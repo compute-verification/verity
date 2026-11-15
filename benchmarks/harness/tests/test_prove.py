@@ -41,6 +41,7 @@ from verity_bench import prove_flock as PF
 from verity_bench import prove_records as R
 from verity_bench import spot_status
 from verity_bench import steady as S
+from verity_bench import steady_node as N
 from verity_bench.cli import main
 
 REPO = Path(__file__).resolve().parents[3]
@@ -1261,18 +1262,19 @@ class Store:
         (root / name).write_text(json.dumps(doc))
         return self.art(kind, meta or {}, tree=root)
 
-    def ran(self, run: str, files: Path | None, *, rc: int = 0) -> None:
-        """A run's attempt on the remote, its files a run record (`files`: None for a run that kept none)."""
+    def ran(self, run: str, files: Path | None, *, rc: int = 0, tool: str = "bash", validation: str | None = None) -> None:
+        """A run's attempt on the remote, its files a run record (`files`: None for a run that kept none), recorded under
+        `tool`, its result's validation `validation`."""
 
         from research.store import canon
 
         record = self.art("run-record/v1", {}, tree=files) if files else None
         attempt = {
-            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "bash", "version": None},
+            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": None},
             "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T00:00:00Z"}, "cost": None,
-            "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": None},
+            "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
             "outputs": {"result": None, "run_record": record}, "telemetry": None,
         }
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
@@ -1675,6 +1677,114 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     s2.record(s2.doc("evidence/v1", "steady.json", {}, {"runs": [newest]}), R.STEADY)
     doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
     assert doc["inputs"][2]["targets"] == [newest] and doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324)
+
+
+#: what a steady-state point's verdict file holds of a row whose run's files didn't show it level, or its card clear
+FAILED_VERDICT = {"identity": "i" * 64, "point": "x-k1", "passed": False, "why": "fail: `level` (fail): ...",
+                  "verdict": {"type": "x", "provers": 1, "status": S.FAIL, "level": S.LEVEL, "checks": {
+                      **{name: {"status": S.PASS, "why": None} for name in S.CHECKS},
+                      "level": {"status": S.FAIL, "why": "its window isn't level"},
+                      "card_clear_start_end": {"status": S.CANNOT_TELL, "why": "no record of its card"}}}}
+
+
+def as_steady_point(s: Store, tmp: Path, run: str, validation: str | None, verdict: dict | None = None) -> None:
+    """A fixture run as a run of the harness's steady-state point: recorded under its tool, its result's validation
+    `validation`, and its files holding `verdict` as the point's verdict file where given."""
+
+    files = tmp / "point-files" / run
+    if not files.exists():
+        shutil.copytree(run_files(tmp, run), files)
+    if verdict is not None:
+        (files / N.VERDICT_FILE).write_text(json.dumps(verdict))
+    s.ran(run, files, tool=R.STEADY_POINT_TOOL, validation=validation)
+
+
+def test_the_steady_point_tool_and_its_verdict_file_are_the_harnesss():
+    from verity_bench import tool
+
+    assert R.STEADY_POINT_TOOL == tool.STEADY_POINT.name and N.VERDICT_FILE == "out/verdict.json"
+
+
+def test_a_labelled_steady_point_whose_own_verdict_failed_prices_nothing_and_is_named(tmp_path):
+    """A run of the harness's steady-state point that judged itself not passed: each of its rows is refused with the
+    run and the checks its verdict file names, whatever the six checks this reader holds a row to say, and every type
+    it measured is priced as with no such run (here, as with the run superseded). The run is named among the
+    measurements' inputs with why."""
+
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    s.label(newest, R.SUPERSEDED_BY, "r20991231-000000-0000")
+    without = R.build("spot", "glm53", store=s.fresh("without"), root=REPO)
+
+    s, _ = recorded(tmp_path / "point")
+    as_steady_point(s, tmp_path / "point", newest, "failed", FAILED_VERDICT)
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    why = (f"its own steady-state verdict failed: run {newest} didn't pass `card_clear_start_end` (cannot tell), "
+           "`level` (fail)")
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {newest: why}
+    assert not any(r.get("record") == newest for r in doc["rows"])
+    assert doc["sources"] == without["sources"]
+    assert [(r["block"], r["source"], r["seconds"]) for r in doc["rows"]] == [
+        (r["block"], r["source"], r["seconds"]) for r in without["rows"]]
+    assert doc["totals"]["gpus_per_serving_gpu"] == without["totals"]["gpus_per_serving_gpu"]
+    head, seconds = R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})
+    assert all(f"refused {newest}: {why}" in m["inputs"] for m in (head, seconds))
+    assert (head["mark"], head["value"]) == next((m["mark"], m["value"]) for m in R.measurements(
+        without, {"a/x": "gpus_per_serving_gpu"}))
+    assert f"- {newest} (`prove-glm53-flock-steady`): {why}" in R.render(doc)
+
+
+@pytest.mark.parametrize("validation, verdict, says", [
+    (None, None, "can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its result's "
+                 "validation is None)"),
+    ("not_run", None, "can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its "
+                      "result's validation is 'not_run')"),
+    ("failed", None, "failed: run {run} keeps no `out/verdict.json` naming the checks it didn't pass"),
+    ("failed", {"passed": False, "why": "refused, nothing timed: no lease", "verdict": None},
+     "failed: run {run} wasn't a passed point: refused, nothing timed: no lease"),
+])
+def test_a_steady_point_whose_verdict_cannot_be_read_or_names_no_check_is_refused(tmp_path, validation, verdict, says):
+    """A run of the point whose attempt carries no verdict can't be told and prices nothing, as a row whose fields
+    can't show a check; a failed one whose verdict file is missing, or names no check, is refused with what it says."""
+
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    as_steady_point(s, tmp_path, newest, validation, verdict)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {newest: "its own steady-state verdict " + says.format(run=newest)}
+    assert not any(r.get("record") == newest for r in doc["rows"])
+
+
+def test_a_passed_steady_point_and_a_run_with_no_verdict_of_its_own_are_priced_as_before(tmp_path):
+    """A run of the point that judged itself passed is read as any run: its rows are priced as the six checks find
+    them. A run under any other tool has no verdict of its own, so a failed validation of its result is no verdict on
+    its rows: they are priced as before. Either table is the one the same records gave before."""
+
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    before = R.build("spot", "glm53", store=s.fresh("before"), root=REPO)
+    as_steady_point(s, tmp_path, newest, "passed", {"passed": True, "why": None, "verdict": None})
+    assert R.build("spot", "glm53", store=s.fresh("passed"), root=REPO) == before
+    s.ran(newest, run_files(tmp_path, newest), validation="failed")
+    assert R.build("spot", "glm53", store=s.fresh("older"), root=REPO) == before
+    assert before["refused"] == [] and {x["source"]: x["block_types"] for x in before["sources"]}[P.STEADY] == 8
+
+
+def test_an_art_completing_a_failed_steady_points_rows_prices_none_of_them(tmp_path):
+    """An art holding a run's rows completed after it stands for that run, so the run's own verdict holds of them."""
+
+    newest = RUNS[-1]
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+    s = Store(tmp_path)
+    for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+        s.record(s.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
+    s.record(census_art(s), R.CENSUS)
+    as_steady_point(s, tmp_path, newest, "failed", FAILED_VERDICT)
+    art = s.record(s.tree("evidence/v1", R.ART_RATES, whole, {"runs": [newest]}), R.STEADY)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert [x["target"] for x in doc["refused"]] == [art]
+    assert doc["refused"][0]["why"].startswith(f"its own steady-state verdict failed: run {newest} didn't pass `card_")
+    assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
 
 
 def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path):
