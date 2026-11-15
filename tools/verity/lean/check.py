@@ -1574,24 +1574,33 @@ def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]
     return out
 
 
-def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
-    """Why ``moved`` cannot be read back: a name moved to itself, two old names moved to one new name (a name of the build
-    under it has no one old name), or a name of ``names`` (a lock's, `lock_names`) whose new name maps back to another
-    (`unrenamed`).  Both maps take the longest prefix, so the names under an entry nested under another's new name map
-    back under its own old name whether or not the old names nest alike; only a name that falls under a longer entry
-    than its own on one way, and not on the other, fails to come back.  Which names do is a fact of the lock and the
-    build, not of the map: here the lock's, and the build's in the texts `Facts.lean` compares (`moved_conflicts`)."""
+def move_refusals(moved: dict[str, str], names: Iterable[str] = ()) -> list[tuple[str, str]]:
+    """Why ``moved`` cannot be read back, each with its failure code: a name moved to itself, two old names moved to one
+    new name (a name of the build under it has no one old name; `moved.map`), a name of ``names`` (a lock's, `lock_names`)
+    whose new name maps back to another (`unrenamed`; `moved.round-trip`), and two names of ``names`` that land on one new
+    name, where `renamed_current` would keep one record for both (`moved.collision`).  Both maps take the longest prefix, so
+    the names under an entry nested under another's new name map back under its own old name whether or not the old names
+    nest alike; only a name that falls under a longer entry than its own on one way, and not on the other, fails to come
+    back.  Which names do, and which land together, is a fact of the lock and the build, not of the map: here the lock's,
+    and the build's in the texts `Facts.lean` compares (`moved_conflicts`)."""
     errs = [f"{old} moves to itself" for old, new in sorted(moved.items()) if old == new]
     by_new: dict[str, list[str]] = {}
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
     errs += [f"{', '.join(sorted(olds))} all move to {new}" for new, olds in sorted(by_new.items()) if len(olds) > 1]
     if errs:
-        return errs
+        return [("moved.map", e) for e in errs]
+    out, lands = [], {}
     for n in sorted(set(names)):
         if (m := renamed(n, moved)) != n and (b := unrenamed(m, moved)) != n:
-            errs.append(f"{n} moves to {m}, which maps back to {b}: give {n} an entry of its own")
-    return errs
+            out.append(("moved.round-trip", f"{n} moves to {m}, which maps back to {b}: give {n} an entry of its own"))
+        lands.setdefault(m, []).append(n)
+    return out + [("moved.collision", f"{', '.join(ns)} all land on {m}") for m, ns in sorted(lands.items()) if len(ns) > 1]
+
+
+def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
+    """`move_refusals`' texts."""
+    return [e for _, e in move_refusals(moved, names)]
 
 
 def moves_file(path: Path) -> dict[str, str]:
@@ -6631,8 +6640,9 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
-    if moved and (back := move_errors(moved, lock_names(policy))):
-        fails = [*fails, *(Failure("moved.round-trip", None, f"moved: {e}") for e in back)]
+    if moved and (back := move_refusals(moved, lock_names(policy))):
+        fails = [*fails, *(Failure(c, None, f"moved: {e}") for c, e in back)]
+    refused = [f for f in fails if (code_of(f) or "").startswith("moved.")]
     if bookkeeping is not None and fails and not update:
         ticket = bookkeeping_ticket(policy, bookkeeping)
         fixed = repaired(policy, facts, files, fails, ticket)
@@ -6659,7 +6669,9 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
         rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
                 "changes": changes(notes, policy, regen)}
         log(f"audit: {pkg}/{POLICY}: every failure is a record difference; {work / POLICY} is the record `--update` writes")
-    if update and new != policy:
+    if update and refused and new != policy:
+        log(f"audit: {pkg}/{POLICY}: not rewritten, the moves are refused ({len(refused)} moved failures)")
+    elif update and new != policy:
         dump(pkg, new)
         notes = review(policy, new, facts, sources(), moved) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
@@ -6672,7 +6684,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
             if len(notes) > len(must) else "") + (
             "; these change what a guarantee says, and the landing message shows them:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
-    elif update and (work / POLICY).read_text() != (pkg / POLICY).read_text():
+    elif update and not refused and (work / POLICY).read_text() != (pkg / POLICY).read_text():
         dump(pkg, new)
         log(f"audit: {pkg}/{POLICY}: rewritten under today's names and layout, saying what it said")
     weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("guarantees", {}).values()) + \
@@ -7035,6 +7047,13 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    for p in (pkgs if moved else []):                   # before any lock is written, as the judge refuses them again
+        try:
+            names = lock_names(load(p)) if (p / POLICY).is_file() else set()
+        except ValueError:
+            names = set()                               # its audit reports the policy
+        if errs := move_errors(moved, names):
+            ap.error(f"{a.moved}: {p / POLICY}: " + "; ".join(errs))
     for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache),
                     ("--program-cache", a.program_cache)):
         if d is not None and (over := build_roots_over(d, pkgs)):
