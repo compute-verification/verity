@@ -42,7 +42,9 @@ run printed is the `run.id` its `job.json` states and the commit its `store.cond
 `-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
 Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names no directory, it reads that
 run's record from the evidence store, through research's client. Anything else is refused (exit 2). A record whose
-`job.json` says it is made up (``made_up``, as the tests' fixture does) has that printed under the number.
+`job.json` says it is made up (``made_up``, as the tests' fixture does) is reported as made up through the kit
+(`kit.report`'s ``made_up``): its line under the number, ``made_up: true``, what the record says of itself
+(``made_up_says``), and `result.json`'s entries marked modeled and made up, never measured.
 
 Either way it reads the verifier's side of the record, and nothing the developer's node reports of what it served:
 
@@ -124,9 +126,8 @@ resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clo
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
 peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
 run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
-are written as one entry each, with no value and why. A made-up record (its `job.json`'s ``made_up``) writes no
-`result.json` at all, with a number or without, and says so under the number: the writer marks every entry measured,
-from a run.
+are written as one entry each, with no value and why. A made-up record's entries are marked modeled and made up
+(`kit.report`'s ``made_up``), with a number or without.
 """
 from __future__ import annotations
 
@@ -620,7 +621,7 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
             "withdrawn": withdrawn,
             "model": served["model"], "revision": served["revision"], "class": served["class"], "policy_agrees": served["policy_agrees"],
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head,
-            "made_up": made_up(tree)}
+            "made_up_says": made_up(tree)}
 
 
 def made_up(tree: Path) -> str | None:
@@ -632,10 +633,8 @@ def made_up(tree: Path) -> str | None:
 
 
 def made_up_text(said: str) -> str:
-    """The printed line of a made-up record: what it says of itself, and that its number is written to no `result.json`,
-    whose every entry the kit's writer marks as measured from a run."""
-    return (f"  a made-up record, not a run's: {said}. So nothing is written to result.json: its entries are "
-            "measurements of runs")
+    """The printed line of what a made-up record says of itself, under the kit's line that it is made up."""
+    return f"  what the record says of itself: {said}"
 
 
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
@@ -773,8 +772,8 @@ def text(doc: dict) -> str:
               f"{doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the {100 * doc['target']:g}% target. "
               "This is what the Pearl+ verifier's own answer credits, not PoUW's verdict in the run's record of "
               "verdicts")]
-    if doc["made_up"]:
-        lines.append(made_up_text(doc["made_up"]))
+    if doc["made_up_says"]:
+        lines.append(made_up_text(doc["made_up_says"]))
     if ran_with(doc) is None:
         lines.append(coins_text(doc["coins"]))
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
@@ -843,14 +842,14 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         except Unreadable as u:
             print(f"compute: {u}", file=sys.stderr)
             return 2
-        measured = [] if up else not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}])
-        return kit.report("compute", made_up_text(up) if up else "", none | {"made_up": up}, measured, ran_with=None,
-                          accepted=False, why=str(e))
+        return kit.report("compute", made_up_text(up) if up else "", none | {"made_up_says": up},
+                          not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]), ran_with=None,
+                          accepted=False, why=str(e), made_up=bool(up))
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    return kit.report("compute", text(doc), doc, [] if doc["made_up"] else not_an_audit(measured), ran_with=said,
-                      accepted=True)
+    return kit.report("compute", text(doc), doc, not_an_audit(measured), ran_with=said, accepted=True,
+                      made_up=bool(doc["made_up_says"]))
 
 
 def not_an_audit(measured: list[dict]) -> list[dict]:
