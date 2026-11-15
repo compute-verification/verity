@@ -609,6 +609,8 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
                 rel = posixpath.relpath(want or ".", common or ".")
                 style = "" if n1 else re.match(r"\(?((?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?)", after[s1:]).group(1)
                 expr = _expression(n1, up + (0 if n1 else 1), [] if rel == "." else rel.split("/"), style)
+                if " / " in expr and after[e1:e1 + 1] in (".", "["):
+                    expr = f"({expr})"
                 edits.append((s1, e1, expr, f"{new}:{line + 1}: {after[s1:e1].strip()} -> {expr} ({want})"))
         if edits:
             out[new] = [e[3] for e in edits]
