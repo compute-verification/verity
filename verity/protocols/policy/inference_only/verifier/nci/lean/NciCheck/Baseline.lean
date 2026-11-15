@@ -50,7 +50,7 @@ statements (`NciCheck.Properties`) stand as they are:
 * `trusted`: the trusted input is not as stated: its keys, a log record that is no object or breaks the chain, `run` the
   digest of no record of the log, or `params` not distinct names of types;
 * `run-program`: the run's own record is not this Program's (its `program` is not `Prog.sha512`), whatever θ is. The
-  run's record is the registration that sampled proofs commit to, so it names the Program checked even when θ is empty
+  run's record is the registration that SPOT commits to, so it names the Program checked even when θ is empty
   and no entry reads it;
 * then θ entry by entry:
   - `theta-record-unknown`: `D` is the digest of no record of the log;

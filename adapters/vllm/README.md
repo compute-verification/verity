@@ -19,7 +19,7 @@ Verity itself knows nothing of vLLM.
   flag and record.
 - **`verity demo vllm`** (`demos/vllm/run.sh`) starts the served-verdicts launcher,
   `benchmarks/one_stage/served_verdicts.sh`, on the node `demos/vllm/placement.toml` names. It runs the Build of
-  record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:
+  record, then the endpoint with `--seal` under a GPU lease, and a load. Then come SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network certifier follow where each has its piece,
   and it ends with one record of every verdict. The launcher's header gives each step, and `demos/vllm/README.md`
