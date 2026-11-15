@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -2269,6 +2269,7 @@ wheels = [
 name = "verity"
 version = "0.1.0"
 source = { editable = "." }
+default-groups = ["dev", "mypy"]
 dependencies = [
     { name = "numpy" },
 ]
@@ -2795,13 +2796,11 @@ torch = [
     { name = "torch", version = "2.14.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
     { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
-    { name = "triton" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
-    { name = "triton", marker = "extra == 'torch'" },
     { name = "verity", editable = "." },
 ]
 provides-extras = ["torch"]
