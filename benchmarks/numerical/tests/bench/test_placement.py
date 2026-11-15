@@ -61,7 +61,7 @@ def test_separate_machines_pass():
     uuids = {"product_uuid": "A"}, {"product_uuid": "B"}
     assert PL.separation(*uuids) == []
     assert PL.is_host_private("172.24.0.3") and PL.is_host_private("127.0.0.1") and PL.is_host_private("100.64.1.1")
-    assert not PL.is_host_private("8.8.8.10") and not PL.is_host_private("198.51.100.20")
+    assert not PL.is_host_private("203.0.113.15") and not PL.is_host_private("198.51.100.20")
 
 
 def test_without_the_api_a_plan_is_refused(monkeypatch):
@@ -103,7 +103,7 @@ def test_the_real_cells_still_pass_on_documents():
 
 # --- a datacenter's shared NAT IP: what the NAT exception needs ---------------------------------------------------------------
 
-IP = "91.199.227.82"
+IP = "203.0.113.16"
 #: An L40S prover and an H100 verifier in EU-NL-1 as the RunPod API shows them: two machine ids behind one egress NAT, the
 #: verifier reached by its global-network name.
 NAT = {"prover": {"pod_id": "pod-p", "machine_id": "fpuyltj3q41d", "public_ip": IP},
@@ -469,11 +469,11 @@ def test_an_ssh_started_probe_records_the_pod_from_the_container_init_environmen
     the container's init process, so the shared-NAT re-check at register finds the pod id.  Only those keys are read."""
     for k in ("RUNPOD_POD_ID", "RUNPOD_PUBLIC_IP", "RUNPOD_DC_ID"):
         monkeypatch.delenv(k, raising=False)
-    init = {"PATH": "/bin", "RUNPOD_POD_ID": "w3joukypegsto7", "RUNPOD_PUBLIC_IP": "91.199.227.82", "RUNPOD_DC_ID": "EU-NL-1",
+    init = {"PATH": "/bin", "RUNPOD_POD_ID": "w3joukypegsto7", "RUNPOD_PUBLIC_IP": "203.0.113.16", "RUNPOD_DC_ID": "EU-NL-1",
             "RUNPOD_API_KEY": "not-to-be-copied", "RUNPOD_EMPTY": ""}
     _init_environ(monkeypatch, tmp_path, b"".join(f"{k}={v}\0".encode() for k, v in init.items()))
     rec = PL.probe()
-    assert (rec["pod_id"], rec["public_ip"], rec["datacenter"]) == ("w3joukypegsto7", "91.199.227.82", "EU-NL-1")
+    assert (rec["pod_id"], rec["public_ip"], rec["datacenter"]) == ("w3joukypegsto7", "203.0.113.16", "EU-NL-1")
     assert "not-to-be-copied" not in json.dumps(rec)
     assert PL._pod_env("RUNPOD_EMPTY") is None and PL._pod_env("RUNPOD_MISSING") is None
     monkeypatch.setenv("RUNPOD_POD_ID", "from-the-job")                       # the job's own environment wins

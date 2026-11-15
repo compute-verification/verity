@@ -163,14 +163,15 @@ def _spans(cpus: Sequence[int]) -> str:
     return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in spans)
 
 
-def fetched(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner, ask: Asker) -> Path:
+def fetched(row: steady_spec.SteadyRow, stored: tuple[str, str], scratch: Path, out: Path, run: Runner,
+            ask: Asker) -> Path:
     """The statement a row names in the store (`SteadyRow.stored`), fetched into the scratch: the artifact's directory,
     read with the key `research run --store-read` puts in the run's environment. The fetch keeps what it reads in a
     store of its own under the scratch, removed once the files are out of it, so the node's store holds no copy and
     nothing stays on the node after the scratch. Before any byte is fetched it refuses a scratch in the node's memory,
     and one whose disk has less free than the statement twice, which the fetch holds until its store is removed."""
 
-    art, directory = row.stored
+    art, directory = stored
     if MEMORY in scratch.resolve().parents:
         raise Refused(f"the `staged` of row {row.type!r} is fetched from the store onto the node's disk, and the scratch "
                       f"({scratch}) is in its memory: the spec's setup exports VERITY_BENCH_STEADY_SCRATCH, a directory "
@@ -205,8 +206,8 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
 
     stage = scratch / "z" / row.name / f"c{row.n}" / "stage"
     stage.parent.mkdir(parents=True)
-    if row.stored is not None:
-        fetched(row, scratch, out, run, ask).rename(stage)
+    if (stored := row.stored) is not None:
+        fetched(row, stored, scratch, out, run, ask).rename(stage)
         if not all((stage / name).is_file() for name in STAGED):
             raise Refused(f"the `staged` of row {row.type!r}, {row.staged}, holds no staged statement in the store "
                           f"({', '.join(STAGED)})")
@@ -484,8 +485,8 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     root = Path.cwd()
     spec = steady_spec.load_spec(a.spec, root=root)
     item = steady_spec.point(spec, a.point)
-    files = steady_spec.closure(root, spec)
-    files_sha256 = sha256(files)
+    closure = steady_spec.closure(root, spec)
+    files_sha256 = sha256(closure)
     identity = steady_spec.point_identity(spec, item, files_sha256)
     if identity != a.identity:
         raise ValueError(f"point identity changed: this tree gives {item.id} {identity}, and the run was launched as "
@@ -495,7 +496,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
                             f"{', '.join(entry for entry in steady_spec.CLOSURE if (root / entry).is_dir())} counts: one "
                             "the launching checkout doesn't track (what a build or a setup left there) changes the "
                             "identity too. ")
-                         + f"Its closure here is {len(files)} files (SHA-256 {files_sha256[:16]}...); `plan` prints "
+                         + f"Its closure here is {len(closure)} files (SHA-256 {files_sha256[:16]}...); `plan` prints "
                          "the launching checkout's as its `toolchain`")
     run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     out = run_dir / "out"

@@ -63,7 +63,7 @@ decides each registration, event and window, an accepted session's record is the
 that record. `audit.AuditRun` keeps the books beside it as the reference, and a registration, event, window verdict or
 record field on which they differ refuses the session at that window as `disagreement`. The books check no openings: a
 window's verdict is the Lean's, and the Python check of its openings runs beside the Lean's in a transcript's replay
-(`lean/tests/replay.py`). The Lean decides alone because:
+(`lean/replay.py`). The Lean decides alone because:
 
 - the two refuse the same forms: a registration that binds PoUW's tiles is refused by both registries, a paced
   window's (k + 1)-th root is refused as `order` by both sessions, and a transcript carries its session's pace.
@@ -71,7 +71,7 @@ window's verdict is the Lean's, and the Python check of its openings runs beside
   block size, a constant; the registration's receipt, bind, codec, layout and rows, bound by its digest, which the
   Lean's record names; and the integrity profile, a function of the Lean's lengths and samples at δ
   (`audit.window_profile`).
-- every recorded session in the store replays through both to the same verdict (`lean/tests/replay.py`), and to the
+- every recorded session in the store replays through both to the same verdict (`lean/replay.py`), and to the
   one it recorded wherever its `verifier.json` keeps enough to rebuild its events in turn: three sessions that failed
   `few` don't keep their appends, and both verifiers refuse the same call of their replay.
 
@@ -110,15 +110,15 @@ compared word for word. The Lean statement that the line is true of the trace th
 
 ## Replay
 
-`lean/tests/replay.py` replays a recorded session through both verifiers and compares their verdicts and reasons: a
+`lean/replay.py` replays a recorded session through both verifiers and compares their verdicts and reasons: a
 transcript (the difftest's case: every event, its clock, the coins and each window's openings, which
 `verifier.py --transcript DIR` writes for each session it runs) replays in full, a `receipt`, `codec` or path rejection
 included, and a remote session's `verifier.json`, which keeps no roots, plans, coins or openings, replays as the case
 its arrivals, steps, samples and parameters make (the module's docstring says how it is held to the recorded verdict).
 
 ~~~text
-uv run python verity/protocols/accounting/poub/verifier/lean/tests/replay.py record VERIFIER.json ... --out ROWS.json
-uv run python verity/protocols/accounting/poub/verifier/lean/tests/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
+uv run python verity/protocols/accounting/poub/verifier/lean/replay.py record VERIFIER.json ... --out ROWS.json
+uv run python verity/protocols/accounting/poub/verifier/lean/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
 ~~~
 
 A transcript that doesn't name its session's pace replays only with the pace its `verifier.json` gives
