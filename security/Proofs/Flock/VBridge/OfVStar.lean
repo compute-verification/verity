@@ -63,13 +63,13 @@ theorem iv_eq : VStar.iv = preCv [] 0 := rfl
 theorem blockAt_eq (msg : List Lin) (off : ℕ) : VStar.blockAt msg.toArray off = blockAt msg off := by
   simp only [VStar.blockAt, blockAt, getD_toArray]
 
-theorem shaBlock_eq : VStar.shaBlock = shaBlock := rfl
+theorem shaChunk_eq : VStar.shaChunk = shaChunk := rfl
 
 theorem shaBlocks_eq (msg : List Lin) : ∀ (n k : ℕ) (st : List Lin),
     VStar.shaBlocks msg.toArray n k st = shaBlocks msg n k st
   | 0, _, _ => rfl
   | n + 1, k, st => by
-    simp only [VStar.shaBlocks, shaBlocks, blockAt_eq, shaBlock_eq]
+    simp only [VStar.shaBlocks, shaBlocks, blockAt_eq, shaChunk_eq]
     exact congrArg _ (funext fun st' => shaBlocks_eq msg n (k + 1) st')
 
 theorem shaFrom_eq (cv : List (BitVec 64)) (bits : List Lin) (pre : ℕ) :
