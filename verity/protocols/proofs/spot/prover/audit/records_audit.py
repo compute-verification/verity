@@ -1020,8 +1020,8 @@ def audit(a: argparse.Namespace) -> int:
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
-        registration = json.loads((wdir / "registration.json").read_text())
-        own = registration.get("window") or {}
+        docket = json.loads((wdir / "registration.json").read_text())
+        own = docket.get("window") or {}
         ties, untied = window_pins(own, doc, resolve)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
@@ -1032,7 +1032,7 @@ def audit(a: argparse.Namespace) -> int:
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
         roots = window_roots(own)
-        for e in registration.get("registered") or ():
+        for e in docket.get("registered") or ():
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         histories = HW.pins(doc, roots)
