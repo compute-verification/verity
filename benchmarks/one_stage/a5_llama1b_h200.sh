@@ -256,12 +256,14 @@ def read(p):
     except (OSError, ValueError):
         return {}
 summ = {**read(d / "window" / "summary.json"), **read(s)}
-law, card = summ.get("law") or {}, os.environ["CARD"]
+# records_audit.py's law is its rate text; the window's is the partition's {law, k}
+law = next((x for x in (read(s).get("law"), read(d / "window" / "summary.json").get("law")) if isinstance(x, dict)), {})
+rate, card = read(s).get("law") if isinstance(read(s).get("law"), str) else None, os.environ["CARD"]
 lines = [x for x in (d / "a5.log").read_text(errors="replace").splitlines() if x.startswith("A5 ")] if (d / "a5.log").is_file() else []
 audit = next((json.loads(x[3:]).get("audit") for x in reversed(lines) if '"audit"' in x), None) or {}
 accepted = "accepted" if audit.get("accepted") is True else "NOT accepted"
 sample = (f"law {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
-          f"drew {summ.get('draw', '?')}")
+          f"drew {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
 if os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []
     rc = next((x.split()[1] for x in v2 if x.startswith("V2RC ")), None)
