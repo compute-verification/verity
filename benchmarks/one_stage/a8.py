@@ -62,7 +62,7 @@ sys.path.insert(0, str(HERE))
 #: the directory of Flock's proof-format reader, `redigest.py`, which the leak scan reads proof streams with
 sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proofs/flock/prover/agreement"))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 import a7  # noqa: E402
 import redigest  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS  # noqa: E402
