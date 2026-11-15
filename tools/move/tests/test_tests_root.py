@@ -61,13 +61,14 @@ TREE = {
     "verity/a/tests/kept.py": "from pathlib import Path\n\nfrom kept_helper import K\n\nHERE = Path(__file__).resolve().parent\n"
                               "PACKAGE = HERE.parent\n",
     "verity/a/tests/kept_helper.py": "K = 1\n",
+    "verity/a/tests/kept.json": "{}\n",
     "verity/a/tests/data.json": "{}\n",
     "verity/a/tests/test_kept.py": "from pathlib import Path\n\nimport kept\n\nHERE = Path(__file__).resolve().parent\n"
-                                   "DATA = HERE / \"data.json\"\n\n\ndef test_kept():\n    assert kept.K and DATA.is_file()\n",
+                                   "DATA = HERE / \"data.json\"\nKEPT_DATA = Path(__file__).with_name(\"kept.json\").read_text()\n\n\ndef test_kept():\n    assert kept.K and DATA.is_file()\n",
     "tools/research/src/research/store/moves.json": '{"moves": []}\n',
 }
 #: the toy's files under a tests/ that code outside the tests runs (`tests_root.KEEP_FILES`)
-KEEP = {"verity/a/tests/kept.py": "`verity/a/runner.py` imports it", "verity/a/tests/kept_helper.py": "`kept.py` imports it",
+KEEP = {"verity/a/tests/kept.py": "`verity/a/runner.py` imports it", "verity/a/tests/kept_helper.py": "`kept.py` imports it", "verity/a/tests/kept.json": "`test_kept.py` reads it",
         "verity/gone/tests/x.py": "a file no longer there drops out"}
 
 
@@ -100,7 +101,8 @@ def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_ru
     assert inv["snags"]["a suite whose pyproject builds a distribution (split first)"] == ["adapters/dist/tests (dist)"]
     assert inv["snags"]["a suite of a member that stays one (split first)"] == ["tools/check/tests (verity-check)"]
     assert inv["snags"]["a file under a tests/ that is no test (kept where it is)"] == [
-        "verity/a/tests/kept.py: `verity/a/runner.py` imports it", "verity/a/tests/kept_helper.py: `kept.py` imports it"]
+        "verity/a/tests/kept.py: `verity/a/runner.py` imports it", "verity/a/tests/kept_helper.py: `kept.py` imports it",
+        "verity/a/tests/kept.json: `test_kept.py` reads it"]
     assert inv["snags"]["a tests/ package its modules import as `tests` (one level kept)"] == ["adapters/dist/tests"]
     assert "adapters/dist/conftest.py" in inv["snags"][
         "a test-like file outside every tests/ (conftest beside a suite's pyproject, or a module named test_*)"]
@@ -177,8 +179,8 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     files = tomllib.loads((r / TR.FILES_MAP).read_text())
     dirs = {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/check/tests/": "tests/tools/check/",
             "tools/plain/tests/": "tests/tools/plain/", "verity/a/tests/": "tests/verity/a/"}
-    assert files["paths"] == {**dirs, "verity/a/tests/kept.py": "verity/a/tests/kept.py",
-                              "verity/a/tests/kept_helper.py": "verity/a/tests/kept_helper.py"}
+    assert files["paths"] == {**dirs, **{p: p for p in ("verity/a/tests/kept.json", "verity/a/tests/kept.py",
+                                                        "verity/a/tests/kept_helper.py")}}
     assert files["keep_files"] == {p: why for p, why in KEEP.items() if "gone" not in p}
     assert files["rewrite"]["keep_relative"] == [f"{d}*.py" for d in dirs]
     move(TR.FILES_MAP)
@@ -190,7 +192,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert "add_inputs" not in suites["pyproject"]["tests/tools/plain/pyproject.toml"]
     move(TR.SUITES_MAP)
     left = [f for f in git(r, "ls-files").split() if "/tests/" in f and not f.startswith(("tests/", "tools/move/"))]
-    assert left == ["verity/a/tests/kept.py", "verity/a/tests/kept_helper.py"]
+    assert left == ["verity/a/tests/kept.json", "verity/a/tests/kept.py", "verity/a/tests/kept_helper.py"]
     assert (r / "tests/tools/check/pyproject.toml").is_file() and (r / "tools/check/pyproject.toml").is_file()
     a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
     assert a["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
@@ -213,7 +215,9 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert 'HELPER = A.parents[1] / "tests" / "verity" / "a" / "helper.py"' in p and "assert HELPER.is_file() and" in p
     assert '(CODE.parents[1] / "tests" / "verity" / "a" / "helper.py").is_file()' in p
     assert 'KEPT_DIR = A / "tests"\n' in p
-    assert 'HERE = Path(__file__).resolve().parent\nDATA = HERE / "data.json"' in (r / "tests/verity/a/test_kept.py").read_text()
+    kept = (r / "tests/verity/a/test_kept.py").read_text()
+    assert 'HERE = Path(__file__).resolve().parent\nDATA = HERE / "data.json"' in kept
+    assert 'KEPT_DATA = (Path(__file__).parents[3] / "verity" / "a" / "tests" / "kept.json").read_text()' in kept
     assert (r / "tests/verity/a/data.json").is_file()
     assert (r / "verity/a/runner.py").read_text() == TREE["verity/a/runner.py"]
     assert (r / "verity/a/tests/kept.py").read_text() == TREE["verity/a/tests/kept.py"]
