@@ -1362,7 +1362,7 @@ def test_where_the_lean_decided_gamma_the_one_machine_ways_print_it_with_no_pyth
     `gamma_decided_by` is `lean`; `numbers_decided_by` says the share and the windows' δ are the Lean's and the
     sketch's and the sample's terms in its error the Python ledger's."""
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
-    machine = Machine(record=a_record(a_session(gamma=0.125)))
+    machine = Machine(record=a_local_record(a_session(gamma=0.125)))
     assert bench(store, way, run=machine) == 0
     text, doc, _ = printed(capsys)
     assert text[0].startswith("memory: 0.125 of the node's memory read rate")
