@@ -2650,7 +2650,7 @@ class Window:
                     raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} {v.word_bits}-bit "
                                      f"leaves, not the port's {words[p]} 16-bit words")
                 wanted.setdefault(param, []).append(positions)
-        drawn, written = _Drawn(values, wanted), self._written(values)
+        sampled, written = _Drawn(values, wanted), self._written(values)
         data, salts_of, strings_of, self._entries = [], {}, {}, {}
         for m, reads in zip(self.window.members, read_by, strict=True):
             lay = by[m.template][1]
@@ -2677,22 +2677,22 @@ class Window:
                         # an output row stays the unit's own, committed under the value's salt, so a row other than
                         # the value's opens no pinned root
                         at = np.asarray(positions, dtype=np.int64)[refs]
-                        salts_of[m.port(p)] = drawn.salts(param, at)
-                        self._entries.setdefault(m.key, {})[p] = drawn.entry(param, at)
+                        salts_of[m.port(p)] = sampled.salts(param, at)
+                        self._entries.setdefault(m.key, {})[p] = sampled.entry(param, at)
                         continue
                     if d["rows"][p] is None:
-                        d["rows"][p] = CS.ValueRows(values[param], tuple(int(x) for x in positions), drawn.salts(param, positions))
-                        self._entries.setdefault(m.key, {})[p] = drawn.entry(param, positions)
+                        d["rows"][p] = CS.ValueRows(values[param], tuple(int(x) for x in positions), sampled.salts(param, positions))
+                        self._entries.setdefault(m.key, {})[p] = sampled.entry(param, positions)
                         continue
                     first = [int(np.flatnonzero(refs == j)[0]) for j in range(len(positions))]
                     rows = d["rows"][p][first]
                     if not np.array_equal(rows[refs], d["rows"][p]):
                         raise ValueError(f"{m.key} {p}: two units recorded two rows for one row of {param!r}")
                     d["rows"][p] = rows
-                    salts_of[m.port(p)] = drawn.salts(param, positions)
+                    salts_of[m.port(p)] = sampled.salts(param, positions)
                     if param not in public:
-                        carried[m.port(p)] = drawn.strings(param, positions)
-                    self._entries.setdefault(m.key, {})[p] = drawn.entry(param, positions)
+                        carried[m.port(p)] = sampled.strings(param, positions)
+                    self._entries.setdefault(m.key, {})[p] = sampled.entry(param, positions)
             wired = {q for q, _o, _ws in m.wired}
             for r, x in d["rows"].items():
                 if x is None:

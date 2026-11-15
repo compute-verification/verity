@@ -31,7 +31,7 @@ def test_the_units_are_circuits_partition():
     assert sum(t.units for t in H.templates(M, pad=True)) == sum(t.units for t in ts)
 
 
-def test_windows_draw_k_split_evenly_under_the_cap(plan):
+def test_windows_sample_k_split_evenly_under_the_cap(plan):
     k = ceil(log(len(plan["windows"]) / H.DELTAS[0]) / H.SHARE)
     caps = {t.id: t.cap for t in H.templates(M)}
     for w in plan["windows"]:

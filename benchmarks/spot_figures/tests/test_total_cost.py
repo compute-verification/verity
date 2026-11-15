@@ -384,7 +384,7 @@ def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monke
     one = row | {"tables": 1.0}
     assert t.limits(cells, one)["limit"] is None
     monkeypatch.setattr(t, "DRAW_BYTES", got["draw_bytes"] - 1)
-    assert t.limits(cells, one)["limit"] == (f"its second draw reads {got['draw_bytes']:,.0f} bytes of live coins, and "
+    assert t.limits(cells, one)["limit"] == (f"its second sample reads {got['draw_bytes']:,.0f} bytes of live coins, and "
                                              f"one layout of the challenger's holds {t.DRAW_BYTES:,}")
     monkeypatch.setattr(t, "LOG_LINES", got["lines"] - 1)
     assert t.limits(cells, one)["limit"] == (f"its sessions write at least {got['lines']:,.0f} lines of session "
