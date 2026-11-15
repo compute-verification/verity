@@ -37,14 +37,14 @@ from verity.circuits.ops import (
     s8,
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
 )
-from verity.definitions.registry import (  # noqa: F401
+from verity_vllm.definitions.registry import (  # noqa: F401
     dsa,
     dsv4_qnorm_insert,
     flashmla,
     marlin_moe,
     topp_word_gates,
 )
-from verity.definitions.registry.ref_prims import gather_f32
+from verity_vllm.definitions.registry.ref_prims import gather_f32
 from verity.circuits.silicon.integer import S32_MAX, s32_word
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")

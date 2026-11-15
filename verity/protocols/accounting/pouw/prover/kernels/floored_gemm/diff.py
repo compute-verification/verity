@@ -12,7 +12,7 @@ and R is unchanged iff that is 0 in every row. Honest states are running sums of
 - one checkpoint: δ added to the words at one checkpoint s;
 - persistent: δ added at checkpoint s0 and every later one (a skipped product stays skipped), R summed over all of them.
 
-python3 diff.py [--trials N] [--seed S] [--json OUT]
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/floored_gemm/diff.py [--trials N] [--seed S] [--json OUT]
 """
 from __future__ import annotations
 
@@ -24,7 +24,18 @@ from pathlib import Path
 
 import numpy as np
 
-from ref import BASE, CHAINED, TB, TBC, emit_key, tb_key, tb_operand, tb_receipts, tbc_receipts, u8bytes
+from verity.protocols.accounting.pouw.prover.kernels.floored_gemm.ref import (
+    BASE,
+    CHAINED,
+    TB,
+    TBC,
+    emit_key,
+    tb_key,
+    tb_operand,
+    tb_receipts,
+    tbc_receipts,
+    u8bytes,
+)
 
 VARIANTS = {"tb4": 5, "tb2": 6, "tb1": 7, "tb2w": 10, "tb1w": 11}
 CHAINS = {"tb4c": 8, "tb1c": 9, "tb2wc": 12, "tb1wc": 13}

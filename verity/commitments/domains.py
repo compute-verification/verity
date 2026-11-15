@@ -311,7 +311,7 @@ WIPE_MONITORING_PERIOD = "verity/wipe-monitoring-period/v1"
 WIPE_PROTOCOL = "verity/wipe/v0"
 WIPE_EGRESS = "wipe-egress/v1"
 
-# Not yet read from here: the remote bandwidth audit
+# Not yet read from here: PoUB
 REMOTE_BANDWIDTH_P2_BLOCK4 = "p2-unit4/v0"
 STORE_ORDER = "store-order/v0"
 REMOTE_BANDWIDTH_MONITORING_PERIOD = "verity/remote-bandwidth-monitoring-period/v1"

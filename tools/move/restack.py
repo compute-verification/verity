@@ -359,9 +359,13 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 raise NoRow(p.stderr.decode(errors="replace").strip())
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
-            if limit and os.path.exists(os.path.join(wt, LIMIT_IN)):
-                swap(os.path.join(wt, LIMIT_IN), NO_LIMIT, limit[0])    # the script's file as it left it, with its limit again
             git("add", "-A", cwd=wt)
+            if limit:
+                # the script's file as it left it, with its limit again, wherever a move of the script's own directory put it
+                hits = git("grep", "-l", "-E", f"^{NO_LIMIT.decode()}$", "--", "*.py", cwd=wt, ok=(0, 1)).stdout.decode()
+                for path in hits.split():
+                    swap(os.path.join(wt, path), NO_LIMIT, limit[0])
+                git("add", "-A", cwd=wt)
             restored = [f for f in restored if not f.endswith(ROWS_SUFFIX) or os.path.lexists(os.path.join(wt, f))]
             for path in restored:
                 if path in mine:
