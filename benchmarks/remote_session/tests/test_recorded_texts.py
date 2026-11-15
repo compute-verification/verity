@@ -33,8 +33,8 @@ SITES = {
 
 #: sha256 of each site's text as main's records carry it, but where a move renamed a cited id on purpose
 PINS = {
-    # `tools/move/device_tokens_map.toml` (`5fd12da779d`) renamed the assumption's id trusted-host to trusted-device
-    # wherever a string holds it: these two cite the new id, and differ from main's by that word alone
+    # `tools/move/device_tokens_map.toml` (`5fd12da779d`) gave the assumption the id trusted-device wherever a string
+    # holds it: these two cite the new id, and differ from main's by that word alone
     "auditor_line.CONDITIONAL_ON": "39cda10a9dfcebf0072503b7b55abeeb82ffac02373744da65d0ecc87248eceb",
     "auditor_line.GROUNDED": "e323302f4027b0752544dd4bdfa9d81dd63ab17cfa17cbbb8c5b28ec7bf287af",
     "auditor_line.PREMISES": "9e01ee2d90f0c1488b589082d6cfedd974f8ed030b7fd17828721527de87dbdf",
