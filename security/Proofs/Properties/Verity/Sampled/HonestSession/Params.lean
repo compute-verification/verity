@@ -332,20 +332,66 @@ private theorem digest?_hexOf {b : ByteArray} (h : b.size = 64) : Spot.OneStageZ
   rw [hlen, hemp, hall]
   decide
 
-/-- `sortStrings` equals insertion sort of its list. `sortStrings = Array.qsort (· < ·)`, which the kernel cannot run
-(well-founded recursion); `List.insertionSort (· ≤ ·)` is structural, so the kernel evaluates it. Both are
+/-- Insert into a list, comparing with `String`'s `<`. Written over `<` (not `≤`) on purpose: the kernel evaluates
+`String`'s `<` (its `Decidable` instance is computable), while `≤`'s is not, so `List.insertionSort (· ≤ ·)` would not
+reduce. Structural, so the kernel runs it. -/
+private def insLt (a : String) : List String → List String
+  | [] => [a]
+  | b :: l => if a < b then a :: b :: l else b :: insLt a l
+
+/-- Insertion sort of a `String` list by `<`; kernel-reducible (see `insLt`). -/
+private def sortLt (l : List String) : List String := l.foldr insLt []
+
+private theorem insLt_perm (a : String) : ∀ l : List String, insLt a l ~ a :: l
+  | [] => .refl _
+  | b :: l => by
+    simp only [insLt]
+    split
+    · exact .refl _
+    · exact ((insLt_perm a l).cons b).trans (List.Perm.swap a b l)
+
+private theorem sortLt_perm : ∀ l : List String, sortLt l ~ l
+  | [] => .refl _
+  | a :: l => by
+    simp only [sortLt, List.foldr]
+    exact (insLt_perm a _).trans ((sortLt_perm l).cons a)
+
+private theorem insLt_sorted {a : String} : ∀ {l : List String}, l.Pairwise (· ≤ ·) →
+    (insLt a l).Pairwise (· ≤ ·)
+  | [], _ => by simp [insLt]
+  | b :: l, h => by
+    simp only [insLt]
+    split
+    · rename_i hab
+      refine List.Pairwise.cons (fun x hx => ?_) h
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact le_of_lt hab
+      · exact le_of_lt (lt_of_lt_of_le hab ((List.pairwise_cons.1 h).1 x hx))
+    · rename_i hab
+      have hba : b ≤ a := le_of_not_lt hab
+      refine List.Pairwise.cons (fun x hx => ?_) (insLt_sorted (List.pairwise_cons.1 h).2)
+      rcases List.mem_cons.1 ((insLt_perm a l).mem_iff.1 hx) with rfl | hx'
+      · exact hba
+      · exact le_trans hba ((List.pairwise_cons.1 h).1 x hx')
+
+private theorem sortLt_sorted : ∀ l : List String, (sortLt l).Pairwise (· ≤ ·)
+  | [] => List.Pairwise.nil
+  | a :: l => by simp only [sortLt, List.foldr]; exact insLt_sorted (sortLt_sorted l)
+
+/-- `sortStrings` equals `sortLt` of its list. `sortStrings = Array.qsort (· < ·)`, which the kernel cannot run
+(well-founded recursion); `sortLt` is structural over `String`'s computable `<`, so the kernel evaluates it. Both are
 `Pairwise (· ≤ ·)` permutations of the input, hence equal (`Perm.eq_of_pairwise`, `≤` on `String` antisymmetric). The
 walk rewrites every `sortStrings` by this, so each `exactly`/`keys?` key set — sorted or in push-chain order — reduces to
 a concrete array the kernel then compares. -/
-private theorem sortStrings_eq_insertionSort (as : Array String) :
-    Spot.sortStrings as = (as.toList.insertionSort (· ≤ ·)).toArray := by
-  show as.qsort (· < ·) = (as.toList.insertionSort (· ≤ ·)).toArray
-  have hl : (as.qsort (· < ·)).toList = as.toList.insertionSort (· ≤ ·) :=
+private theorem sortStrings_eq_sortLt (as : Array String) :
+    Spot.sortStrings as = (sortLt as.toList).toArray := by
+  show as.qsort (· < ·) = (sortLt as.toList).toArray
+  have hl : (as.qsort (· < ·)).toList = sortLt as.toList :=
     List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2)
-      (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted as) (List.pairwise_insertionSort _ _)
-      ((Properties.RemoteAudit.qsort_toList_perm as _).trans (List.perm_insertionSort _ _).symm)
+      (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted as) (sortLt_sorted _)
+      ((Properties.RemoteAudit.qsort_toList_perm as _).trans (sortLt_perm _).symm)
   calc as.qsort (· < ·) = (as.qsort (· < ·)).toList.toArray := rfl
-    _ = (as.toList.insertionSort (· ≤ ·)).toArray := by rw [hl]
+    _ = (sortLt as.toList).toArray := by rw [hl]
 
 /-- `keys?` of an `mkObj`, as its definitional equation. Keyed on `mkObj` (not `.obj`) so the walk's reducible match
 finds it in the literal objects of `Data/`; it exposes the inner `sortStrings` (over the tree's structurally-reducible key
@@ -411,7 +457,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgp] at hdp
     rw [hgk] at hU
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_eq_insertionSort]
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_eq_sortLt]
       block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
