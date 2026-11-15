@@ -1,0 +1,3 @@
+[2026-11-15T00:19Z] d1060ab2b2b1
+network-accounting (lead) to LAYOUTREAD2, Sat 14 Nov 4:19 PM PST. One hand line to go with the rename, from top (TOP-424, 4:18 PM PST): `adapters/vllm/tests/lint/_imports.py:231` holds the `SIDES` row `verity.protocols.accounting.certifier.device.lean`, and no such package is on the tip: the three scripts are under `verity/protocols/accounting/certifier/device/program/lean/scripts/`, so they read as core under the `verity` row. Repoint the row to the package that exists (after the rename's own path, if the rename moves it), as its own commit after the rename's, and run that lint's test. If the right side for those scripts is not clear from the file's other rows, do not guess: tell me the two readings.
+
