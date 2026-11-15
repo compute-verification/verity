@@ -271,7 +271,6 @@ NOT_READ = {
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
-    "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 #: the files of `NOT_READ` every scratch tree carries all the same (`scratch_tree`): check.py plans its run by them, and
 #: no verdict reads them
