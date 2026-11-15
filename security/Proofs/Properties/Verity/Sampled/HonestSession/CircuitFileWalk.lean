@@ -345,6 +345,6 @@ fwd_def cG parse_cG (ls lh : HmNets.Laid) (bP bT bS H C : ByteArray) (A B A' B' 
     qsort_le1]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf]
-  shallow [metaTextG] trace
+  shallow [metaTextG]
 
 end Verity.Sampled.Instance.HonestSession.CircuitFileProof
