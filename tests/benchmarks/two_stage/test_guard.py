@@ -50,7 +50,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "two_stage"))
 import guard as G  # noqa: E402
 
-EXE = of(__file__).VERITY_TWO_STAGE_GUARD
+EXE = of(Path(__file__).resolve().parents[2] / "benchmarks" / "two_stage" / "settings.py").VERITY_TWO_STAGE_GUARD
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
 #: a value no port of the toy's is named, which the registered-value variants register
 VALUE = "TwoStageToyGuard/registered"

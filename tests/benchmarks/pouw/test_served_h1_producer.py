@@ -33,7 +33,7 @@ import producer as PR  # noqa: E402
 
 from verity_torch.pouw.h1 import receipts as RC  # noqa: E402
 
-SETTINGS = of(__file__)
+SETTINGS = of(Path(__file__).resolve().parents[2] / "benchmarks" / "pouw" / "settings.py")
 SERVED_H1 = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"
 SALT, RA, RB = hashlib.sha512(b"salt").digest(), hashlib.sha512(b"A").digest(), hashlib.sha512(b"B").digest()
 #: Llama-3.1-8B's linears (n, K): qkv, o, gate_up, down

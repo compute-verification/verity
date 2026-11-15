@@ -19,7 +19,7 @@ import pytest
 import torch
 from verity_config.settings import of
 
-SETTINGS = of(__file__)
+SETTINGS = of(LR.__file__)
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
 COIN, ROOT = bytes(range(100, 164)), bytes(range(30, 94))

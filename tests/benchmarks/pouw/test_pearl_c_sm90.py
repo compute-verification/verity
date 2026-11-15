@@ -490,9 +490,9 @@ def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypa
     assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
 
 
-@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
+@pytest.mark.skipif(not of(Path(__file__).resolve().parents[2] / "benchmarks" / "pouw" / "settings.py").VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
-    cuda = Path(of(__file__).VERITY_POUW_NVCC)
+    cuda = Path(of(Path(__file__).resolve().parents[2] / "benchmarks" / "pouw" / "settings.py").VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
     with open(ptxas, "w") as err:
         subprocess.run([str(cuda / "bin" / "nvcc"), "-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "-fmad=false",
