@@ -386,10 +386,10 @@ def test_how_the_proving_is_priced_is_the_plans_account(tmp_path):
     assert f"| world year | {PLAN} | 5.542% | computed | 52.358% | 7 | SparseMlaSplitPart_v1 52.291%, " in text and "98.6" not in text
 
     # a plan of another row's, or of the row on other premises, is not these rows' plan
-    for change, why in (({"q": plan()["q"] / 2}, f"{PLAN}'s plan of the world year is priced over 3.5568e\\+16 requests and "
-                                                   f"{ROWS}'s rows over 1.7784e\\+16: it is not these rows' plan"),
-                        ({"bound_bits": plan()["bound_bits"] / 2}, f"{PLAN}'s plan of the world year bounds 6,78\\d.\\d GB at "
-                                                                   f"β = 5.5422%, where {ROWS}'s rows give 13,56\\d.\\d GB")):
+    for change, why in (({"q": plan()["q"] / 2}, (f"{PLAN}'s plan of the world year is priced over 3.5568e\\+16 requests and "
+                                                   f"{ROWS}'s rows over 1.7784e\\+16: it is not these rows' plan")),
+                        ({"bound_bits": plan()["bound_bits"] / 2}, (f"{PLAN}'s plan of the world year bounds 6,78\\d.\\d GB at "
+                                                                   f"β = 5.5422%, where {ROWS}'s rows give 13,56\\d.\\d GB"))):
         s = Store(tmp_path / next(iter(change)))
         s.label(s.ran(ROWS, record()))
         s.label(s.ran(PLAN, None, plan=plan() | change))
@@ -738,15 +738,15 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     assert answer == {k: asked["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
         "runs": [HOLDER], "superseded": []}
     assert answer["why"] == [
-        "each connection is charged its whole schedule: the schedule was not handed for 1 of the 1 class(es) that hold "
+        ("each connection is charged its whole schedule: the schedule was not handed for 1 of the 1 class(es) that hold "
         "a row in the 1 execution phase(s) read, so the rule charges none of those below it, and 0 of the 1 lack a "
-        "verdict: this reader is handed no schedule and asks the rule without one",
+        "verdict: this reader is handed no schedule and asks the rule without one"),
         reader().SERVE_NAMED,
-        "the link responses, execution phase 3, class 0: charged its whole schedule on each of its 4 rows: the "
-        "schedule was not handed",
-        f"`out/registrations.jsonl` of {HOLDER} says its registrations were checked under the network certifier's key "
+        ("the link responses, execution phase 3, class 0: charged its whole schedule on each of its 4 rows: the "
+        "schedule was not handed"),
+        (f"`out/registrations.jsonl` of {HOLDER} says its registrations were checked under the network certifier's key "
         f"whose SHA-512 is {'5a' * 64}, in the session {'c3' * 32}: the reader holds neither, and compares them with "
-        "nothing"]
+        "nothing")]
     bare = E.build(store=recorded(tmp_path / "bare", planned=False).store, root=REPO)
     assert held["periods"] == bare["periods"] == doc["periods"] and held["inputs"] == bare["inputs"]
     assert {tuple(p["output_count"]["at_zero_in"]) for p in held["periods"]} == {()}
@@ -781,7 +781,7 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     lb = term()
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     given = delta(lb)
-    assert E.PERIOD_ERROR == Fraction(1, 2 ** 20) and given == Fraction(1, 12108532285440000000) != lb.SCAN_DELTA
+    assert Fraction(1, 2 ** 20) == E.PERIOD_ERROR and given == Fraction(1, 12108532285440000000) != lb.SCAN_DELTA
     theirs = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS, scan_delta=given), only=E.SCOPES)
     said, by = doc["certifier"]["scan_delta"], {i["input"]: i for i in doc["inputs"]}
     assert (said["value"], said["mark"]) == (theirs["inputs"]["scan_delta"]["value"], "assumed") and said["value"] == float(given)
@@ -1592,8 +1592,8 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     assert alone["inputs"] == base["inputs"] and alone["periods"] == base["periods"]
     assert alone["certifier"]["stop"] == base["certifier"]["stop"] | {"runs": [HOLDER], "why": [
         *term().NO_RECORDS.why,
-        f"{HOLDER} is not read: it holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, "
-        "`out/*-controls.jsonl`, `out/serve-registrations.jsonl`"]}
+        (f"{HOLDER} is not read: it holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, "
+        "`out/*-controls.jsonl`, `out/serve-registrations.jsonl`")]}
     text = E.render(alone)
     assert ("No sum takes it at 0: those under `all three` and `design` hold it too, their stop class charged its whole "
             f"schedule. The stop class's verdicts of record (`{E.VERDICTS}`, {HOLDER}): {said}.\n") in text
@@ -1605,8 +1605,8 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     mixed = [v | {"proved_by": "Made.Up.StopRecordSound", "open": None} if v["piece"] == "stop_record" else v
              for v in complete()]
     stop = E.build(store=with_verdicts(tmp_path / "mixed", mixed).store, root=REPO)["stop_class"]
-    assert (stop["mark"], stop["said"]) == (E.RUN_NOT_PROVED, f"{ON} (run, not proved: {OPEN}; Python verifier "
-                                            "for the response tie, the request tie and the compute audit's second stage)")
+    assert (stop["mark"], stop["said"]) == (E.RUN_NOT_PROVED, (f"{ON} (run, not proved: {OPEN}; Python verifier "
+                                            "for the response tie, the request tie and the compute audit's second stage)"))
 
 
 def test_proved_by_on_every_piece_makes_it_measured(tmp_path, listed):
@@ -1664,11 +1664,11 @@ def test_a_verdicts_record_whose_field_holds_what_it_cant_is_refused(tmp_path):
                          "`open` states what the verifier withheld its accept for, on a `withheld` verdict"),
                         ({"verdict": "withheld", "open": "PRF-456"}, "`open` names an issue, .*"),
                         ({"proved_by": ""}, "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
-                        ({"open": None}, "`open` states what stands between the verdict and proved, while `proved_by` is "
-                                         "null"),
-                        *(({"open": issue}, "`open` names an issue, and the print carries no issue's id: state what is open "
+                        ({"open": None}, ("`open` states what stands between the verdict and proved, while `proved_by` is "
+                                         "null")),
+                        *(({"open": issue}, ("`open` names an issue, and the print carries no issue's id: state what is open "
                                             "in words \\(e.g. `the two-round form's soundness is not proved`\\), and put the "
-                                            "issue on the board") for issue in ("PRF-419", "waits on PRF-419", "NET-386 and more"))):
+                                            "issue on the board")) for issue in ("PRF-419", "waits on PRF-419", "NET-386 and more"))):
         with pytest.raises(ValueError, match=f"^here holds .*: {why}$"):
             E.verdict(v | change, "here")
     assert E.verdict(v | {"proved_by": "G", "open": None, "verifier": VERIFIER | {"more": 1}}, "here")["verifier"] == VERIFIER
@@ -1695,20 +1695,20 @@ def test_without_both_negative_controls_refused_the_class_is_not_complete_and_sa
             ("one", [*honest, made_up_verdict("response_tie", "id")],
              ["no negative control with a changed `max_tokens`"]),
             ("accepted", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verdict="accept")],
-             ["the control with a changed `max_tokens` on the request tie is `accept` on r20261113-000000-a011, not "
-              "refused"]),
+             [("the control with a changed `max_tokens` on the request tie is `accept` on r20261113-000000-a011, not "
+              "refused")]),
             ("other", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verifier=other)],
-             ["the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
-              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the request tie"]),
+             [("the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
+              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the request tie")]),
             ("unaccepted", [*complete()[:2], made_up_verdict("request_tie", verdict="not complete"), *complete()[3:]],
              ["the request tie is `not complete` on r20261113-000000-a003",
-              "the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
-              f"{VERIFIER['commit']}, not by a verifier that accepted the honest run's verdict on the request tie"]),
+              ("the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
+              f"{VERIFIER['commit']}, not by a verifier that accepted the honest run's verdict on the request tie")]),
             ("withheld", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"), *complete()[4:]],
              [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}"]),
             ("withheld control", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verdict="withheld")],
-             [f"the control with a changed `max_tokens` on the request tie on r20261113-000000-a011, withheld: {OPEN}, "
-              "not refused"]),
+             [(f"the control with a changed `max_tokens` on the request tie on r20261113-000000-a011, withheld: {OPEN}, "
+              "not refused")]),
             ("withheld, its controls refused", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"),
                                                 made_up_verdict("second_stage", "id"),
                                                 made_up_verdict("second_stage", "max_tokens")],
@@ -1717,8 +1717,8 @@ def test_without_both_negative_controls_refused_the_class_is_not_complete_and_sa
                                                         made_up_verdict("second_stage", "id", verifier=other),
                                                         made_up_verdict("second_stage", "max_tokens")],
              [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}",
-              "the control with a changed id is refused on r20261113-000000-a008 by `made_up.stop_verifier` at "
-              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the compute audit's second stage"]),
+              ("the control with a changed id is refused on r20261113-000000-a008 by `made_up.stop_verifier` at "
+              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the compute audit's second stage")]),
             ("missing", complete()[1:], ["no verdict on the stop record"])):
         doc = E.build(store=with_verdicts(tmp_path / name, verdicts).store, root=REPO)
         stop = doc["stop_class"]
@@ -1752,17 +1752,17 @@ def test_four_verdicts_complete_a_class_only_on_one_class_at_the_rows_rate(tmp_p
              ["the stop record's verdict on r20261113-000000-a001 lacks `registration`, `serve`",
               "the request tie's verdict on r20261113-000000-a003 lacks `stream_names_boundary`"]),
             ("unchecked", honest({"response_tie": {"stream_names_boundary": False}}),
-             [f"the response tie's verdict on r20261113-000000-a002 records that its stream's registration, `{'02' * 64}`, "
-              "doesn't name the class's boundary (`stream_names_boundary` false)"]),
+             [(f"the response tie's verdict on r20261113-000000-a002 records that its stream's registration, `{'02' * 64}`, "
+              "doesn't name the class's boundary (`stream_names_boundary` false)")]),
             ("registration", honest({"second_stage": {"registration": cd}}),
-             [f"the honest verdicts disagree on `registration`: `{ab}` ({three}) and `{cd}` (the compute audit's second "
-              "stage)"]),
+             [(f"the honest verdicts disagree on `registration`: `{ab}` ({three}) and `{cd}` (the compute audit's second "
+              "stage)")]),
             ("serve", honest({"stop_record": {"serve": "r20261113-000000-ffff"}}),
-             ["the honest verdicts disagree on `serve`: `r20261113-000000-ffff` (the stop record) and "
-              "`r20261113-000000-5e7d` (the response tie, the request tie and the compute audit's second stage)"]),
+             [("the honest verdicts disagree on `serve`: `r20261113-000000-ffff` (the stop record) and "
+              "`r20261113-000000-5e7d` (the response tie, the request tie and the compute audit's second stage)")]),
             ("class", honest({"request_tie": {"class": "w0/p4-o2-nostop"}, "second_stage": {"class": "w1/p4-o2"}}),
-             ["the honest verdicts disagree on `class`: `w0/p4-o2` (the stop record and the response tie), "
-              "`w0/p4-o2-nostop` (the request tie) and `w1/p4-o2` (the compute audit's second stage)"]),
+             [("the honest verdicts disagree on `class`: `w0/p4-o2` (the stop record and the response tie), "
+              "`w0/p4-o2-nostop` (the request tie) and `w1/p4-o2` (the compute audit's second stage)")]),
             ("rates", honest({"second_stage": {"rate": "1/2"}}),
              [f"the honest verdicts disagree on `rate`: `1/1` ({three}) and `1/2` (the compute audit's second stage)"]),
             ("rate", honest({p: {"rate": "1/2"} for p in E.PIECES}),
@@ -1789,8 +1789,8 @@ def test_an_honest_verdicts_class_field_holding_what_it_cant_is_refused(tmp_path
     v = made_up_verdict("stop_record")
     for change, why in (({"registration": ""}, "the digest of the class's boundary record"),
                         ({"stream_registration": None}, "the digest of its own stream's registration"),
-                        ({"stream_names_boundary": "true"}, "true or false, the verifier's recorded check that its "
-                                                            "stream's registration names the boundary"),
+                        ({"stream_names_boundary": "true"}, ("true or false, the verifier's recorded check that its "
+                                                            "stream's registration names the boundary")),
                         ({"serve": 7}, "the store id of the served run the class came from"),
                         *(({"class": c}, "`w<window>/p<P>-o<O>`, with `-nostop` for a class with no stop block")
                           for c in ("p4-o2", "w0/p4-o2-stop", "wA/p4-o2", "w0/p4")),
@@ -1983,10 +1983,10 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert head["inputs"][1:] == audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's",
                                                          *doc["runs"]]
     assert net["inputs"] == [
-        "modeled (run, not proved): the network certifier's term of record, its `scan` row as the scan's check charges "
-        "it today at D_j = 2, on an assumed class of at most 1,024 ids a response",
-        f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
-        f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)"]
+        ("modeled (run, not proved): the network certifier's term of record, its `scan` row as the scan's check charges "
+        "it today at D_j = 2, on an assumed class of at most 1,024 ids a response"),
+        (f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
+        f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)")]
     assert all("why" not in m and m["ci95"] is None and m["host"]["node"] == "cpu-node-0" for m in by.values())
     # every period of the document, each figure the document's own over it
     at = {(m["name"], m["period"], m["over"]): m for m in got["measurements"]}
@@ -2125,6 +2125,6 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
     # no figure of it is called bits: each is a probability over what its clause names
     assert not any(" bits" in line for line in lines)
     none = [line for line in E.render(bare).splitlines() if E.SECURITY in line]
-    assert none == ["- **the security level**: not read. The rows of record hold no binding bound "
+    assert none == [("- **the security level**: not read. The rows of record hold no binding bound "
                     "(`verification_phase.binding`): the planner wrote them before it computed one. Run it again and "
-                    f"label its run (`research data label RUN {E.RUN_OF_RECORD} {E.RECORD} --by LANE`)."]
+                    f"label its run (`research data label RUN {E.RUN_OF_RECORD} {E.RECORD} --by LANE`).")]
