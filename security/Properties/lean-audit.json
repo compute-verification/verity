@@ -17,7 +17,7 @@
   "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Pouw.PearlPlusTie",
-  "Properties.Pouw.PearlPlusDraw",
+  "Properties.Pouw.PearlPlusSample",
   "Properties.InferenceOnly",
   "Properties.InferenceOnly.Threads",
   "Properties.InferenceOnly.Theta",
@@ -989,7 +989,7 @@
   "VStar",
   "Properties.Pouw",
   "PouwWindow.Grid",
-  "PouwWindow.Draw",
+  "PouwWindow.Sample",
   "PouwWindow.Public",
   "PouwWindow.Length",
   "Properties.Pouw.Check",
@@ -1020,7 +1020,7 @@
   "PouwCommit.Py",
   "PouwCommit.Bindings",
   "PouwCommit.Coins",
-  "PouwCommit.Draws",
+  "PouwCommit.Samples",
   "PouwPearlPlus",
   "Identity.Sha512",
   "Identity.Tagged",
@@ -2201,7 +2201,7 @@
     "Properties.Pouw.ServedValues",
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlus.Witnesses",
-    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Pouw.PearlPlusSample",
     "Properties.Pouw.PearlPlusTie"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
@@ -2211,7 +2211,7 @@
    "except": [],
    "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, the trees' messages against the commitments' (`Properties.Pouw.Commit.pathFrames`), and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
   },
-  "Properties.Pouw.PearlPlusDraw": {
+  "Properties.Pouw.PearlPlusSample": {
    "imports": [
     "PouwPearlPlus",
     "Definitions.Pouw.Game.Defs",
@@ -2224,12 +2224,12 @@
   "Properties.Pouw.PearlPlusTie": {
    "imports": [
     "Properties.Pouw.PearlPlus",
-    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Pouw.PearlPlusSample",
     "Definitions.Core.Interaction",
     "Flock.Hash"
    ],
    "except": [],
-   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), and the play's collision finder as a `Claims.Finder` (`Definitions.Core.Interaction`) over the compiled SHA-512 (`Flock.Hash`)"
+   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusSample`), and the play's collision finder as a `Claims.Finder` (`Definitions.Core.Interaction`) over the compiled SHA-512 (`Flock.Hash`)"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -2374,7 +2374,7 @@
     "Properties.Verity.Subprotocols",
     "Properties.Verity.Coupling",
     "Properties.Pouw.PearlPlus",
-    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Pouw.PearlPlusSample",
     "Properties.Remote",
     "Properties.Verity.ExecutionPhaseFiles",
     "Definitions.Core.Compiler",

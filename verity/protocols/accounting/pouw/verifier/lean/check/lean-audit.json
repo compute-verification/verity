@@ -40,7 +40,7 @@
    "imports": [
     "CoreProtocol.Protocol",
     "PouwWindow.Grid",
-    "PouwWindow.Draw",
+    "PouwWindow.Sample",
     "PouwWindow.Public",
     "PouwWindow.Length",
     "PouwCheck.Inputs",
@@ -70,7 +70,7 @@
   "PouwCheck.Pass": {
    "imports": [
     "Flock.Draw",
-    "PouwCommit.Draws",
+    "PouwCommit.Samples",
     "PouwCommit.Bindings",
     "PouwWindow.Rounds",
     "PouwCheck.Inputs",
@@ -99,7 +99,7 @@
     "PouwCheck.Opening",
     "PouwCheck.Pass",
     "PouwCheck.Rounds",
-    "PouwWindow.Draw",
+    "PouwWindow.Sample",
     "PouwWindow.Rounds",
     "Spot.ChallengerCoins",
     "Spot.ChallengerSession",
