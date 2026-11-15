@@ -860,7 +860,7 @@ __global__ void smid_of(unsigned* out, unsigned long long hold_ns) {
 extern "C" {
 
 // got: the filler's SMs, the step's, the minimum partition, the co-scheduled alignment. Returns 0, or 1000 · the failing
-// stage + its CUresult (stage 1: a missing driver symbol).
+// stage + its CUresult (1000: a missing driver symbol).
 int sq_green(int fill_sms, void** s_step, int prio_step, int* got) {
   auto dget = gc::drv<decltype(&cuDeviceGet)>("cuDeviceGet");
   auto res = gc::drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");

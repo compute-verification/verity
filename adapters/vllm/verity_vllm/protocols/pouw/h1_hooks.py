@@ -1,21 +1,22 @@
 """H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`) and their weights' roots
 (`weight_roots`), each layer's ``observe`` (`observer`) and ``apply`` under the credit gate's trace (`traced`), and the
-model runner's ``execute_model``, which hands each step's admissions to the window (`admitting`), all wired at install by
+model runner's ``execute_model``, which hands each step's admissions to the window (`admitting`: its scheduler output's
+new requests, `new_requests`, and its batch order, `batch_order`), all wired at install by
 `wire`; and the z/y kernels a committing run's calls compile, compiled ahead (`warm_zy`)."""
 from __future__ import annotations
 
+import sys
 import weakref
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving import (
-    batch_order,
-    CreditTrace,
     H1_SCHEME,
     H1_TILE,
     H1_WEIGHT_KEY,
-    h1_weight_root,
+    CreditTrace,
     H1Run,
-    new_requests,
+    h1_weight_root,
     numpy_of,
     observe_matmul,
 )
@@ -133,6 +134,36 @@ def traced(run: H1Run, w: int, orig: Any) -> Any:
     return apply
 
 
+def new_requests(scheduler_output: Any) -> list[tuple[str, Sequence[int] | None, int]]:
+    """The requests vLLM's scheduler admitted in this step (`SchedulerOutput.scheduled_new_reqs`, where Model Runner V2
+    also puts requests resumed after a preemption), each (req_id, prompt token ids, token cap). A request with prompt
+    embeddings has no prompt token ids here, and a pooling request no cap."""
+    out = []
+    for r in getattr(scheduler_output, "scheduled_new_reqs", None) or ():
+        params = getattr(r, "sampling_params", None)
+        prompt = None if getattr(r, "prompt_embeds", None) is not None else getattr(r, "prompt_token_ids", None)
+        out.append((str(r.req_id), prompt, int(getattr(params, "max_tokens", 0) or 0)))
+    return out
+
+
+def sort_batch_req_ids(num_tokens_per_req: Mapping[str, int], draft_tokens: Mapping[str, Sequence[int]],
+                       decode_query_len: int) -> list[str]:
+    """Model Runner V2's batch order at vLLM d9105ea8 (``vllm/v1/worker/gpu/model_runner.py``, `sort_batch_req_ids`):
+    verification and decode first, then short extends, then prefills, by rows; the runner's own is used when its module
+    has one (`batch_order`)."""
+    return sorted(num_tokens_per_req, key=lambda r: (not draft_tokens.get(r), num_tokens_per_req[r] != decode_query_len,
+                                                     num_tokens_per_req[r]))
+
+
+def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
+    """The step's scheduled requests, each (req_id, rows), in the order Model Runner V2 lays their rows out in the step's
+    inputs, and so in its linears' A tables (``gather_batch_req_state``, then ``prepare_inputs``' cumulative rows)."""
+    tokens = dict(getattr(scheduler_output, "num_scheduled_tokens", None) or {})
+    drafts = getattr(scheduler_output, "scheduled_spec_decode_tokens", None) or {}
+    sort = getattr(sys.modules.get(type(runner).__module__), "sort_batch_req_ids", None) or sort_batch_req_ids
+    return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
+
+
 def admitting(run: H1Run, orig: Any, runner: Any) -> Any:
     """The model runner's ``execute_model``: the step's admitted requests and its batch order handed to the run
     (`H1Run.admit`) before the step's forward, so each entry is in the round of the step that admits it and each served row
@@ -199,5 +230,5 @@ def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None)
     return len(seen)
 
 
-__all__ = ["admitting", "committed", "expert_names", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots",
-           "wire"]
+__all__ = ["admitting", "batch_order", "committed", "expert_names", "layers", "new_requests", "observer", "serves_zy",
+           "sort_batch_req_ids", "traced", "warm_zy", "weight_roots", "wire"]

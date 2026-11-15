@@ -473,7 +473,7 @@ class H1Run:
               ) -> list[RQ.RequestEntry]:
         """The step about to run: the requests the engine admits for it, each (req_id, prompt token ids, token cap), and its
         batch order, each scheduled request's (req_id, rows) in the order the step's A tables hold its rows
-        (`pouw_h1_requests.batch_order`). Each new request's entry goes in the step's round, at its first slot; a req_id
+        (the adapter's). Each new request's entry goes in the step's round, at its first slot; a req_id
         already admitted (a request resumed
         after a preemption) keeps its entry (`readmitted`). A request past the window's S steps, with no prompt token or
         cap, or not in the batch is refused (`refused_requests`): it has no entry, and its rows are a gap
