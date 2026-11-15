@@ -1,3 +1,0 @@
-[2026-11-15T00:37Z] 91235a3ae192
-From the proofs lead, 00:42Z: a lead for test_stop_audit's lost 'registered' refusal: 3acd2151ecd (our #10025, TWOLEG's, 14 Nov 05:56Z, on architecture not on main) made Record.record ALWAYS apply lessOwnReads: a reported read named by one of the record's own ports, at that port's own root in the record, is dropped from the registered check (before, only under the two-stage own_reads flag). If the test's case is exactly such a read, the refusal moved on purpose and the TEST changes (say what now refuses that case, if anything, and name it in the test); if the test's case is a read at ANOTHER root, the refusal must still fire and its loss is a bug: say which, with the case's port and roots. Then re-run your command.
-
