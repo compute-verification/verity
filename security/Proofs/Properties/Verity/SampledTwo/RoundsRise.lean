@@ -685,6 +685,7 @@ theorem runMembers_sessions {slice : Spot.OneStageZk.Member → Json} {ms : Arra
           (z.2.population (slice z.2) pubB)) bs s := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨r₁, hfold, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
@@ -712,7 +713,8 @@ theorem membersRun_ran {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.
       Spot.OneStageZk.runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs = .ok r := by
   unfold Spot.OneStageZk.membersRun at h
   simp only [Verity.Sampled.bind_ok] at h
-  obtain ⟨_, hs, roots, -, hrm⟩ := h
+  obtain ⟨_, hs, roots, -, r', hrm, _, -, hr⟩ := h
+  obtain rfl : r' = r := by cases hr; rfl
   unfold Spot.OneStageZk.membersStructure at hs
   simp only [Verity.Sampled.bind_ok] at hs
   obtain ⟨held, hheld, hs⟩ := hs
@@ -903,7 +905,7 @@ theorem located_rising (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : 
     have hx' : named.toList[j]? = some x := by rw [Array.getElem?_toList]; exact hx
     obtain ⟨sn, hsj, hnamed, -⟩ := forall₂_getElem?_right hN₀ hx'
     obtain ⟨z, hz, hsz'⟩ := List.mem_flatMap.1 (List.mem_of_getElem? hsj)
-    obtain ⟨circuitB, pubB, rd, hacc'⟩ := hmem z hz
+    obtain ⟨circuitB, pubB, rd, tables, hacc'⟩ := hmem z hz
     obtain ⟨hallr, -, -⟩ := Verity.Sampled.MemberForm.membersTreeReason_none hnone
     obtain ⟨t', ht', hroot', o', -, -, hSt⟩ :=
       Verity.Sampled.MemberForm.memberTreeReason_none (hallr x (Array.mem_of_getElem? hx))
