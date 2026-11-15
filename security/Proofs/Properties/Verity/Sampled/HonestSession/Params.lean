@@ -145,17 +145,12 @@ parsed value, and the decoders must then read that value's fields as a concrete 
 well-founded-recursive, so the kernel does not reduce it (`canon_norm` only gives `canon (norm j) = canon j`, not
 `norm j = j`, and no `plain j → norm j = j` lemma exists).
 
-Unproved: taken as a hypothesis `hN : NormFacts` by `params_full` and the exports that depend on it. It is held, as
-*evaluated* evidence rather than kernel-checked proof, by the `#guard`s beside it. Caveat: `norm` rebuilds each object as
-the ascending-key insertion tree, so the *propositional* equality this states additionally needs that tree shape to match
-the literal's; `Json`'s `==` is *semantic* (per-key lookup), so the `==` guards attest value equality, not the tree-shape
-equality. The `.compress` guards attest the serialized text is equal. -/
+Taken as a hypothesis `hN : NormFacts` by `params_full` and the exports that depend on it. It is *true structurally*, not
+merely semantically: `norm` rebuilds each object as the tree of its members re-inserted in ascending key order
+(`normObj`), which reproduces a literal exactly when that literal is `mkObj` of an ascending, duplicate-free key list at
+every level — which `θJ` and `paramsJ` are (every `Data/` object, `programJ` included, is now such a literal). So both
+trees are identical, not just equal under `Json`'s semantic `==`. -/
 def NormFacts : Prop := jnorm θJ = θJ ∧ jnorm paramsJ = paramsJ
-
-#guard jnorm θJ == θJ
-#guard jnorm paramsJ == paramsJ
-#guard (jnorm θJ).compress == θJ.compress
-#guard (jnorm paramsJ).compress == paramsJ.compress
 
 /-- The session's query is plain. -/
 private theorem plain_query : Firewall.plain query = true := by

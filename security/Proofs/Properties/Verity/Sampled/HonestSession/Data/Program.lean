@@ -33,7 +33,7 @@ def templateId : String := "Unit_v1"
 def arr16 : Json := .arr #[.str "Array", jn 16, .arr #[.str "Value", jn 16]]
 
 /-- The registered descriptor without `annotations`, the object its SHA-512 is taken of. -/
-def programBare : Json := Json.mkObj [
+def programBarePairs : List (String × Json) := [
   ("callees", .arr #[.str "Input16_v1", .str templateId]),
   ("definitions", Json.mkObj [
     ("Input16_v1", Json.mkObj [("form", .str "primitive"), ("id", .str "Input16_v1"), ("params", .arr #[]),
@@ -55,8 +55,13 @@ def programBare : Json := Json.mkObj [
   ("format", .str "verity-ir/descriptor/v1"),
   ("root", .str "Root_v1")]
 
-/-- The registered descriptor: `programBare` with empty `annotations`. -/
-def programJ : Json := programBare.setObjVal! "annotations" (Json.mkObj [])
+/-- The descriptor without `annotations`. -/
+def programBare : Json := Json.mkObj programBarePairs
+
+/-- The registered descriptor: `programBare` with empty `annotations`. Written as a single ascending-key `mkObj` literal
+(not `setObjVal!` into `programBare`), so the parser's rebuild (`norm`) reproduces its exact tree: `"annotations"` sorts
+before every key of `programBarePairs`. -/
+def programJ : Json := Json.mkObj (("annotations", Json.mkObj []) :: programBarePairs)
 
 /-- The registered program file, its descriptor's canonical text. -/
 def programFile : ByteArray := ((Flock.canon programJ).toOption.getD "").toUTF8
