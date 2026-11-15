@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("restack_under_test", HERE.parent / "restack.py")
+spec = importlib.util.spec_from_file_location("restack_under_test", HERE.parents[2] / "tools" / "move" / "restack.py")
 RS = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(RS)
 
@@ -581,7 +581,7 @@ def test_without_kept_no_check_is_kept_and_none_is_read(repo, cache, on_base):
     on_base.again()
     assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [base]
     home = {**os.environ, "HOME": str(cache.parent)}
-    p = subprocess.run([sys.executable, str(HERE.parent / "restack.py"), "pr", "--move-commit", "move", "--dry-run", "--json"],
+    p = subprocess.run([sys.executable, str(HERE.parents[2] / "tools" / "move" / "restack.py"), "pr", "--move-commit", "move", "--dry-run", "--json"],
                        cwd=repo, env=home, capture_output=True, text=True)
     assert json.loads(p.stdout)[0]["status"] == "clean" and not (cache.parent / ".cache").exists()
 
@@ -611,7 +611,7 @@ def test_a_second_restack_py_finds_the_first_one_s_check(repo, cache):
     """The command an owner runs, twice: the second process reads the file the first one wrote, and gives the same tree."""
     on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     home = {**os.environ, "HOME": str(cache.parent)}
-    runs = [subprocess.run([sys.executable, str(HERE.parent / "restack.py"), "pr", "--move-commit", "move", "--kept", "--dry-run",
+    runs = [subprocess.run([sys.executable, str(HERE.parents[2] / "tools" / "move" / "restack.py"), "pr", "--move-commit", "move", "--kept", "--dry-run",
                             "--json"], cwd=repo, env=home, capture_output=True, text=True) for _ in range(2)]
     first, second = (json.loads(p.stdout)[0] for p in runs)
     assert first["status"] == second["status"] == "clean"
@@ -868,7 +868,7 @@ def test_a_branch_that_writes_code_in_an_init_the_move_deletes_is_script_failed_
     commit(r, "old", {"app/__init__.py": "", "app/data/__init__.py": "", "app/data/a.toml": "a = 1\n",
                       "tools/research/src/research/store/moves.json": '{"moves": []}\n'})
     git(r, "branch", "pr")
-    commit(r, "base", {"tools/move/layout.py": (HERE.parent / "layout.py").read_text(),
+    commit(r, "base", {"tools/move/layout.py": (HERE.parents[2] / "tools" / "move" / "layout.py").read_text(),
                        "tools/move/layout_map.toml": '[roots]\nold = {}\nnew = {}\n\n[paths]\n"app/data/a.toml" = "data/a.toml"\n'
                                                      '\n[rewrite]\nexclude = ["tools/move/**"]\n'})
     subprocess.run(["python3", "tools/move/layout.py", "--no-lock"], cwd=r, check=True, capture_output=True)
@@ -1130,7 +1130,7 @@ def real(tmp_path, monkeypatch):
     commit(r, "old", {"old/lib/__init__.py": "", "old/lib/a.py": "X = 1\n", "use.py": "import old.lib.a\n",
                       RECORD: '{"moves": []}\n'})
     git(r, "branch", "pr")
-    commit(r, "base", {"tools/move/layout.py": (HERE.parent / "layout.py").read_text(), "tools/move/layout_map.toml": LAYOUT_MAP})
+    commit(r, "base", {"tools/move/layout.py": (HERE.parents[2] / "tools" / "move" / "layout.py").read_text(), "tools/move/layout_map.toml": LAYOUT_MAP})
     subprocess.run([sys.executable, "tools/move/layout.py", "--map", "tools/move/layout_map.toml", "--no-lock"], cwd=r,
                    check=True, capture_output=True)
     commit(r, "layout: the package moves\n\nLayout-move: tools/move/layout_map.toml --no-lock")
@@ -1263,8 +1263,8 @@ def scoped(tmp_path, monkeypatch):
     commit(r, "old", {".gitignore": "__pycache__/\n", "Spot/Challenger.lean": CHALLENGER, "Other/Uses.lean": USES,
                       "Net/Period.lean": PERIOD, "Net/Accounting.lean": "def total := 2\n"})
     git(r, "branch", "pr")
-    commit(r, "base", {"tools/move/rename.py": (HERE.parent / "rename.py").read_text(),
-                       "tools/move/layout.py": (HERE.parent / "layout.py").read_text(), WORDS_MAP: WORDS})
+    commit(r, "base", {"tools/move/rename.py": (HERE.parents[2] / "tools" / "move" / "rename.py").read_text(),
+                       "tools/move/layout.py": (HERE.parents[2] / "tools" / "move" / "layout.py").read_text(), WORDS_MAP: WORDS})
     subprocess.run([sys.executable, "tools/move/rename.py", "--map", WORDS_MAP], cwd=r, check=True, capture_output=True)
     git(r, "tag", "move", commit(r, f"rename: the challenger's words\n\nMove: {WORDS_MAP}"))
     monkeypatch.chdir(r)
@@ -1419,7 +1419,7 @@ def test_a_malformed_entry_is_refused_with_the_fix(repo, lines, entry, fix):
 
 
 def test_the_tree_s_table_is_well_formed_and_each_entry_is_a_commit_of_the_repository(monkeypatch):
-    monkeypatch.setattr(RS, "MOVE_LINES", str(HERE.parent / "move_lines.toml"))
+    monkeypatch.setattr(RS, "MOVE_LINES", str(HERE.parents[2] / "tools" / "move" / "move_lines.toml"))
     table = RS.corrections()
     p = subprocess.run(["git", "cat-file", "--batch-check"], cwd=HERE, input="".join(f"{s}^{{commit}}\n" for s in table),
                        capture_output=True, text=True, check=True)

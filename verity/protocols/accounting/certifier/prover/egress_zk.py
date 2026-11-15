@@ -58,7 +58,7 @@ from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-_TRAFFIC = Path(__file__).resolve().parents[1] / "verifier/tests/egress_traffic.py"
+_TRAFFIC = Path(__file__).resolve().parents[5] / "tests" / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
