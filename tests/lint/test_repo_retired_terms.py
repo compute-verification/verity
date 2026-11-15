@@ -905,7 +905,7 @@ def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_reti
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"
-    kept = "a served cap S charges each replay block at most F S; `WardenParams.max_tokens_cap`\n"
+    kept = "a served cap S charges each replay block at most F S; `NetworkCertifierParams.max_tokens_cap`\n"
     assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
     assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
         (2, "cap"), (2, "cap")]

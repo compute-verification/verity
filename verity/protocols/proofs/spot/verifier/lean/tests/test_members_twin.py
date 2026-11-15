@@ -243,8 +243,8 @@ def test_the_members_wiring_is_a_parameter_its_check_refuses_and_is_read_after_t
         for d, b in a.files.items():
             (tmp_path / d[:16]).write_bytes(b)
             paths.append(tmp_path / d[:16])
-        why, decided = M.refusal(p, D.canonical(a.rec).encode(), D.canonical(a.evidence).encode(), paths)
-        assert decided, why
+        verdict, why = M.check(p, D.canonical(a.rec).encode(), D.canonical(a.evidence).encode(), paths)
+        assert verdict == "reject", (verdict, why)
         with pytest.raises(M.Outside, match="wiring"):
             M.members_run(p, _json(a.rec), a.evidence, M.blobs_of(paths), program=a.s.program, verify=lms_verify)
         return why
