@@ -23,7 +23,7 @@ same script rather than by rename detection:
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
    rewrote next to one the branch edited would conflict.)
-4. run the result's own `tools/verity/check/pins.py --regen` at its root, which runs each stale pin's command, and commit what it
+4. run the result's own `pins.py --regen` (`PINS_FILES`) at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
 Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
@@ -108,8 +108,10 @@ TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
 MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
 LINE_SCRIPT = {"Move": "tools/move/rename.py", "Layout-move": "tools/move/layout.py"}
-#: the result's own list of pins, whose `--regen` runs every stale pin's command
-PINS = "tools/verity/check/pins.py"
+#: the result's own list of pins, whose `--regen` runs every stale pin's command: in the check's directory, `tools/check/`,
+#: or `tools/verity/check/` in a tree from before the move that put it there
+PINS_FILES = ("tools/check/pins.py", "tools/verity/check/pins.py")
+PINS = PINS_FILES[0]
 #: a Lean package's lock: where both sides changed it, the result takes `--onto`'s whole
 LOCK = "lean-audit.json"
 #: what the owner of a result whose locks took `--onto`'s side does before marking it. A records run regenerates the records
@@ -123,7 +125,7 @@ LOCKS_READD = ("re-add by hand each entry the branch's own change put in them (`
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
 #: where `--kept` keeps the moves `check_generated` found generated, a file a key (`kept_path`): in the check's cache, at its
-#: default place (`tools/verity/check/common.cache_dir`). On a node that is the one directory every run shares: a run's
+#: default place (the check's `common.cache_dir`). On a node that is the one directory every run shares: a run's
 #: clone, with its `.git`, is removed when the run ends, so a file kept there would never be read
 KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: whether `check_generated` reads and writes `KEPT_DIR` (`--kept`). Off, as in drive's jobs and in every test that reaches
@@ -374,13 +376,14 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
 def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, list[str], bool]:
     """Check `result` out in a scratch worktree and run its own `pins.py --regen` at the root: (the tree it leaves, or None when
     it changed nothing, the tail of its output, whether every pin is fresh after). A tree without the list has no pins to run."""
-    if git("cat-file", "-e", f"{result}:{PINS}", cwd=cwd, ok=(0, 128)).returncode:
+    pins = next((p for p in PINS_FILES if not git("cat-file", "-e", f"{result}:{p}", cwd=cwd, ok=(0, 128)).returncode), None)
+    if pins is None:
         return None, [], True
     with tempfile.TemporaryDirectory(prefix="restack-pins-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))
         add_worktree(wt, result, cwd)
         try:
-            p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
+            p = subprocess.run([python, pins, "--regen"], cwd=wt, capture_output=True)
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             git("add", "-A", cwd=wt)
             tree = out("write-tree", cwd=wt)

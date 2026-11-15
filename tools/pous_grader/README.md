@@ -141,7 +141,7 @@ then review the records' diff).
 
 **Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` (among them Core's `prCoin`, in
 `Definitions/Core/Game.lean`, and the proved files `Sanity.lean` imports) or adding a `.lean` file under
-`Definitions/Pous`, regenerating it from this directory (`tools/verity/check/pins.py --regen` runs this command, and
+`Definitions/Pous`, regenerating it from this directory (`tools/check/pins.py --regen` runs this command, and
 `--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
 starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/accounting/pous/verifier/tests/test_pous_trusted.py` names it):
 

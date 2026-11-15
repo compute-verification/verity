@@ -177,7 +177,9 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
         w: bytes([w + 1]) * 32 + salt_key for w in weights})
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
     monkeypatch.setattr(verifier, "executable", lambda: Path("lean"))

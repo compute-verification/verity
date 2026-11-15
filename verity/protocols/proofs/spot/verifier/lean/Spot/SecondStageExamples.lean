@@ -761,11 +761,11 @@ private def exReadRec : Json := exRec 4 [("bx", 5, 6), ("t", 7, 8), ("u", 9, 3)]
 key, and the 1 its verdict port reads. -/
 private def exFilled : Array (String × Array (Array (String × String))) :=
   #[("root", #[#[("bytes", exRoot 7)]]), ("domain", #[#[("bytes", exRoot 8)]]),
-    ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE, VERDICT_ONE])]
+    ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE_LEAF, VERDICT_ONE_LEAF])]
 
 /-- `exFilled` with the second row of the verdict's value a 0. -/
 private def exFilledZero : Array (String × Array (Array (String × String))) :=
-  exFilled.map fun (v, rows) => (v, if v == "one" then #[VERDICT_ONE, #[("bytes", "00000000")]] else rows)
+  exFilled.map fun (v, rows) => (v, if v == "one" then #[VERDICT_ONE_LEAF, #[("bytes", "0000")]] else rows)
 
 /-- Template `t`'s reference statement's registered reads: its port `p` reads value `v`. -/
 private def exRefRead (t p v : String) : String × Json :=
@@ -866,6 +866,22 @@ private def exKeyed : Own :=
   KEY_BOUNDS_WHY
 #guard inputsWhy { exKeyed with rows := exTableRows } "row" == KEY_BOUNDS_WHY
 #guard inputsWhy { exKeyed with parts := some #[⟨"Pair_v0", 0, 2⟩] } "row" == KEY_BOUNDS_WHY
+-- a read whose key is wired lists no `table_rows` at a port of its opening; round 2 reads none yet, so any is refused
+private def exListed : Json :=
+  Json.mkObj [("value", .str "row"), ("table_rows", Json.arr #[Lean.toJson (0 : Nat), Lean.toJson (2 : Nat)])]
+private def exListing (port : String) (e : Json) : Json :=
+  Json.mkObj [("template", .str exRead), ("header", Json.mkObj []), ("draw", Json.mkObj []),
+    ("registered", Json.mkObj [("ports", Json.mkObj [(port, e)])])]
+#guard tableRowsWhy exKeyed exRead "row" exListed == some KEY_ROWS_WHY
+#guard tableRowsWhy exKeyed exRead "tok" exListed == some KEY_ROWS_WHY && tableRowsWhy exKeyed exRead "o1" exListed ==
+  some KEY_ROWS_WHY
+#guard tableRowsWhy exKeyed exRead "root" exListed == some TABLE_ROWS_WHY
+#guard tableRowsWhy exOpening exRead "row" exListed == some TABLE_ROWS_WHY
+#guard tableRowsWhy exKeyed exRead "row" (Json.mkObj [("value", .str "row")]) == none
+#guard tableRowsWhy exKeyed exRead "row" (Json.mkObj [("value", .str "row"), ("table_rows", .null)]) == none
+#guard tableRowsFailures exKeyed [exListing "row" exListed] == [("second-table-rows", Json.mkObj [("statement",
+  Lean.toJson (0 : Nat)), ("template", .str exRead), ("port", .str "row"), ("why", .str KEY_ROWS_WHY)])]
+#guard tableRowsFailures exKeyed [exListing "row" (Json.mkObj [("value", .str "row")])] == []
 -- the root and the domain are one table's of round 1's record, row by row and by their bytes
 #guard bytesOf #[("bytes", "0a")] == some "0a" && bytesOf #[("port", "0a")] == none
 #guard bytesOf #[("bytes", "0a"), ("bytes", "0a")] == none && bytesOf #[] == none
@@ -900,6 +916,9 @@ private def exKeyed : Own :=
 #guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "root") } == some "root"
 #guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "one") } == some "row"
 #guard inputsFailure { exOpening with supplied := exFilledZero } == some "row"
+-- the verdict's 1 is one 16-bit leaf: the four bytes of 1, two leaves, hold it to nothing
+#guard inputsFailure { exOpening with supplied := exRefilled "one" #[#[("bytes", "00000001")]] } == some "row"
+#guard inputsWhy { exOpening with supplied := exRefilled "one" #[#[("bytes", "00000001")]] } "row" == INPUTS_WHY
 #guard inputsFailure { exOpening with refReads := #[] } == some "row"
 #guard inputsFailure { exOpening with links := some (exReadLinks.push ⟨"Other_v1", "x", "row"⟩) } == some "row"
 -- nor may a port no link names read the row: a reference statement's read of it there is refused

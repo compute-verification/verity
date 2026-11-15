@@ -276,7 +276,7 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
         "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
         "--cwd", "source", "--timeout", "120m", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
         "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
-        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
         "--run-max", "7200", "--",
         "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
         "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
@@ -293,7 +293,7 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
     assert [flags[i + 1] for i, t in enumerate(flags) if t == "--env"] == [
         queued_flags[i + 1] for i, t in enumerate(queued_flags) if t == "--env"] == ["VERITY_BENCH_VENV=/workspace/jobs/venv312"]
     assert through_slot(workload)
-    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py"]
+    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
     assert workload[workload.index("--run-max") + 1] == "7200"
     lease = workload[workload.index("--", 4) + 1:]
     assert lease[:3] == ["gpu-lease", "1", "--wait"] and lease[lease.index("--max-min") + 1] == "120"
