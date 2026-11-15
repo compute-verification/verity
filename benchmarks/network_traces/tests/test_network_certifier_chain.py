@@ -223,7 +223,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
     what the step found of the traffic (`network_certifier_chain.WITNESS_KEYS`: which execution phases the signer refused, how
     many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
-    from verity.protocols.accounting.certifier.device import released_keys as RK
+    from verity.protocols.accounting.certifier.prover import released_keys as RK
 
     listing = RK.load().listing("certs.json")
     assert listing is not None and not RK.load().waits("certs.json")
