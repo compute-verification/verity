@@ -201,8 +201,8 @@ def test_gpu_readiness_reads_the_taps_under_fa2_and_the_disk_of_work(tmp_path: P
 
 
 FAKE_PY = "#!/bin/sh\n[ \"$1\" = - ] && exit 1\nexit 0\n"            # steps 1-2's checks pass; step 3's heredoc stops the run
-# every call fills the caches it is given, as an install does
-FAKE_UV = ("#!/bin/sh\nmkdir -p \"$UV_CACHE_DIR\" \"$PIP_CACHE_DIR\" && touch \"$UV_CACHE_DIR/filled\" \"$PIP_CACHE_DIR/filled\"\n"
+# every call fills the caches it is given, as an install does, and records which they were
+FAKE_UV = ("#!/bin/sh\necho \"$UV_CACHE_DIR $PIP_CACHE_DIR\" >> \"${0%/*}/caches.log\"\nmkdir -p \"$UV_CACHE_DIR\" \"$PIP_CACHE_DIR\" && touch \"$UV_CACHE_DIR/filled\" \"$PIP_CACHE_DIR/filled\"\n"
            "[ \"$1 $2\" = \"pip show\" ] && echo \"Version: 0.16.0+cu129\"\nexit 0\n")
 
 
@@ -232,6 +232,8 @@ def test_bootstrap_removes_only_the_caches_it_made_under_work(tmp_path: Path) ->
     """With no cache named by the caller, the install fills $WORK/.cache/{uv,pip} and step 2 removes exactly those: the
     caches under HOME, which on a shared node every other user's `uv sync` reads, are left as they were."""
     c = _through_step2(tmp_path)
+    used = set((tmp_path / "fake" / "caches.log").read_text().splitlines())
+    assert used == {f"{c['work_uv']} {c['work_pip']}"}, f"the install's caches were {used}, not those under $WORK"
     assert not c["work_uv"].exists() and not c["work_pip"].exists()
 
 
