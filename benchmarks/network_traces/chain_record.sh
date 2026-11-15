@@ -56,7 +56,7 @@
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
 # found of the traffic (which execution phases were certified or refused, and how many problems: warden_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
-# which execution phases its members' signer refused, which the report reads back). Those are witness,
+# which execution phases its members' signer refused, and its log of them, n2.log). Those are witness,
 # kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case
 # reads the answers (certifier_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
@@ -246,7 +246,7 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
 EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
-  $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json" --n2-witness "$Q/witness/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
+  $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
   $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   --tie "$OUT/tie/summary.json" \
   ${PA:+--period-answer "$PA"} --out "$OUT/report" | tee -a "$OUT/job.log"
