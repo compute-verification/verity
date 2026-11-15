@@ -34,7 +34,7 @@ __all__ = ["against_warmup", "report_lines"]
 
 SCHEMA = STATIC_SCHEDULE_SCHEMA
 RULE = ("sampling.ignore_eos: every request finishes by length at exactly max_tokens, is never preempted and reads no KV block chosen by "
-        "the host prefix cache; the realized schedule is then a function of the declaration (arrivals, prompt lengths, token limits, engine args)")
+        "the host prefix cache; the realized schedule is then a function of the declaration (arrivals, prompt lengths, caps, engine args)")
 SCHEDULE_FIELDS = ("arrive_step_realized", "first_step", "finish_step", "n_generated", "finish_reason", "prefill_steps", "token_steps")
 
 
