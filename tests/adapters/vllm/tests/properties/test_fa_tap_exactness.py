@@ -22,7 +22,7 @@ from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
 from verity_vllm.records.property_record import digest_of
 
-ADAPTER = (Path(__file__).parents[5] / "adapters" / "vllm")
+TESTS_ROOT = Path(__file__).resolve().parents[2]  # tests/adapters/vllm, where `tests` imports from
 
 #: argv[1], the property's module, is imported alone, then `ir_guard` is called: the modules of the reference evaluator and of the
 #: Definitions that are loaded after each, and the Definitions the call brings to the table
@@ -40,7 +40,7 @@ CHILD = ("import importlib, json, sys\n"
 def _loaded() -> dict[str, Any]:
     """A process of its own that imports the property's module and then calls `ir_guard`: what is loaded after each, and the
     Definitions that enter the table with the call."""
-    child = subprocess.run([sys.executable, "-c", CHILD, X.__name__], capture_output=True, text=True, check=True, cwd=ADAPTER)
+    child = subprocess.run([sys.executable, "-c", CHILD, X.__name__], capture_output=True, text=True, check=True, cwd=TESTS_ROOT)
     return json.loads(child.stdout.splitlines()[-1])
 
 
