@@ -130,9 +130,11 @@ refuses a command that leaves one of these set in the agent's own shell (`shell_
 `CODE_VARIABLES`), read by the same `shell_keeps` as the identity rule, with one difference: it reads only the commands
 that run in that shell (`own_shell`), never in doubt, since the harm is only in the shell that persists. What a carrier
 runs (`bash -lc`, `research run -- ...`, `ssh`, a tmux pane), a subshell, a pipeline's member, a command substitution, a
-script file and a text the hook can't split pass; an `eval` and a `{ ...; }` body are the shell's own. The refusal says
-to put the name on the one command (`PYTHONPATH=DIR python3 ...`) or run it in a subshell, and that `unset PYTHONPATH
-RESEARCH_AT_CHECKOUT` clears one the shell holds.
+script file and a text the hook can't split pass, and so does a file the shell sources (`. FILE`, `source FILE`, a
+startup file such as `.bashrc`), though its export does stay in the shell: the hook reads no file's contents, so that
+form is not covered. An `eval` and a `{ ...; }` body are the shell's own. The refusal says to put the name on the one
+command (`PYTHONPATH=DIR python3 ...`) or run it in a subshell, and that `unset PYTHONPATH RESEARCH_AT_CHECKOUT` clears
+one the shell holds.
 
 The rule for a `git` that names an identity places a command by the directory the hook is handed and git's own `-C`, and, alone among the rules, follows a
 plain `cd` (`shell_hook.cd_dirs`): `cd CHECKOUT && git ...` is judged in CHECKOUT and `cd SCRATCH && git ...` in SCRATCH.
