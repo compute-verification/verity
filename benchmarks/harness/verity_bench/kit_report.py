@@ -153,7 +153,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
     where the deployed challenger's coins aren't verified. With `made_up` (a record
     made up for a test or a fixture, not a run's) `MADE_UP` is printed below those, the document holds ``made_up: true``
     and is no audit, and each measurement is written at `MADE_UP_MARK` with ``made_up: true``. With `accepted` False (the
-    Lean verifier didn't accept the run) the first line is ``NAME: no number: WHY``, the document's value is null beside
+    Lean verifier didn't accept the run) the first line is ``NAME: no number: WHY``, in place of the text's headline (its
+    first line where that opens with ``NAME:``) and above the rest of the text, the document's value is null beside
     ``no_number``, and each measurement is written with no value and `why`. `withdrawn` (`record_dir`'s) is printed
     last and is the document's ``withdrawn``. Given none of these, it prints and writes as it did before them. Its exit
     code: 1 with no number, else 0."""
@@ -168,7 +169,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
     if accepted is False:
         if not why:
             raise ValueError("a run the Lean verifier didn't accept prints no number and says why: give why")
-        lines = [f"{name}: no number: {why}", *(lines if text else [])]
+        # the headline is the text's first line opening with the command's name; the no-number line takes its place
+        lines = [f"{name}: no number: {why}", *(lines[lines[0].startswith(f"{name}:"):] if text else [])]
         doc |= {"value": None, "no_number": why}
         measured = [{k: v for k, v in m.items() if k not in ("value", "interval", "verdict", "why")} | {"value": None,
                                                                                                          "why": why}

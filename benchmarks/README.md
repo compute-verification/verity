@@ -122,9 +122,11 @@ The core benchmarks take and print the same things in the same form. Each rule i
    record's own word: the object holds `verified: false`, and the line `coins by the record's own word, not checked` is
    printed under the audit line. A record that predates the field prints `ran with: not stated` (`ran_with=None`), and
    `ran_with` null.
-3. **A number only from a run the Lean verifier accepted:** `kit.report(..., accepted=False, why=WHY)` prints
-   `NAME: no number: WHY` first, writes `value` null beside `no_number`, writes each measurement with no value and its
-   why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
+3. **A number only from a run the Lean verifier accepted:** a command's headline, its number, is its text's first line,
+   opening with `NAME:` (`compute: 0.75 …`). `kit.report(..., accepted=False, why=WHY)` prints `NAME: no number: WHY`
+   in its place: a first line that opens with `NAME:` is dropped, and the rest of the text follows as the command's
+   detail, which states no number of the run. It writes `value` null beside `no_number`, writes each measurement with no
+   value and its why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
 4. **Not an audit:** the document holds `audit: true` only for coins the deployed challenger drew, verified by the
    command against a pinned key, at `deployed` parameters. Anywhere else the line `a measurement, not an audit` is
    printed under the `ran with` line, and the document holds `audit: false`. A record's own word about its coins is

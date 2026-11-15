@@ -321,7 +321,7 @@ def test_a_made_up_record_says_so_under_the_audit_line_and_every_measurement_car
 def test_a_made_up_record_without_ran_with_says_so_under_the_first_line(out, capsys):
     assert kit.report("x", "x: no number\n  more", DOC, MEASURED, made_up=True, accepted=False, why="refused") == 1
     text, doc, got = said(capsys, out)
-    assert text == ["x: no number: refused", "a made-up record, not a run's", "x: no number", "  more"]
+    assert text == ["x: no number: refused", "a made-up record, not a run's", "  more"]
     assert doc["made_up"] is True and "audit" not in doc
     assert (got["a/metric"]["value"], got["a/metric"]["mark"], got["a/metric"]["made_up"]) == (None, "modeled", True)
 
@@ -344,6 +344,19 @@ def test_a_run_the_lean_verifier_did_not_accept_has_no_number_and_exits_1(out, c
         None, "the Lean verifier refused", 0.5, None, None)
     with pytest.raises(ValueError, match="give why"):
         kit.report("x", "", DOC, accepted=False)
+
+
+def test_with_no_number_the_texts_headline_is_replaced_so_its_number_never_prints(out, capsys):
+    pair = kit.ran_with("local challenger", "development")
+    assert kit.report("x", "x: 0.25 of the rate\n  more", DOC, MEASURED, ran_with=pair, accepted=False, why="refused") == 1
+    text, doc, _ = said(capsys, out)
+    assert text == ["x: no number: refused", pair[0], "a measurement, not an audit", "  more"]
+    assert not any("0.25" in line for line in text) and doc["value"] is None
+    # a first line that isn't the headline, a title or a note, is the command's detail and stays
+    assert kit.report("x", "A title\n  a note", DOC, accepted=False, why="refused") == 1
+    assert capsys.readouterr().out.splitlines()[:3] == ["x: no number: refused", "A title", "  a note"]
+    assert kit.report("x", "x: 0.25", DOC, accepted=False, why="refused") == 1
+    assert capsys.readouterr().out.splitlines()[0] == "x: no number: refused"
 
 
 def test_given_none_of_the_interfaces_arguments_report_prints_and_writes_as_before(out, capsys):
