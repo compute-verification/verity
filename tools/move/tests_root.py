@@ -110,9 +110,12 @@ class Tree:
             return ""
 
     def distribution(self, d: str) -> bool:
-        """Whether the pyproject at `d` builds a distribution: a `[project]` with a build system, not virtual."""
+        """Whether the pyproject at `d` builds a workspace distribution: a member's `[project]` with a build system, not
+        virtual. One no member lists is a suite's pyproject like any other: nothing installs it, its suite imports its code by
+        `pythonpath`, and it moves whole."""
         data = self.pyprojects[d]
-        return bool(data.get("project")) and "build-system" in data and data.get("tool", {}).get("uv", {}).get("package") is not False
+        return (d in self.members and bool(data.get("project")) and "build-system" in data
+                and data.get("tool", {}).get("uv", {}).get("package") is not False)
 
     def test_dirs(self) -> dict[str, list[str]]:
         """{`X/tests`: its tracked files}, the outermost `tests` of each path under `AREAS`."""
@@ -199,6 +202,14 @@ def _tables(text: str) -> list[tuple[str | None, str]]:
         else:
             buf.append(line)
     out.append((name, "".join(buf)))
+    for i in range(len(out) - 1):
+        lines = out[i][1].splitlines(keepends=True)
+        cut = len(lines)
+        while cut and (lines[cut - 1].startswith("#") or (not lines[cut - 1].strip() and cut < len(lines))):
+            cut -= 1
+        while cut < len(lines) and not lines[cut].strip():
+            cut += 1
+        out[i], out[i + 1] = (out[i][0], "".join(lines[:cut])), (out[i + 1][0], "".join(lines[cut:]) + out[i + 1][1])
     return [(n, b) for n, b in out if n is not None or b.strip()]
 
 
@@ -239,7 +250,10 @@ def split(t: Tree, d: str) -> dict[str, str]:
         if table == "tool.verity.tests" and (kept := _exports(body)):
             keep.append("[tool.verity.tests]\n" + kept[0] + "\n")
             body = kept[1]
-        (moved if table and table.startswith(SUITE_TABLES) else keep).append(body)
+        if table and table.startswith(SUITE_TABLES):
+            moved.append(_from_tests(body) if table.startswith("tool.pytest") else body)
+        else:
+            keep.append(body)
     keep_text = "".join(keep).rstrip("\n") + "\n"
     extras = sorted(project.get("optional-dependencies", {}))
     dep = name + (f"[{','.join(extras)}]" if extras else "")
@@ -253,7 +267,7 @@ def split(t: Tree, d: str) -> dict[str, str]:
                 "[tool.uv]\npackage = false\n\n")
     if norm(name) not in {norm(s) for s in t.sources}:
         head.append(f"[tool.uv.sources]\n{name} = {{ workspace = true }}\n\n")
-    body = "".join(_from_tests(b) if b.startswith("[tool.pytest") else b for b in moved)
+    body = "".join(moved)
     member = "".join(head) + _strip_suite_relative(body, "tests/").rstrip("\n") + "\n"
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
     if tests.get("inputs_only") or "exports" in tests:
