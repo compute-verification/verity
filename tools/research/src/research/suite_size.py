@@ -103,32 +103,23 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
     return [] if listed == "none" else [n.strip() for n in listed.split(",") if n.strip()]
 
 
-def _pyproject(source: Path, path: str) -> dict:
-    """The checkout's ``path``/pyproject.toml, {} where it has none that reads."""
-    try:
-        return tomllib.loads((source / path / "pyproject.toml").read_text())
-    except (OSError, tomllib.TOMLDecodeError):
-        return {}
-
-
 def declared(source: Path) -> list[dict]:
     """Each suite of the checkout (a pyproject.toml with [tool.pytest], named as suites.py names it: `suite_layout.suite_name`)
     and what it declares."""
     files = subprocess.run(["git", "-C", str(source), "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"],
                            capture_output=True, text=True).stdout.split("\0")
-    out, dirs = [], suite_layout.member_dirs(lambda d: _pyproject(source, d))
+    read = {}
     for f in filter(None, files):
         try:
-            data = tomllib.loads((source / f).read_text())
+            read[str(Path(f).parent)] = tomllib.loads((source / f).read_text())
         except (OSError, tomllib.TOMLDecodeError) as e:
             print(f"suite_size: {f} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
-            continue
+    out, dirs = [], suite_layout.member_dirs(lambda d: read.get(d, {}))
+    for path, data in read.items():
         if "pytest" not in data.get("tool", {}):
             continue
-        path = str(Path(f).parent)
-        project = data.get("project", {})
         tests = data["tool"].get("verity", {}).get("tests", {})
-        out.append({"name": suite_layout.suite_name(path, project, dirs), "path": path,
+        out.append({"name": suite_layout.suite_name(path, data.get("project", {}), dirs), "path": path,
                     "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0)),
                     "timeout_workers": int(tests.get("timeout_workers", 0))})
     return out
