@@ -1,8 +1,7 @@
 """A class's selects and length check (`greedy_stages.GreedyCombineFirst_v1`, `GreedyCombineLive_v1`,
 `greedy_stop.GreedyStopCheckClass_v1`) on made-up requests at a small class: each step's row puts its argmax on a chosen
 token, the selects run as a chain (each reads the step before's bit and count), and the check reads the served ids, the
-last bit and count.  Each property the
-class's design asks of them has a test here that fails without it."""
+last bit and count.  Each property the class's design asks of them has a test here that fails without it."""
 from __future__ import annotations
 
 import numpy as np
@@ -24,8 +23,8 @@ FIRST = bind(G.GreedyCombineFirst, V=V, N=N, O=O, STOP=STOP, MAX_MODEL_LEN=MML)
 LIVE = bind(G.GreedyCombineLive, V=V, N=N, O=O, STOP=STOP, MAX_MODEL_LEN=MML)
 
 
-def _check(mml: int = MML):
-    return bind(GS.GreedyStopCheckClass, V=V, N=N, P=P, T=O, STOP=STOP, MAX_MODEL_LEN=mml)
+def _check(mml: int = MML, p: int = P):
+    return bind(GS.GreedyStopCheckClass, V=V, N=N, P=p, T=O, STOP=STOP, MAX_MODEL_LEN=mml)
 
 
 def _row(token: int) -> np.ndarray:
@@ -56,7 +55,7 @@ def _select(token: int, request, count: int | None = None, live: int | None = No
     return _out(evaluate(fn or LIVE, *_args(_row(token)), list(request), _bits(count), _bits(live)))
 
 
-def _chain(tokens: list[int], request, mml: int = MML) -> dict:
+def _chain(tokens: list[int], request, mml: int = MML, p: int = P) -> dict:
     """The O selects over steps whose argmaxes are ``tokens``, and the check: each step's outputs, the ids, and the bit."""
     fn_first = bind(G.GreedyCombineFirst, V=V, N=N, O=O, STOP=STOP, MAX_MODEL_LEN=mml)
     fn_live = bind(G.GreedyCombineLive, V=V, N=N, O=O, STOP=STOP, MAX_MODEL_LEN=mml)
@@ -66,8 +65,8 @@ def _chain(tokens: list[int], request, mml: int = MML) -> dict:
         steps.append(_select(t, request, count, live, fn=fn_live))
     ids = [s[0] for s in steps]
     _id, live, count, _key = steps[-1]
-    check = int(evaluate(_check(mml), *_args(_row(tokens[-1])), ids, list(request), _bits(count), _bits(live))[0])
-    want = GS.class_reference(_row(tokens[-1]), ids, request, count, live, V, N, P, STOP, mml)
+    check = int(evaluate(_check(mml, p), *_args(_row(tokens[-1])), ids, list(request), _bits(count), _bits(live))[0])
+    want = GS.class_reference(_row(tokens[-1]), ids, request, count, live, V, N, p, STOP, mml)
     assert check == want, (tokens, request, steps)
     return {"steps": steps, "ids": ids, "keys": [s[3] for s in steps], "bits": [s[1] for s in steps],
             "counts": [s[2] for s in steps], "check": check}
@@ -142,6 +141,14 @@ def test_ignore_eos_switches_the_stop_ids_off_in_the_selects_and_the_check():
 def test_a_prompt_of_other_than_p_ids_is_refused():
     r = _chain([5, 37, 7, 8], _req(lp=P - 1, max_tokens=100))
     assert r["ids"] == [5, 37, 0, 0] and r["check"] == 0
+
+
+@pytest.mark.parametrize("p", [1, 3, 43])
+def test_a_class_is_keyed_by_its_prompt_s_exact_length_a_power_of_two_or_not(p):
+    """P is the prompt's exact length, any integer: at P = 43 a prompt of 43 ids passes, one of 42 or 44 is refused."""
+    assert _chain([5, 37, 7, 8], _req(lp=p, max_tokens=100), p=p)["check"] == 1
+    for lp in (p - 1, p + 1):
+        assert _chain([5, 37, 7, 8], _req(lp=lp, max_tokens=100), p=p)["check"] == 0
 
 
 def test_the_check_ties_n_to_the_last_count_and_bit():
@@ -289,7 +296,7 @@ def test_the_selects_refuse_a_binding_with_no_class(bad):
         bind(G.GreedyCombineLive, **{**dict(V=V, N=N, O=O, STOP=STOP, MAX_MODEL_LEN=MML), **bad})
 
 
-@pytest.mark.parametrize("bad", [dict(P=3), dict(T=6), dict(STOP=(3, 3))])
+@pytest.mark.parametrize("bad", [dict(P=0), dict(P=1 << 31), dict(T=6), dict(STOP=(3, 3))])
 def test_the_check_refuses_a_binding_with_no_class(bad):
     with pytest.raises(ValueError, match="refuses this binding"):
         bind(GS.GreedyStopCheckClass, **{**dict(V=V, N=N, P=P, T=O, STOP=STOP, MAX_MODEL_LEN=MML), **bad})
