@@ -91,6 +91,11 @@ def generated(seed: int) -> tuple[dict, dict, int, float, float, int, float]:
               "pace": r.choice([None, {"k": 2, "window_ns": 1}]), "appends": None, "registration": reg.digest.hex()}
     if g > 1:
         record |= {"groups_per_coin": g, "pace": {"k": 2, "window_ns": 1, "in_flight": 2}}
+        for a in range(0, n, g):
+            left = min(samples, sum(sum(w["lengths"]) for w in ws[a:a + g]))
+            for w in ws[a:a + g]:
+                w["drawn"] = min(left, sum(w["lengths"]))
+                left -= w["drawn"]
     least = least_capacity(record)
     capacity = float(least * Fraction(r.choice([1, 2, 1000]))) * (1 + 2 ** -50)
     if seed % 4 == 3:
@@ -101,6 +106,7 @@ def generated(seed: int) -> tuple[dict, dict, int, float, float, int, float]:
 
 def test_ledgers_gamma_terms_are_held_to_the_leans_on_generated_records(server) -> None:
     got = [held(server, *generated(seed)) for seed in SEEDS]
+    print(f"generated records: {got.count('held')} held, {got.count('refused')} refused alike")
     assert got.count("held") >= len(SEEDS) // 2 and got.count("refused") >= len(SEEDS) // 8, got
 
 
@@ -132,14 +138,14 @@ def test_a_ledger_the_lean_disagrees_with_is_refused_naming_both(server) -> None
     python = audit.ledger(rec, capacity_bytes_per_s=capacity, chip_bytes=chip,
                           rebuild=audit.Rebuild(rec.codec, squarings)).to_json()
     off = json.loads(json.dumps(python))
-    off["windows"][0]["chip"] += 2 ** -30
+    off["windows"][0]["terms"]["chip"] += 2 ** -30
     kind, text = server.call("gamma", {
         "registration": reg, "record": record, "delta": line.text(Fraction(delta)), "block_bytes": audit.BLOCK_BYTES,
         "chip_bytes": chip, "capacity_bytes_per_s": line.text(Fraction(capacity)),
         "squarings_per_s": line.text(Fraction(squarings))})
     lean = json.loads(text)
     assert V.gamma_held(lean, python) == lean
-    with pytest.raises(ValueError, match=r"disagree at \.windows\[0\]\.chip: the Lean's \""):
+    with pytest.raises(ValueError, match=r"disagree at \.windows\[0\]\.terms\.chip: the Lean's \""):
         V.gamma_held(lean, off)
 
 
