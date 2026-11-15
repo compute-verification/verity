@@ -1,6 +1,7 @@
 # The inputs `verity-vllm workload ROW` reads that a row id doesn't give, for each stored row the generator reproduces byte for
 # byte (`SHA256SUMS`).  [checkpoint."<model>__<dtype>"]: the row id's first two fields' repository, revision, case and the
-# sha256 of the tokenizer.json its prompts are tokenized with.  [row."<row id>"]: what the row adds, each key optional:
+# sha256 of the tokenizer.json its prompts are tokenized with, or tokenizer_of: the checkpoint whose tokenizer.json, the
+# same file, can be read without a key.  [row."<row id>"]: what the row adds, each key optional:
 # note_prefix (the text its note starts with), arrival_rule ("round": the arrive_step rule before realized_arrive_steps),
 # arrivals (when not the id's: staggered for "<...>-arrivals", else none), shared_prefix, target and reasons (as --target and --reason).
 
@@ -32,7 +33,7 @@ tokenizer = "6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b"
 repo = "verity-int8/Llama-3.2-1B-INT8"
 revision = "15b0976d400d796ee589e7737d03a919526bf800"
 case = "LLAMA32_1B_INT8"
-tokenizer = "6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b"
+tokenizer_of = "llama32-1b__bf16"
 
 [checkpoint."mistral-7b__bf16"]
 repo = "unsloth/mistral-7b-v0.3"

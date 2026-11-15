@@ -490,15 +490,23 @@ def generation(row_id: str, path: Path = GENERATION) -> dict | None:
     if unknown := sorted(set(own) - ROW_KEYS):
         raise UsageError(f"{path.name}: row {row_id} states {unknown}, none of {sorted(ROW_KEYS)}")
     rid = RowId.parse(row_id)
-    ck = table.get("checkpoint", {}).get(f"{rid.model}__{rid.dtype}")
+    checkpoints = table.get("checkpoint", {})
+    ck = checkpoints.get(f"{rid.model}__{rid.dtype}")
     if ck is None:
         raise UsageError(f"{path.name}: row {row_id} has no [checkpoint.\"{rid.model}__{rid.dtype}\"]")
+    tk = checkpoints[ck["tokenizer_of"]] if "tokenizer_of" in ck else ck
     return {"hf_repo": ck["repo"], "revision": ck["revision"], "case": ck["case"], "batch": rid.batch, "max_input": rid.max_input,
             "max_output": rid.max_output, "sampling": rid.sampling,
             "arrivals": own.get("arrivals", "staggered" if rid.arrivals.endswith("-arrivals") else "none"),
             "shared_prefix": int(own.get("shared_prefix", 0)), "target": own.get("target"), "reason": dict(own.get("reasons", {})),
             "note_prefix": own.get("note_prefix", ""), "arrival_rule": own.get("arrival_rule", "realized"),
-            "tokenizer_sha256": ck["tokenizer"]}
+            "tokenizer_sha256": tk["tokenizer"], "tokenizer_at": (tk["repo"], tk["revision"])}
+
+
+def row_tokenizer(hf_repo: str, revision: str, tokenizer_at: tuple[str, str] | None = None) -> Path | None:
+    """The tokenizer.json of the checkpoint's snapshot under `hf_home`, else of ``tokenizer_at``'s (the checkpoint whose
+    tokenizer the table says a row reads); None without either."""
+    return find_tokenizer(hf_repo, revision) or (find_tokenizer(*tokenizer_at) if tokenizer_at else None)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -520,6 +528,7 @@ class Spec:
     note_prefix: str = ""
     arrival_rule: str = "realized"
     tokenizer_sha256: str | None = None
+    tokenizer_at: tuple[str, str] | None = None
 
 
 def resolve(a: Options, path: Path = GENERATION) -> Spec:
@@ -562,7 +571,7 @@ def main(a: Options) -> int:
 
     tok = None
     if not a.lengths_only:
-        tp = Path(a.tokenizer) if a.tokenizer else find_tokenizer(s.hf_repo, s.revision)
+        tp = Path(a.tokenizer) if a.tokenizer else row_tokenizer(s.hf_repo, s.revision, s.tokenizer_at)
         if tp is None:
             logger.error("tokenizer.json for %s@%s not found under %s — pass --tokenizer or use --lengths-only", s.hf_repo, s.revision, hf_home())
             return 2

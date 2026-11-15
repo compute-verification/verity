@@ -683,13 +683,13 @@ def test_a_row_generation_toml_does_not_list_needs_its_flags_and_a_row_entry_onl
 
 def test_every_row_generation_toml_lists_regenerates_byte_for_byte_where_its_tokenizer_is_present(tmp_path):
     """The rows' bytes, prompts included: each row whose checkpoint's tokenizer.json is in the Hugging Face cache (its revision's
-    snapshot under `$HF_HOME`), with the `tokenizers` library, regenerated from its id alone is the file `SHA256SUMS` names.  The
+    snapshot under `$HF_HOME`, or its `tokenizer_of` checkpoint's), with the `tokenizers` library, regenerated from its id alone is the file `SHA256SUMS` names.  The
     stand-in of the test above gives other ids, so only this test reads the prompts; it runs where the cache holds them."""
     pytest.importorskip("tokenizers")
     sums, checked = stored_workloads(), []
     for row in GENERATED:
         g = W.generation(row)
-        if W.find_tokenizer(g["hf_repo"], g["revision"]) is None:
+        if W.row_tokenizer(g["hf_repo"], g["revision"], g["tokenizer_at"]) is None:
             continue
         out = tmp_path / f"{row}.json"
         assert W.main(W.Options(row=row, out=str(out))) == 0
