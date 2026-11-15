@@ -8,6 +8,15 @@ verifier's service and tie service read are in `verity/protocols/resource_accoun
 build on. Advice's validity check, the block-pool cache step and the compile slices built on it, and the served rows'
 statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
 
+Beside them, the record's leak guard (`leak_guard.py`, its declared witness names and allowlist in `leak_guard.json`),
+which a served run's records are released through: it moves to a quarantine every file of a run dir and its hold that
+holds a piece of a gate run's witness, or (`--keys`) a key `released_keys.json` doesn't declare, and only then releases
+the rest. `benchmarks/network_traces/` starts it as
+`python -m verity.protocols.resource_accounting.network.prover.leak_guard` (`chain_record.sh`, `wipe_gate.sh`,
+`served_session.py` and `certifier_piece.py`); it writes the `network-traces/leak-guard/v1` report. Its tests are
+`tests/test_leak_guard.py`, with `tests/gate_runs.py`, the gate run's files they and `benchmarks/network_traces/tests/`
+build on.
+
 - **Python**: `verity.protocols.resource_accounting.network.prover`. Its importers, each with the modules it imports:
   - `adapters/vllm`: `ingress_scan`, `scan_zk`, `window_charge`, `workload`;
   - `benchmarks/network_traces`: `block_certifier`, `egress_zk`, `ingress_scan`, `leak_scan`, `lengths_row`, `n2_zk`,

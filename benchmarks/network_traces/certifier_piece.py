@@ -78,7 +78,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   endpoint's report, the report's counts or a step's summary, which are private) and the execution phase's five
   certificates (`CERTIFICATES`, `certificates`: the three records' certificates and the two row registrations' of the
   case's evidence, each with its own fields alone). They and the answer are written to a fresh hold under
-  SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`), which reads DIR
+  SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (the certifier's
+  `prover/leak_guard.py`), which reads DIR
   and the hold against the network attester run's witness, DIR declared to hold those files, the split's `CHAINED` and the logs
   alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and
   only then releases the rest. The check's three input files are the piece's case, and a case's evidence and params

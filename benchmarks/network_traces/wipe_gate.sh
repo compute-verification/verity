@@ -20,9 +20,9 @@
 # with the gate run's rc.
 #
 # Everything, this job's own stdout and stderr too (wipe-gate.log), is written to a hold, KEEP/held/ID (ID the research
-# run's id), and reaches $OUT only through the record's leak guard (leak_guard.py), which on every exit reads the run dir
-# and the hold against the kept fetch, moves what holds a piece of the witness to KEEP/quarantine/ID and only then
-# releases the rest (exit 3 when it found one). A signal, a guard past its budget or one that fails releases nothing:
+# run's id), and reaches $OUT only through the record's leak guard (the certifier's prover/leak_guard.py), which on
+# every exit reads the run dir and the hold against the kept fetch, moves what holds a piece of the witness to
+# KEEP/quarantine/ID and only then releases the rest (exit 3 when it found one). A signal, a guard past its budget or one that fails releases nothing:
 # the outputs stay in the hold, out of the record, and the job fails. PY is the guard's interpreter (python3).
 #
 # 1700 requests, the gate's most (`auditor.NETWORK_CERTIFIER_REQUESTS`), on the gate's most prompts, 400 (`NETWORK_CERTIFIER_PROMPTS`; request

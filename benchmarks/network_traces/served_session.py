@@ -49,7 +49,8 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
   counts, the execution phases, the origin and the session's span. Every file is first written to a fresh hold under
-  KEEP/held (0700), and reaches ``--out`` only through the record's leak guard (``leak_guard.py``), whatever the exit:
+  KEEP/held (0700), and reaches ``--out`` only through the record's leak guard (the certifier's
+  ``prover/leak_guard.py``), whatever the exit:
   each file of the hold and member of ``bundle.tgz`` that holds a prompt's ids is removed, then the guard reads
   ``--out`` and the hold against the kept fetch, moves what holds a piece of the witness to KEEP/quarantine and releases
   the rest (exit 4 when either found one). A guard that fails or runs past its budget releases nothing (exit 5), nor
@@ -76,8 +77,8 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 execution phases (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
-  refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
-  way out, whatever the exit.
+  refused unless the tree has the record's leak guard (the certifier's ``prover/leak_guard.py``), which
+  chain_record.sh runs on its way out, whatever the exit.
 
 **The coin link.** A sample on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
 --main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
@@ -163,9 +164,10 @@ TREE = Path(__file__).resolve().parents[2]
 
 
 def guard_argv(*args: str | Path) -> list[str]:
-    """`python -m LEAK_GUARD ARGS`, to run with ``cwd=TREE``: `benchmarks` is no installed package and a caller's own
-    path (pytest's `pythonpath`, a `sys.path` insert) doesn't reach the child, but ``-m`` puts its working directory
-    first on its path. So each `Path` in ARGS is made absolute; a `str` (a record path) is passed as it is."""
+    """`python -m LEAK_GUARD ARGS`, to run with ``cwd=TREE``: an interpreter without `verity` installed finds it
+    there, since ``-m`` puts its working directory first on its path, and a caller's own path (pytest's `pythonpath`,
+    a `sys.path` insert) doesn't reach the child. So each `Path` in ARGS is made absolute; a `str` (a record path) is
+    passed as it is."""
     return [sys.executable, "-m", LEAK_GUARD, *(str(a.absolute()) if isinstance(a, Path) else a for a in args)]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/verifier/live_challenger"))
 import auditor as A  # noqa: E402

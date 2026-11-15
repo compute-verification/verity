@@ -41,9 +41,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with the certifier's
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
-  accounting must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
-  and the certifier's `prover/released_keys.py` (the keys a record releases, each declared public by name, below). The
-  certifier's `prover/block_certifier.py` writes a period's accepted answer as the block record's certifier entry.
+  accounting must refuse, each by the check and code that refuse it), the certifier's `prover/leak_guard.py` (the
+  record's leak guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name,
+  below). The certifier's `prover/block_certifier.py` writes a period's accepted answer as the block record's certifier
+  entry.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** the certifier's `device/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
@@ -371,9 +372,10 @@ client's directory, with its `certificates.jsonl`, is `CR_CLIENT`, by default th
 `client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
 fails or doesn't run says why.
 
-**The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
-each gate sent under `inputs/` to the quarantine once it is unpacked, writes every output (its own stdout and stderr
-too) to a hold outside the run dir (`$Q/held`), and on every exit runs the guard on the run dir and the hold. The guard
+**The record's leak guard** (the certifier's `prover/leak_guard.py`, with its declared data, `leak_guard.json`, beside
+it). Custody publishes the whole run dir, `inputs/` with it, so the job moves each gate sent under `inputs/` to the
+quarantine once it is unpacked, writes every output (its own stdout and stderr too) to a hold outside the run dir
+(`$Q/held`), and on every exit runs the guard on the run dir and the hold. The guard
 moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file that holds
 a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an aligned
 witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through. Only then
