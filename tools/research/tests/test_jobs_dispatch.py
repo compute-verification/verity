@@ -1171,7 +1171,93 @@ def _launcher_tree(tmp_path: Path, seen: Path, runs: Path) -> Path:
         "os.makedirs(os.path.join(runs, rid))\n"
         "json.dump({'command': sys.argv[sys.argv.index('--') + 1:]}, open(os.path.join(runs, rid, 'remote.json'), 'w'))\n"
         "print(f'research: run {rid} launched on vy-nebius-cpu-1 (podid) pid=1 -> /workspace/research/runs/{rid}', file=sys.stderr)\n")
-    return tmp_path / "tree"
+    return _trusted(tmp_path / "tree")
+
+
+def _trusted(tree: Path) -> Path:
+    """``tree`` made a clean checkout of its own origin/main holding everything research.launcher's RUNS names: a tree the
+    launcher trusts."""
+    from research import launcher
+
+    for f in launcher.RUNS:
+        at = tree / f
+        if not at.exists():
+            (at.parent if Path(f).suffix else at).mkdir(parents=True, exist_ok=True)
+            (at if Path(f).suffix else at / "keep").write_text("")
+    _git(tree, "init", "-q", "-b", "main")
+    _git(tree, "add", ".")
+    _git(tree, "commit", "-qm", "main")
+    _git(tree, "update-ref", "refs/remotes/origin/main", "HEAD")
+    return tree
+
+
+@pytest.mark.parametrize("case,problem", [
+    ("blank", "is blank, and set"),
+    ("relative", "is not an absolute path"),
+    ("missing", "is not an existing directory"),
+    ("incomplete", "lacks what the launcher runs from it: tools/research/src/research/launcher.py"),
+    ("not a checkout", "is not a git checkout with an origin/main"),
+    ("stale", "is stale: its HEAD"),
+    ("modified", "is stale: what the launcher runs from it is changed or untracked there (tools/check/slot.py)"),
+    ("deleted", "lacks what the launcher runs from it: tools/check/slot.py"),
+    ("untracked", "is stale: what the launcher runs from it is changed or untracked there (infra/cluster/kinds/new.toml)"),
+    ("around the source", "is around the --source tree"),
+])
+def test_a_tree_the_launcher_refuses_is_refused_in_the_launchers_own_words(tmp_path, case, problem):
+    source = tmp_path / "worktree"
+    source.mkdir()
+    tree = tmp_path / "tree"
+    if case not in ("missing", "incomplete", "around the source"):
+        _trusted(tree)
+    if case == "incomplete":
+        tree.mkdir()
+    if case == "not a checkout":
+        subprocess.run(["rm", "-rf", str(tree / ".git")], check=True)
+    if case == "stale":
+        (tree / "README.md").write_text("ahead of origin/main\n")
+        _git(tree, "add", ".")
+        _git(tree, "commit", "-qm", "a branch")
+    if case == "modified":
+        (tree / "tools" / "check" / "slot.py").write_text("print('not main')\n")
+    if case == "deleted":
+        (tree / "tools" / "check" / "slot.py").unlink()
+    if case == "untracked":
+        (tree / "infra" / "cluster" / "kinds" / "new.toml").write_text("")
+    if case == "around the source":
+        tree = _trusted(tmp_path)
+    value = {"blank": "", "relative": "tree", "missing": str(tmp_path / "gone")}.get(case, str(tree))
+    why = D.launcher_refusal(value, source)
+    assert why.startswith(f"research: $RESEARCH_LAUNCHER_TREE={value!r} {problem}"), why
+    assert D.launcher_refusal(str(_trusted(tmp_path / "good")), source) is None
+
+
+def test_a_launch_the_launcher_refuses_runs_nothing_and_fails_the_job_with_its_message(tmp_path):
+    """A tree too broken to import research from: the launch child refuses it in the launcher's words, and runs nothing."""
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _git(origin, "init", "-q", "-b", "main")
+    (origin / "README.md").write_text("x\n")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-qm", "x")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    runner = D.ResearchRunner(workdir=tmp_path / "jobs", url=str(origin), environ=dict(os.environ), launcher_tree=tree)
+    job = {"id": 11, "kind": D.RUN_KIND, "payload": {**LEAD, "commit": _git(origin, "rev-parse", "HEAD"), "command": "research run -- x"}}
+    launch = runner.start(job, 1, "research-run-1")
+    runner.children[launch].wait()
+    rc, run_id, tail = runner.poll(launch)
+    assert (rc, run_id) == (2, None)
+    assert tail.startswith(f"research: $RESEARCH_LAUNCHER_TREE={str(tree)!r} lacks what the launcher runs from it: ")
+    assert "dispatch: job 11 in" not in (tmp_path / "jobs" / "logs" / "job-11-1.log").read_text()     # nothing was started
+    assert not (tmp_path / "jobs" / "worktrees" / "job-11-1").exists()
+    w = run_world()
+    j = add_run(w)
+    w.at(0)
+    w.runner.launches["L1-1"] = (rc, run_id, tail)
+    w.at(5)
+    w.at(5 + 2 * D.CLAIM_S)
+    assert (w.job(j).state, w.job(j).attempts, w.runner.started) == ("failed", 1, [(j, 1, "research-run-1")])
+    assert w.job(j).result["summary"] == f"`research run` exited 2:\n{tail}"
 
 
 def test_the_launch_child_runs_the_dispatchers_research_in_the_commits_worktree_without_the_queues_tokens(tmp_path):

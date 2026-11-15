@@ -918,9 +918,12 @@ def launch(spec_path: Path) -> dict:
 
         env, plan, before = None, None, set()
         if job["kind"] == RUN_KIND:
-            if not spec.get("launcher_tree"):
+            if spec.get("launcher_tree") is None:
                 raise RuntimeError("the dispatcher runs from no checkout, so it has no tree to launch `research run` from")
             plan = run_plan(p, spec["repo"])
+            if why := launcher_refusal(spec["launcher_tree"], wt):
+                print(why, flush=True)
+                return {"rc": 2, "run_id": None, "tail": why + "\n"}
             cmd, env = run_command(plan, spec["python"]), run_env(dict(os.environ), Path(spec["launcher_tree"]), plan.lane)
             before = set(os.listdir(R.runs_root())) if R.runs_root().is_dir() else set()
         else:
@@ -941,6 +944,23 @@ def launch(spec_path: Path) -> dict:
             fcntl.flock(lock, fcntl.LOCK_EX)
             _git(clone, "worktree", "remove", "--force", str(wt), check=False)
     return {"rc": rc, "run_id": run_id, "tail": "".join(tail)}
+
+
+def launcher_refusal(tree: str, source: Path) -> str | None:
+    """Why `research run` would refuse ``tree`` as the trusted tree of a launch from ``source`` (research.launcher's own
+    message), asked here first with this process's launcher: `research run` imports itself from ``tree``, so a tree too broken
+    for that would end in an import error, not the launcher's refusal. None when it would launch."""
+    from .. import launcher, settings
+
+    was = settings.get(launcher.ENV)
+    os.environ[launcher.ENV] = tree
+    try:
+        return launcher.refusal(source)
+    finally:
+        if was is None:
+            del os.environ[launcher.ENV]
+        else:
+            os.environ[launcher.ENV] = was
 
 
 def launched_by(run_id: str, plan: RunPlan, before: set[str]) -> bool:
