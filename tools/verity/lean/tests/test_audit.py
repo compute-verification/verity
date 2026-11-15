@@ -7798,8 +7798,8 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     A.dump(a, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t")},
                      "shape": pol["shape"] | {"properties": pol["shape"]["properties"] | {
                          "Control.A.t": {"function": "Control.double", "outcome": "none"}}}})
+    A.dump(pkgs["b"], unclaimed(A.load(pkgs["b"])) | {"guarantees": {"Control.main_thm": {"owner": "@lean"}}})
     for p in pkgs.values():
-        A.dump(p, unclaimed(A.load(p)))
         subprocess.run(["lake", "build"], cwd=p, check=True, capture_output=True, env=A.lake_env())
         A.audit(p, tmp_path / "rec", update=True, replay=False, runs=False, log=lambda *_: None)
     committed(tmp_path, *(p / A.POLICY for p in pkgs.values()))
