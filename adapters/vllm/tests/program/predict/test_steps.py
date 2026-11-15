@@ -74,7 +74,8 @@ SERVED = "served-model"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
 INT8_H200_B4 = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 #: its r3's Program: the Build's `--wrapper request --LP 11 --T 8 --launch-context [256,1,1,1,1,1,1,1,1] --stop …` at the row
-INT8_H200_B4_R3 = "da5653596efeff0b"
+INT8_H200_B4_R3 = ("da5653596efeff0b6b88783db3b213c76e95000bb38009d768cf16ead4057cd135504bc6ac9bf56a34fa054b9ee3d74738da264a745248"
+                   "aa0f7d193a25b76283")
 CLASS_G_ENGINE = {"max_model_len": 131072, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
                   "enable_prefix_caching": False}
 
@@ -573,13 +574,11 @@ def test_a_launch_context_traces_at_its_build_and_names_its_trace(tmp_path):
     assert trace_dir(s["requests"][0]) != trace_dir({**s["requests"][0], "seqlen_q": None})
 
 
-@pytest.mark.slow
 def test_the_int8_h200_rows_short_request_compiles_to_the_build_at_its_launch():
     """The H200 int8 B4 row's 11-token request (r3) is prefilled beside its 256-token one and decodes beside decodes, so FA3 ran its
     prefill at the 256 rows' tile (BN 128) where alone it runs BN 192: compiled from the row's advice under its pinned config, its
     Program with its length rule is the Build's at `--launch-context [256,1,1,1,1,1,1,1,1]` with `--stop` (da5653596efeff0b…), not
-    the Build at its own rows (596852f18c3bac6f…). About 40 s: one Llama-3.2-1B request Program, the only test holding a launch
-    context the step compiler derives to a Build at a served model's shapes."""
+    the Build at its own rows (596852f18c3bac6f…)."""
     w = json.loads(workload_file(WORKLOADS / f"{INT8_H200_B4}.json").read_text())
     phi = S.phi_of({"row": INT8_H200_B4, "workload": w}, config=str(HF_CONFIG_DIR / "LLAMA32_1B_INT8.config.json"))
     reg = Registered.of(phi, int(w.get("seed") or 0))
