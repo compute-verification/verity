@@ -424,6 +424,11 @@
    "digest": "1b47e61421e7dcbf59c909b83e765094b02aaf4a485dac8fff2d61160c266afd",
    "why": "The partition the bound counts: every block reads at most k gates outside θ."
   },
+  "Slowdown.Cut.ReadsOn": {
+   "owner": "@training",
+   "digest": "ac338d8619c91ca188425f3651a449aa956fc0aed68320475a7dea1263fe423b",
+   "why": "The blocks the count is over: each block of G reads at most k gates outside θ, all the blocks at most T between them, and the squares of what G's blocks read sum to at most S."
+  },
   "Slowdown.Cut.ValuesInjective": {
    "owner": "@training",
    "digest": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
@@ -4948,6 +4953,11 @@
     "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial",
     "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion"
    ]
+  },
+  "Slowdown.Cut.SecurityProofs.HECharged": {
+   "honest": ["Slowdown.Cut.SecurityProofs.HECharged_honest"],
+   "nontrivial": "Slowdown.Cut.SecurityProofs.HECharged_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -23962,6 +23972,45 @@
    "type_hash": "322719ddb41c0a0b832a597aaf5b21f111dc89f1c61781c6c2af5a0722de2720",
    "unfolded_hash": "665ba026bb138d1ac71a19d109d30e696425c3102a6d7a3cc74a41e41bb1202d"
   },
+  "Slowdown.Cut.SecurityProofs.HECharged": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HECharged : Slowdown.Cut.Guarantees.HECharged"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"],
+    "domain": ["Slowdown.Cut.NoSharedPair", "Slowdown.Cut.ReadsOn", "Slowdown.Cut.ValuesInjective"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ec7bb2245b82e18b2419724d6a531648c426a191887c9eeee30c886e903a5254",
+   "unfolded_hash": "fde9e7ab5e2d6b0d4951f4035daea2f844d0695c135094e83f8cb9770223eff5"
+  },
+  "Slowdown.Cut.SecurityProofs.HECharged_honest": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HECharged_honest : Slowdown.Cut.Guarantees.HECharged_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"]
+   },
+   "type_hash": "a319bbc4054b8c823f5aede00ff66433b7f59d3b6b425e2b0f1a6487d3213471",
+   "unfolded_hash": "45d97fd705171ef5804114f841ab8f683a05b0bf635a4b548ef8c358a163d1cd"
+  },
+  "Slowdown.Cut.SecurityProofs.HECharged_nontrivial": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HECharged_nontrivial : Slowdown.Cut.Guarantees.HECharged_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"]
+   },
+   "type_hash": "2b6b5bfa70e63731edfe684533f6ebdb04a3d019bc045c88d4c51a91636deda0",
+   "unfolded_hash": "361518e550fdd1c9561db3ce2766c84719435e4a01ca2dfede464f77028b6a25"
+  },
   "Slowdown.Cut.SecurityProofs.HEShared": {
    "owner": "@training",
    "signature": ["Slowdown.Cut.SecurityProofs.HEShared : Slowdown.Cut.Guarantees.HEShared"],
@@ -28169,9 +28218,6 @@
    "Slowdown.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Slowdown.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Slowdown.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Slowdown.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (InferenceOnly.CompliesAtMost); the join from a published complies of the count to that verdict is InferenceOnlyCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
-   "Slowdown.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: Slowdown.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (Slowdown.Cut.SecurityProofs.CountsOn, security/Proofs/Slowdown/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
-   "Slowdown.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Slowdown.Cut.Toy, stated with HECharged; its theorem Slowdown.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
-   "Slowdown.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Slowdown.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
    "Pouw.Guarantees.Window.ServiceMissProb": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so ExecutionPhaseDelta reads the deployed draw with each session a call; stated with ExecutionPhaseDelta, and its theorem Pouw.SecurityProofs.Window.ServiceMissProb is not proved yet.",
    "Flock.SecurityProofs.IntegrityPooled": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedPooled": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -28201,7 +28247,8 @@
    "Accounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by Accounting.SecurityProofs.B4UnderId in Proofs.Accounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
    "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
    "Pous.Guarantees.StreamedWipeMeets96GiB": "unstated: the streamed-label wipe bound at the 96 GiB device, whose guarantee Pous.SecurityProofs.StreamedWipeMeets96GiB left the lock by name because it takes its size premises inline; it is listed again once they are named (owner @memory-accounting).",
-   "Accounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee Accounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting)."
+   "Accounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee Accounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting).",
+   "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
