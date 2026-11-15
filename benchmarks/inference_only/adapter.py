@@ -11,7 +11,7 @@ called, so importing this module stays cheap.
 
 | Here | Non-public home | Used by |
 | --- | --- | --- |
-| `gate_table` | `verity_vllm.definitions.boolean.gate_table`, after `import verity_vllm.definitions` registers the adapter's registry with the Boolean-versions lookup | built.py |
+| `gate_table` | `verity.circuits.ops.boolean.versions.gate_table`, after `import verity_vllm.definitions` registers the adapter's registry with the Boolean-versions lookup | built.py |
 """
 from __future__ import annotations
 
@@ -23,6 +23,6 @@ __all__ = ["gate_table"]
 def gate_table(fns: Any) -> tuple[dict[str, int], list[str]]:
     """The Boolean gates of each primitive ``fns`` reach, and the primitives the table doesn't price."""
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
-    from verity_vllm.definitions.boolean import gate_table as table
+    from verity.circuits.ops.boolean.versions import gate_table as table
 
     return table(fns)
