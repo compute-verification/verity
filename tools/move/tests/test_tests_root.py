@@ -30,7 +30,7 @@ TREE = {
     "verity/a/tests/test_a.py": "from pathlib import Path\n\nfrom verity.a import mod\n\nCODE = Path(__file__).parent / \"../..\" / \"a\" / \"mod.py\"\n\n\n"
                                 "def test_a():\n    assert mod.X and CODE.is_file()\n",
     "adapters/dist/pyproject.toml": '[project]\nname = "dist"\nversion = "0"\nrequires-python = ">=3.12"\n\n'
-                                    '[project.optional-dependencies]\nx = []\n\n[build-system]\nrequires = ["hatchling"]\n'
+                                    '[project.optional-dependencies]\nx = ["plain"]\ny = ["requests"]\n\n[build-system]\nrequires = ["hatchling"]\n'
                                     'build-backend = "hatchling.build"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
                                     'pythonpath = ["."]\n\n[tool.verity.tests]\nuntraced = ["tests/test_d.py"]\n'
                                     '# what its dependents read\nexports = ["adapters/dist/dist"]\n',
@@ -78,7 +78,7 @@ def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_ru
 
 
 def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once(tmp_path):
-    """The member depends on the distribution with its extras, its lists are written from its new directory, the root
+    """The member depends on the distribution with its extras that name a workspace package, its lists are written from its new directory, the root
     lists it beside the distribution, and the conftest beside the pyproject joins the one in tests/. What dependents key
     on (`exports`) stays the distribution's, and the member, which no longer holds it, reads it by name. A rerun splits
     none."""
