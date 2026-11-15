@@ -422,7 +422,9 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     p.base.verifier.workTable = none ∧ p.base.challenger = some (key₀, label₀) := by
   have hA := canon_θ₀ hJ hpp
   have hC := canon_params hJ hpp
-  have hE := parse_program hJ hpp
+  -- Annotate `hE`'s type so `fwd_walk`'s `ruleAt` sees a concrete `Eq` (its inferred type otherwise carries the `Except`
+  -- error metavariable, which `ruleAt` only instantiates away since this change; the annotation makes the rule explicit).
+  have hE : Spot.Program.parse (Firewall.printJson programJ).toUTF8 = Except.ok program := parse_program hJ hpp
   have hU := Flock.Hex.unhex_hexOf keyPub
   have hpf := programFile_eq hJ hpp
   -- `canon` of each plain literal directly (the decoders read the literal's fields, not `norm`'s).
