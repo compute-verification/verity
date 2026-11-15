@@ -15,12 +15,12 @@
 #            or CR_N2_CMD
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when scan_zk takes it)
-#   tie      the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
+#   tie      the I/O tie on the network certifier's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
-# The path is the warden path (CR_PATH=warden, the only one): every step reads the active warden's own run
+# The path is the network certifier path (CR_PATH=warden, the only one): every step reads the active network certifier's own run
 # (CR_WARDEN_RUN, or the one gate run holding a certified.jsonl) and nothing of a certifier rehearsal's, which in
 # CR_GATES is refused by name; the report requires every step (chain_record.WARDEN).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)

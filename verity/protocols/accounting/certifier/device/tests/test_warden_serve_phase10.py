@@ -187,7 +187,7 @@ def _heads(out: Path) -> dict:
 
 
 def _closed_heads(closed) -> dict:
-    """The head of each complete record the warden closed, as the check recomputes it: the issuer certifies no other."""
+    """The head of each complete record the network certifier closed, as the check recomputes it: the issuer certifies no other."""
     out = {}
     for name, (link, direction) in RC.CERTIFIED.items():
         grid = PARAMS.fails_grid if name == RC.FAILS else PARAMS.grid

@@ -159,7 +159,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (its id, α and Γ, read as a period-open reads them), so the policy a period's open names (`--policy-name`) is the
   auditor's own, fixed before any lane's open. `policies` reads the registry.
 
-- **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
+- **A network certifier rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell network certifier
   (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `verity/protocols/accounting/certifier/device/warden_serve.py
   rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through a
   tunnel: client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
@@ -168,13 +168,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
   `warden_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
-  it is the scan's rehearsal, the warden run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
+  it is the scan's rehearsal, the network certifier run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
   scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `warden_serve.py`'s default, which
   the scan's class doesn't serve) and the traffic the same arrivals of warden-form id requests (`rehearse --ids`, at
   the sampling below), so the endpoint must answer each id-form (`io_tie.id_event`s, then `io_tie.TRAILER`): the
-  warden frames what the server sends, and the check and the scan refuse a response that isn't by name. `--bucket-ms`
+  network certifier frames what the server sends, and the check and the scan refuse a response that isn't by name. `--bucket-ms`
   (with `--scan`, recorded and passed on only when given) is that schedule's tick τ instead of its 100 ms
-  (`SCAN_BUCKET_MS`; the scan's class takes any tick), the warden run at it: a request has D ticks from its admission
+  (`SCAN_BUCKET_MS`; the scan's class takes any tick), the network certifier run at it: a request has D ticks from its admission
   to its first egress cell, by which a short answer must be whole, and the gate counts the minutes and sampling blocks
   below at that tick (`scan_schedule`). A scan rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
   its stdin (`warden_prompts`: at most `WARDEN_PROMPTS_BYTES` of JSON, `WARDEN_PROMPTS` prompts of `WARDEN_PROMPT_IDS`
@@ -189,10 +189,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
-  --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the warden also send the
+  --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the network certifier also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
   (`verity.protocols.accounting.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
-  bucket t its server connections lost); the warden reads nothing
+  bucket t its server connections lost); the network certifier reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`. The gate
   refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
@@ -203,7 +203,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   run ended follows what the peer sent and when. `status RUN` and `fetch RUN` return it. A rehearsal is no window of
   the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
-  The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
+  The network certifier writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
   the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
   (each registration's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
@@ -325,7 +325,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   the shape and what the shape fixes; or the one word it was refused in, `LOAD_REFUSED`), and the record as the
   write left it and what the write printed (`rehearse.log`) are in its `witness/`. A request the gate refuses for
   the store says the word too, never the store's path. `load-relay` is a rehearsal of the same kind (all
-  of `warden-rehearse`'s flags) with the load first, run by the same warden: the gate refuses it unless the store's
+  of `warden-rehearse`'s flags) with the load first, run by the same network certifier: the gate refuses it unless the store's
   record of `--shape` is interface 1's (`load_relay.read_store`), `--program` is the reading program's digest and
   `--minutes` covers `load_minutes` (the stream and its witness at `LOAD_RATE`, and `LOAD_READY_S`) and then the
   rehearsal's. Its run opens one more tunnel a stream (`--streams`, 4 by default) to `--sink-port` on the peer's
@@ -333,7 +333,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   rehearse --load-store` relays the store over them: each value's bytes held to its digest and committed as they
   cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (4.85 GB at H200) is the sink's
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
-  endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
+  endpoint on the weights the sink wrote, and the network certifier's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
   of the load `out/` publishes nothing, and the end's verdict carries the check's `load` (values and how many
   registered). The load's registrations (`load.json`, which the block record pins) stay in `witness/`, as the row
@@ -349,7 +349,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
   request says otherwise; recorded in every request and passed on every one. `certifier_key.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
-  a rehearsal makes one, which `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its
+  a rehearsal makes one, which `warden_minutes` counts. A network certifier rehearsal's key signs a load's heads, then its
   session's start (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures an execution phase, and its signer
   refuses every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the
   least height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
@@ -439,22 +439,22 @@ DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
 #: the one-time keys a second `certifier_key.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
-#: a warden rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
+#: a network certifier rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
 #: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s execution phases, past the 745 that
 #: the whole-node wipe needs
 WARDEN_REQUESTS = (4, 1700)
-#: the one-time signatures a warden rehearsal's key gives an execution phase: a certificate for each of its three links'
+#: the one-time signatures a network certifier rehearsal's key gives an execution phase: a certificate for each of its three links'
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`warden_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
 #: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
 #: there)
 START_LEAVES = 1
-#: a warden rehearsal's execution phase without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
+#: a network certifier rehearsal's execution phase without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
 #: buckets of 100 ms)
 WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
-#: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
+#: the network certifier rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second sampled from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule at the class of record, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`),
@@ -1536,7 +1536,7 @@ def bounded(flag: str, v: str, lo: int, hi: int) -> int:
 
 
 def warden_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1], window_ms: int = WARDEN_WINDOW_MS) -> int:
-    """The fewest minutes a warden rehearsal of `requests` requests takes: its traffic's last arrival (1/`WARDEN_RATE`
+    """The fewest minutes a network certifier rehearsal of `requests` requests takes: its traffic's last arrival (1/`WARDEN_RATE`
     seconds a request), the tail, the rest of the `window_ms` sampling block it ends in (a minute for a shorter one)
     and the check, and its key at `height` (2^height one-time keys at `KEYGEN_LEAVES_S` a second)."""
     return _minutes(round(requests / WARDEN_RATE) + max(0, -(-window_ms // 1000) - WARDEN_TAIL_S), height)
@@ -1565,13 +1565,13 @@ def scan_bounds(scan_class: str | None = None) -> tuple[tuple[int, int], tuple[i
 
 
 def warden_window_ms(req: dict) -> int:
-    """A warden rehearsal's sampling block, in ms: T ticks of the scan's schedule at the request's tick with ``scan``,
+    """A network certifier rehearsal's sampling block, in ms: T ticks of the scan's schedule at the request's tick with ``scan``,
     `WARDEN_WINDOW_MS` otherwise."""
     return SCAN["--window"] * req.get("bucket_ms", SCAN["--bucket-ms"]) if req.get("scan") else WARDEN_WINDOW_MS
 
 
 def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bucket-ms"]) -> int:
-    """The most execution phases a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
+    """The most execution phases a network certifier rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
     traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in execution phases of the scan's
     schedule at the tick `bucket_ms` with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
     window_ms = warden_window_ms({"scan": True, "bucket_ms": bucket_ms} if scan else {})
@@ -1597,7 +1597,7 @@ def load_heads(shape: str) -> int:
 
 
 def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
-    """Refuses a warden rehearsal whose key at `height` can't sign its `windows` execution phases after a load's `heads`,
+    """Refuses a network certifier rehearsal whose key at `height` can't sign its `windows` execution phases after a load's `heads`,
     with the least height that can (`warden_height`)."""
     if height < (least := warden_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
@@ -1654,7 +1654,7 @@ def session_request(a: argparse.Namespace, port: int, minutes: int, window_ms: i
 
 
 def parse_warden(argv: list[str], host: Host, *, load: bool = False, session: bool = False) -> dict:
-    """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
+    """A network certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
     `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
     request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
     given, its tick `--bucket-ms` (`SCAN_BUCKET_MS`, which the minutes and the key's sampling blocks are counted at),
@@ -2563,7 +2563,7 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 
 def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
                    store: Path | None = None, listen: int | None = None, listen_fd: int | None = None) -> list[str]:
-    """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
+    """`warden_serve.py rehearse` of the request: the network certifier and its client here, the network certifier's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
     for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
@@ -2782,7 +2782,7 @@ def row_registration(text: str, given: dict) -> str:
 
 
 def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dict:
-    """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
+    """A network certifier rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out` (of the deployment, `DEPLOYMENT_PUBLIC`'s keys), the check's verdict
     (`accepted` and `WARDEN_COUNTS`, its `cell_rows` less the registrations' cost, its `failed` in `FAILED`'s
     words), and of an accepted run its lines:
@@ -2967,7 +2967,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None, stop: _Stop) -> dict:
-    """Run the requested rehearsal (the module docstring's "A warden rehearsal" and "The load") or relay session ("A
+    """Run the requested rehearsal (the module docstring's "A network certifier rehearsal" and "The load") or relay session ("A
     relay session": a rehearsal's relay alone, where the same ssh also brings the peer's clients to its listener,
     `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
     the peer's endpoint (and for a load one to its sink a stream,

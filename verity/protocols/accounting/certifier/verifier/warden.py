@@ -190,7 +190,7 @@ service steers: `origin` is a reading of it, a tick runs once it reads the tick'
 lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network certifier does
 not start (`pacer.ClockRefused`): it runs on no other.
 
-**The pacer** (`Warden(paced=…)`, which a warden on the host's clock must have): a bucket written on the loop leaves
+**The pacer** (`Warden(paced=…)`, which a network certifier on the host's clock must have): a bucket written on the loop leaves
 when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
 moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
 connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
@@ -198,7 +198,7 @@ at `origin` + t·τ + `paced` on the network certifier's clock, a time fixed bef
 socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached
 the pacer after its time, whose release started more than `slack` after it, or that the pacer released with a
 connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
-warden on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
+network certifier on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
 published once every bucket of it that was handed is released, or by the
 next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
@@ -746,8 +746,8 @@ class Warden:
       docstring's "The pacer"), which releases it `paced` after its boundary on the host's raw clock, `origin`'s
       clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
       `pacer.Report` once its writes end. On a clock of the host's (`pacer.CLOCKS`: the raw one, its default, or the
-      steered one) `paced` is required: only a warden on an injected clock writes each bucket on its loop;
-    - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
+      steered one) `paced` is required: only a network certifier on an injected clock writes each bucket on its loop;
+    - `until(predicate)` waits until the network certifier's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = raw_clock,
@@ -1400,7 +1400,7 @@ class Warden:
 
 def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
           fails: Sequence[BlockGrid]) -> dict:
-    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
+    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a network certifier
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its
     egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to

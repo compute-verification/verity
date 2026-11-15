@@ -126,7 +126,7 @@ both ends' grids and no sync, as `grid` and `python_verdict` do; its other kinds
 are cases this module never sends. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- the network certifier's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
+- the network certifier's parameters digest (`WardenProfile.digest`, which the network certifier's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
@@ -791,7 +791,7 @@ class TransferBlocks:
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync, the key and session, each end's grid with no
-        profile, and the warden's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
+        profile, and the network certifier's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
         reg, p = draw.docket.record, self.key.params

@@ -201,7 +201,7 @@ def every_count(lw: TransferBlocks, w: int, pair: tuple[CertifiedRecord, Certifi
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
     exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress
-    head (every window's, ``rd.every``) fails its signed digest alone, the warden link's counts being its schedule's.
+    head (every window's, ``rd.every``) fails its signed digest alone, the network certifier link's counts being its schedule's.
     The ingress heads fail nothing."""
     xs = rd.windows
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not

@@ -1,5 +1,5 @@
-"""A request's arrival on each side of the wire: the client's read of a response the warden's cells carried, the API
-server's accept stamp, and the summary's arrival orders and its views of a warden trace for the replay."""
+"""A request's arrival on each side of the wire: the client's read of a response the network certifier's cells carried, the API
+server's accept stamp, and the summary's arrival orders and its views of a network certifier trace for the replay."""
 from __future__ import annotations
 
 import asyncio
@@ -102,8 +102,8 @@ def test_inversions_count_the_pairs_put_the_other_way_round(mod):
 
 
 def warden_trace(root):
-    """A corpus of one trace through the warden: four requests sent in order r0..r3 and admitted together at bucket 1;
-    r0's request takes four ingress buckets, so the warden releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
+    """A corpus of one trace through the network certifier: four requests sent in order r0..r3 and admitted together at bucket 1;
+    r0's request takes four ingress buckets, so the network certifier releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
     engine schedules them in that order."""
     d = root / "w"
     (d / "raw").mkdir(parents=True)

@@ -1,4 +1,4 @@
-"""The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
+"""The gate's network certifier rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
 rehearsal while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
 network certifier through the tunnel into `witness/`, publishes to `out/` only its deployment, its certificates, a
@@ -159,7 +159,7 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
 
 
 def test_a_warden_key_signs_five_a_phase_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
-    """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    """A network certifier window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     after one for the session's start, so height 12's 4096 sign the start and 819 windows, exactly, and 1031 (55 minutes
     of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next
     height. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
@@ -450,7 +450,7 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     assert rc == 0 and json.loads(st)["end"] == end
 
 
-#: each file a warden run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl`,
+#: each file a network certifier run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl`,
 #: `ROW_CERTIFICATES` and `ROW_REGISTRATIONS`) by the certifier's message that carries it to the verifier
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFICATE,
              "cells-certificates.jsonl": NC.CERTIFICATE, "rows-certificates.jsonl": NC.CERTIFICATE,
@@ -458,7 +458,7 @@ PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFIC
 
 
 def test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes():
-    """Every file a warden run publishes is one of the certifier's messages to the verifier, and the verifier's channel
+    """Every file a network certifier run publishes is one of the certifier's messages to the verifier, and the verifier's channel
     carries those messages and the out side's record, nothing else."""
     assert set(A.WARDEN_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values(),
                                    *A.ROW_REGISTRATIONS.values()} == set(PUBLISHED)
@@ -970,7 +970,7 @@ def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(ho
 def test_a_warden_rehearsals_watermark_is_recorded_and_passed_on_only_when_asked(host, tmp_path):
     """`--watermark` is recorded (``watermark: true``) only when given, and its run is the same rehearsal with
     `rehearse --watermark` added: the traffic, schedule and minutes are the same, since the stream changes nothing
-    the warden certifies."""
+    the network certifier certifies."""
     rc, out = gate(host, REQUEST + ["--watermark", "--tokens", "64"], started=[])
     assert rc == 0, out
     req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
@@ -1489,7 +1489,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
-    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the warden's schedule."""
+    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the network certifier's schedule."""
     assert [A.scan_group_windows(t) for t in (1, 2, 11, 12, 139, 140)] == [1, 1, 1, 2, 2, 3]
     assert [A.warden_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
     assert A.warden_group_minutes(400, 64, 10) == 46 and A.warden_group_minutes(1, 2) == 8
