@@ -60251,6 +60251,7 @@
  },
  "ids": {
   "Accounting.Assumptions.KeyBinding": "key-binding",
+  "Accounting.Assumptions.SketchHashRandom": "random-oracle",
   "Accounting.Assumptions.WorkHardness": "rate-codec-work",
   "Accounting.Covered": "certifier-coverage",
   "Claims.ExpectedCR": "ecr/sha-512",
@@ -60266,6 +60267,7 @@
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
   "Pouw.Assumptions.HonestClock": "honest-clock",
   "Pouw.CostModel.Hashless": "pouw-hashless",
+  "Pouw.PearlC.GGapPerCoin": "pouw-gamma-per-coin",
   "Slowdown.Cut.Assumptions.Exports": "training-cut-exports",
   "Slowdown.Cut.Assumptions.Hardness": "training-cut-hardness",
   "Slowdown.Formalism.Assumptions.CutCost": "training-cut-cost",
