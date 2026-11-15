@@ -1758,6 +1758,50 @@ def test_an_env_bump_is_ejected_by_its_inputs_once_they_hold_the_envs_spec_and_a
     assert (w.built, w.count(Rerun)) == ((2, 0) if env else (7, 1))
 
 
+# ---- members with no land verdict -------------------------------------------------------------------------------------------
+
+def unverdicted(r: Ready) -> Ready:
+    """``r`` taken on its mark alone (the low-risk lane): no land verdict at its head (`Ready.verdict`)."""
+    return replace(r, verdict=False)
+
+
+def test_nothing_is_built_on_a_chain_top_holding_a_member_with_no_land_verdict_until_it_has_its_verdict():
+    """A PR taken on its mark alone is built on the chain's top as any PR is, but nothing goes on its candidate, in flight at
+    the head it was built at or not, so a reviewer's hold on it drops that candidate alone.  Once it has its verdict, the
+    tick builds on it."""
+    assert decide(snap(ready=[unverdicted(pr(1))])) == [Build((1,), MAIN, 2)]
+    s = snap(cand("c1", MAIN, 1), ready=[unverdicted(pr(1)), *prs(2, 3)], depth=3)
+    assert decide(s) == []
+    assert [(x.number, x.cause) for x in left_out(s)] == [(2, "unreviewed top"), (3, "unreviewed top")]
+    assert left_out(s)[0].why == ("main's chain's top c1 holds #1, taken on its mark alone with no land verdict: nothing is "
+                                  "built on it until each has its land verdict or lands")
+    assert decide(replace(s, ready=(unverdicted(pr(1, "h1b")), *prs(2, 3)), flying=(unverdicted(pr(1)),))) == []
+    assert decide(replace(s, ready=tuple(prs(1, 2, 3)))) == [Build((2, 3), "c1", 2)]
+    assert decide(snap(cand("c0", MAIN, 4), cand("c1", "c0", 1), ready=[unverdicted(pr(1)), *prs(2, 4)], depth=3)) == []
+
+
+def test_a_rebuild_goes_on_no_candidate_holding_a_member_with_no_land_verdict_and_what_sat_on_it_waits():
+    """`_restack` keeps each rebuilt candidate's place up to one holding a member with no land verdict, the chain's top."""
+    s = snap(cand("c1", MAIN, 3, 4, state=FAIL, failed=(task("t", "pkg3/"),)), cand("c2", "c1", 1), cand("c3", "c2", 2),
+             ready=[unverdicted(pr(1)), *prs(2, 3, 4)], depth=3)
+    assert [a for a in decide(s) if isinstance(a, Build)] == [Build((4,), MAIN, 3, replaces="c1"),
+                                                             Build((1,), "c1", 2, replaces="c2")]
+    assert [a for a in decide(replace(s, ready=tuple(prs(1, 2, 3, 4)))) if isinstance(a, Build)] == [
+        Build((4,), MAIN, 3, replaces="c1"), Build((1,), "c1", 2, replaces="c2"), Build((2,), "c2", 1, replaces="c3")]
+
+
+def test_a_staged_batch_holding_a_member_with_no_land_verdict_goes_onto_the_top_and_nothing_is_built_or_staged_on_it():
+    """Its `Commit` makes it the chain's top, and its tick builds nothing after it; staged, no second Lean batch is staged on
+    it (`Snapshot.lean_stages`)."""
+    passed = waiting("c1", MAIN, 1, records=RecordsRun(PASS))
+    s = snap(passed, cand("c2", MAIN, 2), ready=[unverdicted(lean(1)), *prs(2, 3)], depth=3, records=True)
+    assert decide(s) == [Commit("c1", "c2", 2)]
+    assert decide(replace(s, ready=(lean(1), *prs(2, 3)))) == [Commit("c1", "c2", 2), Build((3,), "c2", 1, after="c1")]
+    staged = snap(waiting("c1", MAIN, 1), ready=[unverdicted(lean(1)), lean(4)], records=True, lean_stages=2)
+    assert not [a for a in decide(staged) if isinstance(a, Build)]
+    assert decide(replace(staged, ready=(lean(1), lean(4)))) == [Build((4,), "c1", 2, True)]
+
+
 # ---- the simulated world -------------------------------------------------------------------------------------------------------
 
 TICK_S, PENDING_S = 600.0, 1800.0

@@ -629,6 +629,24 @@ def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_r
                                        "tools/move/x_map.toml is on `main`")}, loop.world.left
 
 
+def test_a_pr_the_low_risk_rule_builds_on_its_mark_alone_is_the_chain_s_top_until_its_land_verdict_and_then_is_built_on(env):
+    """`World.ready` gives a PR taken on its mark alone `Ready.verdict` False, its own land verdict or a carried one True: the
+    policy builds nothing on a candidate holding one, so a reviewer's hold on it would drop that candidate alone."""
+    _main_to(env, {Q.DRIVE_FLAGS: 'lowrisk_excludes = ["*.lean"]\n'})
+    main, verdicts = env.main(), env.labels.verdicts
+    one = env.put(1, {"a.txt": "1\n"})
+    verdicts[1, one] = []                                        # marked, no land verdict
+    loop = env.loop(vqueue.decide)
+    (built,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert (built["members"], built["base"]) == ([1], main) and loop.world.reviewed == set()
+    env.put(2, {"b.txt": "2\n"})
+    assert [r for r in loop.tick() if r["action"] == "build"] == []
+    assert [(x.number, x.verdict) for x in loop.world.ready(main)] == [(1, False), (2, True)]
+    verdicts[1, one] = [Lab("reviewer", "land", "2026-01-01T00:00:00Z")]
+    (on,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert (on["members"], on["base"]) == ([2], built["sha"]), on
+
+
 @pytest.mark.parametrize("shadow", [False, True])
 def test_a_ready_pr_that_doesnt_merge_onto_main_is_told_its_files_once_a_head_keeping_its_mark_and_with_shadow_only_logged(
         env, shadow):

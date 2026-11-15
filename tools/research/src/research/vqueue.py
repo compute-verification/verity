@@ -73,7 +73,10 @@ A candidate in flight lands as built: a member whose owner withdrew its mark, pu
 its new head waits for the next batch, and a fail blames it by its files as built without ejecting it.  Only a red or a
 member others took from the queue (`Snapshot.pulled`: a hold, a withdrawal or an ejection by another) drops a candidate, with
 every one above it, and the same tick builds each again without what the red suspects or without that member alone
-(`_restack`): a candidate rebuilt for any cause leaves out a member not ready at the head it was built at.
+(`_restack`): a candidate rebuilt for any cause leaves out a member not ready at the head it was built at.  A member taken on
+its mark alone, with no land verdict (`Ready.verdict`: the low-risk lane, a certified move), is only ever in the chain's top
+candidate: nothing is built, staged, committed or rebuilt on a candidate holding one until each such member has its land
+verdict or lands, so a reviewer's hold on it drops that candidate alone.
 
 Lean changes (`Ready.lean`) and changes with none go in batches of their own, so no Lean failure drops a PR with no Lean
 change.  A Lean batch opens whenever none is staged, whether or not PRs with no Lean change wait (`_next`): the Lean PRs first
@@ -125,6 +128,9 @@ class Ready:
     crosses: frozenset[str] = frozenset()  # the heads of the move PRs, ready or in flight, whose maps retire nothing its own
                                    # change names (`queue.crossed`): a batch on a candidate holding such a move, at such a
                                    # head, or in the tick that advances to one, may take it (`_crossing`)
+    verdict: bool = True           # it has a land verdict, or one carried to its head; False: it is taken on its mark alone
+                                   # (the low-risk lane, a certified move): a candidate holding it is only ever main's chain's
+                                   # top, nothing built on it until each such member has its verdict or lands (`_unreviewed`)
 
 
 @dataclass(frozen=True)
@@ -413,7 +419,9 @@ def decide(s: Snapshot) -> list[Action]:
     (`_aside`), which goes behind it as behind any PR waiting.  With `Snapshot.lean_stages` above 1, while fewer are staged
     the tick's Lean batch is staged on the top staged batch, its records run beside that one's: it goes onto the chain only
     after the batch it sits on, a refusal of its records waits for that one's run, and that one's drop (but on `main` or
-    for its own repair) drops it, built again on what is left.
+    for its own repair) drops it, built again on what is left.  While the chain's top holds a member with no land verdict
+    (`Ready.verdict`), nothing is committed, staged or built on it, and nothing is staged on a staged batch holding one
+    (`_unreviewed`).
 
     A red or a member set aside drops its candidate and every one above it, a refused records run drops its staged batch, and
     a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); in
@@ -524,6 +532,8 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
     settled = landed | ejected
     if held:
         return _leaving(s, leaves, acts, chain, kept, settled, CHAIN_WAITS)
+    if chain and (open_ := _unreviewed(chain[-1], built)):
+        return _leaving(s, leaves, acts, chain, kept, settled, _unreviewed_top(chain[-1], open_))
     base, after, moves = chain[-1].sha if chain else main, None, hold | _moves(chain, built)
     if passed and len(chain) < s.depth and len(acts) == n and all(
             _crossing(r if (r := ready.get(m)) is not None and r.head == h else None, moves)
@@ -541,10 +551,12 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept, hold)
             base = chain[-1].sha if chain else main
         moves = hold | _moves(chain, built)
+        if chain and (open_ := _unreviewed(chain[-1], built)):
+            return _leaving(s, leaves, acts, chain, kept, settled, _unreviewed_top(chain[-1], open_))
     scripts = any(built[m].scripts for d in chain for m in d.members if m in built)
     outcomes, room, priority = _outcomes(s, acts), len(chain) < s.depth, max(s.depth - len(chain), 0)
     busy = landed | ejected | {m for d in (*chain, *kept) for m in d.members}
-    stack = s.records and 0 < len(kept) < s.lean_stages
+    stack = s.records and 0 < len(kept) < s.lean_stages and not _unreviewed(kept[-1], built)
     pool = [r for r in _pool(ready, busy, bool(kept) and not stack) if not (r.move and scripts) and _crossing(r, moves)]
     lean, why = _next(s, pool, outcomes, chain, built)
     lean = _moves_last(lean, ready)
@@ -577,6 +589,22 @@ def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
 #: what stops every build of a tick, as a `Leave`'s (cause, why)
 CHAIN_WAITS = ("chain waits", "a failed candidate above the lowest waits for its base's word on its failures: nothing is built "
                               "above it")
+
+
+def _unreviewed(c: Candidate, built: dict[int, Ready]) -> tuple[int, ...]:
+    """``c``'s members with no land verdict at the heads it holds them at (`Ready.verdict`; ``built``: the members as built):
+    while it has any, nothing is built on it, so a reviewer's hold drops it alone."""
+    return tuple(m for m in c.members if m in built and not built[m].verdict)
+
+
+def _unreviewed_top(c: Candidate, members: tuple[int, ...]) -> tuple[str, str]:
+    """What stops every build of a tick whose chain's top ``c`` holds ``members`` with no land verdict, as a `Leave`'s (cause,
+    why)."""
+    return ("unreviewed top", f"main's chain's top {c.sha[:12]} holds {', '.join(f'#{m}' for m in members)}, taken on its "
+                              "mark alone with no land verdict: nothing is built on it until each has its land verdict or "
+                              "lands")
+
+
 #: why a ready PR that doesn't cross a move (`_crossing`) waits, as a `Leave`'s (cause, why)
 ADVANCED_TO_MOVE = ("move on chain", "the tick moved `main` to a candidate holding a move it doesn't cross: it waits for the "
                                      "next tick to read it on the moved `main`")
@@ -1070,7 +1098,9 @@ def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest:
     its records run first (`Build.records`), on the top staged batch when one stays staged, and those after it go on the
     chain's top as before; while `lean_stages` batches stay staged it is not built, and its members wait for a Lean batch.
     On a move, in flight below it or advanced to this tick (``hold``: the moves' heads), each keeps only the members that
-    cross it (`_crossing`, as `decide` builds there): the rest wait in the pool until it is on `main`.  What it stages."""
+    cross it (`_crossing`, as `decide` builds there): the rest wait in the pool until it is on `main`.  Nothing is rebuilt on
+    a candidate or staged batch holding a member with no land verdict (`_unreviewed`): those members wait in the pool.  What
+    it stages."""
     base, below = chain[-1].sha if chain else main, {m for c in [*chain, *staged] for m in c.members}
     built = {**ready, **{r.number: r for r in s.flying}}
     again: list[Candidate] = []
@@ -1083,6 +1113,9 @@ def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest:
         members, heads = tuple(m for m, _ in keep), tuple(h for _, h in keep)
         records = s.records and any(ready[m].lean for m in members)
         if records and len(staged) + len(again) >= s.lean_stages:
+            continue
+        under = [*staged, *again][-1] if records and (staged or again) else chain[-1] if chain else None
+        if under is not None and _unreviewed(under, built):
             continue
         on = ([*staged, *again][-1].sha if staged or again else base) if records else base
         acts.append(Build(members, on, max(s.depth - len(chain), 0), records, replaces=c.sha))

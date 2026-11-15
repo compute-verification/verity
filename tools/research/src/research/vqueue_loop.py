@@ -1134,7 +1134,8 @@ class World:
     def ready(self, main: str) -> list[Ready]:
         """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR with a land verdict, or, while drive.toml's
         `lowrisk_lane` is on, on its mark alone once its move is certified on `main` (`_uncertified`, `_off_mark`), never under
-        the low-risk rule (`queue.lands_on_mark`).  Why each other open PR into `main` isn't one goes to `left`:
+        the low-risk rule (`queue.lands_on_mark`); one taken on its mark alone, with neither its own land verdict nor one
+        carried to its head, has `Ready.verdict` False.  Why each other open PR into `main` isn't one goes to `left`:
         the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
         verdict, the freeze, the landing gates' refusal of its head (`gate`), a move it lacks whose retired names its own
         change names (`lacked_moves`, also to `lacking`), or an untaken PR whose head it holds; those others than their owners
@@ -1262,7 +1263,15 @@ class World:
         # a move regenerated on its batch's tip doesn't merge its head, so whether that merges is moot
         return [Ready(n, (p := entries[n].pr).head, *chosen[n][:2], rank=i, conflict=chosen[n][2] and uncertified.get(n) != "",
                       move=bool(p.move), scripts=vqueue.meets(chosen[n][0], MOVE_SCRIPTS),
-                      lean_input=vqueue.meets(chosen[n][0], inputs)) for i, n in enumerate(placed)]
+                      lean_input=vqueue.meets(chosen[n][0], inputs), verdict=why[n] is None or n in carried)
+                for i, n in enumerate(placed)]
+
+    def verdict(self, n: int, head: str) -> bool:
+        """Whether #``n`` has a land verdict at ``head`` (`vqueue.Ready.verdict`), for a member in flight at a head it isn't ready
+        at; True once it is closed, as no reader reviews it then."""
+        p = self.open().get(n)
+        return p is None or unreviewed(self.labels.reviews(n, head),
+                                       review_owners(self.q, self.labels, n, head, p.owner, self.open())) is None
 
     def _uncertified(self, p: PR, main: str) -> str:
         """Why move PR ``p``, with no land verdict, doesn't land on its ready mark alone: its map isn't on ``main``, where it
@@ -2795,7 +2804,8 @@ class Loop:
                         flying=tuple(Ready(m, h, (f := frozenset() if h in gone else w._changed(main, h)),
                                            lean=h not in gone and w._judge(main, h)[0],
                                            move=bool(getattr(w.open().get(m), "move", "")),
-                                           scripts=vqueue.meets(f, MOVE_SCRIPTS)) for m, h in sorted(flying)),
+                                           scripts=vqueue.meets(f, MOVE_SCRIPTS), verdict=w.verdict(m, h))
+                                for m, h in sorted(flying)),
                         records=self.records is not None, lean_stages=self.lean_stages)
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
