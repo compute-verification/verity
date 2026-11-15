@@ -420,7 +420,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         mc.SessionLog.create(device / "sessions")
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
-        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+        sys.stdout.write(json.dumps({"listening": srv.getsockname()[1]}) + "\n")
+        sys.stdout.flush()
         conn, _ = srv.accept()
         t0 = time.time_ns()
         with conn:
@@ -434,7 +435,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), reads=a.reads,
                           fill=None if streamer is None else native)
             t1 = time.time_ns()
-    print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
+    sys.stdout.write(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True) + "\n")
+    sys.stdout.flush()
     return 0
 
 

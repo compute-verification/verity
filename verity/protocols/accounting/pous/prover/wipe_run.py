@@ -530,7 +530,8 @@ def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side]) -> 
                     help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)
     answer = subprotocol(a.period, a.node, a.out, side_of=side_of)
-    print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
+    sys.stdout.write(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True) + "\n")
+    sys.stdout.flush()
     return 0 if answer["verdict"] == a.expect else 1
 
 
