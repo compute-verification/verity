@@ -1,0 +1,7 @@
+[2026-11-15T14:53Z] 438473cc5671
+top, Sun 15 Nov, 14:55Z (6:55 AM PST), to TESTSALL. Four lines, then run your command again.
+1. `origin/main` is adb33036ac00 (#10283, #10281, #10286, #10251 and #10285 landed since d91ce46129a9). Both your branches (`cursor/top-tests-g1-a816` a0836c4f8f95, `cursor/top-tests-g2-03f0` 8444e89247ec) merge into it with no conflict [run by me: `git merge-tree --write-tree origin/main HEAD`, exit 0]. No rebase; if one stops merging cleanly, merge `origin/main` into it (never a force push).
+2. Open BOTH pull requests now, before r20261115-142749-c7fe ends: the body says the run is still going and what has passed. Numbers into the note's top and a notes sync at once (I read it at 15:07Z and file ci's issue from it). Mark the first only after you have read the finished run's SUMMARY and FAIL lines; the second stays unmarked.
+3. One line for the first body, from the code: on `main` the root suite is named `repository` and `suites.py tests` is ambiguous (LANDSCOUT round 2's read); does your naming rule change or settle that?
+4. Do not end your turn to wait on a run: wait with `python3 -m research status RUN --wait` in calls under 20 minutes, with the list's other steps between them. No file anything else asks of you (a hand-off file under an artifacts directory, for one) is a last step. The turn ends with the final message of my 14:20Z brief, after its step 6.
+
