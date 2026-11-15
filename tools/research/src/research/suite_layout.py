@@ -34,9 +34,10 @@ def mirror_of(path: str) -> str | None:
 
 
 def root_owns(path: str) -> bool:
-    """Whether ``path`` is the root suite's own under `tests/`: a file of `tests/` itself or under a `ROOT_OWN` directory."""
+    """Whether ``path`` is the root suite's own under `tests/`: a file of `tests/` itself or under a `ROOT_OWN` directory, or
+    under `tests/tests/`, which would mirror `tests/` itself and which the root suite collects."""
     rest = mirror_of(path)
-    return rest is not None and ("/" not in rest or rest.split("/", 1)[0] in ROOT_OWN)
+    return rest is not None and ("/" not in rest or rest.split("/", 1)[0] in (*ROOT_OWN, MIRROR))
 
 
 def stands_for(path: str) -> str | None:

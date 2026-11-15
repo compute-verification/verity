@@ -58,6 +58,7 @@ def test_a_path_covers_its_tests_under_the_roots_tests_where_they_exist():
     ("tests/verity/core/test_claims.py", False, "verity/core/test_claims.py"),
     ("tests/tools/research/test_queue.py", False, "tools/research/test_queue.py"),
     ("tests/linted/test_a.py", False, "linted/test_a.py"),
+    ("tests/tests/test_a.py", True, None),
     ("verity/tests/test_a.py", False, None),
     ("testsuite/test_a.py", False, None),
 ])
@@ -75,6 +76,7 @@ def test_the_repository_suites_own_under_tests_are_its_files_and_own_directories
     ("tests/lint/test_a.py", ("tests/",), True),
     ("tests/verity/core/test_a.py", ("tests/",), False),
     ("tests/lint/test_a.py", ("lint/",), False),
+    ("tests/tests/test_a.py", ("tests/",), True),
     ("verity/core/a.py", (), False),
 ])
 def test_a_directory_holds_its_tests_under_tests_and_tests_holds_the_repository_suites_own(path, dirs, held):
