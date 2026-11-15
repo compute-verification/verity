@@ -8,10 +8,10 @@
 # Steps, each one's log in $OUT/logs/STEP.log and its exit status a line of $OUT/steps.txt:
 #   1. cubin: Pearl-C's sm_90a cubin built from this tree (benchmarks/harness/setup/pearl_c_sm90.sh: nvcc, its SASS gates);
 #   2. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card, under `gpu-lease 1` where the machine
-#      has it (GPU picks the card, default 0) and directly otherwise: a warm-up, then CLASS's fixed load, SLOTS requests of
+#      has it (GPU picks the card, default 0) and directly otherwise: with no warm-up, CLASS's fixed load, SLOTS requests of
 #      PROMPT seeded random tokens and OUTPUTS outputs each, every engine step one pass retained under PASSES;
-#   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), the
-#      warm-up's dropped;
+#   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
+#      are the class's rounds alone (a warm-up's would be rounds before them, which the class's fixed load refuses);
 #   4. verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
 #      fixed load, DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
 #   5. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
@@ -150,7 +150,7 @@ print(g["gate"], g["peer"], g["lane"], sep="\n")' "$OUT/auditor-gate.json") || e
 esac
 coins | tee "$OUT/coins.txt"
 step serve lease "$PY" "$SP" serve --spec "$SPEC" --requests "$SLOTS" --prompt-tokens "$PROMPT" \
-  --output-tokens "$OUTPUTS" --max-num-batched-tokens "${T:-8192}" --passes "$P" --out "$PIECE/served.json" || failed=1
+  --output-tokens "$OUTPUTS" --max-num-batched-tokens "${T:-8192}" --no-warm-up --passes "$P" --out "$PIECE/served.json" || failed=1
 if [ "$failed" = 0 ]; then
   step volunteer-needed "$PY" "$SP" volunteer-needed
   grep -q '^no' "$OUT/logs/volunteer-needed.log" || { echo "the verdict needs a give-up before its coin; this runs none"; exit 1; }
