@@ -307,7 +307,7 @@ theorem entry_read {r : Core.Record} {text : String} {mb : Std.TreeMap.Raw Strin
   refine ⟨e, nb, hsb, ?_, ?_⟩
   · intro I m hm
     have hg := Entry.good_of_plain hpl
-    rw [Entry.ledgerMessage_same (I := I) hse' hg (Verity.Sampled.sortedKeys_of_wf _ (Built.wf_of_good hg))
+    rw [Entry.ledgerMessage_same (I := I) hse' hg (CanonRead.sortedKeys_of_wf _ (Built.wf_of_good hg))
       (rfl : getD r.toJson "schema" = .str r.schema)]
     exact hm
   · rw [hle, hsch]

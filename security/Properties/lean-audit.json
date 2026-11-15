@@ -106,7 +106,6 @@
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
   "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
-  "Properties.Accounting.Registration.Code",
   "Properties.Accounting.Registration.Premises"
  ],
  "proved_in": ["../Proofs"],

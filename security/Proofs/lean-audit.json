@@ -119,7 +119,6 @@
   "Proofs.Properties.InferenceOnly.DecodeKeys",
   "Proofs.Properties.InferenceOnly.Lemmas.Opening",
   "Proofs.Properties.InferenceOnly.RecordProvenance",
-  "Proofs.Properties.Accounting.Registration.Code",
   "Proofs.Properties.Ties",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
