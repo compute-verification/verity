@@ -45,13 +45,17 @@ class Lab:
 
 class Labels:
     """A PR's ready mark is the fake GitHub's (`ready`), and each marked head has a land verdict by `reviewer` unless ``held``,
-    but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too."""
+    but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too; a head
+    ``ungated`` names, its mark's preflight couldn't judge with the landing gates (`StoreLabels.unjudged`)."""
 
     def __init__(self, gh):
-        self.gh, self.held, self.verdicts = gh, set(), {}
+        self.gh, self.held, self.verdicts, self.ungated = gh, set(), {}, {}
 
     def ready(self, n: int, head: str) -> bool:
         return (n, head) in self.gh.ready
+
+    def unjudged(self, n: int, head: str) -> str:
+        return self.ungated.get((n, head), "")
 
     def reviews(self, n: int, head: str) -> list[Lab]:
         if (n, head) in self.verdicts:
@@ -3868,6 +3872,64 @@ def test_under_lean_stages_2_a_refused_first_records_run_drops_the_second_which_
     assert (again["members"], again["heads"], again["base"], again["records_first"], again["replaces"]) == (
         [2], [two], env.main(), True, built["sha"]), again
     assert records.started[-1] == ("drive", again["sha"]) and len(records.started) == 3
+
+
+UNJUDGED = "the landing gate gates/g.py ran over 120 s"
+
+
+def _gates(monkeypatch, says: dict[str, tuple[list[str], list[str]]]) -> list[str]:
+    """drive.toml's landing gates at `main`, faked: `gate_refusal` of each head is what ``says`` gives it, (refused,
+    unjudged); the heads judged, in order."""
+    ran: list[str] = []
+    monkeypatch.setattr(L, "gates_at", lambda repo, ref, key="landing_gates": ("gates/g.py",))
+    monkeypatch.setattr(L, "gate_refusal", lambda repo, main, head, gates: ran.append(head) or says[head])
+    return ran
+
+
+def test_a_member_its_mark_s_preflight_couldn_t_judge_with_the_landing_gates_is_judged_once_on_its_head_before_it_is_built(
+        env, monkeypatch):
+    """#1 and #3 were marked with a landing gate that couldn't judge them (`gates_unjudged`), #2 with every gate judging it.
+    The build runs the gates on #1's and #3's heads alone, never #2's: #3 passes and is built beside #2, and #1, refused, is
+    left out, its owner told the gate's reason and fix.  At that head it stays out of `ready`, with the gate's reason, and
+    the gates never run on it again, nor in a new loop on the same cache."""
+    h1, h2, h3 = env.put(1, {"a.txt": "1\n"}), env.put(2, {"b.txt": "2\n"}), env.put(3, {"c.txt": "3\n"})
+    env.labels.ungated = {(1, h1): UNJUDGED, (3, h3): UNJUDGED}
+    refusal = "the landing gate gates/g.py at `main`: touches a.txt; delete a.txt"
+    ran = _gates(monkeypatch, {h1: ([refusal], []), h3: ([], [])})
+    main, cache = env.main(), env.tmp / "cache"
+    lines = env.loop(vqueue.decide, cache=cache).tick()
+    assert ran == [h1, h3]
+    gates = [(r["number"], r["heads"], r["why"], r["gated_on"]) for r in lines if r["action"] == "gate"]
+    assert gates == [(1, [h1], f"refused: {refusal}", main), (3, [h3], "passed", main)], lines
+    (skip,) = [r for r in lines if r["action"] == "skip"]
+    why = f"drive.toml's landing gates, which its ready mark's preflight couldn't judge it with, refuse it: {refusal}"
+    assert (skip["number"], skip["why"]) == (1, why) and skip["done"], skip
+    assert len(env.posts) == 1 and env.posts[0].endswith(
+        f"#1 at {h1[:12]} isn't built on the verified queue's candidate on {main[:12]}: {why}. Push the fix and mark the new "
+        "head."), env.posts
+    (built,) = [r for r in lines if r["action"] == "build"]
+    assert built["members"] == [2, 3], built
+    loop = env.loop(vqueue.decide, cache=cache)
+    assert loop.tick() == [] and ran == [h1, h3]
+    assert loop.world.left[1] == (h1, f"drive.toml's landing gates refuse it at this head: {refusal}")
+    assert json.loads((cache / L.GATES_CACHE).read_text()) == {f"1@{h1}": [refusal], f"3@{h3}": []}
+
+
+def test_a_member_the_landing_gates_still_can_t_judge_waits_unbuilt_its_owner_told_nothing_and_is_judged_again_next_build(
+        env, monkeypatch):
+    head = env.put(1, {"a.txt": "1\n"})
+    env.labels.ungated = {(1, head): UNJUDGED}
+    says = {head: ([], [f"the landing gate gates/g.py can't judge {head[:12]}: exit 2"])}
+    ran = _gates(monkeypatch, says)
+    loop = env.loop(vqueue.decide)
+    lines = loop.tick()
+    (skip,) = [r for r in lines if r["action"] == "skip"]
+    assert skip["waits"] and "nor can they now: the landing gate gates/g.py can't judge" in skip["why"], skip
+    assert env.posts == [] and not [r for r in lines if r["action"] in ("gate", "build") and r.get("sha")]
+    says[head] = ([], [])
+    lines = loop.tick()
+    assert ran == [head, head] and [r["why"] for r in lines if r["action"] == "gate"] == ["passed"]
+    assert [r["members"] for r in lines if r["action"] == "build" and r.get("sha")] == [[1]]
 
 
 def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_refuses_ringing_infra(env):

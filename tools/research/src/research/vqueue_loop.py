@@ -145,7 +145,10 @@ The actions.  Build merges its members in order onto its base (`Queue._merge`), 
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
 out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
 naming them where it merges onto `main`;
-nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
+nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does).  A member whose ready mark's
+preflight couldn't judge it with drive.toml's landing gates (`gates_unjudged`) is judged by them on its head alone first,
+once a head (`World.gate`, logged `gate`): one they refuse is left out, its owner told the gate's reason, and stays out at
+that head.  Build then pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
@@ -238,8 +241,8 @@ from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member, Queue,
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
-                    label_verifier, lands_on_mark, lean_change, listed, lowrisk, merged_tree, move_of, own_files,
-                    priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
+                    gate_refusal, gates_at, label_verifier, lands_on_mark, lean_change, listed, lowrisk, merged_tree, move_of,
+                    own_files, priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
 from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why, merge_main
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
@@ -337,6 +340,9 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 JOBS = 8
 #: what `World.ready` judged of each open head on `main`, in the loop's cache, for the next tick's process (`--once`)
 JUDGED_CACHE = "judged.json"
+#: the landing gates' verdict on each head whose ready mark's preflight couldn't judge it with them, in the loop's cache, so
+#: no head is judged twice (`World.gate`)
+GATES_CACHE = "gates-judged.json"
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
 OFF_SAID = 10
 #: the old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and no tick waits on
@@ -984,11 +990,17 @@ class World:
         self._made_at = cache / "moves-made.json" if cache is not None else None
         #: `JUDGED_CACHE` (`_take_judged`, `_keep_judged`): the text last read or written, and the code and git that judge
         self._judged_at, self._judged_text, self._judging = (cache / JUDGED_CACHE if cache is not None else None), None, ""
+        #: `GATES_CACHE` (`gate`): the landing gates' refusals of each head they judged, by `{number}@{head}`, none when they
+        #: passed it; and the heads `gate` judged since the loop last took them for its log, as (number, head, `main`, refusals)
+        self._gates_at = cache / GATES_CACHE if cache is not None else None
+        self.gated: dict[str, list[str]] = {}
+        self.gates_ran: list[tuple[int, str, str, list[str]]] = []
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
             q._kept_at, q._mapped_at = cache / "own-changes.json", cache / "mapped-changes.json"
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
             q._made = json.loads(self._made_at.read_text()) if self._made_at.is_file() else {}
+            self.gated = json.loads(self._gates_at.read_text()) if self._gates_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.absent: set[str] = set()
@@ -1124,8 +1136,9 @@ class World:
         `lowrisk_lane` is on, on its mark alone once its move is certified on `main` (`_uncertified`, `_off_mark`), never under
         the low-risk rule (`queue.lands_on_mark`).  Why each other open PR into `main` isn't one goes to `left`:
         the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
-        verdict, the freeze, a move it lacks whose retired names its own change names (`lacked_moves`, also to `lacking`), or
-        an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
+        verdict, the freeze, the landing gates' refusal of its head (`gate`), a move it lacks whose retired names its own
+        change names (`lacked_moves`, also to `lacking`), or an untaken PR whose head it holds; those others than their owners
+        took go to `pulled`."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         absent = self._missing(p.head for p in prs)
@@ -1194,6 +1207,11 @@ class World:
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
                 cause.update((n, "freeze") for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
+            gated = {n: r for n in took if (r := self.gated.get(f"{n}@{entries[n].pr.head}"))}
+            left.update((n, (entries[n].pr.head, f"drive.toml's landing gates refuse it at this head: {'; '.join(r)}"))
+                        for n, r in gated.items())
+            cause.update((n, "landing gate") for n in gated)
+            took = [n for n in took if n not in gated]
             # a plain merge of a head below a move leaves its own lines naming what the move retired: such a head lands
             # crossed, and one whose own change names none of it crosses by that merge (`lacked_moves`)
             lacks = dict(zip(took, pool.map(lambda n: self._lacks(main, entries[n].pr.head, files[n]), took)))
@@ -1975,6 +1993,9 @@ class World:
         tip, merged, left = base, [], []
         self.certified = {}
         for p in sorted(prs, key=lambda p: bool(p.move)):
+            if (skip := self.gate(p, main)) is not None:
+                left.append(skip)
+                continue
             if p.move:
                 regenerated, skip = self._move(p, tip, main)
                 if regenerated is not None:
@@ -1995,6 +2016,34 @@ class World:
                 tip = commit
         self._keep_moves(main)
         return tip, merged, left
+
+    def gate(self, p: PR, main: str) -> Skip | None:
+        """Why ``p`` is left out of a build for drive.toml's `landing_gates` at ``main``, run on its head alone (`gate_refusal`,
+        as the preflight runs them) when its ready mark's preflight couldn't judge it with them (`StoreLabels.unjudged`):
+        once a head, their verdict kept (`GATES_CACHE`) and never run again, so a refusal stands at that head (`ready` leaves
+        it out, with the gate's reason) and a pass lets it be built; while they can't judge it either, it waits, judged again
+        at its next build.  None when its mark's preflight judged it, or these passed it."""
+        if not (said := self.labels.unjudged(p.number, p.head)):
+            return None
+        key = f"{p.number}@{p.head}"
+        if key not in self.gated:
+            try:
+                refused, unjudged = gate_refusal(self.repo, main, p.head, gates_at(self.repo, main))
+            except QueueError as e:
+                refused, unjudged = [], [f"drive.toml's landing gates at `main` {main[:12]} can't be read ({e})"]
+            if unjudged and not refused:
+                return Skip(p, f"its ready mark's preflight couldn't judge it with the landing gates ({said}), nor can they "
+                               f"now: {'; '.join(unjudged)}; it waits, judged again at its next build", waits=True)
+            open_now = self.open()
+            self.gated = {k: v for k, v in self.gated.items() if int(k.split("@")[0]) in open_now}
+            self.gated[key] = refused
+            self.gates_ran.append((p.number, p.head, main, refused))
+            if self._gates_at is not None:
+                self._gates_at.write_text(json.dumps(self.gated, indent=1, sort_keys=True) + "\n")
+        if refused := self.gated[key]:
+            return Skip(p, f"drive.toml's landing gates, which its ready mark's preflight couldn't judge it with, refuse it: "
+                           f"{'; '.join(refused)}", fix="Push the fix and mark the new head.")
+        return None
 
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
         """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
@@ -3285,7 +3334,10 @@ class Loop:
         if unknown := [n for n in members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
         tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main)
-        recs = []
+        recs = [self.record(t, "gate", base=base, members=[n], heads=[head], number=n, gated_on=on, done=True,
+                            why=f"refused: {'; '.join(refused)}" if refused else "passed")
+                for n, head, on, refused in w.gates_ran]
+        w.gates_ran = []
         for s in left:
             p, key = s.pr, f"{s.pr.head}@{base}"
             line = dict(base=base, members=[p.number], heads=[p.head], number=p.number)
