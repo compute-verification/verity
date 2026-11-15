@@ -11,7 +11,8 @@
 # (HF_HOME), the sm_90 taps under /workspace/research/vllm-composed-h200int8 (A5_TAPS; the unguarded FA3 build only where it is
 # there, as the row runs the guarded one) and gpu-lease (the row leases the GPU for its Match capture and its Commit's engine
 # only; A5_CARD=N leases card N alone, on a node whose other cards are others'). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
-# while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
+# while the GPU stages run (M0 in A5_ROOT/flock-work, or A5_FLOCK_WORK, kept for a rerun; a build killed mid-clone leaves one
+# that 20-gpu-link.sh takes as built, so a rerun after one names another). The row dir and the window stay on the node, kept
 # there; $OUT, published as the run's record, keeps the row's records that adapters/vllm/tools/served_run/published.sh lists (each with the
 # reason it holds nothing of a request) and verdicts.txt, the window's public files, a5.sh's out ($OUT/a5) and summary.txt,
 # whose A5 line is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length. Every
@@ -32,7 +33,7 @@ NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
 PART=$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 ROOT=${A5_ROOT:-/workspace/research/vllm-sha512-a5}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
-D=$BASE/$ROW WD=$BASE/serving-rows FW=$ROOT/flock-work KEPT=$BASE/unpublished
+D=$BASE/$ROW WD=$BASE/serving-rows FW=${A5_FLOCK_WORK:-$ROOT/flock-work} KEPT=$BASE/unpublished
 VENV=${VENV:-/workspace/cp/venv312}
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 for f in "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
