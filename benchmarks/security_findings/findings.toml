@@ -97,7 +97,7 @@ kind = "example"
 reason = "a test's stand-in host, the placeholder address every example uses"
 
 [[finding.except]]
-path = "tools/verity/check/tests/test_verdicts.py"
+path = "tools/check/tests/test_verdicts.py"
 count = 2
 kind = "example"
 reason = "two test stand-in pods' addresses, the placeholder and the one after it"

@@ -85,7 +85,7 @@ class Steady:
     run's own files, or in `art` where an art holds the run's rows in their place. `form` is the Definition its
     statements are of, by its id, where that is another than `definition` (the type's Boolean version, say); None
     where they are of `definition` itself. `off_node`: whether its card was on another NUMA node than its provers'
-    CPUs, None where that isn't recorded."""
+    CPUs (False: on its node), None where that isn't recorded."""
 
     type: str
     definition: str

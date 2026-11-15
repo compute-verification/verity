@@ -52,6 +52,17 @@ def test_a_records_run_is_its_wall_with_its_work_wait_and_coldness_beside_it():
     assert t["modules"] == 646 + 3191 + 54, "each audited package's modules once"
 
 
+def test_a_check_py_several_packages_share_and_a_requirers_update_are_each_summed_once():
+    out = ("lean-records: security+security/Properties: check.py exit 1 in 600 s on /c/lean-records/build-1 (3 files changed "
+           "there), without the kernel replay\n"
+           "lean-records: security: pass (of that check.py, its own records exit 0)\n"
+           "lean-records: security/Properties: check.py exit 0 in 300 s on /c/lean-records/build-1, audited again with "
+           "--update; reports in /o\n")
+    files = {"slot.json": FILES["slot.json"], "stdout.log": out}
+    t = L.records_task("r20261028-100000-aaaa", _doc(), _meta(), list(files), _read(files))
+    assert t["work_min"] == (600 + 300) / 60, "the shared check.py once, and the requirer's own beside it"
+
+
 def test_a_run_that_audited_nothing_works_its_wall_less_its_check_slot_wait():
     files = {"slot.json": FILES["slot.json"], "stdout.log": "lean-records: reused the record of a passing audit\n"}
     t = L.records_task("r20261028-100000-aaaa", _doc(wall=300.0, remote={"machine": "n2"}), _meta(path="reused"), list(files),
