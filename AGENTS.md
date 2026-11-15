@@ -199,7 +199,7 @@ is unchanged. Every commit of `main` is checked whole, before it lands or right 
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
   `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the certifier program, the inference-only
-  policy's check and PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte
+  check and PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte
   that leaves is computed by `Flock.ZkServer`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released
   bytes through hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
   (`Definitions/`, Mathlib only), properties (`Properties/`) and proofs (`Proofs/`, ArkLib allowed, with
