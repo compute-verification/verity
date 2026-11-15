@@ -52,10 +52,13 @@ def theta (t : Core.Registration.Theta) : Verity.Registration.Theta :=
 def builder (B : String → Verity.Compiler) (b : Core.Registration.Builder) : Verity.Registration.Builder :=
   ⟨b.digest, b.advice, B b.digest⟩
 
-/-- The spec's item of a code item. -/
-def item (B : String → Verity.Compiler) : Core.Registration.Item → Verity.Registration.Item
-  | .theta t => .theta (theta t)
-  | .builder b => .builder (builder B b)
+/-- The spec's items of a code item: a θ value's or the builder's. A configuration, which the spec has no item for and
+the code's check refuses wherever it stands (`configurationUnordered`), is its digest's builder twice, which the spec
+refuses as an item registered twice (`ItemsOnce`). -/
+def item (B : String → Verity.Compiler) : Core.Registration.Item → List Verity.Registration.Item
+  | .theta t => [.theta (theta t)]
+  | .builder b => [.builder (builder B b)]
+  | .configuration d => [.builder ⟨d, "", B d⟩, .builder ⟨d, "", B d⟩]
 
 /-- The spec's declaration of a code declaration: the same day and program. -/
 def declared (d : Core.Registration.Declared) : Verity.Registration.Declared := ⟨d.day, d.program⟩
@@ -63,7 +66,7 @@ def declared (d : Core.Registration.Declared) : Verity.Registration.Declared := 
 /-- The spec's entry of a code entry: a site entry's `Properties.Site.regEntry`, the others field for field. -/
 def entry (B : String → Verity.Compiler) : Core.Registration.Entry → Verity.Registration.Entry
   | .site e => regEntry e
-  | .information p items => .information p (items.map (item B))
+  | .information p items => .information p (items.flatMap (item B))
   | .declaration p d => .declaration p (declared d)
 
 /-- **The log a code log denotes.** -/
