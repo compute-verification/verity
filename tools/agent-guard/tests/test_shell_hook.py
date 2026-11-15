@@ -2100,7 +2100,7 @@ def test_a_name_exported_for_throwaway_commits_is_stopped_before_a_later_merge_i
 #: (`shell_keeps`), in a body, an `eval`, after a comment, beside a subshell or a command substitution that ends first
 CODE_SET_IN_THE_SHELL = [
     "export PYTHONPATH=/x", "export PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1", "export RESEARCH_AT_CHECKOUT=1",
-    "cd /x && export PYTHONPATH=$PWD/src && pytest tests/test_x.py", "declare -x PYTHONPATH=/x", "typeset -x RESEARCH_AT_CHECKOUT=1",
+    "cd /x && export PYTHONPATH=$HERE/src && pytest tests/test_x.py", "declare -x PYTHONPATH=/x", "typeset -x RESEARCH_AT_CHECKOUT=1",
     "export PYTHONPATH", "PYTHONPATH=/x", "X=1 RESEARCH_AT_CHECKOUT=1", "PYTHONPATH=/x; export PYTHONPATH", "readonly PYTHONPATH=/x",
     "set -a; PYTHONPATH=/x; set +a", "command export PYTHONPATH=/x", "export PYTHONPATH=$(pwd)/src", "export PYTHONPATH=`pwd`/src",
     'export PYTHONPATH="$(pwd)/src:$PYTHONPATH"', "if true; then export PYTHONPATH=/x; fi", "for d in a b; do export PYTHONPATH=$d; done",
@@ -2117,7 +2117,7 @@ CODE_NOT_SET_IN_THE_SHELL = [
     "unset PYTHONPATH RESEARCH_AT_CHECKOUT", 'echo "$PYTHONPATH"', "declare -p PYTHONPATH", "export PYTHONPATH_X=1",
     "bash -c 'export PYTHONPATH=/x; python3 -c pass'", "bash -lc 'export PYTHONPATH=/x RESEARCH_AT_CHECKOUT=1; research status'",
     "research run --on auto -- bash -lc 'export PYTHONPATH=.:x; pytest'", "ssh n1 'export PYTHONPATH=/x; pytest'",
-    "( export PYTHONPATH=/x; python3 -c pass )", "cd /x && (export PYTHONPATH=$PWD/src; pytest tests/test_x.py)",
+    "( export PYTHONPATH=/x; python3 -c pass )", "cd /x && (export PYTHONPATH=$HERE/src; pytest tests/test_x.py)",
     "export PYTHONPATH=/x | cat", "export PYTHONPATH=/x &", "echo $(export PYTHONPATH=/x)", "./export_and_run.sh",
     "tmux send-keys 'export PYTHONPATH=/x' C-m", "bash <<'EOF'\nexport PYTHONPATH=/x\nEOF", 'rg -n "export PYTHONPATH" tools/',
     "export PYTHONPATH=/x 'unclosed",
