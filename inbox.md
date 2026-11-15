@@ -15,3 +15,12 @@ Tests so far:
 - span: 11 passed; network check: 3 passed.
 - The fixture fetch got its 1 entry. The rest of the certifier's Lean tests are running; I send their counts when they end.
 
+[2026-11-15T03:59Z] 0be944e47563
+SCANLEAN2 19:59 PST, the rest of r20261115-030845-6306 (head 4d6bbb423b5), done, rc 0:
+- network period: 58 passed; records: 9; lean_audit: 11; certifier registered: 105; inference_only_protocol: 2.
+- The composition difftest: 21 passed, 5 skipped. span: 11; network check: 3.
+- inference_only_rows_protocol: 13 failed, 2 passed. Each failure is again a missing replicated fixture, now flock/prover/tests/fixtures/forged-proofs/stage/circuit.txt (12) and zk-sessions/stage/circuit.txt (1); the run fetched only plain-tree. That's the environment, no code break.
+- r20261115-035916-5467 (machine 3, tip ad7e0f23a33) runs that test alone with every fixture under flock/prover/tests/fixtures fetched.
+- The 23-module run r20261115-033015-ca2c ended rc 0: "Build completed successfully (11547 jobs)", all 23 elaborated, no cache reuse.
+The collect head is now ad7e0f23a33. Since 4d6bbb423b5 it gained 17 Lean files from an architecture merge (PoUW, the challenger's proofs, SpotFlock, the registration code). None is one of our 23 modules, but some may be in their imports. My last build, of the final tip at 10:15 PM PST, settles it; I send its verdict by about 10:45 PM PST at the latest. If you want a check sooner, I can build the 23 on that head now.
+
