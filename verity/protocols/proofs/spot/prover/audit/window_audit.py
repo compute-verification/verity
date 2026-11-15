@@ -143,11 +143,11 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   (``case-v2.json``, `write_case`) names that challenger, the family and the window's root and carries the coins' evidence
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
-* **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a warden execution phase's cells, `certifier.warden_rows`), committed under that value's salts
+* **Transfer gates opened under the network certifier's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
+  registered value's (a network certifier execution phase's cells, `certifier.network_certifier_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
-  the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
-  table's (below). `a5_warden.py` is their stand-in.
+  the root the network certifier signed, which the caller read under the network certifier's key), the same reads, record and negatives as a row
+  table's (below). `a5_network_certifier.py` is their stand-in.
 * **Row tables** (`ml.windows.rows.Binding.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
@@ -829,7 +829,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary and whether it was accepted with every negative refused. ``sets``: each template's input set and Definition, or
     a callable composing its circuit (``(out, partition digest, program digest) -> {"pin", "class_sha512", ...}``) and its
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
-    registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
+    registered value, at the root its owner signed (a network certifier's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     docket (a two-stage design's second stage of its interior docket), its sample, sampling design and receipt, proved in
@@ -1034,6 +1034,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         print("A5 " + json.dumps(why))
         return summary, False
+    on_stage = drawn is not None and trees  # a caller's stage's trees, before `drawn` names the members' draws
     drawn_units, drawn = set(union_sample["units"]), []
     for mm in members:
         m = mm["m"]
@@ -1095,7 +1096,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (`window_trees`, `closes_trees`): once both sides have recorded it, the challenger is asked for its closing round
         (`member_trees.closing_round`), before the next member's session starts. A session with no record closes no
         tree, and the release log then refuses the audit (``challenger/m<k>``)."""
-        if relay is None or not closes_trees(members, drawn is not None and trees):
+        if relay is None or not closes_trees(members, on_stage):
             return s
         try:
             if "handle" in s:
@@ -1213,7 +1214,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             tree_coins(a).release(rank if streamed(a) else 0)
     if relay is not None:
         held = window_trees_held(tree_coins(a).evidence(), done, relayed,
-                                 closes_trees(members, drawn is not None and trees))
+                                 closes_trees(members, on_stage))
         for got in done:
             got["challenger"] = {**held, "closing": got["closing"]}
     for got in done:
@@ -1251,7 +1252,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_sample, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a), one=drawn is not None and trees),
+                   per_member=members_proof(members, done, not plain(a), one=on_stage),
                    **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,

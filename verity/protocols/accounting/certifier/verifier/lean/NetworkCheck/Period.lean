@@ -31,7 +31,7 @@ meta import Spot.Record
 The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
 execution phases beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
 workload). Its execution phases are the rows form's: the network certifier's own run, where it functions as an active warden
-(`warden_serve`): each execution phase's cells committed as rows (`warden_rows`), one registration a direction under one
+(`network_certifier_serve`): each execution phase's cells committed as rows (`network_certifier_rows`), one registration a direction under one
 fixed schedule, its three records certified, and the scan's one-stage answer for the window (`scan_zk --warden-run`).
 Parameters that name a sync set, the clock form's, are refused: the clock form is not one this check reads.
 
@@ -73,7 +73,7 @@ that still name `"key"`, `"session"` or `"sessions"`, naming the entry to write)
 most 65,535 UTF-8 bytes), the period's `m ≥ 1` execution phases, the class circuit, the SHA-512 of the Program of the one
 window circuit the workload's class registers, which every tied compute audit runs (`held`); the scan's Program, its
 descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
-certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
+certifier's one fixed schedule (`network_certifier.NetworkCertifierParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 execution phase is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and
 `Schedule.executionPhasePrograms`; its `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a
@@ -84,13 +84,13 @@ them, 1 or 2, under which ingress ends by the delay, a connection ends within a 
 `mostSlots`); and its content rows' classes `content` when it has them, which only a schedule with lengths rows has,
 each (P, O, rows) under form 1 and (P, O) under form 2, `classesRefusal`; and `request_words`, true, when it has request
 words, which only a schedule with content rows under form 2 and `max_tokens_cap` has, and which lists at most
-`mostClassesWords` classes), whose digest `WardenParams.digest` every registration binds. A schedule with lengths rows
+`mostClassesWords` classes), whose digest `NetworkCertifierParams.digest` every registration binds. A schedule with lengths rows
 registers its connection rows, which this check does not read: it is parsed as the network certifier builds it, its
 digest is the network certifier's, and it is refused by name, in the parameters and in the check
 (`connectionRowsRefusal`,
 `connectionRowsCheck`), so no period is accepted under one. The rows form's `program` is the scan's registered
 Program, the descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's
-(`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
+(`network_certifier_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
 `cells` must be the schedule's cells over the period (`Schedule.rowsCells`): `egress_cells` for each of the `lanes · m ·
 window` connections the network certifier can carry in `m` of a link's execution phases, since it admits a connection at
 a bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
@@ -131,7 +131,7 @@ one-stage's, SHA-512(format ‖ 0 ‖ canonical record) (`registration.digest`).
 
 each audit's and each execution phase's one-stage answer (`Core.Answer.ofJson`), per execution phase the requests',
 responses' and fails' records' certificates (`certified.jsonl`'s) and the ingress and the egress rows' registrations
-(`warden_rows.registration`, `cells.jsonl`'s), and the listed entries' sessions' signed starts, one an entry, in the
+(`network_certifier_rows.registration`, `cells.jsonl`'s), and the listed entries' sessions' signed starts, one an entry, in the
 entries' order:
 
     "starts": [{"base_ms": b, "certificate": certificate, "ordinal": n, "schedule": hex}, …]
@@ -167,12 +167,12 @@ schedule it runs under, and the certificate the key signed for both once, before
   (`<link>-fails`, egress) at `w − a`, each the key's of the entry `w` picks and verifying in its session, so an
   execution phase missing any record's certificate is refused, and the network certifier certifies no record of an
   execution phase in which it refused a
-  connection (traffic past the window's Program slots, `warden`'s "Admission"), so such an execution phase is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
+  connection (traffic past the window's Program slots, `network_certifier`'s "Admission"), so such an execution phase is refused; its two registrations, ingress then egress, are what `network_certifier_rows.check_registration` reads:
   the execution phase's value, link, end and window, in its session's numbers (`w − a`, as the certifier wrote them),
   the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout (its first bucket `(w − a) · T`), the
   execution phase's domain in the entry's
-  session (`warden_rows.domain`), and a certificate that is the key's of the entry `w` picks, signs the head
+  session (`network_certifier_rows.domain`), and a certificate that is the key's of the entry `w` picks, signs the head
   (`CellsHead.digest`) and
   verifies in the entry's session (a registration under another key is refused, by name when its signer is a listed
   key outside its stretch or is not listed); the scan's
@@ -306,7 +306,7 @@ phase's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · 
   `eps`, the answer's δ in its audit's.
 * `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
   response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
-  request it released has `max_tokens` at most the cap (`warden`'s "The response cap",
+  request it released has `max_tokens` at most the cap (`network_certifier`'s "The response cap",
   `NetTiming.Guarantees.ResponseCapped`). The schedule's digest, which every registration binds, binds it
   (`Schedule.digest`), and the check publishes the schedule's (`Properties.NetworkPeriod.RowsCapPublished`).
 * `start` is 0 where the period's first execution phase is the run's first, whose start the check holds to the empty
@@ -386,10 +386,10 @@ def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
 def cellKinds : List Nat := [0, 1, 32, 33, 34]
 def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed", "format"]
-/-- The fail reason a schedule with a response cap adds after `failReasons` (`warden.REASONS`' last): a request past
+/-- The fail reason a schedule with a response cap adds after `failReasons` (`network_certifier.REASONS`' last): a request past
 the cap, or whose `max_tokens` doesn't parse. -/
 def capReason : String := "cap"
-/-- The egress form (`WardenParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
+/-- The egress form (`NetworkCertifierParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
 of another form has a digest no schedule here has. -/
 def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
@@ -409,7 +409,7 @@ structure Audit where
   units : Nat
   entries : Array (String × Nat × String)
 
-/-- The network certifier's schedule when it functions as an active network certifier (`warden.WardenParams`). -/
+/-- The network certifier's schedule when it functions as an active network certifier (`network_certifier.NetworkCertifierParams`). -/
 structure Schedule where
   bucketMs : Nat
   cellBytes : Nat
@@ -422,40 +422,40 @@ structure Schedule where
   queue : Nat
   slots : Nat
   window : Nat
-  /-- The response cap (`WardenParams.max_tokens_cap`), or none. -/
+  /-- The response cap (`NetworkCertifierParams.max_tokens_cap`), or none. -/
   maxTokensCap : Option Nat := none
-  /-- The lengths rows' form (`WardenParams.lengths`), 1 or 2, or none. -/
+  /-- The lengths rows' form (`NetworkCertifierParams.lengths`), 1 or 2, or none. -/
   lengths : Option Nat := none
-  /-- The content rows' classes (`WardenParams.content`), each (P, O, rows) under the lengths rows' form 1 and (P, O)
+  /-- The content rows' classes (`NetworkCertifierParams.content`), each (P, O, rows) under the lengths rows' form 1 and (P, O)
   under form 2, or none. -/
   content : Option (Array (Array Nat)) := none
-  /-- Whether the schedule has request words (`WardenParams.request_words`, true or unset): a words row a release,
+  /-- Whether the schedule has request words (`NetworkCertifierParams.request_words`, true or unset): a words row a release,
   in its class. -/
   requestWords : Bool := false
 
 /-- The `fails` record's reasons under the schedule: `failReasons`, and `capReason` after them under a response cap
-(`WardenParams.reasons`). -/
+(`NetworkCertifierParams.reasons`). -/
 def Schedule.reasons (s : Schedule) : List String :=
   if s.maxTokensCap.isSome then failReasons ++ [capReason] else failReasons
 
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
 
-/-- A slot stride's Program slots, one a lane (`WardenParams.program_slots`). -/
+/-- A slot stride's Program slots, one a lane (`NetworkCertifierParams.program_slots`). -/
 def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 
-/-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
+/-- A window's Program slots: T / `every` slot strides of `programSlots` (`NetworkCertifierParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
 /-- An execution phase in milliseconds on the network certifier's clock: its T buckets of `bucket_ms` each. -/
 def Schedule.windowMs (s : Schedule) : Nat := s.window * s.bucketMs
 
 /-- The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
-(`WardenParams.span`). With lengths rows a connection ends by then, and it is at most T. -/
+(`NetworkCertifierParams.span`). With lengths rows a connection ends by then, and it is at most T. -/
 def Schedule.span (s : Schedule) : Nat := s.delay + (s.egressCells - 1) / s.slots
 
 /-- The most requests the network certifier releases in one slot stride with lengths rows, a lengths row's slots
-(`WardenParams.stride_releases`): a released connection holds its lane at least D + 2 − `ingress_buckets` buckets from
+(`NetworkCertifierParams.stride_releases`): a released connection holds its lane at least D + 2 − `ingress_buckets` buckets from
 its release, so that many buckets hold at most `lanes` releases, and it holds it D + 1 buckets around its release, so
 a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets. It is read where ingress ends by the
 delay (`ingress_buckets` ≤ D), as a schedule with lengths rows has it. -/
@@ -463,14 +463,14 @@ def Schedule.strideReleases (s : Schedule) : Nat :=
   s.lanes * min (divCeil s.every (s.delay + 2 - s.ingressBuckets)) (1 + divCeil (s.every - 1) (s.delay + 1))
 
 /-- A bound on the requests the network certifier releases in one execution phase with lengths rows
-(`WardenParams.phase_releases`): `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉, as a release is at most
+(`NetworkCertifierParams.phase_releases`): `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉, as a release is at most
 `ingress_buckets` − 1 buckets after its connection's admission and the connections admitted in any D + 1 buckets in
 a row are live together, at most `lanes` of them. -/
 def Schedule.executionPhaseReleases (s : Schedule) : Nat :=
   s.lanes * divCeil (s.window + s.ingressBuckets - 1) (s.delay + 1)
 
 /-- Whether the lengths rows end every execution phase of a run, its last included: their form 2
-(`WardenParams.closes`). -/
+(`NetworkCertifierParams.closes`). -/
 def Schedule.closes (s : Schedule) : Bool := s.lengths == some 2
 
 /-- Whether the schedule registers connection rows (`connection_rows`): its lengths rows, which a schedule with
@@ -478,7 +478,7 @@ content rows has too, as one with request words has content rows. Each is asked,
 build may have one without the other. -/
 def Schedule.connectionRows (s : Schedule) : Bool := s.lengths.isSome || s.content.isSome || s.requestWords
 
-/-- The rows form's cells over `windows` of a link's execution phases (`WardenParams.rows_cells`): `egressCells` for
+/-- The rows form's cells over `windows` of a link's execution phases (`NetworkCertifierParams.rows_cells`): `egressCells` for
 each of the `lanes · windows · window` connections the network certifier can carry, as at most `lanes` are live in a
 bucket and each is live in its admission bucket. -/
 def Schedule.rowsCells (s : Schedule) (windows : Nat) : Array Nat :=
@@ -556,7 +556,7 @@ structure BucketSchedule where
   firstBucket : Nat
   deriving BEq
 
-/-- An execution phase's rows in one direction, as `warden_rows.registration` writes them. -/
+/-- An execution phase's rows in one direction, as `network_certifier_rows.registration` writes them. -/
 structure Rows where
   format : String
   value : String
@@ -617,7 +617,7 @@ def isDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit |
 def rowsParamsKeys : List String :=
   ["audits", "cells", "circuit", "first", "jitter", "keys", "link", "lms", "program", "scan", "schedule", "windows"]
 
-/-- The keys every schedule has (`warden.INTEGER_FIELDS`). -/
+/-- The keys every schedule has (`network_certifier.INTEGER_FIELDS`). -/
 def scheduleKeys : List String :=
   ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
     "slots", "window"]
@@ -716,7 +716,7 @@ def scheduleOf (j : Json) : V Schedule := do
     if let some why := classesRefusal s classes then throw s!"schedule: {why}"
   pure s
 
-/-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
+/-- `NetworkCertifierParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
 tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
 before the cap was a parameter. So with the lengths rows' form, the content rows' classes and the request words: a
 schedule without one has nothing of it in its digest. -/
@@ -1327,7 +1327,7 @@ def answered (what : String) (reg : Json) (a : Core.Answer) : Found (Core.Integr
     | _, _, _ => refuse s!"{what}: service: {a.reason.getD ""}"
 
 
-/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of execution phase `w`'s rows in direction `d`, in the
+/-- `network_certifier_rows.domain`'s id: the frame-v3-sha512 domain of execution phase `w`'s rows in direction `d`, in the
 session, under the schedule whose digest is `sd`. -/
 def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Direction) (w : Nat) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 domainTag (Json.mkObj [
@@ -1336,12 +1336,12 @@ def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Dire
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
   pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
 
-/-- `WardenParams()`'s schedule, the defaults. -/
+/-- `NetworkCertifierParams()`'s schedule, the defaults. -/
 def defaultSchedule : Schedule :=
   { bucketMs := 100, cellBytes := 256, delay := 10, egressCells := 4096, every := 1, ingressBuckets := 50,
     ingressCells := 64, lanes := 16, queue := 64, slots := 4, window := 600 }
 
--- `WardenParams().digest` and `WardenParams(max_tokens_cap=4).digest`: the cap and its reason are in the digest only
+-- `NetworkCertifierParams().digest` and `NetworkCertifierParams(max_tokens_cap=4).digest`: the cap and its reason are in the digest only
 -- under a cap
 #guard (defaultSchedule.digest.map Flock.hexOf).toOption == some
   "9a727d16f6c1f351d316465c101269c2a4666cbcdf1dbaaef01579fd7e72315a\
@@ -1357,7 +1357,7 @@ def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : S
   Identity.taggedSha512 cellsTag ((← text link "link") ++ (← uBE 1 d.code "direction") ++ (← uBE 8 w "window") ++ sd ++
     (← uBE 4 s.cellBytes "B") ++ (← uBE 4 s.allocation "S") ++ (← uBE 4 s.window "T") ++ wiring ++ dom ++ root)
 
-/-- `warden_rows.check_registration` of the link's rows in direction `d` for execution phase `w` of the period, under
+/-- `network_certifier_rows.check_registration` of the link's rows in direction `d` for execution phase `w` of the period, under
 the entry `w` picks (`entryAt`): its signer is the entry's key, refused by name first when it is another listed key,
 outside its stretch, or no listed one; and the registration is the certifier's, so its value, its window, its layout's
 first bucket, its domain and the head its certificate signs are in that session's numbers, `w` less the entry's start,

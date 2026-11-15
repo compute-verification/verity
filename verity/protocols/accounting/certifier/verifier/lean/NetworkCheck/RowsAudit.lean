@@ -7,7 +7,7 @@ public import NetworkCertifier.Rows
 /-!
 # The network certifier's run audited as rows over its certified records, a core protocol: `verity/network-rows/v1`
 
-The audit of a run of the active network certifier (`warden_serve`, the serving module below) over the records it
+The audit of a run of the active network certifier (`network_certifier_serve`, the serving module below) over the records it
 signed: each of the run's `W` windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`,
 egress) records, each held to its certified record, then the certifier program's `NetworkCertifier.Rows.audit` over
 their grids, the executable form of `security/Definitions/Certifier/RecordRows.lean`. That audit accepts only
@@ -29,7 +29,7 @@ each egress cell with `io_tie.parse_cell`.
      "session": hex(session), "windows": W}
 
 `NetworkCheck.Period`'s rows-form terms, read by its decoders: the network certifier's LMS public key (16 + N bytes) and
-parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`WardenParams`,
+parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`NetworkCertifierParams`,
 `Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the certifier session (32 bytes)
 every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`. A schedule with a response limit
 (`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkCertifier.Rows.audit` holds no response to its
@@ -119,7 +119,7 @@ def evidenceOf (b : ByteArray) : V Unit := do exactly (← Core.canonicalJson b)
 
 /-! ## The check -/
 
-/-- A record's grid parameters under the schedule (`WardenParams.grid`, `fails_grid`): `T` rows of `lanes · slots` cells
+/-- A record's grid parameters under the schedule (`NetworkCertifierParams.grid`, `fails_grid`): `T` rows of `lanes · slots` cells
 of `B` bytes, the fails record's of `lanes`, at τ_b; the queue's capacity is `GridParams`' default, which no head reads. -/
 def gridOf (s : Period.Schedule) (fails : Bool) : Check.Grid :=
   { buckets := s.window, allocation := if fails then s.lanes else s.allocation, frameBytes := s.cellBytes,

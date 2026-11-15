@@ -8,8 +8,8 @@ public import Properties.Accounting.Registration.Premises
 /-!
 # The registration log's code: its check is the spec's
 
-`Core.Registration` (`verity/protocols/interface/CoreProtocol/Registration.lean`) is the code of the whole registration
-log: site entries, information entries and declarations, folded by one check (`Core.Registration.check`) into a view
+`Core.Registration` (`verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean`) is the code of
+the whole registration log: site entries, information entries and declarations, folded by one check (`Core.Registration.check`) into a view
 (`Core.Registration.View`). This states that the check decides the spec's validity of the log it denotes
 (`Verity.Registration.Valid`), and that the view it makes public is the spec's view of it (`Verity.Registration.view`),
 over the denotations of `Properties.Core.Site` for the Site and its entries.
