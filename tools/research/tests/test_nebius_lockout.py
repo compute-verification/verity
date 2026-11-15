@@ -1220,6 +1220,7 @@ def test_the_plan_has_every_step_with_its_rollback():
     assert steps == ["1. deploy", "2. vy-admin", "3. seal", "4. harden", "5. sudoers", "6. watch"], "no loop to switch, no cluster"
     assert cpu.count("   rollback: ") == 6 and not [w for w in ("tmux", "kubeconfig", "root.env") if w in cpu]
     assert f"vy-lockout sudoers --node {CPU13} --apply" in cpu and "--login vy-admin" in cpu and f"audit --since=-24h --node {CPU13}" in cpu
+    assert f"`research deploy install {CPU13} --only lockout --by WHO`" in cpu, "a whole install leaves deploy.toml's step lockout out"
     assert "sudo sshd -t && sudo systemctl reload ssh" in cpu and f"{LO.SSHD_ADMIN}; sshd -t && systemctl reload ssh" in cpu
 
 

@@ -19,7 +19,10 @@ lock-out too, and anyone may run it.
 
 Apply order. Every step runs as vy-admin on the node and has its own rollback. Without `--apply`, a step only says what it would do.
 
-1. Deploy: `research deploy install NODE --by WHO --apply`. It stages the tools, `/usr/local/lib/vy-lockout/` and node 1's
+1. Deploy: `research deploy install NODE --by WHO --apply` on a node; on a CPU node, whose lock-out files are deploy.toml's
+   step `lockout`, which an install of the whole machine leaves out, `research deploy install NODE --only lockout --by WHO`
+   first: it prints what it would write and the allowlist research keeps there, and refuses while the machine holds a check
+   slot. A CPU node the step's `held` names waits for its reason. It stages the tools, `/usr/local/lib/vy-lockout/` and node 1's
    `/etc/vy/env/root.env`, and starts nothing. From this deploy on, `research run --job-user USER` asks `vy-sudo` for its
    unit, and `vy-sudo` starts one only as a job user: an account root has listed in the group `vy-job`. No tool here makes a
    job user. Before the deploy, on the node, run `sudo groupadd -f --system vy-job`, then `sudo usermod -aG vy-job USER` for
@@ -45,7 +48,7 @@ Apply order. Every step runs as vy-admin on the node and has its own rollback. W
    doesn't work: it wants an ssh login as vy-admin newer than its keys and its sudoers file, and the step itself run from a
    vy-admin login. `vy-sudo-fallback-expire.timer` removes the fallback at its expiry, and only vy-admin can put it back
    (`vy-lockout fallback on`). From this step on, `research deploy install` runs `sudo python3` and so needs vy-admin's login
-   (`research deploy install NODE --login vy-admin`). Rollback: `vy-lockout rollback --apply`.
+   (`research deploy install NODE --login vy-admin`, with `--only lockout` for a CPU node's lock-out files). Rollback: `vy-lockout rollback --apply`.
 9. Watch: during the 24 h, `vy-lockout audit` counts what research ran that the allowlist would refuse, and after them what
    sudo did refuse. It prints command shapes, never arguments. Fix each such form by PR before the fallback expires. Once the fallback is gone, research's
    `sudo -n true` still passes, since it is on the allowlist, and any other root command (`sudo -n id`) is refused.

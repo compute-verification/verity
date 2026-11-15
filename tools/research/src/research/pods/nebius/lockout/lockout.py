@@ -481,7 +481,7 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
     out.append(Check("allowlist", staged.is_file() and staged.read_text() == render(profile(node)),
                      f"{LIB / ALLOWLIST} is {node}'s (sudoers/{profile(node).file})" if staged.is_file() and
                      staged.read_text() == render(profile(node)) else f"{LIB / ALLOWLIST} is missing or not sudoers/{profile(node).file}",
-                     f"research deploy install {node}: the files of one commit"))
+                     f"research deploy install {node}{'' if profile(node) is CLUSTER else ' --only lockout'}: the files of one commit"))
     for loop in SWITCH.get(node, ()):
         if loop.tmux:
             ls = run(["runuser", "-u", "research", "--", "tmux", "has-session", "-t", f"={loop.tmux}"])
@@ -493,7 +493,8 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
                              f"vy-lockout root-units {node} --apply"))
     for tool in ("/usr/local/sbin/vy-sudo", "/usr/local/sbin/vy-seal-runs", "/usr/local/sbin/vy-lockout"):
         bad = untrusted([str(at(tool))]) if root == Path("/") else []
-        out.append(Check(f"tool:{tool}", at(tool).is_file() and not bad, "; ".join(bad) or "root's", "research deploy install"))
+        out.append(Check(f"tool:{tool}", at(tool).is_file() and not bad, "; ".join(bad) or "root's",
+                         f"research deploy install {node}{'' if profile(node) is CLUSTER else ' --only lockout'}"))
     return out
 
 
@@ -734,8 +735,11 @@ def fallback(ctx: Ctx, action: str, now: float, hours: float = FALLBACK_HOURS, s
 def plan_text(node: str) -> str:
     loops, cluster = SWITCH.get(node, ()), profile(node) is CLUSTER
     rows = [
-        ("deploy", f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
-                   + (", the tools and node 1's /etc/vy/env/root.env" if cluster else " and the tools") + "; installs nothing into "
+        ("deploy", (f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
+                    ", the tools and node 1's /etc/vy/env/root.env" if cluster else
+                    f"from an agent VM: `research deploy install {node} --only lockout --by WHO`, which prints what it would write "
+                    "and the allowlist research keeps, and refuses while the node holds a check slot; then the same with `--apply` "
+                    "(stages /usr/local/lib/vy-lockout and the tools") + "; installs nothing into "
                    "sudoers.d or a unit's .d, and starts nothing). From this deploy on, `research run --job-user USER` here asks "
                    f"vy-sudo for its unit, and vy-sudo starts one only as an account listed in group {JOB_GROUP}: before it, on the "
                    f"node, `sudo groupadd -f --system {JOB_GROUP}`, and `sudo usermod -aG {JOB_GROUP} USER` for each account made for "
