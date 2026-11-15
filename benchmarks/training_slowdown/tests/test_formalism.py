@@ -54,7 +54,7 @@ def test_even_update_token_form_is_the_corollary():
     assert r["s_star"] == pytest.approx(k * k / (4 * 1e9) / 8192)
     assert r["token_form"] == pytest.approx(4 * 0.8 * s * 8192 * 1e9 / k ** 2, rel=1e-3)
     got = F.at(m, c, k)
-    assert not got["fit"] and got["rho"] is None and "slowdown" not in got
+    assert not got["fit"] and got["slowdown"] is None and "slowdown" not in got
 
 
 def test_a_frozen_tail_is_always_charged():
@@ -104,10 +104,10 @@ def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     c, k = 1e13, 1e6
     s_tau = c / 0.8e9 * 32
     fits = F.at(measured(u1=1e5, dgrad=1e5, decoder=1e12), c, k)
-    assert fits["fit"] and fits["rho"] == pytest.approx(c / (c - 1e12))
-    assert F.at(measured(u1=1e5, dgrad=1e5), c, k)["rho"] == 1.0
+    assert fits["fit"] and fits["slowdown"] == pytest.approx(c / (c - 1e12))
+    assert F.at(measured(u1=1e5, dgrad=1e5), c, k)["slowdown"] == 1.0
     unmeasured = F.at(measured(u1=1e5, dgrad=1e5, decoder=None), c, k)
-    assert not unmeasured["fit"] and not unmeasured["delta_counted"] and unmeasured["rho_fit"] == math.inf
+    assert not unmeasured["fit"] and not unmeasured["delta_counted"] and unmeasured["slowdown_fit"] == math.inf
     kinds = {"compute": measured(u1=k - s_tau + 1, dgrad=1),
              "reduction": measured(u1=1, dgrad=k / 2 + 1),
              "update": measured(u1=5.5e5, dgrad=4.6e5)}
@@ -118,7 +118,7 @@ def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     for tail in (0.0, 0.5):
         m = measured(u1=1e8, delta=1e3, dgrad=1e3, tail=tail)
         wide, form = F.at(m, c, k), token_form(m, c, k)
-        assert wide["fit"] and wide["rho"] == 1.0 and form["x0"] == 1.0 and form["token_form"] == 0.0
+        assert wide["fit"] and wide["slowdown"] == 1.0 and form["x0"] == 1.0 and form["token_form"] == 0.0
 
 
 def test_u_and_u_in_are_at_most_delta_where_delta_counts():
@@ -298,7 +298,7 @@ def test_the_decoder_is_the_notes_else_the_witness_rebuild_and_0_only_without_on
     own = F.complete({"parts": [part], "u1_bits": 80.0, "decoder_gates": 7.0}, row, SHAPE)
     assert own.decoder_gates == 7.0 and own.labels["decoder_gates"] == "the record's block: its decoder_gates"
     if d:
-        assert F.at(m, 1e13, 1e6)["rho"] == pytest.approx(1e13 / (1e13 - d))
+        assert F.at(m, 1e13, 1e6)["slowdown"] == pytest.approx(1e13 / (1e13 - d))
         assert not F.at(m, 0.5 * d, 1e6)["fit"]
 
 
@@ -434,7 +434,7 @@ def test_the_one_bound_is_its_products_kind_resting_on_what_it_names():
     one = F.bound(stated, c, k)
     assert one["binding"] == "products" and one["max"] == one["terms"]["products"] > 1
     r = F.at(stated, c, k)
-    assert r["bound"] == one and r["rho"] == one["max"] == one["entry"]["slowdown"]
+    assert r["bound"] == one and r["slowdown"] == one["max"] == one["entry"]["slowdown"]
     with pytest.raises(ValueError, match="some of"):
         F.bound(stated, c, k, kinds=("tokens",))
     with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
@@ -473,8 +473,8 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert not fig["below_width"] and fig["macs_share"] == 1
     assert fig["F"] == pytest.approx(2 / math.sqrt(3), rel=1e-15) and fig["N"] == SQUARE["macs"]
     assert fig["O"] == SQUARE["outputs"] * 16
-    assert b["terms"]["products"] == fig["rho"] > 1 and "products" not in b["unmeasured"]
-    assert F.bound(stated, 2 * c, k)["terms"]["products"] == pytest.approx(2 * fig["rho"], rel=1e-12)
+    assert b["terms"]["products"] == fig["term"] > 1 and "products" not in b["unmeasured"]
+    assert F.bound(stated, 2 * c, k)["terms"]["products"] == pytest.approx(2 * fig["term"], rel=1e-12)
     one = F.published(stated)
     assert one["products_rests_on"] == F.he_rests_on(fig)
     assert one["products_rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H)")
@@ -539,7 +539,7 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
         (8, False, False, (False, True)), (1024, False, False, (False, True)), (1024, False, False, (False, True)),
         (1024, True, False, (False, False)), (1024, True, True, (False, False)), (4096, False, True, (False, True))]
     fig = figure(he, c, C)
-    assert fig["subset"] == SUBWORKS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
+    assert fig["subset"] == SUBWORKS[1] and fig["term"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
     assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
     dw = [g for g in he["groups"] if g["dw"]]
     N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
@@ -549,13 +549,13 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
     assert fig["first_steps"] is None and figure(he, c, C, tau=1e3)["first_steps"] == 0
     coded = figure(he, c, C, beta_code=2.0)
-    assert coded["rho"] < fig["rho"] and coded["beta_code"] == 2.0
+    assert coded["term"] < fig["term"] and coded["beta_code"] == 2.0
     one = he | {"groups": [g for g in he["groups"] if g["k_dim"] == 1024 and not g["dw"] and not g["head"]][:1]}
     weighed = figure(one, c, C, beta_code=8.0)
     assert (weighed["beta_w"], weighed["beta_x"], weighed["code_bound"]) == (8.0, 15.9, True)
     m = replace(one_part(delta=2.0 * he["trained_weights"]), products={"k": k, "he": he})
     term, why, got = term_of(m, c, k)
-    assert why is None and got["beta_code"] == 2.0 and term == figure(he, c, m.gates, m.tau_bits, 2.0)["rho"]
+    assert why is None and got["beta_code"] == 2.0 and term == figure(he, c, m.gates, m.tau_bits, 2.0)["term"]
     assert (F.CODE_LABEL in F.he_rests_on(got)) == got["code_bound"]
     far = work.he_of_rows(HE_STEP, 8e7)
     assert figure(far, c, C) == figure(far | {"groups": [g for g in far["groups"] if not g["head"]]}, c, C)
@@ -591,7 +591,7 @@ def test_all_of_m_binds_where_the_count_puts_it_above_the_weight_gradients_and_t
     count = {name: calculators_count(c, k, w) for name, w in (("M", whole), ("dw", alone))}
     assert (fig["subset"], fig["F"], fig["beta_w"], fig["N"], fig["O"]) == (
         "M", calculator._min_cut().share(3), 8.0, whole["N"], whole["O"])
-    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][SUBWORKS[2]]
+    assert fig["term"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][SUBWORKS[2]]
     words = F.he_rests_on(fig)
     assert words.startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at β_w = 8 "
                             f"({F.CODE_LABEL}) and β_x = 15.9 bits a word")
@@ -655,9 +655,9 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
 
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
     assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
-    assert fig["rho"] == pytest.approx(slowdown([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
+    assert fig["term"] == pytest.approx(slowdown([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
     assert slowdown([fwd, dx, dw], 2.0, 8.0) < slowdown([fwd, dx, dw], 2.0, 15.9)
-    assert fig["rho"] > max(slowdown([fwd, dw], 2.0, 15.9), slowdown([dw], 15.9, 8.0), slowdown([dw], 15.9, 8.0, 1.0)) > 0
+    assert fig["term"] > max(slowdown([fwd, dw], 2.0, 15.9), slowdown([dw], 15.9, 8.0), slowdown([dw], 15.9, 8.0, 1.0)) > 0
 
 
 def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
@@ -731,7 +731,7 @@ def test_no_published_string_names_the_code():
 def test_published_where_fit_holds_is_fits_c_over_c_minus_d():
     c, k = 1e13, 1e6
     one = F.published(measured(u1=1e5, dgrad=1e5, decoder=1e12), c, k)
-    assert (one["rho"], one["binding_kind"], one["partial"], one["why"]) == (
+    assert (one["slowdown"], one["binding_kind"], one["partial"], one["why"]) == (
         pytest.approx(c / (c - 1e12)), "fit", False, None)
     assert one["rests_on"] == F.RESTS_ON_CELL["fit"]
 
@@ -740,7 +740,7 @@ def test_published_above_1_is_the_products_term():
     """With a model's stated products the products term binds where it exceeds 1, and the row rests on it at the β it
     took; every kind is measured, so it isn't partial."""
     full = F.published(replace(one_part(), products=STATED), 1e11, policy.CONSOLE[1])
-    assert full["binding_kind"] == "products" and full["rho"] == full["terms"]["products"] > 1
+    assert full["binding_kind"] == "products" and full["slowdown"] == full["terms"]["products"] > 1
     assert not full["partial"] and full["rests_on"] == full["products_rests_on"]
     assert full["rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at "
                                        "β_w = 16 and β_x = 15.9 bits a word")
@@ -750,7 +750,7 @@ def test_published_with_the_term_unmeasured_is_null_never_1():
     """With no product rows the one kind is unmeasured: the record's slowdown is null, never the floor's 1, which would read as no
     slowdown, with `why` saying no kind is measured."""
     one = F.published(one_part(), 1e11, 3600)
-    assert (one["rho"], one["binding_kind"], one["rests_on"], one["partial"], one["why"]) == (
+    assert (one["slowdown"], one["binding_kind"], one["rests_on"], one["partial"], one["why"]) == (
         None, "unmeasured", "unmeasured", False, "no kind is measured")
     assert one["terms"]["products"] is None
 
@@ -760,7 +760,7 @@ def test_published_with_every_kind_measured_and_none_above_1_is_1_binding_none()
     floor sets it, not the term."""
     one = F.published(replace(one_part(), products=STATED), 1e8, policy.CONSOLE[1])
     assert all(t is not None and t <= 1 for t in one["terms"].values())
-    assert (one["rho"], one["binding_kind"], one["partial"], one["why"]) == (1.0, "none", False, None)
+    assert (one["slowdown"], one["binding_kind"], one["partial"], one["why"]) == (1.0, "none", False, None)
     assert one["rests_on"] == F.RESTS_ON_CELL["none"] == "no kind exceeds 1"
 
 
@@ -1017,7 +1017,7 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     assert b["max"] is None and b["binding"] is None and set(b["labels"]) == set(F.SENSITIVITIES)
     assert "split by tokens" in b["labels"]["reduction"] and "a target, not a bound" in b["labels"]["token_form"]
     r = F.at(cut, c, k)
-    assert not r["fit"] and r["rho"] is None and r["bound"]["sensitivities"] == b["sensitivities"]
+    assert not r["fit"] and r["slowdown"] is None and r["bound"]["sensitivities"] == b["sensitivities"]
     for kinds in (("products", "reduction"), ("update",), ("token_form",), ("decoding_form",)):
         with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
             F.bound(cut, c, k, kinds=kinds)
