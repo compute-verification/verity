@@ -100,6 +100,38 @@ Some files here still break these rules: a kernel or a store the integration loa
 holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
 for a new benchmark.
 
+## The core benchmarks' interface
+
+The core benchmarks take and print the same things in the same form. Each rule is a call of the harness's kit
+(`harness/verity_bench/kit_report.py`, re-exported by `kit`), so a command follows it by calling it.
+
+1. **What a command takes:** `--from DIR`, a run's record as a directory (the run's directory as `research run` leaves
+   it: its `job.json` and `out/`). It is read with nothing of ours: no store, no host, no key and no import of
+   `research`. A run id is taken only where `research` is installed, and is fetched to such a directory first.
+   `kit.record_dir(arg)` gives the directory, and refuses anything else in one line naming the fix (`kit.NoRecord`).
+2. **One line of coins and parameters,** right after the command's first line: `ran with: coins COINS; parameters
+   PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
+   `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
+   is `deployed` or `development`; DETAIL is the command's own words (draws, δ, scheme, key). `kit.ran_with(coins,
+   parameters, detail)` refuses other words. A record that predates the field prints `ran with: not stated`
+   (`ran_with=None`), and `ran_with` null.
+3. **A number only from a run the Lean verifier accepted:** `kit.report(..., accepted=False, why=WHY)` prints
+   `NAME: no number: WHY` first, writes `value` null beside `no_number`, writes each measurement with no value and its
+   why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
+4. **Not an audit:** where the coins are not the deployed challenger's or the parameters are `development`, the line
+   `a measurement, not an audit` is printed under the `ran with` line, and the document holds `audit: false`. The kit
+   derives it from `ran_with`; the command does not choose it.
+5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
+   `## How a cheating change is refused`.
+
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=...)` is the command's last step, and the printed
+and written forms are the kit's (`harness/README.md`'s "The kit"). These commands follow the interface; a command's
+row is added in the change that makes it follow, and `harness/tests/test_interface.py` then holds its README's three
+headings and its call of `kit.report` with `ran_with` and `accepted`:
+
+| command | directory | owner |
+|---|---|---|
+
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
@@ -187,7 +219,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
-| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`) | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's drawn units whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
