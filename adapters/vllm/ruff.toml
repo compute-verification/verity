@@ -1,13 +1,14 @@
 # The vLLM integration's ruff configuration (`ruff check adapters/vllm`): the repository's rules (../../ruff.toml, which says
-# which and why), with the integration's own exclusions and per-file exceptions, which replace the root's. tests/lint/test_ruff.py
-# holds the findings to tests/lint/allowlists/ruff.json, which only shrinks, and the ratchet gate judges a change here or to the
-# root's by running the base's copies on the change's tree.
+# which and why), with the integration's own exclusions and per-file exceptions, which replace the root's. tests/adapters/vllm/tests/lint/test_ruff.py
+# holds the findings to its allowlists/ruff.json, which only shrinks, and the ratchet gate judges a change here or to the
+# root's by running the base's copies on the change's tree. Its tests are at ../../tests/adapters/vllm/tests, which the lints
+# name tests/... as they did here.
 extend = "../../ruff.toml"
 # captured output (Inductor's generated kernels), not ours
 extend-exclude = ["fixtures"]
 
 [lint.per-file-ignores]
 # a pytest fixture imported from a sibling module and taken as an argument
-"tests/**" = ["F811"]
+"../../tests/adapters/vllm/tests/**" = ["F811"]
 # the root's annotation rules hold only in the typed directories, of which this lint reads one (the root's says why)
 "!../../verity/circuits/kernels/**" = ["ANN001", "ANN201", "ANN202", "ANN204"]
