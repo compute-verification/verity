@@ -13,7 +13,7 @@ docstring), and the run exits 0 only when the outcome is accepted and every nega
 serving wrote (``window/``, its private files too) and a5's records
 (``rank0/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --main FILE --out DIR
 """

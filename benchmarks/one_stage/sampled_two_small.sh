@@ -54,7 +54,7 @@ for d in ${KEPT_CASES:-}; do
   n=$((n + 1))
 done
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc) PYTHONPATH=$M0PATH FLOCK_CHALLENGER=1
 UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
 { git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
