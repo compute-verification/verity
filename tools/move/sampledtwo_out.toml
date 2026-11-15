@@ -1,14 +1,17 @@
-# Lean declarations out of the tree: each rests on `SpotFlock.RecordNames.recordOk_of_check`, that a registration check
-# with no code leaves a record naming `HeldOf.namesOf v`, which is false at a verifier holding a certified entry (R7
-# holds the record's `registered` to the verifier's own entries and its certified ones). They come back on main once
-# `recordOk`'s contract covers certified entries; the commit keeps them, each file whole.
+# Lean declarations out of the tree, each file whole on the commit below.
+# `record`: each rests on `SpotFlock.RecordNames.recordOk_of_check`, that a registration check with no code leaves a
+# record naming `HeldOf.namesOf v`, which is false at a verifier holding a certified entry (R7 holds the record's
+# `registered` to the verifier's own entries and its certified ones).
+# `tables`: each states or rests on the blobs holding exactly the pinned tables a member's circuit looks up
+# (`HoldsRegisteredTables`, `Spot.OneStageZk.tablesOf`), while the per-member form hands each member its own tables
+# (`Spot.OneStageZk.ownTables`).
 branch = "cursor/proofs-placer-memberchecks-5cc2"
 commit = "9b7c5a1b4d076e014a947dfe43c32f9e7988f4b4"
 files = [
   "security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean",
 ]
 
-[declarations]
+[record]
 "security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean" = [
   "CheckFacts", "checkFacts_of_check", "recordOk_of_facts", "recordOk_of_check",
 ]
@@ -22,3 +25,9 @@ files = [
 "security/Proofs/Properties/Verity/SampledTwo/JoinedCoupling.lean" = ["joinedCouplingAt", "joinedCouplingOfDistribution"]
 "security/Proofs/Properties/Verity/SampledTwo/Undecodable.lean" = ["joinedCouplingOfDistribution_decoded"]
 "security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean" = ["joinedForm", "joinedCoupling"]
+
+[tables]
+"security/Proofs/Properties/Verity/SampledTwo/RefsOfSent.lean" = [
+  "memberStatement_tables", "accepted_tables", "tablesHeldAt_of_accept", "refsAtOr_of_files", "heldOfAtOr_of_files",
+]
+"security/Proofs/Properties/Verity/SampledTwo/FormStmts.lean" = ["stmtAtFixed_of"]

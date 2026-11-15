@@ -33,19 +33,12 @@ So at blobs `F₀` that give `xs₀` and passed the tables' check at one registr
 `xs₀` or collide with `F₀`, on a case map whose accepted plays all passed the check there (`TablesHeldAt`):
 `refsAtOr_of_tables`, and `refsAtOr_of_files` at files the statement is given.
 
-## What the form checks of the tables
-
-The per-member form's run reads every member's statement, whichever members the sample holds
-(`Spot.OneStageZk.membersRun_files`), and a member's statement begins with the tables' check at the member's own files
-(`memberStatement_tables`). So every member of an accepted play's parameters has its circuit
-file on the blobs, and the file looks up exactly the tables the blobs hold (`accepted_tables`), and on a case map
-whose accepted plays decode one parameters (`DecodesAt`) every accepted play passed the check at template 0's member
-(`tablesHeldAt_of_accept`). `refsAtOr_of_files` is `RefsAtOr` from `CaseIsSent`, `DecodesAt` and the files' own
-facts, and `heldOfAtOr_of_files` the held copies per play at the cases at one statement (`HeldOfAtOr`,
-`heldOfAtOr_at`).
-
 ## What this does not show
 
+* `TablesHeldAt` at the accepted plays. The per-member form hands each member its own lookup tables
+  (`Spot.OneStageZk.ownTables`, `Properties.Spot.SecurityProofs.statement_tables`), and the blobs may hold a pinned
+  table no member's circuit looks up, while a reference statement reads every pinned table the blobs hold
+  (`Spot.OneStageZk.tablesOf`).
 * `DecodesAt` at any case map, or that two members' circuit files look up the same tables.
 -/
 
@@ -239,34 +232,7 @@ theorem refStmts_same {p : VStar.Recursive.SampledTwo.Params} {F F' : Array Byte
   subst hmm
   rw [(get_same hc hc').resolve_right hcol, (get_same hp hp').resolve_right hcol, ht]
 
-/-! ## What the form checks of the tables -/
-
-/-- A member's statement begins with the tables' check at the member's own files. -/
-private theorem memberStatement_tables {m : _root_.Spot.OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs}
-    {a : _root_.Spot.OneStageZk.StepAt} (h : m.statement slice bs = .ok a) :
-    Properties.Spot.HoldsRegisteredTables m.own bs := by
-  unfold _root_.Spot.OneStageZk.Member.statement at h
-  obtain ⟨a', ha', -⟩ := ebind_ok h
-  unfold _root_.Spot.OneStageZk.statementOf at ha'
-  obtain ⟨⟨⟩, ht, -⟩ := ebind_ok ha'
-  exact Properties.Spot.SecurityProofs.tablesHeld_ok ht
-
-/-- **Every member of an accepted play's parameters, sampled or not, has its circuit file on the play's blobs, and
-the file looks up exactly the pinned tables the blobs hold.** -/
-theorem accepted_tables {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VStar.Recursive.SampledTwo.Params}
-    {c : _root_.Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
-    (hA : FormAccepts C o) (hk : C o = some k) (hdec : Decoded k p c e) :
-    ∀ m ∈ p.members, Properties.Spot.HoldsRegisteredTables m.own k.blobs := by
-  obtain ⟨k', p', e', s, c₂, ξ₂, r, hk', hp', -, -, -, -, hrun⟩ := SessionCoins.accepted_ran hA
-  have hkk : k' = k := Option.some.inj (hk'.symm.trans hk)
-  subst hkk
-  obtain ⟨g1, -, -⟩ := hdec
-  have hpp : p' = p := Except.ok.inj (hp'.symm.trans g1)
-  subst hpp
-  obtain ⟨roots, -, hf⟩ := _root_.Spot.OneStageZk.membersRun_files hrun
-  intro m hm
-  obtain ⟨a, ha, -⟩ := hf m hm
-  exact memberStatement_tables ha
+/-! ## The members -/
 
 theorem memberOf_mem {p : VStar.Recursive.SampledTwo.Params} {t : ℕ} {m : _root_.Spot.OneStageZk.Member}
     (h : memberOf p t = some m) : m ∈ p.members := by
@@ -281,20 +247,6 @@ theorem memberOf_mem {p : VStar.Recursive.SampledTwo.Params} {t : ℕ} {m : _roo
 tables the blobs hold. -/
 def TablesHeldAt (C : CaseOf) (q : _root_.Spot.OneStageZk.Own) : Prop :=
   ∀ o k, FormAccepts C o → C o = some k → Properties.Spot.HoldsRegisteredTables q k.blobs
-
-/-- **Every accepted play passed the tables' check at template 0's member**, on a case map whose accepted plays
-decode one parameters (`accepted_tables`). -/
-theorem tablesHeldAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params}
-    {m₀ : _root_.Spot.OneStageZk.Member} (hP : DecodesAt C P) (hm : memberOf P 0 = some m₀) :
-    TablesHeldAt C m₀.own := by
-  intro o k hA hk
-  have hA' := hA
-  obtain ⟨k', hk', p, c, e, -, -, hdec, -⟩ := hA'
-  have hkk : k' = k := Option.some.inj (hk'.symm.trans hk)
-  subst hkk
-  have hpP : p = P := hP o _ p c e hA hk hdec
-  subst hpP
-  exact accepted_tables hA hk hdec m₀ (memberOf_mem hm)
 
 /-- **Two plays' blobs that passed the tables' check at one registration hold the pinned tables of one list of names,
 or collide**: the circuit file under the registration's digest is one file, or two blobs collide. -/
@@ -368,41 +320,5 @@ theorem heldOfAtOr_at {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Rec
     obtain rfl := hA i it h (by rw [hpar]) (hrec.trans hjj) hrule hcl (by rw [hip]) hrep hcirc hh
     exact .inl ⟨_, hh⟩
   · exact .inr hcol
-
-/-! ## Anchored on files the statement is given -/
-
-/-- **Each accepted play's reference statements are the files `B₀`'s, or its blobs collide with `B₀`**, on a case
-map whose cases are the ones sent (`CaseIsSent`) and whose accepted plays decode the parameters `P` (`DecodesAt`), at
-files `B₀` the statement is given that give the reference statements `xs₀` and passed the tables' check at template
-0's member. No accepted play is read beyond the one at hand. -/
-theorem refsAtOr_of_files {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {B₀ : Array ByteArray}
-    {xs₀ : List Claims.Msg} (hS : CaseIsSent C) (hP : DecodesAt C P)
-    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
-      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
-    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) : RefsAtOr C xs₀ B₀ := by
-  by_cases hz : P.circuits.size = 0
-  · intro o k p c e xs hA hk hdec hx
-    refine .inl ?_
-    have hpP : p = P := hP o k p c e hA hk hdec
-    subst hpP
-    have h1 := SpotFlock.HeldOf.refStmtsOf_length hx
-    have h2 := SpotFlock.HeldOf.refStmtsOf_length hx₀
-    rw [hz] at h1 h2
-    rw [List.eq_nil_of_length_eq_zero h1, List.eq_nil_of_length_eq_zero h2]
-  · obtain ⟨r, hr, -⟩ := SpotFlock.HeldOf.refStmtsOf_getElem? hx₀ (Nat.pos_of_ne_zero hz)
-    obtain ⟨m₀, -, -, hm, -⟩ := refRawOf_some hr
-    exact refsAtOr_of_tables hS hP (tablesHeldAt_of_accept hP hm) (hT₀ m₀ hm) hx₀
-
-/-- **Each accepted play at one statement has the held copies, or its blobs collide with the files `B₀`**:
-`heldOfAtOr_at` with `RefsAtOr` from `refsAtOr_of_files`, where `A.h` is the copy `heldOf` builds from the parameters
-`P`, the record read from `x` and the reference statements `xs₀` the files `B₀` give (`CopyOf`). -/
-theorem heldOfAtOr_of_files {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
-    {j : Lean.Json} {B₀ : Array ByteArray} {xs₀ : List Claims.Msg} (u₀ : Unread) (hS : CaseIsSent C)
-    (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
-    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
-      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
-    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
-    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) B₀ :=
-  heldOfAtOr_at u₀ hd hP (refsAtOr_of_files (caseIsSent_at x hS) hP hT₀ hx₀) hj hA
 
 end Verity.SampledTwo
