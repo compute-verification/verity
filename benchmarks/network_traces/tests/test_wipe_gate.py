@@ -122,7 +122,7 @@ def test_record_keeps_no_witness(tmp_path):
     assert sorted(wipe_egress.read_run(tmp_path / "run" / "out" / "bundle.tgz")) == sorted(wipe_egress.FILES)
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path):
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_certifier_records(tmp_path):
     """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: in the hold, the leak guard
     holds the reply (and the log it was echoed to) as a piece of the witness, and the job exited 3. The reply goes to

@@ -12,11 +12,11 @@ untraced = [
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
 # imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import, and `zk_drivers.py`, the
 # proof drivers both install, which leak_scan reads with; scan_zk (with
-# warden_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
+# network_certifier_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
 # `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
 inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "verity/protocols/accounting/certifier/prover/leak_scan.py",
-          "verity/protocols/accounting/certifier/prover/scan_zk.py", "verity/protocols/accounting/certifier/prover/warden_zk.py",
+          "verity/protocols/accounting/certifier/prover/scan_zk.py", "verity/protocols/accounting/certifier/prover/network_certifier_zk.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "benchmarks/census/deployments.json", "benchmarks/network_traces/zk_drivers.py",
@@ -25,12 +25,12 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "verity/protocols/a
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
-          # certifier_piece and warden_chain, what they import, and the site.json, settings.py and host.json that
+          # certifier_piece and network_certifier_chain, what they import, and the site.json, settings.py and host.json that
           # served_session and auditor read on import; and serve.py, which the challenger's ledgers test_records_audit
           # signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
-          "benchmarks/network_traces/warden_chain.py", "verity/protocols/accounting/certifier/device/warden_serve.py",
+          "benchmarks/network_traces/network_certifier_chain.py", "verity/protocols/accounting/certifier/device/network_certifier_serve.py",
           "verity/protocols/accounting/certifier/device/connection_rows_run.py",
           "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/certifier_key.py",
           "verity/protocols/accounting/certifier/device/runner_cli.py",

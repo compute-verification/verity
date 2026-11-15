@@ -302,7 +302,7 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
     assert cr.scan_step(second, "g1/warden")["verdict"] == "refused"
 
 
-def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
+def test_leak_counts_the_scans_terms_on_the_network_certifier_run(tmp_path):
     import math
     from dataclasses import asdict
     from verity.protocols.accounting.certifier.prover import scan_zk as sz

@@ -1,4 +1,4 @@
-"""warden_zk's host side on a network certifier run driven tick by tick (`relay_runs._run`): the driver reads the
+"""network_certifier_zk's host side on a network certifier run driven tick by tick (`relay_runs._run`): the driver reads the
 egress registration under the deployment's key and session and holds the network certifier's opening to its head; the
 Program's proof blocks read the egress cells of the connection admitted in the execution phase with the most cells, from
 cell D·r on, chosen from the wiring and the schedule alone, each at its bucket's row and the slot the network
@@ -9,7 +9,7 @@ value, by its row's position); the
 scan's public pieces hold every pad the network certifier wrote, pad's read among them, and none of the Program's cells; the toy
 unit is the identity on a row's bits. Lean's statement setup (`verity-verify-proof statement`, the verifier's checks before
 any proof, `Registered.checkComplete` among them) holds staged members to the verifier's registered reads of every
-port. Nothing here proves (`warden_zk.prove` does, on a node)."""
+port. Nothing here proves (`network_certifier_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -23,11 +23,11 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
-from verity.protocols.accounting.certifier.verifier.warden import END
+from verity.protocols.accounting.certifier.verifier.network_certifier import END
 from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
-from verity.protocols.accounting.certifier.prover import warden_zk as wz
+from verity.protocols.accounting.certifier.prover import network_certifier_zk as wz
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
@@ -161,7 +161,7 @@ def reads_of(m: dict) -> dict:
 
 @pytest.fixture(scope="module")
 def staged(at, tmp_path_factory):
-    """The sender's, receiver's and altered's statements, staged as `warden_zk.prove` stages them."""
+    """The sender's, receiver's and altered's statements, staged as `network_certifier_zk.prove` stages them."""
     M = wz._statement()
     sg = wz.stager(M, WR.row_bytes(tws.PARAMS), UNITS, tmp_path_factory.mktemp("warden-zk-stager"))
     return sg, {name: wz.stage(M, sg, at, name) for name in ("sender", "receiver", "altered")}

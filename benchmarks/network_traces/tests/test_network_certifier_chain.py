@@ -1,13 +1,13 @@
-"""The network chain on an active network certifier's run (`warden_chain`, `chain_record`'s network certifier path),
-here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
+"""The network chain on an active network certifier's run (`network_certifier_chain`, `chain_record`'s network certifier path),
+here the synthetic run published as `network_certifier_serve.Publisher` publishes a served one, in the gate's layout (its witness
 under ``witness/``, and under ``out/`` what the gate's own outcome publishes of it): the
 certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
-refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`warden_chain.deployment_of`),
+refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`network_certifier_chain.deployment_of`),
 and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
 and responses served;
 N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through the older certifier's proxy)
-is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
+is refused by name (`network_certifier_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
 network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
 and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
 run's."""
@@ -35,7 +35,7 @@ import auditor as G  # noqa: E402
 from verity.protocols.accounting.certifier.device.tests.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
 from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
 
-from benchmarks.network_traces import warden_chain as WC  # noqa: E402
+from benchmarks.network_traces import network_certifier_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import blob_files as bf  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
 
@@ -55,12 +55,12 @@ from verity.protocols.accounting.certifier.device import leak_guard as LG  # noq
 def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
     """The synthetic network certifier run in the gate's layout, under the network certifier key ``seed`` makes: its
     files under ``witness/`` with the check the runner writes there, which accepts it, and under ``out/`` what the
-    gate publishes of them (`auditor.warden_outcome`), its lines among them."""
+    gate publishes of them (`auditor.network_certifier_outcome`), its lines among them."""
     run = published(d / "flat", seed=seed)
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
     (d / "gate" / "witness" / "check.json").write_text(json.dumps(WC.RC.check(d / "gate" / "witness")))
-    outcome = G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
+    outcome = G.network_certifier_outcome(d / "gate" / "out", d / "gate" / "witness")
     assert outcome["verdict"]["accepted"] is True, "the gate publishes a run's lines only when its check accepted"
     assert "unruled" not in outcome, "a run's own lines are in the forms the gate publishes them in"
     return d / "gate"
@@ -68,7 +68,7 @@ def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
 
 def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_the_wiring(tmp_path):
     """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
-    direction and window the registration names, and the line as `warden_serve.Publisher` writes it less the wiring
+    direction and window the registration names, and the line as `network_certifier_serve.Publisher` writes it less the wiring
     and the cost: the witness's own bytes but for those two, the root and the domain among them, and no wiring. The
     line whole is in ``witness/``, where the chain reads it. A record's certificate is written in one key order, so
     its text in the witness's line is its text in the public one. So the record's leak guard, which reads a job's files
@@ -133,7 +133,7 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
         [*released, *gate_files])
 
 
-def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
+def test_a_network_certifier_runs_certificates_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got, private = WC.checked(run)
     assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
@@ -146,7 +146,7 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
     assert all(r["release"] is not None and r["frames"][0][1] >= r["release"] for r in io["records"])
     lw, dep, params = WC.link(run)
-    assert lw.warden.digest == params.digest and lw.windows == sz.W63.windows
+    assert lw.network_certifier.digest == params.digest and lw.windows == sz.W63.windows
     assert lw.grid(0) == lw.grid(1) and lw.link == "warden" and lw.run == dep["run_id"]
     pairs, refused = WC.pairs(run, dep)
     assert len(pairs) == sz.W63.windows and refused == []
@@ -185,7 +185,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     does a key the summary gains later. The record's leak guard reads
     pieces of 32 bytes and sees no shorter value, so this is held by name."""
     assert (WC.COUNTS, WC.CELL_ROWS) == (G.WARDEN_COUNTS, G.CELL_ROWS), (
-        "warden_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.WARDEN_COUNTS "
+        "network_certifier_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.WARDEN_COUNTS "
         "first, then write it here")
     assert (WC.ACCEPTED_COUNTS, WC.ACCEPTED_CELL_ROWS) == (G.ACCEPTED_COUNTS, G.ACCEPTED_CELL_ROWS), (
         "the counts only an accepted check's verdict holds are the gate's (auditor.ACCEPTED_COUNTS)")
@@ -198,7 +198,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
             "ticker_stalls", "withheld_windows"} <= set(check["summary"]) - set(got)
     (run / "witness" / "check.json").write_text(json.dumps(check))
     (tmp_path / "end").mkdir()
-    assert got == G.warden_outcome(tmp_path / "end", run / "witness")["verdict"]
+    assert got == G.network_certifier_outcome(tmp_path / "end", run / "witness")["verdict"]
     later = {"accepted": True, "problems": ["connection 3: its words"],
              "summary": {"requests": 1, "a_later_key": 2, "cell_rows": {"registered": 1, "of": 2, "cost": {"ms": 3}}}}
     assert WC.verdict(later) == {"accepted": True, "cell_rows": {"registered": 1, "of": 2}}
@@ -206,7 +206,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
                "summary": check["summary"] | {"certified_windows": 1, "certificates": 5,
                                               "cell_rows": {"registered": 3, "of": 4, "rows": [600]}}}
     (run / "witness" / "check.json").write_text(json.dumps(refused))
-    assert WC.verdict(refused) == G.warden_outcome(tmp_path / "end", run / "witness")["verdict"]
+    assert WC.verdict(refused) == G.network_certifier_outcome(tmp_path / "end", run / "witness")["verdict"]
     assert set(WC.verdict(refused)) == {"accepted", "failed", "windows", "cell_rows"}
     assert WC.verdict(refused)["cell_rows"] == {"of": 4}
     assert WC.RC.FAILED == G.FAILED, (
@@ -220,7 +220,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
                                                                                                monkeypatch):
     """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
     accepted run and on one the network certifier's own check refuses, and every count of `verdict` the list names;
-    what the step found of the traffic (`warden_chain.WITNESS_KEYS`: which execution phases the signer refused, how
+    what the step found of the traffic (`network_certifier_chain.WITNESS_KEYS`: which execution phases the signer refused, how
     many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
     from verity.protocols.accounting.certifier.device import released_keys as RK
@@ -337,7 +337,7 @@ def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_r
                 CR.check_no_head(word, key, session, params, c["link"], w)
 
 
-def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
+def test_n2_on_a_network_certifier_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--gpu", "--dry", "--out", str(tmp_path / "n2")]) == 0
     s = json.loads((tmp_path / "n2" / "summary.json").read_text())
@@ -349,7 +349,7 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
     assert s["draw"]["selection"] == "all" and n2.OTHER not in s["members"]
 
 
-def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_subset(tmp_path):
+def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_proves_another_subset(tmp_path):
     """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the sample holds refuse
     it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
     run = gate_run(tmp_path)
@@ -390,7 +390,7 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
         network_certifier_run=str(run))
 
 
-def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_certifier_rehearsals(tmp_path,
+def test_the_network_certifier_path_requires_every_step_on_one_network_certifier_run_and_refuses_a_certifier_rehearsals(tmp_path,
                                                                                                 certifier_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)

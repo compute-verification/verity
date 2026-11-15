@@ -16,7 +16,7 @@ is one execution phase, one proof block. Its `window` provenance is `{"kind": "s
 challenger holds w to the registration's order in the stream (`TransferBlocks.register`), so the receipt's order is the
 execution phase. The
 network verdict of record is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share
-credit: it accepts only when every window of the link (its `WardenProfile`'s) is registered in order and its outcome
+credit: it accepts only when every window of the link (its `NetworkCertifierProfile`'s) is registered in order and its outcome
 of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
 reject the link. A run's is the AND over its links'.
 
@@ -101,33 +101,33 @@ service, in the clear. That is a provisional exception to the four public kinds,
 `TransferBlocks.clear` is the in-the-clear check on the opening, for a debug comparison only (`verify(opening=…)`, off by
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
 root, each end's head check accepts (`head_check.reference`), the opening's certificates hold (`certified`) and both
-heads met their deadline. The records' cells are the scan's (`warden.audit`
+heads met their deadline. The records' cells are the scan's (`network_certifier.audit`
 reads them in the clear), and the certifier's host audit doesn't read them. `TransferBlocks.unproved_outcome` decides a
 run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
 zero-knowledge.
 
-**The link** (`TransferBlocks(warden=WardenProfile(…))`) is the network certifier's (`warden.Warden`) own two records of
+**The link** (`TransferBlocks(network_certifier=NetworkCertifierProfile(…))`) is the network certifier's (`network_certifier.NetworkCertifier`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`network_certifier.NetworkCertifierParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
-cells, r for each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks
+cells, r for each live connection and the rest padding (`network_certifier.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the network certifier runs no shaper clock, so a window declares
 no sync and the charge is 0. Each head check holds its end's head to the network certifier's grid and digest and to its
 signed digest. N2 takes no frames: the frames, their content and their order, are the scan's, and N2 says nothing of
-them. A `TransferBlocks` without a `WardenProfile` raises `ValueError`.
+them. A `TransferBlocks` without a `NetworkCertifierProfile` raises `ValueError`.
 
 **The verdict of record is the Lean's**: `NetworkCheck.TransferBlocks.verdict`
 (`verity/protocols/accounting/certifier/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
-the Lean refuses the case. The Lean reads the network certifier's parameters digest (`lean_case`'s ``warden``) for
+the Lean refuses the case. The Lean reads the network certifier's parameters digest (`lean_case`'s ``network_certifier``) for
 both ends' grids and no sync, as `grid` and `python_verdict` do; its other kinds of link (`Kind.plain`, `Kind.served`)
 are cases this module never sends. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- the network certifier's parameters digest (`WardenProfile.digest`, which the network certifier's deployment publishes
-  as its schedule's, `warden.WardenParams.digest`), which neither derives;
+- the network certifier's parameters digest (`NetworkCertifierProfile.digest`, which the network certifier's deployment publishes
+  as its schedule's, `network_certifier.NetworkCertifierParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -451,9 +451,9 @@ class Hidden:
 
 
 @dataclass(frozen=True)
-class WardenProfile:
-    """A network certifier link's profile (`TransferBlocks.warden`, the module docstring's "A network certifier link"): the
-    link's windows and the network certifier's parameters digest (`warden.WardenParams.digest`), which both ends' heads
+class NetworkCertifierProfile:
+    """A network certifier link's profile (`TransferBlocks.network_certifier`, the module docstring's "A network certifier link"): the
+    link's windows and the network certifier's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads
     bind, both fixed before the run."""
 
     windows: int
@@ -471,7 +471,7 @@ class TransferBlocks:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and
-    the network certifier's profile (`warden`: its records, its key and session the certifier's here, its counts its
+    the network certifier's profile (`network_certifier`: its records, its key and session the certifier's here, its counts its
     schedule's). It declares no sync, so `sync_set` is read only as the Lean case's ``sync_set``."""
 
     link: str
@@ -482,11 +482,11 @@ class TransferBlocks:
     certifier_session: bytes
     ingress: GridParams | None = None
     proof_deadline: float | None = None
-    warden: WardenProfile | None = None
+    network_certifier: NetworkCertifierProfile | None = None
 
     def __post_init__(self) -> None:
-        if self.warden is None:
-            raise ValueError("a link is the network certifier's: TransferBlocks(warden=WardenProfile(windows, digest))")
+        if self.network_certifier is None:
+            raise ValueError("a link is the network certifier's: TransferBlocks(network_certifier=NetworkCertifierProfile(windows, digest))")
         if self.ingress_params != self.params:
             raise ValueError("a warden link's two ends are on the warden's one grid")
 
@@ -502,13 +502,13 @@ class TransferBlocks:
 
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the network certifier's grid under
-        its parameters digest (`WardenProfile.digest`)."""
-        return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
+        its parameters digest (`NetworkCertifierProfile.digest`)."""
+        return HC.grid_bytes((self.params, self.ingress_params)[direction], self.network_certifier.digest)
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: its `WardenProfile`'s."""
-        return self.warden.windows
+        """The link's windows, which `network_verdict` takes by default: its `NetworkCertifierProfile`'s."""
+        return self.network_certifier.windows
 
     @cached_property
     def unit(self):
@@ -547,7 +547,7 @@ class TransferBlocks:
             "certifier_session": self.certifier_session.hex(), "charge": 0.0,
             "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
                            "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
-            "occupancy": [None, None], "warden": [self.warden.windows, self.warden.digest.hex()]})
+            "occupancy": [None, None], "warden": [self.network_certifier.windows, self.network_certifier.digest.hex()]})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
@@ -833,7 +833,7 @@ class TransferBlocks:
             "session": bytes(self.certifier_session).hex(),
             "egress": {"grid": LA._grid_json(self.params), "profile": None},
             "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": None},
-            "warden": self.warden.digest.hex()}
+            "warden": self.network_certifier.digest.hex()}
         return case
 
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1011,7 +1011,7 @@ class TransferBlocks:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. The windows are by default the `WardenProfile`'s (`windows`).
+        the verdict to the stream and those records. The windows are by default the `NetworkCertifierProfile`'s (`windows`).
 
         With `drawn`, the period sample (`period_draw`) over this stream's n windows, the stream's registrations must be
         exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
@@ -1079,4 +1079,4 @@ class TransferBlocks:
 
 
 __all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "TransferBlocks", "OUTPUTS", "OUT_BITS", "Hidden", "PORTS",
-           "PUBLIC", "ROWS", "SCHEMA", "VALUE", "WardenProfile", "encode", "output_row", "rows", "unit"]
+           "PUBLIC", "ROWS", "SCHEMA", "VALUE", "NetworkCertifierProfile", "encode", "output_row", "rows", "unit"]

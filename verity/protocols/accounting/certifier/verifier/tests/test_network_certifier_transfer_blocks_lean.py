@@ -58,7 +58,7 @@ class Case:
         return replace(self.delivered, proof=replace(self.delivered.proof, public=path))
 
 
-def _warden(tmp):
+def _network_certifier(tmp):
     """The network certifier's link: both records certified under its parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
     opening = run.honest(0)
@@ -143,7 +143,7 @@ def _syncs(c):
 def test_the_lean_verdict_is_the_pythons(tmp_path):
     """On every case the Lean gives the Python's accept bit, public outputs and digest; the honest proof is accepted,
     with both bits proved."""
-    c = _warden(tmp_path)
+    c = _network_certifier(tmp_path)
     rng = random.Random("link-window/warden")
     lean, python = c.both()
     assert lean == python and python["accepted"] and python["public"]["verdict"] == 1 == python["public"]["deadline"]
@@ -162,18 +162,18 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
     assert rejected >= len(cases) - 30
 
 
-def test_a_warden_phase_reads_the_wardens_digest_and_no_sync(tmp_path):
+def test_a_network_certifier_phase_reads_the_wardens_digest_and_no_sync(tmp_path):
     """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network certifier's digest is a reject by both; and a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
     grids) is refused, which `verify` rejects."""
-    c = _warden(tmp_path)
+    c = _network_certifier(tmp_path)
     honest = c.both()
     assert honest[0] == honest[1] and honest[1]["accepted"] and honest[1]["public"] == {"verdict": 1, "deadline": 1}
     for s in _syncs(c):
         assert c.both(syncs=s) == honest
     lw = c.lw
-    other = replace(lw, warden=SVC.WardenProfile(3, bytes(64)))
+    other = replace(lw, network_certifier=SVC.NetworkCertifierProfile(3, bytes(64)))
     assert other.program == lw.program
     c.lw = other
     lean, python = c.both()
@@ -197,7 +197,7 @@ def test_a_warden_phase_reads_the_wardens_digest_and_no_sync(tmp_path):
 def test_an_advised_phase_is_refused_by_name(tmp_path):
     """No advised link has a verdict of record: the Lean refuses a case of kind ``advised`` by name, its view and advice
     included or not, as it does a kind it doesn't know."""
-    c = _warden(tmp_path)
+    c = _network_certifier(tmp_path)
     case = c.lw.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
     assert case["kind"] == "warden" and SVC.LA.SERVER.call("link-window", case)["accepted"]
     view = {"view": {"released": [0], "floor": [0], "received": 0}, "advice": "00" * 64}
@@ -211,7 +211,7 @@ def test_an_advised_phase_is_refused_by_name(tmp_path):
 def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypatch):
     """The switch names whose verdict is the record's (`by`), the other's accept bit is `reference`'s; where the two
     differ, or the Lean has no case (a key other than an `LmsKey`), the execution phase is rejected with deadline 0."""
-    c = _warden(tmp_path)
+    c = _network_certifier(tmp_path)
     run = lambda lw=c.lw: lw.verify(c.draw, c.certificates, c.syncs, c.delivered,
                                     circuit_sha512=standin.circuit_sha512(c.delivered))
     lean = run()

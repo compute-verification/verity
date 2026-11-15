@@ -18,7 +18,7 @@ from verity.channel import Message, Refused
 from verity.runtime.framing import HEADER, decode, encode, parse
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.tests import signers as S
 from verity.protocols.proofs.spot.verifier import parties as SP
 

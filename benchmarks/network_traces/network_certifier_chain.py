@@ -1,4 +1,4 @@
-"""warden-chain: the network chain's reads of an active network certifier's run (`warden_serve.py`'s directory, or the
+"""warden-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (whose records came through the older certifier's proxy in front of the
 endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network certifier
@@ -14,7 +14,7 @@ the refusal stays with the form that reads them.
   certifier's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
   record was read off (`recorded`) adds only the auditor's device's keys (`relay_check.DEVICE_KEYS`). `own_record`
   is the record a job that ran the network certifier itself holds (a local rehearsal's, the job its own auditor).
-* `link`: N2's link on the run (`service.TransferBlocks` with its `service.WardenProfile`): the network certifier's link
+* `link`: N2's link on the run (`service.TransferBlocks` with its `service.NetworkCertifierProfile`): the network certifier's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
   certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
@@ -22,7 +22,7 @@ the refusal stays with the form that reads them.
 * `certificates`: the network certifier's own offline check (`relay_check.check`: every execution phase of the three
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.warden_outcome`, which writes it only of a run its check accepted) exactly the certified lines'
+  `auditor.network_certifier_outcome`, which writes it only of a run its check accepted) exactly the certified lines'
   certificates, in order: a witness line that says the signer refused its execution phase has no public line, so a
   public file beside one isn't the gate's. Of the check it writes what the gate's end publishes and no more
   (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of counts, less those only an accepted check's
@@ -34,7 +34,7 @@ the refusal stays with the form that reads them.
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
 * `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
   `verity/network-rows/v1`): the auditor's record's key, link, schedule, session and windows (`deployment_of`), and
-  each execution phase's three records (`warden_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
+  each execution phase's three records (`network_certifier_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
   and then certified. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer
   fields, and `max_tokens_cap` when the run has one, which the rows audit refuses by name).
 """
@@ -50,7 +50,7 @@ from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import lean_audit as LA
 from verity.protocols.accounting.certifier.verifier import service as SVC
-from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
@@ -62,12 +62,12 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a certifier rehearsal's run (its records through the older certifier's proxy in front of the endpoint): "
-         "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
+         "the warden path reads an active warden's own run (network_certifier_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network certifier link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``warden``); one
+#: a network certifier link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``network_certifier``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: the auditor's record of a network certifier run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
@@ -75,7 +75,7 @@ UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: and ``key`` and ``session``, the deployment's; the fields the gate's run also gives it (``host``, ``run``, ``pinned``,
 #: ``peer``, ``request``, ``end``) the reader of its ``status`` checks, and no check here reads them
 RECORD = "certifier-key/v1"
-#: the counts of `warden_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
+#: the counts of `network_certifier_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
 #: run's end publishes (`auditor.WARDEN_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
 #: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
@@ -91,7 +91,7 @@ ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("r
 #: which follows what the node sent and when
 WITNESS_KEYS = ("issuer_refused", "certified_windows", "rows", "problems")
 #: why `checked` refuses a run the network certifier's own check refuses, its one word of it
-REFUSES = "the network certifier's own check refuses the run, which warden_serve.py check says on the witness"
+REFUSES = "the network certifier's own check refuses the run, which network_certifier_serve.py check says on the witness"
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
@@ -109,7 +109,7 @@ def witness(run: Path) -> Path:
     return found(run, "certified.jsonl").parent
 
 
-def deployment(run: Path) -> tuple[dict, W.WardenParams]:
+def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
     """The run's ``deployment.json`` and the network certifier's schedule, refused by name where the run is a certifier
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
@@ -118,7 +118,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
         raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a warden's)")
-    params = W.WardenParams(**dep["params"])
+    params = W.NetworkCertifierParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
     if not dep.get("run_id"):
@@ -126,7 +126,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     return dep, params
 
 
-def deployment_of(run: Path, record: dict) -> tuple[dict, W.WardenParams]:
+def deployment_of(run: Path, record: dict) -> tuple[dict, W.NetworkCertifierParams]:
     """The run's deployment (`deployment`) held to ``record``, the auditor's record of it (`RECORD`), never the kept
     fetch's: the prover's node holds that, and could rewrite it and re-sign the records under another key
     (`trusted-device` covers the device and its host, not a file there). The record's key and session must be its
@@ -153,7 +153,7 @@ def deployment_of(run: Path, record: dict) -> tuple[dict, W.WardenParams]:
             raise SystemExit(f"{run}: {f.relative_to(run)} " + (
                 f"names another {field} than the auditor's record's" if field else
                 "isn't the bytes the auditor's record hashes"))
-    return dep, W.WardenParams(**dep["params"])
+    return dep, W.NetworkCertifierParams(**dep["params"])
 
 
 def recorded(run: Path) -> Path:
@@ -172,12 +172,12 @@ def own_record(run: Path) -> dict:
             "deployment_sha512": hashlib.sha512(data).hexdigest(), "deployment": dep}
 
 
-def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.WardenParams]:
+def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.NetworkCertifierParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
     dep, params = deployment(run)
     lw = SVC.TransferBlocks(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
                          bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=RC.PROOF_DEADLINE_S,
-                         warden=SVC.WardenProfile(dep["windows"], params.digest))
+                         network_certifier=SVC.NetworkCertifierProfile(dep["windows"], params.digest))
     return lw, dep, params
 
 
@@ -196,8 +196,8 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 def verdict(check: dict) -> dict:
     """What `certificates` writes of the network certifier's own check, the gate's end's verdict
-    (`auditor.warden_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
-    words (`warden_serve.FAILED`, the gate's `FAILED`). A check that didn't accept gives none of `ACCEPTED_COUNTS`:
+    (`auditor.network_certifier_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
+    words (`network_certifier_serve.FAILED`, the gate's `FAILED`). A check that didn't accept gives none of `ACCEPTED_COUNTS`:
     how many execution phases the signer refused is the traffic's. The problems, their number and their words, are
     made from the witness, as the summary's other keys are, so none is written. This is the check's word alone: the
     gate's end also says not accepted of a check that counted another number of requests than its request's, or
@@ -223,7 +223,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
     keeps on the chain's private side (`WITNESS_KEYS`). A run is certified when each of an execution phase's three
     records is, complete, for every execution phase. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A
     run the network certifier's own check refuses is refused by that word alone: its problems, and how many there are,
-    are the private side's, and ``warden_serve.py check`` on the witness says them."""
+    are the private side's, and ``network_certifier_serve.py check`` on the witness says them."""
     dep, _ = deployment(run)
     wit = witness(run)
     check = RC.check(wit)

@@ -23,7 +23,7 @@ the proof as the verifier receives it and the link's public fields, and nothing 
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
-A network certifier link (`Kind.warden`, `service.WardenProfile`) is the plain proof block under the active network
+A network certifier link (`Kind.networkCertifier`, `service.NetworkCertifierProfile`) is the plain proof block under the active network
 certifier's records: both ends' grids are the network certifier's one grid, with no profile, and both carry the network
 certifier's parameters digest (`gridBytes`) in place of a certifier's; the active network certifier runs no shaper
 clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
@@ -87,8 +87,8 @@ structure Sync where
 inductive Kind where
   | plain
   | served
-  /-- the network certifier's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
-  | warden (digest : ByteArray)
+  /-- the network certifier's parameters digest (`service.NetworkCertifierProfile.digest`), which both ends' heads bind -/
+  | networkCertifier (digest : ByteArray)
 
 structure Case where
   link : String
@@ -186,7 +186,7 @@ def caseOf (j : Json) : V Case := do
     | "warden" => do
       let d ← bytesOf (← get j "warden" "case") "warden"
       unless d.size = digestBytes do throw s!"a warden's parameters digest is {digestBytes} bytes, not {d.size}"
-      pure (Kind.warden d)
+      pure (Kind.networkCertifier d)
     | k => throw s!"a link is plain, served or a warden's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
@@ -199,7 +199,7 @@ def caseOf (j : Json) : V Case := do
   let salts ← get j "salts" "case"
   let egress ← endOf (← get j "egress" "case") "egress"
   let ingress ← endOf (← get j "ingress" "case") "ingress"
-  if let .warden _ := kind then
+  if let .networkCertifier _ := kind then
     let fields (g : NetworkCheck.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
     unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
       throw "a warden link's two ends are on the warden's one grid, with no occupancy profile"
@@ -255,7 +255,7 @@ def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
   let digest ← match c.kind with
-    | .warden w => pure w
+    | .networkCertifier w => pure w
     | _ => parametersDigest g (if d = 0 then some (manifestSet c) else none)
   return be 4 g.buckets ++ be 4 g.allocation ++ be 4 g.frameBytes ++ be 4 g.bucketMs ++ digest
 
@@ -276,7 +276,7 @@ def pubRow (c : Case) : V (Option ByteArray) := do
   let digests := [d0, d1]
   if c.certificates.size ≠ 2 ∨ digests.any (·.size ≠ 64) then return none
   let tail : Option ByteArray ← match c.kind with
-    | .plain | .warden _ => pure (some ByteArray.empty)
+    | .plain | .networkCertifier _ => pure (some ByteArray.empty)
     | .served => pure do
         let s ← c.syncs[c.window]?
         let (d, p, q) ← syncWords s
@@ -395,7 +395,7 @@ def certified (c : Case) : Bool :=
 link declares none (the active network certifier runs no shaper clock), so nothing is read of the syncs there. -/
 def synced (c : Case) : Bool :=
   match c.kind with
-  | .warden _ => true
+  | .networkCertifier _ => true
   | _ => match c.syncs[c.window]? with
     | some s => c.deltas.contains s.delta && c.rhos.any fun (n, d) => s.num * d == n * s.den
     | none => false
