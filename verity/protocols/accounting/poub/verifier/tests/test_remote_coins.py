@@ -19,7 +19,7 @@ import threading
 from pathlib import Path
 
 import pytest
-from test_remote_bandwidth import SCHEDULE, Entropy, drive, finish, params, store  # noqa: F401
+from test_poub import SCHEDULE, Entropy, drive, finish, params, store  # noqa: F401
 
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.poub.verifier import coins

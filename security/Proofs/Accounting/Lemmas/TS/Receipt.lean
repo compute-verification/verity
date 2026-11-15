@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Assumptions.TS
-public import Definitions.Accounting.TS.Receipt
+public import Definitions.Pouw.Assumptions.TS
+public import Definitions.Pouw.TS.Receipt
 
 /-!
 # (I7) from the receipt: lemmas
@@ -9,7 +9,7 @@ public import Definitions.Accounting.TS.Receipt
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5), each
-`def G : Prop` proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Receipt`:
+`def G : Prop` proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.Receipt`:
 
 * `LuckOfReceipt`: with the openings pinned, the operand luck at `p` and the receipt luck at `pr ≤ 1` give (I7) at
   `p + (1 − p)·pr`.

@@ -5,7 +5,7 @@ carries at its parameters (`CapacityBound`).  It implements `encode_segment` and
 honest answer is more than the stored label.  Everything else is written once, here:
 
 1. **Commit.** The server commits to `W` before any salt exists (`commit`).
-2. **Salt.** The verifier samples the salt after the commitment (`draw_salt`).
+2. **Salt.** The verifier samples the salt after the commitment (`sample_salt`).
 3. **Encode.** The server computes `C = Enc(W, salt)` (`encode`).  The verifier builds `vk` (`verifier_key`) either by
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
@@ -15,7 +15,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is flipped here through `verity.commitments.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
-none.  The claims a certificate rests on are ids in `verity.claims`' format (`claim`).
+none.  The claims a certificate rests on are claim ids (`verity.commitments.claim_ids`).
 """
 
 from __future__ import annotations
@@ -27,8 +27,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, ClassVar
 
-from verity.claims import Entry
-from verity.claims import get as core_claim
+from verity.commitments import claim_ids
 from verity.commitments.randomness import Key
 
 from . import audit, setup
@@ -42,59 +41,6 @@ PRIVATE, PUBLIC = "private", "public"
 """How the verifier gets `vk`: it encodes `W` itself, or it decodes the server's `C*` and checks it against the
 commitment."""
 
-LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
-    Entry("ideal-permutation", "model",
-          "Ideal-permutation model: the scheme's permutation is uniformly random and queried in both directions",
-          "Ideal permutation"),
-    # The id is the earlier model's, kept because certificates and their pinned vectors carry it.
-    Entry("perfect-isolation", "model",
-          "Help accounted: on PoUS's challenge schedule some challenge tick t_j has mem_X(t_j) + 2^e·h >= S for the "
-          "audited location X, where h is the help X received (console's actual-circuit model; proved at e = 0 for a "
-          "location that does no arithmetic modulo p). Nothing attests the developer's machine",
-          "Help accounted"),
-    Entry("sequential-step-floor", "assumption",
-          "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "
-          "(ASICs out of scope); it bounds an adversary only in the ideal-permutation model, since at the reference "
-          "Feistel-SHAKE256 permutation a prover answers from kept round states without completing any call",
-          "Step floor", "measured"),
-    Entry("feistel-indifferentiability", "assumption",
-          "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
-          "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
-          "rebuilds any label in 481 sequential Keccak-f",
-          "Feistel-SHAKE256 as ideal (refuted)", "conjectured"),
-    Entry("m1-ideal-permutations", "model",
-          "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
-          "data", "M1"),
-    Entry("sms-m1-instantiation", "assumption",
-          "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
-          "algebraic; not accepted)", "SMS as M1", "conjectured"),
-    Entry("seq-root", "assumption",
-          "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
-          "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
-    # Lean's `Pous.P2.Assumptions.P2RingRoundSecureWide` (security/Definitions/Pous/Assumptions/P2.lean)
-    Entry("p2-ring-round-secure-wide", "assumption",
-          "P2 in the ring model, per round, at every block count N from 2^19 to 2^27: outside a bad event of mass k·ε₀, "
-          "a state of at most ⌊ρ·|C|⌋ bits answers each fresh uniform challenge with probability at most 1 − p, with "
-          "(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130; nobody has checked a proof's ε₀ against N above 2^25",
-          "P2 ring rounds to 2^27", "conjectured"),
-    # Lean's `Pous.Period.RingDeviceAt` (security/Properties/Pous/PeriodAt.lean)
-    Entry("pous-ring-device-at", "model",
-          "PoUS ring device at the store's block count: pous-ring-device, pous-ring-instantiation and prf/sha-512 per "
-          "run, read over the ring game at N, the blocks the point's session challenges",
-          "PoUS ring device at N"),
-)}
-"""Claims a certificate cites that `verity.claims` does not hold yet, in its id format.  Each moves to core when a
-render cites it; the tests fail once core defines an id this table still holds."""
-
-
-def claim(id: str) -> Entry:
-    """The claim with this id: `verity.claims`' own, else `LOCAL_CLAIMS`'; `KeyError` when neither has it."""
-    try:
-        return core_claim(id)
-    except KeyError:
-        return LOCAL_CLAIMS[id]
-
-
 @dataclass(frozen=True)
 class CapacityBound:
     """What an accepted audit of a scheme at its parameters establishes: Lean's `Meets S .sequential D Q k ε`.
@@ -102,7 +48,10 @@ class CapacityBound:
     A server that holds fewer than `⌊rho · |C|⌋` bits when the challenges arrive, and answers each within `rounds`
     sequential calls of at least `call_ns` each using at most `work` calls, passes `k` challenges with probability at
     most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`; where a claim is
-    refuted (`feistel-indifferentiability` at the reference `Π₂`), it holds only in the model the others name.
+    refuted (`feistel-indifferentiability` at the reference `Π₂`), it holds only in the model the others name.  Where
+    `claims` list `prf/sha-512`, `2^eps_log2` is that claim's advantage, assumed at that figure
+    (`Hash.Assumptions.Sha512Prf` takes it as a parameter, which no model fixes), and `delta` is the theorem's whole
+    bound; elsewhere `2^eps_log2` is a term of the theorem's bound.
 
     `cliff` is the most rounds the structure tolerates at any `k`, or None when security degrades gracefully past
     `rounds`.  The band has its cliff at its in-degree `d`.  `segments` is the number of segments of `W` the theorem is
@@ -131,7 +80,7 @@ class CapacityBound:
         if self.segments is not None and self.segments < 1:
             raise ValueError("a certificate is about at least one segment")
         for c in self.claims:
-            claim(c)
+            claim_ids.get(c)
 
     def effective_rounds(self, limit_ns: int) -> int:
         """The sequential calls of at least `call_ns` that fit in `Δ + RTT`: the effective `D`."""
@@ -236,9 +185,9 @@ def commit(scheme: Scheme, w: bytes | Iterable[bytes]) -> bytes:
     return setup.commit(scheme.params, w)
 
 
-def draw_salt(source: bytes, commitment: bytes) -> bytes:
-    """The verifier's salt, sampled after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
-    return setup.draw_salt(source, commitment)
+def sample_salt(source: bytes, commitment: bytes) -> bytes:
+    """The verifier's salt, sampled after the commitment from its own secret or a later beacon round (`setup.sample_salt`)."""
+    return setup.sample_salt(source, commitment)
 
 
 def encode(scheme: Scheme, w: bytes | Iterable[bytes], salt: bytes) -> list[list[bytes]]:
@@ -325,8 +274,9 @@ class StorageProfile:
         if not self.certified:
             return f"{head}{self.scheme}, {self.k} challenges within {self.limit_ns:,} ns: not certified ({'; '.join(self.gaps)})."
         given = f", given {', '.join(cert.hypotheses)}" if cert.hypotheses else ""
+        assumed = f", assuming ε_prf ≤ 2^{cert.eps_log2} under prf/sha-512" if "prf/sha-512" in cert.claims else ""
         return (f"{head}A server holding fewer than {self.state_bound_bits:,} bits of state passes {self.k} challenges "
-                f"within {self.limit_ns:,} ns with probability at most {cert.delta} + 2^{cert.eps_log2} "
+                f"within {self.limit_ns:,} ns with probability at most {cert.delta} + 2^{cert.eps_log2}{assumed} "
                 f"({cert.theorem}{given}; under {', '.join(cert.claims)}).")
 
     def to_json(self) -> dict[str, Any]:
@@ -416,5 +366,5 @@ class TimedAudit:
                               self.gaps, self.scheme.experimental)
 
 
-__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "CapacityBound", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
-           "claim", "commit", "decode", "decode_tensor", "draw_salt", "encode", "verifier_key"]
+__all__ = ["PRIVATE", "PUBLIC", "CapacityBound", "Scheme", "StorageProfile", "TimedAudit", "challenge_key", "commit",
+           "decode", "decode_tensor", "sample_salt", "encode", "verifier_key"]

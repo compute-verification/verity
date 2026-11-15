@@ -1,0 +1,10 @@
+{
+ "format": 1,
+ "roots": [],
+ "exempt": {
+  "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.Sampled.main, audited under VStarRecursive (verity/protocols/proofs/spot_flock/verifier/lean)"
+ },
+ "escapes": {},
+ "layers": {},
+ "guarantees": {}
+}

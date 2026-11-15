@@ -92,8 +92,8 @@ inputs = [
     # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.commitments.randomness against
     # its pinned vectors
     "verity/protocols/proofs/spot", "verity/commitments/randomness", "verity/commitments/randomness/tests",
-    # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
-    "verity/protocols/policy/inference_only/verifier/nci/lean/scripts",
+    # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
+    "verity/protocols/policy/inference_only/verifier/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
@@ -102,7 +102,7 @@ inputs = [
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
     # lock, the release side's (its Flock.ZkServer.Honest is Flock's, which the flock-zk-server artifact keys)
     "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/zk_server",
-          "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
@@ -191,7 +191,7 @@ tests = [
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
-paths = ["verity/protocols/accounting/pouw/verifier/tests"]
+paths = ["verity/protocols/accounting/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
@@ -215,7 +215,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "tests/test_lean_draw_laws.py",
+    "tests/test_lean_sample_designs.py",
     "tests/test_lean_ks_form.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_record_checks.py",

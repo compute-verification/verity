@@ -21,8 +21,15 @@ The claim is not empty of content on an accepted play: the policy's component ac
 
 This is the clause of the case as sent. The link from that case to the committed files is two checks the verifier
 lacks (the case's wires are the committed record's wires, and the case's unit is the committed `Γ`'s unit), which
-`Vocab.Holds` names with what else the claim leaves unsaid; until both exist, the composites' soundness keeps this
-target in its trust gap.
+`Vocab.Holds` names with what else the claim leaves unsaid. Onsite's soundness keeps this target as a hypothesis.
+Remote's (`remote_soundness_of_subprotocols`, here) applies it, and takes in its place the two statements those checks
+would establish (`Vocab.WiresSound`, `GateARow`), which no clause of its conclusion reads and nothing proves: the
+union bound at remote's three subprotocols, SPOT's and PoUW's targets as given and the policy's as proved.
+
+Its witnesses are at the idle deployment (`Properties.Verity.Idle`): the two targets and the wires' statement hold at
+`Idle.unbounded`, where every error is `⊤` (`remote_soundness_of_subprotocols_honest`), and its conclusion fails at
+`Idle.exact` for a verifier that accepts everything (`remote_soundness_of_subprotocols_nontrivial`). `GateARow` reads
+no deployment, so no instance concludes it: it holds or fails once, for every file.
 -/
 
 @[expose] public section
@@ -34,18 +41,18 @@ open Accounting Core
 /-- **A composite's acceptance holds the policy's case to its check's**: on what composite `k` accepted as a `same`
 composition, every decoding of the policy's case meets `PolicyHeld`. -/
 theorem policyHeld_of_same {k : Verity.Registration.Composite} {s : Sent} (h : SameAccepts k s)
-    {p : NciCheck.Protocol.Params} {r : NciCheck.Protocol.Commitment} {e : NciCheck.Protocol.Evidence}
+    {p : InferenceOnlyCheck.Protocol.Params} {r : InferenceOnlyCheck.Protocol.Commitment} {e : InferenceOnlyCheck.Protocol.Evidence}
     (hc : PolicyCase k s p r e) : Properties.Remote.PolicyHeld p r e := by
   obtain ⟨ps, c, ev, ⟨h1, h2, h3⟩, pub, prof, ⟨⟨-, hcases, -⟩, -⟩, -⟩ := h
   obtain ⟨ps', c', ev', ⟨h1', h2', h3'⟩, ⟨P, n, cs⟩, hx, hx1, hp, hr, he⟩ := hc
   obtain rfl : ps' = ps := Except.ok.inj (h1'.symm.trans h1)
   obtain rfl : ev' = ev := Except.ok.inj (h3'.symm.trans h3)
-  have hx1' : P = NciCheck.Protocol.protocol := hx1
+  have hx1' : P = InferenceOnlyCheck.Protocol.protocol := hx1
   subst hx1'
   obtain ⟨p', r', e', hp', hr', he', pub', prof', hacc⟩ := hcases _ hx
-  have hp'' : (canonicalJson n.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p' := hp'
-  have hr'' : NciCheck.Protocol.commitmentOf cs.commitment = .ok r' := hr'
-  have he'' : NciCheck.Protocol.evidenceOf cs.evidence = .ok e' := he'
+  have hp'' : (canonicalJson n.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p' := hp'
+  have hr'' : InferenceOnlyCheck.Protocol.commitmentOf cs.commitment = .ok r' := hr'
+  have he'' : InferenceOnlyCheck.Protocol.evidenceOf cs.evidence = .ok e' := he'
   obtain rfl : p' = p := Except.ok.inj (hp''.symm.trans hp)
   obtain rfl : r' = r := Except.ok.inj (hr''.symm.trans hr)
   obtain rfl : e' = e := Except.ok.inj (he''.symm.trans he)
@@ -56,9 +63,9 @@ the policy's case decodes. -/
 theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent}
     (h : ComponentAccepts k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
   obtain ⟨Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
-  have hQ' : Q = NciCheck.Protocol.protocol := (component_eq_some.1 hQ).2
+  have hQ' : Q = InferenceOnlyCheck.Protocol.protocol := (component_eq_some.1 hQ).2
   subst hQ'
-  have hx1' : P = NciCheck.Protocol.protocol := hx1
+  have hx1' : P = InferenceOnlyCheck.Protocol.protocol := hx1
   subst hx1'
   obtain ⟨p, r, e, hp, hr, he, -⟩ := hacc
   exact ⟨p, r, e, ps, c, ev, hdec, _, hx, rfl, hp, hr, he⟩
@@ -79,5 +86,20 @@ theorem inferenceOnlySound (k : Verity.Registration.Composite) : V.InferenceOnly
     _ ≤ V.error .inferenceOnly θ F c σ := zero_le
 
 end Vocab
+
+theorem remote_soundness_of_subprotocols : RemoteSoundness :=
+  fun ι α _ d V hS hW _ _ =>
+    soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW (V.inferenceOnlySound .remote))
+
+/-- **`RemoteSoundness`'s honest lemma**: its two targets and the wires' statement hold at the idle deployment's
+compiled remote composite. -/
+theorem remote_soundness_of_subprotocols_honest :
+    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote ∧ Idle.unbounded.WiresSound .remote :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.wiresSound_unbounded _⟩
+
+/-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
+the idle deployment whose errors are all `0`. -/
+theorem remote_soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
+  Idle.nontrivial_at .remote (mem_subprotocols.2 (by decide))
 
 end Verity

@@ -29,7 +29,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
   registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the case
   (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
-  `RemoteAudit.P2Protocol` checks and replays; it is witness, which the prover
+  `Poub.P2Protocol` checks and replays; it is witness, which the prover
   keeps private. A session the books vetoed, or one with no memory challenger to sign it, has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
@@ -40,11 +40,12 @@ the prover (`verity/protocols/accounting/poub/prover/p2_party_prover.py`'s `Prov
 whole as its body (`Lines`), so the Lean reads every line the prover sent as it sent it, and the verifier takes the line
 it waits for whatever its key, one it can't name as `Malformed`. `session` and the prover's `prove` step each side over
 the channel with PoUS's loop (`drive`, `challenger_session.run`), the verifier's side handed a failed write as its
-channel failing (`broken`).
+channel failing (`broken`). The runtime starts the verifier from a configuration and its deploy bindings (`start`,
+`STARTS`): its closer's key is refused unless the configuration pins it (`pinned_signer`).
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
-untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
-`RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
+untrusted provenance, and Python is never trusted: the process `poub-verifier` (`p2_lean.py`,
+`Poub.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
 on the registered vk root, and its answer is the session's. The Python's books (`Books`, `audit.AuditRun` over the
 P2 codec) take every event beside it and can only veto (`Twin`): an event, a held store or an answer on which the two
@@ -55,9 +56,9 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 `python -m verity.protocols.accounting.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
-log in `--challenger`'s directory (`pous.verifier.period.challenger`) signing the close of the one session the auditor
+log in `--challenger`'s directory (`pous.device.onsite.device_key`) signing the close of the one session the auditor
 named `--session SID`, which is claimed in its log before the session's first coin, the
-Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
+Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
@@ -80,9 +81,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.channel import Body, Message, Schema
+from verity.channel import Body, Message, Refused, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
-from verity.protocol import Channel, Manifest, ProtocolDef, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -123,12 +124,15 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""
+DELTA = 2.0 ** -40
+"""PoUB-P2's δ, its own (`P2Session.DELTA`): each window's profile δ and the pooled bound's.  It is not PoUB's
+`audit.DELTA`, and not at an error of 2^-100."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
-#: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
+#: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
-EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `RemoteAudit.Protocol.certify` sums; "
+EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `Poub.Protocol.certify` sums; "
              "not the sketch's term at units (`SketchBoundP2`, drafted), and not Σ_t adv_t (SHA-512 stream as PRF: "
              "not priced, not assumed)")
 #: what an accepted session's `gamma` is against, and what it and `q_bytes` are before (`core_answer`)
@@ -287,8 +291,9 @@ def params_of(reg: p2.Registration, request: Mapping[str, Any],
         raise ValueError("; ".join(f"the request's {k} is not the auditor's ({request[k]}, not {auditor[k]})"
                                    for k in off))
     return audit.Params(blocks=reg.blocks, deadline_ns=auditor["deadline_ns"], windows=auditor["windows"],
-                        samples=auditor["samples"], min_passes=auditor["passes"], window_ns=auditor["window_ns"],
-                        codec=reg.codec, receipt=reg.receipt, layout=reg.layout, rows=reg.rows)
+                        samples=auditor["samples"], delta=DELTA, min_passes=auditor["passes"],
+                        window_ns=auditor["window_ns"], codec=reg.codec, receipt=reg.receipt, layout=reg.layout,
+                        rows=reg.rows)
 
 
 def verdict_json(v: audit.Verdict) -> dict[str, Any]:
@@ -303,7 +308,7 @@ def _done(v: audit.Verdict | None) -> dict[str, Any]:
 
 def answer(s: audit.AuditRun, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
     """The session's answer (`P2Session.answer`, with `reason`): `accept` with the credited reads, `reject` with the
-    failure and the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass
+    failure and the sample it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass
     reads."""
     reg = s.registration
     out: dict[str, Any] = {"protocol": PROTOCOL, "registration": reg.digest.hex(), "unit_bytes": p2.UNIT_BYTES,
@@ -339,7 +344,7 @@ def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[
     """The session's answer `a` (`answer`, as the verifier sent it) in the core interface's form (`period.answer`'s),
     its commitment the registration's digest. Accepted, its public outputs are the credited reads `q_bytes` over the
     span `span_ns` at `eps` (`EPS_TERMS`), and with `r_bytes_per_s` (R) `gamma` against it (`GAMMA_TERMS`); its profile
-    is δ, the receipts, the wrong ones the pooled bound leaves, each window's draws and the store's units. Any other
+    is δ, the receipts, the wrong ones the pooled bound leaves, each window's samples and the store's units. Any other
     answer is a reject (`undecided` while a window is unverified) with its failure, where, and its reason, and neither.
     ValueError for an answer of another protocol."""
     if a.get("protocol") != PROTOCOL:
@@ -463,7 +468,7 @@ class _Ended(Exception):
 
 
 class Twin:
-    """A P2 session through the Lean verifier (session `k` of `lean`, `RemoteAudit.P2Session`) with the
+    """A P2 session through the Lean verifier (session `k` of `lean`, `Poub.P2Session`) with the
     Python's books beside it (`books`), which can only veto: each event goes to both and its result is the Lean's
     where the two agree; where they differ, or the Lean answers an error, the session is rejected `disagreement` at
     the event's window (`disagreement` says where and what each answered) and the event raises `_Ended`."""
@@ -474,7 +479,7 @@ class Twin:
         self.request, self.not_before_ns = request, not_before_ns
         self.disagreement: dict[str, Any] | None = None
         self.log: list[dict[str, Any]] = []
-        """Every request after the session opened, as `RemoteAudit.P2Protocol` replays them (`p2_case`), each coin
+        """Every request after the session opened, as `Poub.P2Protocol` replays them (`p2_case`), each coin
         whole, as the challenger released it, where the Lean is sent its first `coins.COIN_BYTES`."""
 
     @classmethod
@@ -542,7 +547,7 @@ class Twin:
         return self._settle(t, "root", got, mine)
 
     def close(self, t: int, now: int) -> dict[str, Any]:
-        """Window t's draws at `now`."""
+        """Window t's samples at `now`."""
         mine = self.books.close(t, now)
         return self._event(t, {"kind": "close", "now": now, "t": t}, mine)
 
@@ -601,7 +606,7 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
          auditor: Mapping[str, int] = SESSION) -> tuple[p2.Registration, Plan]:
     """The registration file's bytes `data`, held by both verifiers: the Python's registration and plan
     (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store and holds every request to
-    the auditor's session parameters `auditor`, every `chunk` draws checked on a thread (`P2Session.heldOf`). The Lean
+    the auditor's session parameters `auditor`, every `chunk` samples checked on a thread (`P2Session.heldOf`). The Lean
     is sent `auditor` only when it isn't `SESSION` (a toy party's): otherwise it holds its own pinned
     `P2Session.SESSION`, which must be this one's."""
     doc = json.loads(data.decode())
@@ -706,8 +711,9 @@ def drive(party: Any, params: Mapping[str, Any], identity: Identity, f_in: Binar
 class Verifier:
     """The verifier and its challenger: one session, decided by the Lean beside the books (`Twin`), on its clock and
     coins. Its capabilities are `lean` (holding `registration` and `plan`: `hold`), the auditor's session parameters
-    `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None) and a progress `log`.
-    It claims the closer's session id, draws the session's coins, and reads the prover's request; then each pass is
+    `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None), where its case is kept
+    (`keep`, or None) and a progress `log`.
+    It claims the closer's session id, flips the session's coins, and reads the prover's request; then each pass is
     asked for in order under the plan, each window's openings sampled once its roots are final and verified, and the
     session ends with its coins disclosed, its case and the answer sent, finishing with `{"answer", "case"}`. Every
     line the prover sends reaches the Lean whole whatever its type, the end of the channel as an empty line; a channel
@@ -718,6 +724,7 @@ class Verifier:
         self.lean, self.registration, self.closer = c["lean"], c["registration"], c.get("closer")
         self.plan = Plan.whole(self.registration.blocks) if c.get("plan") is None else c["plan"]
         self.auditor, self.host = c.get("auditor", SESSION), c["host"]
+        self.keep: Callable[[dict[str, Any]], None] | None = c.get("keep")
         self.log: Callable[[str], None] = c.get("log") or (lambda _m: None)
         self.twin: Twin | None = None
         self.coins = b""
@@ -883,6 +890,8 @@ class Verifier:
             close = p2_case.close_of(self.closer.signer, self.closer.session, head, twin.log)
             case = p2_case.case_of(held, twin.request, twin.not_before_ns, twin.log, session=self.closer.session,
                                    trusted=[self.closer.signer.public_key], close=close)
+            if self.keep is not None:
+                self.keep(case)
         end = {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]}
         sent = [Send(PROVER, Message("End", body=line_of("end", end)))]
         if case is not None:
@@ -903,11 +912,9 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     `closer`'s session id is claimed before the request is read, and the session refused when the claim is. A line out
     of form or a closed channel rejects the session (its answer says why)."""
     capabilities = {"lean": lean, "registration": registration, "plan": plan, "auditor": auditor, "closer": closer,
-                    "log": log, "host": host or socket.gethostname()}
+                    "keep": keep, "log": log, "host": host or socket.gethostname()}
     done = drive(Verifier(), {}, Identity(VERIFIER, capabilities=capabilities), f_in, f_out, peer=PROVER, clock=clock,
                  coins=lambda _n: coins, wait=sleep_until)
-    if done.outcome["case"] is not None and keep is not None:
-        keep(done.outcome["case"])
     return done.outcome["answer"]
 
 
@@ -953,7 +960,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
     ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key and "
-                                                    "session log (`pous.verifier.period.challenger`), which sign the "
+                                                    "session log (`pous.device.onsite.device_key`), which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
                                       "challenger for this session; without them, no session has a case")
@@ -998,9 +1005,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     closer = None
     if a.challenger is not None:
-        from verity.protocols.accounting.pous.verifier import period
+        from verity.protocols.accounting.pous.device import onsite
 
-        signer = period.challenger(a.challenger)
+        signer = onsite.device_key(a.challenger)
         closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
 
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
@@ -1025,14 +1032,52 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
+GOAL = CS.ONSITE_GOAL
+#: PoUB's P2 session's name in a deployment configuration: in its `protocols` and a binding's table
+COMPONENT = "bandwidth"
 
 
-__all__ = ["Books", "CASE_DIGESTS", "COIN_BYTES", "Closer", "EPS_TERMS", "GAMMA_TERMS", "ID", "LINES", "Lines",
-           "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Twin", "VERIFIER", "VERSION", "Verifier",
-           "answer", "broken", "case_digest", "core_answer", "drive", "held_json", "hold", "line_of", "main",
-           "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "recv", "registration_json",
-           "registration_of", "registration_of_setup", "request_of", "send", "session", "verdict_json"]
+def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any]) -> dict[str, Any]:
+    """The prover's request (`request_of`) as a deployment starts it: the session parameters `SESSION`, and `node` the
+    node the store was registered under, which PoUS's setup over the served store gives and no configuration states."""
+    raise NotImplementedError(GOAL)
+
+
+def pinned_signer(configuration: Mapping[str, Any], directory: Path) -> mc.LmsSigner:
+    """The key that signs each session's close: the memory challenger's PoUS key, in its device's `directory`, refused
+    unless the configuration pins it for PoUS (`onsite.pin`, `onsite.signer`). A directory holding no key is refused,
+    never given a new one, which no pin could name."""
+    from verity.protocols.accounting.pous.device import onsite
+
+    key_sha512 = onsite.pin(configuration, CS.CHALLENGER, CS.COMPONENT)
+    if not (directory / "seed").is_file():
+        raise Refused("state", f"{directory} holds no memory challenger's key; its setup makes one")
+    return onsite.signer(directory, key_sha512)
+
+
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The verifier's start on the auditor's host (`ProtocolDef.starts`), from the configuration, its deploy bindings
+    (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's PoUS device
+    directory on this host) and its own `state` directory: the closer's key, pinned (`pinned_signer`); its case digests
+    under `state`'s `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the session parameters `SESSION`; and
+    the runtime's own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It
+    raises `NotImplementedError(GOAL)` past the key: the registration (PoUS setup's record on that device,
+    `pous_record`, for the setup's session id), the session id the auditor gives the memory challenger, and the Lean
+    process holding the registration (`hold`) have no source the runtime gives a party."""
+    pinned_signer(configuration, Path(bound["challenger"]))
+    raise NotImplementedError(GOAL)
+
+
+STARTS = {VERIFIER: start}
+PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier}, STARTS)}
+
+
+__all__ = ["Books", "CASE_DIGESTS", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
+           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "STARTS", "Twin",
+           "VERIFIER", "VERSION", "Verifier", "answer", "broken", "case_digest", "core_answer", "deployed_request",
+           "drive", "held_json", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
+           "pinned_signer", "plan_of", "pous_record", "recv", "registration_json", "registration_of",
+           "registration_of_setup", "request_of", "send", "session", "start", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())

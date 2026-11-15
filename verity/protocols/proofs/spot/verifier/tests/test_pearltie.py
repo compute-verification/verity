@@ -90,7 +90,7 @@ KEY, SALT_KEY = bytes(range(32)), bytes(range(64, 96))
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-LAW = D.parse_design("stratified:1")
+SAMPLING_DESIGN = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)
@@ -276,7 +276,7 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
         _reuse(toy, flipped.W, flipped.manifests)
     (tid, port, u), = [k for k, v in _reads(c).items() if v == FLIP[:2]]
     assert c.units[tid] == 1 and "ROUND=1" in tid and "CALL=1" in tid and port == "o0" and u == 0
-    assert D.stratum_k(LAW["k"], c.units[tid], sum(c.units.values())) == 1
+    assert D.stratum_k(SAMPLING_DESIGN["k"], c.units[tid], sum(c.units.values())) == 1
     j = next(j for j, r in toy.low.programs[0].arows.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).astype("<u4").view("<u2").reshape(-1)
@@ -288,14 +288,14 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     """The toy's window recorded, committed and written as window-commit writes it after W (R in its
     ``registration.json``), and the verifier's own window and circuit record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
+    win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
-    mine, doc = IF.of_records(out, LAW, RA.catalog_resolve)
+    mine, doc = IF.of_records(out, SAMPLING_DESIGN, RA.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
                            leaf_layer=CS.leaf_layer(publics))
@@ -311,7 +311,7 @@ def _check(written, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as records_audit ties it (`tie_of`, no prefix)."""
     tied, _pins = RA.tie_of(written.doc, W, None)
     mine = written.mine
-    return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
+    return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
                      tied["log"], registered=tied["registered"], outputs=tied["outputs"], schemas=tied["schemas"],
                      window_root=RUN)
 
@@ -350,6 +350,15 @@ def test_the_records_accept_a_flipped_row_on_its_own_w_so_only_its_readers_proof
     assert list(_check(written, toy.W, R2).codes) != []
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _no_scope():
+    """The toy's Lean checks run under no memory limit of their own (`served_cases.NO_SCOPE`), as on a development
+    host: a test's host may make no scope."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("CHECK_SCOPE", "none")
+        yield
+
+
 def _one_stage() -> SimpleNamespace:
     """`served_cases` and `replay` of ``benchmarks/one_stage`` (`replay` under the name its own tests load it by)."""
     if str(ONE_STAGE) not in sys.path:
@@ -371,7 +380,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
     against, standing in for their proofs."""
     mine, (tied, _pins) = written.mine, RA.tie_of(written.doc, W, None)
     program, query = mine.program, mine.query
-    drawn = D.derive(program, query, LAW)
+    drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": P.units(program, query), "units": units}
     proved = D.proved(draw)
@@ -380,7 +389,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
                 "receipt": REG.receipt(R, "v", received="2000-01-01T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
-    params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
+    params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
                            registered=tied["registered"], scheme=CS.SCHEME, outputs=tied["outputs"], schemas=tied["schemas"])
     params |= {"window_root": RUN}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),

@@ -9,7 +9,7 @@ public import Proofs.Flock.Bridge.FaultyRightC
 
 `Accounting.unbound` at a game circuit's partition (`Verity.Partition.ofAudit P`), the transcript a witness opens
 (`openedOf C κ val`) and any openings `opens` of the circuit's gates that hold at the constants `κ` fix and wherever
-`val` opens a value: a unit there is wrong in the transcript, or one of its committed inputs and outputs (`io`) is not
+`val` opens a value: a unit there is incorrect in the transcript, or one of its committed inputs and outputs (`io`) is not
 opened to its value. Either way its lowered gates `unitGates P u` are correct in `progOf C κ` at no interior values
 (`not_correct_of_unbound`). An incorrect proof block is `correct_of_progCorrect`'s converse. A gate the constants fix is an input
 opened to its constant, and a gate `val` opens is opened to its value, so the gate `opens` misses has no value at its
@@ -75,8 +75,8 @@ theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n
   intro hc
   simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and] at hu
   rcases hu with hw | ⟨g, hg, hop⟩
-  · have h1 : u ∉ P.wrong (openedOf C κ val) := fun hm => P.mem_wrong.1 hm (correct_of_progCorrect P u val ι hc)
-    rw [← Verity.Partition.wrong_ofAudit P] at h1
+  · have h1 : u ∉ P.incorrect (openedOf C κ val) := fun hm => P.mem_incorrect.1 hm (correct_of_progCorrect P u val ι hc)
+    rw [← Verity.Partition.incorrect_ofAudit P] at h1
     exact h1 ((Verity.Partition.ofAudit P).mem_incorrect.2 hw)
   · simp only [Verity.Partition.io, Finset.mem_filter] at hg
     obtain ⟨hgc, hgu⟩ := hg

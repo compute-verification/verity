@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.TS.Sheet
-public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Pouw.TS.Sheet
+public import Definitions.Pouw.Assumptions.TS
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,7 +42,7 @@ Seven physical assumptions, each a `Prop` taken as a hypothesis, never an
 with its claim id (`verity.core.claims`) and names its document. A1–A5 are claimed for a run of the stated device
 against its sheet (`Accounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
 section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
-`Definitions.Accounting.Assumptions.TS`'s are.
+`Definitions.Pouw.Assumptions.TS`'s are.
 
 What they give (`Definitions.Accounting.Guarantees.Sheet`): A1–A5 give (I1) `FacetCeilings` on the data-sheet machine; A6
 gives (I2)/(I4) `WordsWritten` and, with the labelling's split, (I3) `ScalarRoute` at `q, q_T ≤ ½`, `b_T ≤ 0`; A7 is

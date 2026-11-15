@@ -19,7 +19,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.prims import ZERO32
-from verity_vllm.definitions.boolean import boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS

@@ -23,7 +23,9 @@ and its docstring lists what it registers. The terms and the front doors are [`v
 `ops.boolean` holds their Boolean versions: each module the next version of an `ops` module's word Definitions, the same
 function on bits. They are built with `verity.circuits.boolean`'s `forms`, `gather` and `trace` and
 `verity.circuits.silicon`'s `fp`, `fp4` and `tc_step`, and `ops.boolean.trace_cache` lets a prover's or a developer's
-build reuse traced circuits across processes (a verifier never does).
+build reuse traced circuits across processes (a verifier never does). `ops.boolean.versions` is the Boolean-versions
+lookup: `boolean_version` finds the one a word Definition has, among `ops.boolean`'s, what is already imported, and every
+catalog registered with it (`catalog_loader`), which it imports none of by name.
 
 Beside the modules are each Definition module's binding file and pins (`<module>.circuit-check.py`,
 `<module>.circuit-check.json`), the store ids a module's conformance texts cite (`<module>_evidence.json`), and
@@ -43,7 +45,7 @@ are replayed against.
   `interface` imports every module; PoUW's prover (`verity.protocols.accounting.pouw.prover`); Flock's prover (`verity_flock`), pod
   scripts and agreement with upstream's verifier (`verity/protocols/proofs/flock`); the script that writes the difftest
   vectors of the inference-only policy's check
-  (`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
+  (`verity/protocols/policy/inference_only/verifier/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
   module that has a sidecar; the vLLM integration (`verity_vllm`); and benchmarks. Tests across the tree import it too,
   verifiers' tests among them. No verifier loads it.
 - **Loads:** `verity.circuits` (its types, its Boolean forms, its census and its library), `verity.circuits.silicon`,

@@ -104,7 +104,7 @@ end Past
 section Member
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
-  {M : WindowCoinMap g σ Ω R} {BL : WindowLinkHold} {B : WindowRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
+  {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
 /-- **The stop after a member's session's end is where `StopsAt` says**, from a log and the close after it, where the
 stop its session starts at is and each round's reading picks only openings (`StopsAt.next` at each consumed stop). -/
@@ -208,24 +208,24 @@ after `q`, the session's closing round's, and writes a transcript verity-verify-
 (`step`); and a member with no proof block in the sample, which has
 no statement and no session in the play, has `I` at the next place and the same position (`skip`). It is
 `MemberDecodes` with what every member's trace keeps handed to the step. -/
-structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
-    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
+structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
+    (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
       Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop) : Prop where
   start : ∀ ω r, I ω r 0 (Pos.root (roundCuts V θ F c rd) (M.start ω))
   step : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
     (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
-    (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) m) (memberPts m)),
+    (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) m) (memberPts m)),
     ((W.extend M.widening).joint t).ms[i]? = some m → (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
     I ω r i p → p.Inv (roundCuts V θ F c rd) →
     StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
-    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Past r →
+    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) i m p q out → q.Past r →
     r.Inv (roundCuts V θ F c rd) →
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
       P (CoinTape.run (V.game θ F c) σ r.tape) →
     I ω r (i + 1) q.toStop.consume ∧ FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
-      (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out)
+      (m.wr (m.part ((W.extend M.widening).L.draw ω)) (executionPhaseReg V θ F c W rd σ D) out)
   skip : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
     (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
     ((W.extend M.widening).joint t).ms[i]? = some m → ¬ (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
@@ -241,9 +241,9 @@ steps (`MemberSteps`) at an invariant `I`, it holds at `I` beside the play's sta
 member's session starts at, wherever each round's reading picks only openings. The play's start and where the walk
 stops are kept by every member's trace (`MemberReach.inv`, `MemberReach.stopsAt`), so `MemberReach.logged` applies at
 each member. -/
-theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
-    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
+theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
+    (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
       Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n)

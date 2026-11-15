@@ -5,16 +5,17 @@
 `circuit.words`' vectors as Lean data (`verity/protocols/accounting/pouw/verifier/lean/scripts/row_prims_vectors.py`). `circuit/`
 holds each scheme's Definitions with their word and Boolean forms and reference evaluators, an execution phase's
 Program and sampling design, and the leaves, seeds and anchors a call's rows are committed under.
-`schemes/` holds the named schemes (NCP, Pearl's FP8 scheme, Pearl-C and Pearl-C4), each a
+`schemes/` holds the named schemes (NCP, Pearl's FP8 scheme and Pearl-C), each a
 `verity.protocols.accounting.pouw.verifier.protocol.PoUWScheme`, and Pearl-C's device record. `serving/` is what runs
 beside a served model, one directory a scheme (its README): a workload's adapter reaches it through `run_matmul` and
 `observe_matmul` and the other names `serving` exports, and through no deeper module. A caller imports a module by its own
 name and takes the names its `__all__` lists: `schemes.get(name)` returns a configured scheme, and
 `circuit.traced_as(scheme, m, k, n)` its traced circuit. Target, not yet: every name another file reads is in its
-module's `__all__`. Four modules of `schemes/` state none, and six lists are short of what is read (`circuit.h1tile`,
-`circuit.live`, `circuit.ncp2`, `circuit.pc8`, `circuit.plan` and `schemes.pearl_c4`): each by names the module only
-imports, which a test, a sidecar or a benchmark reads through it, and `circuit.live` by one name and
-`schemes.pearl_c4` by two that are retired terms. The package is stated over the
+module's `__all__`. Four modules of `schemes/` state none, and five lists are short of what is read (`circuit.h1tile`,
+`circuit.live`, `circuit.ncp2`, `circuit.pc8` and `circuit.plan`): each by names the module only
+imports, which a test, a sidecar or a benchmark reads through it, and `circuit.live` by one name that is a retired term.
+Pearl-C4 (`pearl-c-nvfp4-v0`) is experimental: `SCHEMES` names it and raises until
+`verity.protocols.experimental.pearl_c4` is imported, which registers it (`schemes.register`). The package is stated over the
 verifier's parameters: it imports `verity.circuits`, `verity_vllm.definitions`, `verity.commitments`,
 `verity.protocols.accounting.pouw.verifier` and SPOT's verifier (`verity.protocols.proofs.spot.verifier`, for a window's Program and
 sampling design), with `verity.errors`, and nothing else of the workspace, except that `serving/` also imports SPOT's
@@ -43,9 +44,9 @@ device code, torch and `verity_flock` (inside functions, and torch at import in 
 - `served_zk/`: a served Pearl-C window's rows committed as hm96-sha512 leaves in the ZK statement's format, and that
   window registered, sampled, proved and judged by PoUW's verifier.
 - `filler/`: the DRAM-free filler, int8 MMAs on operands derived from a round's coins whose receipt a host recomputes
-  bit for bit: `dcap.cu` (the decode step's proxy beside it), `pfill.cuh` (the proved filler) with its host build and
-  its Python twin `pfill_ref.py`, `lfill.cuh` (the lane filler), `flin.cuh` (the fused filler) and `dfill_ref.py`. Its
-  scorer, arms and drivers are in `benchmarks/pouw/filler/`.
+  bit for bit: `dcap.cu` (the decode step's proxy beside it), `pfill.cuh` (the proved filler) with its host build,
+  `lfill.cuh` (the lane filler) and `flin.cuh` (the fused filler). Its scorer, arms, drivers and Python twins are in
+  `benchmarks/pouw/filler/`.
 
 The SASS gate is `sass_gate.py`: no shipped kernel computes a value the verifier's scalar model can't replay. Its pins
 are `sass_pins.json`, whose numeric pin is built from `ieee_pin.cu` and changes only with ptxas; the listings and probes

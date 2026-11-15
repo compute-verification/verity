@@ -758,7 +758,7 @@ def lean_exe(name: str, given: str | None) -> str:
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
-    from benchmarks.network_traces import scan_period as SP
+    from verity.protocols.accounting.certifier.prover import scan_period as SP
     try:
         return SP.lean_check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
@@ -769,7 +769,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
     """Step 1's rows audit of the network certifier run ``run`` (module docstring) by ``network-rows`` ``exe``, under
     ``record``, the record of its deployment (`warden_chain.RECORD`): `Rejected` on its reject, `NotRun` where the case
     can't be read or the check gives no `ROWS` accept or reject."""
-    from benchmarks.network_traces import scan_period as SP
+    from verity.protocols.accounting.certifier.prover import scan_period as SP
     from benchmarks.network_traces import warden_chain as WC
     try:
         case = WC.rows_audit_case(run, record)
@@ -810,7 +810,7 @@ def chain_witness(keep: Path, run: str) -> Path:
 
 
 def case_of(warden: Path, scan: Path, answers: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
-    from benchmarks.network_traces import scan_period as SP
+    from verity.protocols.accounting.certifier.prover import scan_period as SP
     try:
         return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit, answers=answers)
     except (SystemExit, OSError, KeyError, ValueError) as e:
@@ -821,7 +821,7 @@ def class_circuit(v3c: Path) -> str:
     """The class circuit V3c's audit is held to: the Program of the verifier's own window-circuit record beside V3C
     (`served_verdicts.sh`'s ``window-circuit-w<K>-<class>.json`` beside ``v3c-w<K>-<class>``,
     `scan_period.circuit_of_record`); `NotRun` without one."""
-    from benchmarks.network_traces import scan_period as SP
+    from verity.protocols.accounting.certifier.prover import scan_period as SP
     try:
         return SP.circuit_of_record(v3c.parent / f"window-circuit-{v3c.name.removeprefix('v3c-')}.json")
     except (SystemExit, OSError, ValueError) as e:
@@ -928,7 +928,7 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
     holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = captured([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
+    got = captured([sys.executable, "-m", "verity.protocols.accounting.certifier.device.leak_guard", str(d), str(quarantine),
                     *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
                     "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
                     "--report", str(quarantine / "piece-guard.json")])
@@ -942,7 +942,7 @@ def certificates(evidence: bytes) -> dict:
     records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
     with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""
-    from benchmarks.network_traces.scan_period import CERTIFICATE_KEYS
+    from verity.protocols.accounting.certifier.prover.scan_period import CERTIFICATE_KEYS
     windows = json.loads(evidence)["windows"]
     rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
              "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}

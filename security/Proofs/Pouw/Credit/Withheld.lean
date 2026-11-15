@@ -261,7 +261,7 @@ theorem root_one {key salt commit sample row x : Json} {k : ChallengerKey} {s rc
 /-- **`creditedDraw` on a sample whose session released its one challenge after the sample root.** -/
 theorem sample_ok {ledger pins main sample : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
     {o : LiveOpening} (hroot : PouwCheck.str? (PouwCheck.get sample "root") = some (Flock.hexOf root))
-    (hsess : PouwCheck.Credit.drawSession ledger k pins main (PouwCheck.get sample "session") (Flock.hexOf root) =
+    (hsess : PouwCheck.Credit.drawChallengePhase ledger k pins main (PouwCheck.get sample "session") (Flock.hexOf root) =
       .ok (c, [(PouwWindow.DRAW, [root])]))
     (hopen : LiveOpening.ofJson (PouwCheck.get sample "coin") = .ok o)
     (hlive : liveReason c o PouwWindow.DRAW 0 root = .ok none) :
@@ -307,10 +307,10 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
   have g2 : PouwCheck.get (sampleOf p receipts) "root" = .str (Flock.hexOf p.window) := (get_getD _ _).trans rfl
   have g3 : PouwCheck.get (sampleOf p receipts) "session" = p.session := (get_getD _ _).trans rfl
   have g4 : PouwCheck.get (sampleOf p receipts) "coin" = p.opening.toJson := (get_getD _ _).trans rfl
-  have hsess : PouwCheck.Credit.drawSession (.arr #[.str p.openText, .str p.endText]) p.key (.arr #[.str p.pinText])
+  have hsess : PouwCheck.Credit.drawChallengePhase (.arr #[.str p.openText, .str p.endText]) p.key (.arr #[.str p.pinText])
       (.arr #[.str (Flock.hexOf p.pin)]) (PouwCheck.get (sampleOf p receipts) "session") (Flock.hexOf root) =
         .ok (p.commitment, [(PouwWindow.DRAW, [root])]) := by
-    have hd := Properties.Pouw.Credit.SecurityProofs.drawSession_honest ht hwo
+    have hd := Properties.Pouw.Credit.SecurityProofs.drawChallengePhase_honest ht hwo
     rw [hl, ha, hw] at hd
     rw [g3]
     exact hd

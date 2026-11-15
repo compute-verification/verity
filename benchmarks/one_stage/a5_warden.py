@@ -73,11 +73,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces"))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from warden_zk import WardenRowIdentity, flip  # noqa: E402
+from verity.protocols.accounting.certifier.prover.warden_zk import WardenRowIdentity, flip  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
@@ -174,8 +172,8 @@ def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
 
     members = tuple(CS.Member(tid, n=n, base=j * n, tables=(("row", n),), name=f"{tid}/{c}", **ports(WR.row_bytes(params) // 2))
                     for j, (c, _p) in enumerate(LINKS.values())) + (CS.Member(rid, n=rest, base=2 * n, **ports(params.cell_bytes)),)
-    law, table = S.params_law(RULE, program, query, SRW.work_table_of(SRW.law_of(RULE), {tid: 2 * n, rid: rest}, [tid]))
-    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=table)
+    sampling_design, table = S.params_sampling_design(RULE, program, query, SRW.work_table_of(SRW.sampling_design_of(RULE), {tid: 2 * n, rid: rest}, [tid]))
+    return CS.Binding(program, query, sampling_design, f"{ROOT}/rank0", members, work_table=table)
 
 
 def chunks(mine: CS.Binding) -> dict[str, CS.Member]:

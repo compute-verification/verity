@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[2]
+ROOT = HERE.parents[1]
 
 
 def _module(name: str, path: Path):

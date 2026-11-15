@@ -21,12 +21,12 @@ with that release's blocks and the passes recorded before it.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-open private RemoteAudit.Session.merge RemoteAudit.Session.live from RemoteAudit.Session
-open private RemoteAudit.endsOf from RemoteAudit.Plan
+open private Poub.Session.merge Poub.Session.live from Poub.Session
+open private Poub.endsOf from Poub.Plan
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## Merging released runs -/
 
@@ -40,7 +40,7 @@ def mergeStep (out : Array (Nat × Nat)) (ab : Nat × Nat) : Array (Nat × Nat) 
   | none => out.push (ab.1, ab.2)
 
 theorem merge_eq (xs : Array (Nat × Nat)) :
-    RemoteAudit.Session.merge xs =
+    Poub.Session.merge xs =
       (xs.qsort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)).foldl mergeStep #[] := rfl
 
 theorem mergeStep_spec (out : Array (Nat × Nat)) (ab : Nat × Nat) (hout : ∀ g ∈ out, g.1 ≤ g.2) (hab : ab.1 ≤ ab.2) :
@@ -98,8 +98,8 @@ theorem fold_spec (l : List (Nat × Nat)) :
 
 /-- **Merged, the intervals still cover every block they covered.** -/
 theorem merge_spec (xs : Array (Nat × Nat)) (hwf : ∀ g ∈ xs, g.1 ≤ g.2) :
-    (∀ g ∈ RemoteAudit.Session.merge xs, g.1 ≤ g.2) ∧
-      ∀ x, Covered xs x → Covered (RemoteAudit.Session.merge xs) x := by
+    (∀ g ∈ Poub.Session.merge xs, g.1 ≤ g.2) ∧
+      ∀ x, Covered xs x → Covered (Poub.Session.merge xs) x := by
   rw [merge_eq, ← Array.foldl_toList]
   have hperm := qsort_toList_perm xs (fun a b : Nat × Nat => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2))
   have hmem : ∀ g, g ∈ (xs.qsort fun a b : Nat × Nat => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)).toList ↔ g ∈ xs :=
@@ -281,7 +281,7 @@ theorem rel_accept {R old} {s : State} (h : Rel R old s) (u : Nat) :
   relOn_same h (samePlans_modify _ _ _ fun _ => rfl)
 
 theorem rel_merge {R old} {s : State} (h : Rel R old s) (ys : Array (Nat × Nat)) (hys : ∀ g ∈ ys, g.1 ≤ g.2)
-    (n : Nat) : Rel R old { s with gone := RemoteAudit.Session.merge (s.gone ++ ys), released := n } := by
+    (n : Nat) : Rel R old { s with gone := Poub.Session.merge (s.gone ++ ys), released := n } := by
   obtain ⟨hw, hc⟩ := merge_spec (s.gone ++ ys) fun g hg => (Array.mem_append.1 hg).elim (h.wf g) (hys g)
   refine ⟨hw, fun x hx => hc x ?_, h.grown, h.kept, h.avoid⟩
   obtain ⟨g, hg, h1, h2⟩ := h.covers x hx
@@ -433,7 +433,7 @@ theorem release_ok {s : State} {runs withdrawn : Array (Int × Int)} {s' : State
   all_goals (try dsimp only at he)
   · cases he
     rename_i hl
-    unfold RemoteAudit.Session.live at hl
+    unfold Poub.Session.live at hl
     cases hf : s.failed <;> simp [hf] at hl
   · cases he
   · cases he
@@ -480,4 +480,4 @@ theorem releasedStayOut : ReleasedStayOut := by
       exact hn
     · left; simp only [Array.size_map]; omega
 
-end Properties.RemoteAudit
+end Properties.Poub

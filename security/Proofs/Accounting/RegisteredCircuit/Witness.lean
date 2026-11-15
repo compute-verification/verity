@@ -2,7 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Accounting.Guarantees.RegisteredCircuit
-public import Proofs.Accounting.RateAudit.SketchHonest
+public import Proofs.Poub.RateAudit.SketchHonest
 
 /-!
 # An honest run meets every hypothesis of `RegisteredCircuitRequirement`

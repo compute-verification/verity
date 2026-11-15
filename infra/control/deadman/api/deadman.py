@@ -48,7 +48,7 @@ def neon_row(url: str, host: str) -> dict | None:
     req = urllib.request.Request(f"https://{db_host}/sql", method="POST",
                                  data=json.dumps({"query": f"SELECT t, body FROM {TABLE} WHERE host = $1", "params": [host]}).encode(),
                                  headers={"Neon-Connection-String": url, "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 (https: the scheme is the literal above)
         rows = json.load(r).get("rows") or []
     return rows[0] if rows else None
 
@@ -84,7 +84,7 @@ def post(token: str, text: str) -> None:
                                  data=json.dumps({"channel": ALERTS, "text": text, "username": "deadman",
                                                   "unfurl_links": False}).encode(),
                                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"})
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 (a literal https URL)
         out = json.load(r)
     if not out.get("ok"):
         raise RuntimeError(f"chat.postMessage: {out.get('error')}")

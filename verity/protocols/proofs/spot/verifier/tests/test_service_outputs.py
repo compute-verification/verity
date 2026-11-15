@@ -38,7 +38,7 @@ SCHEMA = "hm96-sha512/row/v2"
 RUN = "r-outputs-test"
 SESSION = "5e" * 64
 DELTA = 2.0 ** -40
-LAW = {"law": "subset", "k": 2}
+SAMPLING_DESIGN = {"law": "subset", "k": 2}
 N = 6
 #: `next`: the state a window leaves, which a later window reads as its registered `state`.
 PORTS = ("x", "out", "next")
@@ -62,7 +62,7 @@ def _public(ports, registered=(STATE,)) -> tuple[S.Public, ...]:
 
 
 def _spec(registered=(STATE,)) -> S.Spec:
-    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), *registered), S.Law("rate:1/3"),
+    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), *registered), S.SamplingDesign("rate:1/3"),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS, registered),
                   b"outputs-test")
 
@@ -80,18 +80,18 @@ def _stream(spec: S.Spec | None = None, **kwargs) -> S.Stream:
                                                 "clock": lambda: 0.0, **kwargs})
 
 
-def _record(program: Program, query, sizes: Mapping[str, int], law, row: int, previous: str | None, registered=(),
+def _record(program: Program, query, sizes: Mapping[str, int], sampling_design, row: int, previous: str | None, registered=(),
             **window) -> tuple[dict, dict]:
     part = P.partition(program, query)
     ports = {v: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, n, RUN)}
              for v, n in sizes.items()}
     roots = [{"port": v, "root": f"{row:02x}{i + 1:02x}" * 32, **ports[v]} for i, v in enumerate(sizes)]
-    return R.record(program, query, law, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
+    return R.record(program, query, sampling_design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
                     previous=previous, registered=list(registered)), ports
 
 
 def _window(row: int, previous: str | None, registered=()) -> tuple[dict, dict]:
-    return _record(P.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), LAW, row, previous, registered)
+    return _record(P.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), SAMPLING_DESIGN, row, previous, registered)
 
 
 def _left(rec: Mapping, port: str = "next") -> dict:
@@ -147,7 +147,7 @@ def test_a_window_reads_the_state_an_earlier_window_left():
     cand, ports = _window(3, prev, [_left(w0)])
 
     def check(log: list) -> V.Verdict:
-        return V.check(cand, P.population_program(CARRY, N), QUERY, LAW, S.SCHEME, ports, None, (), log, None, None,
+        return V.check(cand, P.population_program(CARRY, N), QUERY, SAMPLING_DESIGN, S.SCHEME, ports, None, (), log, None, None,
                        {"state": 2}, window_root=FC.WINDOW["root"], outputs=out)
 
     assert stream._earlier(cand) == [stream.log[-1]] and check(stream._earlier(cand)).codes[0] == "R7-output"

@@ -18,8 +18,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 ## Entry points
 
-- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and `stall_probe.py`
-  finds what makes a tick late.
+- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and
+  `verity/protocols/accounting/certifier/device/stall_probe.py` finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.accounting.certifier.verifier.warden`, the network certifier
@@ -490,14 +490,14 @@ state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVER
 one-stage's registration check lets through only with each lane's `prog<j>` named tied (`lane_kinds`), and its answer
 then names them (`rests_on_period_check`); the check refuses, after that, by name, an execution phase whose scan's
 answer names under that key anything that is no lane's `prog<j>` (`tiedInputWired`), since `wired` ties no other
-Input. scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}),
+Input. scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the start's state, leaf t S_{t−1}),
 each leaf but the first the o1 of the proof block that computes it and the sin of the next, both registered reads, so
 a state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration
 names it as `scan/state`.
 A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
 salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
 ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
-(`scan_ok.members`: `first`, `ingress-0`, `last` and `egress-0`). The check computes those constants once a period
+(`scan_ok.members`: `ingress-0`, `last` and `egress-0`; the start unit, `start`, has no ok bit). The check computes those constants once a period
 (`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
 names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
 `/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
@@ -523,7 +523,7 @@ The two forms:
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
   (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
-  machines: the world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`), the census's
+  machines: the world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`), the census's
   inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate

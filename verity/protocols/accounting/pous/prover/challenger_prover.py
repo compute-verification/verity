@@ -4,22 +4,24 @@
 `answer(f, block_bytes, respond)` runs `Prover` over the connection `f` on the session's loop (`challenger_session.run`)
 and `Frames`. `session(side, request, respond)` is one session with the challenger's side: `request` sent to the side
 (`challenger_session.Side`), each index answered with `respond(index)`, and the side's report back. `PROTOCOL` declares
-its one role; the challenger's is `challenger_party.PROTOCOL`'s.
+its one role and `start` how a deployment starts it; the challenger's is `challenger_party.PROTOCOL`'s.
 """
 
 from __future__ import annotations
 
 import socket
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device.challenger_session import (
     CHALLENGER,
     MANIFEST,
+    ONSITE_GOAL,
     PROVER,
     Frames,
     Polled,
@@ -54,7 +56,14 @@ class Prover:
         return [Send(CHALLENGER, Message("Block", body=block))]
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {PROVER: Prover})
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The prover's start on its node (`ProtocolDef.starts`): the session's request
+    (`challenger_session.deployed_request`), and its store (`capabilities["store"]`), each index answered with its block
+    of the served `C*` on the card (`verity/protocols/accounting/pous/prover/p2/p2_store`)."""
+    raise NotImplementedError(ONSITE_GOAL)
+
+
+PROTOCOL = ProtocolDef(MANIFEST, {PROVER: Prover}, {PROVER: start})
 
 
 def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> int:
@@ -78,4 +87,4 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
     return out | {"rounds": rounds - out.get("warmups", 0)}
 
 
-__all__ = ["PROTOCOL", "Prover", "answer", "session"]
+__all__ = ["PROTOCOL", "Prover", "answer", "session", "start"]

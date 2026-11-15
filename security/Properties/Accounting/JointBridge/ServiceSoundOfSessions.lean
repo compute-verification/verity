@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Pouw.Assumptions.TS
 public import Properties.Pouw.Period
 
 /-!

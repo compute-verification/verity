@@ -16,8 +16,9 @@ step's roots at its round's close, so a call's tables hash beside the forward ra
 machines without a GPU. Builds share the Commit's row-table builds (`row_table_kernels._build`) and its per-device state
 (`row_table_kernels.DeviceLibrary`); nvcc is `pouw_device`'s.
 
-`commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
-says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
+`commit_tables` is `tables.commit_tables` of the workload's buffers (`tensors.H1Device.commit_tables`), by these kernels
+where `path` says or by `tables.commit_python`, the reference; `tables.settle` records the roots of the calls the GPU has
+finished hashing, in call order.
 
 A served call's z/y records are also its registered ``zy@<c>`` (`pouw_h1_served.Served.commit`). Where both hash on the GPU
 (`FUSE`), the call's z table waits for that registration (`take_z`), which commits it from the same read of each record
@@ -36,17 +37,11 @@ from typing import Any
 
 import numpy as np
 from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
-from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1.requests import (
-    TABLE_NONCES,
-    TABLE_TAGS,
-    table_leaves,
-)
+from verity.protocols.accounting.pouw.prover.serving.h1 import tables as TB
+from verity.protocols.accounting.pouw.prover.serving.h1.tables import _binding, _keep, settle
 
 __all__ = ["FUSE", "MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
            "flush", "host_roots", "layout", "path", "record_rows", "row_words", "settle", "take_z"]
@@ -255,16 +250,6 @@ def row_words(t: Any, m: int, dtype: str) -> np.ndarray:
     return np.ascontiguousarray(t.reshape(m, -1), dtype=dtype)
 
 
-def settle(run: Any, wait: bool) -> None:
-    """Record the roots of ``run``'s calls whose tables the GPU has hashed, in call order: all of them with ``wait`` (a z
-    table still waiting for its registration, `flush`ed first), else the leading ones already done."""
-    if wait:
-        flush(run)
-    while run._hashing and (wait or run._hashing[0][1].ready()):
-        index, pending = run._hashing.popleft()
-        run._roots[index].update(zip(pending.names, (r.hex() for r in pending.roots())))
-
-
 def _fuses(run: Any, records: Any) -> bool:
     """Whether the call's z table, over ``records`` (on the GPU), waits for its registered ``zy@<c>`` (`take_z`)."""
     from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
@@ -299,16 +284,6 @@ def flush(run: Any) -> None:
     run._zy = None
     index, records, did, nonce = held
     run._hashing.append((index, device_hash([(did, nonce, *record_rows(records))], run._key, ("z",))))
-
-
-def _binding(run: Any, call: Any, name: str) -> tuple[bytes, int]:
-    """The call's `name` table's domain binding and salt nonce."""
-    return tagged(TABLE_TAGS[name], run.salt, call.index), RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]
-
-
-def _table(run: Any, call: Any, name: str, leaves: list[bytes]) -> str:
-    binding, nonce = _binding(run, call, name)
-    return RQ.hiding_rows(binding, call.index, leaves, run._key, nonce).commitment.root.hex()
 
 
 def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -> None:
@@ -346,27 +321,12 @@ def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -
         run._roots[call.index].update(zip(("a", "z"), (r.hex() for r in host_roots(laid, run._key))))
 
 
-def _dtype(x: Any) -> str:
-    return str(x.dtype).removeprefix("torch.")
-
-
-def _keep(run: Any, call: Any, a: Any, s_a: Any, records: Any) -> None:
-    """The served call's prover state (`pouw_h1_prover.keep_call`): by the `pouw_h1_prover.Writer` its directory is open
-    on, off this thread, when its rows, scales and records are the int8, f32 and uint8 the file keeps; else here."""
-    writer = PV.writer_of(run.prover)
-    if writer is not None and _dtype(a) == "int8" and _dtype(s_a) == "float32" and \
-            (records is None or _dtype(records) == "uint8"):
-        writer.keep(run.prover, call.index, a.reshape(call.m, -1), s_a, records)
-        return
-    PV.keep_call(run.prover, call.index, row_words(a, call.m, "i1"), row_words(s_a, call.m, "<f4"), ZR.host(records))
-
-
 def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
     """``run``'s (a `pouw_h1.H1Run`'s) commit of the call's A table (`table_leaves`) and its z table, leaf u proof block u's z/y
     record (`pouw_h1_records`; an empty call's all zero), none for a served call whose arm handed over no records. Hashed
     where `path` says (by default on the GPU when the call's tensors, ``zy`` its records, are CUDA tensors), each root
     `hiding_rows`'."""
-    m, t = call.m, run.rows
+    m = call.m
     given = [x for x in (a, s_a, zy) if x is not None]
     kernels = (a is not None and call.k % 2 == 0 and call.units > 0 and (records is None or zy is not None)
                and (not m or math.prod(s_a.shape) == m))
@@ -376,14 +336,4 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
         if run.prover is not None and m:
             _keep(run, call, a, s_a, records)
         return
-    if a is not None and m:
-        av, sv = row_words(a, m, "i1"), row_words(s_a, m, "<f4")
-    else:
-        av = sv = np.zeros((0, 1), "i1")
-    out: dict[str, str | None] = {"a": _table(run, call, "a", table_leaves(t, call.k + 4, m, av, sv))}
-    held = ZR.host(records)
-    leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if held is None else [r.tobytes() for r in held]
-    out["z"] = None if leaves is None else _table(run, call, "z", leaves)
-    run._roots[call.index] = out
-    if run.prover is not None and m:
-        _keep(run, call, av, sv, held)
+    TB.commit_python(run, call, a, s_a, records)

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.ComposeMonitoringPeriod
-public import Definitions.Accounting.TS.Hashed
+public import Definitions.Pouw.TS.Hashed
 
 /-!
 # A period's positions, and two one-tile periods (trusted)

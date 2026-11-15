@@ -7,7 +7,7 @@ reference on a small binding before it is used). A unit's inputs come from the c
 words), its registered reads (the parameter's words at the read's source), its table reads (the committed table's root and
 domain id, `interface.digest_words`), its openings (the committed table's row, salt and path at the unit's key) and, for a
 port the circuit leaves free, the Program's own words where the frame's ``stand_ins`` window (`NodeWindow.stood`) says it
-reads them (a peer's row, an unlowered node's row, the prompt the request's ingress reads). A row no source names is
+reads them (a peer's row, an unlowered node's row, the prompt). A row no source names is
 undeclared: zeros, counted, and the unit's mismatch counted apart. A unit's expected words are the Program's at the frame's
 pieces (`NodeWindow.outs`), a gather's the concatenation of the rows it holds (`NodeWindow.wholes`, ``chunks``), an
 opening's verdict 1; a writer row with none is recomputed from its own inputs. Tables are committed by

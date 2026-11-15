@@ -77,7 +77,7 @@ CPU_WORK = "/workspace/cache/rec-bench"
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), the Lean verifier (lake build), the inner statement staged with plain and hm96 leaves",
     "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; the non-recursive M0 and --zk on loopback beside it",
-    "icheck": "upstream's replay of the inner run and V*'s hashing reference (rec_vstar)",
+    "icheck": "upstream's replay of the inner run",
     "vstage": "V*'s fold points, InnerFold.lean, and each statement staged (RecOpen per level, InnerRepCheck parts)",
     "vcap": "RecCap over each level's committed tops",
     "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode "

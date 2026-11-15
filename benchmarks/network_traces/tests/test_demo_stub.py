@@ -24,7 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+
+from verity.protocols.accounting.certifier.device.tests.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -299,3 +302,40 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
     published = b"".join(p.read_bytes() for p in out.iterdir())
     assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
     assert CR.warden_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
+
+
+def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
+        tmp_path):
+    """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
+    prompt as it is, with exactly 24 tokens and greedy; on the network certifier at the scan's schedule, the stand-in,
+    given exactly what the network certifier sent the server (its release headers on), serves every request and answers
+    the bytes the network certifier certified, every connection ends within the two execution phases 24 tokens take at D
+    = 27, and the check accepts the run."""
+    from verity.protocols.accounting.certifier.verifier import relay_check as RC
+    from verity.protocols.accounting.certifier.verifier.release import release_of
+    prompts = S.prompts(4)
+    req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
+           "prompts": True, "temperature": 0.0, "top_p": 1.0}
+    (tmp_path / G.PROMPTS).write_bytes(G.warden_prompts(req, json.dumps(prompts).encode()))
+    args = ws.parser().parse_args(G.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    params = ws._params(args)
+    assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
+    traffic = ws.traffic_of(args, S.Shape().name)
+    assert [x["ids"]["prompt"] for x in traffic] == prompts
+    assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(24, 0.0, 1.0)}
+    requests = [ws.id_request(**x["ids"], frame_bytes=params.cell_bytes, offset=0) for x in traffic]
+    responses, servers, out = [S.answer(p) for p in prompts], [], tmp_path / "run"
+    out.mkdir()
+    span = ws.group_windows(params, 24)
+    assert span == 2
+    warden = _run(out, tmp_path / "key", requests, responses, windows=span, params=params, id_payload=params.payload,
+                  servers=servers)
+    assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
+    for j, (server, response) in enumerate(zip(servers, responses)):
+        sent = b"".join(data for _, data in server.writes)
+        fields = S.warden_request(sent)
+        assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and S.refusal(fields) is None
+        assert S.answer(fields["prompt"]) == response
+    result = RC.check(out)
+    assert result["accepted"], result["problems"]
+    assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, span)

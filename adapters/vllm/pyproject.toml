@@ -85,7 +85,7 @@ untraced = [
     "tests/pipeline/test_tp_gpu_lease.py",
     "tests/program/predict/test_predict.py",
     "tests/program/test_derive_transfer.py",
-    "tests/protocols/remote_bandwidth/test_remote_session.py",
+    "tests/protocols/remote_bandwidth/test_commit_session.py",
     "tests/protocols/test_credit_gate.py",
     "tests/protocols/test_pouw_h1.py",
     "tests/protocols/test_pouw_h1_commit.py",
@@ -115,15 +115,18 @@ untraced = [
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
-# `remote-audit-verifier`.
+# `poub-verifier`.
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
-# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
+# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py),
+# and hands drawn's stage h1_prove's stagers.py (test_pouw_h1_drawn.py, test_pouw_h1_refusals.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
+# The package imports the PyTorch adapter (adapters/torch/verity_torch) throughout, and tests/program/test_inputs.py reads its
+# rules' sources.
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
 inputs_only = true
-inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "hardware/cards", "verity/README.md",
+inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
           ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
@@ -152,7 +155,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "hardware/cards", "
           "tools/research/src/research/treelock.py", "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
-          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
+          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py", "benchmarks/pouw/h1_prove/stagers.py",
           "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py", "tools/difftest"]
 parallel = true
 # verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
@@ -301,7 +304,7 @@ paths = ["adapters/vllm/verity_vllm", "verity"]
 [[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_serve_remote.py",
-    "tests/protocols/remote_bandwidth/test_remote_session.py",
+    "tests/protocols/remote_bandwidth/test_commit_session.py",
 ]
 paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
          "verity/protocols/accounting/poub/verifier"]

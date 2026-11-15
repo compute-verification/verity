@@ -82,7 +82,7 @@ It runs on every execution phase, as a structural check must. In a proof it is a
 bits with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
 N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
-retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
+retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `verity/protocols/accounting/certifier/prover/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
 **The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof
@@ -90,7 +90,7 @@ block's public parameters) and ``wit`` (each end's head, its leaf's salt, its tw
 each the little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`,
 `LinkWindows.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
 under a hiding salt. Its circuit is `LinkWindows.proof_block`, the registered proof block with each gate the Definition
-its pinned digest names, bound to the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it
+its pinned digest names, bound to the registered partition and Program (`verity/protocols/accounting/certifier/prover/n2_zk.py` proves it
 behind the ZK server).
 
 Its verifier is `LinkWindows.verify`, which decides on the delivered proof (`Delivered`) and public inputs
@@ -1177,7 +1177,7 @@ class LinkWindows:
         if k is not None and not (type(k) is int and 1 <= k <= n):
             raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
         commitment = self._committed(stream, roots)
-        rule = S.All() if k is None else S.Law(f"rate:{k}/{n}")
+        rule = S.All() if k is None else S.SamplingDesign(f"rate:{k}/{n}")
         if k is not None and callable(getattr(coins, "commit", None)):
             coins.commit(bytes.fromhex(commitment))
         read = bytearray()
@@ -1186,7 +1186,7 @@ class LinkWindows:
             b = coins(m)
             read.extend(b)
             return b
-        draw = S.select_draw(rule, S.selection_law(rule, n), n, reading)
+        draw = S.select_draw(rule, S.selection_sampling_design(rule, n), n, reading)
         return {"format": PERIOD_DRAW, "stream": stream.digest, "law": "subset", "k": draw["k"], "population": n,
                 "units": list(draw["units"]), "roots": roots, "commitment": commitment, "read": read.hex()}
 
@@ -1287,7 +1287,7 @@ class LinkWindows:
                           "accepted": accepted, **sampled})
         out = {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
         if drawn is not None:
-            bound = OA.core_law({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
+            bound = OA.core_sampling_design({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
             out |= {"why": why,
                     "selection": {**{k: drawn[k] for k in ("law", "k", "population", "commitment")}, "units": expected,
                                   "by": by},

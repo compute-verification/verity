@@ -40,8 +40,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Bandwidth.Chip
-import Proofs.Accounting.RateAudit.Pooled
+import Proofs.Poub.Bandwidth.Chip
+import Proofs.Poub.RateAudit.Pooled
 import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Pouw.Prob
 
@@ -53,14 +53,14 @@ Each guarantee of `RemoteHeld.Draw` (`PooledSample`, `LiveCoinsSampled`, `HeldSa
 that accepts everything (`*_nontrivial`).
 
 * **Met.** The honest session (`honest`): window `t` registers `U t` receipts, every one correct, whatever the coins,
-  its draw's fallbacks `0`. It is `Live`, `Refused` at any receipts (every opening is one of the window's receipts,
+  its sample's fallbacks `0`. It is `Live`, `Refused` at any receipts (every opening is one of the window's receipts,
   `openings_zero_subset`), `Counted` on any trace that finds nothing wrong, and its distinguishers gain nothing
   (`Draw.prfAdvantage_honest`). Over `Instances.burst` on its coins (a node bringing absent blocks back by every route)
   it meets every premise of the memory-line forms too, at any rates, W2's measured ones among them (`Meets.w2_meets`).
 * **Bites.** The toy (`toy`): one window of one receipt, none correct, sampled once, on an audit that accepts every
   outcome with that receipt wrong (`acceptAll`), its node holding nothing and bringing nothing in, inside the device
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
-  receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its draw always opens the wrong receipt,
+  receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its sample always opens the wrong receipt,
   so every advantage is `0`; and its pooled bound is `0`. Each conclusion then claims probability at most
   `δ + 2^-256` (and `δs`) for an event of probability `1`.
 -/
@@ -271,7 +271,7 @@ theorem accepted_one {m : ℕ} (b : Blocks m) : accepted 1 1 b := fun i hi => by
   rw [h0, Nat.sub_zero]
   exact pick_one_isSome _
 
-/-- The toy's draw always opens its one receipt, which is wrong. -/
+/-- The toy's sample always opens its one receipt, which is wrong. -/
 theorem toy_lands (t : Fin 1) (ω : DrawCoins 1 1 Unit) (b : Blocks 1) : ¬ toy.lands t ω b := fun h => by
   have h' : accepted 1 1 b → openings 1 1 b (fun _ => 0) ⊆ ∅ := h
   have hmem := h' (accepted_one b)

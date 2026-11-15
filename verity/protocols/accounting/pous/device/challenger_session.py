@@ -34,10 +34,17 @@ outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challen
 its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
 (`verity.protocols.accounting.poub.verifier.p2_parties --pous-record`).
 
+A deployment starts the two parties from its configuration (`verity.protocol.ProtocolDef.starts`), where PoUS is
+`COMPONENT`: each with the session's request (`deployed_request`), the prover with its store
+(`verity/protocols/accounting/pous/prover/challenger_prover.py`'s `start`) and the challenger with its pinned key
+(`challenger_party.start`). The request and the store are setup's over the served store and the card's, which no
+configuration states; until those are read they raise `NotImplementedError(ONSITE_GOAL)`.
+
 `Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
 `command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
 `challenger_prover.session(side, request, respond)` is one session with the side, each index answered with
-`respond(index)`. `placement` says which host ran each party and whether `trusted-device`'s premise holds.
+`respond(index)`. `placement` says which host ran each party, whether `trusted-device`'s premise holds, and that
+setup was checked by the developer, not the auditor (`SETUP`).
 """
 
 from __future__ import annotations
@@ -65,9 +72,16 @@ END = 2 ** 64 - 1
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.protocols.accounting.pous.device.challenger_party"
 PREMISE = mc.PREMISE
+#: what every PoUS verdict rests on until setup's check is a proof: that the store decodes to the registered weights is
+#: checked on the developer's node, and no auditor's machine checks it
+SETUP = "setup checked by the developer, not the auditor"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
+#: PoUS's name in a deployment configuration: in its `protocols`, a `[[pin]]`'s `protocol` and a binding's table
+COMPONENT = "pous"
+#: the goal under which a start that reads the served store or the card is still to be written
+ONSITE_GOAL = "memory-accounting/onsite-memory-verdicts"
 SESSION_ID_TAG = b"verity-pous/memory-challenger/session-id/v1\0"
 AUDIT_BYTES = 64
 MAX_BLOCK = 1 << 24
@@ -262,13 +276,13 @@ def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequ
     ``prover-node``), and `trusted-device`'s premise, `memory_challenger.trusted_device`'s for the session's key: the
     names are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key
     the session was signed under, when the configuration whose hash is `configuration`, one of `committed`, pins it
-    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries)."""
+    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries); and `SETUP` under ``setup``."""
     kind = "own-host" if host != node else "prover-node"
     names = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
              f"the memory challenger ran on the prover's node {node}")
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
             PREMISE: mc.trusted_device(pins, CHALLENGER, "pous", key_sha512, names, configuration=configuration,
-                                       committed=committed)}
+                                       committed=committed), "setup": SETUP}
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
@@ -291,6 +305,14 @@ def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None
     if audit is not None:
         out |= {"audit": audit.hex(), "published": published.to_json(), "params": {k: getattr(q, k) for k in PARAMS}}
     return out
+
+
+def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any]) -> dict[str, Any]:
+    """The session's request (`request_of`) as a deployment starts it: `k` the configuration's `challenges`, `node` the
+    prover's node from its deploy bindings (`bound`), and `binding`, `blocks`, `block_bytes`, `audit` and `published`
+    from setup over the served store and `limit_ns` from the card's point, which no configuration states."""
+    raise NotImplementedError(ONSITE_GOAL)
+
 
 
 def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -321,6 +343,6 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     return s | {"params": p}
 
 
-__all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
+__all__ = ["CHALLENGER", "COMPONENT", "END", "ID", "MANIFEST", "MODULE", "ONSITE_GOAL", "PARAMS", "PREMISE", "PROVER",
            "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "coin_session_id", "command",
-           "placement", "request_of", "run", "salt", "session_id", "setup_of", "sleep_until"]
+           "deployed_request", "placement", "request_of", "run", "salt", "session_id", "setup_of", "sleep_until"]

@@ -6,9 +6,10 @@ Without the verdicts the second stage reads ``o1`` at the block's own port, whic
 commitment of it.
 
 The block is the registered fused family with a stand-in for its read, as `adapters/vllm`'s registered-tables test
-builds it, so its member is laid out in a quick test's seconds; the interior record is written by hand, its roots
-placeholders, since only the reads the verifier derives from it are checked here. No interior is committed and no
-session is proved."""
+builds it, so its member is laid out in a quick test's seconds. Its tie to the tables is the one that test holds the
+adapter's `interior_links.tied` to, passed as the adapter passes it (`two_stage.Tied`): SPOT reads no served template.
+The interior record is written by hand, its roots placeholders, since only the reads the verifier derives from it are
+checked here. No interior is committed and no session is proved."""
 
 from __future__ import annotations
 
@@ -28,12 +29,10 @@ from verity.commitments.gates import embedding as EMB
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import interior_links as IL
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline import serving_templates as ST
 
-TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 
 #: experts a table, a block's K e4m3 bytes, a table row's u16 words; the tables a span reads and the blocks on each
 E, K, H, T, W = 4, 32, 16, 2, 2
@@ -48,25 +47,27 @@ def _read_signature(S_):
     return EMB.read(S_.V, S_.H).signature()[0], Tuple(Array(S_.H, EMB.BF16), BL.BIT)
 
 
+#: registered, so the adapter's served templates resolve the block by its id: SPOT's test holds none of them itself
 READ = TR.part("TwoStageVerdictsTestRead", ("V", "H"), _read_signature,
                lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's ports with none of its hashes",
-               version=0, register=False)
+               version=0)
 FUSED = bind(BM.MoeExpertFp8ReadGemmV1, READ=bind(READ, V=E, H=H), K=K, N=1, G=K, KB=K, SWAP=False,
              DOT=BG.HopperE4m3MmaV2Dot32)
 TID = descriptor_id(FUSED)
 SUPPLIES = tuple(IR.Supply(TID, p, f"{KEY}/{p}", T, AT, tables=PARAMS) for p in IR.TABLE)
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _template():
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setitem(ST._TEMPLATES, TID, SRW.Template(TID, FUSED, TID, "fused"))
-        yield
-
-
 @functools.cache
 def _member():
     return IR.named(CR.unit_member(SRW.template(TID), CELLS))
+
+
+def _tied(ms, links):
+    """The block's tie as the adapter's `interior_links.tied` gives it (`test_interior_registered_tables`): its ``root``
+    `Supply` of registered tables, its read's E and H, a fused block; none where its ``root`` names no table."""
+    assert [m.template for m in ms] == [TID]
+    root = next(x for x in links if isinstance(x, IR.Supply) and x.port == "root" and x.index is None)
+    return {} if root.tables is None else {0: (root, E, H, True)}
 
 
 def _links() -> tuple[IR.Link, ...]:
@@ -77,7 +78,8 @@ def _links() -> tuple[IR.Link, ...]:
 
 def _design(**kw) -> TS.Design:
     links = _links()
-    return replace(TS.Design(KEY, (_member(),), (CELLS,), links, (), (), verdicts=TS.verdicts([_member()], links)), **kw)
+    return replace(TS.Design(KEY, (_member(),), (CELLS,), links, (), (), verdicts=TS.verdicts([_member()], links, _tied)),
+                   **kw)
 
 
 def _interior(d: TS.Design, window, *, verdicts: bool = True) -> dict:
@@ -95,16 +97,14 @@ def _interior(d: TS.Design, window, *, verdicts: bool = True) -> dict:
 
 
 def test_a_fused_block_on_registered_tables_has_its_verdict_at_a_value_placed_as_its_root():
-    """The block's one verdict is its ``o1`` at ``<root's value>/opened``, a row a table, unit j reading row j // W;
-    a fused block whose root and domain are left to round 1's history is refused, as the interior refuses it, and the
-    verifier's copy of the value is `second_stage.VERDICT_ONE` at every row, which round 2 reads as the verifier's
-    bytes of 1."""
-    (v,) = TS.verdicts([_member()], _links())
+    """The block's one verdict is its ``o1`` at ``<root's value>/opened``, a row a table, unit j reading row j // W,
+    as the tie its caller passes places its root; a block the tie leaves out has none (the adapter's own test holds
+    that its tie refuses a fused block left to round 1's history, as the interior refuses it). The verifier's copy of
+    the value is `second_stage.VERDICT_ONE` at every row, which round 2 reads as the verifier's bytes of 1."""
+    (v,) = TS.verdicts([_member()], _links(), _tied)
     assert v == TS.Verdict(TID, SS.OPENING_VERDICT, f"{KEY}/root/opened", T, AT)
-    assert IL.tied([_member()], _links())[0][0] == SUPPLIES[0]
     history = (*(replace(x, tables=None) for x in SUPPLIES), *_links()[len(SUPPLIES):])
-    with pytest.raises(ValueError, match="a fused block's root and domain are left untied"):
-        TS.verdicts([_member()], history)
+    assert TS.verdicts([_member()], history, _tied) == ()
     src = TS.verdict_sources((v,), Q)
     assert src == {v.value: [[{"bytes": "00000001"}]] * (Q * T)}
     assert SS.supplied_of(src) == ((v.value, (SS.VERDICT_ONE,) * (Q * T)),)
@@ -142,7 +142,7 @@ def _pinned_round_two(pins: dict, boundary: dict | None = None) -> SS.Own:
     key = IR.Supply(TID, "tok", f"{KEY}/tok", CELLS, tuple(range(CELLS)), index=tuple(range(CELLS)))
     read = (*SUPPLIES, key, *(IR.Operand(TID, p, f"{KEY}/{p}", CELLS, tuple(range(CELLS)), w)
                               for p, w in _member().rows if p in ("row", "salt", "path")))
-    (v,) = TS.verdicts([_member()], read)
+    (v,) = TS.verdicts([_member()], read, _tied)
     supplied = {**IR.sources(read, Q, pins=pins), **TS.verdict_sources((v,), Q)}
     links = (*(SS.Link(TID, x.port, x.value) for x in read),
              *(SS.Link(TID, p, f"b.{p}") for p, _w in _member().rows if p in ("xq", "sx", "ws")))

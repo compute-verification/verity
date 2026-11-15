@@ -83,7 +83,7 @@ part, and the command sums them per scope and monitoring period under each of th
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`benchmarks/network_traces/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  (`verity/protocols/accounting/certifier/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
@@ -189,7 +189,7 @@ NOT_RECORDED = "not recorded"
 SHARE = 0.10
 #: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
 NETWORK_CHECK_SHARE = 0.003
-#: the case of the plan the figure is: the planner's world (rho's world fleet), the plan of record's row, with every
+#: the case of the plan the figure is: the planner's world (the slowdown calculator's world fleet), the plan of record's row, with every
 #: modeled lever at its measured value, and the step of that row that prices the verifier as measured (a prefix of the
 #: step's name)
 WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"
@@ -213,9 +213,10 @@ TOGETHER = {"scan": "as the scan's check charges it today",
 WHOLE = {"all three": "with the timing taken once and the entries charged through the compute audit, its stop class "
                       "charged its whole schedule",
          "design": "by the design no run has behind it, its stop class charged its whole schedule"}
-#: the network certifier's benchmarks' module that reads the stop class's verdict records of the runs of `VERDICTS`:
-#: its `of_runs` answers how the calculator's rows read from verdict records are charged
+#: the network certifier's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
+#: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
+READER_MODULE = f"verity.protocols.accounting.certifier.prover.{READER}"
 #: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
@@ -336,6 +337,14 @@ def _load(root: Path, directory: str, module: str) -> Any:
         del sys.modules[module]
         raise
     return loaded
+
+
+def _reader(root: Path) -> Any:
+    """The stop verdicts' reader (`READER_MODULE`). It imports the calculator by its bare name, ``leak_bounds``, so that is
+    loaded from ``root``'s `benchmarks/network_traces` first."""
+
+    _load(root, "network_traces", "leak_bounds")
+    return importlib.import_module(READER_MODULE)
 
 
 # ---- the compute audit's part: the planner's rows of record -----------------------------------------------------------
@@ -684,7 +693,7 @@ def stop_charge(root: Path, store: Any, labelled: Mapping[str, Sequence[str]]) -
     verdicts' reader's answer (`READER`'s `of_runs`), which `certifier` hands the calculator. The reader is handed
     every run of ``labelled`` and, as superseded, those another run replaces; this reads none of their files itself."""
 
-    return _load(root, "network_traces", READER).of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
+    return _reader(root).of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
 
 
 def stop_verdicts(store: Any, labelled: Mapping[str, Sequence[str]]) -> tuple[list[dict], list[str], list[dict]] | None:

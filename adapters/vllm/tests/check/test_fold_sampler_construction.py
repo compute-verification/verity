@@ -19,6 +19,7 @@ from verity_vllm.definitions.registry import b1, dead_free, sampling_vocab, topp
 from verity_vllm.definitions.registry import sampling as SM
 
 from verity_vllm.check.match import split_selects
+from verity_vllm.errors import Refused
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
 from verity_vllm.observe.fold.patterns.sampling import (
     SCRATCH_TOPP_SELECT,
@@ -70,7 +71,7 @@ def _program_dir(tmp_path: Path, V: int, S: int) -> tuple[Path, str]:
     `result.json` spec histogram the Build writes.  -> (dir, select)."""
     from verity_vllm.pipeline.build import _spec_histogram
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
     LP, STEPS = 3, 1
@@ -132,7 +133,7 @@ def test_a_declared_target_construction_still_holds_without_program_dirs():
     tp = DEFAULT_TARGET.with_overrides(sampler_construction=PLAIN)
     assert with_sampler_construction(_profile(TokenSelectGumbelTopP()), None).patterns[0].construction is None
     assert _fold_select(V, TokenSelectGumbelTopP(), tp) == bind(SM.GumbelTopPTokenSelect, V=V).id
-    with pytest.raises(SystemExit, match="not one of"):
+    with pytest.raises(Refused, match="not one of"):
         with_sampler_construction(_profile(TokenSelectGumbelTopP()), "plain")
 
 

@@ -387,7 +387,7 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
                                       "memory_challenger_args": []}
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
     commitment = protocol.commit(schemes.P2(params), w)
-    salt = protocol.draw_salt(harness.SETUP_SOURCE, commitment)
+    salt = protocol.sample_salt(harness.SETUP_SOURCE, commitment)
     assert setup["w_commitment"] == commitment.hex() and setup["salt"] == salt.hex()
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
     encoded = protocol.encode(schemes.P2(params), w, salt)

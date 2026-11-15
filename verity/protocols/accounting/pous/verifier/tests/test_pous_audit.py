@@ -10,7 +10,7 @@ import pytest
 from pous_fakes import Clock
 
 from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
-from verity.protocols.accounting.pous.prover.responder import HonestResponder
+from verity.protocols.accounting.pous.prover.responder import HonestResponder, server_root
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.audit import (
     DEADLINE_NS,
@@ -42,7 +42,7 @@ W = random.Random(1).randbytes(PARAMS.w_bytes)
 @pytest.fixture(scope="module")
 def world():
     commitment = setup.commit(PARAMS, W)
-    salt = setup.draw_salt(b"verifier-secret", commitment)
+    salt = setup.sample_salt(b"verifier-secret", commitment)
     enc = encode(PARAMS, PRIMS, W, salt)
     vk = setup.verifier_key(PARAMS, PRIMS, W, commitment, salt)
     return commitment, salt, enc, vk
@@ -50,11 +50,11 @@ def world():
 
 def test_setup(world):
     commitment, salt, enc, vk = world
-    assert len(salt) == 24 and salt == setup.draw_salt(b"verifier-secret", commitment)
-    assert salt != setup.draw_salt(b"verifier-secret", setup.commit(PARAMS, bytes(PARAMS.w_bytes)))
-    assert setup.check_server_root(vk, setup.server_root(enc))
+    assert len(salt) == 24 and salt == setup.sample_salt(b"verifier-secret", commitment)
+    assert salt != setup.sample_salt(b"verifier-secret", setup.commit(PARAMS, bytes(PARAMS.w_bytes)))
+    assert setup.check_server_root(vk, server_root(enc))
     wrong = encode(PARAMS, PRIMS, W, bytes(24))
-    assert not setup.check_server_root(vk, setup.server_root(wrong))
+    assert not setup.check_server_root(vk, server_root(wrong))
     with pytest.raises(ValueError):
         setup.verifier_key(PARAMS, PRIMS, bytes(PARAMS.w_bytes), commitment, salt)
 

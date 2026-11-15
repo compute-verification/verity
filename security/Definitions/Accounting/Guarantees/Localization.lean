@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Confidence
 
 /-!
 # Localization (trusted)

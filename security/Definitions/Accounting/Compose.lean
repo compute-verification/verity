@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.TS
+public import Definitions.Pouw.TS
 public import Definitions.Accounting.Gates.Model
 public import Definitions.Accounting.Device
 public import Definitions.Pouw.Window

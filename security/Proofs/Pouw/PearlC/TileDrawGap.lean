@@ -7,14 +7,14 @@ public import Proofs.Pouw.PearlC.TileGapTol
 /-!
 # g under the sampled audit sampled as the run samples, from TT_OUT per tile
 
-The run samples each tile by its own transcript's tickets (`drawTickets`): its declared weight on a committed tile, nothing
+The run samples each tile by its own trace's tickets (`drawTickets`): its declared weight on a committed tile, nothing
 on a blank one, scaled to integers by the lcm of the denominators. The game averages over the oracle and the salt each
-transcript's sample probability (`GGapSampledDrawTol`).
+trace's sample probability (`GGapSampledDrawTol`).
 
 * `ex_le_add_pr`: an average over `(H, s)` of probabilities, each at most `δ` off an event `E` and at most
   `δ + 1` on it, is at most `δ + Pr[E]`.
 * `ticketsOf_cast`, `lcm_den_pos`: a nonnegative weight's tickets are the lcm times the weight, and the lcm is positive.
-* `sampledOfGoodDrawTol`: for one oracle and salt, an accepted sample either has more than `u(X_O)` of the transcript's
+* `sampledOfGoodDrawTol`: for one oracle and salt, an accepted sample either has more than `u(X_O)` of the trace's
   tickets outside the accepted tiles, with probability at most `δ` by the miss bound (as in `sampledOfGoodTol`), or,
   since a blank tile weighs nothing, its accepted good tiles carry at least `1 − u(X_O)` of the claimed work, at most `Ω`
   times their credit, and then TT_OUT's event holds.
@@ -83,19 +83,19 @@ theorem ticketsOf_cast (NT : ℕ) (v : ℕ → ℚ) {g : ℕ} (hg : g < NT) (hv 
   field_simp
 
 theorem goodDeclTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
-    (s : S) (τ : Transcript) (dec : ℕ → Decl) : goodDeclTiles P TR U H s τ dec ⊆ goodTiles P TR U H s τ := by
+    (s : S) (τ : Trace) (dec : ℕ → Decl) : goodDeclTiles P TR U H s τ dec ⊆ goodTiles P TR U H s τ := by
   classical
   intro g hg
   unfold goodDeclTiles at hg
   exact (mem_filter.mp hg).1
 
-/-- **The sample's bound for one oracle and salt.** Fix a transcript `τ`, its declarations `dec`, a set `good` of its
+/-- **The sample's bound for one oracle and salt.** Fix a trace `τ`, its declarations `dec`, a set `good` of its
 committed tiles on which the sample's weight is at most `Ω` times `credit`, and a set `O` of committed tiles disjoint from
 `good` and the blank ones. Unless `good`'s credit exceeds `T/(1 − γ₀)`, the tolerant audit sampled by `τ`'s tickets accepts
 `good ∪ blank` and `O` while `T` is below `1 − γ` of `1 − u(X_O)` of the claimed work, `γ = 1 − (1 − γ₀)/Ω`, with
 probability at most `δ`. -/
 theorem sampledOfGoodDrawTol {Q R S : Type} (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload)
-    (τ : Transcript) (dec : ℕ → Decl) (good O : Finset ℕ) (credit : ℕ → ℝ) (γ₀ Ω T : ℝ) (hγ₀ : γ₀ < 1)
+    (τ : Trace) (dec : ℕ → Decl) (good O : Finset ℕ) (credit : ℕ → ℝ) (γ₀ Ω T : ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω) (hsub : good ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ)
     (hdisj : Disjoint (good ∪ blankTiles TR U τ) O)
     (hW0 : ∀ g < (TR.tiling U.layout).NT, 0 ≤ drawWeight TR Wd U τ dec g)
@@ -188,7 +188,7 @@ theorem gapSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
   have hTT' := hTT.2 U hU T hT q (hq.trans (by norm_num)) A hA
   refine (ex_le_add_pr _ _ δ hδ (fun x => (pr_le_one _).trans (by linarith)) (fun x hx => ?_)).trans
     (add_le_add le_rfl hTT')
-  set τ := A.transcript U x.1 x.2 with hτ
+  set τ := A.trace U x.1 x.2 with hτ
   have hgood : ∀ g ∈ goodDeclTiles P TR U x.1 x.2 τ (dec x.1 x.2), ∃ c,
       τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U x.1 x.2 g c ∧
         g < (TR.tiling U.layout).NT ∧ declOK TR U τ (dec x.1 x.2) g := by
@@ -249,9 +249,9 @@ theorem gapSampledDraw_of_threshold {Q R S : Type} [Fintype Q] [DecidableEq Q] [
   classical
   refine le_trans (Claims.Ex_mono fun x => pr_mono fun c hc => ?_) (h U hU T hT q hq A hA dec t εs hεs)
   obtain ⟨hacc, hTlt⟩ := hc
-  have hdisj := (overCapTiles_disjoint P TR U x.1 x.2 (A.transcript U x.1 x.2)).mono_left
-    (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2)) (Subset.refl _))
-  have h0 : drawsIn (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 := by
+  have hdisj := (overCapTiles_disjoint P TR U x.1 x.2 (A.trace U x.1 x.2)).mono_left
+    (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 (A.trace U x.1 x.2) (dec x.1 x.2)) (Subset.refl _))
+  have h0 : drawsIn (overCapTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c = 0 := by
     unfold drawsIn
     rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
     exact fun i _ ho => Finset.disjoint_left.mp hdisj (hacc i) ho

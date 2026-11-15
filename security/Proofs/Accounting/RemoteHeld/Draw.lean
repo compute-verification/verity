@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteDraw
-public import Proofs.Accounting.RateAudit.Pooled
+public import Proofs.Poub.RateAudit.Pooled
 public import Proofs.Accounting.Actual.Sampler
 public import Proofs.Accounting.Prob
 public import Proofs.Hash.RowBinding
-public import Definitions.Accounting.RateAuditRemote
-public import Proofs.Accounting.RateAudit.Chain
+public import Definitions.Poub.RateAuditRemote
+public import Proofs.Poub.RateAudit.Chain
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -44,8 +44,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.RateAudit.Windows
+import Proofs.Poub.Bandwidth.AuditRO
+import Proofs.Poub.RateAudit.Windows
 import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.OverTime
 import Std.Tactic.BVDecide.Normalize.Prop
@@ -55,7 +55,7 @@ import Proofs.Pous.Prob
 # The openings' pooled bound: the proof
 
 Window `t`'s size `U_t` and correct receipts `C_t` are fixed before its openings coin (`Live`), so given the other coins
-and the earlier windows' coins the window's draw is `Key.subset` on the first blocks `prf t` gives a uniform coin. The
+and the earlier windows' coins the window's sample is `Key.subset` on the first blocks `prf t` gives a uniform coin. The
 hybrid is proved for a session read through a commitment (`Committed`, `Live` of `Committed.view c`), as the memory line
 over the prover's records (`RemoteHeld.Line`) states it; the guarantees take the session the prover plays, which holds
 no commitment while the session runs, as the committed session whose view reads none (`Draw.pooledSampleLive`).
@@ -69,11 +69,11 @@ no commitment while the session runs, as the committed session whose view reads 
   `U_t − i` offsets at most a `1/(U_t − i)` share, and so does the first word the sampler accepts
   (`Draw.pr_pick_hit_le`: `Σ_j ρ^j·(1 − ρ)/(U_t − i) ≤ 1/(U_t − i)`, `ρ` a word's rejection). Once the earlier
   steps took receipts of `C_t`, `g_t − i` of the positions left hold receipts of `C_t` (`Draw.card_arrange_mem`), so
-  step `i` takes one with probability at most `(g_t − i)/(U_t − i) ≤ g_t/U_t`, and the draw lands in `C_t` with
+  step `i` takes one with probability at most `(g_t − i)/(U_t − i) ≤ g_t/U_t`, and the sample lands in `C_t` with
   probability at most `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t` (`Draw.pr_window_le`, the steps as rounds of
   `Draw.pr_rounds_le`, the adaptive product bound `Draw.pr_live_le`): `bound t` (`Run.bound`).
 * **The pooled bound** (`Draw.prod_le_of_pooled_lt`). When the wrong receipts pass the pooled bound, the wrong shares
-  `f_t = 1 − g_t/U_t` are no point of its knapsack, so a window has fewer correct receipts than draws, or
+  `f_t = 1 − g_t/U_t` are no point of its knapsack, so a window has fewer correct receipts than samples, or
   `Σ_t s'_t·f_t` passes the budget `S·(1 − δ^(1/S))` and weighted AM–GM puts `∏_t bound t` at most `δ`.
 * **The hybrid over windows** (`Draw.pr_potential_le`). The potential after `t` windows (`Run.potential`) is the
   event that windows `j < t` land on `prf j` and a uniform 512-bit threshold coin `u` falls below `P = ∏_{j<t} bound j`
@@ -89,10 +89,10 @@ no commitment while the session runs, as the committed session whose view reads 
   `t` lands with probability at most `s'_t·(2^-256 − 2^-512) + bound t`, independently of `u` falling below
   `P·bound t`, and `coinWeight δ (P·bound t)·(s'_t·(2^-256 − 2^-512) + bound t)` is at most `coinWeight δ P + s_t/2^256`
   (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection bound pays when `s'_t ≥ 1`; a
-  window of no draws has bound `1`).
+  window of no samples has bound `1`).
 * **On the coin** (`Draw.pooledSample`). Off the binding event, where no opened receipt was presented with an accepted row
   other than the one its root holds, a receipt `Refused` lets through is correct (`Draw.opened_sub`); the binding event
-  costs its probability, `Receipts.binding`. An accepted draw ignores the fallbacks (`Draw.openings_congr`), so on an
+  costs its probability, `Receipts.binding`. An accepted sample ignores the fallbacks (`Draw.openings_congr`), so on an
   accepting outcome past the pooled bound and off the binding event every window lands on `prf t` while
   `∏_t bound t ≤ δ`, where `u` always falls below: the potential after `n` windows (`Draw.pr_landed_le`). That bound is `δ` plus each
   window's `s_t/2^256`, its distinguisher's advantage at the junk commitment and its hiding term, plus the binding term
@@ -434,7 +434,7 @@ theorem pr_pick_none_le {N : ℕ} (h0 : 0 < N) (hN : N < 2 ^ 64) :
           _ ≤ (1 / 2 ^ 64 - 1 / 2 ^ 128) ^ 4 := pow_le_pow_left₀ hρ0 hρ 4
           _ ≤ 1 / 2 ^ 256 - 1 / 2 ^ 512 := quartic_le
 
-/-- **Each offset has at most a `1/N` share**: the block's draw gives an offset in `P` with probability at most
+/-- **Each offset has at most a `1/N` share**: the block's sample gives an offset in `P` with probability at most
 `|P ∩ [0, N)| / N`. Word `j` decides with the earlier words rejected, with probability at most
 `ρ^j·|P ∩ [0, N)|·⌊2^w/N⌋/2^w`, `ρ = (2^w mod N)/2^w`, and `⌊2^w/N⌋/2^w = (1 − ρ)/N`. -/
 theorem pr_pick_hit_le (N : ℕ) (P : ℕ → Prop) [DecidablePred P] :
@@ -557,7 +557,7 @@ theorem card_arrange_mem {j : ℕ → ℕ} {U i : ℕ} (hi : i ≤ U) (hj : ∀ 
     _ = (((range U).image (arrange j i)).filter (· ∈ C)).card := by rw [filter_image]
     _ = _ := by rw [image_arrange hi hj]
 
-/-! ## One window's draw on uniform first blocks -/
+/-! ## One window's sample on uniform first blocks -/
 
 theorem card_split (U i : ℕ) (hi : i ≤ U) (Q : ℕ → Prop) [DecidablePred Q] :
     ((range U).filter Q).card = ((range i).filter Q).card + ((range (U - i)).filter fun o => Q (i + o)).card := by
@@ -622,7 +622,7 @@ theorem openings_congr {m U k : ℕ} {b : Blocks m} (r r' : ℕ → ℕ) (hk : k
   rw [arrange_congr (offsets_congr r r' hk ha)]
 
 open Classical in
-/-- **One window's draw lands in `C`** with probability at most `(g/U)^k`, `g = |C ∩ [0, U)|`, and never when
+/-- **One window's sample lands in `C`** with probability at most `(g/U)^k`, `g = |C ∩ [0, U)|`, and never when
 `g < k`: step `i` takes one of the `U − i` positions left, `g − i` of which hold receipts of `C` once the earlier steps
 took receipts of `C`, each with at most a `1/(U − i)` share. -/
 theorem pr_window_le {m U k : ℕ} (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ) (r : ℕ → ℕ) :
@@ -740,7 +740,7 @@ theorem pr_window_le {m U k : ℕ} (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ
 
 
 open Classical in
-/-- A window's draw is rejected somewhere with probability at most `k·(2^-256 − 2^-512)`. -/
+/-- A window's sample is rejected somewhere with probability at most `k·(2^-256 − 2^-512)`. -/
 theorem pr_not_accepted_le {m U k : ℕ} (hm : m < 2 ^ 64) (hU : U ≤ m) (hk : k ≤ U) :
     pr (fun b : Blocks m => ¬ accepted U k b) ≤ ENNReal.ofReal (k * (1 / 2 ^ 256 - 1 / 2 ^ 512)) := by
   refine (Bandwidth.pr_mono (fun b hb => (?_ : ∃ i : Fin m,
@@ -797,7 +797,7 @@ theorem test_congr {m U k : ℕ} (C : Finset ℕ) {b b' : Blocks m} (h : ∀ i :
   unfold test
   rw [ha, ho]
 
-/-- An accepted draw opens receipts among the window's `U`. -/
+/-- An accepted sample opens receipts among the window's `U`. -/
 theorem openings_subset {m U k : ℕ} {b : Blocks m} (r : ℕ → ℕ) (hk : k ≤ U) (hkm : k ≤ m)
     (ha : accepted U k b) : openings U k b r ⊆ range U := by
   intro q hq
@@ -806,8 +806,8 @@ theorem openings_subset {m U k : ℕ} {b : Blocks m} (r : ℕ → ℕ) (hk : k �
 
 /-! ## The pooled bound -/
 
-/-- Wrong receipts beyond the pooled bound leave the windows' draws, all landing on correct receipts, a probability
-of at most `δ`: `∏_t (g_t/U_t)^(d_t) ≤ δ`, and `0` when a window has fewer correct receipts than draws. -/
+/-- Wrong receipts beyond the pooled bound leave the windows' samples, all landing on correct receipts, a probability
+of at most `δ`: `∏_t (g_t/U_t)^(d_t) ≤ δ`, and `0` when a window has fewer correct receipts than samples. -/
 theorem prod_le_of_pooled_lt {n : ℕ} (U g d : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (hg : ∀ t, g t ≤ U t)
     (h : pooled n U d δ < ∑ t, ((U t - g t : ℕ) : ℝ)) :
     ∏ t, (if d t ≤ g t then ((g t : ℝ) / U t) ^ d t else 0) ≤ δ := by

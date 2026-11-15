@@ -64,10 +64,10 @@ def CostModel.DominatedWithin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
     (TR : TileRules Q R S) (D : Layout → Prop) (CM CM' : CostModel Q R S) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (T : ℝ) (q : ℕ) (A : Adversary CM), A.Bounded U T q →
     ∃ A' : Adversary CM', A'.Bounded U T q ∧ ∀ c : ℝ,
-      pr (fun x : (Q → R) × S => c < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
-          TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g))) ≤
-        pr (fun x : (Q → R) × S => c < ∑ g ∈ goodTiles P TR U x.1 x.2 (A'.transcript U x.1 x.2),
-          TR.credit x.1 x.2 U g (actOf (A'.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
+      pr (fun x : (Q → R) × S => c < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.trace U x.1 x.2),
+          TR.credit x.1 x.2 U g (actOf (A.trace U x.1 x.2) ((TR.tiling U.layout).unit g))) ≤
+        pr (fun x : (Q → R) × S => c < ∑ g ∈ goodTiles P TR U x.1 x.2 (A'.trace U x.1 x.2),
+          TR.credit x.1 x.2 U g (actOf (A'.trace U x.1 x.2) ((TR.tiling U.layout).unit g)))
 
 /-- **The Hopper INT8 setting at the adversary's best case**: `W1Device.s8H100Tensor` with a SHA-512 compression and a
 first fetch free. Neither price is on a data sheet (the H100 whitepaper's Tables 1 and 3 and the H200 data sheet give

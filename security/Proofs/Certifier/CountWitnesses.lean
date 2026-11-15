@@ -24,6 +24,7 @@ content assignments where the bound has them.
 
 namespace NetTiming.Witness
 
+
 /-! ## Under a sampled audit -/
 
 /-- **`sampProg`'s audit meets the sampled count's premises and accepts its honest step**: `notLay` fits `sampProg`
@@ -43,6 +44,7 @@ theorem EncardAccSeqsSampledLe_nontrivial :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).encard ≤
       ((2 ^ 1 * (faultySets sampDesign sampPart (1 / 4)).card * 2 ^ 3 * 1 ^ 1 : ℕ) : ℕ∞) :=
   accSeqsAt_acceptAll_not_le (by norm_num) (by norm_num) _
+
 
 /-! ## Into X -/
 

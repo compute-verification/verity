@@ -63,7 +63,7 @@ have a proof block needing the representative `q` extracted (`callsBy`).
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn wrongAllAt wrongAllAt_subset gateBlock flatMapRP)
+open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn incorrectAllAt incorrectAllAt_subset gateBlock flatMapRP)
 
 /-- Filtering what a weaker filter keeps by a stronger one is filtering by the stronger one. -/
 theorem filter_filter_of_imp {β : Type} (k1 k2 : β → Bool) (h : ∀ b, k1 b = true → k2 b = true) (l : List β) :

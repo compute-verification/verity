@@ -1,6 +1,6 @@
 """The session's pass at each sketch row count in turn over one store on the visible GPUs, with no verifier: what a
 pass at 64 rows costs beside one at 16, each over the plain read (`rows.sh` builds the libraries and runs it under a
-lease). The registration of each row count is drawn here, as `audit.register` draws the verifier's.
+lease). The registration of each row count is sampled here, as `audit.register` samples the verifier's.
 
 For each of --rows, in the order given, on the same store (`device.GpuBackend`; its bytes are encoded once, at the
 first), and at a row count for each of its receipt CTA counts in turn (--ctas-at; `--sketch-ctas` alone unless given),
