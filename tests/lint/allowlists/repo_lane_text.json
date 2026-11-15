@@ -16,7 +16,6 @@
     {"file": "hardware/cards/rtx-pro-6000-server.toml", "count": 2},
     {"file": "security/Definitions/Pouw/PearlC/Device.lean", "count": 2},
     {"file": "security/Definitions/Pouw/PearlC/W1.lean", "count": 3},
-    {"file": "security/Proofs/Properties/Verity/SampledTwo/JoinsAt.lean", "count": 2},
     {"file": "security/Properties/Pouw/PearlPlus.lean", "count": 1},
     {"file": "tests/test_vllm_public_api.py", "count": 1},
     {"file": "tools/move/certified_store_block_map.toml", "count": 1},

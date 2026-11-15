@@ -263,7 +263,6 @@
     {"file": "security/Proofs/Properties/Verity/Sampled/Moves.lean", "rule": "heartbeats-uncommented", "count": 1},
     {"file": "security/Proofs/Properties/Verity/Sampled/Stops.lean", "rule": "long-file", "count": 1},
     {"file": "security/Proofs/Properties/Verity/SampledRead.lean", "rule": "heartbeats-uncommented", "count": 8},
-    {"file": "security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean", "rule": "heartbeats-uncommented", "count": 1},
     {"file": "verity/circuits/base/Base.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/circuits/base/Base/Canon.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/circuits/base/Base/Field.lean", "rule": "module-doc", "count": 1},

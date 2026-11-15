@@ -79,7 +79,6 @@
   "Properties.Verity.Coupling",
   "Properties.Verity.Committed",
   "Properties.Verity.GateARow",
-  "Properties.Ties",
   "Properties.Flock.Nets",
   "Properties.Assumptions",
   "Properties.Verity.ExecutionPhaseFiles",
@@ -106,7 +105,6 @@
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
   "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
-  "Properties.Accounting.Registration.Code",
   "Properties.Accounting.Registration.Premises"
  ],
  "proved_in": ["../Proofs"],
