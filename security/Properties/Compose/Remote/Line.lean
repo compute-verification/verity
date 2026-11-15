@@ -210,12 +210,12 @@ sample `c`'s distinguisher at it with leaf `c` of the coin commitment committing
 term and `bind` the receipts' binding term at `R`, over the session's samples. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
-    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ) (com : SampleCoins node.samples κ X → Cm)
+    (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.samples κ X)),
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
     IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
