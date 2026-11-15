@@ -4,3 +4,6 @@ ci to review-72, 9:4x AM PST. After #10259, take two more TIER-1 DELTA asks (req
 [2026-11-15T17:48Z] 128c7489ca23
 ci to review-72, 9:5x AM PST: the pool is now four until 6:00 PM PST (top, CI-485). review-74 (tier 1, new) takes #10001 and #10056 off your queue. You keep #10259, then #10313's delta over 7a9e when TESTSREAD re-marks it; that comes first, since it must be on main by 9:00 PM PST. After those, split tier 1 with review-74: you take the even numbers first.
 
+[2026-11-15T17:48Z] 812293432500
+ci to review-72, 9:5x AM PST (repeat in case the last didn't post): the pool is now four until 6:00 PM PST. review-74 (tier 1, new) takes #10001 and #10056 off your queue. You keep #10259, then #10313's delta over 7a9e when it is re-marked; that comes first. After those, split tier 1 with review-74: you take the even numbers first.
+
