@@ -7844,6 +7844,10 @@ fn prove_stream(path: &str) {
 }
 
 fn main() {
+    let names: Vec<String> = std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
+    if let Some(why) = flock_live::zk_server::retired_env(names.iter().map(String::as_str)) {
+        refuse(why);
+    }
     let cmd = std::env::args().nth(1).unwrap_or_default();
     // unit-walk times the device witness's host units, so it runs on the device prover's pages unless --huge-pages asks
     flock_live::huge_pages::set(!(flag("--gpu") || (cmd == "unit-walk" && !flag("--huge-pages"))));

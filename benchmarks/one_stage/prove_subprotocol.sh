@@ -16,6 +16,8 @@
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail
+[ -z "${SUBPROTOCOL_FIREWALL+x}" ] || [ -n "${SUBPROTOCOL_ZK_SERVER+x}" ] || { echo "prove-subprotocol: SUBPROTOCOL_FIREWALL is set \
+and SUBPROTOCOL_ZK_SERVER is not: the switch is read under SUBPROTOCOL_ZK_SERVER; set SUBPROTOCOL_ZK_SERVER instead" >&2; exit 2; }
 export HZ_CONFIGS=prove-leg HZ_MEM_GB=${SUBPROTOCOL_MEM_GB:-32}
 if [ -n "${SUBPROTOCOL_CACHE:-}" ] && mkdir -p "$SUBPROTOCOL_CACHE" 2>/dev/null && [ -w "$SUBPROTOCOL_CACHE" ]; then export HZ_CACHE=$SUBPROTOCOL_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh

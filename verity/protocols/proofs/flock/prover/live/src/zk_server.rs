@@ -16,6 +16,18 @@ pub fn refused(what: impl std::fmt::Display) -> String {
     format!("ZK-SERVER-REFUSED: {what}")
 }
 
+/// The refusal of an environment that sets a ZK server control under its old name, `FC_FIREWALL<rest>`, and not under
+/// `FC_ZK_SERVER<rest>`: nothing reads the old name, so a job written for it would run as if the control were unset.
+pub fn retired_env<'a>(names: impl IntoIterator<Item = &'a str> + Clone) -> Option<String> {
+    let mut old: Vec<&str> = names.clone().into_iter().filter(|k| k.starts_with("FC_FIREWALL")).collect();
+    old.sort_unstable();
+    old.into_iter().find_map(|k| {
+        let new = format!("FC_ZK_SERVER{}", &k["FC_FIREWALL".len()..]);
+        (!names.clone().into_iter().any(|n| n == new))
+            .then(|| format!("{k} is set and {new} is not: the ZK server's controls are read under {new}; set {new} instead"))
+    })
+}
+
 /// What a zk_served rep's worker (the device prover, on a thread of its own: [`run_worker`]) asks the ZK server, which serves it
 /// on the session's thread.
 pub enum Ask<T> {
@@ -978,6 +990,14 @@ pub fn cpu_seconds() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_old_control_name_without_its_new_one_is_refused_by_the_new_name() {
+        let why = retired_env(["PATH", "FC_FIREWALL", "FC_FIREWALL_LEAN", "FC_ZK_SERVER_LEAN"]).expect("refused");
+        assert!(why.starts_with("FC_FIREWALL is set and FC_ZK_SERVER is not") && why.ends_with("set FC_ZK_SERVER instead"), "{why}");
+        assert_eq!(retired_env(["FC_FIREWALL", "FC_ZK_SERVER", "FC_ZK_SERVER_TAMPER"]), None);
+        assert_eq!(retired_env(["FC_ZK_SERVER", "FC_HOST_WITNESS"]), None);
+    }
 
     fn framed(f: impl FnOnce(&mut Framer<'_>)) -> Vec<(Vec<u8>, usize)> {
         let mut out = Vec::new();

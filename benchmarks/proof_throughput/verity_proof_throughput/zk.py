@@ -130,8 +130,14 @@ def point(d: Path, workload: Any, B: int, zk_server: bool, run_id: str | None) -
     }
 
 
-def zk_server_on() -> bool:
-    return os.environ.get("FC_ZK_SERVER") == "1"
+def zk_server_on(env: dict[str, str] | None = None) -> bool:
+    """Whether the sessions ran behind the ZK server (``FC_ZK_SERVER=1``). A job written when the key was ``FC_FIREWALL``
+    sets a key nothing reads: refused by name rather than read as off."""
+    env = os.environ if env is None else env
+    if "FC_FIREWALL" in env and "FC_ZK_SERVER" not in env:
+        raise SystemExit("zk-point: FC_FIREWALL is set and FC_ZK_SERVER is not: the ZK server's switch is read under "
+                         "FC_ZK_SERVER; set FC_ZK_SERVER instead")
+    return env.get("FC_ZK_SERVER") == "1"
 
 
 __all__ = ["FIELDS", "STANDIN", "describe", "zk_server_on", "point"]
