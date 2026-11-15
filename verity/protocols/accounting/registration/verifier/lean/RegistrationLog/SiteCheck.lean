@@ -117,6 +117,8 @@ def Reached : Prop :=
 
 instance instDecidableFresh : Decidable (Fresh D S e) := by unfold Fresh; infer_instance
 instance instDecidableRefs : Decidable (Refs S e) := by unfold Refs; infer_instance
+set_option synthInstance.maxSize 2048 in
+set_option synthInstance.maxHeartbeats 400000 in
 instance instDecidableKinds : Decidable (Kinds S e) := by unfold Kinds; infer_instance
 instance instDecidableSheets : Decidable (Sheets D A S e) := by unfold Sheets; infer_instance
 instance instDecidableFigures : Decidable (Figures A e) := by unfold Figures; infer_instance
