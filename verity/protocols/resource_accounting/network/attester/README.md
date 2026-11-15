@@ -26,5 +26,6 @@ definitions). It has no console script.
 - **Loads from**: `program/lean/`, no package. The Python, `verity.party`, `verity.channel`, `verity.runtime`,
   `verity.commitments`, `verity.protocols.proofs.spot.verifier.challenger` and the certifier's `verifier/`. The scripts, `verity.protocols.resource_accounting.network.verifier`;
   `window_vectors.py` also the prover side, `verity.protocols.resource_accounting.network.prover`.
-- **Not here**: the certifier's host programs, which run the certifier on a host in front of a server: they are in
-  `benchmarks/network_traces`.
+- **Not here**: the certifier's developer side that a served run starts beside this device (its piece, session and
+  chain of record), in `benchmarks/network_traces/`, and the leak guard its records are released through, in the
+  certifier's `prover/`.
