@@ -2,6 +2,7 @@ module
 
 public import Flock
 public import Flock.CircuitType
+public import Flock.KnownTrees
 public import Flock.Layout
 public import Flock.JsonParse
 
@@ -1122,7 +1123,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.sampleDesign zk tags plainTables draw else .ok ()).map fun () =>
-        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
+        (spec, sts, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let handed := program.map read.digest  -- `some none`: bytes that are no descriptor
   let header := (publicHeader pubB).bind headerDigest
@@ -1131,7 +1132,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- the population's statement is set up once, when a session first needs it; a sampled session at its own sample, never at
   -- another session's (samples have no faithful cache key: `canon` refuses a non-integer number that `recordDraw` keeps)
-  let mut population : Option (Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := none
+  let mut population : Option (Except String (SessionSpec × Array Stmt × Lean.Json × Lean.Json)) := none
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -1140,7 +1141,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       catch e => pure (Except.error s!"session files: {e}")
     -- a sampled session is verified against the sampled proof blocks' statement (Σ covers the sample); several tables split the sample
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
-    let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
+    let mut st : Except String (SessionSpec × Array Stmt × Lean.Json × Lean.Json) := .error "setup: none"
     match draw, population with
     | none, some s => st := s
     | _, _ =>
@@ -1163,8 +1164,8 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     let checked : Except String (String × Array Setup) := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
-      let (spec, tabs, _) ← st
-      if zk then Zk.verify spec tabs record proofs
+      let (spec, sts, _) ← st; let tabs := sts.map Setup.ofCircuit  -- `Zk.verifyOnePass_eq`: it is `Zk.verify spec tabs`
+      if zk then Zk.verifyOnePass spec sts record proofs
       else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
       else verify spec tabs record proofs
       pure (record, tabs)
@@ -2000,6 +2001,7 @@ def main (args : List String) : IO UInt32 := do
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths
+  | "known-trees" :: rest => KnownTrees.cmd (argOf rest "--registered") (argOf rest "--public") (argOf rest "--out")
   | "draw" :: rest => sampleCmd rest
   | "draw-test" :: path :: rest => sampleTest path rest
   | "statement" :: rest => statementCmd rest

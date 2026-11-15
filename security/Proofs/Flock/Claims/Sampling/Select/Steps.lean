@@ -194,6 +194,20 @@ theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (
     obtain rfl := (Except.ok.inj h).symm
     exact Or.inl ⟨rfl, by rw [hk]; decide, by rw [hk]; decide⟩
 
+/-- **`deriveSamplingDesign` expands no sampling design of neither kind `stratified` nor `work`**: it returns `none` there, whatever
+the program, query and work table. -/
+theorem deriveSamplingDesign_none (d : Program) (query samplingDesign : Json) (table : Option Json) (h1 : kindOf samplingDesign ≠ "stratified")
+    (h2 : kindOf samplingDesign ≠ "work") : Draw.deriveSamplingDesign d query samplingDesign table = .ok none := by
+  unfold Draw.deriveSamplingDesign
+  split
+  next s hs =>
+    have hk : kindOf samplingDesign = s := by simp [kindOf, hs]
+    rw [hk] at h1 h2
+    dsimp only
+    rw [ite_eq_left (by simp [h1, h2])]
+    rfl
+  next => rfl
+
 /-- The units of ascending ranges `[lo, hi)`. -/
 def rsSize (rs : Array (ℕ × ℕ)) : ℕ := (expand rs.toList).length
 
