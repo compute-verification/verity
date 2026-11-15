@@ -1,15 +1,18 @@
 """The sibling check (`siblings.py`) that `verity lean try --siblings` runs once FILE elaborates: which modules its stub
 imports, and, with a real toolchain, that a module redeclaring a name another built module of its package declares fails
 the try naming both, as the package's root fails a records run an hour in. Its stub loads no build that is not of its
-source as it is, by the hash Lake's trace states, in the package or in one it requires by path, and none without a
-source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules,
-and still fails a clash that is in the sources. A first refusal that names a sibling has Lake rebuild it, once, before
-the stub's word is the verdict: with a real toolchain, a theorem Lean makes in two modules, one of them left built
-against an older build of an import, is refused in the stub and in a root alike until Lake rebuilds that module, and a
-name two sources declare is refused after the rebuild too. And the package's Lean options every try takes from it: with
-a real toolchain, an auto-bound name fails a try where the package sets `autoImplicit = false`."""
+source as it is, by the hash Lake's trace states or, of a build Lake took rather than made, by Lake's own word, in the
+package or in one it requires by path, and none without a source: with a real toolchain, a try passes over the products
+a tree keeps from before names moved between modules, and still fails a clash that is in the sources; and a build Lake
+took is a sibling until its source's text changes, and again once the source is written as it was. A first refusal that
+names a sibling has Lake rebuild it, once, before the stub's word is the verdict: with a real toolchain, a theorem Lean
+makes in two modules, one of them left built against an older build of an import, is refused in the stub and in a root
+alike until Lake rebuilds that module, and a name two sources declare is refused after the rebuild too. And the
+package's Lean options every try takes from it: with a real toolchain, an auto-bound name fails a try where the package
+sets `autoImplicit = false`."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -315,29 +318,216 @@ def test_a_source_written_again_as_it_was_built_from_leaves_its_build_checked(tm
     assert S.plan(proofs, "Proofs/File.lean").unchecked == []
 
 
-@pytest.mark.parametrize("took", ['{"synthetic": true, "schemaVersion": "2025-09-10", "outputs": {}, "log": [], "inputs": [], '
-                                  '"depHash": "b3c1e3c25b4816c6"}',
-                                  '{"schemaVersion":"2025-09-10","depHash":"255a6a20482e9767","outputs":{}}'], ids=["cache", "ltar"])
-def test_a_module_lake_took_rather_than_built_counts_until_its_source_is_written_again(tmp_path, took):
+#: a trace as Lake writes it for a module whose outputs it found in its artifact cache, and as `leantar` writes it for
+#: one unpacked from its `.ltar`
+TOOK = {"cache": '{"synthetic": true, "schemaVersion": "2025-09-10", "outputs": {}, "log": [], "inputs": [], '
+                 '"depHash": "b3c1e3c25b4816c6"}',
+        "ltar": '{"schemaVersion":"2025-09-10","depHash":"255a6a20482e9767","outputs":{}}'}
+
+
+def lake_out(*jobs: tuple[str, ...]) -> tuple[int, str]:
+    """Lake's (exit, output) for `WORD` whose jobs end as ``jobs`` say, each (icon, verb, caption, then its log's lines),
+    in that order: numbered after Lake's own two as Lake numbers them, then its last lines, the count where none failed
+    (exit 0), else the failed ones' captions (exit 3)."""
+    total, failed = len(jobs) + 1, [c for _, verb, c, *_ in jobs if verb.endswith("ing")]
+    out = [f"✔ [0/{total}] Ran job computation", f"✔ [1/{total}] Ran p:extraDep"]
+    for k, (icon, verb, caption, *log) in enumerate(jobs, 2):
+        out += [f"{icon} [{k}/{total}] {verb} {caption}", *log]
+    out += [S.FAILED, *(f"- {c}" for c in failed)] if failed else [f"All targets up-to-date ({total} jobs)."]
+    return (3 if failed else 0), "\n".join(out) + "\n"
+
+
+def lake_says(said: tuple[int, str], asked: list | None = None):
+    """A stand-in for `plan`'s ``lake`` that ends as ``said`` (its exit and output) in 3 s at a peak of 900 MB, and lists
+    in ``asked`` what it is run with."""
+    def run(args: list[str]) -> tuple[int, str, float, int]:
+        if asked is not None:
+            asked.append(args)
+        return said[0], said[1], 3.0, 900
+    return run
+
+
+@pytest.mark.parametrize("took", list(TOOK.values()), ids=list(TOOK))
+def test_a_module_lake_took_rather_than_built_counts_on_lakes_word_alone(tmp_path, took):
     """Lake writes a trace with no input for a module it finds in its artifact cache, and `leantar` one for a module
     unpacked from its `.ltar`, as a node's records runs leave most of a slot tree, the definitions everything imports
-    among them: there is no source hash to compare. Lake took it for the source as it was then, so it is a sibling while
-    its trace is at least as new as its source, and unchecked, with what imports it, once a sync has written the source
-    again. The `.olean` itself is a link into the cache, touched whenever the cache is read: its time says nothing."""
+    among them: there is no source hash to compare. Such a module is a sibling only where Lake, asked once about the
+    modules that could be siblings, says that it holds it as its inputs are now. The times say nothing either way: a
+    source written again as it was is newer than its build, and counts; one whose text changed while its trace was
+    written later is older, and doesn't. Where Lake would compile the module, says it only ran, or isn't asked, or
+    where its word isn't taken, it is unchecked, and so is what imports it."""
     pkg, then = tmp_path / "p", 2_000_000_000.0
     write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/File.lean": "module\n", "P/A.lean": "module\n",
-                "P/B.lean": "module\nimport P.A\n"})
-    built(pkg, "P.A", "P.B")
+                "P/B.lean": "module\nimport P.A\n", "P/Up.lean": "module\nimport P.File\n"})
+    built(pkg, "P.A", "P.B", "P.Up")
     (trace := pkg / S.LIB / "P" / "A.trace").write_text(took)
-    os.utime(pkg / "P" / "A.lean", (then, then))
-    os.utime(trace, (then, then))
-    os.utime(pkg / S.LIB / "P" / "A.olean", (then - 500, then - 500))
-    assert S.plan(pkg, "P/File.lean") == S.Plan("P.File", True, ["P.A", "P.B"], [])
-    os.utime(pkg / "P" / "A.lean", (then + 100, then + 100))
-    os.utime(pkg / S.LIB / "P" / "A.olean", (then + 500, then + 500))
-    assert S.plan(pkg, "P/File.lean") == S.Plan("P.File", True, [], ["P.A", "P.B"])
+    asked, none = [], ("P.File", True, [], ["P.A", "P.B"])
+    for source, written in ((then + 100, then), (then, then + 100)):
+        os.utime(pkg / "P" / "A.lean", (source, source))
+        os.utime(trace, (written, written))
+        p = S.plan(pkg, "P/File.lean", lake_says(lake_out(("✔", "Replayed", "P.A"), ("✔", "Replayed", "P.B")), asked))
+        assert p == S.Plan("P.File", True, ["P.A", "P.B"], [], "Lake holds 2 of the 2 modules that could be siblings as "
+                           "their inputs are now (lake build --no-build -v --no-ansi: exit 0 in 3 s, peak 900 MB)")
+        for said in (lake_out(("✖", "Building", "P.A", S.REBUILD), ("✔", "Ran", "P.B")),
+                     lake_out(("✔", "Ran", "P.A"), ("✔", "Replayed", "P.B")), (1, "error: no such target\n"), (0, "")):
+            assert S.plan(pkg, "P/File.lean", lake_says(said))[:4] == none, said
+        assert S.plan(pkg, "P/File.lean") == S.Plan(*none), "Lake isn't asked"
+    assert asked == [["build", "--no-build", "-v", "--no-ansi", "+P.A", "+P.B"]] * 2, \
+        "once a plan, about the modules that import FILE neither directly nor through others"
+    assert S.plan(pkg, "P/File.lean", lake_says((1, "error: no such target\n"))).word == (
+        "Lake's word isn't taken, so every build Lake took rather than made is unchecked: its exit is 1, not 0 or 3 "
+        "(lake build --no-build -v --no-ansi: exit 1 in 3 s, peak 900 MB)")
     built(pkg, "P.A")
-    assert S.plan(pkg, "P/File.lean").unchecked == [], "built from the source as it is"
+    assert S.plan(pkg, "P/File.lean").unchecked == [], "built from the source as it is, which its trace states"
+
+
+def test_lake_is_asked_before_a_product_is_read_since_it_puts_in_place_what_it_holds_packed(tmp_path):
+    """`lake build --no-build` unpacks the archive it holds a module's outputs in, and says so: `P.A` has no product
+    until Lake is asked, and is a sibling after. An executable's root, a module under an `exempt` prefix and FILE's
+    own importers are no siblings, so Lake isn't asked about them; with no module to ask about, it isn't run."""
+    pkg = tmp_path / "p"
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P") + '\n[[lean_exe]]\nname = "tool"\nroot = "P.Tool"\n',
+                "lean-audit.json": json.dumps({"exempt": ["P.Scripts"]}), "P/File.lean": "module\n", "P/A.lean": "module\n",
+                "P/Tool.lean": "module\n", "P/Scripts/Run.lean": "module\n", "P/Up.lean": "module\nimport P.File\n"})
+    asked: list = []
+
+    def lake(args: list[str]) -> tuple[int, str, float, int]:
+        asked.append(args)
+        built(pkg, "P.A")
+        (pkg / S.LIB / "P" / "A.trace").write_text(TOOK["ltar"])
+        return (*lake_out(*(("✔", "Unpacked", a[1:]) for a in args if a.startswith("+"))), 0.4, 300)
+
+    assert S.plan(pkg, "P/File.lean") == S.Plan("P.File", True, [], ["P.A"])
+    assert S.plan(pkg, "P/File.lean", lake)[:4] == ("P.File", True, ["P.A"], [])
+    assert asked == [[*S.WORD, "+P.A"]]
+    assert S.plan(pkg, "P/A.lean", lake)[:4] == ("P.A", True, [], ["P.File", "P.Up"])
+    assert asked[1] == [*S.WORD, "+P.File", "+P.Up"]
+    (pkg / "P" / "A.lean").unlink()
+    (pkg / "P" / "Up.lean").unlink()
+    assert S.plan(pkg, "P/File.lean", lake) == S.Plan("P.File", True, [], []) and len(asked) == 2, "nothing to ask about"
+
+
+#: `lake build --no-build -v --no-ansi` as Lake 4.34 prints it where every target is held: its log of the workspace, then
+#: each job's line, numbered from 0, each icon but ✔ followed by the job's log, and the count
+HELD_ALL = ["info: p: no previous manifest, creating one from scratch",
+            "✔ [0/14] Ran job computation",
+            "✔ [1/14] Ran p:extraDep",
+            "✔ [2/14] Replayed P.A:setup",
+            "✔ [3/14] Replayed P.A",
+            "ℹ [4/14] Replayed P.B (1.2s)",
+            "info: P/B.lean:3:0: said while it compiled",
+            "  ✔ [5/14] Replayed P.O",
+            "⚠ [5/14] Replayed P.«C-d» (340ms)",
+            "warning: P/C-d.lean:1:0: declaration uses `sorry`",
+            "",
+            "Note: a line of the warning's own",
+            "ℹ [6/14] Unpacked P.E (12s)",
+            "info: unpacked",
+            "✔ [7/14] Reused P.F",
+            "✔ [8/14] (Optional) Replayed P.G",
+            "✔ [9/14] Replayed P.H",
+            "✔ [10/14] Ran P.H",
+            "✔ [11/14] Replayed P.Q:c.o",
+            "✔ [12/14] Fetched P.M",
+            "✔ [13/14] Built P.N (2.0s)",
+            "✔ [14/14] Ran p/P:default",
+            "All targets up-to-date (14 jobs)."]
+ASKED = ["P.A", "P.B", "P.C-d", "P.E", "P.F", "P.G", "P.H", "P.M", "P.N"]
+#: as it prints it where it would compile `P.I` and `P.L`: `P.J` imports `P.I`
+HELD_SOME = ["✔ [0/5] Ran job computation",
+             "✔ [1/5] Ran p:extraDep",
+             "✖ [2/5] Building P.I",
+             "trace: .> LEAN_PATH=/tree/.lake/build/lib/lean lean /tree/P/I.lean",
+             S.REBUILD,
+             "✔ [3/5] Ran P.J",
+             "✔ [4/5] Replayed P.K",
+             "✖ [5/5] Building P.L",
+             S.REBUILD,
+             S.FAILED,
+             "- P.I",
+             "- P.L"]
+
+
+def test_lakes_word_is_read_on_the_line_of_the_job_that_makes_a_modules_olean():
+    """A module Lake holds is one whose every line says it replayed the build the tree holds, reused its cache's or
+    unpacked its archive, with or without a log after the line, a time, or the mark of an optional job. A module's
+    other jobs and Lake's own have a colon, a slash or a space in their captions, and a line of a log is no job's
+    (`P.O`). One Lake would compile fails with the verb of what it tried, one that imports it only ran, and one with
+    two lines that say different things (`P.H`) is not held."""
+    assert S.held(0, "\n".join(HELD_ALL) + "\n", ASKED) == {"P.A", "P.B", "P.C-d", "P.E", "P.F", "P.G"}
+    assert S.held(3, "\n".join(HELD_SOME) + "\n", ["P.I", "P.J", "P.K", "P.L"]) == {"P.K"}
+
+
+def test_lakes_word_is_not_taken_from_an_output_this_does_not_know():
+    """Every way the output can differ from Lake's known shape leaves every build Lake took unchecked, and says why: an
+    exit other than 0 or 3; a line before the first job's other than Lake's log of the workspace; no job; a log after a
+    line whose icon says none follows; an error other than the one `--no-build` adds; numbers that don't go one by one
+    from 0 up to the count, which a log's line in a job's shape breaks; a last line other than the count of jobs none of
+    which failed (exit 0) or the captions of jobs that failed (exit 3); and a module asked about with no line."""
+    every, some, asked = "\n".join(HELD_ALL) + "\n", "\n".join(HELD_SOME) + "\n", ["P.I", "P.J", "P.K", "P.L"]
+
+    def said(rc: int, lines: list[str], mods: list[str] = ASKED) -> set[str] | str:
+        return S.held(rc, "\n".join(lines) + "\n", mods)
+
+    assert S.held(1, every, ASKED) == "its exit is 1, not 0 or 3" and S.held(2, some, asked) == "its exit is 2, not 0 or 3"
+    assert said(0, ["Lake version 5.0.0", *HELD_ALL]) == "it printed a line this doesn't read: 'Lake version 5.0.0'"
+    assert S.held(0, "", ASKED) == S.held(0, "info: p: nothing\n", ASKED) == "it printed no job's line"
+    assert said(0, [*HELD_ALL[:4], "stray", *HELD_ALL[4:]]) == "it printed a line this doesn't read: 'stray'", \
+        "a log after a line whose icon is ✔"
+    assert said(0, [*HELD_ALL[:7], "error: P/B.lean:4:0: unknown identifier 'x'", *HELD_ALL[7:]]) == \
+        "it printed a line this doesn't read: \"error: P/B.lean:4:0: unknown identifier 'x'\""
+    assert said(0, [*HELD_ALL[:8], "✔ [5/14] Replayed P.Z", *HELD_ALL[8:]]) == \
+        "its jobs' lines are not numbered one by one: '⚠ [5/14] Replayed P.«C-d» (340ms)'", \
+        "a module's log printing a line in a job's shape"
+    assert said(3, [*HELD_SOME[:9], "✔ [6/6] Replayed P.I", *HELD_SOME[9:]], asked) == {"P.K"}, \
+        "such a line after the last job's is one more line of a module that has its own"
+    assert said(3, [*HELD_SOME[:9], "✔ [6/6] Replayed P.Z", *HELD_SOME[9:]], [*asked, "P.Z"]) == {"P.K", "P.Z"}
+    assert said(3, [*HELD_SOME[:9], "✔ [6/6] Replayed P.Z", *HELD_SOME[9:]], asked) == {"P.K", "P.Z"}, \
+        "a module no target imports, of which the plan reads nothing"
+    assert said(3, HELD_SOME[1:], asked) == "its jobs' lines are not numbered one by one: '✔ [1/5] Ran p:extraDep'"
+    assert said(3, [s.replace("[5/5]", "[5/6]") for s in HELD_SOME], asked) == "its last job's number is 5, of 6 jobs"
+    assert said(0, HELD_ALL[:-1]) == "it printed a line this doesn't read: '✔ [14/14] Ran p/P:default'"
+    assert said(0, [*HELD_ALL[:-1], "All targets up-to-date (13 jobs)."]) == \
+        "it printed a line this doesn't read: 'All targets up-to-date (13 jobs).'"
+    assert said(0, HELD_SOME, asked) == "it printed a line this doesn't read: '- P.L'"
+    assert said(0, [*HELD_SOME[:-3], "All targets up-to-date (5 jobs)."], asked) == \
+        "it printed a line this doesn't read: 'All targets up-to-date (5 jobs).'", "a job failed"
+    assert said(3, HELD_ALL) == "it ended 3 with no line of the jobs that failed"
+    assert said(3, HELD_SOME[:-2], asked) == "it ended 3 and named no job that failed"
+    assert said(3, [*HELD_SOME, "- P.K"], asked) == "it printed a line this doesn't read: '- P.K'"
+    assert said(0, HELD_ALL, [*ASKED, "P.X"]) == "it printed no line for P.X"
+
+
+def test_after_the_rebuild_the_plan_is_made_once_more_and_its_stub_is_the_verdict(tmp_path):
+    """The rebuild changed builds the first plan read, so `again` makes it once more, Lake asked again, and nothing Lake
+    held before is carried over: `P.E`, a build Lake took and held before, imports `P.B`, which the rebuild changed,
+    and is left out of the stub the verdict is. The new plan's word is a line between the rebuild's and the verdict's.
+    A plan that can't be made once more is the verdict, with the reason."""
+    p = S.Plan("P.D", True, ["P.A", "P.B", "P.C", "P.E"], [], "Lake holds 4 of the 4 modules ...")
+    q = S.Plan("P.D", True, ["P.A", "P.B", "P.C"], ["P.E"], "Lake holds 3 of the 4 modules ...")
+    refusal, stubs, made = REFUSAL.format("P.B", "P.step.eq_1", "P.A"), [], []
+
+    def lean(args: list[str]) -> tuple[int, str, float, int]:
+        stubs.append(Path(args[-1]).read_text())
+        return (1, refusal, 20.0, 800) if len(stubs) == 1 else (0, "", 20.0, 800)
+
+    def again() -> S.Plan:
+        made.append(len(stubs))
+        return q
+
+    rc, _, lines = S.check(p, tmp_path, lean, lambda _: REBUILT, again)
+    assert rc == 0 and made == [1], "made once, after the first stub and before the second"
+    assert stubs == ["module\n\npublic import P.D\npublic import P.A\npublic import P.B\npublic import P.C\npublic import P.E\n",
+                     "module\n\npublic import P.D\npublic import P.A\npublic import P.B\npublic import P.C\n"]
+    assert lines.splitlines() == [
+        ONCE, "Lake holds 3 of the 4 modules ...",
+        "siblings: no built module of its package that doesn't import P.D declares a name it does (3 imported in 20 s, peak "
+        "800 MB); 1 unchecked, with no build of their source as it is or importing a module with none, in their package "
+        "or one it requires: P.E"]
+    stubs.clear()
+    rc, _, lines = S.check(p, tmp_path, lean, lambda _: REBUILT, lambda: "its package has no lakefile.toml")
+    assert (rc, len(stubs)) == (1, 1) and lines.splitlines() == [
+        ONCE, "siblings: no plan once more: its package has no lakefile.toml; P.D's own names are unchecked"]
 
 
 def test_no_stub_imports_a_product_with_no_source_or_a_module_whose_build_loads_one(tmp_path):
@@ -655,6 +845,148 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     assert "(3 imported" in capsys.readouterr().out
 
 
+def entry(store: Path, scope: str, mod: str, at: str, sources: dict[str, str], schema: str = "lean-module/v4") -> Path:
+    """An entry of a node's index (`module_keys`) as `put` writes one, and its file: ``mod`` of package ``scope`` compiled
+    under Lake's input hash ``at``, recording the SHA-512 of each of ``sources`` ({path: text}) and of its lakefile."""
+    art = f"{at}.olean"
+    files = {path: "sha512:" + hashlib.sha512(text.encode()).hexdigest() for path, text in sources.items()}
+    doc = {"schema": schema, "module": mod, "scope": scope, "hash": at, "outputs": {"o": art},
+           "digests": {art: "sha512:" + "0" * 128},
+           "inputs": {"vars": {"module": mod, "package": scope}, "env": {}, "reads": {},
+                      "files": {**files, f"{scope}/lakefile.toml": "sha512:" + "1" * 128}}}
+    (store / "keys").mkdir(parents=True, exist_ok=True)
+    (f := store / "keys" / f"{hashlib.sha512(json.dumps(doc).encode()).hexdigest()}.json").write_text(json.dumps(doc))
+    return f
+
+
+@pytest.mark.parametrize("took", list(TOOK.values()), ids=list(TOOK))
+def test_a_build_lake_took_and_would_compile_counts_where_the_index_records_its_source_as_it_is(tmp_path, took):
+    """`P.B` is a build Lake took, against a build of `P.A` that has since been rebuilt, so Lake would compile it and
+    doesn't hold it, though its source is the text it was taken for. On a node the index says so: an entry under its
+    package, its name and its trace's `depHash` records the SHA-512 of its source as it is, and `P.B` counts. An entry of
+    another text doesn't, nor two that disagree, nor one under another hash, package or schema, and one cut short is
+    passed over and counted in the plan's word; without an index, or
+    with one that has no entries, `P.B` is unchecked, as with Lake's word alone. Where Lake's word isn't taken, the index
+    isn't read."""
+    pkg, store = tmp_path / "p", tmp_path / "lean-artifacts"
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/File.lean": "module\n", "P/A.lean": "module\n",
+                "P/B.lean": "module\nimport P.A\n"})
+    built(pkg, "P.A", "P.B")
+    (pkg / S.LIB / "P" / "B.trace").write_text(took)
+    at = json.loads(took)["depHash"]
+    said = lake_out(("✔", "Replayed", "P.A"), ("✖", "Building", "P.B", S.REBUILD))
+    word = ("Lake holds 1 of the 2 modules that could be siblings as their inputs are now (lake build --no-build -v "
+            "--no-ansi: exit 3 in 3 s, peak 900 MB)")
+    fact1 = S.Plan("P.File", True, ["P.A"], ["P.B"], word)
+    assert S.plan(pkg, "P/File.lean", lake_says(said)) == fact1
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store) == fact1._replace(
+        word=f"{word}; the index records the source as it is of 0 of the 1 other builds Lake took that a stub could load "
+             "(0 entries read in 0 s)"), "no index here"
+    other = entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\nopen P\n"})
+    entry(store, "p", "P.B", "0123456789abcdef", {"p/P/B.lean": "module\nimport P.A\n"})
+    entry(store, "q", "P.B", at, {"q/P/B.lean": "module\nimport P.A\n"})
+    entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\n"}, schema="lean-module/v3")
+    (store / "keys" / "cut.json").write_text(f'{{"schema": "lean-module/v4", "hash": "{at}", "module": "P.B"')
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "another text, hash, package or schema"
+    entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\n"})
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "two entries that disagree"
+    other.unlink()
+    p = S.plan(pkg, "P/File.lean", lake_says(said), store)
+    assert p == S.Plan("P.File", True, ["P.A", "P.B"], [], f"{word}; the index records the source as it is of 1 of the 1 "
+                       "other builds Lake took that a stub could load (5 entries read, 1 of them unreadable and passed "
+                       "over, in 0 s)"), p
+    for refused in ((1, said[1]), (0, "")):
+        p = S.plan(pkg, "P/File.lean", lake_says(refused), store)
+        assert p[:4] == fact1[:4] and "index" not in p.word, p
+    write(pkg, {"P/B.lean": "module\nimport P.A\n\n"})
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "its source changed since"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("how", ["cache", "ltar"])
+def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_say(tmp_path, monkeypatch, capsys, how):
+    """Built with Lake, then taken by Lake into a tree with no build: from its artifact cache (`cache`), or unpacked
+    from the archives of a published build (`ltar`), as a node's tree takes main's. Every trace there states one hash
+    and no source. Without Lake asked none of the modules is a sibling; with it each is. Then `P.A`'s text changes,
+    and its trace is made the newer of the two: `P.A` is unchecked, and so are `P.B` and the root, which import it and
+    which Lake says only ran. Written again as it was, later than every build, all are siblings again. Then `P.A`
+    changes and Lake rebuilds it: Lake would compile `P.B`, which imports it, so `P.B` is unchecked until the node's index
+    records its source under its trace's hash.
+
+    Only this test takes builds with Lake and has Lake say which it holds, so only it shows that `built_from` knows
+    the traces and `held` the lines Lake writes for them, whole: its workspace log, its own jobs, a module's log."""
+    pkg, cache = tmp_path / "tree" / "p", tmp_path / "cache"
+    files = {"lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n',
+             "lean-toolchain": (HERE / "fixtures" / "control" / "lean-toolchain").read_text(),
+             "P.lean": "module\n\npublic import P.A\npublic import P.B\npublic import P.D\n",
+             "P/A.lean": "module\n\n@[expose] public section\n\ndef P.a : Nat := 1\n",
+             "P/B.lean": "module\n\npublic import P.A\n@[expose] public section\n\ntheorem P.b : P.a = 1 := rfl\n",
+             "P/D.lean": "module\n\n@[expose] public section\n\ndef P.d : Nat := 4\n\n#eval IO.println \"said while it compiled\"\n",
+             "P/C.lean": "module\n\n@[expose] public section\n\ndef P.c : Nat := 3\n"}
+    monkeypatch.delenv("LAKE_ARTIFACT_CACHE", raising=False)
+    monkeypatch.setenv("LAKE_CACHE_DIR", str(cache))
+
+    def lake(at: Path, *argv: str, **env: str) -> str:
+        r = subprocess.run(["lake", *argv], cwd=at, env={**os.environ, **env}, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True)
+        assert r.returncode in (0, 3) if "--no-build" in argv else r.returncode == 0, r.stdout
+        return r.stdout
+
+    write(pkg, files)
+    if how == "cache":
+        lake(pkg, "build", LAKE_ARTIFACT_CACHE="true")
+        shutil.rmtree(pkg / ".lake" / "build")
+    else:
+        publisher, out = tmp_path / "publisher" / "p", tmp_path / "published"
+        write(publisher, files)
+        writable = {"LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
+        lake(publisher, "build", "-o", str(out / "outputs.jsonl"), **writable)
+        lake(publisher, "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage"), **writable)
+        lake(publisher, "cache", "unstage", str(out / "stage"))
+        shutil.copy(publisher / "lake-manifest.json", pkg)
+    took = lake(pkg, "build", "-v", "--no-ansi")
+    assert "Built" not in took and ("Reused P.A" if how == "cache" else "Unpacked P.A") in took, took
+    mods = ["P", "P.A", "P.B", "P.D"]
+    for m in mods:
+        trace = (pkg / S.LIB).joinpath(*m.split(".")).with_suffix(".trace")
+        assert S.built_from(trace, f"{m.split('.')[-1]}.lean") == (None, True), f"{m}: {trace.read_text()}"
+
+    def ask(args: list[str]) -> tuple[int, str, float, int]:
+        return S.run(["lake", *args], pkg)
+
+    assert S.plan(pkg, "P/C.lean") == S.Plan("P.C", True, [], mods), "no build Lake took counts without Lake's word"
+    p = S.plan(pkg, "P/C.lean", ask)
+    assert p[:4] == ("P.C", True, mods, []) and p.word.startswith("Lake holds 4 of the 4 modules that could be siblings"), p
+    assert _cli().main(["lean", "try", str(pkg / "P" / "C.lean"), "--siblings"]) == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "P/C.lean: Lake holds 4 of the 4 modules that could be siblings as their inputs are now (lake build" in out, out
+    assert "siblings: no built module of its package that doesn't import P.C declares a name it does (4 imported" in out, out
+
+    source, trace = pkg / "P" / "A.lean", pkg / S.LIB / "P" / "A.trace"
+    write(pkg, {"P/A.lean": files["P/A.lean"] + "\ndef P.more : Nat := 2\n"})
+    os.utime(source, (2_000_000_000, 2_000_000_000))
+    os.utime(trace, (2_000_000_100, 2_000_000_100))
+    p = S.plan(pkg, "P/C.lean", ask)
+    assert p[:4] == ("P.C", True, ["P.D"], ["P", "P.A", "P.B"]), ("a build taken for another text, though its trace is "
+                                                                 "the newer", p)
+    assert p.word.startswith("Lake holds 1 of the 4 modules") and ": exit 3 in " in p.word, p
+    write(pkg, {"P/A.lean": files["P/A.lean"]})
+    os.utime(source, (2_100_000_000, 2_100_000_000))
+    p = S.plan(pkg, "P/C.lean", ask)
+    assert p[:4] == ("P.C", True, mods, []), ("written again as it was, later than every build", p)
+
+    write(pkg, {"P/A.lean": files["P/A.lean"] + "\ndef P.more : Nat := 2\n"})
+    lake(pkg, "build", "+P.A")
+    store, trace = tmp_path / "lean-artifacts", pkg / S.LIB / "P" / "B.trace"
+    p = S.plan(pkg, "P/C.lean", ask, store)
+    assert p[:4] == ("P.C", True, ["P.A", "P.D"], ["P", "P.B"]), ("Lake would compile P.B, whose import was rebuilt", p)
+    entry(store, "p", "P.B", S.dep_hash(trace), {"p/P/B.lean": files["P/B.lean"]})
+    p = S.plan(pkg, "P/C.lean", ask, store)
+    assert p[:4] == ("P.C", True, ["P.A", "P.B", "P.D"], ["P"]), ("the index records P.B's source under its hash", p)
+    assert p.word.endswith("; the index records the source as it is of 1 of the 2 other builds Lake took that a stub "
+                           "could load (1 entries read in 0 s)"), p
+
+
 DEFS = ("module\n\n@[expose] public section\n\nnamespace P\n\nstructure Trace where\n  log : List Nat\n  out : Nat\n\n"
         "def step : Nat → Trace → Trace\n  | 0, t => { t with out := 0 }\n  | n + 1, t => step n { t with log := n :: t.log }\n")
 USER = ("module\n\npublic import P.D\n\n@[expose] public section\n\nnamespace P\n\n"
@@ -748,11 +1080,18 @@ def test_the_local_try_rebuilds_what_the_stubs_refusal_names_once_and_elaborates
         tmp_path, monkeypatch, capsys):
     """Against a stand-in `lake` that refuses the stub over `P.B` and `P.A` until it has built them: the local try runs
     `lake build +P.B +P.A` in the package, once, then the stub once more, and prints the rebuild's line before the
-    verdict's, as `lean_changed.py --try` does on a node for such a refusal (`test_lean_changed.py`)."""
-    pkg, bin_, log = tmp_path / "p", tmp_path / "bin", tmp_path / "ran"
+    verdict's, as `lean_changed.py --try` does on a node for such a refusal (`test_lean_changed.py`). Before the first
+    stub the try asks Lake which builds it holds: `P.A`, which Lake took, is a sibling on the line that says so. The
+    rebuild changed the builds that plan read, so the try asks Lake again before the second stub, whose plan is the
+    verdict."""
+    pkg, bin_, log, word = tmp_path / "p", tmp_path / "bin", tmp_path / "ran", tmp_path / "word"
     write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/A.lean": "module\n", "P/B.lean": "module\n",
                 "P/C.lean": "module\n"})
     built(pkg, "P.A", "P.B")
+    lib, made = pkg / S.LIB / "P", tmp_path / "made"
+    shutil.copytree(lib, made)
+    (lib / "A.trace").write_text(TOOK["cache"])
+    word.write_text(lake_out(("✔", "Reused", "P.A"), ("✔", "Replayed", "P.B"))[1])
     write(bin_, {"lake": f"""#!/bin/sh
 echo "$@" >> "{log}"
 case "$1 $2 $3" in
@@ -760,8 +1099,11 @@ case "$1 $2 $3" in
         [ -e "{tmp_path}/rebuilt" ] && exit 0
         echo "VeritySiblings.lean:1:0: error: import P.B failed, environment already contains 'P.step.eq_1' from P.A"
         exit 1;;
+    "build --no-build -v")
+        cat "{word}";;
     build\\ *)
         : > "{tmp_path}/rebuilt"
+        cp "{made}"/* "{lib}"/
         echo "[3/4] Built P.A (1.0s)";;
 esac
 exit 0
@@ -769,9 +1111,16 @@ exit 0
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
     assert _cli().main(["lean", "try", str(pkg / "P" / "C.lean"), "--siblings"]) == 0
-    assert [" ".join(line.split()[:3]) for line in log.read_text().splitlines()] == [
-        "env lean -R", "env lean --setup", "build +P.B +P.A", "env lean --setup"]
-    first, last = [line for line in capsys.readouterr().out.splitlines() if "siblings:" in line]
+    ran = [" ".join(line.split()[:3]) for line in log.read_text().splitlines()]
+    assert ran == ["build --no-build -v", "env lean -R", "env lean --setup", "build +P.B +P.A", "build --no-build -v",
+                   "env lean --setup"], ran
+    assert log.read_text().splitlines()[0] == "build --no-build -v --no-ansi +P.A +P.B"
+    out = capsys.readouterr().out
+    held = [line for line in out.splitlines() if "Lake holds" in line]
+    assert len(held) == 2 and all(line.startswith(
+        "verity lean try: P/C.lean: Lake holds 2 of the 2 modules that could be siblings as their inputs are now (lake build "
+        "--no-build -v --no-ansi: exit 0 in ") for line in held), out
+    first, last = [line for line in out.splitlines() if "siblings:" in line]
     assert first.startswith("verity lean try: P/C.lean: siblings: P.B and P.A both declare 'P.step.eq_1' as they are built "
                             "here: Lake rebuilt P.A in ") and first.endswith(" s, and the stub is elaborated once more")
     assert last.startswith("verity lean try: P/C.lean: siblings: no built module of its package that doesn't import P.C "

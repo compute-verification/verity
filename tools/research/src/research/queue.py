@@ -4190,11 +4190,22 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
 #: and `stage.py`'s word maps, `rename.py`) and `Layout-move:` (`stage.py`'s path maps, `layout.py`)
 MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
 #: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
-#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
-#: worktree), and prints the tree it leaves (`MAPPED_RE`)
+#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/` and the map the
+#: move adds, `own_map`, in a scratch worktree), merges in what the move has beside its script's output on its parent (its hand
+#: changes and that map: `check_generated`) as restack.py's step `hand` does, and prints the tree it leaves (`MAPPED_RE`); by a
+#: restack.py from before own maps and hand changes, as that one ran a move
 _MAPPED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
-           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(sys.argv[3], None)\n"
-           "print('mapped', R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
+           "x, m = sys.argv[2:4]\n"
+           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(m, None)\n"
+           "base = R.move_base(m, None)\n"
+           "own = getattr(R, 'own_map', lambda *a: None)(m, base, R.SCRIPT_ARGS, None)\n"
+           "tree = R.run_script(x, base, sys.executable, None, *([(m, own)] if own else []))[0]\n"
+           "if own or getattr(R, 'hand_of', lambda *a: [])(m, None):\n"
+           "    on_base = R.commit_tree(R.check_generated(m, base, sys.executable, None), [], 'the script on the base', None)\n"
+           "    tree, files = R.merge_trees(R.commit_tree(tree, [x], 'the script', None), m, None, base=on_base)\n"
+           "    if files:\n"
+           "        sys.exit('its hand changes conflict with the head in ' + ', '.join(files))\n"
+           "print('mapped', tree)\n")
 MAPPED_RE = re.compile(r"^mapped ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one head (`mapped_tree`): a layout map on the whole tree, `uv lock` with it
 MAPPED_TIMEOUT_S = 1800.0
@@ -4226,17 +4237,18 @@ def scratch() -> tempfile.TemporaryDirectory:
 
 
 def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
-                timeout: float = MAPPED_TIMEOUT_S) -> tuple[str | None, str]:
+                timeout: float = MAPPED_TIMEOUT_S, env: dict[str, str] | None = None) -> tuple[str | None, str]:
     """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
-    runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
-    ``timeout`` seconds pass (`run_group`), with its scratch worktree in a `scratch` directory, which goes once it has run, and
-    with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's
-    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials nor the store's keys
-    (`tree_env`), so the run gets none, and `gh` a config that isn't there."""
+    runs it on a branch (`_MAPPED`), with ``env`` in its environment for the merge of its hand changes: `cross_drivers`, ''), or
+    (None, why it couldn't).  It runs in a process group of its own, killed whole once ``timeout`` seconds pass (`run_group`),
+    with its scratch worktree in a `scratch` directory, which goes once it has run, and with it the clone's record of a worktree
+    a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's own code runs there, which a reviewer
+    passed (`UNLANDED`) but which needs none of the queue's credentials nor the store's keys (`tree_env`), so the run gets none,
+    and `gh` a config that isn't there."""
     with scratch() as d:
-        env = tree_env(_script_env())
         rc, out = run_group([sys.executable, "-c", _MAPPED, str(restack), commit, move], repo, timeout,
-                            env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
+                            env={**tree_env({**_script_env(), **(env or {})}), "TMPDIR": d,
+                                 "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
         left = any(Path(d).iterdir())
     if left:
         with open(Path(repo, _out(repo, "rev-parse", "--git-common-dir")) / WORKTREES_LOCK, "a") as f:
@@ -4260,10 +4272,11 @@ def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[
     `tools/move/restack.py` carries a branch, from its merge base with ``onto``, ''), or (None, why it can't): it refuses a head
     with a commit of ``onto``'s that came after the last move's parent, as the restack does (`based-after`), and skips an
     earlier move such a head is based after, as a restack naming only the moves after it crosses; before each move it merges
-    the move's parent when it lacks it (with ``env`` in that git's environment: `cross_drivers`), a merge that must leave its
-    own change as it was (as a merge of `main` must, to keep a mark: `StoreLabels`), then the move's script runs on it
-    (`mapped_tree`, ``restack`` the directory holding main's `restack.py`), and the result takes the move as a second parent.
-    What a restack of ``head`` gives for its own change, when `main` since the last move touched none of it."""
+    the move's parent when it lacks it (with ``env`` in that git's environment, and in the merge of the move's hand changes:
+    `cross_drivers`), a merge that must leave its own change as it was (as a merge of `main` must, to keep a mark:
+    `StoreLabels`), then the move runs on it (`mapped_tree`, ``restack`` the directory holding main's `restack.py`), and the
+    result takes the move as a second parent.  What a restack of ``head`` gives for its own change, when `main` since the last
+    move touched none of it."""
     x = head
     for i, (move, parents) in enumerate(moves):
         if len(parents) != 1:
@@ -4285,7 +4298,7 @@ def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[
             x = _git(repo, "commit-tree", got[0], "-p", x, "-p", base, "-m", f"Merge {base}", env=IDENTITY).stdout.strip()
             if _own_onto(repo, onto, x) != before:
                 return None, f"its merge with {base[:12]}, the base of the move {move[:12]}, changes its own change"
-        tree, why = mapped_tree(repo, x, move, restack)
+        tree, why = mapped_tree(repo, x, move, restack, env=env)
         if tree is None:
             return None, f"the move {move[:12]}'s script fails on it: {why}"
         x = _git(repo, "commit-tree", tree, "-p", x, "-p", move, "-m", f"Mapped across {move}", env=IDENTITY).stdout.strip()
@@ -4600,12 +4613,29 @@ def restack_why(x: dict) -> str:
     return f"{RESTACK}: {x.get('status')}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"
 
 
+def named_moves(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Those of ``moves`` that `tools/move/restack.py` carries ``head`` across when it finds them itself, which `cross_one`
+    names to it: it skips a move the branch it carries is based after (shares with ``main`` a commit the move's base lacks,
+    the moves it crossed among them) where a later move's base contains it, as `mapped_change` skips one, and refuses a named
+    move it is based after (`based-after`), since it never skips a named one."""
+    shared, out = _git(repo, "merge-base", "--all", head, main, check=False).stdout.split(), []
+    for i, (move, parents) in enumerate(moves):
+        later = [q[0] for _, q in moves[i + 1:] if len(q) == 1]
+        if (len(parents) == 1 and later and _out(repo, "rev-list", "-n1", *shared, f"^{parents[0]}")
+                and not _out(repo, "rev-list", "-n1", move, "--not", *later)):
+            continue
+        out.append((move, parents))
+        shared.append(move)
+    return out
+
+
 def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]], onto: str | None = None,
               kept: bool = False, src: str | None = None, drivers: dict[str, str] | None = None) -> dict:
     """``head`` carried across ``moves`` by ``main``'s own `tools/move/restack.py`, run from a `scratch` directory as `map_one`
     runs it and as `mapped_tree` runs a move's script, without the queue's credentials or the store's keys (`tree_env`):
-    `--move-commit` each move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main`
-    ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
+    `--move-commit` each move it crosses (`named_moves`), `--onto` ``onto`` (the crossed head of the PR below it in its
+    stack), else ``main``, `--main` ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with
+    ``drivers`` in their environment (`cross_drivers`).
     {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
     and the crossed head's own change from its merge base with ``main`` is the own change of ``src`` (the head whose labels
     would carry, default ``head``) mapped across the moves that base has and it lacks (`map_one`): the equality the loop
@@ -4619,7 +4649,8 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
         if not restack.is_file():
             return {"why": f"{main[:12]} has no {RESTACK}"}
         env = tree_env(_script_env())
-        argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
+        named = named_moves(repo, head, main, moves)
+        argv = [sys.executable, str(restack), head, *(a for m, _ in named for a in ("--move-commit", m)), "--onto", onto or main,
                 "--main", main, "--json", *(("--kept",) if kept else ())]
         rc, out = run_group(argv, repo, RESTACK_WAIT_S,
                             env={**env, **(drivers or {}), "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
@@ -6974,7 +7005,8 @@ def main(argv: list[str]) -> int:
                     "and whose tools/move/restack.py crosses them (default origin/main)")
     ap.add_argument("--move-commit", action="append", default=[], metavar="SHA", help="cross: a move to cross, a commit of "
                     "--main with a `Move:` or `Layout-move:` line, repeated (default: every move --main has and a head lacks); "
-                    "a head lacking others besides crosses the named ones, as restack.py --move-commit crosses it")
+                    "a head crosses those of them restack.py crosses finding them itself, which skips one the branch it "
+                    "carries is based after where a later one's base holds it (`named_moves`)")
     ap.add_argument("--only", type=int, nargs="+", metavar="N", help="cross: only these PRs; one stacked on a PR it doesn't name "
                     "is skipped, as its stack doesn't cross")
     ap.add_argument("--push", action="store_true", help="cross: push each crossing that is clean to its PR's own branch, with a "
