@@ -422,7 +422,7 @@ def selection() -> dict[str, Any]:
     rec = {"padded_heads": int(FS.FlashMLASparseImpl._compute_fp8_decode_padded_heads(NH)),
            "min_heads_for_bf16_prefill": int(FS.MIN_HEADS_FOR_BF16_PREFILL), "sparse_supported": list(sup),
            "interface": FI.__file__, "interface_sha256": sha, "decode_fn": f"{fn.__module__}.{fn.__name__}"}
-    rec["checks"] = {"padded_heads": rec["padded_heads"] == H_Q, "mixed_batch": NH < rec["min_heads_for_bf16_prefill"],
+    rec["checks"] = {"padded_heads": rec["padded_heads"] == H_Q, "mixed_batch": rec["min_heads_for_bf16_prefill"] > NH,
                      "sparse_supported": bool(sup[0]), "interface": sha == D.INTERFACE_SHA256,
                      "decode_fn": rec["decode_fn"] == "vllm.third_party.flashmla.flash_mla_interface.flash_mla_with_kvcache"}
     rec["ok"] = all(rec["checks"].values())

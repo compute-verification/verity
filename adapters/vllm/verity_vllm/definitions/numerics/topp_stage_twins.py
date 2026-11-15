@@ -237,7 +237,7 @@ def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, split
     keep, counts = np.zeros(V, bool), {}
     for S in K.SPLIT_COUNTS:
         k, counts[S] = _pipeline(E, T.Geo(V, S), x, p, outs)
-        if S == int(splits):
+        if int(splits) == S:
             keep = vals(k).astype(bool)
     xs = vals(x)
     masked = np.where(keep, xs, np.uint64(K.NEG_INF))

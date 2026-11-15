@@ -117,7 +117,7 @@ def reference(ids: Sequence[int], max_tokens: int, stops: Sequence[int], prompt_
     cap = 1 if cap <= 0 else cap
     s = next((i + 1 for i, x in enumerate(ids) if x & M32 in stop_set), T + 1)
     n = s if s <= cap else cap
-    if not (1 <= mt and n <= T):
+    if not (mt >= 1 and n <= T):
         return T, 0
     return n, 1 if s <= cap else 2 if mt <= n else 3
 

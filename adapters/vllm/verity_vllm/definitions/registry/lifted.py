@@ -1372,7 +1372,7 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
         raise ValueError("LServe_v1 requires a non-empty declared EOS set")
     for e in eos_ids:
         check_boundary(32, e, what="eos id", prescribed=True)
-    if not (1 <= STEPS and LP + STEPS <= C["MAX_POS"]):
+    if not (STEPS >= 1 and C["MAX_POS"] >= LP + STEPS):
         raise ValueError(f"LServe_v1 validity: 1 <= STEPS and LP + STEPS <= MAX_POS (got LP={LP}, STEPS={STEPS}, MAX_POS={C['MAX_POS']})")
     check_lag(lag)
     return eos_ids
@@ -2043,7 +2043,7 @@ def lifted_request(C: dict, prompt_len: int, cap: int, eos: Sequence[int], *, la
     fed a served length is refused by name (the unlifted `WorkloadProgram` rule, kept verbatim)."""
     if cap < 1:
         raise ValueError(f"max_tokens = {cap}: a request declares at least one sampling event")
-    if T is not None and T != cap - 1:
+    if T is not None and cap - 1 != T:
         raise ValueError(f"T={T} is not cap-1={cap - 1}: the Program must be built from the declared cap, never from a served length")
     return lserve(C, prompt_len, cap - 1, eos, lag=lag, gemm=gemm, attention=attention, norm=norm) if cap > 1 else \
         _prefill_only(C, prompt_len, eos, gemm=gemm, attention=attention, norm=norm)

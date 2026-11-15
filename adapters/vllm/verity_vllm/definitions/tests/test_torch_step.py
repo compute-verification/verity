@@ -98,7 +98,7 @@ def test_the_roots_constants_are_the_ignore_index_and_the_loss_seed() -> None:
     probe = CompositeDefinition("TrainStepConstantsProbe", 1, (), lambda S: ((("x", BL.BIT),), k.signature()[1]),
                                 lambda B, S, x: B.call(k), register=False)
     assert BS.evaluate_words(bind(probe), np.zeros((1, 1), U32)).reshape(-1).tolist() == [TS.IGNORE, TS.ONE]
-    assert TS.IGNORE == -100 & 0xFFFFFFFF and TS.ONE == np.float32(1).view(U32)
+    assert TS.IGNORE == -100 & 0xFFFFFFFF and np.float32(1).view(U32) == TS.ONE
 
 
 LINEARS = [(TS.LinearTorch, "fwd"), (TS.LinearTorchDx, "dX"), (TS.LinearTorchDw, "dW")]
@@ -278,7 +278,7 @@ def test_the_silu_models_are_the_bits() -> None:
 def test_the_rms_forward_model_is_the_gpus() -> None:
     """Four tokens of each of the step's five norms at H = 576 (32 lanes): the saved rsqrt r, the normalized bf16 hb and the
     output y, every word equal; and the norms' eps, 1e-5, is `torch_step.EPS`."""
-    assert TS.EPS == int(np.float32(1e-5).view(U32))
+    assert int(np.float32(1e-5).view(U32)) == TS.EPS
     with np.load(NORMS) as z:
         for i in range(5):
             x, w = z[f"n{i}_x"].astype(U32), np.broadcast_to(z[f"n{i}_w"].astype(U32), z[f"n{i}_x"].shape)

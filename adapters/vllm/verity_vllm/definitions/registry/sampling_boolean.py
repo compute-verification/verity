@@ -198,7 +198,7 @@ def _stage_sig(word, kw: int):
         n = levels(S.V)
         if not 0 <= S.L < len(n) - 1:
             raise ValueError(f"the tree over V={S.V} has stages 0..{len(n) - 2}, not L={S.L}")
-        final = S.L == len(n) - 2
+        final = len(n) - 2 == S.L
         ins = word if S.L == 0 else candidate(GB * S.L, kw)
         return (("c", Array(n[S.L], ins)),), (I32 if final else Array(n[S.L + 1], candidate(GB * (S.L + 1), kw)))
     return sig
@@ -209,7 +209,7 @@ def _stage(name: str, leaf: CompositeDefinition, merge: CompositeDefinition, wor
 
     def body(B, S, c):
         n = levels(S.V)
-        N, final = n[S.L], int(S.L == len(n) - 2)
+        N, final = n[S.L], int(len(n) - 2 == S.L)
         T = c.type.elem
 
         def member(g: int, first: int):

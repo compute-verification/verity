@@ -86,7 +86,7 @@ def check_statics(N: int, EPS: float) -> None:
 
 def check_block(N: int, BLOCK: int, WARPS: int, EPS: float) -> None:
     threads = WARP * WARPS
-    if not (WARPS > 0 and WARPS & (WARPS - 1) == 0 and BLOCK >= 2 * threads and BLOCK & (BLOCK - 1) == 0):
+    if not (WARPS > 0 and WARPS & (WARPS - 1) == 0 and 2 * threads <= BLOCK and BLOCK & (BLOCK - 1) == 0):
         raise ValueError(f"TritonBlockRMSNorm: a power-of-two BLOCK of at least two elements a thread on a power-of-two warp count "
                          f"(BLOCK={BLOCK}, WARPS={WARPS})")
     if not (0 < N <= BLOCK and N % min(BLOCK // threads, 8) == 0):

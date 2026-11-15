@@ -180,7 +180,7 @@ def _lane_partials(B, vec, block: int):
     """Thread t's vector partials t, t + BLOCK, ... added left to right: the first ``q`` of every thread's as one batch
     of sums in order, then the ``rem`` threads holding one more vector add it, one batch."""
     V = len(vec)
-    if V <= block:
+    if block >= V:
         return vec
     q, rem = divmod(V, block)
     lanes = _sums_in_order(B, Coll(Array(block, Array(q, F32)), strided_view(vec, 0, q, 1, block, block * q)), q)

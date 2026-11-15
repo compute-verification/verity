@@ -343,7 +343,7 @@ def test_the_cut_counts_its_units() -> None:
         assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v2"} == \
                {(hi - lo, lo) for lo, hi in bl}
         assert sum(cut.values()) == masks + len(bl) + 1 + 64 + 2 * SERVED_TOPK
-    assert R.CUTS == {"DsaTopKReadRows_v1": R.cut}
+    assert {"DsaTopKReadRows_v1": R.cut} == R.CUTS
 
 
 #: the row classes the long row serves: N a multiple of TOPK from 4,096 to the table's capacity

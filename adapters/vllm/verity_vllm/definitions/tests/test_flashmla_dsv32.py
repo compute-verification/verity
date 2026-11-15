@@ -346,7 +346,7 @@ def test_glm53_statics():
     S = V.FLASHMLA_GLM53
     assert (S["NH"], S["DN"], S["DR"], S["QT"], S["BN"], S["SCALE"]) == (8, 512, 64, 128, 64, 0.0625)
     assert S["DN"] + 4 * (S["DN"] // S["QT"]) + 2 * S["DR"] == 656
-    assert V.GLM53_TOPK == 32 * S["BN"]
+    assert 32 * S["BN"] == V.GLM53_TOPK
     assert F.scale_log2_bits(S["SCALE"]) == T.scale_log2(S["SCALE"])
     dec = bind(V.FlashMlaV32Decode, **{**S, "SPLITS": TV.step_splits(14, topk=V.GLM53_TOPK)})
     assert dec.out_leaves == 8 * 512

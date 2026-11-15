@@ -349,7 +349,7 @@ def _log_tables() -> dict:
     # step 1: m = 1 + t 2^-8 + m1 2^-23, R1 = k1 / 2^9, U1 = (m R1 - 1 + 2^-8) 2^32 in [0, 2^25)
     k1 = [512 if t == 0 else 256 if t == 255 else round(Fraction(1 << 18, 513 + 2 * t)) for t in range(256)]
     for t, k in enumerate(k1):
-        assert (1 << 32) - (1 << 24) <= ((1 << 23) + (t << 15)) * k and ((1 << 23) + ((t + 1) << 15) - 1) * k < (1 << 32) + (1 << 24)
+        assert ((1 << 23) + (t << 15)) * k >= (1 << 32) - (1 << 24) and ((1 << 23) + ((t + 1) << 15) - 1) * k < (1 << 32) + (1 << 24)
     # step 2: u1 = U1 2^-32 - 2^-8, index b = floor(u1 2^15), R2 = k2 / 2^16, U2 = (u2 + 2^-15) 2^48 in [0, 2^34)
     k2 = [1 << 16 if b in (0, -1) else round(Fraction(1 << 32, (1 << 16) + 2 * b + 1)) for b in range(-128, 128)]
     for bp, k in enumerate(k2):

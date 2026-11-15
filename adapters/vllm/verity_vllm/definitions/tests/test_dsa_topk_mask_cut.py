@@ -198,4 +198,4 @@ def test_the_cut_counts_its_units_past_whole_max(family) -> None:
         M_ = -(-N // X.BLOCK)
         cut = X.cut(bind(family, N=N, TOPK=SERVED_TOPK))
         assert sum(n for _, n in cut) == 5 * M_ + 4 == len(X.plan(N, SERVED_TOPK))
-    assert M.CUTS == {"DsaTopKMaskCounted_v1": X.__name__} and BM.CUTS == {"DsaTopKMaskCounted_v2": X.__name__}
+    assert {"DsaTopKMaskCounted_v1": X.__name__} == M.CUTS and {"DsaTopKMaskCounted_v2": X.__name__} == BM.CUTS

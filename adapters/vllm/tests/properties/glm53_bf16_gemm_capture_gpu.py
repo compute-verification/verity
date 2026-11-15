@@ -284,7 +284,7 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     w[1, starts[0] + 1] = 0x3F80
     w[1, starts[1]] = 0xC780
     models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
-    if np.array_equal(models[BC.CUBLAS_SPLITK_HYPOTHESIS], models["strided-f32-forward"]) and K > 16 * splits:
+    if np.array_equal(models[BC.CUBLAS_SPLITK_HYPOTHESIS], models["strided-f32-forward"]) and 16 * splits < K:
         w[2] = 0
         w[2, [0, 16, 16 * splits]] = [0x4C00, 0xCC00, 0x3F80]
         models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)

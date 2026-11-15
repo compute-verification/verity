@@ -154,7 +154,7 @@ def _refuse(b: dict) -> str | None:
     tile, v, n = b.get("TILE"), b.get("V"), b.get("N")
     if tile is not None and not (type(tile) is int and tile >= 512 and tile % 512 == 0):
         return f"TILE is a positive multiple of 512 (128 threads, four lanes a vector), not {tile!r}"
-    if n is not None and not (type(n) is int and 1 <= n and (tile is None or n <= tile)):
+    if n is not None and not (type(n) is int and n >= 1 and (tile is None or n <= tile)):
         return f"a tile holds 1 to TILE logits, not N={n!r} at TILE={tile!r}"
     if v is not None and tile is not None:
         if not (type(v) is int and v % 16 == 0 and PADDED_TILES // 2 < -(-v // tile) <= PADDED_TILES):

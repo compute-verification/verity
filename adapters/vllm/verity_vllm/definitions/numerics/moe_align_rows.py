@@ -35,7 +35,7 @@ def moe_align_ranks(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[
     e, k, i = (_i32(ops[g], P) for g in range(3))
     before = (e[None, :] == e[:, None]) & ((k[None, :] < k[:, None]) | ((k[None, :] == k[:, None]) & (i[None, :] < i[:, None])))
     rank = before.sum(axis=1)
-    start = (0 <= e) & (e < E) & (rank % BM == 0)
+    start = (e >= 0) & (e < E) & (rank % BM == 0)
     return {"0": _word(rank), "1": _word(start)}
 
 

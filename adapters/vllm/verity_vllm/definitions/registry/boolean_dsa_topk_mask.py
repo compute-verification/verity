@@ -500,7 +500,7 @@ def _tags_count(B, S, mask):
     tags = concat([B.batch(bind(DsaButterflyTag, W=0, KB=kb), keys(0, 1), axes=(0,)).refs,
                    *(B.batch(bind(DsaButterflyTag, W=min(h, kb), KB=kb), keys(1 << h - 1, len(c)), c, axes=(0, 0)).refs
                      for h, c in sorted(before.items()))])
-    tiles = ([(depth - 1, 0), (depth - 1, 1)] if N == 1 << depth
+    tiles = ([(depth - 1, 0), (depth - 1, 1)] if 1 << depth == N
              else [(k, N >> k + 1 << 1) for k in reversed(range(depth)) if N >> k & 1])
     total, wide = _sum_counts(B, zero, [(up[k].refs.slice(t * (k + 1), (t + 1) * (k + 1)), k + 1) for k, t in tiles], depth + 1)
     return tuple_of(Coll(Array(N, _tag(S.K)), tags), Coll(I32, concat([total, _rep(zero, 32 - wide)])))

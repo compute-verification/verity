@@ -88,7 +88,7 @@ def test_the_units_compute_the_twin_s_words_whose_token_is_the_call_s(kind, temp
         tok, outs = TW.stage_rows(V, lg, splits=S, **ops)
         for fam in (SA.GumbelTopPTokenSelect, SA.GumbelTopPTokenSelectSharedGreedy):
             assert evaluate(bind(fam, V=V), [int(v) for v in lg], *(ops[o] for o in OPERANDS[:4]), S) == (tok,), (fam, S)
-        if S != at:
+        if at != S:
             continue
         bad = []
         for u in T.plan(V):
