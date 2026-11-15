@@ -22,45 +22,61 @@ conflicts = [[
 [manifest]
 members = [
     "cluster",
+    "cluster-tests",
     "core-identity",
     "memory-challenger-lean",
     "pous-check",
     "research",
+    "research-tests",
     "verity",
     "verity-bench",
     "verity-bench-specs",
+    "verity-bench-tests",
     "verity-certifier-timing",
     "verity-check",
     "verity-circuit-check",
+    "verity-circuit-check-tests",
     "verity-cli",
+    "verity-cli-tests",
     "verity-commitments-benchmarks",
     "verity-config",
+    "verity-config-tests",
     "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-sampled-proofs",
     "verity-core-zk-server",
     "verity-difftest",
+    "verity-difftest-tests",
     "verity-exact-kit",
+    "verity-exact-kit-tests",
     "verity-flock",
     "verity-flock-tests",
     "verity-graph",
+    "verity-graph-tests",
     "verity-landq",
+    "verity-landq-tests",
     "verity-lean-audit",
     "verity-machine-model",
+    "verity-machine-model-tests",
     "verity-native-peak",
     "verity-network-e2e",
     "verity-network-traces",
     "verity-numerical",
+    "verity-numerical-tests",
     "verity-ops",
+    "verity-ops-tests",
     "verity-pouw-benchmarks",
     "verity-pouw-check-difftest",
     "verity-pouw-window-difftest",
     "verity-proof-throughput",
+    "verity-proof-throughput-tests",
     "verity-slack-events",
     "verity-tc-probe",
     "verity-tc-probe-fp4",
     "verity-torch",
+    "verity-torch-tests",
     "verity-vllm",
+    "verity-vllm-tests",
 ]
 
 [[package]]
@@ -167,6 +183,17 @@ wheels = [
 name = "cluster"
 version = "0.1.0"
 source = { editable = "infra/cluster" }
+
+[[package]]
+name = "cluster-tests"
+version = "0.0.0"
+source = { virtual = "infra/cluster/tests" }
+dependencies = [
+    { name = "cluster" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cluster" }]
 
 [[package]]
 name = "colorama"
@@ -1775,6 +1802,17 @@ version = "0.1.0"
 source = { editable = "tools/research" }
 
 [[package]]
+name = "research-tests"
+version = "0.0.0"
+source = { virtual = "tools/research/tests" }
+dependencies = [
+    { name = "research" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "research" }]
+
+[[package]]
 name = "rpds-py"
 version = "2026.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2360,6 +2398,17 @@ version = "0.0.0"
 source = { virtual = "benchmarks/harness/specs" }
 
 [[package]]
+name = "verity-bench-tests"
+version = "0.0.0"
+source = { virtual = "benchmarks/harness/tests" }
+dependencies = [
+    { name = "verity-bench" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-bench" }]
+
+[[package]]
 name = "verity-certifier-timing"
 version = "0.0.0"
 source = { virtual = "benchmarks/certifier_timing" }
@@ -2407,6 +2456,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-circuit-check-tests"
+version = "0.0.0"
+source = { virtual = "tools/verity/circuit_check/tests" }
+dependencies = [
+    { name = "verity-circuit-check" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-circuit-check" }]
+
+[[package]]
 name = "verity-cli"
 version = "0.0.0"
 source = { editable = "tools/verity/cli" }
@@ -2416,6 +2476,17 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
+
+[[package]]
+name = "verity-cli-tests"
+version = "0.0.0"
+source = { virtual = "tools/verity/cli/tests" }
+dependencies = [
+    { name = "verity-cli" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-cli" }]
 
 [[package]]
 name = "verity-commitments-benchmarks"
@@ -2450,6 +2521,17 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity", editable = "." }]
+
+[[package]]
+name = "verity-config-tests"
+version = "0.0.0"
+source = { virtual = "tools/config/tests" }
+dependencies = [
+    { name = "verity-config" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-config" }]
 
 [[package]]
 name = "verity-core-composition"
@@ -2507,6 +2589,17 @@ dependencies = [
 requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 
 [[package]]
+name = "verity-difftest-tests"
+version = "0.0.0"
+source = { virtual = "tools/difftest/tests" }
+dependencies = [
+    { name = "verity-difftest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-difftest" }]
+
+[[package]]
 name = "verity-exact-kit"
 version = "0.1.0"
 source = { editable = "benchmarks/pouw/exact_kit" }
@@ -2522,6 +2615,17 @@ requires-dist = [
     { name = "python-sat", specifier = ">=1.8.dev0" },
     { name = "sympy", specifier = ">=1.13" },
 ]
+
+[[package]]
+name = "verity-exact-kit-tests"
+version = "0.0.0"
+source = { virtual = "benchmarks/pouw/exact_kit/tests" }
+dependencies = [
+    { name = "verity-exact-kit" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-exact-kit" }]
 
 [[package]]
 name = "verity-flock"
@@ -2566,9 +2670,31 @@ version = "0.0.0"
 source = { editable = "tools/verity/graph" }
 
 [[package]]
+name = "verity-graph-tests"
+version = "0.0.0"
+source = { virtual = "tools/verity/graph/tests" }
+dependencies = [
+    { name = "verity-graph" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-graph" }]
+
+[[package]]
 name = "verity-landq"
 version = "0.0.0"
 source = { editable = "tools/verity/landq" }
+
+[[package]]
+name = "verity-landq-tests"
+version = "0.0.0"
+source = { virtual = "tools/verity/landq/tests" }
+dependencies = [
+    { name = "verity-landq" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-landq" }]
 
 [[package]]
 name = "verity-lean-audit"
@@ -2595,6 +2721,17 @@ requires-dist = [
     { name = "numpy" },
     { name = "scipy", specifier = "==1.18.1" },
 ]
+
+[[package]]
+name = "verity-machine-model-tests"
+version = "0.0.0"
+source = { virtual = "benchmarks/machine_model/tests" }
+dependencies = [
+    { name = "verity-machine-model" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-machine-model" }]
 
 [[package]]
 name = "verity-native-peak"
@@ -2662,6 +2799,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-numerical-tests"
+version = "0.0.0"
+source = { virtual = "benchmarks/numerical/tests" }
+dependencies = [
+    { name = "verity-numerical" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-numerical" }]
+
+[[package]]
 name = "verity-ops"
 version = "0.1.0"
 source = { editable = "infra/ops" }
@@ -2671,6 +2819,17 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "research", editable = "tools/research" }]
+
+[[package]]
+name = "verity-ops-tests"
+version = "0.0.0"
+source = { virtual = "infra/ops/tests" }
+dependencies = [
+    { name = "verity-ops" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-ops" }]
 
 [[package]]
 name = "verity-pouw-benchmarks"
@@ -2738,6 +2897,17 @@ requires-dist = [
     { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
+
+[[package]]
+name = "verity-proof-throughput-tests"
+version = "0.0.0"
+source = { virtual = "benchmarks/proof_throughput/tests" }
+dependencies = [
+    { name = "verity-proof-throughput" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-proof-throughput" }]
 
 [[package]]
 name = "verity-slack-events"
@@ -2819,6 +2989,17 @@ requires-dist = [
 provides-extras = ["torch"]
 
 [[package]]
+name = "verity-torch-tests"
+version = "0.0.0"
+source = { virtual = "adapters/torch/tests" }
+dependencies = [
+    { name = "verity-torch", extra = ["torch"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-torch", extras = ["torch"] }]
+
+[[package]]
 name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "adapters/vllm" }
@@ -2847,6 +3028,18 @@ requires-dist = [
     { name = "verity-torch", editable = "adapters/torch" },
 ]
 provides-extras = ["torch", "research"]
+
+[[package]]
+name = "verity-vllm-tests"
+version = "0.0.0"
+source = { virtual = "adapters/vllm/tests" }
+dependencies = [
+    { name = "verity-vllm", extra = ["research"] },
+    { name = "verity-vllm", extra = ["torch"], marker = "extra == 'extra-11-verity-vllm-torch' or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-vllm", extras = ["research", "torch"] }]
 
 [[package]]
 name = "z3-solver"
