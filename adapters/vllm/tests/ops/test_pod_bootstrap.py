@@ -251,3 +251,19 @@ def test_bootstrap_leaves_a_cache_already_under_work(tmp_path: Path) -> None:
     c = _through_step2(tmp_path, before=("work_uv",))
     assert (c["work_uv"] / "entry").exists() and (c["work_uv"] / "filled").exists()
     assert not c["work_pip"].exists()
+
+
+def test_the_launcher_it_writes_lets_a_spawned_child_start(tmp_path: Path) -> None:
+    """serve-openai spawns its seal process, which imports the launcher again as `__mp_main__`: an unguarded `main()` there
+    ran the CLI a second time in the child, which exited before its ready and took the server down."""
+    _through_step2(tmp_path)
+    cli = tmp_path / "stub" / "verity_vllm" / "pipeline"
+    cli.mkdir(parents=True)
+    for d in (cli.parent, cli):
+        (d / "__init__.py").write_text("")
+    (cli / "cli.py").write_text("import multiprocessing\n\n\ndef _child():\n    pass\n\n\ndef main():\n"
+                                "    p = multiprocessing.get_context('spawn').Process(target=_child)\n"
+                                "    p.start()\n    p.join()\n    return p.exitcode\n")
+    r = subprocess.run([sys.executable, "-S", str(tmp_path / "work" / "venv312" / "bin" / "verity-vllm")], cwd=tmp_path,
+                       capture_output=True, text=True, env={"PYTHONPATH": str(tmp_path / "stub"), "PATH": "/usr/bin:/bin"})
+    assert r.returncode == 0, f"the spawned child failed\n{r.stderr}"
