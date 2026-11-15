@@ -49,7 +49,7 @@ def _load(name: str):
 
 cr = _load("chain_record")
 from verity.protocols.accounting.certifier.prover import n2_zk as n2  # noqa: E402
-from verity.protocols.accounting.certifier.device import leak_guard as LG  # noqa: E402
+from benchmarks.network_traces import leak_guard as LG  # noqa: E402
 
 
 def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
