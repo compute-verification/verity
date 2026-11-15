@@ -1,5 +1,5 @@
-# The suite of `verity-flock` (its distribution is ..): a virtual member that depends on it, so the suite keys on what
-# the distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+# The suite of the distribution `verity-flock`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
 [project]
 name = "verity-flock-tests"
 version = "0.0.0"
