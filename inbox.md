@@ -19,3 +19,19 @@ Guard, run with the runner, `uv run tools/check/suites.py network_traces --fresh
 - without the mend: failed, "its tests read 2 files outside its inputs ... prove_path.py ... records_audit.py (read by test_kept_scan.py)", ci's failure exactly.
 Also: the TOML parses (51 inputs); tests/test_repository.py 17 passed.
 
+[2026-11-15T08:04Z] 27d8cbb253ef
+SCANCOUNT2: (a), mended. Branch cursor/na-scan-ok-hashes-b51f, commit a36323209a60 (on 009698aa9c0a), pushed; nothing to architecture or collect.
+Cause: verity/commitments/merkle.py:95 `_head` is lru_cache'd: each frame domain's hashed prefix is hashed once per process. The test counted the FIRST K.constants(T) as the per-call cost, so when no earlier test in its pytest worker had warmed the heads, the first call paid them (5 in ci, 6 here: 3 hm96 row-leaf heads, 1 pad head, 2 node heads) and the second didn't: 495 == 2*250. Order-dependent, not a lost hash: the digests are the same, only the prefix state is reused; no statement or circuit changed. Not tonight's tags/rename: the cache predates them (in merkle.py since the 11-11 layout move 6581bcf197d); the suite passes whole at 009698aa9c0a here, and [16] run alone fails 496 == 2*251.
+Before (test_network_certifier_scan_ok.py:194-202):
+    cs = K.constants(T)
+    once = len(sha512_calls)
+    ... assert len(sha512_calls) == 2 * once   (twice)
+After:
+    K.constants(T)
+    start = len(sha512_calls)
+    cs = K.constants(T)
+    once = len(sha512_calls) - start
+    ... assert len(sha512_calls) - start == 2 * once   (twice)
+  + docstring: "The count starts after one warm call: the frame's domain heads (`merkle._head`) are hashed once per process, so the first call's count depends on the tests before it."
+Ran: [2] [3] [16] [32] each alone (cold) 1 passed; the file 21 passed; py_compile ok; tests/test_repository.py 17 passed.
+
