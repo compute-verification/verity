@@ -1912,7 +1912,7 @@ def commit_advice(compiler: Mapping[str, str], data: bytes, salts: Sequence[byte
 
 def advice_opening(data: bytes, reg: AC.Committed) -> dict[str, Any]:
     """The advice's opening, the prover's private file: its bytes and every row's salt. Handing it to the verifier stands in for
-    the compile unit (the named gap)."""
+    the compile slice's proof block (the named gap)."""
     return {"scheme": ADVICE_SCHEME, "advice": bytes(data).hex(), "salts": [s.hex() for s in reg.salts]}
 
 
