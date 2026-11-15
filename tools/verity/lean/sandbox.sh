@@ -2,6 +2,7 @@
 # The build sandbox, run as
 #   unshare --user --map-root-user --mount --net --pid --fork --kill-child -- \
 #     bash sandbox.sh [--ro RO_DIR]... [--at FIXED TREE] RW_DIR... -- CMD...
+# or, for a fetch, with the network kept (`unshare` without `--net`) and said (`--net`), the rest the same.
 # Inside new user, mount, network and PID namespaces: every mount read-only except the RW_DIRs (the build's .lake
 # directories), a private /tmp, /dev/shm and /var/tmp unless an RW_DIR or an RO_DIR (read, never written: Lake's
 # artifact cache, or the seal the sampled recompile reads) lives under one, no network, and a fresh /proc. TMPDIR, TEMP
@@ -25,8 +26,10 @@ rw=()
 ro=()
 at=
 tree=
+net=
 while [ "$1" != "--" ]; do
   case "$1" in
+    --net) net=1; shift;;
     --ro) ro+=("$2"); shift 2;;
     --at) at="$2"; tree=$(realpath "$3"); shift 3;;
     *) rw+=("$1"); shift;;
