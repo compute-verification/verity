@@ -94,7 +94,10 @@ def test_slack_dates_rewrites_around_protected_spans():
 SUN_0225 = dt.datetime(2026, 11, 15, 10, 25, 30, tzinfo=UTC)                           # Sun 15 Nov, 2:25:30 AM PST
 SAT_2358 = dt.datetime(2026, 11, 15, 7, 58, 10, tzinfo=UTC)                            # Sat 14 Nov, 11:58 PM PST
 SUN_0001 = dt.datetime(2026, 11, 15, 8, 1, 10, tzinfo=UTC)                             # Sun 15 Nov, 12:01 AM PST
-PT_FIX = "write the time `TZ=America/Los_Angeles date` gives now, or leave the time out"
+COMING = "leave the time out, or, if it is a time to come, put `by`, `at` or `ETA` before it"
+PT_FIX = "write the time `TZ=America/Los_Angeles date` gives now, " + COMING
+Z_FIX = "write the time `date -u` gives now, " + COMING
+SUN_0820 = dt.datetime(2026, 11, 15, 16, 20, 5, tzinfo=UTC)                            # Sun 15 Nov, 8:20 AM PST: comms' probes
 
 
 @pytest.mark.parametrize("now, text, says", [
@@ -102,15 +105,16 @@ PT_FIX = "write the time `TZ=America/Los_Angeles date` gives now, or leave the t
      "the first line says Sun 15 Nov 2:28 AM PST and it is Sun 15 Nov 2:25 AM PST: " + PT_FIX),
     (SUN_0225, "lean/AREAS, 2:26 AM PST: one minute ahead", "the first line says 2:26 AM PST and it is 2:25 AM PST: " + PT_FIX),
     (SUN_0225, "lean (lead), 2:28 AM PST (10:28Z): x", "the first line says 2:28 AM PST and it is 2:25 AM PST: " + PT_FIX),
-    (SUN_0225, "ci 10:26Z: posts", "the first line says 10:26Z and it is 10:25Z: write the time `date -u` gives now, or leave "
-                                   "the time out"),
-    (SUN_0225, "ci, 15 Nov 10:40 UTC: x", "the first line says 15 Nov 10:40 UTC and it is 15 Nov 10:25Z: write the time "
-                                          "`date -u` gives now, or leave the time out"),
+    (SUN_0225, "ci 10:26Z: posts", "the first line says 10:26Z and it is 10:25Z: " + Z_FIX),
+    (SUN_0225, "ci, 15 Nov 10:40 UTC: x", "the first line says 15 Nov 10:40 UTC and it is 15 Nov 10:25Z: " + Z_FIX),
     (SUN_0225, "lean, Mon 16 Nov 1:00 AM PST: x",
      "the first line says Mon 16 Nov 1:00 AM PST and it is Sun 15 Nov 2:25 AM PST: " + PT_FIX),
     (SAT_2358, "lean (lead), 12:01 AM PST: x", "the first line says 12:01 AM PST and it is 11:58 PM PST: " + PT_FIX),
     (dt.datetime(2026, 11, 15, 23, 58, 10, tzinfo=UTC), "ci 00:01Z: x",
-     "the first line says 00:01Z and it is 23:58Z: write the time `date -u` gives now, or leave the time out"),
+     "the first line says 00:01Z and it is 23:58Z: " + Z_FIX),
+    (SUN_0820, "the window closes Sun 15 Nov 10:30 AM PST",                 # a time to come with no word before it
+     "the first line says Sun 15 Nov 10:30 AM PST and it is Sun 15 Nov 8:20 AM PST: " + PT_FIX),
+    (SUN_0820, "check starts 20:00Z", "the first line says 20:00Z and it is 16:20Z: " + Z_FIX),
 ])
 def test_a_first_line_stamped_ahead_of_the_clock_is_refused_with_the_stamp_the_clock_and_the_fix(now, text, says):
     """The lean lane's stamps ran up to 17 minutes ahead of the clock, kept right only by hand: one minute ahead is refused."""
@@ -132,6 +136,8 @@ def test_a_first_line_stamped_ahead_of_the_clock_is_refused_with_the_stamp_the_c
     (SUN_0225, "freeze 2026-11-15T12:00Z"), (SUN_0225, "lean, Sat 14 Nov 11:59 PM PST: yesterday"),
     (SUN_0001, "lean (lead), 11:59 PM PST: last night, across midnight"),
     (dt.datetime(2026, 11, 16, 0, 1, 10, tzinfo=UTC), "ci 23:59Z: across UTC midnight"),
+    (SUN_0820, "the review is due 8:30 AM PST today"),
+    (SUN_0820, "the window closes by Sun 15 Nov 10:30 AM PST"), (SUN_0820, "check starts at 20:00Z"),
 ])
 def test_a_stamp_at_or_behind_the_clock_no_stamp_and_a_doubt_all_pass(now, text):
     assert stamp_ahead(text, now) is None

@@ -25,7 +25,7 @@ _PAC = r"(?P<ph>\d{1,2}):(?P<pm>\d{2})\s*(?P<ap>[AP]M)\s+P[DS]T\s+\("
 _UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(?P<D>\d{{2}})T(?P<H>\d{{2}}):(?P<N>\d{{2}})(?::(?P<S>\d{{2}}))?Z)"
                        rf"|(?:{_DATE})?(?:{_PAC}(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})Z\)|(?P<bh>\d{{1,2}}):(?P<bm>\d{{2}})Z))(?![\w-])")
 #: a word just before a time that makes it a deadline (`by 20:00Z`, `ETA 4:00 AM PST`), not when the line was written
-DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
+DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}
 #: a stamp: `2:28 AM PST`, `Sun 15 Nov 2:28 AM PST`, `10:28Z`, `10:28 UTC`; `_CLOCKISH` is anything that looks like a clock
 _STAMP = re.compile(rf"(?<![\w:.-])(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*(?P<ap>[AP]M)\s+P[DS]?T"
                     rf"|(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})(?:Z|\s+UTC))(?![\w-])")
@@ -134,4 +134,5 @@ def stamp_ahead(text: str, now: dt.datetime) -> str | None:
     clock = ((f"{local:%a} " if g["wd"] else "") + f"{local.day} {local:%b} " if mon else "") + (
         f"{local:%I:%M %p}".lstrip("0") + f" {local.tzname()}" if pac else f"{local:%H:%M}Z")
     told = "TZ=America/Los_Angeles date" if pac else "date -u"
-    return f"the first line says {m[0].strip()} and it is {clock}: write the time `{told}` gives now, or leave the time out"
+    return (f"the first line says {m[0].strip()} and it is {clock}: write the time `{told}` gives now, leave the time out, "
+            "or, if it is a time to come, put `by`, `at` or `ETA` before it")

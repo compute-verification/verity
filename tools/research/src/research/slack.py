@@ -118,7 +118,7 @@ except ImportError:                                                 # run as a s
         def retired(text: str) -> list[tuple[str, str]]:
             return []
 
-    DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}   # timefmt's
+    DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}   # timefmt's
 
     def stamp_ahead(text: str, now: Any) -> str | None:
         return None

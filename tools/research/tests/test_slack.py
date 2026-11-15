@@ -1198,7 +1198,8 @@ def test_send_reply_and_ask_refuse_a_first_line_stamped_ahead_of_the_clock_and_p
                  ["ask", "--as", "infra", "--to", "@ci"]):
         rc, _, err = run(capsys, *argv, "--text", "infra, 2:28 AM PST: node 2 is free")
         assert rc == 2 and "the first line says 2:28 AM PST and it is 2:25 AM PST: write the time " \
-                           "`TZ=America/Los_Angeles date` gives now, or leave the time out" in err
+                           "`TZ=America/Los_Angeles date` gives now, leave the time out, or, if it is a time to come, put " \
+                           "`by`, `at` or `ETA` before it" in err
     assert len(fake.messages[COORD]) == 1
     assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra, 2:25 AM PST: free")[0] == 0
 

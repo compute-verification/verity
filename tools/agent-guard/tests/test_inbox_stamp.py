@@ -25,7 +25,8 @@ def test_send_refuses_a_stamp_ahead_of_the_clock_and_queues_nothing(inbox, tmp_p
     with pytest.raises(SystemExit) as e:
         inbox.main(["send", AGENT, "--local", "--text", "lean (lead), 2:05 AM PST: continue"], now=lambda: NOW)
     assert str(e.value) == ("inbox: the first line says 2:05 AM PST and it is 1:55 AM PST: write the time "
-                            "`TZ=America/Los_Angeles date` gives now, or leave the time out")
+                            "`TZ=America/Los_Angeles date` gives now, leave the time out, or, if it is a time to come, put "
+                            "`by`, `at` or `ETA` before it")
     assert not (tmp_path / "box").exists()
     body = tmp_path / "m.md"
     body.write_text("lean (lead), 1:55 AM PST: continue")
