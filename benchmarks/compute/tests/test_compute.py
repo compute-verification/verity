@@ -675,10 +675,10 @@ def test_the_uncredited_words_are_the_calls_own_sum_over_every_call(store, tmp_p
 
 
 @pytest.mark.parametrize("edits, why", [
-    ({"VERIFY": None}, ("the record holds no per-call give-up (`uncredited`): its verifier wrote none, as Pearl+'s "
-                        "verifier did before 13 Nov (#9477); `served_passes.py uncredited` computes one from the run's "
-                        "passes and verify.json, and --uncredited F reads it")),
-    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up (`uncredited`)"),
+    ({"VERIFY": None}, ("the record holds no per-call give-up: its verify document has no `uncredited`, which "
+                        "`served_passes.py uncredited` writes from the run's passes and verify.json, and --uncredited F "
+                        "reads")),
+    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up: its verify document has no"),
     ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
     ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
     ({"VERIFY": lambda d: (d["uncredited"]["calls"][1].update(macs=d["uncredited"]["calls"][1]["macs"] + 1), resum(d))},
@@ -965,7 +965,7 @@ def of_record(argv: list[str]) -> list[str]:
      f"challenger sample, salt coins from challenger; Lean verifier run as development; {PARAMETERS}", True),
     ({"DEVELOPMENT": None},
      f"node sample, salt coins: not stated in the record; Lean verifier run as development; {PARAMETERS}", True),
-    ({"ANSWER": lambda d: d["profile"].pop("source_from"), "LEAN_CHECK": lambda d: d.pop("argv"), "DEVELOPMENT": "not json"},
+    ({"ANSWER": lambda d: d["profile"].pop("source_from"), "LEAN_CHECK": lambda d: d.pop("argv"), "DEVELOPMENT": None},
      ("sample source not stated in the record sample, salt coins: not stated in the record; Lean verifier run not "
       f"stated in the record; {PARAMETERS}"), True),
     ({"ANSWER": lambda d: (d["profile"].pop("draws"), d["profile"].pop("delta"))},
@@ -994,3 +994,12 @@ def test_the_benchmarks_load_is_the_fixtures_and_the_harness_class_of_record():
                               "outputs": 4}
     policy = json.loads((RECORD / C.POLICY).read_text())
     assert {**policy["serve"], **{k: policy["class"][k] for k in ("slots", "prompt", "outputs")}} == C.fixed_load()
+
+
+def test_a_development_piece_that_does_not_read_as_json_exits_2_naming_it(store, tmp_path, capsys):
+    record = a_record(tmp_path, DEVELOPMENT="not json")
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert bench(store, *argv) == 2
+        out, err = capsys.readouterr()
+        assert out == "" and f"compute: the record's {C.DEVELOPMENT} doesn't read as JSON" in err
