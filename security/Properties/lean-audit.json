@@ -959,6 +959,28 @@
    "due": "2026-11-30"
   }
  },
+ "ids": {
+  "Accounting.Assumptions.KeyBinding": "key-binding",
+  "Accounting.Assumptions.Parties.Confined": "confined",
+  "Accounting.Assumptions.Parties.Faithful": "faithful",
+  "Accounting.Assumptions.Parties.Secret": "secret",
+  "Accounting.Assumptions.Parties.WitnessPathPrivate": "witness-path-private",
+  "Accounting.Remote.Held.Assumptions.Covered": "certifier-coverage",
+  "Claims.ExpectedCR": "ecr/sha-512",
+  "Claims.StrictBirthday": "cr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
+  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
+  "Hash.Assumptions.LmsUnforgeable": "euf-cma/lms-sha512-n64",
+  "Hash.Assumptions.Sha512Prf": "prf/sha-512",
+  "Pous.Period.Instantiates": "pous-ring-instantiation",
+  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
+  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
+  "Verity.Assumptions.TrustedDevice": "trusted-device",
+  "Verity.Assumptions.VerifierReadsLog": "honest-verifier"
+ },
  "trust": {
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
@@ -7057,15 +7079,40 @@
    "owner": "@memory-accounting",
    "signature": [
     "Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial :",
-    "  Not",
-    "    (Properties.Poub.Subprotocol.LineHeldBy (fun x x_1 => True) fun x x_1 =>",
-    "      Option.some Properties.Poub.Subprotocol.Toy.sm)"
+    "  Exists fun node =>",
+    "    Exists fun κ =>",
+    "      Exists fun X =>",
+    "        Exists fun Cm =>",
+    "          Exists fun x =>",
+    "            Exists fun prf =>",
+    "              Exists fun rest =>",
+    "                Exists fun recs =>",
+    "                  Exists fun correct =>",
+    "                    Exists fun com =>",
+    "                      Exists fun T =>",
+    "                        Exists fun R =>",
+    "                          Exists fun δs =>",
+    "                            Exists fun δnet =>",
+    "                              Exists fun O =>",
+    "                                Exists fun I =>",
+    "                                  Exists fun x_1 =>",
+    "                                    Exists fun x_2 =>",
+    "                                      Exists fun x_3 =>",
+    "                                        Exists fun x_4 =>",
+    "                                          Exists fun x_5 =>",
+    "                                            Exists fun x_6 =>",
+    "                                              Exists fun x_7 =>",
+    "                                                Exists fun x_8 =>",
+    "                                                  Not",
+    "                                                    (Real.instLE.le (Pouw.pr ⋯)",
+    "                                                      (instHAdd.hAdd (instHAdd.hAdd δs δnet) ⋯))"
    ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": [
+    "open": [],
+    "reads": [
      "Accounting.Remote.Held.Assumptions.Covered",
      "Accounting.Remote.Held.Assumptions.Covers",
      "Accounting.Remote.Held.Assumptions.IngressCounted",
@@ -7074,10 +7121,9 @@
      "Accounting.Remote.Sample.Assumptions.Counted",
      "Accounting.Remote.Sample.Assumptions.Live",
      "Accounting.Remote.Sample.Assumptions.Refused"
-    ],
-    "reads": []
+    ]
    },
-   "type_hash": "d3934685083236f1b71021633bff7457fad2e2994b75a5021d72f9426a5aa8d0"
+   "type_hash": "8ee56c454fb5ff6b91fe672b0ad09e23601a5bf5f2f1b5a6a3a1feba3d6d52b1"
   },
   "Properties.Poub.Line.lineChecked": {
    "owner": "@memory-accounting",
@@ -7277,15 +7323,36 @@
    "owner": "@memory-accounting",
    "signature": [
     "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_nontrivial :",
-    "  Not",
-    "    (Properties.Poub.Subprotocol.LineHeldAtSubprotocolBy (fun x x_1 x_2 x_3 x_4 => True) (fun x x_1 => True)",
-    "      fun x x_1 => Option.some Properties.Poub.Subprotocol.Toy.sm)"
+    "  Exists fun node =>",
+    "    Exists fun κ =>",
+    "      Exists fun X =>",
+    "        Exists fun Cm =>",
+    "          Exists fun x =>",
+    "            Exists fun prf =>",
+    "              Exists fun rest =>",
+    "                Exists fun recs =>",
+    "                  Exists fun correct =>",
+    "                    Exists fun com =>",
+    "                      Exists fun T =>",
+    "                        Exists fun R =>",
+    "                          Exists fun δs =>",
+    "                            Exists fun δnet =>",
+    "                              Exists fun a =>",
+    "                                Exists fun b =>",
+    "                                  Exists fun e =>",
+    "                                    Exists fun O =>",
+    "                                      Exists fun I =>",
+    "                                        Exists fun x_1 =>",
+    "                                          Exists fun x_2 =>",
+    "                                            Exists fun x_3 =>",
+    "                                              Exists fun x_4 => Exists fun x_5 => Exists fun x_6 => Exists ⋯"
    ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": [
+    "open": [],
+    "reads": [
      "Accounting.Remote.Held.Assumptions.Covered",
      "Accounting.Remote.Held.Assumptions.Covers",
      "Accounting.Remote.Held.Assumptions.IngressCounted",
@@ -7294,10 +7361,9 @@
      "Accounting.Remote.Sample.Assumptions.Counted",
      "Accounting.Remote.Sample.Assumptions.Live",
      "Accounting.Remote.Sample.Assumptions.Refused"
-    ],
-    "reads": []
+    ]
    },
-   "type_hash": "488c8946a5c49b413217a96f76174df9529494827466853fbe1e79d7edfddecd"
+   "type_hash": "3dcf7385d3a1061ae830a3f595965b3b02a3a63192a106571b48e89e038edd4d"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified": {
    "owner": "@memory-accounting",
@@ -14891,7 +14957,8 @@
    "InferenceOnlyCheck.Properties.Record.PinnedReadBinds": "unstated: stated in the properties tree and proved by InferenceOnlyCheck.Properties.Record.SecurityProofs.pinnedReadBinds in Proofs.Properties.InferenceOnly.Lemmas.Opening, listed as a guarantee after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyCheck.Properties.Record.PinnedReadHonest": "unstated: PinnedReadBinds's witness that the check's own form has a pinned read, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyCheck.Properties.Record.PinnedReadNontrivial": "unstated: PinnedReadBinds's witness that at the verdict bit 0 some pinned read does not return its table's row, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
-   "InferenceOnlyCheck.Properties.Record.OpenedRowReturned": "unstated: that an opening's declared row is the row its reader returns, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov"
+   "InferenceOnlyCheck.Properties.Record.OpenedRowReturned": "unstated: that an opening's declared row is the row its reader returns, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
+   "Properties.Site.RefusedAt": "unstated: a site entry's refusal, the first of its checks it fails, whose guarantee Properties.Site.refusedAt left the lock by name with its honest and nontrivial witnesses; it is listed again with them (owner @lean)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16100,11 +16167,18 @@
    }
   },
   "CoreProtocol.Site": {
-   "digest": "29fd4753b365c0d83b390d8e4ac26012ae3e738a4e43e3c5ad47a6e2b2263f8e",
+   "digest": "fe5c4f4598c3d639232e80eebab7b03b0100f30f4ebcdf24f60013d09b9243dc",
    "definitions": {
     "Core.Site": "2a3c07003f1e6c7bd6fe76f03f4d6653cbc9d1e2ebcb824862bc03b22c4e61e9",
+    "Core.Site.Boundary": "469c58ecf7869a988ee7461c486b8bba89fc9d20e455e84c47b9165cdde685f5",
+    "Core.Site.Certified": "56ee9d2752418be3280d44a6b6d12cd36041cdef09cc8fea75c2d63c86f67506",
+    "Core.Site.DeviceEstimate": "e5efb9d4625e168dac919a006e85f33ccca57e5bc37e6eee38f608e565a969f8",
+    "Core.Site.DeviceEstimate.figures": "ddc6c3f0bcf6ef90fdf57e580c096d008bc6b007ebdfcf9c2db4ee184b5f5c09",
+    "Core.Site.DeviceEstimate.tolerance": "b7e77b6a39deed436051cb008c165f7c8fe144cf95ca3839e4080cc70d4df618",
     "Core.Site.DeviceFigures": "6153935d2f23a92cef42c140c86f4c004686ce61dd59cbdeec7dddade401a792",
+    "Core.Site.DeviceFigures.Accepted": "1b0ed2f7f8710f757c95d5d8de37c99823cd33680370a6d54a2eb3d70c8e6f39",
     "Core.Site.DeviceFigures.clock": "89cf36a8cfafe744d0beb7805d2a6b49da1e131a743ac96f420d2568c017ac52",
+    "Core.Site.DeviceFigures.instDecidableAccepted": "d82ab405eece2bc84cc94f569654a5e8161df14838b986288643060fc57b2036",
     "Core.Site.DeviceFigures.peakRate": "0140a67566472485bdf721c7005057b70dcefcfea9746002fd19e1841832fa92",
     "Core.Site.DeviceFigures.sku": "3d65eac9783e88c7c746f71f1fdd35de64e8c3639372d3a5db5a983b372ff697",
     "Core.Site.Entry": "4e97b5176e20ee062afe5ea3202b8f59f37d9de5633665d886e2eed44474339a",
@@ -16117,17 +16191,23 @@
     "Core.Site.HostFigures.chip": "08e516ca09207324c654ab924829fa8078dc5a6c26db30b9567745e8b243cca6",
     "Core.Site.HostFigures.shared": "ca0a3ea567a8f536c0d1f0ea8194bfd33f581ef4215ae9d211b8941f823f172a",
     "Core.Site.HostFigures.ways": "620f61e15a1cce3e6fa7525acc1e3cd64af5f5a375fadc2a24a48a0fe26edff0",
+    "Core.Site.Joins": "9861181c44f080a4ba9b8ee912f2f610102c3122abe9b992acd7057731a26d71",
     "Core.Site.Kind": "e5204e6064f27a1ff2f751666e07cccf8e703a26a3763df15d8de4270615b9d0",
     "Core.Site.Kind.accelerator": "12666d76cfc1f9e674099cf46f8dbfa1ab29e8fda114da16671b05a9fdf6f0f5",
+    "Core.Site.Kind.auditor": "a3a514a0e5e756a11ae68ea664c626471adbf03453c810c520b4a537b5541607",
     "Core.Site.Kind.auditorHost": "946708dcae146d7bd04aa6e7c8b89ef9c1560ab1f11b8d0f4946ae73f14f58f0",
     "Core.Site.Kind.casesOn": "7faa2d8617ff45b8d3e382e2650aa8245997df41152ede59ca7fe728440e220c",
     "Core.Site.Kind.certifier": "ff3824253a1ab0d2a0f51a572cb8889118dbc5305211a7175ec7e30e6e4631d2",
     "Core.Site.Kind.challenger": "bacf588002ba562202396b85f78934455345ca1108b9598b3cd23af28f181cec",
+    "Core.Site.Kind.ctorIdx": "ba811b4b031bd38dd0527c8062021c4d57211c96a20f89247a92b4c51c8b5eb5",
     "Core.Site.Kind.host": "27473062baf097271633f89a6469edac23d7f02346028551809fe2624afd683f",
+    "Core.Site.Kind.links": "1273f117676c503e9d93cf0cb092373301a46302b217393833b9bde3860669d7",
     "Core.Site.Kind.memory": "64d2ae628cf0ede94a483142ed6e6d0b35a68e94693924b79e9435232ecf7548",
     "Core.Site.Kind.outside": "58e3895edab1521b871cfbcc44ae62f1dc74ea93c983e41fdf387ace327bf637",
+    "Core.Site.Kind.parents": "758a835730448e8255ee21cb98fdf5dbd693e8ab9d45cf1c461cfdaad7594b34",
     "Core.Site.Kind.rec": "85e738893853cf0ea9de07731c435e2ac4cbeda3e2841adb324c5cebc0daf945",
     "Core.Site.Kind.site": "b4d971aeca3d760574e6421f4076584c0cf80b039824797faade4789fc1ae318",
+    "Core.Site.Known": "367de3fde6e20166f7a5323f979af62a278d876079389fdc7a59770707b7e7be",
     "Core.Site.Link": "1fd67aa08031660a38ddd3998f8af7a3c983b4f16af1e9d66da64b71a318f9fc",
     "Core.Site.Link.ends": "0b81172a53f374a3eb7e9ff4ab93825c22cbd1168add85c77c0669ad870011f1",
     "Core.Site.Link.id": "33802d901f3e1f186ca5d778089a4558a6f089162b26222ceafd4a3a5cf410fb",
@@ -16155,6 +16235,7 @@
     "Core.Site.MemoryFigures.bytes": "a621e631cf9ca72ec1c6bd2ba2c8c4ca7ecfa9f0437a3c20f35e22606de5e6b6",
     "Core.Site.MemoryFigures.host": "5b871b58942bb8a262ee6b14f93676d3935ad7f8b070e96365a2e8863c4f1ea6",
     "Core.Site.OperandClass": "57c86e0c8e04eea7460bf69b23cec0ebbf5768da34b406cd6fd3d1f44c5ab205",
+    "Core.Site.OperandClass.all": "fcc22e56f90f33836fd11ae15928c9a35b4a359919f6bf7adb3d6d311ec0f2ae",
     "Core.Site.OperandClass.casesOn": "c44aad1f96098ce9335e22d20a65d121d280a2bde6b6f074051744ae5850ddc2",
     "Core.Site.OperandClass.rec": "25265bc98243da6771e56909f0eee97bdb8ab4117d5e618fc1d14bceb1f0e737",
     "Core.Site.OperandClass.uniformS2": "b6616241adf973e07e752961949df671f64d16e0071549ae6f22d3b2084b93c0",
@@ -16165,11 +16246,13 @@
     "Core.Site.Owner": "598db32b1c1141ec6f459538e3c992024662e063ae2e452edbc5dda732a54f88",
     "Core.Site.Owner.auditor": "48fa5bdc5ded6ed6ef455c18af5fa6871ceea92af82822b0b0b89b522a81ea85",
     "Core.Site.Owner.casesOn": "cc31676ebe1655a83a4110f5ce5aba0bc41519361e18e5d132a5e9bb88a71580",
+    "Core.Site.Owner.ctorIdx": "27d478cb882d78b0ca51ea7dd7be94cfae1057cdad6c0ca4aa601566ae80d33e",
     "Core.Site.Owner.prover": "ab82ff60ce72645461c38244f1ae4cdfc1fdec3abc8ceaa7c194239d7360974a",
     "Core.Site.Owner.rec": "0604ad13c05d690647c828ed6500a9771bad9459b501615bc0316616ba627edf",
     "Core.Site.Registration": "c04323afda3cf5edd91807b72cb9788cea3f51c2739e7c44efb57938f978b9b3",
     "Core.Site.Registration.Auditor": "b9db92a291df5e081794487a319dd531f5765f023fbb9d275e26b06f8201b0c5",
     "Core.Site.Registration.Auditor.drift": "d7f5b23723f0a2796c02e36199bc43c2bae9d0fe2baeab611235624d2583c285",
+    "Core.Site.Registration.Auditor.estimate": "bbef2a98ed2e527bc0a9270668fc24562c9da9078eae33533a69b30b44591e99",
     "Core.Site.Registration.Auditor.hosts": "2af235d6dca3093d982280401e0f97a780d98159109ac07899b8401671da5a04",
     "Core.Site.Registration.Auditor.key": "5a2a248a0274dc2a7851af85b94c921aaf93f9cbac5cb93266ca81772590e2ae",
     "Core.Site.Registration.Auditor.memory": "c2bf3acafee26381445e3c58f90d1fcdcfffa0d96d578180a0198c20a7a1f8c5",
@@ -16178,6 +16261,7 @@
     "Core.Site.Registration.Auditor.timebases": "3af9430e366c880ac91f6a6c53edb11db3b5325c47d74c2d575bc76950e6859b",
     "Core.Site.Registration.Auditor.tolerance": "912f8c3c39c023cdc58b823e80ade3e95050ce49ce78e226f7d1b9786cfa253d",
     "Core.Site.Registration.Composite": "0c7b37ad296e9c3a9c5d6419612339b1136a099e152be7113b23011974bbef31",
+    "Core.Site.Registration.Composite.onsite": "d6a912f3c2377a00bca971e93cf149b79b7442637f9bba7b3982ef7c5b038d3a",
     "Core.Site.Registration.Composite.remote": "bee7907c6e62d13dadf7a00e50b34cef602396692864305943e2f69c8449c7ac",
     "Core.Site.Registration.Digests": "bb847dc0b2a027451de17008edf9687e00a47e19a2e85ac406986006a3f740f6",
     "Core.Site.Registration.Digests.entry": "8a14a5d840b54c0c3fc7616993766b21905ac806ad2a683d7056b9b83e30b226",
@@ -16186,6 +16270,7 @@
     "Core.Site.Registration.Entry": "838843e1e85affc7566e29b9fb72f646441b1fbcd7529c0e7ed50fbf73d631a6",
     "Core.Site.Registration.Entry.added": "7b7e66aeb52f3fdc4452a334c55baf4a70d7468055b56493669b8828aefc9857",
     "Core.Site.Registration.Entry.casesOn": "b13c470ef2cfc33b219fe4c42434fc9c7f08755cd98901b76c626bde9f24daf3",
+    "Core.Site.Registration.Entry.previous": "1dccf3734e35a7b0dc775e19b48335a88692d35b8cb4566a1d4c8d49d958a381",
     "Core.Site.Registration.Entry.rec": "5ecb870d0161f83864804cc40f502f0a2919b2b675f9db73085b2702e9675741",
     "Core.Site.Registration.Entry.site": "7ec35a62a78063415c8310d24517c0c1b5942baa0c946f9d11881cc97156732c",
     "Core.Site.Registration.Refusal": "6a9b2a8164083eb44df06404c4618c5499ba524bc4748fb8cc2f61f804084f7c",
@@ -16202,22 +16287,44 @@
     "Core.Site.Registration.Refusal.sheetDigest": "508e8c0dbdc29fbb18391d1ccc1f1fbf790c5233d04cf662cf8d3b770bf0b4e7",
     "Core.Site.Registration.Refusal.uncertified": "b8dc23e88e76f5106c33948decb4b0cbc7189781259ab8eb597d052d7c99cff1",
     "Core.Site.Registration.Refusal.unknownRef": "adae5ee48a84260268b7e12e5be91b60988496806351de2977549f7ff2b04789",
+    "Core.Site.SCHEMES": "0133ba7c5fe5e90ea18507411ea58f0dc3a6d1b1f6ba4720c8eff82e9fc5f9c5",
     "Core.Site.Sheet": "ecb222e8e6e5298832a9b49d7d5d44df2565806b28c750ecb0341afb4a331fd8",
     "Core.Site.Sheet.bw": "111bc1727fbf8cc78af49b074b5b5f005efd63538bae4e2caac37defaa6eac0b",
     "Core.Site.Sheet.chip": "ddded7c77056855baa24060a0261a6f28f20eb3177410bd7735ea1f2f7515359",
     "Core.Site.Sheet.figures": "f8d55fd2f21d9e37b1f0e5a7a4dbdc373e26e56a73118c036ac0cdae59b6a056",
     "Core.Site.Sheet.mem": "287ff844e0ff147decd1b9f5e923d9f61e1a50a589b8319f8a629fafb0ba5221",
+    "Core.Site.Sheet.sku": "8c1a12341316010bd5aecdf7d5e280e5c7e0ef06c5c93b2e3a6be68d3693c296",
     "Core.Site.Tier": "cd9f6d8bfda3e96fc3784ff320478bf7c9753523d2aa47708748eef972d567e7",
     "Core.Site.Tier.casesOn": "f95c9f1aded1e037168112ae46be4e8aefbfeed0756c1e06c6f48d1a32ada01d",
+    "Core.Site.Tier.ctorIdx": "56c48dbb1988262deaf532e3fea434799928130622a6ba48a938f072098cadbc",
     "Core.Site.Tier.disk": "9f5f48f3ba0d06f46312ea2ea101e8d60258b4090b87db7bbe8f14c7614d1d48",
     "Core.Site.Tier.dram": "ba4bdc02dfe64fc812b5c96e46f3510321d3909ddec3e75ea5e6e1cee20e421e",
     "Core.Site.Tier.hbm": "06ad6bd4e2b2eaab93f606155c83306e93bb5e359d3b0e200cce038c7ccb4d37",
     "Core.Site.Tier.rec": "58e3d5cbad31aacad330fac27b9e7876f2f98f50f30ccd04a3c2fa1ac340587a",
+    "Core.Site.WithinTolerance": "3525f4bd5f39b946be24ecb65ed73a8b94ce04eefb8e2cd7f325e27eb738d323",
+    "Core.Site.add": "377cd3e4679f0f12e3562c0b003c369497f1b6920821ad042b0c628103ae5f9f",
+    "Core.Site.far": "8d2438b29b64b4fe777d14fec15a51bfdadbee3220fb2bf699b2ade319a0c4ec",
+    "Core.Site.held": "5211786554e2928b776855221c49063c31da35b349c495f6d7214e72efe57de7",
+    "Core.Site.host?": "494bc1f555bd5cf278fb9cd2912f1a88995d8d7af1cf8294d091647d8d1243f1",
+    "Core.Site.ids": "1ce48f4112cdb0abf46dc41c3533f89d99c301e39b560d2e85a7a054ce7071a6",
+    "Core.Site.instDecidableEqKind": "a3a1e881a93a0a6b73be6d4fbb15d35620529047a17b87874f9a6c6ce42f7a65",
+    "Core.Site.instDecidableEqOwner": "f22d3ade95226ce069cb37f7440f4f938ae1be35f0df940bbb52f83d51dadbbb",
+    "Core.Site.instDecidableEqTier": "2915a2f2908ae0e9461738cc7e2004d71734be505ea42cf868626ffa4bb9e4bc",
+    "Core.Site.instDecidableJoins": "7d2147b42906371c906d596732d10ba9e8571b336e6a4d3ad264e38c90125ea2",
+    "Core.Site.instDecidablePredLinkBoundary": "34ac8e3b9f2f5e0db937154eb6c77a083c36ca15ace9e1ce350d5b86803c5eaa",
+    "Core.Site.instDecidablePredLinkCertified": "eb686a8ed1b0bef9c936eeafbcc7e2574eefab7ba8e36a3f5936ec1dc9619846",
+    "Core.Site.instDecidablePredStringKnown": "736f65487c51c48c75b9fe25d4d3ecb3212cc3f398b3750abac3324ef5ffd61b",
+    "Core.Site.instDecidableWithinTolerance": "dee3aa29a20636b7034efc326363c32713357fa38659cc068bc052e46e18e8c7",
+    "Core.Site.kind?": "51ff982d03b772ea0d584ee9a2c998d1472d201d255bc8b44a28a415979e2e2c",
     "Core.Site.links": "92a8324bb39183e50d1f4ca630c90231904071326c3237e5ae738a135ce1c38a",
+    "Core.Site.loc?": "f8fdfdcc8cd0c5d7bda96b119046c342a401040cca6ad0bc8d5f2a35d04729cb",
     "Core.Site.locs": "a0e117503ed1f025e52bd9ee455de4729677b20cb75acb72bb1516a607550085",
     "Core.Site.ofLog": "a39407822cc32c4c7b3eafec9a1d69791882f1e8cb7424fac0b7a360bc83eb6e",
     "Core.Site.outside": "03acc86b31808ec5595250c20c4c51890e8ba8fc2035f9b745f44a92c59ca9b6",
-    "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1"
+    "Core.Site.reached": "41de08b6fac4b2a4202377c9cbed4bd057f4c6f58dfcc09288712bf512bb241b",
+    "Core.Site.sheet?": "bcb332733317635e34b2c58b20a6f186944cb94f8dbe5861c3b796e06119c9f7",
+    "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1",
+    "Core.Site.timeUnit": "eed8718a2198e439f344adbe538afca0830699a77b0c737e230c765781abfeb7"
    }
   },
   "CoreRemote": {
@@ -25804,12 +25911,11 @@
    }
   },
   "Properties.Core.Site": {
-   "digest": "7ea315bd86f41a0e68711a951b93e986078eb5138a5595fb35ba6e170e30f0f0",
+   "digest": "9cbf8faf5718cd4973873e217862c38787c34d78461dff77b3f37a6b5ea3d66f",
    "definitions": {
     "Properties.Site.Checks": "70c4b55829d492ce690537ac6b40d146e705885e2c5ffef633859838e68027e8",
     "Properties.Site.EntryValid": "0e3ef25549ae8d8a9f3d6d42b0e78346b10859b4d3c36ba18934865f013dc50a",
     "Properties.Site.Fold": "3ce6342cf94c0c55b7b67d3a692e2bf1e35bcd4c113d4cd95d23ed34a55ad72a",
-    "Properties.Site.RefusedAt": "14aa012479dd6dd88dd17e9de8c0c52c154da3534d5f5287641bc98fe992c78a",
     "Properties.Site.Refuses": "521da3a70bf02758b487c8f700d5f57dc54ac013b18192fbd93c85000a47755a",
     "Properties.Site.acceptAllCheck": "1d1da3316b1a8b84008be81f29230714002a8e6b9d2c5c5fcfb0dfba06b321c9",
     "Properties.Site.acceptAllRefusal": "375be3f8729607be48170c4dd925d03df18e1222c7f4ee60c6bd981ba431bb9f",
@@ -27751,6 +27857,42 @@
     "Properties.ZkServer.firstAdmitted": "182892d81c73f1be692a263078cc9ebc5505679e54c5faedec527f6d96c9ca8a",
     "Properties.ZkServer.oneStatement": "ea1abce87664a0967c9f7212717655051d9624c40fd35cbe95d0d5fe7e0342e2",
     "Properties.ZkServer.scheduledAdmitted": "91ded8dfe3aaeecd22a1ab76ad3ee730f3149daf470157f1fb5c0bda27636cc0"
+   }
+  },
+  "RegistrationLog.SiteCheck": {
+   "digest": "2999ae7052a4b86ba98a55e42963be3e41822d30f957040e18581498ec6f287c",
+   "definitions": {
+    "Core.Site.Entry.Capacity": "143753fb6204b3a1a64ac60eb64a7e27ff073c8deaff85fff68429db6b10b829",
+    "Core.Site.Entry.Chips": "59733098c9d8fae761ad30b7f7517d53140c59935aa9139ad33da89337f7ef10",
+    "Core.Site.Entry.Covered": "511783f1efb6eda3337b4843ea1aaa6f3722f450b77233e604f6fe7e322b7d2f",
+    "Core.Site.Entry.Figures": "03c81900543b36c6baa52d53c1ec4c4d18d9b8f5dc1cf131e18ce6d64bf97de1",
+    "Core.Site.Entry.Fresh": "5c5d89f36b33271c289f0af7583a7f08c0713aa8ebad4b3edc4de812f4f4b077",
+    "Core.Site.Entry.Kinds": "ceb147effe2bf412c0e8bea724c187b884ac805cbe3c3bb71ee584e8839f2397",
+    "Core.Site.Entry.Owners": "775ebe3ca90a5ea33c12e5aaf2804b5cbebf326562c851ca766919893e8e41d8",
+    "Core.Site.Entry.Rates": "d9ab860c28a50da3fb1ed8c9a46d7d35eb84b9c13e16862bacd67f0d23e6c4e5",
+    "Core.Site.Entry.Reached": "1c183e7e4175006ff3a0cfe8ae228d68285a04ede42f880d1d40502cc4f3e067",
+    "Core.Site.Entry.Refs": "7c6d8489361326ca43352f52313048a5eb76e315e7db98767aad2d8fe922f2b4",
+    "Core.Site.Entry.Sheets": "19bca45f28eea01b7c0009aaeffb4affcb007a459a505288de192e0aaf56fcbc",
+    "Core.Site.Entry.Timed": "9f65d777c64ec2e50b37ce2cb49e2a5218683981c2a11263e15164b7d9f63071",
+    "Core.Site.Entry.instDecidableCapacity": "861f74d49ba3e91cb979a4eaa3bf19dcec21c56253cfb928547588bd0afe9834",
+    "Core.Site.Entry.instDecidableChips": "641fd94646aa220652b13b1e07549e4704a07c2bcbdb5d64388fec9d4331fa0d",
+    "Core.Site.Entry.instDecidableCovered": "d88bfc6d506081da4f524994efb65160ffdf2ce76f4f6acfefe26cd359821d98",
+    "Core.Site.Entry.instDecidableFigures": "802895297500e0b72e0e151370441d3c430fffc0f647d853f03ecdb469bf7af3",
+    "Core.Site.Entry.instDecidableFresh": "e22f58bf3ca4486ee0a904700b0230714bd35ade7b686133346d9f5e794df86f",
+    "Core.Site.Entry.instDecidableKinds": "a8d8e67ce49c07981936045e8a9dc245f5d4907e3d8b7772f421b91075901922",
+    "Core.Site.Entry.instDecidableOwners": "987727abf118a78cb113741a039df5ec05bd588258b219f578ded8d91b8f280c",
+    "Core.Site.Entry.instDecidableRates": "e0402c143fa329deffcdddba770bd7e95211df8e11563bf2a3de582f6c0162c7",
+    "Core.Site.Entry.instDecidableReached": "ab0dfee2fa2a23719efe78607e690eb2522c107144f6089a0a35ae3c8d206895",
+    "Core.Site.Entry.instDecidableRefs": "3d1419192d47380b4d14a78c180aca16062d3711e09b472869ffe97203d1e79d",
+    "Core.Site.Entry.instDecidableSheets": "1a4f8552e282def043f69d7a7c0147439b1540d2408f4a7a9538c1cade6ee241",
+    "Core.Site.Entry.instDecidableTimed": "5271ddf4e921b77f3c2aee887af7da4e8303eec6924d2fc2cd7021e8ae33bb40",
+    "Core.Site.Entry.refusal": "eaf7f371484feb346ed2a25ef89d342e415d8d077ce24206f3a80548689aabb1",
+    "Core.Site.Registration.Complete": "6ee2400594f2f3101b6b39bea60d3e24731f3756e9cb177f1441d732148ec008",
+    "Core.Site.Registration.Entry.kindRefusal": "cd4b6061101003d374e0892e3b4fa543eec15505b3efc3ef0f50526367b035de",
+    "Core.Site.Registration.Entry.refusal": "6fa193534a45d5b23acbc3a0046f084baf7f0f88a5188c46b2536a4efec60efa",
+    "Core.Site.Registration.check": "83abccc2c75db1d1420894c1ffb9d276ded050362080c2741f1810b6bc40a4a5",
+    "Core.Site.Registration.check.go": "3b6f411f2ff11349b3dc958259beeda8cab4f4541503decdeadb8baeac878f0c",
+    "Core.Site.Registration.instDecidableComplete": "b0d0d205501812ea606a885bf54f9ed20760d75fb5d4837b8ae1244960c9eda9"
    }
   },
   "Spot.Bits": {
@@ -30389,27 +30531,5 @@
    "Pous.Component.SecurityProofs.runDigest": "an equation between two functions of the commitment's bytes that no check takes part in, so no verifier's decision can falsify it, and its one hypothesis (the bytes decode) is what the composition establishes before it binds a digest",
    "Pous.Component.SecurityProofs.wipeDigest": "the same equation for the wipe's commitment: no check takes part in it"
   }
- },
- "ids": {
-  "Accounting.Assumptions.KeyBinding": "key-binding",
-  "Accounting.Assumptions.Parties.Confined": "confined",
-  "Accounting.Assumptions.Parties.Faithful": "faithful",
-  "Accounting.Assumptions.Parties.Secret": "secret",
-  "Accounting.Assumptions.Parties.WitnessPathPrivate": "witness-path-private",
-  "Accounting.Remote.Held.Assumptions.Covered": "certifier-coverage",
-  "Claims.ExpectedCR": "ecr/sha-512",
-  "Claims.StrictBirthday": "cr/sha-512",
-  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
-  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
-  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
-  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
-  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
-  "Hash.Assumptions.LmsUnforgeable": "euf-cma/lms-sha512-n64",
-  "Hash.Assumptions.Sha512Prf": "prf/sha-512",
-  "Pous.Period.Instantiates": "pous-ring-instantiation",
-  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
-  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
-  "Verity.Assumptions.TrustedDevice": "trusted-device",
-  "Verity.Assumptions.VerifierReadsLog": "honest-verifier"
  }
 }

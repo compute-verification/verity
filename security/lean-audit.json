@@ -3389,6 +3389,42 @@
    "due": "2026-11-17"
   }
  },
+ "ids": {
+  "Accounting.Assumptions.KeyBinding": "key-binding",
+  "Accounting.Assumptions.SketchHashRandom": "random-oracle",
+  "Accounting.Assumptions.WorkHardness": "rate-codec-work",
+  "Accounting.BudgetAbort": "pouw-budget-abort",
+  "Accounting.BudgetAbortPearlC": "pouw-budget-abort-pearl-c",
+  "Accounting.Covered": "certifier-coverage",
+  "Claims.ExpectedCR": "ecr/sha-512",
+  "Claims.Hm96Hiding": "hash-derived-key",
+  "Claims.StrictBirthday": "cr/sha-512",
+  "Claims.ZKServer.Loop.Src": "flock-zk-server-os-src",
+  "FlockSoundness.Assumptions.KeyedStreamsUniform": "prf/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
+  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "hash-derived-key",
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
+  "Pous.TimedINC": "pous-timed-inc",
+  "Pouw.Assumptions.HonestClock": "honest-clock",
+  "Pouw.CostModel.Hashless": "pouw-hashless",
+  "Pouw.PearlC.GGapPerCoin": "pouw-gamma-per-coin",
+  "Slowdown.Cut.Assumptions.Exports": "training-cut-exports",
+  "Slowdown.Cut.Assumptions.Hardness": "training-cut-hardness",
+  "Slowdown.Formalism.Assumptions.CutCost": "training-cut-cost",
+  "Slowdown.Formalism.Assumptions.EfficiencyFloor": "training-efficiency-floor",
+  "Slowdown.Formalism.Assumptions.TokenWork": "training-token-work",
+  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
+  "Verity.Assumptions.ChannelAuthentic": "channel-authentic",
+  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
+  "Verity.Assumptions.ImprintPathPrivate": "imprint-path-private",
+  "Verity.Assumptions.TrustedDevice": "trusted-device",
+  "Verity.Assumptions.VerifierReadsLog": "honest-verifier",
+  "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
+  "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard"
+ },
  "trust": {
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
@@ -29144,8 +29180,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -36737,9 +36773,8 @@
    }
   },
   "Definitions.Pous.Guarantees.StreamedWipeFamily": {
-   "digest": "c134b41c2e5907cd438dbff4ec55a70d5b7782189403950fc4b05b1306f051ae",
+   "digest": "0b56d5ede145fb39e818b1945d0484cd35b1ba0dd4418473a91270950a9562c0",
    "definitions": {
-    "Pous.Guarantees.StreamedWipeMeets96GiB": "f4f77c498a61b6b6bd72eea20654215da4e296ae2e94137fba51bb2abc68a71f",
     "Pous.Guarantees.StreamedWipeMeetsFamily": "23dfe40e93f228a0f7eaae86c52a43dd31cf0661a09b2ec5a4323d9e1d277362"
    }
   },
@@ -61315,42 +61350,6 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
- },
- "ids": {
-  "Accounting.Assumptions.KeyBinding": "key-binding",
-  "Accounting.Assumptions.SketchHashRandom": "random-oracle",
-  "Accounting.Assumptions.WorkHardness": "rate-codec-work",
-  "Accounting.BudgetAbort": "pouw-budget-abort",
-  "Accounting.BudgetAbortPearlC": "pouw-budget-abort-pearl-c",
-  "Accounting.Covered": "certifier-coverage",
-  "Claims.ExpectedCR": "ecr/sha-512",
-  "Claims.Hm96Hiding": "hash-derived-key",
-  "Claims.StrictBirthday": "cr/sha-512",
-  "Claims.ZKServer.Loop.Src": "flock-zk-server-os-src",
-  "FlockSoundness.Assumptions.KeyedStreamsUniform": "prf/sha-512",
-  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
-  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
-  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
-  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
-  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "hash-derived-key",
-  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
-  "Pous.TimedINC": "pous-timed-inc",
-  "Pouw.Assumptions.HonestClock": "honest-clock",
-  "Pouw.CostModel.Hashless": "pouw-hashless",
-  "Pouw.PearlC.GGapPerCoin": "pouw-gamma-per-coin",
-  "Slowdown.Cut.Assumptions.Exports": "training-cut-exports",
-  "Slowdown.Cut.Assumptions.Hardness": "training-cut-hardness",
-  "Slowdown.Formalism.Assumptions.CutCost": "training-cut-cost",
-  "Slowdown.Formalism.Assumptions.EfficiencyFloor": "training-efficiency-floor",
-  "Slowdown.Formalism.Assumptions.TokenWork": "training-token-work",
-  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
-  "Verity.Assumptions.ChannelAuthentic": "channel-authentic",
-  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
-  "Verity.Assumptions.ImprintPathPrivate": "imprint-path-private",
-  "Verity.Assumptions.TrustedDevice": "trusted-device",
-  "Verity.Assumptions.VerifierReadsLog": "honest-verifier",
-  "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
-  "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard"
  },
  "four_names_except": {
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
