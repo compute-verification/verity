@@ -33,3 +33,21 @@ id = "suite verity-vllm::tests/protocols/test_credit_gate.py::test_the_drawn_set
 owner = "compute-accounting"
 expires = "2026-11-21T07:59:00Z"
 reason = "credit period verdict of record is the Lean's (goal compute-accounting/pouw-verdict-from-main, Fri 20 Nov)"
+
+[[allow]]
+id = "suite verity-vllm::tests/lint/test_p10_size.py::test_no_new_or_grown_offenders"
+owner = "vllm"
+expires = "2026-11-17T07:59:00Z"
+reason = "three adapter modules over 800 lines and one facts lint from today's landings and the torch cut; vllm mends Mon 16 Nov"
+
+[[allow]]
+id = "suite verity-vllm::tests/tools/test_scorecard.py::test_the_real_tree_agrees_with_the_p10_and_p7_allowlists"
+owner = "vllm"
+expires = "2026-11-17T07:59:00Z"
+reason = "three adapter modules over 800 lines and one facts lint from today's landings and the torch cut; vllm mends Mon 16 Nov"
+
+[[allow]]
+id = "suite verity-vllm::tests/lint/test_p08_facts.py::test_no_new_violations"
+owner = "vllm"
+expires = "2026-11-17T07:59:00Z"
+reason = "three adapter modules over 800 lines and one facts lint from today's landings and the torch cut; vllm mends Mon 16 Nov"

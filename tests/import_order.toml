@@ -21,7 +21,7 @@ order = [
     ["verity/protocols/interface"],
     ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py"],
     ["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"],
-    ["verity/device.py", "verity/hardware"],
+    ["verity/device.py"],
     ["verity/commitments/periods"],
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
@@ -107,94 +107,6 @@ owner = "compute-accounting"
 # file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
 # a pair no file needs any more, which it names to delete.
-[[against]]
-loader = "verity"
-loaded = "verity/protocols/proofs/flock/verifier"
-files = [
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean",
-]
-
-[[against]]
-loader = "verity"
-loaded = "verity/protocols/interface"
-files = [
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean",
-]
-
-[[against]]
-loader = "verity"
-loaded = "verity/protocols/proofs/spot"
-files = [
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean",
-]
-
-[[against]]
-loader = "verity"
-loaded = "verity/protocols/proofs/recursion"
-files = [
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/lakefile.toml",
-]
-
-[[against]]
-loader = "verity"
-loaded = "verity/protocols/proofs/spot_flock"
-files = [
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean",
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursiveMain.lean",
-    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/lakefile.toml",
-]
-
-[[against]]
-loader = "verity/protocols/proofs/spot"
-loaded = "verity/protocols/proofs/flock"
-files = [
-    "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
-    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/template_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
-    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
-]
-
-[[against]]
-loader = "verity/protocols/proofs/spot"
-loaded = "verity/protocols/accounting/registration"
-files = [
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-]
-
-[[against]]
-loader = "verity/protocols/proofs/spot"
-loaded = "verity/protocols/accounting/pouw"
-files = [
-    "verity/protocols/proofs/spot/prover/audit/prove_path.py",
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-    "verity/protocols/proofs/spot/prover/cost/demo_a.py",
-]
-
-[[against]]
-loader = "verity/protocols/proofs/spot"
-loaded = "adapters"
-files = [
-    "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
-    "verity/protocols/proofs/spot/prover/audit/prove_path.py",
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/stop_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
-    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
-    "verity/protocols/proofs/spot/prover/cost/class_rows.py",
-    "verity/protocols/proofs/spot/prover/cost/window_cost.py",
-]
-
-[[against]]
-loader = "verity/protocols/proofs/spot"
-loaded = "benchmarks"
-files = [
-    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
-    "verity/protocols/proofs/spot/prover/audit/stop_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
-]
-
 [[against]]
 loader = "verity/protocols/proofs/flock"
 loaded = "adapters"
@@ -445,8 +357,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-    "verity/protocols/proofs/spot/prover/cost/class_rows.py",
     "verity/tests/tests/test_cards.py",
     "verity/tests/tests/test_nodes.py",
 ]
@@ -461,11 +371,13 @@ paths = [
     "verity/protocols/accounting/certifier/device",
 ]
 loads = [
+    "verity/channel.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/protocols/accounting/certifier/verifier",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
+    "verity/runtime",
 ]
 reaches = [
     "verity/channel.py",
@@ -523,19 +435,11 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/certifier/prover/egress.py",
-    "verity/protocols/accounting/certifier/prover/egress_zk.py",
     "verity/protocols/accounting/certifier/prover/ingress_scan.py",
     "verity/protocols/accounting/certifier/prover/io_ids.py",
     "verity/protocols/accounting/certifier/prover/lengths_row.py",
-    "verity/protocols/accounting/certifier/prover/n2_tie_zk.py",
-    "verity/protocols/accounting/certifier/prover/n2_zk.py",
-    "verity/protocols/accounting/certifier/prover/network_certifier_zk.py",
     "verity/protocols/accounting/certifier/prover/response_tie.py",
-    "verity/protocols/accounting/certifier/prover/scan_period.py",
-    "verity/protocols/accounting/certifier/prover/scan_zk.py",
-    "verity/protocols/accounting/certifier/prover/stop_verdicts.py",
     "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py",
-    "verity/protocols/accounting/certifier/prover/window_chain.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
 ]
 
@@ -568,11 +472,6 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/audit_prover.py",
     "verity/protocols/accounting/poub/prover/codec_tensor/reader.py",
     "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
-    "verity/protocols/accounting/poub/prover/node_store/memory_map.py",
-    "verity/protocols/accounting/poub/prover/node_store/plan.py",
-    "verity/protocols/accounting/poub/prover/node_store/registry.py",
-    "verity/protocols/accounting/poub/prover/node_store/serving.py",
-    "verity/protocols/accounting/poub/prover/node_store/verify.py",
     "verity/protocols/accounting/poub/prover/opening_prover.py",
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
@@ -581,7 +480,6 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/remote_session/device.py",
     "verity/protocols/accounting/poub/prover/remote_session/prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
-    "verity/protocols/accounting/poub/prover/window.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
     "verity/protocols/accounting/poub/tests/session_harness.py",
@@ -631,9 +529,6 @@ reaches = [
     "verity/protocols/accounting/pous/verifier",
     "verity/runtime",
 ]
-loaded_by = [
-    "verity/protocols/accounting/pous/prover/wipe_run.py",
-]
 
 [[place]]
 paths = [
@@ -680,11 +575,6 @@ loaded_by = [
     "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
-    "verity/protocols/accounting/pous/prover/period_prover.py",
-    "verity/protocols/accounting/pous/prover/responder.py",
-    "verity/protocols/accounting/pous/prover/setup_proof.py",
-    "verity/protocols/accounting/pous/prover/weight_store.py",
-    "verity/protocols/accounting/pous/prover/window.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_run.py",
     "verity/protocols/accounting/pous/prover/wipe_store.py",
@@ -749,7 +639,6 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/live.py",
     "verity/protocols/accounting/pouw/prover/circuit/ncp2.py",
     "verity/protocols/accounting/pouw/prover/circuit/pc8.py",
-    "verity/protocols/accounting/pouw/prover/circuit/pearl_plus_tile.py",
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/accounting/pouw/prover/circuit/rowk.py",
     "verity/protocols/accounting/pouw/prover/circuit/window_statement.py",
@@ -757,9 +646,6 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/clear/clear_work.py",
     "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_egemm_ref.py",
     "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_egemm_ref_gate.py",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/stage_tile.py",
     "verity/protocols/accounting/pouw/prover/lowering/h1unit.py",
     "verity/protocols/accounting/pouw/prover/lowering/live.py",
     "verity/protocols/accounting/pouw/prover/schemes/__init__.py",
@@ -767,38 +653,10 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py",
-    "verity/protocols/accounting/pouw/prover/serving/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/circuit.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/commit.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/live.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/names.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/prover.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/public_rows.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/sample.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/sampled.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/sampled_rows.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/serve_sample.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/tables.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/window.py",
-    "verity/protocols/accounting/pouw/prover/serving/lead/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/lead/record.py",
-    "verity/protocols/accounting/pouw/prover/serving/ncp.py",
-    "verity/protocols/accounting/pouw/prover/serving/operands.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/lanes.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/served_y.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/window.py",
     "verity/protocols/accounting/pouw/prover/tests/test_h1_pin.py",
     "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_answers.py",
     "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4.py",
-    "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",
     "verity/protocols/experimental/pearl_c4/prover/pearl_c4.py",
     "verity/protocols/experimental/pearl_c4/tests/pearl_c4_regions_vectors.py",
     "verity/protocols/experimental/pearl_c4/tests/pearl_c4_vectors.py",
@@ -808,8 +666,6 @@ loaded_by = [
     "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py",
     "verity/protocols/experimental/pearl_c4/tests/test_pouw_pearl_c4.py",
     "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-    "verity/protocols/proofs/spot/prover/cost/demo_a.py",
     "verity/protocols/proofs/spot/prover/tests/test_cost_demo_a.py",
     "verity/protocols/proofs/spot/prover/tests/test_records_audit.py",
 ]
@@ -828,7 +684,6 @@ reaches = [
     "verity/device.py",
 ]
 loaded_by = [
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
     "verity/protocols/proofs/spot/prover/tests/test_records_audit.py",
 ]
 
@@ -950,36 +805,12 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/certifier/prover/egress_zk.py",
-    "verity/protocols/accounting/certifier/prover/n2_tie_zk.py",
-    "verity/protocols/accounting/certifier/prover/n2_zk.py",
-    "verity/protocols/accounting/certifier/prover/network_certifier_zk.py",
-    "verity/protocols/accounting/certifier/prover/scan_period.py",
-    "verity/protocols/accounting/certifier/prover/scan_zk.py",
-    "verity/protocols/accounting/certifier/prover/stop_verdicts.py",
     "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
     "verity/protocols/accounting/pous/prover/served_weights.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/accounting/pouw/prover/lowering/h1unit.py",
     "verity/protocols/accounting/pouw/prover/lowering/live.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/answers.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/commit.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/handoff.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/sample.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/sampled.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/sampled_rows.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/serve_sample.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/served_files.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/window.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/window.py",
     "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_answers.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
@@ -1029,23 +860,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
     "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
     "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
-    "verity/protocols/proofs/spot/prover/audit/check_memo.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
-    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
-    "verity/protocols/proofs/spot/prover/audit/prove_path.py",
-    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/stop_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/template_audit.py",
-    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
-    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
-    "verity/protocols/proofs/spot/prover/cost/demo_a.py",
-    "verity/protocols/proofs/spot/prover/cost/glm53.py",
-    "verity/protocols/proofs/spot/prover/cost/h200.py",
-    "verity/protocols/proofs/spot/prover/cost/inputs.py",
-    "verity/protocols/proofs/spot/prover/cost/int8_llama.py",
-    "verity/protocols/proofs/spot/prover/cost/served_window.py",
-    "verity/protocols/proofs/spot/prover/cost/transformer.py",
-    "verity/protocols/proofs/spot/prover/cost/window_cost.py",
     "verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py",
     "verity/protocols/proofs/spot/prover/tests/test_audit_two_members.py",
     "verity/protocols/proofs/spot/prover/tests/test_check_memo.py",
@@ -1075,11 +890,6 @@ reaches = [
 loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
-    "verity/protocols/proofs/spot/prover/cost/demo_a.py",
-    "verity/protocols/proofs/spot/prover/cost/glm53.py",
-    "verity/protocols/proofs/spot/prover/cost/h200.py",
-    "verity/protocols/proofs/spot/prover/cost/served_window.py",
-    "verity/protocols/proofs/spot/prover/cost/transformer.py",
     "verity/protocols/proofs/spot/prover/tests/test_cost_demo_a.py",
 ]
 
@@ -1105,7 +915,6 @@ reaches = [
     "verity/channel.py",
 ]
 loaded_by = [
-    "verity/protocols/accounting/certifier/prover/block_certifier.py",
     "verity/protocols/accounting/certifier/prover/workload.py",
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
@@ -1113,10 +922,6 @@ loaded_by = [
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",
-    "verity/protocols/proofs/spot/prover/cost/cpu_budget.py",
-    "verity/protocols/proofs/spot/prover/cost/served_window.py",
-    "verity/protocols/proofs/spot/prover/cost/transformer.py",
-    "verity/protocols/proofs/spot/prover/cost/window_cost.py",
     "verity/protocols/proofs/spot/prover/workload.py",
     "verity/tests/tests/test_reporting.py",
 ]
