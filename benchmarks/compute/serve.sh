@@ -209,7 +209,7 @@ if [ "$failed" = 0 ]; then
     --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "${LEAN_TIMEOUT:-3600}" || failed=1
-  [ -s "$P/coin.json" ] && step publish publish && step piece piece
+  if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1; else failed=1; fi
 fi
 phi() {
   CUDA_VISIBLE_DEVICES='' "$PY" -c '

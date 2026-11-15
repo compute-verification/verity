@@ -190,7 +190,7 @@ def init(root: Path) -> dict:
     print(f"[coins] {V.executable()} built in {time.monotonic() - t:.0f} s: each challenger's coins are its", flush=True)
     A = _auditor()
     host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
-    (root / "var" / "sessions").mkdir(parents=True)
+    (root / "var" / "sessions").mkdir(parents=True, exist_ok=True)
     (root / "peers").write_text(f"{HOST} research@127.0.0.1\n{PEER} research@127.0.0.1\n")
     ports = _free_ports()
     (root / "coin-ports").write_text(f"{PEER} {ports.start}-{ports.stop - 1}\n")
