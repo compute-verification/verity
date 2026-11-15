@@ -679,7 +679,7 @@ def audit_negatives(result: dict, sampling_design: dict, delta: float, session_r
     (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
     where the Lean answered (`lean_answered`);
     `agree` is whether the Lean and the Python decided it alike."""
-    base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], sampling_design=sampling_design,
+    base = dict(docket=result["registration"], receipt=result["receipt"], draw=result["draw"], sampling_design=sampling_design,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
                 verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
@@ -694,7 +694,7 @@ def audit_negatives(result: dict, sampling_design: dict, delta: float, session_r
                                                                    for k, v in vs.items()}),
            "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),
            "session-root-not-registered": decide(session_roots={**session_roots, port: "00" * 64})}
-    opened = audit.session_registered(vs, base["registration"])
+    opened = audit.session_registered(vs, base["docket"])
     if opened:
         value = next(iter(opened))
         neg["registered-read-opened-against-another-root"] = decide(verdicts={
