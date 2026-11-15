@@ -14,14 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-import auditor_line as al  # noqa: E402
-import gate_whatif as gw  # noqa: E402
-from test_challengers import PINS, analysed, host  # noqa: E402,F401
-from test_session import run as run_sessions  # noqa: E402
+import auditor_line as al
+import gate_whatif as gw
+from test_challengers import PINS, analysed, host  # noqa: F401
+from test_session import run as run_sessions
 
 from verity.protocols.accounting.poub.verifier.session import (
-    verifier,  # noqa: E402
-    wire,  # noqa: E402
+    verifier,
+    wire,
 )
 
 MS = 1_000_000

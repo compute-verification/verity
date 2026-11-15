@@ -24,8 +24,13 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-import lean_stands_in  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E402
+
 import prover  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+import lean_stands_in  # noqa: E402
 
 from verity.protocols.accounting.poub.tests.session_harness import (  # noqa: E402
     FIGURES,
@@ -33,13 +38,6 @@ from verity.protocols.accounting.poub.tests.session_harness import (  # noqa: E4
     PassClock,
     TickingBackend,
     run,
-)
-from verity.protocols.accounting.poub.verifier import audit, coins, ledger, timing  # noqa: E402
-from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E402
-from verity.protocols.accounting.poub.verifier import receipts as rb
-from verity.protocols.accounting.poub.verifier.session import (
-    verifier,  # noqa: E402
-    wire,  # noqa: E402
 )
 
 BARE = dataclasses.replace(FIGURES, gpu_chip_bytes=0, host_chip_bytes=0, gpu_squarings_per_s={"p512": 0.0})
@@ -447,6 +445,7 @@ def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
 
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
     from verity.protocols.accounting.poub.verifier.session.checks import Checks
+
     from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
     profiles = [IntegrityProfile(("receipt",), (n,), {"receipt": Subset(k)}, 2.0 ** -40, drawn={"receipt": k})
@@ -846,9 +845,8 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
     import json
 
-    import replay
-
     from verity.protocols.accounting.poub.verifier.session import challengers
+    import replay
     from verity.protocols.proofs.spot.device import challenger as C
 
     asked = []

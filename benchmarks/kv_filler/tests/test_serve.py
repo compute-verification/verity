@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import serve  # noqa: E402
+import serve
 
 
 def test_filler_by_phase_splits_each_record_pro_rata_over_decode_prefill_and_between():

@@ -551,8 +551,8 @@ def main() -> None:
     md.append(table(head + ["receipt trees held to the coin"],
                     [coin_row(x) + ([""] if x.get("infeasible") else [f"{x['tree_bytes'] / 1e9:.2f} GB"])
                      for x in coin_plans]))
-    md.append(f"\n## The same at g = 1's pass rate, one draw a coin: the openings g saves, and what the line gives "
-              f"for them\n")
+    md.append("\n## The same at g = 1's pass rate, one draw a coin: the openings g saves, and what the line gives "
+              "for them\n")
     md.append(table(head, [coin_row(x) for x in coin_fixed]))
 
     md.append(f"\n## Pass rate at each point's 1% openings rate (the line rule's, else ε only's), pooled over "
