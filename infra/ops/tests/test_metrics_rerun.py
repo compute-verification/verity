@@ -242,7 +242,11 @@ def test_a_dry_run_judges_the_default_job_the_same(tmp_path, option, said):
     (f"--timeout {AUTO_MAX_MIN + 1}m", f"--timeout {AUTO_MAX_MIN + 1}m over {MAX_S:g}"),
     (f"--timeout {AUTO_MAX_MIN // 60 + 1}h", f"--timeout {AUTO_MAX_MIN // 60 + 1}h over {MAX_S:g}"),
     ("--timeout abc", "--timeout abc could not be read"),
-    ("--mem-gb x", "--mem-gb x could not be read")])
+    ("--mem-gb x", "--mem-gb x could not be read"),
+    ("--timeout nan", "--timeout nan could not be read"),
+    ("--mem-gb nan", "--mem-gb nan could not be read"),
+    ("--timeout inf", f"--timeout inf over {MAX_S:g}"),
+    ("--mem-gb inf", f"--mem-gb inf over {MEM:g}")])
 def test_a_value_is_read_as_research_run_reads_it_and_one_it_cant_read_is_its_owners(tmp_path, option, said, dry_run):
     """`--timeout` in research run's own units (`60m`, `2h`) is judged by its seconds; a value research run can't read is past
     the default job and said, and the pass goes on to the next row."""

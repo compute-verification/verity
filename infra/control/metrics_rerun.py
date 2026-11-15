@@ -74,6 +74,7 @@ import datetime as dt
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -237,10 +238,9 @@ def past_default(opts: list[tuple[str, str | None]]) -> list[str]:
         try:
             asked = timeout_seconds(value) if name == "--timeout" else float(value)
         except ValueError:
-            past.append(f"{name} {value} could not be read")
-            continue
-        if asked > most:
-            past.append(f"{name} {value} over {most:g}")
+            asked = math.nan
+        if not asked <= most:
+            past.append(f"{name} {value} could not be read" if math.isnan(asked) else f"{name} {value} over {most:g}")
     return past
 
 
