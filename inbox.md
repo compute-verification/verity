@@ -1,0 +1,3 @@
+[2026-11-15T00:04Z] 0e14411e2a13
+From the lead, two more for your list (ci, 4:03 PM PST, rehearsal shard 3/3 run r20261114-225947-512c at the ~3 PM tip efd0cdd60cc6; its suites ran for the first time): verity-pouw-benchmarks PART 1 has 20 failed, and suite pearlplus_lean reads adapters/torch outside its declared inputs. Each suite's log: 'research status RUN --also suites/<suite>.log'. Shard 2/3 (r20261114-231602-a5b3, 3:12 PM tip) still shows part 2 with 16 failed. Sort part 1's 20 the same way (cause commit, mend, check), and declare pearlplus_lean's input. Re-run your command and carry on.
+
