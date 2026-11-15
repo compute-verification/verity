@@ -1826,6 +1826,8 @@ class Run:
             out = _replace_list_item(out, "testpaths", old, new)
         if prefix := conf.get("strip_suite_relative"):
             out = _strip_suite_relative(out, prefix)
+        if was := conf.get("pythonpath_from"):
+            out = _pythonpath_from(out, was, posixpath.dirname(path))
         for n in merged:
             dep = re.compile(r'"' + re.escape(n) + r'(\[[^\]]*\])?"')
             if dep.search(out):
@@ -2165,6 +2167,16 @@ def _strip_suite_relative(text: str, prefix: str) -> str:
                 key = None
         out.append(line)
     return "".join(out)
+
+
+def _pythonpath_from(text: str, was: str, now: str) -> str:
+    """pytest's `pythonpath`, each entry written from directory `was`, written from `now`, the pyproject's new directory, so
+    it names the same directory (`[pyproject] pythonpath_from`)."""
+    def fix(m: re.Match) -> str:
+        items = json.loads("[" + m.group("items") + "]")
+        moved = [posixpath.relpath(posixpath.normpath(posixpath.join(was, i)), now) for i in items]
+        return m.group("head") + ", ".join(json.dumps(i) for i in moved) + "]"
+    return re.sub(r"^(?P<head>pythonpath\s*=\s*\[)(?P<items>[^\]]*)\]", fix, text, flags=re.M)
 
 
 def _replace_list_item(text: str, key: str, old: str, new: list[str]) -> str:
