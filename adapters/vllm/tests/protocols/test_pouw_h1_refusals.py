@@ -689,9 +689,10 @@ def test_a_sample_session_of_another_layout_is_refused(tmp_path, monkeypatch, fa
                                        "live window's draw session's: its draw coin alone")
 
 
-def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_its_root(served, tmp_path):
+def test_the_sample_sessions_files_are_the_ledgers_refusal_where_it_pins_no_session_on_its_root(served, tmp_path):
     """`draw_files` fetches the session the ledger opens on the window's sample root, pinned; where the ledger opens none
-    on that root, or holds no pins log, it fetches nothing and gives None, which `draw_session_reason` refuses."""
+    on that root, or holds no pins log, it fetches nothing and gives the ledger's `CoinError`, which `draw_session_reason`
+    refuses naming it; no files at all (None) it refuses as `NO_DRAW_SESSION`."""
     host, honest, _record = served
     (tmp_path / "tree").mkdir()
     (tmp_path / "tree" / "out").symlink_to(host.draw.directory, target_is_directory=True)
@@ -705,10 +706,13 @@ def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_
     assert files is not None and asked == [host.draw.session_id]
     assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), files,
                                    PHC.lms_verify) is None
-    assert PHD.draw_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify) is None
+    assert isinstance(PHD.draw_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify), CoinError)
     unpinned = PHC.Ledger.load([host.ledger.path], host.key, main=CH.MAIN)
-    assert PHD.draw_files(honest, unpinned, fetch, PHC.lms_verify) is None
-    assert asked == [host.draw.session_id]
+    refused = PHD.draw_files(honest, unpinned, fetch, PHC.lms_verify)
+    assert isinstance(refused, CoinError) and asked == [host.draw.session_id]
+    assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), refused,
+                                   PHC.lms_verify) == ("the window's draw session is not one the ledger opens on its draw "
+                                                       f"root: {refused}")
     assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), None,
                                    PHC.lms_verify) == PHD.NO_DRAW_SESSION
 
