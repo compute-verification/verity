@@ -38,6 +38,15 @@ argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
 env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
 
+# all compute's dollars an hour to the site's metrics door with the panels key, from fleet's last pass and the budget guard's
+# last poll, each fleet pass once, the last one sent kept in its state (loop_metrics.py; metrics.toml's row is this argv; the
+# store index's pass length goes from store_index.sh with the same script)
+[[loop]]
+name = "loop-metrics"
+argv = ["python3.12", "-s", "{src}/infra/control/loop_metrics.py", "compute", "--every", "60", "--state", "{dir}/loop-metrics.json"]
+needs = ["/root/.config/verity/panels.key"]
+env = { FLEET_DIR = "{dir}/fleet" }
+
 # the relay-side monitors and CPU node 1's watchdog alerts, posted to #agent-alerts (tmux `watchdog-relay`). The node-side
 # monitors run only on node 2 (deploy.toml's vy-monitors.timer), which is stopped. The relay reads the `--on` host's node alert
 # dir over ssh every pass, and a host that doesn't answer is a failed read each pass, so `--on` names CPU node 1: it answers and
