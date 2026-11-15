@@ -1129,7 +1129,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
     into a commit whose records passed (`kept`), possibly through further such merges, and each merge takes every Lean input
     of ``pkg`` from one side whole, its locks aside, which are `merge.py`'s merge of the two sides. The lock is then a candidate,
     never a verdict: the Lean check of `next` rebuilds every record and regenerates one that differs."""
-    prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), *tool_inputs(files)})
+    prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), AUDIT.FIXTURES.relative_to(AUDIT.ROOT).as_posix(), *tool_inputs(files)})
     if git("status", "--porcelain", "--untracked-files=no", "--", *prefixes) != "":
         return None
     main = next((r for r in MAIN if git("rev-parse", "-q", "--verify", r) is not None), None)

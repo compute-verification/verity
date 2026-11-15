@@ -136,7 +136,7 @@ def test_a_sample_copies_each_vms_deadline_into_its_registry_entry_once(tmp_path
     (F.MACHINES_D / "vy-dc-b200.toml").write_text('provider = "ssh"\nhost = "203.0.113.8"\n')
     synced = []
     monkeypatch.setattr(F, "sync_registry", synced.append)
-    t = int(F.datetime(2026, 10, 20, 4, tzinfo=F.timezone.utc).timestamp())
+    t = int(F.datetime(2026, 10, 20, 4, tzinfo=F.UTC).timestamp())
     rows = [{"name": "vy-dc-h200", "deadline": t}, {"name": "vy-dc-b200", "deadline": t}, {"name": "vy-x", "deadline": t},
             {"name": "vy-dc-b200", "deadline": None}]
     assert F.record_deadlines(rows, F.registry()) == ["vy-dc-h200", "vy-dc-b200"]

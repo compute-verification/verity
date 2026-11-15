@@ -20,6 +20,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -45,8 +46,8 @@ def lane_table(path: Path) -> list[tuple[str, str]]:
             if ln.strip() and not ln.startswith("#") and "\t" in ln:
                 prefix, lane = ln.split("\t", 1)
                 out.append((prefix, lane.strip()))
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"alert_sink: {path} unread, so no job names a lane ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return sorted(out, key=lambda x: -len(x[0]))
 
 
@@ -64,18 +65,21 @@ def open_stages(timeline: Path) -> set[str]:
     """Stages that started and haven't ended, by (pid, stage), in a verity-sweep timeline."""
     live: dict[tuple[Any, str], bool] = {}
     try:
-        for ln in timeline.read_text().splitlines():
+        lines = timeline.read_text().splitlines()
+        for i, ln in enumerate(lines):
             try:
                 e = json.loads(ln)
-            except ValueError:
+            except ValueError as err:
+                if i < len(lines) - 1:                          # the last may be a line still being written
+                    print(f"alert_sink: line {i + 1} of {timeline} skipped, not JSON ({err})", file=sys.stderr, flush=True)
                 continue
             key = (e.get("pid"), e.get("stage"))
             if e.get("ev") == "start":
                 live[key] = True
             elif e.get("ev") == "end":
                 live.pop(key, None)
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"alert_sink: {timeline} unread, so no stage is open ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return {stage for _, stage in live}
 
 
@@ -84,17 +88,21 @@ def pod_row(pod: str, runs: str = RUNS, since_s: float = 2 * 86400) -> str | Non
     now = time.time()
     try:
         dirs = sorted((d for d in os.scandir(runs) if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)
-    except OSError:
+    except OSError as e:
+        print(f"alert_sink: {runs} unlisted, so pod {pod} names no row ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     for d in dirs[:400]:
         if now - d.stat().st_mtime > since_s:
             break
+        if not os.path.exists(os.path.join(d.path, "events.jsonl")):
+            continue
         try:
             with open(os.path.join(d.path, "events.jsonl")) as f:
                 if f"@{pod}:" not in f.read(8192):
                     continue
             j = json.load(open(os.path.join(d.path, "job.json")))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"alert_sink: run {d.name} skipped, its events or job unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         row = ((j.get("store") or {}).get("params") or {}).get("row")
         cmd = (j.get("execution") or {}).get("command") or []
@@ -117,7 +125,9 @@ def sky_jobs() -> dict[int, str]:
     try:
         r = subprocess.run([SKY_PY, "-c", code], capture_output=True, text=True, timeout=60)
         return {int(k): v for k, v in json.loads(r.stdout.strip().splitlines()[-1]).items()}
-    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError) as e:
+        print(f"alert_sink: SkyPilot's job names unread, so no alert names its job ({type(e).__name__}: {e})", file=sys.stderr,
+              flush=True)
         return {}
 
 
@@ -178,7 +188,7 @@ def main() -> None:
     os.makedirs(outbox, exist_ok=True)
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             try:
                 payload = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             except ValueError:

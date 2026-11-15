@@ -2,7 +2,9 @@
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
 `verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
-`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+`prove_records.py` the store side and the table, its code in `prove_common.py` (the slots, the workloads, reading a
+record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_table.py` (the table and what a
+runner records) and `prove_render.py` (the text)); this directory holds its runner. It reads the store's labelled
 records and runs on any machine that reaches the store, with no GPU and no node.
 
 ```text
@@ -15,6 +17,8 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
     [--steady-rows FILE]                                            also write the steady-state rows the planner reads
     [--local-only]                                                  this machine's catalog alone, not the store's remote
 verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean verifier timed on one kept proof (below)
+verity bench prove layers --flock R --zk R --sampling R --recursion R
+                                                                    the proof system by layer, a row each (below)
 ```
 
 ## What it prints
@@ -268,9 +272,64 @@ as the measured one:
 Both figures assume full statements, as the proving time's steady-state rows do. They are a model from one block type
 until more types have runs of their own.
 
+## The proof system by layer
+
+`verity bench prove layers` prints one table of four rows, Flock, Flock with zero knowledge, with sampling and with
+recursion, each read from what its own command wrote (`verity_bench/proof_layers.py`). It runs nothing. Each flag takes
+a run's `out/` directory (or the run directory holding it), read with no store, or a run id, fetched through the
+evidence store where `research` is installed. A layer not given is printed as "not run".
+
+```text
+verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] [--recursion DIR|RUN]
+```
+
+| layer | reads | prover seconds | Lean verifier |
+|---|---|---|---|
+| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines) and `summary.json` | Flock's prover a drawn block, the mean over every rank's drawn blocks | every rank accepted, each rank's own audited `A5` line with `lean-verify/m0` true |
+| `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
+| `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
+| `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
+
+The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
+more than one honest arm is refused: give the arm's directory. A `--flock` row must state the plain proof, and a `--zk`
+or `--sampling` row the zk proof (the sampling layer is Flock with zero knowledge at the sampling plan): one whose output
+states another proof, or none, prints no number and writes null with why, whichever command wrote it. Each printed row states its proof (`plain`, `zk`, or "not
+stated"), so a plain run's numbers in the sampling row say plain.
+
+A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
+table. Its last column is one line, `ran with: coins COINS; parameters PARAMETERS (DETAIL)`: COINS is `deployed
+challenger`, `local challenger` or `in-process` and PARAMETERS `deployed` or `development`, each only where the output
+says so outright, "not stated" for a half it doesn't say, and `ran with: not stated` where it says neither. DETAIL, the
+output's own words, is also the JSON's `detail`. No output yet states development or deployed parameters. The table
+is followed by its JSON line, and under a research run, or with `$OUT` set, it writes `proof-layers.json`.
+
+Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes three of `metrics.toml`'s rows through the
+kit's writer, each a figure a drawn proof block:
+
+| id | figure |
+|---|---|
+| `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the drawn blocks |
+| `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the drawn blocks |
+| `benchmarks/proof-layer-proof-bytes` | the session's proof files' bytes, over its drawn blocks |
+
+Under each id it writes three measurements, in this order:
+
+1. the Flock layer, member `flock`;
+2. the zero-knowledge layer, member `zero knowledge`;
+3. the sampling layer last, with no member. That is the row's own reading, Flock with zero knowledge at the sampling
+   plan, the system as served, and the one the row's title, unit and axis are for.
+
+prove_path and a5 both give these figures by dividing a member's session timing by its drawn blocks (`draw_counts`), as
+prove_path's own `per_unit` does. A member whose timing has no drawn-block count (one keyed by its chunk's name) gives no
+figure, and the row says so under the table. A layer that was not run, was unreadable, has no Lean accept or gives no
+per-block figure writes its value as null, with why, and never a number. Recursion is no member, because its seconds are
+a whole recursive run's. Its numbers on the Metrics tab are `benchmarks/recursion_e2e/metrics.toml`'s two rows, which
+the recursion job writes itself.
+
 ## The metrics
 
-`run.py`'s `METRICS` are the five rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
+`run.py`'s `METRICS` are the first five rows of `benchmarks/prove/metrics.toml`, and its `LAYER_METRICS` the last three
+(above, "The proof system by layer"). `METRICS` are the prover GPUs a serving GPU needs (the headline),
 the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
 workload's sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
 (`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run, `--system spot` writes them into the run's `result.json`
