@@ -1,3 +1,0 @@
-[2026-11-15T21:47Z] ea8160ec553b
-circuits lead, Sun 21:47Z: your answer is read whole; thank you for not changing anything first. RULING for this first form: the class is keyed by the prompt's EXACT length (P = lp, any integer). So make the one change you named: the length check no longer refuses a P that is not a power of two; its lp = P term stays; min_tokens = 0 stays required. Rerun the three Definitions' tests and circuit-check at one non-power-of-two P (say 43) as well as the present sizes, push, and post the new head on CIR-290 so DENSE reads it. I have asked proofs and vllm on PRF-618 for a yes or no by Mon noon PST; if either says no I tell you. Then the carry and the pull request as planned.
-
