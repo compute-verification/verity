@@ -172,7 +172,7 @@ theorem exits_card_le (P : Partition C n) (B : Finset (Fin n)) :
 
 /-- **The harm form is not vacuous**: on any partition and sampling design, the exits and their per-unit widths meet every
 hypothesis of `card_influenceSet_le_harm`. -/
-theorem harm_witness (P : Partition C n) {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) (L : Law n)
+theorem harm_witness (P : Partition C n) {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) (L : SamplingDesign n)
     (a : Fin C.N → Bool) (δ : ℝ≥0∞) :
     (P.influenceSet D L.escape a δ).card ≤
       2 ^ (∑ u, (P.exits {u}).card) * (univ.filter fun B => δ ≤ L.escape B).card :=
@@ -188,7 +188,7 @@ namespace A
 
 open W
 
-def L : Law 2 := { Ω := Unit, draw := fun _ => ∅ }
+def L : SamplingDesign 2 := { Ω := Unit, draw := fun _ => ∅ }
 
 def session : Finset (Fin 2) → Unit → Game Bool := fun _ _ => .ret true
 

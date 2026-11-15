@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondFirst
 # SPOT[Flock]'s second stage refuses an honest run with probability at most `K · Σ_t k_t · 2⁻⁶⁴`
 
 The second stage (`Spot.Select.selectSecond`) refuses where the replay sample and the cells are not a second stage's
-(`secondProblem`), where its sampling design is not well formed (`Spot.Draw.flockLaw`, `Spot.Draw.checkDraw`), or
+(`secondProblem`), where its sampling design is not well formed (`Spot.Draw.flockSamplingDesign`, `Spot.Draw.checkDraw`), or
 where a cell's sample does not end on the stage's bytes (`Spot.Draw.sampleUnits`). The first two read no coin of the
 second stage, and
 the second never happens where `secondProblem` passes (`Properties.Spot.SecurityProofs.secondFormed`). The third
@@ -47,17 +47,17 @@ theorem select_subset_ascending {g : Reg} {K : ℕ} (hK : firstK g = some K) {sr
     (hs : Spot.Select.select g.rule g.program g.query g.table g.closure src = .ok (draw, proved, read)) :
     1 ≤ K ∧ proved.toList.Pairwise (· < ·) := by
   obtain ⟨hc, hne, n, named, hn, hl, hf⟩ := firstK_some hK
-  refine ⟨(flockLaw_subset _ _ _ hf).2.1, ?_⟩
+  refine ⟨(flockSamplingDesign_subset _ _ _ hf).2.1, ?_⟩
   obtain ⟨n', named', derived, hn', hl', hder, units, hpu, hcase⟩ := select_proved _ _ _ _ _ _ _ _ _ hs
   rw [hn] at hn'
   obtain rfl := Except.ok.inj hn'
   rw [hl] at hl'
   obtain rfl := Except.ok.inj hl'
-  obtain rfl : derived = none := deriveLaw_subset _ _ _ _ _ (flockLaw_subset _ _ _ hf).1 hder
+  obtain rfl : derived = none := deriveSamplingDesign_subset _ _ _ _ _ (flockSamplingDesign_subset _ _ _ hf).1 hder
   rw [hpu hc]
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+  · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
     have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu

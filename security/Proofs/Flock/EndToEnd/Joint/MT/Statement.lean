@@ -11,7 +11,7 @@ public import Flock.Desc
 
 `JointStratified` and `JointStratifiedHorizon` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
 parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof blocks, whose units the
-challenger's coins sample by one live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`): stratum
+challenger's coins sample by one live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `SamplingDesign.execOS`): stratum
 `s` holds `n_s` of the sampling block's units, `k_s` of them are sampled uniformly without replacement, independently
 across strata, and the strata run over every table's units, so a table's subcircuits are strata of the one sample.
 `verify --zk --session-tables J` proves the sampled proof blocks in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
@@ -25,7 +25,7 @@ that the parts are proved and set up with the session's link points is verity-ve
 (`XplurZC`). The bound is `JointStratified`'s, with the same budget and the same confidence set:
 
 * `JointStratifiedMT`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if verity-verify-proof accepts, the
-  sampling block's incorrect proof blocks `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
+  sampling block's incorrect proof blocks `B` lie in the confidence set (`SamplingDesign.stratified`'s escape of `B` is at least `δ`), so they
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` over every stratum of every table, and their ANDs and their
   output bits are each at most the most any set in the confidence set holds (`StratifiedBlockMT.maxHarm`).
 * `JointStratifiedHorizonMT`, pooled: the same over a period of `T` such sampling blocks played by one adaptive prover,
@@ -54,7 +54,7 @@ open scoped ENNReal
 /-- **A sampling block of `J` tables whose sample is stratified**: one hidden-output `--zk` session of `nTab I` tables over
 `n` proof blocks, with every binder of `EndToEndHidden` but the prover and its sampling design. Its statement (circuit descriptor,
 public file); its strata over every table's units, unit `u` in stratum `sub u`, `ks s` of stratum `s`'s units sampled, the
-executable strata `St` describing them (`Law.ExecStrata`); its record (sample files, session writer, reference setup at
+executable strata `St` describing them (`SamplingDesign.ExecStrata`); its record (sample files, session writer, reference setup at
 table 0, `∑ s, ks s / nTab I` sampled proof blocks a table); the verifier's byte sources, one per stratum; the verify command's
 tags; `live-verifier` at the stratified sampling design (`hCust`); the count curve's parameters; and the knowledge finders' budgets
 `qF`, `qS`. -/
@@ -73,9 +73,9 @@ structure StratifiedBlockMT where
   m : ℕ
   sub : Fin n → Fin m
   ks : Fin m → ℕ
-  hks : ∀ s, ks s ≤ (Law.stratum sub s).card
+  hks : ∀ s, ks s ≤ (SamplingDesign.stratum sub s).card
   St : Fin m → Flock.Draw.Stratum
-  hS : Law.ExecStrata sub ks St
+  hS : SamplingDesign.ExecStrata sub ks St
   Kd : ℕ
   pop : ℕ
   dj : Finset (Fin n) → Lean.Json
@@ -119,11 +119,11 @@ variable (w : StratifiedBlockMT)
 
 /-- The sampling block's sample: `Flock.Draw.drawWith`'s stratified sample on the challenger's coins, over every table's
 units. -/
-def L : Law w.n := Law.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
+def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
-/-- The stratified sampling design the sample is held to under A3 (`Law.execOS_escape_le`): `ks s` of stratum `s`'s units, uniform
+/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_escape_le`): `ks s` of stratum `s`'s units, uniform
 without replacement, independently across strata. -/
-def ideal : Law w.n := Law.stratified w.sub w.ks w.hks
+def ideal : SamplingDesign w.n := SamplingDesign.stratified w.sub w.ks w.hks
 
 /-- The sampling block's audit as it runs: `EndToEndHidden`'s game at the stratified sample. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
@@ -166,7 +166,7 @@ noncomputable def link : ℝ≥0∞ :=
 /-- **The detection budget an incorrect set `B` spends**, `Σ_s k_s·x_s/n_s` over every stratum of every table, with
 `x_s` its units in stratum `s`. -/
 noncomputable def spend (B : Finset (Fin w.n)) : ℝ :=
-  ∑ s, (w.ks s : ℝ) * (B.filter (w.sub · = s)).card / (Law.stratum w.sub s).card
+  ∑ s, (w.ks s : ℝ) * (B.filter (w.sub · = s)).card / (SamplingDesign.stratum w.sub s).card
 
 /-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the incorrect sets `B` the
 stratified sample misses with probability at least `δ`. -/

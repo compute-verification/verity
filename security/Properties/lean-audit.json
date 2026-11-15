@@ -27987,7 +27987,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "cba9b5f451a8403d48e142f2953c62f0839317a292b3698f68d40b8e2e963622",
+   "digest": "c26f5f9d3fb882d6ac378ad76defe334b2110c758cf48f3a7acb0c052396a032",
    "definitions": {
     "Spot.OneStage.CERTIFIED_KEYS": "cc810f37104e3a01d4fcab1fce134737d2b7eaadde17439a09739aea9311e1e9",
     "Spot.OneStage.CERTIFIED_REFUSED": "6cb4793ad6550fdba552a3bc8e2f987b307b478a12d504d43e591530a619e303",
@@ -28006,7 +28006,7 @@
     "Spot.OneStage.Evidence.statement": "74b356c3f76171f9868dfa576a844a538f3f08c4410ac30345904616d6f97698",
     "Spot.OneStage.Evidence.verdicts": "81db97c8dd0262866fef18d1ee034915508f7e88883ed12ac90f627fc981eb32",
     "Spot.OneStage.PARAM_KEYS": "67fa7abb3b14fe0b31c7e59f31acd29a0329e4469f074e74c76ae7e8529b0793",
-    "Spot.OneStage.Params": "c7e59a1216107d2421365fa4fae992643407964b83359a62a6311a4d48b14313",
+    "Spot.OneStage.Params": "b95560f804862565274a5b4ae974e9642b0d4c4d478f030a2d66559149cd7ec8",
     "Spot.OneStage.Params.challenger": "598ee235786a0a3a9fa87465206478af0fe014791b74ae86ab3dd2f899a7095c",
     "Spot.OneStage.Params.delta": "d550f45ad0ba012c2bc8c7a0467b8c402089f9c49e78b913427cf382710b2de8",
     "Spot.OneStage.Params.verifier": "680df793464a25574c508c8be9441d42dc65883c3c4b93ed60db17fac4535c69",

@@ -15,7 +15,7 @@ from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import moe
 
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset

@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainLeafKS
 import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Claims.Sampling.Select.SampleLaw
+import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.SamplingGeneric
 import Proofs.Certifier.SampledAuditAccepted
@@ -128,7 +128,7 @@ theorem sampledLeak_registered_plain_sha512
   sampledLeak_registered_plain relD c iroots shaD
     (SamplingDeploy.ks_compiled (FlockDeploy.deployPlainTrim relD) c iroots shaD FlockDeploy.KS.plain_KS
       (listWithin_deployPlainTrim relD) (binds_deployOf (FlockDeploy.deployPlainTrim relD) c shaD)
-      (sampleLaw_of_slots Dp hslots)
+      (sampleDesign_of_slots Dp hslots)
       (refuses_of shaD Dp (scopeMatches_of Dp hslots hprog) hchecks) hfix hfixed hsessions
       (SamplingDeploy.innerNumbers_deployPlain relD c hnum) hopens)
     L K S lay k δ hδ reg ops Dj x hx hreg Ω P

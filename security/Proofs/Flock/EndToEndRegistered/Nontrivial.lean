@@ -223,7 +223,7 @@ def pubW : Flock.Public :=
   { header := Json.mkObj [("units", Json.mkObj [("indices", .arr #[jn 0])])], n := 1, digests := #[], outputs := #[],
     sha := ByteArray.empty }
 
-def sampleU : Flock.Draw.UnitSample := { law := .subset 1, population := 1, units := #[0] }
+def sampleU : Flock.Draw.UnitSample := { samplingDesign := .subset 1, population := 1, units := #[0] }
 
 theorem sampleW_obj : drawW = .obj ⟨⟨FlockDeploy.Concrete.objT drawW⟩⟩ := by kernel_rfl
 

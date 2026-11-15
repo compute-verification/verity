@@ -11,6 +11,7 @@ import pytest
 
 import slots as S
 import slots_gpu as G
+from conftest import BUILD
 
 pytestmark = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 
@@ -22,7 +23,7 @@ KEY = bytes(range(100, 132))
 def test_the_edge_layout(slots: int) -> None:
     layout = S.edge_layout()
     out = S.random_outputs(layout, slots, np.random.default_rng(slots))
-    assert G.commit(G.Plan(CTX, layout, "host"), 3, KEY, out, slots) == S.commit(CTX, layout, 3, KEY, out, slots)
+    assert G.commit(G.Plan(CTX, layout, "host", build=BUILD), 3, KEY, out, slots) == S.commit(CTX, layout, 3, KEY, out, slots)
 
 
 def test_the_fixtures_root() -> None:
@@ -30,7 +31,7 @@ def test_the_fixtures_root() -> None:
     layout = S.edge_layout()
     out = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(d["slots"], n) for h, n in zip(t, g.sources, strict=True)]
            for t, g in zip(d["outputs"], layout.groups, strict=True)]
-    got = G.commit(G.Plan(bytes.fromhex(d["context"]), layout, "host"), d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
+    got = G.commit(G.Plan(bytes.fromhex(d["context"]), layout, "host", build=BUILD), d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
     assert got.root.hex() == d["root"]
     assert [r.hex() for r in got.slot_roots] == [s["root"] for s in d["per_slot"]]
 
@@ -38,7 +39,7 @@ def test_the_fixtures_root() -> None:
 def test_two_h200_layers() -> None:
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(7))
-    assert G.commit(G.Plan(CTX, layout, "host"), 9, KEY, out, 3) == S.commit(CTX, layout, 9, KEY, out, 3)
+    assert G.commit(G.Plan(CTX, layout, "host", build=BUILD), 9, KEY, out, 3) == S.commit(CTX, layout, 9, KEY, out, 3)
 
 
 @pytest.mark.parametrize(("layout", "k"), [(S.h200_layout(layers=3), 2), (S.edge_layout(), 2)], ids=["h200-3-by-2", "edge-by-2"])
@@ -47,12 +48,12 @@ def test_regrouped_layers_give_the_same_digest_and_roots(layout: S.CommitShape, 
     assert len(grouped.groups) == -(-len(layout.groups) // k) and S.layout_digest(grouped) == S.layout_digest(layout)
     out = S.random_outputs(layout, 3, np.random.default_rng(11))
     joined = [[t for ts in out[i:i + k] for t in ts] for i in range(0, len(out), k)]
-    assert G.commit(G.Plan(CTX, grouped, "host"), 4, KEY, joined, 3) == S.commit(CTX, layout, 4, KEY, out, 3)
+    assert G.commit(G.Plan(CTX, grouped, "host", build=BUILD), 4, KEY, joined, 3) == S.commit(CTX, layout, 4, KEY, out, 3)
 
 
 def test_a_step_reuses_its_plan_and_its_root_moves_with_the_step_and_the_key() -> None:
     layout = S.edge_layout()
-    plan = G.Plan(CTX, layout, "host")
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
     out = S.random_outputs(layout, 4, np.random.default_rng(8))
     a, b = G.commit(plan, 0, KEY, out, 4), G.commit(plan, 1, KEY, out, 4)
     c = G.commit(plan, 0, bytes(32), out, 4)
@@ -62,7 +63,7 @@ def test_a_step_reuses_its_plan_and_its_root_moves_with_the_step_and_the_key() -
 
 def test_the_streaming_call_refuses_what_is_not_the_layouts() -> None:
     layout = S.edge_layout()
-    plan = G.Plan(CTX, layout, "host")
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
     out = S.random_outputs(layout, 2, np.random.default_rng(9))
     sc = G.StepCommitter(plan, 0, 2, KEY)
     with pytest.raises(ValueError, match="takes 1 tensors"):
@@ -106,7 +107,7 @@ def test_a_plan_drops_tables_once_read_and_past_the_lag_after_the_producer_waits
     """``Plan.release`` with stand-in events (a CUDA plan's adds hold their tensors so): a held table goes, oldest first,
     once its read has passed, and with ``keep`` every add's but the last ``keep``, an unread one's only after its producer's
     stream waits for its read; a later read never lets a table go ahead of an earlier unread one."""
-    plan, producer = G.Plan(CTX, S.edge_layout(), "host"), _Producer()
+    plan, producer = G.Plan(CTX, S.edge_layout(), "host", build=BUILD), _Producer()
     reads, tables = [_Read() for _ in range(4)], [_Table() for _ in range(4)]
     alive = [weakref.ref(t) for t in tables]
     for read, t in zip(reads[:3], tables[:3], strict=True):
