@@ -21,8 +21,9 @@ that finds it held does nothing and says so. Then:
               - its `research run` options are all in ALLOWED, each with a value of its form: no option names a path of the
                 pod (`--send`, `--source DIR`), so a row can't ship one of the pod's files to a machine;
               - it asks no more than the default job (DEFAULT_JOB, `research run`'s own): no `--pool`, and `--mem-gb` and
-                `--timeout` each at or under the default's GiB and seconds (a row may carry no `--cpus`, so it takes the
-                default's CPUs); any other row is rerun by its owner, whether or not the plan lists a machine for it;
+                `--timeout` each at or under the default's GiB and seconds, read as `research run` reads them (a value it
+                can't read is over; a row may carry no `--cpus`, so it takes the default's CPUs); any other row is rerun
+                by its owner, whether or not the plan lists a machine for it;
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks);
               - none of its numbers has a launch of this loop's still in flight, or one that ran and ended less than that
                 number's `every` ago, whatever the door says (the record);
@@ -86,6 +87,7 @@ from typing import Callable
 
 from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
 from research.jobs import dispatch
+from research.remote import timeout_seconds
 from research.runs import ENDED
 
 SCHEMA = "verity/metrics-rerun/v1"
@@ -115,8 +117,8 @@ ALLOWED: dict[str, re.Pattern | frozenset | None] = {
     "--cwd": frozenset({"source", "clone"}),
     "--pool": WORD,                  # the slot pool on the machine
     "--as": WORD,                    # the lane its slot names
-    "--mem-gb": NUMBER,              # memory reserved on the machine
-    "--timeout": NUMBER,             # the run's own bound
+    "--mem-gb": WORD,                # memory reserved on the machine, read as `research run` reads it (past_default)
+    "--timeout": WORD,               # the run's own bound, read as `research run` reads it (past_default)
     "--gpus": NUMBER,                # GPUs it waits for on the machine; the plan decides the machine
     "--store-read": None,            # a read-only store key for the workload, minted for the run and deleted after it
 }
@@ -220,6 +222,26 @@ def declarations(tree: Path) -> tuple[list[Job], list[str]]:
                 by.setdefault(r.get("command") or None, []).append(r)
             jobs += [Job(f, c, tuple(rs)) for c, rs in by.items()]
     return sorted(jobs, key=lambda j: (j.where, j.ids)), broken
+
+
+def past_default(opts: list[tuple[str, str | None]]) -> list[str]:
+    """What of a row's options asks more than DEFAULT_JOB, each as the skip line says it. A value is read as `research run`
+    reads it (`--timeout` by remote.timeout_seconds, `--mem-gb` as a float); one it can't read is past the default too."""
+    past = []
+    for name, value in opts:
+        if name not in DEFAULT_JOB:
+            continue
+        if (most := DEFAULT_JOB[name]) is None:
+            past.append(f"{name} {value}")
+            continue
+        try:
+            asked = timeout_seconds(value) if name == "--timeout" else float(value)
+        except ValueError:
+            past.append(f"{name} {value} could not be read")
+            continue
+        if asked > most:
+            past.append(f"{name} {value} over {most:g}")
+    return past
 
 
 def options(command: str) -> tuple[list[tuple[str, str | None]], list[str], bool]:
@@ -424,9 +446,7 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
         except Refused as x:
             skip(f"{why}; but {x}")
             continue
-        over = [(n, v, DEFAULT_JOB[n]) for n, v in opts
-                if n in DEFAULT_JOB and (DEFAULT_JOB[n] is None or float(v) > DEFAULT_JOB[n])]
-        if past := [f"{n} {v}" if most is None else f"{n} {v} over {most:g}" for n, v, most in over]:
+        if past := past_default(opts):
             skip(f"{why}; but its command asks for more than the default job ({', '.join(past)}): such a number is rerun "
                  "by its owner")
             continue

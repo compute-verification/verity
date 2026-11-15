@@ -237,6 +237,27 @@ def test_a_dry_run_judges_the_default_job_the_same(tmp_path, option, said):
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("option, said", [
+    (f"--timeout {AUTO_MAX_MIN}m", None),
+    (f"--timeout {AUTO_MAX_MIN + 1}m", f"--timeout {AUTO_MAX_MIN + 1}m over {MAX_S:g}"),
+    (f"--timeout {AUTO_MAX_MIN // 60 + 1}h", f"--timeout {AUTO_MAX_MIN // 60 + 1}h over {MAX_S:g}"),
+    ("--timeout abc", "--timeout abc could not be read"),
+    ("--mem-gb x", "--mem-gb x could not be read")])
+def test_a_value_is_read_as_research_run_reads_it_and_one_it_cant_read_is_its_owners(tmp_path, option, said, dry_run):
+    """`--timeout` in research run's own units (`60m`, `2h`) is judged by its seconds; a value research run can't read is past
+    the default job and said, and the pass goes on to the next row."""
+    cfg, pod = past_default(tmp_path, option)
+    state, _ = run(cfg, pod, dry_run=dry_run)
+    if dry_run:
+        launched = sorted(m for m in ("training/asks", "training/plain")
+                          if any(ln.startswith(f"would launch {m} on vy-nebius-cpu-12: ") for ln in pod.lines))
+    else:
+        launched = sorted(i for e in state["launches"] for i in e["metrics"])
+    assert launched == (["training/plain"] if said else ["training/asks", "training/plain"])
+    assert pod.lines.count(past_default_line(said)) == (1 if said else 0)
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
 def test_a_planned_command_past_the_default_job_is_not_launched_though_the_plan_lists_its_machine(tmp_path, dry_run):
     """The shape of the network scans' rows: a machine of the plan's choosing, a pool of its own and more than the default
     job's memory and time. The default job is judged first, so the plan's machine doesn't launch it."""

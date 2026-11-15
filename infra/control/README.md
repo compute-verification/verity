@@ -235,8 +235,8 @@ DIR`, `--runs-dir`, `--id`) is refused and said, so no row ships a file of the p
 line is refused and said, and the pass goes on; a `research run` without `--on` is a local run, which would run on the pod,
 and is skipped and said. The loop runs a row only when its command asks no more than the default job (`DEFAULT_JOB`,
 `research run`'s own `AUTO_MEM_GB` and `AUTO_MAX_MIN` from `research.cli`): no `--pool`, and `--mem-gb` and `--timeout` each
-at or under the default's; a row may carry no `--cpus`. Any other row runs when its owner runs it, and is skipped and said,
-before and whatever the plan below lists for it. A CPU command (`--on auto`) goes to the loop's `--on` in the loop's
+at or under the default's, read as `research run` reads them (one it can't read is over); a row may carry no `--cpus`.
+Any other row runs when its owner runs it, and is skipped and said, before and whatever the plan below lists for it. A CPU command (`--on auto`) goes to the loop's `--on` in the loop's
 `--pool`; a command asking for GPUs or naming its machine (`--on NODE`, `--on vy-...`) goes only to a machine
 `/data/watchers/gpu-plan.toml` lists for one of its numbers now (the machine it names, when it names one) and that no
 launch of the loop's is in flight on (waiting for its slot or running), and without one it is skipped and said. The plan is
