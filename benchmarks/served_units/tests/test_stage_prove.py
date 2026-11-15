@@ -4,7 +4,9 @@ process, or when KILL_AT is too near; it reads the leases among CARDS alone (GPU
 the job is then taken among), so another card's process or lease holds nothing back; once every card is free it goes on to
 its first build. STEPS=stage reads no lease, hides every card and keeps FLOCK_WORK with .staged naming its commit;
 STEPS=prove builds nothing, refuses a FLOCK_WORK another commit staged before reading a lease, and proves one this commit
-staged on its cards alone."""
+staged on its cards alone. Proving, it routes a statement past the GPU prover's nonzero bound to the CPU prover with no card,
+and has the Lean verifier check each proved statement's last kept session on FLOCK_WORK's statement before removing it: a
+refusal fails the job (exit 7), once, with nothing retried."""
 from __future__ import annotations
 
 import os
@@ -39,13 +41,35 @@ done
 LAKE = '#!/usr/bin/env bash\necho "lake $* cvd=[${CUDA_VISIBLE_DEVICES-unset}]" >> "$CALLS"\n[ -n "${LAKE_OK:-}" ]\n'
 #: findmnt -no OPTIONS|TARGET -T PATH: a mount that allows exec, unless $NOEXEC
 FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime${NOEXEC:+,noexec} ;; *) echo / ;; esac\n'
-#: window.py stage|prove UNITS: its call, groups, allowed cards and visible cards logged; `stage` stages one statement
+#: window.py stage|prove UNITS | route UNITS GPU CPU: its call, groups, allowed cards and visible cards logged; `stage`
+#: stages one statement; `route` sends a line naming $TO_CPU to CPU; under $PROVED `prove` proves each line's statement,
+#: its name the unit's after `census:`, lower case, with two kept sessions and its exit, $PROVER_EXIT or 0
 WINDOW = r'''import os, sys
 from pathlib import Path
 a = os.environ.get("GPU_LEASE_ALLOWED_FILE")
+units = [ln.split("\t")[0] for ln in Path(sys.argv[2]).read_text().splitlines()] if sys.argv[1] != "stage" else []
 with open(os.environ["CALLS"], "a") as f:
     f.write(f"window {sys.argv[1]} gpus={os.environ.get('WIN_GPUS', '')} allowed={Path(a).read_text().strip() if a else ''} "
-            f"cvd=[{os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')}]\n")
+            f"cvd=[{os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')}]"
+            + (f" device={os.environ['WIN_DEVICE']} {' '.join(units)}" if sys.argv[1] != "stage" else "") + "\n")
+if sys.argv[1] == "route":
+    to = os.environ.get("TO_CPU", "@@")
+    lines = Path(sys.argv[2]).read_text().splitlines(keepends=True)
+    Path(sys.argv[3]).write_text("".join(ln for ln in lines if to not in ln))
+    Path(sys.argv[4]).write_text("".join(ln for ln in lines if to in ln))
+if sys.argv[1] == "prove" and os.environ.get("PROVED"):
+    fw, out = Path(os.environ["FLOCK_WORK"]), Path(os.environ["RESEARCH_RUN_DIR"]) / "out"
+    for u in units:
+        nm = u.split(":")[1].split("_")[0].lower()
+        d = fw / "data" / f"{nm}-k0"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "circuit.txt").write_text('flock-circuit\nMETA {"statement": "verity/flock-circuit"}\n')
+        (d / "stage.json").write_text('{"word": "W"}')
+        for s in ("l0000-1", "l0001-1"):
+            (out / "kept" / nm / "sessions" / s).mkdir(parents=True, exist_ok=True)
+            (out / "kept" / nm / "sessions" / s / "session.json").write_text(s)
+        (out / "kept" / nm / "pub.bin").write_text("p")
+        (out / "kept" / nm / "exit").write_text(os.environ.get("PROVER_EXIT", "0") + "\n")
 if sys.argv[1] == "stage":
     d = Path(os.environ["FLOCK_WORK"]) / "data" / "s"
     d.mkdir(parents=True, exist_ok=True)
@@ -55,6 +79,31 @@ if sys.argv[1] == "stage":
         import signal
         signal.pause()
 '''
+#: uv run --no-sync python|verity ...: Python itself, but for lean_check.sh's program-word writer, which writes an empty
+#: descriptor; `verity bench prove lean-verify` logs its proof tree's statement, session (its session.json, the
+#: stub's session id) and public file, and accepts
+#: unless its statement's directory names $REFUSE
+UV = r'''#!/usr/bin/env bash
+[ "$1 $2" = "run --no-sync" ] || exit 2
+shift 2
+if [ "$1" = verity ]; then
+  o=; t=; while [ $# -gt 0 ]; do case $1 in --out) o=$2; shift ;; --proof) t=$2; shift ;; esac; shift; done
+  d=$(basename "$(dirname "$(readlink "$t/circuit.txt")")")
+  echo "lean-verify $d $(cat "$t/session/session.json") pub=$(readlink "$t/pub.bin")" >> "$CALLS"
+  case $d in *"${REFUSE:-@@}"*) a=false ;; *) a=true ;; esac
+  l=; [ $a = true ] && l=L; echo "{\"accepted\": $a, \"label\": \"$l\", \"verifier\": {\"runs\": [{\"why\": \"refused\", \"wall_s\": 1.5}]}}" > "$o/lean-verify.json"
+  exit 0
+fi
+shift
+if [ "$1" = - ]; then
+  s=$(cat); case $s in *descriptor_chunks*) : > "$2/program-word.json"; echo '{}'; exit 0 ;; esac
+  printf '%s\n' "$s" | exec python3 "$@"
+fi
+exec python3 "$@"
+'''
+LAKEFILE = '[[lean_exe]]\nname = "flock-verify"\nroot = "FlockVerify"\n\n[[lean_exe]]\nname = "flock-read-tmpl"\nroot = "FlockReadTmpl"\n'
+
+
 #: /proc/meminfo as the job reads it, at GB of MemAvailable
 def meminfo(path: Path, gb: int) -> str:
     path.write_text(f"MemTotal: {2015 << 20} kB\nMemAvailable: {gb << 20} kB\n")
@@ -67,13 +116,15 @@ def job(tmp_path, monkeypatch):
     bin_.mkdir()
     monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
     monkeypatch.delenv("GPU_LEASE_ALLOWED_FILE", raising=False)
-    for name, text in (("nvidia-smi", NVIDIA_SMI), ("gpu-lease", GPU_LEASE), ("lake", LAKE), ("findmnt", FINDMNT)):
+    for name, text in (("nvidia-smi", NVIDIA_SMI), ("gpu-lease", GPU_LEASE), ("lake", LAKE), ("findmnt", FINDMNT), ("uv", UV)):
         (bin_ / name).write_text(text)
         (bin_ / name).chmod(0o755)
     (tmp_path / "units").write_text("census:EmbeddingRead_v1{V=256,H=4}@full\t4.8\t1.5\t197\t30\n")
     (tmp_path / "verity/protocols/proofs/flock/verifier").mkdir(parents=True)
+    (tmp_path / "verity/protocols/proofs/flock/verifier/lakefile.toml").write_text(LAKEFILE)
     (tmp_path / "benchmarks/served_units").mkdir(parents=True)
     (tmp_path / "benchmarks/served_units/window.py").write_text(WINDOW)
+    shutil.copy(HERE / "lean_check.sh", tmp_path / "benchmarks/served_units/lean_check.sh")
     run_dir, calls = tmp_path / "run", tmp_path / "calls"
 
     def run(**extra: str) -> tuple[int, str, list[str]]:
@@ -228,5 +279,58 @@ def test_prove_alone_proves_this_commits_staging_on_its_cards_alone(job, tmp_pat
     (fw / ".staged").write_text(f"{TREE} 2026-11-13T17:00:00Z units-sha256 0 staged 1\n")
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6")
     assert rc == 0 and "staged by this commit" in steps and "start check passed: cards 4,5 free" in steps, steps
-    assert calls == ["4,5", "window prove gpus=2 allowed=4,5 cvd=[unset]"]
+    unit = "census:EmbeddingRead_v1{V=256,H=4}@full"
+    assert calls == ["4,5", f"window route gpus=2 allowed=4,5 cvd=[unset] device=gpu {unit}",
+                     f"window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu {unit}"]
     assert "flock-read-tmpl" not in steps and not fw.exists()
+
+
+def staged(tmp_path: Path, units: str) -> Path:
+    (tmp_path / "units").write_text(units)
+    fw = tmp_path / "fw"
+    fw.mkdir()
+    (fw / ".staged").write_text(f"{TREE} 2026-11-15T01:00:00Z units-sha256 0 staged 2\n")
+    return fw
+
+
+TWO = "census:Small_v1{N=1}@full\t1\t1\t1\t1\ncensus:Big_v1{N=9}@full\t1\t1\t1\t1\n"
+
+
+def test_prove_routes_past_the_gpu_bound_to_the_cpu_prover_and_checks_each_proof_with_lean(job, tmp_path: Path):
+    """The statement route sends past the GPU prover's bound is proved with no card, one group, into out/cpu; the other on
+    the cards. Each proved statement's last kept session is checked by the Lean verifier at FLOCK_WORK's statement with its
+    kept public files, before FLOCK_WORK is removed."""
+    fw = staged(tmp_path, TWO)
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", TO_CPU="Big", PROVED="1", LAKE_OK="1")
+    out = tmp_path / "run/out"
+    assert rc == 0 and "route: 1 statements to the cards, 1 past the GPU prover's nonzero bound to the CPU prover" in steps, steps
+    assert calls[2:] == [
+        "window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu census:Small_v1{N=1}@full",
+        "window prove gpus=1 allowed=4,5 cvd=[] device=cpu census:Big_v1{N=9}@full",
+        "lake build flock-verify cvd=[unset]",
+        f"lean-verify small-k0 l0001-1 pub={out}/kept/small/pub.bin",
+        f"lean-verify big-k0 l0001-1 pub={out}/cpu/out/kept/big/pub.bin"]
+    rows = [ln.split("\t")[:4] for ln in (out / "lean.tsv").read_text().splitlines()]
+    assert rows == [["name", "session", "accepted", "label"], ["small", "l0001-1", "True", "L"], ["big", "l0001-1", "True", "L"]]
+    assert "the Lean verifier: 2 proved statements accepted, 0 refused or not checked" in steps and not fw.exists()
+
+
+def test_a_proof_the_lean_verifier_refuses_fails_the_job_once(job, tmp_path: Path):
+    fw = staged(tmp_path, TWO)
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", LAKE_OK="1", REFUSE="big")
+    assert rc == 7 and "LEAN REFUSED: big l0001-1: False\trefused" in steps and "LEAN accepted: small" in steps, steps
+    assert sum(c.startswith("lean-verify big") for c in calls) == 1 and not fw.exists()
+
+
+def test_a_verifier_that_does_not_build_fails_every_proof_unchecked(job, tmp_path: Path):
+    fw = staged(tmp_path, TWO)
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1")
+    assert rc == 7 and "LEAN REFUSED: the verifier flock-verify did not build: none of 2 proved statements checked" in steps
+    assert not any(c.startswith("lean-verify") for c in calls) and not fw.exists()
+
+
+def test_a_statement_whose_prover_failed_has_no_proof_to_check(job, tmp_path: Path):
+    fw = staged(tmp_path, TWO)
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", PROVER_EXIT="1")
+    assert rc == 0 and "LEAN: small: its prover exited 1: no proof to check" in steps, steps
+    assert "the Lean verifier: 0 proved statements accepted, 0 refused" in steps and not any(c.startswith("lake") for c in calls)

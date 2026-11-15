@@ -22,9 +22,15 @@
 #      removes FLOCK_WORK and DISK_WORK and exits 5; a job that proves removes both at any exit, and STEPS=stage keeps them
 #      once window.py stage has ended. Under
 #      STEPS=stage the job ends here, FLOCK_WORK kept and, if every statement staged, .staged naming the commit
-#   3. (prove) window.py prove: one group per card of CARDS (one group on the CPU), each group's `gpu-lease 1` taken only among
-#      CARDS (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step under `timeout` to KILL_AT less 90 s;
-#      every session kept in out/kept/NAME; FLOCK_WORK removed at its end
+#   3. (prove) on DEV=gpu, window.py route first: a statement past the GPU prover's nonzero bound goes to the CPU prover
+#      (out/gpu.units, out/cpu.units). window.py prove: one group per card of CARDS (one group on the CPU), each group's
+#      `gpu-lease 1` taken only among CARDS (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step
+#      under `timeout` to KILL_AT less 90 s; every session kept in out/kept/NAME. Then the CPU prover's statements, one
+#      group on the job's cores with no card, into out/cpu/out (its kept/ there)
+#   4. (prove, LEAN=1, the default) Flock's Lean verifier on each proved statement's last kept session, in this job and on
+#      the statement FLOCK_WORK holds, before it is removed (lean_check.sh): out/lean.tsv, out/lean/NAME/SESSION/. A
+#      statement it doesn't accept, or a proved one it can't check, is LEAN REFUSED in steps.txt and the job exits 7;
+#      nothing is retried. FLOCK_WORK removed at the job's end
 # env: UNITS (a path, or a name sent with the run) DEV (gpu|cpu) CARDS (gpu, to prove) SM (gpu) NOT_BEFORE KILL_AT; STEPS;
 #      FLOCK_WORK (under /workspace/tmp: STEPS=stage's choice, STEPS=prove's input); RAM_WORK=1 DISK_WORK (a FLOCK_WORK in
 #      /dev/shm) MEM_FLOOR_GB=500 MEM_POLL_S=5 MEMINFO=/proc/meminfo; MIN_LEFT_S=1800 WORK_ROOT=/workspace/tmp
@@ -146,13 +152,69 @@ fi
 export FLOCK_WORK=$FW
 left=$(( KILL_AT - 90 - $(date +%s) )); lease=$(( (KILL_AT - $(date +%s)) / 60 - 3 ))
 [ "$left" -gt 300 ] || { say "REFUSED: $left s to KILL_AT: nothing proved"; drop; exit 9; }
-export WIN_GPUS=$ngroups WIN_DEV_GIB=${WIN_DEV_GIB:-135} WIN_KEEP=0 WARM=${WARM:-1} RUNS=${RUNS:-4} VCPUS=${VCPUS:-2} \
+LEAN=${LEAN:-1}; DROP=1   # FLOCK_WORK outlives each window.py prove, for the CPU prover's and the Lean verifier's steps
+export WIN_GPUS=$ngroups WIN_DEV_GIB=${WIN_DEV_GIB:-135} WIN_KEEP=1 WARM=${WARM:-1} RUNS=${RUNS:-4} VCPUS=${VCPUS:-2} \
   LEASE_MIN=$(( ${LEASE_MIN:-60} < lease ? ${LEASE_MIN:-60} : lease ))
-say "window.py prove: $ngroups groups, lease $LEASE_MIN min, stopped in $left s"
-timeout --signal=TERM --kill-after=60 "$left" python3 benchmarks/served_units/window.py prove "$UNITS"; rc=$?
-say "window.py prove exit $rc"
-[ "$DEV" = gpu ] && nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name --format=csv,noheader > "$OUT/cards-at-end.txt" 2>&1
-fin=$(awk -F'\t' 'NR > 1 && $4 == 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l)
-say "statements: $(awk 'NR > 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l) started, $fin finished with exit 0; kept: $(ls "$OUT/kept" 2>/dev/null | wc -l)"
+GU=$UNITS; CU=$S/none; : > "$CU"
+if [ "$DEV" = gpu ]; then
+  GU=$OUT/gpu.units CU=$OUT/cpu.units
+  python3 benchmarks/served_units/window.py route "$UNITS" "$GU" "$CU" >> "$OUT/route.log" 2>&1 \
+    || { say "window.py route FAILED: $(tail -1 "$OUT/route.log"): nothing proved"; drop; exit 9; }
+  say "route: $(grep -c . "$GU") statements to the cards, $(grep -c . "$CU") past the GPU prover's nonzero bound to the CPU prover (out/gpu.units, out/cpu.units)"
+fi
+rc=0
+if [ -s "$GU" ]; then
+  say "window.py prove: $ngroups groups, lease $LEASE_MIN min, stopped in $left s"
+  timeout --signal=TERM --kill-after=60 "$left" python3 benchmarks/served_units/window.py prove "$GU"; rc=$?
+  say "window.py prove exit $rc"
+  [ "$DEV" = gpu ] && nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name --format=csv,noheader > "$OUT/cards-at-end.txt" 2>&1
+  fin=$(awk -F'\t' 'NR > 1 && $4 == 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l)
+  say "statements: $(awk 'NR > 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l) started, $fin finished with exit 0; kept: $(ls "$OUT/kept" 2>/dev/null | wc -l)"
+fi
+if [ -s "$CU" ]; then
+  left=$(( KILL_AT - 90 - $(date +%s) ))
+  say "window.py prove on the CPU prover: $(grep -c . "$CU") statements, one group on $NCPU cores, no card, stopped in $left s (out/cpu/out)"
+  RESEARCH_RUN_DIR=$OUT/cpu WIN_DEVICE=cpu WIN_GPUS=1 CUDA_VISIBLE_DEVICES= \
+    timeout --signal=TERM --kill-after=60 "$left" python3 benchmarks/served_units/window.py prove "$CU"; c=$?
+  say "window.py prove on the CPU prover exit $c"; [ "$rc" != 0 ] || rc=$c
+fi
+
+# 4. the Lean verifier on each proved statement's last kept session, before FLOCK_WORK is removed
+if [ "$LEAN" = 1 ]; then
+  proved=(); for K in "$OUT"/kept/*/ "$OUT"/cpu/out/kept/*/; do
+    [ -d "$K" ] || continue; K=${K%/}; x=$(cat "$K/exit" 2>/dev/null)
+    if [ "$x" = 0 ]; then proved+=("$K"); else say "LEAN: $(basename "$K"): its prover exited ${x:-unread}: no proof to check"; fi
+  done
+  ok=0; bad=0
+  if [ ${#proved[@]} -gt 0 ]; then
+    . benchmarks/served_units/lean_check.sh
+    LEAN_PY=(uv run --no-sync python); LEAN_TMP=$S; V=verity/protocols/proofs/flock/verifier
+    mkdir -p "$OUT/lean"; printf 'name\tsession\taccepted\tlabel\twall_s\tpeak_gib\tcircuit_bytes\n' > "$OUT/lean.tsv"
+    exe=$(lean_exes "$V" 2>> "$OUT/lean-build.log" | cut -d' ' -f1)
+    if [ -z "$exe" ] || ! (cd "$V" && lake build "$exe") >> "$OUT/lean-build.log" 2>&1; then
+      say "LEAN REFUSED: the verifier ${exe:-named in $V/lakefile.toml} did not build: none of ${#proved[@]} proved statements checked (out/lean-build.log)"
+      bad=${#proved[@]}; proved=()
+    else
+      EXE=$PWD/$V/.lake/build/bin/$exe; say "the Lean verifier $exe built, sha256 $(sha256sum "$EXE" | cut -c1-16)"
+    fi
+    for K in "${proved[@]}"; do
+      nm=$(basename "$K"); sd=$(for d in "$K"/sessions/*/; do [ -s "$d/session.json" ] && echo "${d%/}"; done | sort | tail -1)
+      ds=("$FW"/data/"$nm"-*/); D=${ds[0]%/}
+      if [ -z "$sd" ] || [ ${#ds[@]} != 1 ] || [ ! -s "$D/circuit.txt" ]; then
+        say "LEAN REFUSED: $nm: ${sd:+its statement is not one directory of FLOCK_WORK}${sd:-no kept session}: not checked"; bad=$((bad + 1)); continue
+      fi
+      lean_word "$D" > "$OUT/lean/$nm.word.txt" 2>&1 \
+        || { say "LEAN REFUSED: $nm: program-word.json not written: $(tail -1 "$OUT/lean/$nm.word.txt" | cut -c1-200)"; bad=$((bad + 1)); continue; }
+      LEAN_BENCH=(timeout --signal=TERM --kill-after=30 "$(( KILL_AT - 60 - $(date +%s) ))" uv run --no-sync verity bench)
+      if lean_check "$nm" "$sd" "$D" "$K" "$OUT/lean/$nm/$(basename "$sd")" "$EXE" "$OUT/lean.tsv"; then
+        ok=$((ok + 1)); say "LEAN accepted: $nm $(basename "$sd"): $(tail -1 "$OUT/lean.tsv" | cut -f4-6)"
+      else
+        bad=$((bad + 1)); say "LEAN REFUSED: $nm $(basename "$sd"): $(tail -1 "$OUT/lean.tsv" | cut -f3-6)"
+      fi
+    done
+  fi
+  say "the Lean verifier: $ok proved statements accepted, $bad refused or not checked (out/lean.tsv)"
+  [ "$bad" = 0 ] || [ "$rc" != 0 ] || rc=7
+fi
 drop
 exit $rc
