@@ -116,9 +116,12 @@ the share a wipe left foreign at most (the bound its run's label states). Each p
 the same rule. A reference that can't be read prints its reason in place of a number, and the session's number still
 prints.
 
-Under `research run`, an accepted session of a node run or of `--from` also writes the run's result,
-`$RESEARCH_RUN_DIR/result.json`, where `research` reads a run's result, through the harness kit's writer
-(`benchmarks/harness/verity_bench/kit.py`), in the five fields every resource's benchmark reports. Each is read from
+The command prints and writes through the harness kit's report (`kit.report`, `benchmarks/harness/README.md`), as
+`verity bench compute` does: under `research run` it writes the printed document to
+`$RESEARCH_RUN_DIR/out/memory.json`, outside one where `OUT` names a directory to `$OUT/memory.json`, and with
+neither nothing. Where it writes, an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json` (where `research` reads a run's result) or `$OUT/result.json`, through the kit's
+writer, in the five fields every resource's benchmark reports. Each is read from
 the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the
 printed number in its unit); `verified` (the bytes the verifier certified read over the session's span, its
 `certified_bytes`); `capacity at spec` and `capacity at measured` (for each reading the ledger holds, the data sheet's
@@ -153,7 +156,8 @@ and says so on stderr.
 
 **Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs
 from the evidence store; under `research run` writes an accepted session's amounts to the run's result,
-`$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and `--loopback`
+`$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json` (outside one, with
+`OUT` set, `$OUT/result.json` and `$OUT/memory.json`), and `--loopback`
 leaves `run.sh`'s records beside the document. A run that ran `--loopback` keeps a loopback's document there whatever
 it prints afterwards: it is how `--from` knows that run's session for a loopback. **Backs:** no Lean guarantee or
 claim; the number is the ledger's γ of one session, which PoUB's own analysis bounds.

@@ -72,7 +72,12 @@ points, each with an identity. `verity-bench run SPEC` records one run per point
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
 The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
-stamp, the paired ratio and the result's writer, which records measurements and refuses a verdict of record.
+stamp, the paired ratio, the result's writer, which records measurements and refuses a verdict of record, and the
+report, the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write
+their number. The report prints the text, then one line of JSON whose first keys are `value`, `unit`, `commit` and
+`run`. Under a research run it writes that line to `$RESEARCH_RUN_DIR/out/NAME.json` and the measurements to
+`$RESEARCH_RUN_DIR/result.json`; outside one, with `OUT` set, to `$OUT/NAME.json` and `$OUT/result.json`; with
+neither set, or set empty, it writes nothing. A command's `--out DIR` names the place in place of those.
 `benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
 
 ## What a benchmark may import and write
