@@ -27983,7 +27983,9 @@
    "Accounting.SecurityProofs.EgressRegistered": "restatable: it takes A.cell_inj, a field of the placed run it ranges over that restricts no run, since egress and Links read no cell and every circuit at its leaves and ticks has cells meeting it (cell g = g, as Placed.onto gives); stated without the field, NET-450, Wed 18 Nov",
    "Verity.Guarantees.RegistrationSound": "unstated: the view of a log that registration accepts holds the registered facts the theorems read of it. As stated it fails at the present Site: it asks that every boundary link of an onsite Site be certified, and registration's coverage rule (Site.Entry.Covered) also admits an unmediated one. No theorem proves it; it is to be restated to admit unmediated links and then proved.",
    "Verity.Guarantees.RegistrationSound_honest": "unstated: RegistrationSound's premise holding at a log with a device and a boundary link, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is.",
-   "Verity.Guarantees.RegistrationSound_nontrivial": "unstated: the view of a log whose device names no sheet failing the registered facts, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is."
+   "Verity.Guarantees.RegistrationSound_nontrivial": "unstated: the view of a log whose device names no sheet failing the registered facts, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is.",
+   "Accounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by Accounting.SecurityProofs.B4UnderId in Proofs.Accounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
+   "Accounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.Accounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
