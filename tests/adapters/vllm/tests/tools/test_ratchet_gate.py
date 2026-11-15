@@ -95,7 +95,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def found():
-    return sorted(f"verity_vllm/{p.name}" for p in (HERE.parents[1] / "verity_vllm").glob("*.py") if WORD.search(p.read_text()))
+    return sorted(f"verity_vllm/{p.name}" for p in (HERE.parents[4] / "adapters" / "vllm" / "verity_vllm").glob("*.py") if WORD.search(p.read_text()))
 
 
 @pytest.mark.slow
@@ -299,8 +299,8 @@ HERE = Path(__file__).resolve().parent
 
 def test_no_new_violations():
     found = Counter()
-    for p in sorted((HERE.parents[1] / "verity_vllm").rglob("*.py")):
-        rel = p.relative_to(HERE.parents[1]).as_posix()
+    for p in sorted((HERE.parents[4] / "adapters" / "vllm" / "verity_vllm").rglob("*.py")):
+        rel = p.relative_to(HERE.parents[4] / "adapters" / "vllm").as_posix()
         found[rel if PER == "file" else rel.rpartition("/")[0]] += p.read_text().count("or []")
     entries = json.loads((HERE / "allowlists" / f"{NAME}.json").read_text())["entries"]
     allowed = Counter({e["file"]: e.get("count", 1) for e in entries})
@@ -371,7 +371,7 @@ def rank(module):
 
 
 def test_no_new_violations():
-    root = HERE.parents[1]
+    root = HERE.parents[4] / "adapters" / "vllm"
     known = {p.relative_to(root).with_suffix("").as_posix().replace("/", "."): p for p in sorted(root.glob("verity_vllm/**/*.py"))}
     found = [f"{src[12:]} -> {dst[12:]}" for src, p in known.items() for dst in re.findall(r"^import (\\S+)$", p.read_text(), re.M)
              if dst in known and rank(src) < rank(dst)]
@@ -978,7 +978,7 @@ def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
     {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
     {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
     {G.REPO_RUFF_CONFIG: None},
-    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"adapters/vllm/",)', '"adapters/vllm/", "tools/")')},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"adapters/vllm/", "tests/adapters/vllm/")', '"adapters/vllm/", "tests/adapters/vllm/", "tools/")')},
 ], ids=["ignore", "exclude", "deleted", "lint-code"])
 def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
     both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})
@@ -1286,7 +1286,7 @@ def test_the_environment_read_list_may_not_grow(env_linted):
 
 
 def test_loosening_the_environment_read_lint_fails_naming_what_the_base_lint_finds(env_linted):
-    lint = (SCRIPT.parents[3] / REPO_ENV_LINT).read_text().replace('"adapters/vllm/",)', '"adapters/vllm/", "tools/")')
+    lint = (SCRIPT.parents[3] / REPO_ENV_LINT).read_text().replace('"adapters/vllm/", "tests/adapters/vllm/")', '"adapters/vllm/", "tests/adapters/vllm/", "tools/")')
     env_linted.commit("leaves tools/ out and drops its entry", {REPO_ENV_LINT: lint, REPO_ENV_JSON: _allowlist()})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_env_reads"], [
@@ -1397,7 +1397,7 @@ def test_the_silent_except_list_may_not_grow_and_loosening_its_lint_fails_naming
     assert c["why"].startswith(f"grows {REPO_SILENT_JSON} 1 -> 2 in total"), c["why"]
     assert c["fix"] == [f"{REPO_SILENT_JSON}: {G.key(b)} 0 -> 1"]
     silent_linted.git("checkout", "-q", "-B", "pr", "main")
-    lint = (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text().replace('"adapters/vllm/",)', '"adapters/vllm/", "tools/")')
+    lint = (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text().replace('"adapters/vllm/", "tests/adapters/vllm/")', '"adapters/vllm/", "tests/adapters/vllm/", "tools/")')
     silent_linted.commit("leaves tools/ out and drops its entry", {REPO_SILENT_LINT: lint, REPO_SILENT_JSON: _allowlist()})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_silent_excepts"], [
