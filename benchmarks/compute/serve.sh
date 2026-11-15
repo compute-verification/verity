@@ -44,7 +44,7 @@
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30). The load is
 # benchmarks/compute/load.toml's, which run.py holds the record to. Exit 0 only where Python and Lean both accept and
 # run.py prints the share.
-set -uo pipefail
+set -euo pipefail
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
@@ -72,7 +72,9 @@ here=$(dirname "$TREE")
 [ -n "${RESEARCH_RUN_ID:-}" ] && [ "$(basename "$here")" = "$RESEARCH_RUN_ID" ] || here=${SCRATCH:-${TMPDIR:-/tmp}}
 W=${PASSES:-$(mktemp -d -p "$here" pearlplus-compute.XXXXXX)}
 P=$W/passes WR=$W/window-record.json
-mkdir -p "$W" && chmod 700 "$W" || exit 3
+mkdir -p "$W/tmp" && chmod 700 "$W" || exit 3
+# every temporary file of every step under W too, so the run leaves nothing in /tmp
+export TMPDIR=$W/tmp
 umask 077
 failed=0
 step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
@@ -114,8 +116,16 @@ else:
     held = {"challenger": "in-process", "salt_coin": "in-process challenger",
             "sample_coin": "node draw (verify_run.node_draw)", "lean": "development (no --of-record)"}
     line = "in-process challenger (salt) and the node's draw (sample)"
+steps = {}
+if os.path.exists(os.path.join(os.path.dirname(out), "steps.txt")):
+    for x in open(os.path.join(os.path.dirname(out), "steps.txt")):
+        name, _, rest = x.partition(" rc=")
+        rc, _, sec = rest.partition(" ")
+        if sec.split("s:")[0].isdigit():
+            steps[name] = {"rc": int(rc), "seconds": int(sec.split("s:")[0])}
 doc = {"schema": "verity-bench/compute-run/v1", **held, "development": True, "draws": int(draws), "delta": delta,
-       "over_cap": "uncredited", "class": cls, "scheme": scheme, "model": repo, "revision": rev, "commit": commit}
+       "over_cap": "uncredited", "class": cls, "scheme": scheme, "model": repo, "revision": rev, "commit": commit,
+       "steps": steps, "seconds": sum(v["seconds"] for v in steps.values())}
 open(out, "w").write(json.dumps(doc, indent=1) + "\n")
 print(f"COINS {line}; parameters: development ({draws} draws at delta {delta}, over-cap uncredited, {scheme}, class "
       f"{cls}), {repo}@{rev[:10]}, commit {commit[:12]}")
@@ -201,7 +211,7 @@ coins | tee "$OUT/coins.txt"
 step serve lease "$PY" "$SP" serve --spec "$SPEC" --requests "$SLOTS" --prompt-tokens "$PROMPT" \
   --output-tokens "$OUTPUTS" --max-num-batched-tokens "${T:-8192}" --no-warm-up --passes "$P" --out "$PIECE/served.json" || failed=1
 if [ "$failed" = 0 ]; then
-  step volunteer-needed "$PY" "$SP" volunteer-needed
+  step volunteer-needed "$PY" "$SP" volunteer-needed || exit 1
   grep -q '^no' "$OUT/logs/volunteer-needed.log" || { echo "the verdict needs a give-up before its coin; this runs none"; exit 1; }
   step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || exit 1
   cp "$WR" "$REC/window-record.json"
@@ -228,10 +238,11 @@ step serve-phi phi \
     --model "$REPO" --revision "$REV" --lease-min "${LEASE_MIN:-30}" --tree "$(git rev-parse HEAD 2> /dev/null)" \
     --serve "$REC/serve-phi.json" --pearl-tables "$SCHEME" --out "$OUT/inference-only-policy.json" || failed=1
 step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$REC/serve-phi.json" \
-  --class "$CLASS" --pearl-tables "$SCHEME" --out "$REC/circuit-record.json"
-step verdicts verdicts
-step registered registered
+  --class "$CLASS" --pearl-tables "$SCHEME" --out "$REC/circuit-record.json" || failed=1
+step verdicts verdicts || failed=1
+step registered registered || failed=1
 coins
 step share "$PY" benchmarks/compute/run.py --record "$RUN" || failed=1
+coins > "$OUT/coins.txt"
 cat "$OUT/logs/share.log"
 exit "$failed"
