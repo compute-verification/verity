@@ -127,6 +127,9 @@ LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-serve
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
 VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier"
 SHEETS = ROOT / "hardware"
+#: the one session form `--local` runs, as `run.sh`'s variables: one session of seven windows of a second at 2773
+#: openings a window, the form the board's numbers are compared at
+FORM = {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "1000", "SAMPLES": "2773"}
 #: where a session's coins came from, by its verifier's `--challenger`
 COINS = {"local": "the verifier's own challenger, in its process", "serve": "a challenger process (serve.py) on the "
          "verifier's machine", "gate": "the auditor device's challenger, through its gate"}
@@ -467,10 +470,16 @@ def local(run: Callable = subprocess.run) -> dict:
     set, the tree's bootstrap makes the vLLM environment and the row's checkpoint in LOCAL_WORK first (it skips what
     is already there); with no `gpu-lease` installed the tree's own lease keeps its locks there too. The run's records
     are kept, in the research run's directory under one and else in a directory of LOCAL_WORK/runs/."""
+    given = SETTINGS.environ()
+    if other := [f"{k}={given[k]}" for k, v in FORM.items() if given.get(k, v) not in (v, "")]:
+        raise Unreadable(f"--local runs one session form, {FORM['WINDOWS']} windows of {FORM['WINDOW_MS']} ms at "
+                         f"{FORM['SAMPLES']} openings a window, so its numbers compare: {', '.join(other)} is another")
     name, cc = gpu_of(run)
     row, kind, work = card_row(name, cc), sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
     node, hbm_bytes = one_card(kind)
-    env = {**SETTINGS.environ(), "ROLE": "both", "SERVE": "row", "ROW": row, "PLAN": SETTINGS.PLAN or "serve"}
+    verifier_cpus, prover_cpus = cores()
+    env = {"VERIFIER_CPUS": verifier_cpus, "PROVER_CPUS": prover_cpus, **SETTINGS.environ(), **FORM, "ROLE": "both",
+           "SERVE": "row", "ROW": row, "PLAN": SETTINGS.PLAN or "serve"}
     if not SETTINGS.VLLM_PY:
         work.mkdir(parents=True, exist_ok=True)
         boot = {**SETTINGS.environ(), "WORK": str(work), "VENV": str(work / "venv312"), "HF_HOME": str(work / "hf")}

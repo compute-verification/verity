@@ -44,7 +44,9 @@ from the verifier's record, the JSON's `parameters`: where its coins came from, 
   machine and checked against its pinned SHA-256s. A machine that can't reach Hugging Face stops there: the command
   prints "no number: the bootstrap failed" and the bootstrap's log names the download. `VLLM_PY` names an environment
   of your own instead, `LOCAL_ROW` another row (a card of another capability needs one: `verity-vllm workload`), `GPU`
-  the card. With no `gpu-lease` installed, the tree's own lease program keeps its locks in `LOCAL_WORK`.
+  the card. With no `gpu-lease` installed, the tree's own lease program keeps its locks in `LOCAL_WORK`. The session
+  runs on this process's cores, half to the verifier and half to the prover (`taskset` narrows them; `VERIFIER_CPUS`
+  and `PROVER_CPUS` name others).
 - **Where the result goes:** the text and the JSON on stdout, and with `OUT=DIR` the JSON in `DIR/memory.json`; the
   session's records (the verifier's `verifier.json`, every process's log) in a new directory under `LOCAL_WORK/runs/`,
   which stderr names. The two reference numbers
@@ -54,10 +56,13 @@ from the verifier's record, the JSON's `parameters`: where its coins came from, 
   backend, its passes and their pacing against the verifier's windows), how the KV cache and the store are encoded
   on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and what of the engine's memory is
   registered as the store and how it is laid out (`adapters/vllm/verity_vllm/protocols/poub/binder.py`, and `run.sh`'s
-  `KV_PAGES`, `WEIGHT_BLOCKS` and filler).
+  `KV_PAGES`, `WEIGHT_BLOCKS` and filler), the store's size among them: the audit certifies reads of the registered
+  store whatever it holds, and no PoUS runs behind the session to say the store is the served model's state. The
+  baseline to beat is your own run of this command at `main`'s commit on your machine, not a number from another.
 - **What is fixed:** the verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`), the ledger
   that turns a session into the share and its error (`verifier/session/verifier.py`), the error rule (an error of 1 or
-  more prints no number), the session's windows and samples, and this command. A number from a changed verifier is
+  more prints no number), the session's form (one session of 7 windows of 1000 ms at 2773 openings a window, which
+  `--local` refuses any other `SESSIONS`, `WINDOWS`, `WINDOW_MS` or `SAMPLES` than), and this command. A number from a changed verifier is
   not a result.
 - **How a cheat is refused:** every pass answers challenges the verifier draws only after the pass's data is fixed,
   and the verifier checks each answer against the store's committed contents and against time. A prover that skips

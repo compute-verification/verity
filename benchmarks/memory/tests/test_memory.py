@@ -133,7 +133,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
     the command; and the kit's writer stamping with `STAMP` rather than asking this machine."""
     for name in ("RESEARCH_RUN_DIR", "OUT", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
                  "HOST_GIB", "LEAF_CTAS", "PLAN", "LOCAL_WORK", "LOCAL_ROW", "VLLM_PY", "GPU", "GPU_LEASE_DIR",
-                 *WINDOWED):
+                 "VERIFIER_CPUS", "PROVER_CPUS", *WINDOWED):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(M.kit, "host_stamp", lambda: dict(STAMP))
     s = FakeStore(tmp_path / "store")
@@ -1062,6 +1062,35 @@ def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, m
     machine = Machine()
     assert bench(store, "--local", run=machine) == 0
     assert machine.started[0][0][-2:] == ["-i", "3"]
+
+
+def test_local_runs_the_one_session_form_on_this_process_cores(store, capsys, work, monkeypatch):
+    """Its numbers compare because every `--local` session has one form, and its cores are this machine's, not the
+    team node's that `run.sh` assumes; the person's own VERIFIER_CPUS and PROVER_CPUS win."""
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert {k: env[k] for k in WINDOWED} == M.FORM == {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "1000",
+                                                       "SAMPLES": "2773"}
+    assert (env["VERIFIER_CPUS"], env["PROVER_CPUS"]) == M.cores()
+    monkeypatch.setenv("PROVER_CPUS", "4-7")
+    monkeypatch.setenv("WINDOWS", "7")
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert env["PROVER_CPUS"] == "4-7"
+
+
+@pytest.mark.parametrize("given", [{"WINDOWS": "3"}, {"SAMPLES": "64", "WINDOW_MS": "500"}, {"SESSIONS": "2"}])
+def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, given):
+    for k, v in given.items():
+        monkeypatch.setenv(k, v)
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 2
+    assert machine.started == []
+    err = capsys.readouterr().err
+    assert "--local runs one session form, 7 windows of 1000 ms at 2773 openings a window" in err
+    assert all(f"{k}={v}" in err for k, v in given.items())
 
 
 @pytest.mark.parametrize("machine, why", [
