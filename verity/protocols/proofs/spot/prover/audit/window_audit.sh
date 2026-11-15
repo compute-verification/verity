@@ -74,7 +74,7 @@ mkdir -p $O/window && cp $WIN/{registration,window,partition,index}.json $WIN/m*
 # the verifier's lowering: a synthetic input set of the template (its values are never read)
 $PY -m verity_numerical.bench.generate --subcircuit ${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16} --n 4 --seed 1 --out $W/sets > $O/sets.log 2>&1 || exit 9
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 $PY verity/protocols/proofs/spot/prover/audit/window_audit.py --bundle $BUNDLE --row-dir $ROWD --partition $PART --window $WIN \
   --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --out $W/a5 2>&1 | tee $O/a5.log | cut -c1-4000
