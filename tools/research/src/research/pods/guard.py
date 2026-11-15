@@ -5,7 +5,9 @@
     research pods guard stop [--dry-run]
 
 Scope.  Live pods (desiredStatus not EXITED/TERMINATED) whose name a budget line covers or a `[guard] project` prefix starts.  The
-guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it.
+guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it,
+but for the state's `rate_all` and `unrated`: every live pod's costPerHr summed, and the pods that list none or one that is not
+a number (infra's hourly total, infra/control/loop_metrics.py, reads them).
 
 Every `--poll` seconds (default 60), from the budgets in memory (the last good read):
   tally      each pod's costPerHr x the time since the last poll (RunPod bills a running pod whether or not anything uses it), added
@@ -48,6 +50,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import signal
 import subprocess
@@ -159,8 +162,8 @@ def load_state(path: Path, now: float, log: Callable[[str], None]) -> dict[str, 
     aside = path.with_name(f"{path.name}.corrupt-{int(now)}")
     try:
         path.replace(aside)
-    except OSError:
-        aside = path
+    except OSError as e:
+        aside, why = path, f"{why}; not moved aside ({type(e).__name__}: {e})"
     log(f"STATE {path.name} {why}: kept as {aside.name}; new tallies start now")
     state = new_state(now)
     state["tally_restarted"] = {"at": iso(now), "why": why, "kept": str(aside)}
@@ -260,11 +263,20 @@ def refresh(cfg: Config, state: dict[str, Any], current: B.Budgets | None, now: 
 def budgets_from_state(state: dict[str, Any]) -> B.Budgets | None:
     try:
         return B.parse((state.get("budgets") or {})["text"])
-    except (KeyError, TypeError, B.BudgetError):
+    except (KeyError, TypeError, B.BudgetError) as e:
+        print(f"research pods guard: the state holds no budgets that parse, so none are carried over ({type(e).__name__}: "
+              f"{e})", file=sys.stderr)
         return None
 
 
 # ---- one poll ---------------------------------------------------------------------------------------------------------------------------------
+
+def listed_rate(v: Any) -> float | None:
+    """A pod's listed costPerHr as dollars an hour, or None when it is not a finite JSON number (a string included)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v) if math.isfinite(v) else None
+
 
 def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: float, log: Callable[[str], None]) -> list[dict[str, Any]]:
     """One guard step over the provider's current pod list: tally, decide, terminate, and only then log.  Returns the terminations it
@@ -303,6 +315,11 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
             del w[k]
         t["window_usd"] = sum(w.values())
     state["last_poll"], state["rate_now"] = now, rate_now
+    # every listed pod, its own host, exempt and foreign ones too: what the account pays an hour (infra/control/loop_metrics.py);
+    # a rate that is not a number makes its pod unrated and never fails the poll
+    rates = {p["id"]: listed_rate(p.get("costPerHr")) for p in listed}
+    state["rate_all"] = sum(r for r in rates.values() if r is not None)
+    state["unrated"] = sorted(k for k, r in rates.items() if r is None)
 
     balance = floor = None
     if budgets.balance_floor is not None:
@@ -414,9 +431,12 @@ def _alive(pid: int) -> bool:
 
 
 def recorded_pid(pid_path: Path) -> int | None:
+    if not pid_path.exists():
+        return None
     try:
         return int(pid_path.read_text().split()[0])
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError) as e:
+        print(f"research pods guard: {pid_path} unread, so no guard is recorded ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 
@@ -609,8 +629,11 @@ def main(argv: list[str]) -> int:
         return supervise([sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--supervise"]], ns.poll)
     if not os.environ.get(SUPERVISED_ENV):
         try:
-            prior = budgets_from_state(json.loads(paths(ns.dry_run)["state"].read_text()))
-        except (OSError, ValueError):
+            state_path = paths(ns.dry_run)["state"]
+            prior = budgets_from_state(json.loads(state_path.read_text())) if state_path.exists() else None
+        except (OSError, ValueError) as e:
+            print(f"research pods guard: {paths(ns.dry_run)['state']} unread, so no budgets are carried over ({type(e).__name__}: "
+                  f"{e})", file=sys.stderr)
             prior = None
         try:
             B.load(cfg.source)

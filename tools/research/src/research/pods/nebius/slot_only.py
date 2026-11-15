@@ -40,8 +40,12 @@ LOG = Path("/workspace/monitoring/slot-only.jsonl")
 #: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
 #: tree each run ships
 NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+#: the check's directory in a shipped tree, either spelling, while trees of both are run: node_ops.py and run_records.py, which
+#: are installed or sent alone, hold copies (`check_file` is the match they spell out)
+CHECK_DIRS = ("tools/verity/check/", "tools/check/")
 #: slot.py as a run's command names it: a shipped tree's, or the machine's own
-SLOT_PATHS = ("tools/verity/check/slot.py", NODE_SLOT)
+TREE_SLOTS = tuple(d + "slot.py" for d in CHECK_DIRS)
+SLOT_PATHS = (*TREE_SLOTS, NODE_SLOT)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
 #: `proofs` pool), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
@@ -102,9 +106,16 @@ def node_copy(command: list[str]) -> list[str] | None:
     """A command that names a pool and then the shipped tree's slot.py (`in_pool`'s words, however it was built), with the
     machine's own copy (NODE_SLOT) in the tree's place; None for any other command. A recorded check (`check.py --record
     --on`) names its pool in the run's environment and no pool in its command, so it keeps its tree's slot.py."""
-    if command[:1] == ["env"] and through_slot(command) and command[3] == SLOT_PATHS[0]:
+    if command[:1] == ["env"] and through_slot(command) and command[3] in TREE_SLOTS:
         return [*command[:3], NODE_SLOT, *command[4:]]
     return None
+
+
+def check_file(*names: str) -> re.Pattern[str]:
+    """A command's text naming one of the check's files ``names`` (`check.py`, `slot.py`) under either of CHECK_DIRS, as a whole
+    path, which a longer name (`slot.py.bak`, `tools/checks/slot.py`) is not."""
+    dirs, files = "|".join(map(re.escape, CHECK_DIRS)), "|".join(map(re.escape, names))
+    return re.compile(rf"(?<![\w.-])(?:{dirs})(?:{files})(?![\w.-])")
 
 
 def through_slot(command: object) -> bool:
@@ -131,9 +142,12 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
     """The commands an auditor host runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    if not marker.exists():
+        return []
     try:
         lines = marker.read_text().splitlines()
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"slot_only: {marker} unread, so no auditor command runs ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     return [shlex.split(ln) for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
 
@@ -150,9 +164,12 @@ def auditor_refusal(marker: Path = AUDITOR) -> str:
 
 
 def _json(p: Path) -> dict:
+    if not p.exists():
+        return {}
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"slot_only: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -226,8 +243,8 @@ def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = Fa
                 if not dry_run:
                     os.setpriority(os.PRIO_PROCESS, p, nice)
                 moved.append(p)
-        except (ProcessLookupError, PermissionError):
-            pass
+        except (ProcessLookupError, PermissionError) as e:
+            print(f"slot_only: process {p} not reniced ({type(e).__name__})", file=sys.stderr, flush=True)
     return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
 

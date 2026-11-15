@@ -412,20 +412,27 @@ def test_chronology_is_declared_and_bounded():
 
 
 _ROWS = ("prefix", "prefix_ik", "prefix_iks")
+#: a member's history groups over an fp8_ds_mla cache: the latent rows as three parts, then the indexer's
+_FP8_ROWS = ("prefix", "prefix_scale", "prefix_rope", "prefix_ik", "prefix_iks")
 
 
-def _toy_edge_request(LP: int, C: int, E: int, last: bool, checks: bool = False):
-    """`GpTestEdge{LP,C,E,LAST,CHK}`: a request after a history of C rows of each group (`prefix`, `prefix_ik`, `prefix_iks`, and
-    with LAST its `last_token`) that samples one token reading the history's last scale, and with E returns its rows [0, E) of each
-    group after its sample (and with CHK a check after it), the history's then its own, as `build_program(edge=)` does."""
+def _toy_edge_request(LP: int, C: int, E: int, last: bool, checks: bool = False, fp8: bool = False):
+    """`GpTestEdge{LP,C,E,LAST,CHK,FP8}`: a request after a history of C rows of each group (`prefix`, `prefix_ik`, `prefix_iks`,
+    with FP8 `prefix_scale` and `prefix_rope` after `prefix`, and with LAST its `last_token`) that samples one token reading the
+    history's last scale, and with E returns its rows [0, E) of each group after its sample (and with CHK a check after it), the
+    history's then its own, as `build_program(edge=)` does."""
     V = Value(16)
 
+    def rows_of(S):
+        return _FP8_ROWS if S.FP8 else _ROWS
+
     def params(S):
-        return [("prompt", Array(S.LP, V)), *((g, Array(S.C, V)) for g in _ROWS * bool(S.C)),
-                *([("last_token", Array(1, V))] if S.LAST else []), ("weights", Array(4, V))]
+        return [("prompt", Array(S.LP, V)), *((g, Array(S.C, V)) for g in rows_of(S) * bool(S.C)),
+                *([("last_token", Array(1, V))] if S.LAST else []), ("weights", Array(1 + len(rows_of(S)), V))]
 
     def sig(S):
-        return tuple(params(S)), W.TupleT(Array(1, V), *[Array(1, V)] * S.CHK, *[Array(S.E, V)] * 3) if S.E else Array(1, V)
+        return tuple(params(S)), (W.TupleT(Array(1, V), *[Array(1, V)] * S.CHK, *[Array(S.E, V)] * len(rows_of(S))) if S.E else
+                                  Array(1, V))
 
     def body(B, S, *args):
         a = dict(zip([n for n, _ in params(S)], args))
@@ -434,13 +441,13 @@ def _toy_edge_request(LP: int, C: int, E: int, last: bool, checks: bool = False)
         if not S.E:
             return sample
         rows = [coll_concat(Array(S.E, V), [*([a[g]] if S.C else []), *(B.call(_ADD, a["prompt"][j % S.LP], a["weights"][1 + k])
-                                                                       for j in range(S.C, S.E))]) for k, g in enumerate(_ROWS)]
+                                                                       for j in range(S.C, S.E))]) for k, g in enumerate(rows_of(S))]
         check = [coll_concat(Array(1, V), [B.call(_ADD, s, a["weights"][3])])] * S.CHK
         return coll_concat(sig(S)[1], [sample, *check, *rows])
 
-    d = REGISTRY["GpTestEdge_v1"] if "GpTestEdge_v1" in REGISTRY else CompositeDefinition("GpTestEdge", 1, ("LP", "C", "E", "LAST", "CHK"),
-                                                                                         sig, body)
-    return d.bind(LP=LP, C=C, E=E, LAST=last, CHK=int(checks))
+    d = REGISTRY["GpTestEdge_v1"] if "GpTestEdge_v1" in REGISTRY else CompositeDefinition("GpTestEdge", 1, ("LP", "C", "E", "LAST", "CHK",
+                                                                                                             "FP8"), sig, body)
+    return d.bind(LP=LP, C=C, E=E, LAST=last, CHK=int(checks), FP8=int(fp8))
 
 
 def _edge_wl(units: dict, edge: W.Edge, **kw) -> W.WorkloadProgram:
@@ -452,8 +459,8 @@ def _edge_wl(units: dict, edge: W.Edge, **kw) -> W.WorkloadProgram:
     return W.WorkloadProgram(reqs, lag=0, edge=edge, **kw)
 
 
-def _groups(E: int, LP: int = 3) -> tuple:
-    return (*((g, E, 16) for g in _ROWS), *((("last_token", 1, 16),) if E >= LP else ()))
+def _groups(E: int, LP: int = 3, rows: tuple = _ROWS) -> tuple:
+    return (*((g, E, 16) for g in rows), *((("last_token", 1, 16),) if E >= LP else ()))
 
 
 def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output_ports_in_close_order():
@@ -499,6 +506,21 @@ def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output
         _edge_wl({2: (3, 4, 0, True)}, W.Edge(ins=((2, _groups(3)),)))
     with pytest.raises(ValueError, match=r"request 3 leaves with .* nor came in so"):
         _edge_wl({1: (3, 0, 2, False)}, W.Edge(outs=((1, _groups(2)), (3, _groups(1)))))
+
+
+def test_an_fp8_edge_carries_the_cache_rows_three_parts_in_ports_of_their_own():
+    """Over an fp8_ds_mla cache a member's latent rows are three groups (`dsa.Net.prefix_params`): window w's out-ports are
+    `edge.kv`, `edge.scale` and `edge.rope`, then `edge.ik` and `edge.iks`, each field its request's rows of that group; window
+    w+1 takes the same ports as registered parameters in that order, and its member's history Inputs read its fields."""
+    from verity.circuits.evaluation.reference import evaluate
+    fp8 = ("edge.kv", "edge.scale", "edge.rope", "edge.ik", "edge.iks")
+    out = _edge_wl({0: (3, 0, 2, False, False, True)}, W.Edge(outs=((0, _groups(2, rows=_FP8_ROWS)),)))
+    assert out.artifact()["edge"]["ports"]["out"] == list(fp8)
+    assert evaluate(out.fn, [1, 2, 3, 4, 5, 6], [10, 11, 12]) == (11, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17)
+    wl = _edge_wl({0: (3, 2, 0, False, False, True)}, W.Edge(ins=((0, _groups(2, rows=_FP8_ROWS)),)))
+    assert wl.registered == wl.ports == fp8 and [n for n, _ in wl.fn.signature()[0]] == ["shared.weights", *fp8, "request[r0].prompt"]
+    kv, sc, ro, ik, iks = ([100 * k + j for j in range(2)] for k in range(1, 6))
+    assert evaluate(wl.fn, [1, 2, 3, 4, 5, 6], kv, sc, ro, ik, iks, [10, 11, 12]) == (10 + 1 + 501,)
 
 
 def test_an_edge_request_returning_checks_keeps_them_its_output():
