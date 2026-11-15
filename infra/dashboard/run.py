@@ -1,7 +1,8 @@
 """The Metrics dashboard's goal, as a number: of the top goals the dashboard lists, how many have a number that runs,
 measured as `console/top-goals-running` against the count of top goals as its target. A goal's number is the first metric
-the dashboard lists under it, and it runs when its newest value has a target, is younger than its `every` and carries a
-mark. Higher is better; the dashboard holds to its goal when every top goal's number runs.
+the dashboard lists under it whose row names that goal, or with no such row the first it lists (the dashboard also lists
+under a goal the numbers of the goals beneath it), and it runs when its newest value has a target, is younger than its
+`every` and carries a mark. Higher is better; the dashboard holds to its goal when every top goal's number runs.
 
     research run --on vy-nebius-cpu-9 --project verity --source . --cwd source -- uv run python infra/dashboard/run.py
 
@@ -28,7 +29,8 @@ MARKS = ("measured", "modeled", "partial")
 
 def _miss(goal: dict, rows: dict[str, dict]) -> str | None:
     """The first point at which `goal`'s number doesn't run, or None when it runs."""
-    row = next((rows[i] for i in goal.get("metrics") or [] if i in rows), None)
+    listed = [rows[i] for i in goal.get("metrics") or [] if i in rows]
+    row = next((r for r in listed if r.get("goal") == goal["id"]), listed[0] if listed else None)
     if row is None:
         return "no number"
     latest = row.get("latest")
