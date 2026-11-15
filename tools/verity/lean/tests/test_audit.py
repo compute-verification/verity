@@ -7814,6 +7814,8 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
 
     def run(names, *flags, sandbox=True):
         monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+        for n in names:
+            shutil.rmtree(pkgs[n] / ".lake" / "build", ignore_errors=True)
         out = tmp_path / f"out{next(runs)}"
         code = A.main([*(str(pkgs[n]) for n in names), "--build", "--no-replay", "--no-runs", "--artifacts", str(store),
                        "--out", str(out), "--repo", str(tmp_path), *flags])
