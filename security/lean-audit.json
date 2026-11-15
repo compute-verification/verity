@@ -274,6 +274,11 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
+  "NetTiming.Covered": {
+   "owner": "@network-accounting",
+   "digest": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
+   "why": "A scope inside RLeakCertifierChecked, which ExecutionPhaseGoodChecked holds and the honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes: the observation sequences the leak relation speaks of are those whose every status at every step of the horizon is complete."
+  },
   "NetTiming.ExecutionPhaseGoodChecked": {
    "owner": "@network-accounting",
    "digest": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
