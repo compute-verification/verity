@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.Program
 public import Proofs.Flock.SessionLoop.Concrete.File
 public import Flock.Firewall
+public import Proofs.Properties.Verity.Sampled.HonestSession.Data.SignedJson
 
 /-!
 # The honest session's circuit file
@@ -13,7 +14,9 @@ two fixed nets (`sha512x3`, `hm96`) as parameters, as in `Proofs.Flock.SessionLo
 whose every digest is a spliced term: the program's SHA-512, the partition digest, the row key's SHA-512, the output
 row's prefix, midstate and pad, and the dummy row's leaf string. `circuitFile` is the file at the verifier's own nets.
 
-Piece P1 owns this file's values: it fixes the META's members to the ones `HmOut.parse` accepts.
+The input leaf is `-1` because the file has no input row (`HmOut.checkRows` refuses a leaf at or past the input rows'
+words, here 0) and the unit's one leaf port takes exactly one leaf (`Circuit.checkLayout`); so META's line is written by
+`jsonCharsS`, which writes a negative number's sign, where `Firewall.printJson` would write `-1` as `0`.
 -/
 
 @[expose] public section
@@ -45,7 +48,7 @@ def metaPairs : List (String × Json) := [
   ("leaves_in", .arr #[.arr #[.num ⟨-1, 0⟩]]),
   ("leaves_out", .arr #[.arr #[jn 0]]),
   ("mask_log", jn 14),
-  ("out_ports", .arr #[.arr #[.str "y", jn 16]]),
+  ("out_ports", .arr #[.arr #[.str "y", jn 1]]),
   ("partition", Json.mkObj [("digest", .str (hexOf partitionDigestB)), ("rule", .str HmRow.PARTITION_V1)]),
   ("per_vu", Json.mkObj [("hm96", jn 1), ("sha512x3", jn 1), ("unit", jn 1)]),
   ("ports", .arr #[.arr #[.str "y", jn 64, jn 1]]),
@@ -57,7 +60,7 @@ def metaPairs : List (String × Json) := [
     Json.mkObj [("count", jn 1), ("net", .str "unit"), ("pos0", jn 1024), ("slot_log", jn 9), ("type", .str "unit")],
     Json.mkObj [("count", jn 1), ("pos0", jn 64), ("slot_log", jn 14), ("type", .str "mask")]]),
   ("row_key_sha512", .str (hexOf (Sha512.hash Hm96.Default512.key))),
-  ("row_schemas", Json.mkObj [("y", .str HmRow.ROW_SCHEMA_V2)]),
+  ("row_schemas", .arr #[.arr #[.str HmRow.ROW_SCHEMA_V2, jn 1024]]),
   ("rows", .arr #[Json.mkObj [("midstate", .arr ((HmRow.midstateOf yPort).map fun w => Json.str (HmRow.hex16 w))),
     ("pad", .str (hexOf (HmRow.tailOf yPort))), ("prefix", .str (hexOf (HmRow.prefixOf yPort)))]]),
   ("scheme", .str "frame-v3-sha512/hm96-sha512"),
@@ -71,7 +74,7 @@ def metaPairs : List (String × Json) := [
 def metaJ : Json := Json.mkObj metaPairs
 
 /-- The META line's text. -/
-def metaText : String := Firewall.printJson metaJ
+def metaText : String := String.ofList (jsonCharsS metaJ)
 
 /-- The circuit file's first line. -/
 def headLine : String := "flock-circuit " ++ unitName
