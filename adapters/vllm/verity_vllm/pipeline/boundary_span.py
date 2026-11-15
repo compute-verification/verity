@@ -93,7 +93,7 @@ def _words(u32s: Sequence[int]) -> np.ndarray:
 
 
 def ingress_row(span: Span, prompt_cap: int) -> np.ndarray:
-    """Span's `b.ingress` row at prompt cap P, as u16 words."""
+    """Span's `b.ingress` row at prompt size P, as u16 words."""
     if len(span.prompt) > prompt_cap:
         raise ValueError(f"{span.engine_id}: {len(span.prompt)} prompt ids past the class's {prompt_cap}")
     s = {**{k: None for k in SAMPLING}, **span.sampling}
@@ -103,7 +103,7 @@ def ingress_row(span: Span, prompt_cap: int) -> np.ndarray:
 
 
 def egress_row(span: Span, output_cap: int, head: bool = True) -> np.ndarray:
-    """Span's `b.egress` row at output cap O, as u16 words: the ids served n, the finish and the O ids; without ``head``
+    """Span's `b.egress` row at output size O, as u16 words: the ids served n, the finish and the O ids; without ``head``
     (a serve that registers a stop rule), the O ids alone."""
     if len(span.served) > output_cap:
         raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {output_cap}")
@@ -125,7 +125,3 @@ def id_rows(span: Span, outputs: int) -> np.ndarray:
         raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {outputs}")
     last = span.served[-1] if span.served else 0
     return _words([*span.served] + [last] * (outputs - len(span.served))).reshape(outputs, 2)
-
-
-__all__ = ["FIELD_AT", "FIELDS", "FINISH", "HEAD_U32", "MIN_CAP", "SAMPLING", "Span", "cap", "class_size", "egress_row",
-           "id_rows", "ingress_row", "sampling_of"]
