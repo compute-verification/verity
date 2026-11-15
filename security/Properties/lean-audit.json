@@ -13221,6 +13221,8 @@
   "premises": [
    "Definitions.Certifier.Premises",
    "Definitions.Accounting.Assumptions",
+   "Definitions.Poub.Assumptions",
+   "Definitions.Compose.Assumptions.Parties",
    "Properties.Poub.Remote.Line.Premises",
    "Properties.Poub.Remote.Schedule",
    "Properties.Accounting.Registration.Premises"
