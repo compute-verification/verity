@@ -368,11 +368,11 @@ private theorem insLt_sorted {a : String} : ∀ {l : List String}, l.Pairwise (�
       · exact le_of_lt hab
       · exact le_of_lt (lt_of_lt_of_le hab ((List.pairwise_cons.1 h).1 x hx))
     · rename_i hab
-      have hba : b ≤ a := le_of_not_lt hab
+      have hba : b ≤ a := not_lt.1 hab
       refine List.Pairwise.cons (fun x hx => ?_) (insLt_sorted (List.pairwise_cons.1 h).2)
       rcases List.mem_cons.1 ((insLt_perm a l).mem_iff.1 hx) with rfl | hx'
       · exact hba
-      · exact le_trans hba ((List.pairwise_cons.1 h).1 x hx')
+      · exact (List.pairwise_cons.1 h).1 x hx'
 
 private theorem sortLt_sorted : ∀ l : List String, (sortLt l).Pairwise (· ≤ ·)
   | [] => List.Pairwise.nil
