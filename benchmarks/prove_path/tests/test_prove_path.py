@@ -1227,6 +1227,18 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
 
 
+def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
+    """A single-GPU Commit's φ (`i2_of_record`) reads the config of record of the pin its workload serves (`workload_hf_config`),
+    as a served pin's does: an int8 row's carries the quantization config its Programs were built under, never the bf16
+    fixture's; a bf16 row's is the fixture's, so that row compiles as before; a model no manifest pins reads the fixture."""
+    int8 = {"model": "verity-int8/Llama-3.2-1B-INT8", "engine": {"revision": "15b0976d400d796ee589e7737d03a919526bf800"}}
+    assert json.loads(PP.workload_hf_config(int8).read_text())["quantization_config"]["quant_method"] == "verity_int8"
+    bf16 = {"model": "unsloth/Llama-3.2-1B", "engine": {"revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}}
+    assert json.loads(PP.workload_hf_config(bf16).read_text()) == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
+    assert PP.workload_hf_config({"model": "org/unpinned", "engine": {}}) == PP.LLAMA32_1B_CONFIG
+    assert PP.workload_hf_config(int8, "given.json") == Path("given.json")
+
+
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
     """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
     `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ (the engine's args among its

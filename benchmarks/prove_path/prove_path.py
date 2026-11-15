@@ -476,11 +476,24 @@ def ingress_of(ctx: Mapping[str, Any]) -> dict[str, dict]:
                                             **{k: sampling.get(k) for k in BODY_SAMPLING if k in sampling}} for q in ctx["requests"]}
 
 
+def workload_hf_config(doc: Mapping[str, Any], hf_config: str | None = None) -> Path:
+    """The checkpoint's ``config.json`` a declared run's φ reads: ``hf_config``, else the config of record of the pin the workload
+    ``doc`` serves (its ``model`` at its engine's revision, `dense_generic.pinned_hf_config`, as `phi_of_serve` reads a served
+    one's), else for a model no manifest pins unsloth/Llama-3.2-1B's. An int8 row's pin carries its ``quantization_config``."""
+    from verity_vllm.config import RowEngine
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    if hf_config:
+        return Path(hf_config)
+    return pinned_hf_config(str(doc.get("model")), str(RowEngine.of(dict(doc)).revision)) or LLAMA32_1B_CONFIG
+
+
 def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None, cap_bits: int = CAP_BITS,
                  transfer_gates: Sequence[str] = (), programs_root: str | None = None, own: bool = False) -> I2Compiler:
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
-    served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
-    ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``own``, the verifier's own)."""
+    served, refused unless its digest is the record's, and the checkpoint's ``config.json``, `workload_hf_config`), the bodies
+    from the record, listing ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``own``,
+    the verifier's own)."""
     from verity_vllm.program.predict.score import phi_of
     from verity_vllm.program.predict.steps import Registered
 
@@ -489,7 +502,7 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if got != r.row.get("workload_sha256"):
         raise ValueError(f"{workload}: workload sha256 {got[:16]} is not the record's {str(r.row.get('workload_sha256'))[:16]}")
-    phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or LLAMA32_1B_CONFIG))
+    phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(workload_hf_config(doc, hf_config)))
     return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(programs_root or row_dir),
                       transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), own=own)
 
@@ -1874,8 +1887,8 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
-        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
-                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
+        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default the config of record "
+                                           "of the pin the serve or the workload serves, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "

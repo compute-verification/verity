@@ -42,7 +42,8 @@ Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prov
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
 `run.sh`, `../one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
-deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
+deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`, of the row `LROW` names, the bf16
+RTX PRO 6000 B4 row by default; its workload the stored one of that name) or on a served window
 (`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
 
