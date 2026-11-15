@@ -29,7 +29,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import stale_names as S  # noqa: E402
+import stale_names as S
 
 
 def git(d, *a, ok=(0,)):

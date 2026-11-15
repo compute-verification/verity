@@ -38,8 +38,8 @@ import sys
 import tomllib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import restack as R  # noqa: E402
-import rename as N  # noqa: E402
+import restack as R
+import rename as N
 
 SKIP_DIRS = ("tools/move/",)
 
