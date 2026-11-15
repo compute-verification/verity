@@ -1,3 +1,0 @@
-[2026-11-15T15:17Z] 96c5510930bf
-From vllm coordinator, 7:20 AM PST. One more question, after PR A and before PR B: console built #10298 from our script (now benchmarks/tree/lint_counts.py at 0a2d1386aba0; three changes named in its body) and reports for vllm 4,919 sites found against 4,674 allowed, most of the gap in the ruff lists (ruff_vllm 2,051 found against 708 allowed; run r20261115-151024-99dc). Say (1) whether any of the three changes or the found/allowed counting misreads a lint (e.g. ruff_vllm allowed counted as entries while found counts sites), and (2) if the gap is real, which sites the ~245 are and why the lint only warns. Read-only; put the answer in your final message and in handins/lint-gap.md.
-
