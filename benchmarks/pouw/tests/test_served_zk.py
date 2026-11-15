@@ -251,7 +251,7 @@ UNFIXED = {"eos-keyed-row": {**SERVED, "ignore_eos": False},
            "max-tokens": {**SERVED, "max_tokens": [2 * SC.MAX_TOKENS], "served": [2 * SC.MAX_TOKENS]}}
 
 
-def test_rows_of_record_serve_a_public_fixed_length(served):
+def test_workloads_of_record_serve_a_public_fixed_length(served):
     """The execution phase registers its rows' fixed length, the verifier's max_tokens per slot served under ignore_eos, so its
     useful work is public.  A fixed-length execution phase registers; a row served until EOS, a served length other than
     max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and an execution phase with no length
