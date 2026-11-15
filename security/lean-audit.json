@@ -277,17 +277,17 @@
   "NetTiming.Covered": {
    "owner": "@network-accounting",
    "digest": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
-   "why": "A scope inside RLeakCertifierChecked, which ExecutionPhaseGoodChecked holds and the honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes: the observation sequences the leak relation speaks of are those whose every status at every step of the horizon is complete."
+   "why": "A scope inside RLeakCertifierChecked, which ExecutionPhaseGoodChecked holds: the observation sequences the leak relation speaks of are those whose every status at every step of the horizon is complete. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a toy code (`placedCode`) at one placed window with nothing registered or checked, not at the deployed check."
   },
   "NetTiming.ExecutionPhaseGoodChecked": {
    "owner": "@network-accounting",
    "digest": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
-   "why": "A scope of the held and counted clauses: the secrets they count are those whose every window's statement is in scope and registered as that window's, whose extracted witness is in the leak relation at the network certifier's rows with a valid run and holds the registered inputs, and whose observations are complete, of the horizon's length and below the jitter bound; the honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at one placed window, at the witness a passing run extracts."
+   "why": "A scope of the held and counted clauses: the secrets they count are those whose every window's statement is in scope and registered as that window's, whose extracted witness is in the leak relation at the network certifier's rows with a valid run and holds the registered inputs, and whose observations are complete, of the horizon's length and below the jitter bound; the honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of one placed window, at a toy code (`placedCode`: every statement parses as one copy statement, its verifier checks only that the statement is `[]`, and it samples and opens nothing), not the deployed check, with no input registered (`reg = ∅`) or checked (`chk = ∅`), the check `True` and the sample rate 0: it shows the scope is not empty at one placed window, and not that an honest run of the deployed network certifier is inside it, nor anything about the checked inputs the guarantee leaves out of its count."
   },
   "NetTiming.ExecutionPhasesPlaced": {
    "owner": "@network-accounting",
    "digest": "eb224719d0b462afe48c9b1c9d71e602e1fb77181e5062f27e5a5a0ac3c2fb4d",
-   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of one window, with `Compiled.KS` at a code whose verifier accepts a run at that window's statement."
+   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it, with `Compiled.KS`, at a period of one window, at a toy code (`placedCode`: one copy statement, a verifier that checks only that the statement is `[]`, sample rate 0, nothing sampled or opened), not the deployed check."
   },
   "NetTiming.FaultyGate": {
    "owner": "@network-accounting",

@@ -695,7 +695,13 @@ the observations `[obs1]` (one step, a frame on the link, every status complete)
 (`True` twice), `δ = 0` and jitter below `1`: every record the network certifier registers at those openings is
 accepted with no incorrect proof block and a valid run, since the circuit copies the ingress `true` to the egress
 presence gate as the openings do; the statement is in scope and registered as `copyStmt`; and the observations have the
-horizon's length, jitter `0` and every status complete. -/
+horizon's length, jitter `0` and every status complete.
+
+It is a toy instance: `placedCode` parses every statement as one copy statement, its verifier checks only that the
+statement is `[]`, and it samples and opens nothing, so it is not the deployed check; no input is registered
+(`reg = ∅`) or checked (`chk = ∅`), the check is `True` and the sample rate is `0`. So it shows the good event's scope
+is not empty at a period of one placed execution phase, and does not show that an honest run of the deployed network
+certifier is inside it, nor anything about the checked inputs the guarantee leaves out of its count. -/
 theorem executionPhaseGoodChecked_placed :
     ExecutionPhaseGoodChecked FlockDeploy.sha512 (placedL) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
       (fun _ _ => True ∧ True) 1 copyStmt (fun _ => false) (fun _ => certOps) [] ⟨[]⟩ [obs1] := by
@@ -753,7 +759,13 @@ and the committed bits of every possible incorrect set (`ExecutionPhasesPlaced`)
 witness, the network certifier's openings `certOps` and the observations the network certifier's code records
 (`executionPhaseGoodChecked_placed`). The code checks no proof block and the extracted witness opens nothing, so the
 good event's leak relation holds by the circuit computing the network certifier's openings, with no incorrect proof
-block; that the network certifier's openings pass under the deployed commitment (`CertifierRegisters`) is not shown. -/
+block; that the network certifier's openings pass under the deployed commitment (`CertifierRegisters`) is not shown.
+
+It is a toy instance: `placedCode` parses every statement as one copy statement, its verifier checks only that the
+statement is `[]`, and it samples and opens nothing, so it is not the deployed check; no input is registered
+(`reg = ∅`) or checked (`chk = ∅`), the check is `True` and the sample rate is `0`. So it shows the good event's scope
+is not empty at a period of one placed execution phase, and does not show that an honest run of the deployed network
+certifier is inside it, nor anything about the checked inputs the guarantee leaves out of its count. -/
 theorem MonitoringPeriodLeakChecked_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
         Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
