@@ -5,6 +5,7 @@
     python3 tools/move/tests_root.py split [NAME...]    each distribution's suite to a virtual member `NAME-tests` in its tests/
     python3 tools/move/tests_root.py maps               write `tests_root_map.toml`: every test under the root's tests/
     python3 tools/move/tests_root.py suites-map         after it moved them, `tests_root_suites_map.toml`: each suite's pyproject
+    python3 tools/move/tests_root.py anchors BASE [--write]   each moved file's anchor that no longer names what it did at BASE
 
 The rule: a file at `X/tests/REST` goes to `tests/X/REST`, for each `X` under `AREAS`; the root suite's own files stay at the
 top of `tests/`. A suite's pyproject goes beside its tests (`tests/X/pyproject.toml`), so its directory is its tests' and
@@ -27,18 +28,22 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
   own directory did.
 
 Each map is written from the tree as it is, so the sequence reruns on `main` after any later move: `split`, `maps`,
-`layout.py --map tests_root_map.toml`, `suites-map`, `layout.py --map tests_root_suites_map.toml`. A map's `[modules]` is
+`layout.py --map tests_root_map.toml`, `suites-map`, `layout.py --map tests_root_suites_map.toml`, `anchors BASE --write`
+(BASE the commit before the first move: `layout.py` recomputes a `Path(__file__)` anchor it reads as joins, but not one
+through a name bound to it, `HERE.parent`). A map's `[modules]` is
 what `layout.py --modules` derives, and its `[split]` rows are what its dry run finds: a reference to a directory whose
 tests or suite's pyproject alone move means what stays (a pythonpath entry, which `pythonpath_from` writes again, too)."""
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import posixpath
 import re
 import subprocess
 import sys
 import tempfile
+import tokenize
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -415,6 +420,140 @@ def suites_map(t: Tree) -> str:
         "\n".join(tables)])
 
 
+# anchors -----------------------------------------------------------------------------------------------------------------
+
+#: `Path(__file__)` resolved, then `.parent`s or `.parents[N]`: a directory found from a file's own place
+ANCHOR = r"(?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?(?P<up>(?:\.parent\b)+|\.parents\[\d+\](?:\.parent\b)*)"
+#: literal joins after an anchor
+JOINS = r"(?P<joins>(?:\s*/\s*(?:\"[^\"\n]*\"|'[^'\n]*'))*)"
+NAMED = re.compile(r"^(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*" + ANCHOR + r"\s*$", re.M)
+
+
+def _levels(up: str) -> int:
+    """How many directories above the file `up` (`.parent.parent`, `.parents[1]`) names: the file's directory is 1."""
+    m = re.match(r"\.parents\[(\d+)\]", up)
+    return (int(m.group(1)) + 1 if m else 0) + up.count(".parent") - (1 if m else 0)
+
+
+def _ancestor(path: str, n: int) -> str:
+    for _ in range(n):
+        path = posixpath.dirname(path)
+    return path
+
+
+def _segments(joins: str) -> list[str]:
+    return [x for seg in re.findall(r"[\"']([^\"'\n]*)[\"']", joins) for x in seg.split("/") if x]
+
+
+def _strings(text: str) -> list[tuple[int, int]]:
+    """The spans of a module's string literals (a toy file's text a test writes holds anchors that aren't the test's)."""
+    starts = [0]
+    for line in text.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+    out = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.STRING or tok.type == getattr(tokenize, "FSTRING_START", -1):
+                (l0, c0), (l1, c1) = tok.start, tok.end
+                if tok.type == tokenize.STRING:
+                    out.append((starts[l0 - 1] + c0, starts[l1 - 1] + c1))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        pass
+    return out
+
+
+def _anchors(text: str) -> list[tuple[int, int, str | None, int, list[str]]]:
+    """Each anchor of a file outside its string literals: (start, end, the name it starts from or None for
+    `Path(__file__)`, the levels above the file it names, its literal joins, those after a parenthesis around it too). A
+    name is a module constant bound to an anchor; `NAME.parent...` counts from its level."""
+    names = {m.group("name"): _levels(m.group("up")) for m in NAMED.finditer(text)}
+    found = [(m, None, _levels(m.group("up"))) for m in re.finditer(ANCHOR + JOINS, text)]
+    if names:
+        named = r"\b(?P<name>" + "|".join(map(re.escape, names)) + r")(?P<up>(?:\.parent\b)+|\.parents\[\d+\](?:\.parent\b)*)" + JOINS
+        found += [(m, m.group("name"), names[m.group("name")] + _levels(m.group("up"))) for m in re.finditer(named, text)]
+    strings = _strings(text)
+    out = []
+    for m, name, levels in found:
+        a, b, segs = m.start(), m.end(), _segments(m.group("joins"))
+        if any(x <= a < y for x, y in strings):
+            continue
+        if a and text[a - 1] == "(" and text[b:b + 1] == ")" and (more := re.match(JOINS, text[b + 1:])) and more.group("joins"):
+            a, b, segs = a - 1, b + 1 + more.end(), segs + _segments(more.group("joins"))
+        out.append((a, b, name, levels, segs))
+    return sorted(out)
+
+
+def _rows(root: Path) -> list[tuple[str, str]]:
+    rows = []
+    for path in (FILES_MAP, SUITES_MAP):
+        if (root / path).is_file():
+            rows += list(tomllib.loads((root / path).read_text()).get("paths", {}).items())
+    return rows
+
+
+def _mapped(p: str, rows: list[tuple[str, str]]) -> str:
+    for o, n in rows:
+        if o.endswith("/") and (p + "/").startswith(o):
+            return posixpath.normpath(n + p[len(o):]) if p + "/" != o else n.rstrip("/")
+        if p == o:
+            return n
+    return p
+
+
+def _expression(name: str | None, levels: int, segs: list[str], style: str) -> str:
+    """An anchor naming the directory `levels` above the file (for `name`, the levels above it), then `segs`."""
+    if name is None:
+        head = style + (".parent" if levels == 1 else f".parents[{levels - 1}]")
+    else:
+        head = name if levels == 0 else f"{name}.parent" if levels == 1 else f"{name}.parents[{levels - 1}]"
+    return head + "".join(f' / "{x}"' for x in segs)
+
+
+def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
+    """Each anchor of a moved Python file that no longer names what it named at `base`, the commit before the moves (the
+    mover recomputes the anchors it reads as joins; a name bound to one, `NAME.parent`, it can't). With `write`, each is
+    rewritten to name it again. {file: [what changed]}."""
+    rows = _rows(t.root)
+    out = {}
+    for old in git("ls-tree", "-r", "--name-only", base, root=t.root).split("\n"):
+        new = _mapped(old, rows)
+        if new == old or not new.endswith(".py") or not (t.root / new).is_file():
+            continue
+        before, after = git("show", f"{base}:{old}", root=t.root), (t.root / new).read_text()
+        if before.count("\n") != after.count("\n"):
+            out[new] = [f"{new}: its lines differ from {old}'s, so its anchors are not checked"]
+            continue
+        line_of = lambda text, at: text.count("\n", 0, at)  # noqa: E731
+        pairs = defaultdict(lambda: ([], []))
+        for k, text in ((0, before), (1, after)):
+            for x in _anchors(text):
+                pairs[line_of(text, x[0])][k].append(x)
+        names_new = {m.group("name"): _levels(m.group("up")) for m in NAMED.finditer(after)}
+        edits = []
+        for line, (ax, ay) in sorted(pairs.items()):
+            if len(ax) != len(ay):
+                continue
+            for (_, _, n0, l0, g0), (s1, e1, n1, l1, g1) in zip(ax, ay):
+                want = _mapped(posixpath.normpath(posixpath.join(_ancestor(old, l0), *g0)), rows)
+                have = posixpath.normpath(posixpath.join(_ancestor(new, l1), *g1))
+                if want == have:
+                    continue
+                start = _ancestor(new, names_new[n1]) if n1 else posixpath.dirname(new)
+                common = posixpath.commonpath([start, want]) if start and want and not want.startswith("..") else ""
+                up = (start.count("/") + 1 if start else 0) - (common.count("/") + 1 if common else 0)
+                rel = posixpath.relpath(want or ".", common or ".")
+                style = "" if n1 else re.match(r"\(?((?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?)", after[s1:]).group(1)
+                expr = _expression(n1, up + (0 if n1 else 1), [] if rel == "." else rel.split("/"), style)
+                edits.append((s1, e1, expr, f"{new}:{line + 1}: {after[s1:e1].strip()} -> {expr} ({want})"))
+        if edits:
+            out[new] = [e[3] for e in edits]
+            for s1, e1, expr, _ in sorted(edits, reverse=True):
+                after = after[:s1] + expr + after[e1:]
+            if write:
+                (t.root / new).write_text(after)
+    return out
+
+
 def modules(path: str, root: Path = ROOT) -> str:
     """The `[modules]` table `layout.py --modules` derives for the map at `path`, as TOML."""
     r = subprocess.run([sys.executable, str(HERE / "layout.py"), "--root", str(root), "--map", path, "--modules"],
@@ -446,6 +585,9 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     sp.add_argument("names", nargs="*", help="only these distributions")
     sub.add_parser("maps", help=f"write {FILES_MAP}")
     sub.add_parser("suites-map", help=f"write {SUITES_MAP}, once {FILES_MAP} has moved the tests")
+    an = sub.add_parser("anchors", help="each moved file's anchor that no longer names what it named at BASE")
+    an.add_argument("base", help="the commit before the moves")
+    an.add_argument("--write", action="store_true", help="rewrite each to name it again")
     a = ap.parse_args(argv)
     t = Tree(root)
     if a.cmd == "inventory":
@@ -462,6 +604,13 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     if a.cmd == "split":
         done = run_split(t, a.names)
         print(f"tests_root: split {len(done)} distribution(s)' suites: {', '.join(done) or 'none'}")
+        return 0
+    if a.cmd == "anchors":
+        found = anchors(t, a.base, a.write)
+        for f, items in sorted(found.items()):
+            print("\n".join(items))
+        n = sum(" -> " in x for items in found.values() for x in items)
+        print(f"tests_root: {n} anchor(s){' rewritten' if a.write else ''}, in {len(found)} file(s)")
         return 0
     if a.cmd == "maps":
         print(f"tests_root: wrote {write_map(t, FILES_MAP, files_map(t))}")
