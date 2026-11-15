@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Certifier.MonitoringPeriodConditions
-public import Proofs.Certifier.Warden
+public import Proofs.Certifier.Cells
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

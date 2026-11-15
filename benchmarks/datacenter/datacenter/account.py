@@ -56,7 +56,7 @@ from .memory import answer_time, fill_rate, into, regen_time
 from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
-#: the premise that no undeclared compute is reachable from a block
+#: the premise that no unregistered hardware is reachable from a block
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
 #: k, the bits that could carry it out before registration, stays at most this many

@@ -39,7 +39,7 @@ from verity_difftest import protocol as P
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import registered as R
 from verity.protocols.accounting.certifier.verifier import span
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
                                                             Direction, Issuer, certificate_digest, mark_digest,
                                                             marks_link)

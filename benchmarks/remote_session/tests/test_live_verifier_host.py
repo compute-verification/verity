@@ -56,4 +56,4 @@ def test_auditor_line_reads_the_out_a_host_run_leaves(tmp_path):
     line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
     assert line["registration"] == v["registration"]["digest"]
     assert [(r["k"], r["accepted"], r["skipped"]) for r in line["sessions"]] == [
-        (0, True, "no challenger log: coins flipped in the verifier's process")]
+        (0, True, "no challenger log: coins drawn in the verifier's process")]

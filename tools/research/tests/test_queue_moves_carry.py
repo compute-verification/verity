@@ -66,12 +66,14 @@ def _push_main(world: World, commit: str) -> None:
     _git(world.dev, "fetch", "-q", "origin")
 
 
-def _move(world: World, path: str = MAP, on: str = "origin/main") -> str:
+def _move(world: World, path: str = MAP, on: str = "origin/main", line: str | None = None) -> str:
     """A map's commit on ``on`` (`main` as it is), as `stage.py` commits it: what `rename.py` writes there for the word map, with
-    its `Move:` line, or what `layout.py` writes for a path map, with its `Layout-move:` line."""
+    its `Move:` line, or what `layout.py` writes for a path map, with its `Layout-move:` line; with ``line``, a commit whose
+    own record is that line instead."""
     _git(world.dev, "checkout", "-q", "--detach", on)
-    script, args, line = (("tools/move/rename.py", ["--map", MAP], f"Move: {MAP}") if path == MAP
-                          else ("tools/move/layout.py", ["--map", path, "--no-lock"], f"Layout-move: {path} --no-lock"))
+    script, args, ran = (("tools/move/rename.py", ["--map", MAP], f"Move: {MAP}") if path == MAP
+                         else ("tools/move/layout.py", ["--map", path, "--no-lock"], f"Layout-move: {path} --no-lock"))
+    line = line or ran
     subprocess.run([sys.executable, script, *args], cwd=world.dev, env=ENV, check=True, capture_output=True)
     _git(world.dev, "add", "-A")
     _git(world.dev, "commit", "-q", "-m", f"Move by {args[1]}\n\n{line}\n")
@@ -687,3 +689,59 @@ def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(wo
     assert q.mapped_change(old, new) is None
     assert world.logs[-1].endswith(f"it has {other[:12]}, which came after {_git(world.dev, 'rev-parse', f'{move}^')[:12]}, "
                                    f"the base of the move {move[:12]}: restack.py refuses it (based-after)")
+
+
+#: a word map that renames a word no file holds: a move commit's wrong record of the map it ran
+OTHER = "tools/move/demo_other_map.toml"
+
+
+def _corrections(move: str, plain: str | None = None) -> str:
+    """`restack.py`'s corrections table: ``move``'s record corrected to the map it ran (`MAP`), and ``plain``, whose message
+    has a move line, no move (`move = false`)."""
+    table = f'["{move}"]\nline = "Move: {MAP}"\nreason = "The move ran {MAP}, as its tree shows and its trailer doesn\'t."\n'
+    return table + (f'\n["{plain}"]\nmove = false\nreason = "A note quoting a move line, which no script wrote."\n'
+                    if plain else "")
+
+
+def test_a_restack_job_runs_restack_py_with_its_commits_corrections_beside_it_and_none_where_that_commit_has_none(
+        world, monkeypatch):
+    """`restack.py` reads the corrections to move commits' records from beside itself (its `MOVE_LINES`), so the job's copy
+    has the table of the commit the script is taken from; a commit without the table gets none, as before it existed."""
+    monkeypatch.setattr(tempfile, "tempdir", str(world.tmp / "tmp"))
+    q = _queue(world)
+    q._restack_starts = True
+    started: list[Path] = []
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env: started.append(Path(argv[6])) or {"pid": 0})
+    head = _git(q.workdir, "rev-parse", q.base)
+    assert q._launch_restack(head, Q.Move(head, MAP), head)
+    assert started[0].read_bytes() == (ROOT / Q.RESTACK).read_bytes()
+    assert sorted(p.name for p in started[0].parent.iterdir()) == ["restack.py"]
+    _push_main(world, world.change({Q.MOVE_LINES: _corrections(head)}))
+    q.fetch(world.gh.open_prs())
+    assert q._launch_restack(head, Q.Move(head, OTHER), head)
+    assert (started[1].parent / "move_lines.toml").read_text() == _corrections(head)
+
+
+def test_a_crossing_over_a_move_whose_record_the_table_corrects_passes_with_the_table_and_refuses_without_it(world):
+    """The move ran `MAP` and its commit's trailer names `OTHER`, and a later commit of `main`'s quotes a move line but is no
+    move.  Without corrections, `restack.py` reruns `OTHER` and finds the move isn't what that writes, so the crossing refuses
+    and no mark or verdict carries.  With `main`'s `move_lines.toml` naming `MAP` for the move and `move = false` for the
+    other, the queue finds the one move (`moves_between`, as `restack.py`'s `moves_on` does), and the table is written beside
+    `main`'s `restack.py` for the crossing and for the mapping that judges it (`cross_one`, `map_one`): #1 crosses with its
+    line renamed and its own change the old one's mapped."""
+    _push_main(world, world.change({OTHER: '[rewrite]\nexclude = ["tools/move/**"]\n\n[words]\n"no_such_word" = "none"\n'}))
+    world.gh.put(1, old := world.change({"b.py": B + "Y = old_proto.a.g()\n"}), ready=False)
+    landed = _land(world, move := _move(world, line=f"Move: {OTHER}"))
+    note = world.change({"d.txt": "d\n"})
+    _push_main(world, without := _git(world.dev, "commit-tree", f"{note}^{{tree}}", "-p", landed, "-m",
+                                      f"A note\n\nMove: {OTHER}\n"))
+    _push_main(world, corrected := world.change({Q.MOVE_LINES: _corrections(move, without)}))
+    q = _queue(world)
+    assert [m for m, _ in Q.moves_between(q.workdir, without, old)] == [move, without]
+    assert [m for m, _ in Q.moves_between(q.workdir, corrected, old)] == [move]
+    refused = Q.cross_one(q.workdir, old, without, Q.moves_between(q.workdir, without, old))
+    assert refused == {"why": f"{Q.RESTACK} exit 1:   old_proto/__init__.py |   old_proto/a.py |   "
+                              "tools/research/src/research/store/moves.json"}
+    crossed = Q.cross_one(q.workdir, old, corrected, Q.moves_between(q.workdir, corrected, old))
+    assert set(crossed) == {"new", "own", "key"}, crossed
+    assert _git(q.workdir, "show", f"{crossed['new']}:b.py").endswith("Y = new_proto.a.g()")

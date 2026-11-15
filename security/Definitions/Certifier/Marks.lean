@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Certifier.Warden
+public import Definitions.Certifier.Cells
 
 /-!
 # Marks: a mark's phase and a span's tail
 
-Definitions only. The schedule's buckets (`Definitions.Certifier.Warden`) run in execution phases of `T` buckets
+Definitions only. The schedule's buckets (`Definitions.Certifier.Cells`) run in execution phases of `T` buckets
 each. The network certifier signs a **mark** over a message it is handed and stamps it with the phase of the bucket it
 handles it in (`markPhase`). A mark's bucket is the number of ticks the device has done when it handles the mark, so
 every connection whose server bytes the device can have read by then was admitted at an earlier bucket; this is exact

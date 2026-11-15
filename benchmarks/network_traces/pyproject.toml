@@ -45,7 +45,7 @@ untraced = [
 # prove_subprotocol (with the population a7 reads), Flock's proof-format reader (redigest, with the modules it loads
 # beside it) and SPOT's template audit and challenger session; test_scan_zk_challenger's stream verifies with the Lean
 # package core_spot's verifier, whose lakefile is the package it builds.
-# demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
+# demo_stub's endpoint records are read as the network certifier path's endpoint step reads them: `verity-vllm advice` (with the
 # step trace and the records it imports, the engine handle the step trace finds a scheduler through, the registry it
 # wraps the scheduler through with the ranks its parts run by, and its CLI, which served_session's endpoint step runs it
 # through) and network-e2e's chain. certifier_piece is the network certifier's piece of one_stage's served_verdicts,
@@ -91,7 +91,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py"]
 # network-rows, the compiled audit of the network certifier's records, which test_certifier_piece builds in its package
-# (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_warden_zk
+# (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_certifier_zk
 # and test_egress_zk run on their staged members.
 artifacts = ["verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-rows",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"]
