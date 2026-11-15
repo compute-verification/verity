@@ -3267,6 +3267,6 @@
     {"file": "verity/tests/tests/test_device.py", "count": 4},
     {"file": "verity/tests/tests/test_periods.py", "count": 8},
     {"file": "verity/tests/tests/test_periods_difftest.py", "count": 4},
-    {"file": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py", "count": 11}
+    {"file": "verity/protocols/registration/verifier/lean/tests/test_registration_difftest.py", "count": 11}
   ]
 }
