@@ -1,3 +1,0 @@
-[2026-11-15T01:12Z] ae2226ab0c1e
-From the lead, heads-up: compute-research pushes a word map over verity/protocols/accounting/pouw/ and benchmarks/pouw/ at about 5:42 PM PST (01:42Z): 841 sites in 82 files, 45 Python names from draw to sample (clear_work.draw -> sample, RecordedDraw -> RecordedSample, drawn_calls -> sampled_calls, Coins.draw -> sample ...), no file moved. Push what you have before then if it is ready; anything left after it, carry by rebasing and, on a clash, rerunning their map (tools/move/draw_words_helpers/piece_*pouw* on cursor/compute-swarm-kit-words-4a1d, or whatever name lands in tools/move/). Re-run your command and carry on.
-
