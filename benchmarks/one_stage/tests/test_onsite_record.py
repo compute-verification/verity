@@ -650,7 +650,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
                                                                        "a column no unit reads", "`TIGHT`"))
     wrong = OR.PREMISES["wrong-bounds"]["is"]
     assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.samplingDesignOver n",
-                                    "Draw.sameLaw", "jeq a (toJson n) → nat? a = some n"))
+                                    "Draw.sameSamplingDesign", "jeq a (toJson n) → nat? a = some n"))
     assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-device",
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))
     assert all(x in OR.CHECKED[OR.AUDITOR_RECORD] for x in ("never the prover's node or its deployment.json",

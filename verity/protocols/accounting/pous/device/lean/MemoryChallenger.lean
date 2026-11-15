@@ -11,6 +11,7 @@ public import MemoryChallenger.WipeJudge
 public import MemoryChallenger.WipeProtocol
 public import MemoryChallenger.WipeCount
 public import MemoryChallenger.SetupRecord
+public import MemoryChallenger.InProofs
 public import MemoryChallenger.Difftest
 
 /-!
@@ -28,6 +29,8 @@ crypto, and each verdict behind the core protocol interface (`Core.Protocol`).
   composition's tie reads off the wipe's case and the wipe's check with its count held;
 * `SetupRecord`, the setup's published outputs the memory challenger's device signs at setup, under a session's key
   and id, and its check against a session (`setupRecordOk`);
+* `InProofs`, the session's verdict from the outcomes of its `k + 2` proofs, linked only by their committed rows
+  (`runInProofs`, `pous.verifier.session_proofs`' `check_session`);
 * `Difftest`, the functions `tests/` holds to the Python, among them those of `Attest`, the package `core_attest`'s
   period tree and checks, which this module imports.
 -/

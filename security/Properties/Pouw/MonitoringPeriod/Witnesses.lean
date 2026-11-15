@@ -107,7 +107,7 @@ def h1Reg (context format program partition : String) (bytes : ByteArray) : Exec
   partition := partition
   scheme := PouwCheck.scheme
   population := 144
-  samplingDesign := subsetLaw 24
+  samplingDesign := subsetSamplingDesign 24
   roots := #[]
   window := ⟨"served", context, h1Items, none, none⟩
 

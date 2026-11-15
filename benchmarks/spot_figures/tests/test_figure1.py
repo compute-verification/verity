@@ -104,7 +104,7 @@ def test_a_line_at_zero_is_sampled_on_the_floor_and_captioned_and_coincident_lin
     assert _lines([refs[0] | {"style": "solid"}], "world year", 1.0) == [(100.0, "a", "solid")]
     assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(
-        " At 0, drawn along the axis's floor: zero.")
+        " At 0, sampled along the axis's floor: zero.")
     assert _zeros(refs, "world year") == [("zero", "dashed")] and _zeros(refs, "world week") == [("zero", "dashed")]
 
 
@@ -213,7 +213,7 @@ def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
-        " At 0, drawn along the axis's floor: no advice.")
+        " At 0, sampled along the axis's floor: no advice.")
     assert "no advice" not in out["scopes"]["world year"]["captions"]["exfiltration"]
     assert {"label": "a steering vector", "input": "references", "value": 98304.0, "main": True,
             "style": "dashed"} in inf["references"]

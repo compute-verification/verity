@@ -47,9 +47,9 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
+sys.path[:0] = [str(HERE), str(REPO)]
 
-import zk_drivers  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
@@ -447,7 +447,7 @@ def rescan(a) -> int:
     """`prove`'s statements under `--from` scanned again (`leak_scan.rescan`): the verifier's files each one kept searched
     afresh for its pieces, recomputed from the sealed run as `prove` cut them (its units, then the honest blocks it filled
     the statement with, and their ``srv`` salts, less the pieces the circuit holds: the kept one, else the statement
-    lowered again and held to the run's pin). A found salt `prove` drew isn't recomputed, so its summary's find of it
+    lowered again and held to the run's pin). A found salt `prove` sampled isn't recomputed, so its summary's find of it
     stays and reads leaked."""
     d = units_of(a)
     zk_drivers.install()

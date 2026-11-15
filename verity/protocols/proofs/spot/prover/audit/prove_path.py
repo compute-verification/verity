@@ -1884,7 +1884,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
         p.add_argument("--jobs", type=int, help="ranks at once, each in its own process (default: commit one, audit every "
                        "audited rank, which draw from the run root's one challenger session)")
         p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
-                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN). A "
+                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN). A "
                        "served window's are its model's of record (GATES_OF_RECORD), which this may only restate")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
@@ -1909,7 +1909,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's law "
+    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's sampling design "
                    "stratified (stratified-rate:NUM/DEN), each window one member with no registered reads or shared rows "
                    "(a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "

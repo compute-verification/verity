@@ -212,7 +212,8 @@ def families(machines_toml: Path, environ: dict | None = None) -> dict[str, dict
     if d is not None and (d / FAMILIES_FILE).is_file():
         try:
             extra = tomllib.loads((d / FAMILIES_FILE).read_text()).get("families", {})
-        except (OSError, tomllib.TOMLDecodeError):
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"registry: {d / FAMILIES_FILE} unread, so it adds no family ({type(e).__name__}: {e})", file=sys.stderr)
             extra = {}
         for k, v in extra.items():
             out.setdefault(k, v)

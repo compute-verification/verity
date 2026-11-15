@@ -73,6 +73,27 @@ def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
     assert tool.resolve_params(["--rows", "64"], ROOT)[1] == {"row_bytes": "4,256,1536,3072,4096,8192", "rows": 64}
 
 
+def test_interior_commit_peak_commits_one_interior_whole_and_into_a_directory(tmp_path: Path) -> None:
+    """interior_commit_peak's two arms, a process each, commit the same interior to the same roots and leaf layer, which
+    is what its result is valid on; and an arm alone says its peak and writes no result."""
+    spec = importlib.util.spec_from_file_location("interior_commit_peak", ROOT / "benchmarks" / "commitments" / "interior_commit_peak.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    size = ["--spans", "3", "--units", "48", "--words", "8"]
+    assert mod.main([*size, "--scratch", str(tmp_path / "scratch"), "--out", str(tmp_path)]) == 0
+    check = research_result.check(tmp_path, None)
+    assert check.valid, check.errors
+    assert check.validation_status == "passed"
+    got = json.loads((tmp_path / "interior_commit_peak.json").read_text())
+    assert [a["arm"] for a in got["arms"]] == ["whole", "streamed"] and len({a["commitment"] for a in got["arms"]}) == 1
+    assert got["leaves"] == 2 * 3 * 48 and got["row_bytes"] == 4 * 48 * 16
+    assert all(a["peak_rss_bytes"] >= a["built_rss_bytes"] > 0 for a in got["arms"])
+    assert {"whole.peak_rss", "streamed.peak_rss", "streamed.seconds"} <= {m["name"] for m in check.doc["measurements"]}
+    assert not (tmp_path / "scratch" / "streamed").exists()
+    alone = mod.arm("streamed", mod.parse(size), tmp_path / "alone")
+    assert alone["commitment"] == got["arms"][0]["commitment"] and (tmp_path / "alone" / "streamed" / "m2-public.bin").exists()
+
+
 def test_the_ripple_carry_model_counts_spot_sha512_ands() -> None:
     """hiding_leaf_cost's model of a SHA-512 compression (80 rounds of 7 additions, Ch and Maj, 64 schedule words of 3
     additions and 8 feed-forward additions, a w-bit addition w - 1 ANDs at w = 64) gives the count it reads."""

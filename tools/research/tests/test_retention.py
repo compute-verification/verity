@@ -10,7 +10,7 @@ import importlib.util
 import json
 import os
 import socket
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,7 +24,7 @@ from research.store import withdraw as W
 from research.store.local import LocalStore
 
 REPO = Path(__file__).resolve().parents[3]
-NOW = datetime(2026, 10, 1, 19, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 19, 30, tzinfo=UTC)
 PAST, FUTURE = "2026-09-25T00:00:00Z", "2026-10-08T00:00:00Z"
 NODE = "vy-test"
 ART = "art:" + "a" * 64
@@ -114,7 +114,7 @@ def test_a_record_round_trips_through_its_sidecar_and_an_update_keeps_created(tm
                    "preserved": None, "regenerate": "research run ... at abc", "why": "job B's passes"}
     assert R.load(d) == rec and json.loads((d / R.SIDECAR).read_text()) == rec
 
-    later = datetime(2026, 10, 2, tzinfo=timezone.utc)
+    later = datetime(2026, 10, 2, tzinfo=UTC)
     upd = R.keep(d, root=tmp_path, owner="@infra", expires=None, priority="keep", preserved=ART, regenerate="", now=lambda: later, node=NODE)
     assert upd["created"] == "2026-10-01T19:30:00Z", "an update keeps created"
     assert (upd["owner"], upd["expires"], upd["priority"], upd["preserved"]) == ("@infra", None, "keep", ART)
@@ -351,7 +351,8 @@ def test_gc_acts_on_a_filesystem_out_of_inodes_with_blocks_to_spare(tmp_path):
     """Inodes at 100% with blocks at 32%: gc must not skip every path as "not needed"."""
     a = kept(tmp_path, "pouw/a")
     disk = Disk(100 * UNIT, 31 * UNIT, [a])                                   # blocks 32%
-    full = lambda _p: (1000, 990 if a.exists() else 0)                         # inodes 99% while a exists
+    def full(_p):
+        return (1000, 990 if a.exists() else 0)  # inodes 99% while a exists
     assert not run_gc(tmp_path, disk)["acting"]
     plan = run_gc(tmp_path, disk, apply=True, inodes=full)
     assert (plan["acting"], plan["pct_before"], plan["inodes_pct_before"]) == (True, 99.0, 99.0)
@@ -637,6 +638,11 @@ def test_the_default_check_needs_the_artifact_to_hold_the_paths_files_and_be_pre
     R.keep(d, root=root, owner="@x", expires=PAST, priority="low", preserved=art, now=clock, node=NODE)
     check = R.store_check(str(vault_store), clock)
     assert check(art, d) == VERIFIED
+    (d / "link").symlink_to(tmp_path / "elsewhere")
+    os.mkfifo(d / "fifo")
+    assert check(art, d) == VERIFIED, "a link or a fifo holds no bytes, and custody never stores one"
+    (d / "link").unlink()
+    (d / "fifo").unlink()
     (d / "late.bin").write_bytes(b"l")
     assert check(art, d) == R.Stored("uncovered", "1 file(s) under it are not in the artifact at their size, e.g. late.bin")
     (d / "late.bin").unlink()
@@ -668,21 +674,121 @@ def test_without_a_remote_the_check_trusts_the_catalogs_verified_replica(tmp_pat
     assert found.state == "unreachable" and "no verified remote replica recorded in the local catalog" in found.why
 
 
-def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault_store, monkeypatch):
-    """Custody marks a run dir preserved while its run record only lists an undeclared file over the limit (custody.select); those
-    bytes are on no remote, so gc keeps the dir."""
-    root = tmp_path / "ws"
-    d = run_dir(root, "research/runs/r1", extra={"work/big.bin": b"t" * UNIT})
+def trimmed_runs(monkeypatch, root: Path, st: LocalStore, host: str = NODE, **verified: str) -> dict[str, Path]:
+    """Run dirs custody marked preserved while their run records only list an undeclared file over its limit (custody.select)."""
     monkeypatch.setattr(CU, "UNDECLARED_LIMIT_BYTES", 0)
+    dirs = {}
+    for name, when in verified.items():
+        d = dirs[name] = run_dir(root, f"research/runs/{name}", verified=when, host=host, extra={"work/big.bin": b"t" * UNIT})
+        art = CU.put_run_record(st, d, name)
+        assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]
+        (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
+        assert CU.marker_problem(d) is None, "custody vouches for the dir"
+    return dirs
+
+
+TRIMMED = "48.8 KiB stored nowhere else (1 file(s) under it are not in the artifact at their size, e.g. work/big.bin)"
+
+
+def test_a_run_dir_whose_record_custody_trimmed_goes_seven_days_after_custody_verified_it(tmp_path, vault_store, monkeypatch):
+    """A trimmed file's bytes are on no remote, so they are the run's only copy, as a never-stored run's are: gc lists the dir with
+    the date it goes, 7 d after custody verified the run, and how to keep it, and deletes it then only under --unpreserved-runs,
+    saying how much of it was stored nowhere else and counting it apart."""
+    root = tmp_path / "ws"
+    dirs = trimmed_runs(monkeypatch, root, LocalStore(vault_store), young="2026-09-28T00:00:00Z", old="2026-09-21T00:00:00Z")
+
+    def gc(**kw):
+        return run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(vault_store)),
+                      **kw)
+
+    plan = gc()
+    young, old = (by_path(plan)[f"research/runs/{n}"] for n in ("young", "old"))
+    assert dirs["young"].exists() and dirs["old"].exists() and plan["stored"]["uncovered"] == 2
+    assert plan["trimmed"] == {"deleted": 0, "files": 0, "bytes": 0, "kept": 2}
+    art = R.implicit(dirs["young"], "research/runs/young")["preserved"]
+    keep = (f"; to keep it: `research keep {dirs['young']} --owner @LANE --expires DATE --priority P`, or a custody that declares the "
+            "files (--declared-output)")
+    assert young["reason"] == (f"custody trimmed {TRIMMED} from its run record {art}: it goes 2026-10-05T00:00:00Z, 7 d after custody "
+                               f"verified the run, under --unpreserved-runs{keep}")
+    assert old["reason"].endswith("its 7 d after custody verified the run are over, and only --unpreserved-runs deletes it"
+                                  + keep.replace("young", "old"))
+
+    plan = gc(unpreserved=True)
+    assert dirs["young"].exists() and not dirs["old"].exists()
+    assert "it goes 2026-10-05T00:00:00Z, 7 d after custody verified the run; to keep it:" in by_path(plan)["research/runs/young"]["reason"]
+    gone = by_path(plan)["research/runs/old"]
+    assert (gone["action"], gone["stored"], gone["error"]) == ("delete", "uncovered", None)
+    assert gone["reason"].endswith(f"but for {TRIMMED}, which custody trimmed: 7 d after custody verified the run")
+    assert plan["trimmed"] == {"deleted": 1, "files": 1, "bytes": UNIT, "kept": 1}
+    assert plan["unpreserved"]["deleted"]["paths"] == 0, "counted apart from the never-stored runs"
+
+
+def test_the_pass_counts_the_trimmed_runs_apart(tmp_path, vault_store, monkeypatch, capsys):
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    root = tmp_path / "ws"
+    dirs = trimmed_runs(monkeypatch, root, LocalStore(vault_store), socket.gethostname(), young="2026-09-28T00:00:00Z", old="2026-09-21T00:00:00Z")
+    argv = ["retention", "gc", "--root", str(root), "--force", "--low-pct", "0", "--apply", "--store", str(vault_store)]
+    assert research_main([*argv, "--unpreserved-runs"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert dirs["young"].exists() and not dirs["old"].exists()
+    assert lines[-2].endswith("0 withdrawn (deleted); 1 uncovered, 0 mismatch, 0 unknown, 0 unreachable (kept)")
+    assert lines[-1] == ("runs whose files custody trimmed, apart from the never-stored and the covered: 1 deleted, 1 file(s), 48.8 KiB "
+                         "of them stored nowhere else; 1 kept until 7 d after custody verified each")
+
+
+def test_a_trimmed_run_with_a_keep_record_or_no_reachable_copy_is_kept(tmp_path, vault_store, monkeypatch):
+    """The seven days never take a run someone keeps, even once their keep record expires, nor one whose stored copy can't be
+    reached."""
+    root = tmp_path / "ws"
+    dirs = trimmed_runs(monkeypatch, root, LocalStore(vault_store), kept="2026-09-01T00:00:00Z", lapsed="2026-09-01T00:00:00Z",
+                        unasked="2026-09-01T00:00:00Z")
+    R.keep(dirs["kept"], root=root, owner="@infra", expires=FUTURE, priority="keep", now=clock, node=NODE)
+    art = R.implicit(dirs["lapsed"], "research/runs/lapsed")["preserved"]
+    R.keep(dirs["lapsed"], root=root, owner="@infra", expires="2026-09-20T00:00:00Z", priority="low", preserved=art, now=clock, node=NODE)
+    vault = R.store_check(str(vault_store))
+
+    def check(a, p):
+        return R.Stored("unreachable", "the remote did not answer") if p == dirs["unasked"] else vault(a, p)
+
+    plan = run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=check, unpreserved=True)
+    assert all(d.exists() for d in dirs.values())
+    acts = by_path(plan)
+    assert acts["research/runs/lapsed"]["stored"] == "uncovered" and "is not verified on the remote" in acts["research/runs/lapsed"]["reason"]
+    assert acts["research/runs/unasked"]["stored"] == "unreachable"
+    assert plan["trimmed"] == {"deleted": 0, "files": 0, "bytes": 0, "kept": 0}
+
+
+def test_a_run_dir_whose_record_lacks_only_links_goes_as_a_covered_one(tmp_path, vault_store):
+    """A link holds no bytes: a run its record covers but for links goes once custody's record of it expires, as a covered run does,
+    without --unpreserved-runs or the seven days."""
+    root = tmp_path / "ws"
     st = LocalStore(vault_store)
-    art = CU.put_run_record(st, d, "r1")
-    assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]
+    d = run_dir(root, "research/runs/linked", verified="2026-09-28T00:00:00Z")
+    art = CU.put_run_record(st, d, "linked")
+    assert st.push(art, preserve=True)["preserved"]
     (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
-    assert CU.marker_problem(d) is None, "custody vouches for the dir"
+    (d / "latest").symlink_to("stdout.log")
+    (d / "venv").symlink_to(tmp_path, target_is_directory=True)
     plan = run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(vault_store)))
-    assert d.exists() and (d / "work/big.bin").exists()
-    assert by_path(plan)["research/runs/r1"]["reason"] == (f"preserved {art} is not verified on the remote: 1 file(s) under it are not "
-                                                         "in the artifact at their size, e.g. work/big.bin")
+    act = by_path(plan)["research/runs/linked"]
+    assert not d.exists() and (act["action"], act["stored"]) == ("delete", "verified") and tmp_path.is_dir()
+    assert plan["trimmed"] == {"deleted": 0, "files": 0, "bytes": 0, "kept": 0}
+
+
+def test_an_uncovered_run_whose_remote_copy_is_wrong_is_kept_for_that(tmp_path, vault_store):
+    """The seven days take only what custody did not store: where the remote doesn't hold the rest, its answer keeps the path."""
+    root = tmp_path / "ws"
+    d = data(root, "research/runs/r1")
+    st = LocalStore(vault_store)
+    art = st.put_artifact("run-record/v1", {"run_id": "r1"}, tree=d)
+    assert st.push(art, preserve=True)["preserved"]
+    (d / "late.bin").write_bytes(b"l")
+    check = R.store_check(str(vault_store), clock)
+    assert check(art, d).state == "uncovered"
+    aged(tmp_path / "vault", art, days=0)
+    (tmp_path / "vault" / "objects" / "sha256" / hashlib.sha256(b"x" * UNIT).hexdigest()).unlink()
+    assert check(art, d).state == "mismatch"
 
 
 # ---- the command line -----------------------------------------------------------------------------------------------------------------
@@ -968,7 +1074,7 @@ def test_a_lean_records_tree_is_in_use_exactly_when_lean_audits_prune_keeps_it(t
 
 def test_expires_now_is_what_rm_tells_an_owner_to_record():
     """rm's refusal tells the owner to record `--expires now`, so keep takes that word."""
-    now = datetime(2026, 10, 17, 14, 20, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 17, 14, 20, tzinfo=UTC)
     assert R.parse_expires("now", now) == R.fmt_utc(now) == R.parse_expires("0h", now)
     with pytest.raises(R.RecordError, match="never, now, a date"):
         R.parse_expires("soon", now)
@@ -987,3 +1093,11 @@ def test_a_python_package_named_passes_or_anything_in_a_venv_is_no_retained_pass
     assert not R._holds_passes(tree / "vllm/compilation/passes", root)
     (tree / "out/passes/r0").mkdir(parents=True)
     assert R._holds_passes(tree, root) and R._holds_passes(tree / "out/passes/r0", root)
+
+
+def test_a_record_that_does_not_parse_reads_as_none_and_says_so_but_a_missing_one_is_quiet(tmp_path, capsys):
+    assert R._read_json(tmp_path / "status.json") is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / "status.json").write_text("{torn")
+    assert R._read_json(tmp_path / "status.json") is None
+    assert f"retention: {tmp_path / 'status.json'} unread, read as none (JSONDecodeError" in capsys.readouterr().err

@@ -724,7 +724,7 @@ PoolChain = CompositeDefinition(
         "window, then window 2's)")
 
 
-def compile_unit(**st):
+def compile_slice_block(**st):
     return bind(CompileSlice, **st)
 
 
@@ -1045,7 +1045,7 @@ def _run(unit, rows, args) -> list[int]:
 
 def run_compile(st: dict, args: Sequence[dict[str, list[int]]]) -> list[int]:
     """The compile slice's verdict word on each of `args` (`arguments`' form), in one evaluation."""
-    return _run(compile_unit(**st), COMPILE_ROWS, args)
+    return _run(compile_slice_block(**st), COMPILE_ROWS, args)
 
 
 def run_pool(st: dict, args: Sequence[dict[str, list[int]]]) -> list[int]:
@@ -1082,7 +1082,7 @@ def size(**st) -> dict[str, int]:
     `st`."""
     S = SimpleNamespace(**st)
     bits = row_bits(S)
-    return {"compile_ands": ands(compile_unit(**st)), "pool_ands": ands(pool_unit(**st)),
+    return {"compile_ands": ands(compile_slice_block(**st)), "pool_ands": ands(pool_unit(**st)),
             **{f"{r}_bits": b for r, b in bits.items()},
             "compile_free_bits": free_width(S, {r: bits[r] for r in COMPILE_ROWS}),
             "pool_free_bits": free_width(S, {r: bits[r] for r in POOL_ROWS})}
