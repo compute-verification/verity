@@ -35,6 +35,8 @@ DECLARED: dict[str, str] = {
     "RESEARCH_AGENT": "the agent that registers a machine (default the hostname)",
     "RESEARCH_AGENT_URL": "the URL of the agent running the command, recorded as who acted",
     "CLOUD_AGENT_INJECTED_SECRET_NAMES": "the secrets Cursor injects into this VM, by name, comma-separated",
+    "CURSOR_AGENT_SOCKET": "the Cursor agent's identity socket, which answers for its OIDC tokens (default /run/cursor/api.sock); "
+                           "a machine without it is no Cursor agent",
     # credentials, read by name and never printed
     "SLACK_BOT_TOKEN": "the Slack bot's token",
     "CURSOR_API_KEY": "the Cursor API key the agent watch reads agents with",
