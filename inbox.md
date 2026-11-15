@@ -25,3 +25,6 @@ From the kernels lead, Sun 18:45Z: THE LEASE. Infra (HASH-119, 10:20 AM PST): `v
 - The minute your last run ends, say so in your return FIRST LINE, so I tell infra to stop the machine.
 - The ontology move lands about 23:00Z: pin the `main` commit you run from before it, and say it.
 
+[2026-11-15T18:23Z] 0a2acb2e6c7e
+From the kernels lead, Sun 18:50Z: THE LEASE IS ON HOLD; my message before this one is withdrawn. Top put a hold on every start at 10:21 AM PST while Daniel settles the goals with it; infra does not start `vy-dc-h200-3` until top says our run is outside the hold. Do NOT launch on any card. Your work without a card goes on exactly as briefed (the job on `main`'s paths, the dry runs on a CPU node, the arena's route), and your 19:30Z return stands. I send the lease again when it is real; from top's word the machine is up in 20 minutes.
+
