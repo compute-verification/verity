@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -217,3 +218,15 @@ def test_the_latch_under_its_older_name_still_latches_and_is_renamed(pacer):
     pacer.tick()
     assert not pacer.OLD_LATCH.exists() and pacer.LIMIT_LATCH.read_text() == "2026-11-01T00:00:00Z disk 78.2%\n"
     assert pacer.LIMIT_LATCH.name == "limit-150" and pacer.cluster["policy"] == "Hold", "latched: the limit is LIMIT_LOW_GB"
+
+
+def test_a_sudo_that_refuses_the_bundle_reads_stops_the_pacer_rather_than_reading_zero(tmp_path, monkeypatch):
+    """A locked node's sudo refuses `find` and `du` to research; with their errors sent to /dev/null the old read was 0 GB."""
+    monkeypatch.setenv("VY_PACER_DIR", str(tmp_path / "pacer"))
+    mod = load("release", NEBIUS / "sky" / "release.py", monkeypatch)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "sudo").write_text('#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n')
+    (tmp_path / "bin" / "sudo").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    with pytest.raises(SystemExit, match="sudo refuses /usr/bin/find to this login.*nothing released"):
+        mod.bundles_gb()
