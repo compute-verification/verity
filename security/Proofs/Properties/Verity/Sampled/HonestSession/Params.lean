@@ -477,7 +477,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     -- the sort (the walk's condition is otherwise stuck on `keys? query`'s `qsort`, buried in the partition object where the
     -- taint does not reach), so the walk rewrites by it.
     have hq : Spot.keys? query = some #["name", "params", "version"] := by
-      unfold query; rw [keys?_mkObj, sortStrings_eq_sortLt]; decide
+      unfold query; rw [keys?_mkObj, sortStrings_eq_sortLt]; kernel_rfl'
     unfold paramsJ partitionObj Spot.Partition.build
     -- Detaint every canon-/hash-derived leaf so the field lookups reduce: the program digest in the partition, and the
     -- circuit and public digests in `proofs`. The digest facts are restated over the fresh names.
@@ -489,6 +489,16 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgc] at hdc
     rw [hgp] at hdp
     rw [hgk] at hU
+    -- The genesis/window-root and program digests each face a `length == 128 && isHex` form check (`digest?`); their
+    -- bytes are 64, so the check passes off the size fact (`digest?_hexOf`), which the walk reads from the context.
+    have hgw_dg : (gw.length == 128 && Spot.isHex gw) = true := by
+      rw [← hgw]
+      have hsz : (ByteArray.mk (Array.replicate 64 0)).size = 64 := by decide
+      exact digest?_hexOf hsz
+    have hgh_dg : (gh.length == 128 && Spot.isHex gh) = true := by
+      rw [← hgh]
+      have hsz : programSha.size = 64 := by unfold programSha; exact Hex.size_hash _
+      exact digest?_hexOf hsz
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
     case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, poolValues_none, keys?_mkObj, keys?_obj,
       sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
