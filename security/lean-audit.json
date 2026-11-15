@@ -5507,10 +5507,6 @@
    "type_hash": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
    "unfolded_hash": "37f7bcfaa7774cf93391a95b1efaeb42ee1e0c7e21a08707ff16fe72a6f93659"
   },
-  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
-   "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
-   "unfolded_hash": "d1f124470e4a49a5ba2e92eaaf0e9de7d8e2ccd564164e0ebda122e413c19c49"
-  },
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
    "unfolded_hash": "2c44dfafca4dd9b61448620c3a735030c19a6af6381c8051349eb0bd3474d68e"
