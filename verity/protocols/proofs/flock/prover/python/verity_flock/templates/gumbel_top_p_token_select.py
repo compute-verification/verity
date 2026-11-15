@@ -3,7 +3,7 @@ IR composites of the Definition's three scans (``TemperatureLane``, ``TopPMaskSt
 row-level values (the top-p keep word, the Gumbel noise, the temperature's row scalars) native public cut words, under
 ``verity/flock-ir-sampling/v1`` (``verity_flock.ir_sampling``).
 
-The lane netlist does not depend on V (only the arrangement does) and is pinned by :data:`PIN`."""
+The lane's circuit description does not depend on V (only the arrangement does) and is pinned by :data:`PIN`."""
 TEMPLATE = "gumbel-top-p-token-select"
 UNIT = "gumbel-top-p-token-select/fp32/lane"
 PIN = "c9aeca364cb08b68a174fa9811ff505306c6a8f9af7458689ff23e66409cc1b6"
@@ -27,7 +27,7 @@ def lowering(subcircuit):
 def supports(subcircuit, scheme):
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-sampling/v1); binding its rows under "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-sampling/v1); binding its rows under "
             f"{scheme} is not wired yet")
 
 

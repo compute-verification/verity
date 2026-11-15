@@ -40,9 +40,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .unit_costs import retree
 
@@ -244,7 +245,7 @@ def evaluate(N: int, K: int, units: Sequence[Unit], menu: Sequence[float], B: in
         mean += B * Z * s
         public += B * Z * -(-q // B)
         hi += B * Z * -(-upper_q(N, n, K, delta / m) // B)
-        shapes.append({"Z": Z, "types": len(us), "units": n, "drawn_mean": xm, "drawn_q": q, "sessions_mean": s,
+        shapes.append({"Z": Z, "types": len(us), "units": n, "sampled_mean": xm, "sampled_q": q, "sessions_mean": s,
                        "sessions_public": -(-q // B)})
     low = sum(lower_q(N, u.n, K, delta / m) * u.z_mean for u in units)
     r = lambda x: x / actual if actual else float("nan")  # noqa: E731
@@ -259,9 +260,9 @@ def large(N: int, units: Sequence[Unit], K: int) -> list[dict[str, Any]]:
     out = []
     for Z in LARGE_Z:
         over = sorted((u for u in units if u.z > Z), key=lambda u: -u.n)
-        out.append({"Z": Z, "types_over": len(over), "types": len(units), "draw_share_over": sum(u.n for u in over) / N,
+        out.append({"Z": Z, "types_over": len(over), "types": len(units), "sample_share_over": sum(u.n for u in over) / N,
                     "pieces_mean": (sum(u.n * math.ceil(u.z / Z) for u in over) / sum(u.n for u in over)) if over else 0,
-                    "units": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / Z)} for u in over]})
+                    "units": [{"unit_type": u.label, "nnz": u.z, "sample_share": u.n / N, "pieces": math.ceil(u.z / Z)} for u in over]})
     return out
 
 
@@ -297,9 +298,9 @@ def workload_table(inv: Mapping[str, Any], workload: str) -> dict[str, Any]:
     ts = tail_eval([replace(u, z=u.z_step, z_mean=u.z_step) if u.z_step else u for u in samplers])
     tn = tail_eval(samplers, one_bucket=False)
     return {"workload": workload, "N": N, "K": K, "skipped": skipped, "tail_threshold": thr,
-            "body": {"types": len(body), "draw_share": sum(u.n for u in body) / N},
-            "tail": {"types": [{"unit_type": u.label, "nnz": u.z, "nnz_mean": u.z_mean, "draw_share": u.n / N, "source": u.source}
-                               for u in tail], "draw_share": sum(u.n for u in tail) / N, "eval": tl, "eval_step_model": ts,
+            "body": {"types": len(body), "sample_share": sum(u.n for u in body) / N},
+            "tail": {"types": [{"unit_type": u.label, "nnz": u.z, "nnz_mean": u.z_mean, "sample_share": u.n / N, "source": u.source}
+                               for u in tail], "sample_share": sum(u.n for u in tail) / N, "eval": tl, "eval_step_model": ts,
                      "eval_per_stratum": tn},
             "menus": rows, "large": large(N, units, K)}
 
@@ -331,15 +332,15 @@ def _short(w: str) -> str:
 def render(pad: Mapping[str, Any]) -> str:
     L = [f"# F6 padding: unit = one subcircuit, K = {pad['K']} sampled proof blocks, δ = {pad['delta']}", "",
          "Per-unit nonzeros: " + str(pad.get("nnz")), "",
-         "zpad: Z rounding only; pad_mean: with sessions of B slots rounded up; public: each shape's session count fixed at "
-         "its 1 − 2⁻⁴⁰ quantile (hides the sample's mix); pad_q: bound on the 1 − 2⁻⁴⁰ quantile of padded / actual. All over the "
-         "body's expected actual nonzeros. Tail: the samplers and units over "
-         f"{pad['tail_factor']}x the body's 99th-percentile Z, each its own bucket at B = 1.", "",
+         ("zpad: Z rounding only; pad_mean: with sessions of B slots rounded up; public: each shape's session count fixed at "
+          "its 1 − 2⁻⁴⁰ quantile (hides the sample's mix); pad_q: bound on the 1 − 2⁻⁴⁰ quantile of padded / actual. All over the "
+          "body's expected actual nonzeros. Tail: the samplers and units over "
+          f"{pad['tail_factor']}x the body's 99th-percentile Z, each its own bucket at B = 1."), "",
          "## Compact: each workload x menu at its best B", "",
          f"best B: the largest B within {pad['b_tolerance']:.0%} of B = 1's pad_mean.", "",
-         "| workload | menu | buckets | best B | zpad | pad_mean | round extra | public | hide extra | pad_q | sessions mean / "
-         "public | tail share of the sample | tail actual / body actual | tail public / body actual | same, token-select at its step "
-         "model |", "|" + "---|" * 15]
+         ("| workload | menu | buckets | best B | zpad | pad_mean | round extra | public | hide extra | pad_q | sessions mean / "
+          "public | tail share of the sample | tail actual / body actual | tail public / body actual | same, token-select at its step "
+          "model |"), "|" + "---|" * 15]
     for w in pad["workloads"]:
         t, ts = w["tail"]["eval"], w["tail"]["eval_step_model"] or w["tail"]["eval"]
         for m in w["menus"]:
@@ -348,7 +349,7 @@ def render(pad: Mapping[str, Any]) -> str:
                 _short(w["workload"]), m["menu"], str(e["buckets"]), str(m["best_B"]), f"{e['zpad']:.3f}", f"{e['pad_mean']:.3f}",
                 f"{e['round_extra']:.4f}", f"{e['public']:.3f}", f"{e['hide_extra']:.4f}",
                 f"{e['pad_q']:.3f}" if e["pad_q"] else "–", f"{e['sessions_mean']:.1f} / {e['sessions_public']}",
-                f"{w['tail']['draw_share']:.2e}", f"{t['actual_mean'] / e['actual_mean']:.3g}" if t else "0",
+                f"{w['tail']['sample_share']:.2e}", f"{t['actual_mean'] / e['actual_mean']:.3g}" if t else "0",
                 f"{t['padded_public'] / e['actual_mean']:.3g}" if t else "0",
                 f"{ts['actual_mean'] / e['actual_mean']:.3g} / {ts['padded_public'] / e['actual_mean']:.3g}" if ts else "0"]) + " |")
     L += ["", "## B sensitivity: pad_mean and public at each B", "",
@@ -360,14 +361,14 @@ def render(pad: Mapping[str, Any]) -> str:
     L += ["", "## Tails", "", "| workload | tail unit | src | nnz | share of the sample |", "|---|---|---|---|---|"]
     for w in pad["workloads"]:
         for u in sorted(w["tail"]["types"], key=lambda u: -u["nnz"]):
-            L.append(f"| {_short(w['workload'])} | {u['unit_type']} | {u['source'][:1].upper()} | {_si(u['nnz'])} | {u['draw_share']:.2e} |")
+            L.append(f"| {_short(w['workload'])} | {u['unit_type']} | {u['source'][:1].upper()} | {_si(u['nnz'])} | {u['sample_share']:.2e} |")
     L += ["", "## Large units: unit types over Z (must be split)", "",
           "| workload | Z | types over / all | share of the sample over | mean pieces | largest by share |", "|---|---|---|---|---|---|"]
     for w in pad["workloads"]:
         for g in w["large"]:
-            top = ", ".join(f"{u['unit_type']} ({u['draw_share']:.1%}, {u['pieces']} pieces)" for u in g["units"][:3])
+            top = ", ".join(f"{u['unit_type']} ({u['sample_share']:.1%}, {u['pieces']} pieces)" for u in g["units"][:3])
             L.append(f"| {_short(w['workload'])} | 2^{int(math.log2(g['Z']))} | {g['types_over']} / {g['types']} | "
-                     f"{g['draw_share_over']:.4%} | {g['pieces_mean']:.1f} | {top} |")
+                     f"{g['sample_share_over']:.4%} | {g['pieces_mean']:.1f} | {top} |")
     L += ["", "## Menus", "", "| workload | menu | Z buckets |", "|---|---|---|"]
     for w in pad["workloads"]:
         for m in w["menus"]:

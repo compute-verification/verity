@@ -13,29 +13,36 @@ from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier.certificate import RECORD_TAG, CertifiedRecord, certificate_digest, parameters_digest
 from verity.protocols.accounting.certifier.verifier.grid import Reason, Status
 
-from test_network_certifier_service import PARAMS, Run, honest_occupancy
+from test_network_certifier_service import PARAMS, Run
 
 
 def _checks(lw, opening):
     return lw.head_checks(opening, bytes.fromhex(lw.root(opening)))
 
 
+def _profiled(lw, opening, honest):
+    """The opening's head checks with a profile (COUNTS = 1): each end's row the honest opening's head's counts."""
+    return [replace(i, profile=tuple(r.head.counts)) for i, r in zip(_checks(lw, opening), honest.records)]
+
+
 @pytest.fixture(scope="module")
 def cases(tmp_path_factory):
-    """Head checks of the service's execution phases under the honest profile, by name: (instance, the part that refuses
-    it or None). The honest heads of both ends in each window, and heads each wrong in one input; an edited head is
-    committed under its own root and its certificate's signed digest is its own, so only the edit can refuse it."""
-    run = Run(tmp_path_factory.mktemp("heads"), occupancy=honest_occupancy())
+    """Head checks of the service's execution phases with a profile, each end's row its honest head's counts, by name:
+    (instance, the part that refuses it or None). The honest heads of both ends in each window, and heads each wrong in
+    one input; an edited head is committed under its own root and its certificate's signed digest is its own, so only
+    the edit can refuse it."""
+    run = Run(tmp_path_factory.mktemp("heads"))
     lw, honest = run.lw, [run.honest(w) for w in range(3)]
-    out = {f"{end} {w}": (i, None) for w, o in enumerate(honest) for end, i in zip(("egress", "ingress"), _checks(lw, o))}
-    e0, i0 = _checks(lw, honest[0])
+    out = {f"{end} {w}": (i, None) for w, o in enumerate(honest)
+           for end, i in zip(("egress", "ingress"), _profiled(lw, o, o))}
+    e0, i0 = _profiled(lw, honest[0], honest[0])
 
     def edited(d, **fields):
         recs = list(honest[0].records)
         r = recs[d]
         head = replace(r.head, **fields)
         recs[d] = CertifiedRecord(head, r.salt, replace(r.certificate, digest=certificate_digest(r.salt, head.digest())))
-        return _checks(lw, replace(honest[0], records=tuple(recs)))[d]
+        return _profiled(lw, replace(honest[0], records=tuple(recs)), honest[0])[d]
 
     swapped = replace(honest[0], records=honest[0].records[::-1])
     return out | {
@@ -62,7 +69,7 @@ def cases(tmp_path_factory):
 @pytest.fixture(scope="module")
 def bare(tmp_path_factory):
     """The honest heads of a link with no profile: COUNTS = 0."""
-    run = Run(tmp_path_factory.mktemp("bare"), occupancy=(None, None))
+    run = Run(tmp_path_factory.mktemp("bare"))
     return [i for w in range(3) for i in _checks(run.lw, run.honest(w))]
 
 

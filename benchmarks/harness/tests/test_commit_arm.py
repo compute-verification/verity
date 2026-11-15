@@ -223,6 +223,24 @@ def test_host_memory_reads_the_tightest_limit_on_the_cgroup_path_and_its_anonymo
     assert host_memory(root, self_cgroup) == (64 << 30, 20 << 30)
     self_cgroup.write_text("1:name=systemd:/x\n")
     assert host_memory(root, self_cgroup) is None
+    assert host_memory(root, tmp_path / "no-such-file") is None
+
+
+def test_host_memory_raises_on_a_limit_it_cannot_read_rather_than_skip_it(tmp_path):
+    from verity_bench.vllm.commit_arm import host_memory
+
+    root = tmp_path / "cgroup"
+    (root / "job").mkdir(parents=True)
+    (root / "job" / "memory.max").write_text("lots\n")
+    (root / "job" / "memory.stat").write_text("anon 1\n")
+    self_cgroup = tmp_path / "self"
+    self_cgroup.write_text("0::/job\n")
+    with pytest.raises(ValueError, match="lots"):
+        host_memory(root, self_cgroup)
+    (root / "job" / "memory.max").write_text(f"{64 << 30}\n")
+    (root / "job" / "memory.stat").write_text("file 2\n")
+    with pytest.raises(KeyError, match="anon"):
+        host_memory(root, self_cgroup)
 
 
 def test_a_run_whose_levels_cannot_fit_the_jobs_memory_is_refused_by_name(monkeypatch):

@@ -7,7 +7,7 @@ import types
 import pytest
 
 torch = pytest.importorskip("torch")
-PHK = pytest.importorskip("verity_vllm.protocols.pouw.h1.hooks")
+PHK = pytest.importorskip("verity_vllm.protocols.pouw.h1_hooks")
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 

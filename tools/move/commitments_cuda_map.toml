@@ -1,0 +1,51 @@
+# The GPU's SHA-512 and its row commit, to the commitment schemes: what
+# `tools/move/layout.py --map tools/move/commitments_cuda_map.toml` moves and rewrites.
+#
+# `verity/circuits/kernels/sha512.cuh` (SHA-512 on the device and the host) and `row_commit.cuh` (the hm96 row commit
+# and the frame-v3-sha512 tree over it) become `verity/commitments/cuda/sha512.cuh` and
+# `verity/commitments/cuda/row_commit.cuh`: they are how a GPU computes a commitment, so they live with the commitment
+# schemes. Their tests and the suite's `pyproject.toml` go with them, and the suite becomes `verity/commitments/cuda`.
+#
+# What stays in `verity/circuits/kernels/`: `__init__.py`, `tc.py` and its sidecar. The two names the package exports
+# for the headers (`SHA512`, `ROW_COMMIT`) are not paths and no row carries them: the commit after the move's gives
+# `verity/commitments/cuda/` its `__init__.py` with the two names and turns each importer, and each `-I` a script spells
+# as the directory, to it.
+#
+# Kernel sources are rewritten here, where the maps that move no header exclude them: a source that includes one of the
+# two headers by a path from its own directory must follow it. The old and the new directory's names have one length,
+# so each rewritten `#include` keeps its length, and no other line of a kernel source changes but a comment naming the
+# old path. Never rewritten: the earlier moves' records, files whose bytes a digest pins, every Lean file and the layout
+# of record (`tests/tree.toml`). No root moves ([roots] old == new). No file is split, added or deleted. The format is
+# `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/circuits/kernels/sha512.cuh" = "verity/commitments/cuda/sha512.cuh"
+"verity/circuits/kernels/row_commit.cuh" = "verity/commitments/cuda/row_commit.cuh"
+"verity/circuits/kernels/tests/" = "verity/commitments/cuda/tests/"
+"verity/circuits/kernels/pyproject.toml" = "verity/commitments/cuda/pyproject.toml"
+
+[retired]
+# what leaves `verity/circuits/kernels/`: `layout.py` refuses a tracked file under its `tests/` with no row
+paths = ["verity/circuits/kernels/sha512.cuh", "verity/circuits/kernels/row_commit.cuh",
+         "verity/circuits/kernels/tests/", "verity/circuits/kernels/pyproject.toml"]
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[split]
+
+[modules]
+# the rename [paths] and [roots] imply (`layout.py --modules`): the tests' directory as a dotted path
+"verity.circuits.kernels.tests" = "verity.commitments.cuda.tests"

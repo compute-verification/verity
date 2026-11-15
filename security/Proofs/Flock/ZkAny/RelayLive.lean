@@ -26,8 +26,8 @@ earlier round failed (`ZkServer.liveBefore`), a frame round is one message in bo
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (SessionSpec)
-open _root_.Flock.Firewall.Frame (Masker Place)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Masker Place)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **A released frame round of the session is the deferred model's message, and keeps the session's stop the
 model's**: at a frame round below the `Finish` of the session's rep `(i, r)`, whose worker value is the device round `v`
@@ -39,15 +39,15 @@ theorem roundStep_nextD {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ) (
     (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
     (hn : h.length + 1 < n x) (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
     (hcr : L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false)
-    {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
+    {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
     {sid i r : Nat} {dom : ByteArray} {q p₁ : Rep} {f : Bool} {nd : Option String} {o : ByteArray}
     (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
       .ok (q, .sched ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩, f, nd))
     (hnd : nd.isSome = R.stopped sid) (hq : R.stopped sid = false → q.st.m.stopped = false)
     (hcfg : q.cfg = L.cfg x ρ h) (hu : unstop q.st.m = unstop m)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
       some p₁)
     (hst : R.stopped sid = !L.toSrv.liveBefore wk x w ρ κ h) :
     ∃ out, o = (if f then dom ++ out else out) ∧ 0 :: out.data.toList = L.toSrv.nextD L.fillOf n wk x w ρ κ h ∧
@@ -59,11 +59,11 @@ theorem roundStep_nextD {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ) (
     exact L.stop_frame_snoc wk x w ρ κ h hk hlt hv hcr hst e
 
 /-- **A round at a place `roundPlace` readies puts a frame back.** -/
-theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
-    ∃ p₁, (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁ := by
-  rcases hres : _root_.Flock.Firewall.Frame.step q.cfg q.st
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    ∃ p₁, (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁ := by
+  rcases hres : _root_.Flock.ZkServer.Frame.step q.cfg q.st
     (.round n (if nd.isSome then ByteArray.empty else content) pl) with ⟨a, st'⟩
   obtain ⟨v, hv⟩ := roundStep_put hrp hres
   exact ⟨_, hv⟩
@@ -72,13 +72,13 @@ theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slo
 (`Env.round`) is the loop's round on its frames at a place `roundPlace` readies, whose release, wherever it puts a frame
 back, is the message `M`'s after the stream's domain frame at its first round (`roundStep_nextD`), and the loop's
 first round of the stream is the schedule's and its domain frame the setup's. -/
-theorem envOk_roundStep {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem envOk_roundStep {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     {spec : SessionSpec} {seen : List String} {stream : String} {k : Nat} {e : Env} {M : Msg}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
-    (he : e.round = (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out)
-    (hrel : ∀ o p₁, (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o →
-      (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁ →
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (he : e.round = (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out)
+    (hrel : ∀ o p₁, (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o →
+      (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁ →
       ∃ out, o = (if f then dom ++ out else out) ∧ 0 :: out.data.toList = M)
     (hf : f = !seen.contains stream) (hd : dom = domOf spec stream) :
     EnvOk spec seen (.round stream k) e M := by

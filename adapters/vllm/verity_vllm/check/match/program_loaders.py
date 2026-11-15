@@ -8,16 +8,18 @@ import hashlib
 import json
 import os
 
+from verity.circuits.ops.boolean.versions import word_descriptor
+
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.program.compact import p_item_indices as _p_indices  # [GLM-5.3 "P"]
 from verity_vllm.program.compact import p_item_weight_span as _p_w_span
+from verity_vllm.query.program_view import _read_instance_header
 
 
 def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
-    from verity.definitions.boolean import word_descriptor
     with gzip.open(word_descriptor(d)) as f:
         desc = json.load(f)
     with open(os.path.join(d, "derive-report.json")) as f:
@@ -61,7 +63,6 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
 def check_rows(d: str) -> list[int]:
     """The instance rows of Program dir ``d``'s checks (its `instances.json.gz` header's `checks`, `at`; none without one), which
     the runtime never runs, so no fold holds them."""
-    from verity_vllm.query.program_view import _read_instance_header
     path = os.path.join(d, "instances.json.gz")
     return [int(a[0]) for a in _read_instance_header(path).get("checks", {}).get("at", ())] if os.path.exists(path) else []
 
@@ -77,7 +78,7 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
     # goes through sha256 before it is decoded), and the digests are stated beside the form (LOAD_NOTES -> impl.fold_load[dir].program_sha256 /
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
     # content, so the audit tool compares the two documents' digests with the row's files (and with each other) instead of trusting that
-    # two oracle_dir paths named the same bytes.  ~2-3 s per GB at load; nothing else changes (rows, form handling, the RootView).
+    # two oracle_dir paths named the same bytes.  The hash reads each file once at load; nothing else changes (rows, form handling, the RootView).
     with open(os.path.join(d, "program.json"), "rb") as f:
         raw = f.read()
     program_sha = hashlib.sha256(raw).hexdigest()
@@ -173,7 +174,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         p.witness_index[node] = int(ent["request_index"])
     p.tp = pj.get("tp")
     w_nodes = SI.load_oracle_supplied(p, pj, d)   # a `registered_values` fold's supplied parameters
-    del pj, desc   # the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode
+    del pj, desc   # the descriptor JSON is not needed past the decode
     # Input node -> offset of its first leaf inside the weights parameter (0 for a single homogeneous Record node -- the older layout):
     # the codec emits the prompt parameters' nodes first (one each, `w_param` of them), then the Record's leaf batches in field order.
     w_nodes = w_nodes if w_nodes is not None else {k for k in p.inputs if k >= w_param}

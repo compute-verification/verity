@@ -1,9 +1,9 @@
 # prove
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
-`verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_records.py` the store side and
-the table); this directory holds its runner. It reads the store's labelled records and runs on any machine that reaches
-the store, with no GPU and no node.
+`verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
+`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+records and runs on any machine that reaches the store, with no GPU and no node.
 
 ```text
 verity bench prove --system flock --workload glm53                  every block proved
@@ -28,7 +28,7 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
 - **A row priced from a steady-state row names the Definition that row's statements are of**, with its parameters,
   after the staged type: `` `TYPE` (`DEFINITION`) ``. A row may be staged for a census type in another Definition than
   the type's own, so the line says which form priced the type: `its Boolean version` where the tree registers that
-  Definition as the type's (`verity.definitions.boolean.boolean_version`), `another Definition` otherwise, and nothing
+  Definition as the type's (`verity.circuits.ops.boolean.versions.boolean_version`), `another Definition` otherwise, and nothing
   where it is the type's own. A family's row names the Definition of the row it is scaled from the same way, after that
   row's own type's. The JSON rows hold it as `definition`, null on a row no steady-state row prices. Which Definition
   was staged changes no figure: a row prices the census type it was staged for.
@@ -55,6 +55,12 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
 - **The share of the proving time that rests on rows timed above the host's cores:** the types priced from a row
   timed at more than `--cores` cores, their own or their family's, with the cores those rows were timed at. On a
   host of the stated cores those types' figures are not measured.
+- **How many priced rows ran with their card off their CPUs' NUMA node:** of the steady-state rows that price a type,
+  those whose card was on another NUMA node than their provers' CPUs, and those that don't record it, each with its
+  share of the proving time, in the table's notes and in the inputs of both proving totals. A row records its card's
+  node itself (`card_numa_node`, against its `cores.numa_nodes`); for a row timed before it did, the harness's
+  `verity_bench/data/off_node.json` lists the runs known off-node. Such rows still price their types: the line moves
+  no value and no mark.
 - **The Lean verifier's seconds and the proof's bytes per served token, modeled.** Both are "not measured" until a
   Lean verifier run of record exists (below). With one, the block type it ran on takes its figures, and every other
   block type is scaled from it; each line says `modeled, not measured`, then what was measured (the block type and its
@@ -75,6 +81,11 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   share of total compute at an audit budget β, so a serving GPU holds that share / (1 − β) prover GPUs, modeled.
   Where the record can't be read, its line says why and the table stands.
 - **The share of the proving time each source covers.**
+- **The Lean verifier's seconds a block on every block type,** a row each in the main table's order, marked by what
+  it rests on: measured on a statement of its own Definition, modeled on its Definition's measured statement at its
+  AND gates, assumed at the rate fitted over every measured statement, none with no AND gates. A measured or modeled
+  row names the run that measured its statement, that statement's blocks, and the circuit file the Lean verifier read
+  it from (the unrolled file, or its templates), as the record's statement id says.
 - **The steady-state rows it didn't read,** under "Unread": a labelled row whose staged Definition is no block type
   of the census under its cut, at any prover count. Each is named with what holds it, the type and Definition it
   staged, and its own ms per block where it is a steady-state measurement, else why it isn't one. It is on no row and
@@ -105,6 +116,7 @@ Every input is a record of the store, named there by a label and never in code: 
 | `cut` | the `partition` card that recuts it |
 | `flock-steady` | each run of `benchmarks/one_stage/server_rate.py`, an art naming them in its `runs`, or an art holding one run's rows as its `rate.json` |
 | `flock-single` | the `proof_overhead` card |
+| `flock-warm` | each run of `benchmarks/served_units/stage_prove.sh` (optional): a type with no steady-state row takes its own statement proved on one card, after WARM warm sessions the median of RUNS timed ones, marked `measured from warm sessions` with its WARM and RUNS |
 | `spot-sampling` | the sampling plan's art, for `--system spot` |
 | `lean-verify` | each run of `verity bench prove lean-verify` (optional: without one the two figures are "not measured") |
 
@@ -177,7 +189,7 @@ a steady-state measurement when the report wasn't stopped or timed out, every pr
 accepted and its cache was flat. A run that holds `rate.json` is read from it alone.
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
-serving MFU (`benchmarks/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
+serving MFU (`benchmarks/slowdown/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
 
 
 ## The Lean verifier's seconds and the proof's bytes
@@ -273,7 +285,10 @@ block type measured and what its accept holds) come first among its inputs, then
 proving totals' words also give the plan's own prices where its record states them. The prover GPUs a serving GPU are
 the proving total over the stated serving rate, so their mark is the weaker of the two's (measured, then partial, then
 modeled), first among their inputs, then proving's words and the serving rate's. A total the table gives as not
-measured has no value, says why and is marked `modeled`. The validation is
+measured has no value, says why and is marked `modeled`. Both prover GPUs a serving GPU, at the plan of record and
+at the exfiltration run of record's design, carry the goal's target, at most 0.0545 (`prove_records.GPUS_PER_SERVING_GPU_TARGET`:
+proving's share of the 10% compute budget, until the proof system's own number is set), and, with a value, the verdict `meets` at or under it or `misses`
+over it; no other measurement carries a target. The validation is
 the six checks a steady-state row is held to: passed when some block type is priced from rows that passed them all
 and no block type is left out of the totals. The run keeps the table as `out/prove.json`, and its fingerprint names
 the sampling plan.

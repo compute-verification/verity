@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
 
@@ -30,7 +30,7 @@ def test_session_jobs_refuses_anything_else_naming_the_rule(jobs):
 
 def args(loop: str | None, **more) -> argparse.Namespace:
     """An audit's arguments: ``loop``, the ZK server's Lean loop its sessions run behind, or None for none."""
-    return argparse.Namespace(bin="flock-circuit", firewall=loop, **more)
+    return argparse.Namespace(bin="flock-circuit", zk_server=loop, **more)
 
 
 def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_the_members_one_environment(tmp_path):
@@ -47,6 +47,20 @@ def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_t
     assert a5.proof_server(a, tmp_path, [dict(window), {**window, "statement": "verity/flock-circuit/tmpl"}]) is None
     assert a5.proof_server(a, tmp_path, []) is None
     assert a5.proof_server(args("loop", plain=True), tmp_path, [window]) is None
+
+
+@pytest.mark.parametrize("loop", ["loop", None], ids=["behind the ZK server", "with no ZK server"])
+def test_the_proof_server_proves_on_the_audits_gpus_and_on_the_cpu_without_them(tmp_path, monkeypatch, loop):
+    monkeypatch.delenv("FC_HOST_WITNESS", raising=False)
+    window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
+    on_gpus = a5.proof_server(args(loop, gpus=[3]), tmp_path, [dict(window)])
+    assert on_gpus.devices == [3]
+    # behind the ZK server, which refuses a witness the device builds, the host builds a device's
+    assert on_gpus._env.get("FC_HOST_WITNESS") == ("1" if loop else None)
+    on_gpus.close()
+    on_cpu = a5.proof_server(args(loop), tmp_path, [dict(window)])
+    assert on_cpu.devices == [None] and "FC_HOST_WITNESS" not in on_cpu._env
+    on_cpu.close()
 
 
 @pytest.mark.parametrize("loop", ["loop", None], ids=["behind the ZK server", "with no ZK server"])

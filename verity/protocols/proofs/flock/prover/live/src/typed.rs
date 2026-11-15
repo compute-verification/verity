@@ -469,9 +469,9 @@ fn own_region(t: &Type, lay: &Layout, subs: &[(usize, &Rows)]) -> Result<(Rows, 
     Ok((Rows { rows, konst, in_groups, out_groups, in_cols, out_cols, read: None }, steps, binds))
 }
 
-/// The rows as `verity_flock.ir_lower.netlist` writes a unit (`flock-ir-unit/v2`, no `LEAVES` or `CUT` line), then a
-/// generated read's `READ` line (`verity_flock.derive.netlist`); entries at or past `cols` (another slot's columns) left out.
-pub fn netlist(d: &Rows, name: &str, cols: usize) -> String {
+/// The rows as `verity_flock.ir_lower.circuit_description` writes a unit (`flock-ir-unit/v2`, no `LEAVES` or `CUT` line), then a
+/// generated read's `READ` line (`verity_flock.derive.circuit_description`); entries at or past `cols` (another slot's columns) left out.
+pub fn circuit_description(d: &Rows, name: &str, cols: usize) -> String {
     let mut head = vec!["flock-ir-unit/v2".to_string(), name.to_string(), d.rows.len().to_string(), d.konst.to_string()];
     for groups in [&d.in_groups, &d.out_groups] {
         head.push(groups.len().to_string());
@@ -524,7 +524,7 @@ pub fn unit_rows(meta: &Value, name: &str) -> Result<String, String> {
     if !t.calls.is_empty() || !t.tables.is_empty() {
         return Err("META: a flat unit's type makes calls or reads tables".into());
     }
-    Ok(netlist(&own_region(t, &lay, &[])?.0, name, usize::MAX))
+    Ok(circuit_description(&own_region(t, &lay, &[])?.0, name, usize::MAX))
 }
 
 /// A template's instance, typed: its unit's own region and every placed part, in unit coordinates, with the block's Δ
@@ -703,7 +703,7 @@ pub fn staged_rows(meta: &Value, name: &str, tables: Option<&str>) -> Result<Vec
         return Ok(vec![("unit.txt".into(), unit_rows(meta, name)?)]);
     }
     let (inst, _) = instance(meta, tables)?;
-    let mut out = vec![("root.txt".to_string(), netlist(&inst.root, name, usize::MAX))];
+    let mut out = vec![("root.txt".to_string(), circuit_description(&inst.root, name, usize::MAX))];
     out.extend(inst.layouts.iter().map(|(&j, (d, _, _))| (format!("{d}.txt"), inst.layout_text(j))));
     let mut delta: Vec<String> = inst.parts.iter().map(|&(j, base)| format!("PART {} {base}", inst.layouts[&j].0)).collect();
     delta.push(format!("DELTA {} 1 one", inst.root.konst));
@@ -774,13 +774,13 @@ impl Instance {
 
     /// The own region's rows (`[0, own)`), every entry at a part's column left out.
     pub fn root_text(&self, name: &str) -> String {
-        netlist(&self.root, name, self.root.rows.len())
+        circuit_description(&self.root, name, self.root.rows.len())
     }
 
     /// Placed layout `j`'s rows.
     pub fn layout_text(&self, j: usize) -> String {
         let (d, _, rows) = &self.layouts[&j];
-        netlist(rows, &d[..16], usize::MAX)
+        circuit_description(rows, &d[..16], usize::MAX)
     }
 
     /// The own rows' entries at parts' columns (unit coordinates): `(row, A's, B's)`.
@@ -862,7 +862,7 @@ mod tests {
 
     /// A flat type of two input groups, an AND with a constant form, an AND over an XOR and two output ports in one group,
     /// with `verity_flock.circuit_types`' digest, `verity_flock.layouts`' record and the SHA-256 of `verity_flock.derive`'s
-    /// netlist of it (unit name `t`).
+    /// circuit description of it (unit name `t`).
     const CONTENT: &str = r#"{"calls":[],"format":"verity/circuit-type/v1","in":[[1,2],[1,1]],"items":[[0,[[0],0],[[1],1]],[0,[[2,3],0],[[0],0]]],"label":"program","out":[[1,1],[1,1]],"outputs":[[[3],0],[[0,2,4],1]],"tables":[]}"#;
     const TYPE: &str = "3ca26baa5024af3ea96a08e63ea90814ab025eb6b59291b3d7fe17548e496aa243742fba9aba08fc2bcd35388bdf5d89823648c69d9378b81af1986924c53dd7";
     const LAYOUT: &str = r#"{"calls":[],"in_split":[1],"out_split":[],"own":{"derive":"v2"},"reads":[],"sha512":"fa46a775a07166964967f473598baf43517481d05100c0d259bfc489dc14abc1abedba107b1827ff69d0dd7921ddc23477d3cd0b0074ca79dd5c4b06539b8d7e","type":"3ca26baa5024af3ea96a08e63ea90814ab025eb6b59291b3d7fe17548e496aa243742fba9aba08fc2bcd35388bdf5d89823648c69d9378b81af1986924c53dd7"}"#;

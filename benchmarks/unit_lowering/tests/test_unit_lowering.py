@@ -26,7 +26,7 @@ def small() -> IL.LoweredUnit:
 
 def test_scan_counts_the_and_rows_ir_lower_lays_out(tmp_path):
     lay = small()
-    text = IL.netlist(lay, "unit")
+    text = IL.circuit_description(lay, "unit")
     path = tmp_path / "small.circuit.txt"
     path.write_bytes(b'flock-circuit small\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % text.count("\n") + text.encode()
                      + b"CIRCUIT again %d\n" % text.count("\n") + text.encode())
@@ -40,7 +40,7 @@ def test_scan_counts_the_and_rows_ir_lower_lays_out(tmp_path):
 
 
 def test_scan_refuses_a_section_whose_line_count_is_not_its_rows(tmp_path):
-    text = IL.netlist(small(), "unit")
+    text = IL.circuit_description(small(), "unit")
     path = tmp_path / "short.circuit.txt"
     path.write_bytes(b'flock-circuit short\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % (text.count("\n") - 1) + text.encode())
     with pytest.raises(ValueError, match="whose first line counts"):

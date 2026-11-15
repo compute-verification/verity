@@ -1,0 +1,527 @@
+# The LAW family's Lean names in the proof system's paths: what `tools/move/rename.py --map tools/move/law_lean_map.toml`
+# renames. GLOSSARY.md's term for "law", "draw law" and the Lean's `Law` is the sampling design: `Law` becomes
+# `SamplingDesign` (`Verity.SamplingDesign`, `Flock.Draw.SamplingDesign`, `Flock.Audit.SamplingDesign`), `law`
+# `samplingDesign`, and a compound renames its law part the same way (`flockLaw` `flockSamplingDesign`, `lawWhy`
+# `samplingDesignWhy`). "Draw law" compounds rename their law part alone (`drawLaw` `drawDesign`), since `drawLaw` and
+# `law` stand side by side in many files and the draw part is the DRAW family's. A module named for its law moves with
+# its imports (`Flock/Audit/Law.lean` to `Flock/Audit/SamplingDesign.lean`).
+#
+# A law that is the distribution of a random variable takes "distribution" instead: the coin map's (`CoinMapLaw`,
+# `LawHolds`, `law_send` and their agreement forms in SPOT's two-stage Lean, and there `lawAt` and `hLaw`), the
+# joined coupling's, and the products of PMFs (`prodLaw`, `piLaw`).
+#
+# In our paths (the first two tables) every LAW name renames. In every other Lean file (the last table) only `Law`, `law`
+# and the names our files declare rename, since those files read our structures, fields, constructors and lemmas; the
+# rest of their LAW names, and their prose, are their owners'. The Lake files' module lists take the same names, and the
+# few files that name a moved module by its path (SPOT's test inputs, the Audit README) take its new path.
+#
+# What stays ([keep]): every string literal that holds a LAW word, so the record key `"law"`, the refusal code `R1-law`
+# and the refusal messages the Python mirror's difftest compares keep their bytes until a format version; hyphenated
+# names (recorded case names); and the prose of other lanes' Lean files. `Verity.SamplingDesign.escape` is the field
+# lean's chain renames to `missProb`. Declarations keep their place in the locks' records: `rename.py --moves` prints the
+# renames `tools/verity/lean/check.py --update --moved` takes.
+
+
+
+
+#
+# Names holding both retired words (draw and law) have one final name, the same row in TWOLEG's
+# `draw_compound_map.toml`: draw becomes sample (sampled, samples), law beside it Design, law apart from it
+# samplingDesign. Each intermediate spelling either map left reaches the final name too.
+#
+# Python, Rust and shell names rename by their language's case (`law` -> `sampling_design`, `Law` ->
+# `SamplingDesign`, `LAW` -> `SAMPLING_DESIGN`), our flags `--law` and `--draw-law` to `--sampling-design` and
+# `--sample-design`, `FLOCK_DRAW_LAW` to `FLOCK_SAMPLE_DESIGN`. Kept there: every string literal holding the word (record
+# keys such as "law", refusal codes such as R1-law, recorded case names, the messages the difftests compare with the
+# Lean's kept literals, but those naming the flag `--draw-law`), every attribute named `law` (other lanes' `Binding`, `Window`, `Component` and `Plan` carry
+# one, and ours, `Draw.law`, is read outside: our Python and shell table's `.law`, which [keep_in] holds there (a Rust
+# field renames with its readers), never
+# a keep pattern, which would keep a Lean projection of a renamed field too), the keywords that write a "law" key or set another lane's field, the
+# adapter's `served_tp --law`, `V3C_LAW` (the onsite demo sets it) and the square-root law. Outside our paths only the
+# names other lanes import from us rename; `_law` takes `_design`, the name `law_words_map.toml` gives the served table's
+# hook. A file another lane moves is named where it sits now, by a glob that holds while it moves inside its owner's
+# directory.
+
+[words]
+
+[rewrite]
+exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py"]
+
+[keep]
+patterns = [
+  '''(?<!check\[)["']laws?["'](?!: (?:LAW|SAMPLING_DESIGN), "scheme")''',
+  '''\\"laws?\\"''',
+  '''(?<=[A-Za-z0-9])(?<!-draw)-[Ll]aws?\b''',
+  '''\b[Ll]aws?-\w''',
+  '''(?<=\n    )law(?=: Mapping\[str, Any\]\n)''',
+  '''(?<=registration=R\.digest\(rec\), )law(?==)''',
+  '''(?<=d\.update\()law(?==)''',
+  '''(?<=draw=result\["draw"\], )law(?==)''',
+  '''(?<=replace\(w, )law(?==)''',
+  '''(?<=members=members, )law(?==)''',
+  '''(?<=program=program, )law(?==)''',
+  '''(?<=served_tp \$S --world 2 --I \$I )--law\b''',
+  '''(?<=--world 2 --I 256 )--law\b''',
+  '''"--law"(?=, "subset:4")''',
+  '''\bV3C_LAW\b''',
+  '''\blaw\.json\b''',
+  '''\border\.law\b''',
+  '''\bsqrt_law\b''',
+  '''\broot_law\b''',
+  '''(?<=audit_of\(d, draw, coins, )law(?==)''',
+  '''(?<=_record_with\(c, )law(?==)''',
+]
+strings = [
+  " (the receipt), the calls' laws ",
+  " (the window's game, its laws, sessions\na",
+  " at the period's law, each windo",
+  " data under the\nrecipe's loss law: 87.6B for ",
+  " for\nanother law), its popul",
+  " for a Bernoulli law of denomina",
+  " has these laws; ",
+  " it is equality of\nthe two laws; ",
+  " law, from ",
+  " on the run's law, each windo",
+  " the calls' laws at the\n  pr",
+  " under the uniform laws. -/",
+  " with its draw law split by st",
+  "\"'law'\"",
+  "\"K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER \"",
+  "\"PEARL-TIE: V3C_LAW is empty: the tied window's rule is the launch's, a stratified rate\"",
+  "\"PREFLIGHT: V3C_LAW is the rate\"",
+  "\"PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many \"",
+  "\"R1-law\"",
+  "\"R1-law: \"",
+  "\"SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (law rate:2/4), \"",
+  "\"SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [13, 19] (law rate:2/4), \"",
+  "\"U2: a work law's population does no work\"",
+  "\"U2: an unknown law\"",
+  "\"U2: the draw's law is not the verifier's own (its program and query)\"",
+  "\"U2: the draw's work law is not the verifier's own (its K, program, query and work table)\"",
+  "\"U2: the law\"",
+  "\"U2: unit_draw's keys are not law, population, k, strata, units and a closure draw's closure\"",
+  "\"U2: unit_draw's keys are not law, population, k, strata, units\"",
+  "\"U2: unit_draw's keys are not law, population, k, units\"",
+  "\"U2: unit_draw's keys are not law, population, p, units\"",
+  "\"U2: unit_draw.law {",
+  "\"U2: unit_draw.law\"",
+  "\"U: a draw law without the drawn statement\"",
+  "\"V3C_LAW\"",
+  "\"a bernoulli law is exactly {law, p}\"",
+  "\"a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0\"",
+  "\"a bernoulli law's p is NUM/DEN\"",
+  "\"a draw is a unit_draw object: law, population, units\"",
+  "\"a draw law is an object\"",
+  "\"a draw law is subset:K or bernoulli:NUM/DEN, not {s:?}\"",
+  "\"a draw law object is {{law: stratified, k, strata}}, {{law: subset, k}} or {{law: bernoulli, p}}, not {v}\"",
+  "\"a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), stratified-rate:NUM/DEN or work-rate:NUM/DEN \"",
+  "\"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {",
+  "\"a law needs 1 <= k <= {",
+  "\"a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, \"",
+  "\"a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, not {",
+  "\"a one-stage law is subset, bernoulli, stratified or work\"",
+  "\"a rate law over {",
+  "\"a selection rule is All, Law or TwoStage\"",
+  "\"a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, grain, replay, k}\"",
+  "\"a stratified law needs 1 <= k <= {",
+  "\"a stratified law needs strata with distinct names\"",
+  "\"a stratified law's k\"",
+  "\"a stratified law's strata\"",
+  "\"a subset law draws at least one unit\"",
+  "\"a subset law is exactly {law, k}\"",
+  "\"a subset law's k is a natural number\"",
+  "\"a subset law's k\"",
+  "\"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, \"",
+  "\"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not {",
+  "\"a work law needs 1 <= k <= {",
+  "\"a work law needs a population that does some work\"",
+  "\"a work law needs the verifier's work table\"",
+  "\"a work law's population does no work\"",
+  "\"a work rate law needs the verifier's work table\"",
+  "\"draw-law\"",
+  "\"draw-under-another-law\"",
+  "\"draw:law\"",
+  "\"draw_law\"",
+  "\"firstLaw\"",
+  "\"hand-off, `IntegrityPeriod`'s windows (one a template; `compile --law L --cap N`):\"",
+  "\"its rule is 'law'\"",
+  "\"law is missing\"",
+  "\"law is not an object\"",
+  "\"law or population\"",
+  "\"law subset\"",
+  "\"law.json\"",
+  "\"law: registered {",
+  "\"laws\"",
+  "\"link points: no draw under the law ends, so each of its windows fails\"",
+  "\"no Lean toolchain or no stratified law in core\"",
+  "\"order.law\"",
+  "\"over SiluMul_v2{I=8192} at model.layers.0.mlp. (law rate:2/4), drawn members [0, 2]\"",
+  "\"population is not an integer or law not an object\"",
+  "\"proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: \"",
+  "\"rate law\"",
+  "\"refused: a bernoulli draw: no soundness claim draws by this law\"",
+  "\"refused: a subset draw without --zk: no soundness claim draws by this law\"",
+  "\"refused: the draw's law is not subset\"",
+  "\"registered-law-with-a-stratum-k-changed (R1)\"",
+  "\"registered_law\"",
+  "\"registration-law-another-k (R1)\"",
+  "\"registration-law-not-the-agreement's\"",
+  "\"registration-law-subset-not-stratified (R1)\"",
+  "\"registration: R1-law: {",
+  "\"registration: no law\"",
+  "\"replay law\"",
+  "\"session_law\"",
+  "\"setup: U2: the draw's work law is not the verifier's own\"",
+  "\"sqrt_law\"",
+  "\"stratum-k-written-true (law, strata)\"",
+  "\"the draw is not well formed under the law\"",
+  "\"the draw is not well formed under the law: {",
+  "\"the draw's law has no profile\"",
+  "\"the draw's law has no sampling design\"",
+  "\"the draw's law is not subset\"",
+  "\"the draw's record is not a draw of its units under the registered law and population\"",
+  "\"the law is bernoulli, which the sampled audit's soundness statement doesn't cover\"",
+  "\"the law is not an object\"",
+  "\"the law is not subset, bernoulli, stratified or work\"",
+  "\"the law is not subset:k over N with k <= N and N >= 1\"",
+  "\"the law the draw passed under has no profile\"",
+  "\"the law {",
+  "\"the law\"",
+  "\"the law's k is not a natural number\"",
+  "\"the law's one stratum\"",
+  "\"the law's p is not NUM/DEN\"",
+  "\"the law's p is not NUM/DEN, 0 <= NUM <= DEN, 0 < DEN\"",
+  "\"the receipt, the draw or the law\"",
+  "\"the registration's law is not subset:K′\"",
+  "\"the rule's rate law refuses the population\"",
+  "\"the second stage's draw is not well formed under its law: {",
+  "\"the session's draw's law is not subset\"",
+  "\"the stratified law at K = the population leaves a unit undrawn\"",
+  "\"the verifier's partition file: {templates, law, scope?}\"",
+  "\"verity-verify-proof --stratified B, its own law\"",
+  "\"{\\\"form\\\":\\\"one-stage\\\",\\\"law\\\":{}}\"",
+  "\"{\\\"format\\\":\\\"verity/registration/v1\\\",\\\"law\\\":{},\\\"partition\\\":\\\"p\\\",\\\"population\\\":1,\\\"program\\\":\\\"\"",
+  "\"{\\\"format\\\":\\\"verity/registration/v2\\\",\\\"protocol\\\":\\\"verity/sampled-proofs/one-stage/v1\\\",\\\"program\\\":\\\"ab01\\\",\\\"roots\\\":[{\\\"port\\\":\\\"x\\\",\\\"root\\\":\\\"00ff\\\",\\\"leaves\\\":4,\\\"domain\\\":\\\"11\\\"}],\\\"window\\\":{\\\"kind\\\":\\\"served\\\",\\\"stream\\\":\\\"aa\\\",\\\"prover\\\":\\\"bb\\\"},\\\"previous\\\":null,\\\"law\\\":{\\\"law\\\":\\\"bernoulli\\\",\\\"p\\\":\\\"1/3\\\"},\\\"population\\\":12,\\\"anchors\\\":[],\\\"registered\\\":[{\\\"value\\\":\\\"W\\\",\\\"root\\\":\\\"cc\\\",\\\"leaves\\\":2,\\\"words\\\":4,\\\"domain\\\":\\\"dd\\\",\\\"word_bits\\\":32}],\\\"leaf_layer\\\":null,\\\"neg\\\":-5,\\\"t\\\":true,\\\"e\\\":{}}\"",
+  "\"{\\\"m\\\":1,\\\"c\\\":2,\\\"x\\\":3,\\\"a\\\":4,\\\"q\\\":5,\\\"b\\\":6,\\\"k\\\":7,\\\"d\\\":8,\\\"unit_draw\\\":{\\\"law\\\":\\\"subset\\\",\\\"k\\\":1}}\"",
+  "\"{\\\"unit_draw\\\":{\\\"closure\\\":[3],\\\"k\\\":2,\\\"law\\\":\\\"work\\\",\\\"population\\\":4,\\\"strata\\\":[{\\\"floor\\\":1,\"",
+  "\"| h | windows pooled | C (MACs) | best L | √ law L | proving only L |\"",
+  "\"| template | units | law | cap | K0 at 1% | K0 at 1e-6 |\"",
+  "\"ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee \"",
+  "'s collision bounds and law at each ses",
+  "'s law gives\n  the",
+  "'s laws with exactl",
+  "'s laws. -/",
+  "'s two laws\n(",
+  "'s two laws): fix the c",
+  "'s two laws, so the sam",
+  "('law')}:{",
+  "('law', '?')})\"",
+  "(law rate:",
+  "), which the laws read. -/",
+  ").\n  The machine's laws (",
+  ")} proof blocks is a proof block: its rule is 'law'\"",
+  ", a number of the signs' law evaluated o",
+  ", and its plays have the same law here. What ",
+  ", by its draw laws and the bes",
+  ", from its draw laws (",
+  ", from its draw laws. -/",
+  ", the calls' laws each sample",
+  ".\n\n  The first two are laws of the mach",
+  ". The sessions' laws ",
+  "/-- Under the uniform law, ",
+  "4 (64 digits from a geometric law;\n",
+  ": law is a string or null",
+  "['law']!",
+  "['law']} | {",
+  "['law']}:{",
+  "at uniform keys, so the\nkeys' law is within s",
+  "dency, a number of the signs' law that is eva",
+  "draws by this law\"",
+  "event and error: the sample's law and each wi",
+  "f\"(law {",
+  "f\"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {",
+  "f\"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {",
+  "f\"a selection rule is All, Law or TwoStage, not {",
+  "f\"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not {",
+  "f\"a5 draws by the subset law with Lean on a development challenger's coins; the partition \"",
+  "f\"is not the registered law {{\\\"k\\\":{",
+  "f\"registration: R1-law: {",
+  "f\"the draw is not one under the registered law {",
+  "f\"the law has no stratum {",
+  "f\"the law: {",
+  "f\"the second stage's draw is not well formed under its law: {",
+  "he sampling design of Flock's law (",
+  "ice's sample is its sessions' laws on copy-clo",
+  "is not the registered law {",
+  "law is exactly \\{law, k, strata}",
+  "nit), and the machine's three laws, each read ",
+  "ow's\nmiss bound from its draw laws (",
+  "rithmetic through\nthe F2 rank law, with exhau",
+  "s are fresh too, so the keys' law\nis within t",
+  "s sessions have the sessions' law.\n* ",
+  "ssion have the session game's law**: for ever",
+  "t al.'s refit of Chinchilla's law, and\n17–218",
+  "t its escape under the calls' laws at\n",
+  "unit_draw.law",
+  "witness doesn't show.**\n* Its laws are global:",
+  "} law is exactly {",
+  "} law is expanded: its strata are a list (one_stage.draw.derive)\"",
+  "} law needs 1 <= k <= {",
+  "} law's k is",
+  "} law's k is a natural number\"",
+  "} law's strata",
+  "}\"\n# with W the circuit reads H1's tables, in the verifier's record and the commit alike\ntables = {{\"tables\": \"h1\"}} if \"--window-registration\" in a else {{}}\nif a[0] == \"window-circuit\":\n    if tables:\n        open(os.environ[\"ORDER\"] + \".circuit\", \"w\").write(json.dumps([out.name, *a[a.index(\"--window-registration\"):]]))\n    else:\n        open(os.environ[\"ORDER\"] + \".circuit\", \"w\").write(\"\\\\n\".join(a))\n    out.write_text(json.dumps(tables))\n    print(json.dumps({{\"bits\": 772, \"count\": {{\"free\": 3, \"inputs\": 10, \"registered\": 7, \"units\": 1}}}}))\nelse:\n    assert a[0] == \"window-commit\"\n    if os.environ.get(\"FAIL_COMMIT\"):\n        print(\"prove_path.py window-commit: the row dir holds no window 7\", file=sys.stderr)\n        sys.exit(2)\n    out.mkdir(parents=True)\n    (out / \"circuit.json\").write_text(json.dumps({{\"run\": \"ab\", **tables}}))\n    open(os.environ[\"ORDER\"] + \".law\", \"w\").write(a[a.index(\"--law\") + 1] if \"--law\" in a else \"\")\n    if \"--window-registration\" in a:\n        tail = a[a.index(\"--window-registration\"):]\n        open(os.environ[\"ORDER\"] + \".commit\", \"w\").write(\"\\\\n\".join(tail))\n        w = json.load(open(tail[1]))\n        if \"--pearl-passes\" in a:\n            from verity.protocols.proofs.spot.verifier.one_stage import docket as REG\n            r = {{\"format\": \"toy\", \"previous\": \"ef\" * 64 if os.environ.get(\"BREAK_CHAIN\") else REG.digest(w)}}\n        else:\n            r = {{\"format\": \"toy\", \"after\": w}}\n        (out / \"registration.json\").write_text(json.dumps(r))\n    print(json.dumps({{\"run\": \"ab\", \"circuit\": \"cd\", \"population\": 37, \"sources\": {{\"pad\": 3}}, \"window\": 7}}))\n'''",
+  "},\\\"law\\\":\\\"subset\\\"}}\"",
+  "}.law: not subset",
+  "}: no soundness claim draws by this law\"",
+  "}: the work:1 law draws {",
+]
+
+[keep_in]
+"benchmarks/commitments/*.py" = [".law"]
+"benchmarks/dsa_topk/*.py" = [".law"]
+"benchmarks/dsa_topk/*.sh" = [".law"]
+"benchmarks/flock_s8_block/*.py" = [".law"]
+"benchmarks/flock_s8_block/*.sh" = [".law"]
+"benchmarks/multi_unit/*.py" = [".law"]
+"benchmarks/multi_unit/*.sh" = [".law"]
+"benchmarks/one_stage/*.py" = [".law"]
+"benchmarks/one_stage/*.sh" = [".law"]
+"benchmarks/private_circuit/*.py" = [".law"]
+"benchmarks/private_circuit/*.sh" = [".law"]
+"benchmarks/proof_throughput/*.py" = [".law"]
+"benchmarks/proof_throughput/*.sh" = [".law"]
+"benchmarks/remote_session/*.py" = [".law"]
+"benchmarks/remote_session/*.sh" = [".law"]
+"benchmarks/replay_ladder/*.py" = [".law"]
+"benchmarks/replay_ladder/*.sh" = [".law"]
+"benchmarks/route_capture/*.py" = [".law"]
+"benchmarks/route_capture/*.sh" = [".law"]
+"benchmarks/sampling_plan/*.py" = [".law"]
+"benchmarks/serve_tax/*.py" = [".law"]
+"benchmarks/serve_tax/*.sh" = [".law"]
+"benchmarks/spot_figures/*.py" = [".law"]
+"benchmarks/spot_proved/*.py" = [".law"]
+"benchmarks/spot_proved/*.sh" = [".law"]
+"benchmarks/two_stage/*.py" = [".law"]
+"benchmarks/two_stage/*.sh" = [".law"]
+"benchmarks/unit_walk/*.sh" = [".law"]
+"benchmarks/verifier_cost/*.py" = [".law"]
+"benchmarks/verifier_cost/*.sh" = [".law"]
+"verity/protocols/proofs/*.py" = [".law"]
+"verity/protocols/proofs/*.sh" = [".law"]
+
+
+[[words_in]]
+files = ["*.lean", "*lakefile.toml", "*.py", "*.rs", "*.sh"]
+words = { "DRAW_LAW" = "SAMPLE_DESIGN", "DrawLaw" = "SampleDesign", "DrawnLaw" = "SampledDesign", "FLOCK_DRAW_LAW" = "FLOCK_SAMPLE_DESIGN", "LawDraw" = "SamplingDesignSample", "a_malformed_law_or_draw_is_refused" = "a_malformed_sampling_design_or_sample_is_refused", "drawFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign", "drawFileZK_printedDraw_law" = "sampleFileZK_printedSample_samplingDesign", "drawLaw" = "sampleDesign", "drawLaw_deployOf" = "sampleDesign_deployOf", "drawLaw_of_slots" = "sampleDesign_of_slots", "drawLaw_ok" = "sampleDesign_ok", "draw_law" = "sample_design", "drawnFrom_drawnLaw" = "sampledFrom_sampledDesign", "drawnLaw" = "sampledDesign", "drawnLaw_cases" = "sampledDesign_cases", "drawnLaw_ok" = "sampledDesign_ok", "drawn_law" = "sampled_design", "lawOn_drawnLaw" = "samplingDesignOn_sampledDesign", "lawOn_drawsUnder" = "samplingDesignOn_samplesUnder", "lawSized_drawnLaw" = "samplingDesignSized_sampledDesign", "lawSized_drawsUnder" = "samplingDesignSized_samplesUnder", "proved_of_drawLaw" = "proved_of_sampleDesign", "setupAt_drawLaw" = "setupAt_sampleDesign", "setup_drawLaw" = "setup_sampleDesign", "test_a5_records_a_law_none_of_whose_draws_ends" = "test_a5_records_a_sampling_design_none_of_whose_samples_ends", "test_a_draw_is_held_to_its_registered_law" = "test_a_sample_is_held_to_its_registered_sampling_design", "test_a_draw_law_input_it_cannot_read" = "test_a_sample_design_input_it_cannot_read", "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design", "test_a_sampler_draws_instead_and_is_held_to_the_law" = "test_a_sampler_samples_instead_and_is_held_to_the_sampling_design", "test_a_subset_draw_at_hidden_outputs_passes_the_law_in_either_mode" = "test_a_subset_sample_at_hidden_outputs_passes_the_sampling_design_in_either_mode", "test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with" = "test_a_work_sampling_designs_need_is_its_sample_under_the_work_table_the_rank_registers_with", "test_handoff_work_law_draws_the_plans_k_and_its_windows_are_integrity_period_logs" = "test_handoff_work_sampling_design_samples_the_plans_k_and_its_windows_are_integrity_period_logs", "test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one" = "test_leak_count_is_certified_and_the_leak_sampling_design_samples_n_lambda_over_k_plus_one", "test_lean_draw_laws" = "test_lean_sample_designs", "test_link_points_refuses_a_law_none_of_whose_draws_ends" = "test_link_points_refuses_a_sampling_design_none_of_whose_samples_ends", "test_no_claim_draws_by_these_laws_in_either_mode" = "test_no_claim_samples_by_these_sampling_designs_in_either_mode", "test_the_default_work_law_draws_a_calls_share_of_the_windows_budget" = "test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_budget", "test_work_law_draws_the_plan_sizes" = "test_work_sampling_design_samples_the_plan_sizes", "SAMPLE_LAW" = "SAMPLE_DESIGN", "SampleLaw" = "SampleDesign", "DrawDesign" = "SampleDesign", "DrawnSamplingDesign" = "SampledDesign", "SampledLaw" = "SampledDesign", "FLOCK_SAMPLE_LAW" = "FLOCK_SAMPLE_DESIGN", "SamplingDesignDraw" = "SamplingDesignSample", "LawSample" = "SamplingDesignSample", "a_malformed_law_or_sample_is_refused" = "a_malformed_sampling_design_or_sample_is_refused", "drawFileZK_of_toJson_samplingDesign" = "sampleFileZK_of_toJson_samplingDesign", "sampleFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign", "drawFileZK_printedDraw_samplingDesign" = "sampleFileZK_printedSample_samplingDesign", "sampleFileZK_printedSample_law" = "sampleFileZK_printedSample_samplingDesign", "drawDesign" = "sampleDesign", "sampleLaw" = "sampleDesign", "sampleLaw_deployOf" = "sampleDesign_deployOf", "drawDesign_deployOf" = "sampleDesign_deployOf", "drawDesign_of_slots" = "sampleDesign_of_slots", "sampleLaw_of_slots" = "sampleDesign_of_slots", "sampleLaw_ok" = "sampleDesign_ok", "drawDesign_ok" = "sampleDesign_ok", "draw_design" = "sample_design", "sample_law" = "sample_design", "drawnFrom_drawnSamplingDesign" = "sampledFrom_sampledDesign", "sampledFrom_sampledLaw" = "sampledFrom_sampledDesign", "sampledLaw" = "sampledDesign", "drawnSamplingDesign" = "sampledDesign", "sampledLaw_cases" = "sampledDesign_cases", "drawnSamplingDesign_cases" = "sampledDesign_cases", "drawnSamplingDesign_ok" = "sampledDesign_ok", "sampledLaw_ok" = "sampledDesign_ok", "sampled_law" = "sampled_design", "samplingDesignOn_drawnSamplingDesign" = "samplingDesignOn_sampledDesign", "lawOn_sampledLaw" = "samplingDesignOn_sampledDesign", "samplingDesignOn_drawsUnder" = "samplingDesignOn_samplesUnder", "lawOn_samplesUnder" = "samplingDesignOn_samplesUnder", "samplingDesignSized_drawnSamplingDesign" = "samplingDesignSized_sampledDesign", "lawSized_sampledLaw" = "samplingDesignSized_sampledDesign", "samplingDesignSized_drawsUnder" = "samplingDesignSized_samplesUnder", "lawSized_samplesUnder" = "samplingDesignSized_samplesUnder", "proved_of_sampleLaw" = "proved_of_sampleDesign", "proved_of_drawDesign" = "proved_of_sampleDesign", "setupAt_sampleLaw" = "setupAt_sampleDesign", "setupAt_drawDesign" = "setupAt_sampleDesign", "setup_sampleLaw" = "setup_sampleDesign", "setup_drawDesign" = "setup_sampleDesign", "test_a5_records_a_law_none_of_whose_samples_ends" = "test_a5_records_a_sampling_design_none_of_whose_samples_ends", "test_a_sample_is_held_to_its_registered_law" = "test_a_sample_is_held_to_its_registered_sampling_design", "test_a_sample_law_input_it_cannot_read" = "test_a_sample_design_input_it_cannot_read", "test_a_profile_sampled_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design", "test_a_sampler_samples_instead_and_is_held_to_the_law" = "test_a_sampler_samples_instead_and_is_held_to_the_sampling_design", "test_a_subset_sample_at_hidden_outputs_passes_the_law_in_either_mode" = "test_a_subset_sample_at_hidden_outputs_passes_the_sampling_design_in_either_mode", "test_a_work_laws_need_is_its_sample_under_the_work_table_the_rank_registers_with" = "test_a_work_sampling_designs_need_is_its_sample_under_the_work_table_the_rank_registers_with", "test_handoff_work_law_samples_the_plans_k_and_its_windows_are_integrity_period_logs" = "test_handoff_work_sampling_design_samples_the_plans_k_and_its_windows_are_integrity_period_logs", "test_leak_count_is_certified_and_the_leak_law_samples_n_lambda_over_k_plus_one" = "test_leak_count_is_certified_and_the_leak_sampling_design_samples_n_lambda_over_k_plus_one", "test_lean_sample_laws" = "test_lean_sample_designs", "test_link_points_refuses_a_law_none_of_whose_samples_ends" = "test_link_points_refuses_a_sampling_design_none_of_whose_samples_ends", "test_no_claim_samples_by_these_laws_in_either_mode" = "test_no_claim_samples_by_these_sampling_designs_in_either_mode", "test_the_default_work_law_samples_a_calls_share_of_the_windows_budget" = "test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_budget", "test_work_law_samples_the_plan_sizes" = "test_work_sampling_design_samples_the_plan_sizes", "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_sampling_design" = "test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design", "test_the_default_work_sampling_design_draws_a_calls_share_of_the_windows_budget" = "test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_budget" }
+
+[[words_in]]
+files = [
+  "security/Proofs/Properties/Verity/SampledTwo/*.lean",
+]
+words = { "lawAt" = "distributionAt", "hLaw" = "hDistribution" }
+
+[[words_in]]
+files = [
+  "benchmarks/two_stage/*.lean",
+  "benchmarks/verifier_cost/*.lean",
+  "security/Definitions/*/ReadUnit.lean",
+  "security/Definitions/Accounting/Served.lean",
+  "security/Definitions/Assumptions/Flock.lean",
+  "security/Definitions/Core.lean",
+  "security/Definitions/Core/*.lean",
+  "security/Definitions/Flock.lean",
+  "security/Definitions/Flock/Accounting/*.lean",
+  "security/Definitions/Flock/Arith.lean",
+  "security/Definitions/Flock/Audit/*.lean",
+  "security/Definitions/Flock/Circuit.lean",
+  "security/Definitions/Flock/Compiled.lean",
+  "security/Definitions/Flock/Defs.lean",
+  "security/Definitions/Flock/Extract.lean",
+  "security/Definitions/Flock/Game.lean",
+  "security/Definitions/Flock/Game/*.lean",
+  "security/Definitions/Flock/Guarantees.lean",
+  "security/Definitions/Flock/Guarantees/Claims.lean",
+  "security/Definitions/Flock/Guarantees/RecursionClaims.lean",
+  "security/Definitions/Flock/Guarantees/SamplingClaims.lean",
+  "security/Definitions/Flock/Holo.lean",
+  "security/Definitions/Flock/HoloCompiled.lean",
+  "security/Definitions/Flock/Ligerito.lean",
+  "security/Definitions/Flock/LigeritoPad.lean",
+  "security/Definitions/Flock/Lowering.lean",
+  "security/Definitions/Flock/Merkle.lean",
+  "security/Definitions/Flock/Piop.lean",
+  "security/Definitions/Flock/Recursive/*.lean",
+  "security/Definitions/Flock/Rewinding.lean",
+  "security/Definitions/Flock/Session.lean",
+  "security/Definitions/Flock/Sparse.lean",
+  "security/Definitions/Flock/Statement.lean",
+  "security/Definitions/Flock/ZK/*.lean",
+  "security/Definitions/Hash.lean",
+  "security/Definitions/Hash/*.lean",
+  "security/Definitions/Spot.lean",
+  "security/Definitions/Spot/*.lean",
+  "security/Proofs/*/ReadUnit.lean",
+  "security/Proofs/*/ReadUnit/*.lean",
+  "security/Proofs/Accounting/Served.lean",
+  "security/Proofs/Core.lean",
+  "security/Proofs/Core/*.lean",
+  "security/Proofs/Flock.lean",
+  "security/Proofs/Flock/*.lean",
+  "security/Proofs/Hash.lean",
+  "security/Proofs/Hash/*.lean",
+  "security/Proofs/Properties/Accounting/Served.lean",
+  "security/Proofs/Properties/Challenger.lean",
+  "security/Proofs/Properties/Challenger/*.lean",
+  "security/Proofs/Properties/Composition.lean",
+  "security/Proofs/Properties/Core/Period.lean",
+  "security/Proofs/Properties/Core/Site.lean",
+  "security/Proofs/Properties/Flock/*.lean",
+  "security/Proofs/Properties/Hash/*.lean",
+  "security/Proofs/Properties/Spot*.lean",
+  "security/Proofs/Properties/Spot.lean",
+  "security/Proofs/Properties/Spot/*.lean",
+  "security/Proofs/Properties/Verity/Recursive.lean",
+  "security/Proofs/Properties/Verity/Recursive/*.lean",
+  "security/Proofs/Properties/Verity/Sampled.lean",
+  "security/Proofs/Properties/Verity/Sampled/*.lean",
+  "security/Proofs/Properties/Verity/SampledCoins.lean",
+  "security/Proofs/Properties/Verity/SampledDraw.lean",
+  "security/Proofs/Properties/Verity/SampledLog.lean",
+  "security/Proofs/Properties/Verity/SampledRead.lean",
+  "security/Proofs/Properties/Verity/SampledTwo/*.lean",
+  "security/Proofs/Spot.lean",
+  "security/Proofs/Spot/*.lean",
+  "security/Properties/Accounting/Served.lean",
+  "security/Properties/Annot.lean",
+  "security/Properties/Challenger.lean",
+  "security/Properties/Composition.lean",
+  "security/Properties/Core/Period.lean",
+  "security/Properties/Core/Site.lean",
+  "security/Properties/Flock/Circuit.lean",
+  "security/Properties/Flock/Circuit/*.lean",
+  "security/Properties/Flock/Nets.lean",
+  "security/Properties/Hash/*.lean",
+  "security/Properties/Spot*.lean",
+  "security/Properties/Spot.lean",
+  "security/Properties/Spot/*.lean",
+  "verity/commitments/lean/Commitments/Draw.lean",
+  "verity/protocols/proofs/*.lean",
+]
+words = { "AbortLaw" = "AbortSamplingDesign", "CoinMapLaw" = "CoinMapDistribution", "DrawLaw" = "SampleDesign", "DrawnLaw" = "SampledDesign", "Law" = "SamplingDesign", "LawA" = "DistributionA", "LawAt" = "SamplingDesignAt", "LawDraw" = "SamplingDesignSample", "LawHolds" = "DistributionHolds", "LawOf" = "SamplingDesignOf", "LawOn" = "SamplingDesignOn", "LawSized" = "SamplingDesignSized", "Laws" = "SamplingDesigns", "RecLaw" = "RecDistribution", "RecLawA" = "RecDistributionA", "SessionLaw" = "SessionSamplingDesign", "TABLES_LAW" = "TABLES_SAMPLING_DESIGN", "WindowLaw" = "WindowSamplingDesign", "_law" = "_samplingDesign", "_law_problem" = "_samplingDesign_problem", "accepted_law_run" = "accepted_samplingDesign_run", "accepted_secondLaw" = "accepted_secondSamplingDesign", "avg_memberLaw" = "avg_memberSamplingDesign", "deriveLaw" = "deriveSamplingDesign", "deriveLaw_cases" = "deriveSamplingDesign_cases", "deriveLaw_congr" = "deriveSamplingDesign_congr", "deriveLaw_none" = "deriveSamplingDesign_none", "deriveLaw_some" = "deriveSamplingDesign_some", "deriveLaw_subset" = "deriveSamplingDesign_subset", "drawFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign", "drawFileZK_printedDraw_law" = "sampleFileZK_printedSample_samplingDesign", "drawLaw" = "sampleDesign", "drawLaw_deployOf" = "sampleDesign_deployOf", "drawLaw_of_slots" = "sampleDesign_of_slots", "drawLaw_ok" = "sampleDesign_ok", "draw_law" = "sample_design", "drawnFrom_drawnLaw" = "sampledFrom_sampledDesign", "drawnLaw" = "sampledDesign", "drawnLaw_cases" = "sampledDesign_cases", "drawnLaw_ok" = "sampledDesign_ok", "exists_certifying_law" = "exists_certifying_samplingDesign", "firstLaw" = "firstSamplingDesign", "flockLaw" = "flockSamplingDesign", "flockLaw_bernoulli_text" = "flockSamplingDesign_bernoulli_text", "flockLaw_cases" = "flockSamplingDesign_cases", "flockLaw_keys" = "flockSamplingDesign_keys", "flockLaw_second" = "flockSamplingDesign_second", "flockLaw_subset" = "flockSamplingDesign_subset", "flockLaw_subset_text" = "flockSamplingDesign_subset_text", "getD_law_of_kindOf" = "getD_samplingDesign_of_kindOf", "getD_secondLaw_k" = "getD_secondSamplingDesign_k", "getD_secondLaw_law" = "getD_secondSamplingDesign_samplingDesign", "getD_secondLaw_strata" = "getD_secondSamplingDesign_strata", "hLaw" = "hSamplingDesign", "joinedCouplingOfLaw" = "joinedCouplingOfDistribution", "joinedCouplingOfLaw_decoded" = "joinedCouplingOfDistribution_decoded", "joinedOfLaw" = "joinedOfDistribution", "law" = "samplingDesign", "lawAt" = "samplingDesignAt", "lawAt_of_lawOf" = "samplingDesignAt_of_samplingDesignOf", "lawAt_ok" = "samplingDesignAt_ok", "lawJ" = "samplingDesignJ", "lawK" = "samplingDesignK", "lawKeys" = "samplingDesignKeys", "lawObj" = "samplingDesignObj", "lawOf" = "samplingDesignOf", "lawOf_unique" = "samplingDesignOf_unique", "lawOk" = "samplingDesignOk", "lawOn_all" = "samplingDesignOn_all", "lawOn_designAt" = "samplingDesignOn_designAt", "lawOn_drawnLaw" = "samplingDesignOn_sampledDesign", "lawOn_drawsUnder" = "samplingDesignOn_samplesUnder", "lawOn_size" = "samplingDesignOn_size", "lawOver" = "samplingDesignOver", "lawSized_drawnLaw" = "samplingDesignSized_sampledDesign", "lawSized_drawsUnder" = "samplingDesignSized_samplesUnder", "lawSized_of_lawOn" = "samplingDesignSized_of_samplingDesignOn", "lawSized_size" = "samplingDesignSized_size", "lawStages" = "samplingDesignStages", "lawText" = "samplingDesignText", "lawWhy" = "samplingDesignWhy", "lawWhy_zk" = "samplingDesignWhy_zk", "law_along" = "distribution_along", "law_alongA" = "distribution_alongA", "law_bound" = "samplingDesign_bound", "law_congr" = "distribution_congr", "law_congrA" = "distribution_congrA", "law_fresh" = "distribution_fresh", "law_freshA" = "distribution_freshA", "law_hello" = "distribution_hello", "law_helloA" = "distribution_helloA", "law_id" = "distribution_id", "law_idA" = "distribution_idA", "law_ite" = "distribution_ite", "law_iteA" = "distribution_iteA", "law_keep" = "distribution_keep", "law_keepA" = "distribution_keepA", "law_leafA" = "distribution_leafA", "law_mono" = "distribution_mono", "law_monoA" = "distribution_monoA", "law_of" = "samplingDesign_of", "law_of_lawWhy" = "samplingDesign_of_samplingDesignWhy", "law_of_setsUp" = "samplingDesign_of_setsUp", "law_open" = "distribution_open", "law_openA" = "distribution_openA", "law_opt" = "distribution_opt", "law_optA" = "distribution_optA", "law_place" = "distribution_place", "law_placeA" = "distribution_placeA", "law_placeK" = "distribution_placeK", "law_placeKA" = "distribution_placeKA", "law_round" = "distribution_round", "law_roundA" = "distribution_roundA", "law_send" = "distribution_send", "law_sendA" = "distribution_sendA", "law_set" = "distribution_set", "law_setA" = "distribution_setA", "law_write" = "distribution_write", "law_writeA" = "distribution_writeA", "laws" = "samplingDesigns", "laws_contPlay" = "samplingDesigns_contPlay", "laws_goPlay" = "samplingDesigns_goPlay", "laws_lifePlay" = "samplingDesigns_lifePlay", "laws_ofBindPlay" = "samplingDesigns_ofBindPlay", "laws_roundPlay" = "samplingDesigns_roundPlay", "laws_stagePlay" = "samplingDesigns_stagePlay", "law₁" = "samplingDesign₁", "law₂" = "samplingDesign₂", "liveLaw" = "liveSamplingDesign", "memberLaw" = "memberSamplingDesign", "memberLaw_escape" = "memberSamplingDesign_escape", "oneClass_memberLaw" = "oneClass_memberSamplingDesign", "oneShot_laws" = "oneShot_samplingDesigns", "oneStageOk_lawOk" = "oneStageOk_samplingDesignOk", "ownLaw" = "ownSamplingDesign", "pa_empty_of_lawOn" = "pa_empty_of_samplingDesignOn", "piLaw" = "piDistribution", "piLaw_apply" = "piDistribution_apply", "piLaw_toReal" = "piDistribution_toReal", "prCoin_law" = "prCoin_distribution", "prCoin_memberLaw" = "prCoin_memberDistribution", "prodLaw" = "prodDistribution", "prodLaw_toReal" = "prodDistribution_toReal", "proved_of_drawLaw" = "proved_of_sampleDesign", "readShare_memberLaw" = "readShare_memberSamplingDesign", "registeredLaw" = "registeredSamplingDesign", "registered_law" = "registered_samplingDesign", "replayLaw" = "replaySamplingDesign", "root_law_le" = "root_samplingDesign_le", "sameLaw" = "sameSamplingDesign", "secondLaw" = "secondSamplingDesign", "secondLawOf_ok" = "secondSamplingDesignOf_ok", "second_law" = "second_samplingDesign", "selectSecond_law" = "selectSecond_samplingDesign", "selection_law" = "selection_samplingDesign", "setupAt_drawLaw" = "setupAt_sampleDesign", "setup_drawLaw" = "setup_sampleDesign", "slotDesign_law" = "slotDesign_samplingDesign", "slotDesign_lawText" = "slotDesign_samplingDesignText", "slotDesign_of_firstLaw" = "slotDesign_of_firstSamplingDesign", "sort_law_k" = "sort_samplingDesign_k", "stratifiedLaw" = "stratifiedSamplingDesign", "stratifiedLawWith" = "stratifiedSamplingDesignWith", "stratifiedLawWith_sim" = "stratifiedSamplingDesignWith_sim", "stratifiedLawWith_std" = "stratifiedSamplingDesignWith_std", "stratifiedLaw_cost" = "stratifiedSamplingDesign_cost", "sub_law" = "sub_samplingDesign", "wellFormed_of_lawOn" = "wellFormed_of_samplingDesignOn", "workLaw" = "workSamplingDesign", "workLawWith" = "workSamplingDesignWith", "workLawWith_sim" = "workSamplingDesignWith_sim", "workLawWith_std" = "workSamplingDesignWith_std", "workLaw_cost" = "workSamplingDesign_cost", "work_law" = "work_samplingDesign", "designOfLaw" = "designOfSamplingDesign", "LawSample" = "SamplingDesignSample", "SampleLaw" = "SampleDesign", "SampledLaw" = "SampledDesign", "lawOn_sampledLaw" = "samplingDesignOn_sampledDesign", "lawOn_samplesUnder" = "samplingDesignOn_samplesUnder", "lawSized_sampledLaw" = "samplingDesignSized_sampledDesign", "lawSized_samplesUnder" = "samplingDesignSized_samplesUnder", "proved_of_sampleLaw" = "proved_of_sampleDesign", "sampleFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign", "sampleFileZK_printedSample_law" = "sampleFileZK_printedSample_samplingDesign", "sampleLaw" = "sampleDesign", "sampleLaw_deployOf" = "sampleDesign_deployOf", "sampleLaw_of_slots" = "sampleDesign_of_slots", "sampleLaw_ok" = "sampleDesign_ok", "sampledFrom_sampledLaw" = "sampledFrom_sampledDesign", "sampledLaw" = "sampledDesign", "sampledLaw_cases" = "sampledDesign_cases", "sampledLaw_ok" = "sampledDesign_ok", "setupAt_sampleLaw" = "setupAt_sampleDesign", "setup_sampleLaw" = "setup_sampleDesign", "VLaw" = "VSamplingDesign" }
+
+[[words_in]]
+files = [
+  "*.lean",
+  "*lakefile.toml",
+]
+words = { "Law" = "SamplingDesign", "law" = "samplingDesign", "laws" = "samplingDesigns", "Laws" = "SamplingDesigns", "LawDraw" = "SamplingDesignSample", "DrawnLaw" = "SampledDesign", "DrawLaw" = "SampleDesign", "CoinMapLaw" = "CoinMapDistribution", "LawA" = "DistributionA", "LawAt" = "SamplingDesignAt", "LawHolds" = "DistributionHolds", "LawOf" = "SamplingDesignOf", "LawOn" = "SamplingDesignOn", "LawSized" = "SamplingDesignSized", "RecLaw" = "RecDistribution", "RecLawA" = "RecDistributionA", "SessionLaw" = "SessionSamplingDesign", "TABLES_LAW" = "TABLES_SAMPLING_DESIGN", "WindowLaw" = "WindowSamplingDesign", "accepted_law_run" = "accepted_samplingDesign_run", "accepted_secondLaw" = "accepted_secondSamplingDesign", "avg_memberLaw" = "avg_memberSamplingDesign", "deriveLaw" = "deriveSamplingDesign", "deriveLaw_cases" = "deriveSamplingDesign_cases", "deriveLaw_congr" = "deriveSamplingDesign_congr", "deriveLaw_none" = "deriveSamplingDesign_none", "deriveLaw_some" = "deriveSamplingDesign_some", "deriveLaw_subset" = "deriveSamplingDesign_subset", "drawFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign", "drawFileZK_printedDraw_law" = "sampleFileZK_printedSample_samplingDesign", "drawLaw" = "sampleDesign", "drawLaw_deployOf" = "sampleDesign_deployOf", "drawLaw_of_slots" = "sampleDesign_of_slots", "drawLaw_ok" = "sampleDesign_ok", "draw_law" = "sample_design", "drawnFrom_drawnLaw" = "sampledFrom_sampledDesign", "drawnLaw" = "sampledDesign", "drawnLaw_cases" = "sampledDesign_cases", "drawnLaw_ok" = "sampledDesign_ok", "exists_certifying_law" = "exists_certifying_samplingDesign", "firstLaw" = "firstSamplingDesign", "flockLaw" = "flockSamplingDesign", "flockLaw_bernoulli_text" = "flockSamplingDesign_bernoulli_text", "flockLaw_cases" = "flockSamplingDesign_cases", "flockLaw_keys" = "flockSamplingDesign_keys", "flockLaw_second" = "flockSamplingDesign_second", "flockLaw_subset" = "flockSamplingDesign_subset", "flockLaw_subset_text" = "flockSamplingDesign_subset_text", "getD_law_of_kindOf" = "getD_samplingDesign_of_kindOf", "getD_secondLaw_k" = "getD_secondSamplingDesign_k", "getD_secondLaw_law" = "getD_secondSamplingDesign_samplingDesign", "getD_secondLaw_strata" = "getD_secondSamplingDesign_strata", "joinedCouplingOfLaw" = "joinedCouplingOfDistribution", "joinedCouplingOfLaw_decoded" = "joinedCouplingOfDistribution_decoded", "joinedOfLaw" = "joinedOfDistribution", "lawAt" = "samplingDesignAt", "lawAt_of_lawOf" = "samplingDesignAt_of_samplingDesignOf", "lawAt_ok" = "samplingDesignAt_ok", "lawK" = "samplingDesignK", "lawKeys" = "samplingDesignKeys", "lawObj" = "samplingDesignObj", "lawOf" = "samplingDesignOf", "lawOf_unique" = "samplingDesignOf_unique", "lawOk" = "samplingDesignOk", "lawOn_all" = "samplingDesignOn_all", "lawOn_designAt" = "samplingDesignOn_designAt", "lawOn_drawnLaw" = "samplingDesignOn_sampledDesign", "lawOn_drawsUnder" = "samplingDesignOn_samplesUnder", "lawOn_size" = "samplingDesignOn_size", "lawOver" = "samplingDesignOver", "lawSized_drawnLaw" = "samplingDesignSized_sampledDesign", "lawSized_drawsUnder" = "samplingDesignSized_samplesUnder", "lawSized_of_lawOn" = "samplingDesignSized_of_samplingDesignOn", "lawSized_size" = "samplingDesignSized_size", "lawStages" = "samplingDesignStages", "lawText" = "samplingDesignText", "lawWhy" = "samplingDesignWhy", "lawWhy_zk" = "samplingDesignWhy_zk", "law_along" = "distribution_along", "law_alongA" = "distribution_alongA", "law_bound" = "samplingDesign_bound", "law_congr" = "distribution_congr", "law_congrA" = "distribution_congrA", "law_fresh" = "distribution_fresh", "law_freshA" = "distribution_freshA", "law_hello" = "distribution_hello", "law_helloA" = "distribution_helloA", "law_id" = "distribution_id", "law_idA" = "distribution_idA", "law_ite" = "distribution_ite", "law_iteA" = "distribution_iteA", "law_keep" = "distribution_keep", "law_keepA" = "distribution_keepA", "law_leafA" = "distribution_leafA", "law_mono" = "distribution_mono", "law_monoA" = "distribution_monoA", "law_of_lawWhy" = "samplingDesign_of_samplingDesignWhy", "law_of_setsUp" = "samplingDesign_of_setsUp", "law_open" = "distribution_open", "law_openA" = "distribution_openA", "law_opt" = "distribution_opt", "law_optA" = "distribution_optA", "law_place" = "distribution_place", "law_placeA" = "distribution_placeA", "law_placeK" = "distribution_placeK", "law_placeKA" = "distribution_placeKA", "law_round" = "distribution_round", "law_roundA" = "distribution_roundA", "law_send" = "distribution_send", "law_sendA" = "distribution_sendA", "law_set" = "distribution_set", "law_setA" = "distribution_setA", "law_write" = "distribution_write", "law_writeA" = "distribution_writeA", "laws_contPlay" = "samplingDesigns_contPlay", "laws_goPlay" = "samplingDesigns_goPlay", "laws_lifePlay" = "samplingDesigns_lifePlay", "laws_ofBindPlay" = "samplingDesigns_ofBindPlay", "laws_roundPlay" = "samplingDesigns_roundPlay", "laws_stagePlay" = "samplingDesigns_stagePlay", "liveLaw" = "liveSamplingDesign", "memberLaw" = "memberSamplingDesign", "memberLaw_escape" = "memberSamplingDesign_escape", "oneClass_memberLaw" = "oneClass_memberSamplingDesign", "oneShot_laws" = "oneShot_samplingDesigns", "oneStageOk_lawOk" = "oneStageOk_samplingDesignOk", "ownLaw" = "ownSamplingDesign", "pa_empty_of_lawOn" = "pa_empty_of_samplingDesignOn", "piLaw" = "piDistribution", "piLaw_apply" = "piDistribution_apply", "piLaw_toReal" = "piDistribution_toReal", "prCoin_law" = "prCoin_distribution", "prCoin_memberLaw" = "prCoin_memberDistribution", "prodLaw" = "prodDistribution", "prodLaw_toReal" = "prodDistribution_toReal", "proved_of_drawLaw" = "proved_of_sampleDesign", "readShare_memberLaw" = "readShare_memberSamplingDesign", "registeredLaw" = "registeredSamplingDesign", "registered_law" = "registered_samplingDesign", "replayLaw" = "replaySamplingDesign", "root_law_le" = "root_samplingDesign_le", "sameLaw" = "sameSamplingDesign", "secondLaw" = "secondSamplingDesign", "secondLawOf_ok" = "secondSamplingDesignOf_ok", "selectSecond_law" = "selectSecond_samplingDesign", "setupAt_drawLaw" = "setupAt_sampleDesign", "setup_drawLaw" = "setup_sampleDesign", "slotDesign_law" = "slotDesign_samplingDesign", "slotDesign_lawText" = "slotDesign_samplingDesignText", "slotDesign_of_firstLaw" = "slotDesign_of_firstSamplingDesign", "sort_law_k" = "sort_samplingDesign_k", "stratifiedLaw" = "stratifiedSamplingDesign", "stratifiedLawWith" = "stratifiedSamplingDesignWith", "stratifiedLawWith_sim" = "stratifiedSamplingDesignWith_sim", "stratifiedLawWith_std" = "stratifiedSamplingDesignWith_std", "stratifiedLaw_cost" = "stratifiedSamplingDesign_cost", "sub_law" = "sub_samplingDesign", "wellFormed_of_lawOn" = "wellFormed_of_samplingDesignOn", "workLaw" = "workSamplingDesign", "workLawWith" = "workSamplingDesignWith", "workLawWith_sim" = "workSamplingDesignWith_sim", "workLawWith_std" = "workSamplingDesignWith_std", "workLaw_cost" = "workSamplingDesign_cost", "workLaw_cost'" = "workSamplingDesign_cost'", "work_law" = "work_samplingDesign", "designOfLaw" = "designOfSamplingDesign", "SampledLaw" = "SampledDesign", "SampleLaw" = "SampleDesign", "LawSample" = "SamplingDesignSample", "lawOn_sampledLaw" = "samplingDesignOn_sampledDesign", "lawOn_samplesUnder" = "samplingDesignOn_samplesUnder", "lawSized_sampledLaw" = "samplingDesignSized_sampledDesign", "lawSized_samplesUnder" = "samplingDesignSized_samplesUnder", "proved_of_sampleLaw" = "proved_of_sampleDesign", "sampleFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign", "sampleFileZK_printedSample_law" = "sampleFileZK_printedSample_samplingDesign", "sampleLaw" = "sampleDesign", "sampleLaw_deployOf" = "sampleDesign_deployOf", "sampleLaw_of_slots" = "sampleDesign_of_slots", "sampleLaw_ok" = "sampleDesign_ok", "sampledFrom_sampledLaw" = "sampledFrom_sampledDesign", "sampledLaw" = "sampledDesign", "sampledLaw_cases" = "sampledDesign_cases", "sampledLaw_ok" = "sampledDesign_ok", "setupAt_sampleLaw" = "setupAt_sampleDesign", "setup_sampleLaw" = "setup_sampleDesign" }
+
+[[words_in]]
+files = [
+  "verity/protocols/proofs/spot/verifier/pyproject.toml",
+  "verity/protocols/proofs/spot/verifier/tests/lean/generate.sh",
+  "verity/protocols/proofs/spot/verifier/tests/test_consumers.py",
+  "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
+  "security/Proofs/Flock/Soundness/Audit/README.md",
+]
+words = { "Audit/Law.lean" = "Audit/SamplingDesign.lean", "\"Law.lean\"" = "\"SamplingDesign.lean\"" }
+
+[[words_in]]
+files = ["*.lean", "*lakefile.toml"]
+words = { "sampledLaw_subset" = "sampledDesign_subset", "flockLaw_second_strata" = "flockSamplingDesign_second_strata", "flockLaw_cells" = "flockSamplingDesign_cells", "flockLaw_second_ok" = "flockSamplingDesign_second_ok", "lawOn_second" = "samplingDesignOn_second", "getD_secondLaw_cells" = "getD_secondSamplingDesign_cells", "keys_secondLaw" = "keys_secondSamplingDesign", "getD_obj_law" = "getD_obj_samplingDesign", "lawOf_secondObj" = "samplingDesignOf_secondObj", "good_secondLaw" = "good_secondSamplingDesign", "canon_secondLaw" = "canon_secondSamplingDesign", "lawAt_designAt" = "samplingDesignAt_designAt", "SecondLaw" = "SecondSamplingDesign" }
+
+[[words_in]]
+files = ["benchmarks/one_stage/served_verdicts.sh"]
+words = { "step 3's law" = "step 3's sampling design" }
+
+[[words_in]]
+files = ["adapters/vllm/tests/program/predict/test_weights_tie.py"]
+words = { "params_law" = "params_sampling_design" }
+
+[[words_in]]
+files = ["adapters/vllm/verity_vllm/pipeline/serving_rows.py"]
+words = { "params_law" = "params_sampling_design", "law_of" = "sampling_design_of" }
+
+[[words_in]]
+files = ["adapters/vllm/verity_vllm/pipeline/boundary_rows.py"]
+words = { "selection_law" = "selection_sampling_design" }
+
+[[words_in]]
+files = ["adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"]
+words = { "params_law" = "params_sampling_design", "law_of" = "sampling_design_of" }
+
+[[words_in]]
+files = ["verity/protocols/tests/tests/test_profile.py"]
+words = { "_law" = "_design", "_sampling_design" = "_design" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/*/scan_zk.py"]
+words = { "Law" = "SamplingDesign", "selection_law" = "selection_sampling_design", "params_law" = "params_sampling_design" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/*/test_scan_zk.py"]
+words = { "params_law" = "params_sampling_design" }
+
+[[words_in]]
+files = ["tools/verity/cli/tests/test_onsite_served.py"]
+words = { "Law" = "SamplingDesign" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/verifier/service.py"]
+words = { "Law" = "SamplingDesign", "selection_law" = "selection_sampling_design", "core_law" = "core_sampling_design" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py"]
+words = { "selection_law" = "selection_sampling_design" }
+
+[[words_in]]
+files = ["tests/test_lean_vocabulary.py"]
+words = { "Law" = "SamplingDesign" }
+
+[[words_in]]
+files = ["adapters/vllm/tests/pipeline/test_edge_history.py"]
+words = { "\"law\"" = "\"sampling_design\"" }
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/pyproject.toml"]
+words = { "test_lean_draw_laws" = "test_lean_sample_designs" }
+
+[[words_in]]
+files = [
+  "benchmarks/commitments/*.py",
+  "benchmarks/dsa_topk/*.py",
+  "benchmarks/dsa_topk/*.sh",
+  "benchmarks/flock_s8_block/*.py",
+  "benchmarks/flock_s8_block/*.sh",
+  "benchmarks/multi_unit/*.py",
+  "benchmarks/multi_unit/*.sh",
+  "benchmarks/one_stage/*.py",
+  "benchmarks/one_stage/*.sh",
+  "benchmarks/private_circuit/*.py",
+  "benchmarks/private_circuit/*.sh",
+  "benchmarks/proof_throughput/*.py",
+  "benchmarks/proof_throughput/*.sh",
+  "benchmarks/remote_session/*.py",
+  "benchmarks/remote_session/*.sh",
+  "benchmarks/replay_ladder/*.py",
+  "benchmarks/replay_ladder/*.sh",
+  "benchmarks/route_capture/*.py",
+  "benchmarks/route_capture/*.sh",
+  "benchmarks/sampling_plan/*.py",
+  "benchmarks/serve_tax/*.py",
+  "benchmarks/serve_tax/*.sh",
+  "benchmarks/spot_figures/*.py",
+  "benchmarks/spot_proved/*.py",
+  "benchmarks/spot_proved/*.sh",
+  "benchmarks/two_stage/*.py",
+  "benchmarks/two_stage/*.sh",
+  "benchmarks/unit_walk/*.sh",
+  "benchmarks/verifier_cost/*.py",
+  "benchmarks/verifier_cost/*.sh",
+  "verity/protocols/proofs/*.py",
+  "verity/protocols/proofs/*.rs",
+  "verity/protocols/proofs/*.sh",
+]
+words = { "FLOCK_DRAW_LAW" = "FLOCK_SAMPLE_DESIGN", "LAW" = "SAMPLING_DESIGN", "LAWS" = "SAMPLING_DESIGNS", "LAW_CHANGES" = "SAMPLING_DESIGN_CHANGES", "LAW_TEXTS" = "SAMPLING_DESIGN_TEXTS", "Law" = "SamplingDesign", "ODD_LAW_TEXTS" = "ODD_SAMPLING_DESIGN_TEXTS", "SERVED_ZK_V0_LAW" = "SERVED_ZK_V0_SAMPLING_DESIGN", "SIMPLE_LAWS" = "SIMPLE_SAMPLING_DESIGNS", "TABLES_LAW" = "TABLES_SAMPLING_DESIGN", "TIED_LAW" = "TIED_SAMPLING_DESIGN", "_LAW_KEYS" = "_SAMPLING_DESIGN_KEYS", "_changed_law" = "_changed_sampling_design", "_law" = "_design", "_law_text" = "_sampling_design_text", "_replay_law" = "_replay_sampling_design", "a4_law" = "a4_sampling_design", "agreed_laws" = "agreed_sampling_designs", "core_law" = "core_sampling_design", "draw_law" = "sample_design", "first_law" = "first_sampling_design", "law" = "sampling_design", "law_at" = "sampling_design_at", "law_file" = "sampling_design_file", "law_of" = "sampling_design_of", "law_problem" = "sampling_design_problem", "law_text" = "sampling_design_text", "laws" = "sampling_designs", "params_law" = "params_sampling_design", "sampled_law" = "sampled_design", "second_law" = "second_sampling_design", "selection_law" = "selection_sampling_design", "session_law" = "session_sampling_design", "test_a5_records_a_law_none_of_whose_samples_ends" = "test_a5_records_a_sampling_design_none_of_whose_samples_ends", "test_a_bernoulli_law_is_refused_at_register" = "test_a_bernoulli_sampling_design_is_refused_at_register", "test_a_changed_proof_or_an_uncovered_law_is_refused" = "test_a_changed_proof_or_an_uncovered_sampling_design_is_refused", "test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n" = "test_a_rate_sampling_design_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n", "test_a_sample_is_held_to_its_registered_law" = "test_a_sample_is_held_to_its_registered_sampling_design", "test_a_sample_law_input_it_cannot_read" = "test_a_sample_design_input_it_cannot_read", "test_a_sampler_samples_instead_and_is_held_to_the_law" = "test_a_sampler_samples_instead_and_is_held_to_the_sampling_design", "test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need" = "test_a_stratified_rate_is_the_stratified_sampling_design_at_the_least_k_its_strata_need", "test_a_subset_sample_at_hidden_outputs_passes_the_law_in_either_mode" = "test_a_subset_sample_at_hidden_outputs_passes_the_sampling_design_in_either_mode", "test_a_work_laws_need_is_its_sample_under_the_work_table_the_rank_registers_with" = "test_a_work_sampling_designs_need_is_its_sample_under_the_work_table_the_rank_registers_with", "test_audit_record_under_the_stratified_law" = "test_audit_record_under_the_stratified_sampling_design", "test_audit_record_under_the_work_law" = "test_audit_record_under_the_work_sampling_design", "test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location" = "test_certificate_of_a_full_sampling_design_is_zero_and_the_leak_adds_location", "test_handoff_work_law_draws_the_plans_k_and_its_windows_are_integrity_period_logs" = "test_handoff_work_sampling_design_samples_the_plans_k_and_its_windows_are_integrity_period_logs", "test_leak_count_is_certified_and_the_leak_law_samples_n_lambda_over_k_plus_one" = "test_leak_count_is_certified_and_the_leak_sampling_design_samples_n_lambda_over_k_plus_one", "test_link_points_refuses_a_law_none_of_whose_samples_ends" = "test_link_points_refuses_a_sampling_design_none_of_whose_samples_ends", "test_no_claim_samples_by_these_laws_in_either_mode" = "test_no_claim_samples_by_these_sampling_designs_in_either_mode", "test_r1_holds_a_work_law_to_the_verifiers_own_table" = "test_r1_holds_a_work_sampling_design_to_the_verifiers_own_table", "test_the_law_is_one_stratum_of_every_unit" = "test_the_sampling_design_is_one_stratum_of_every_unit", "test_the_population_command_writes_the_law_and_names_the_class_sweeps_program" = "test_the_population_command_writes_the_sampling_design_and_names_the_class_sweeps_program", "test_the_rate_law_is_its_rate_rounded_up_to_its_tables" = "test_the_rate_sampling_design_is_its_rate_rounded_up_to_its_tables", "test_the_run_refuses_a_bernoulli_law" = "test_the_run_refuses_a_bernoulli_sampling_design", "test_work_law_samples_the_plan_sizes" = "test_work_sampling_design_samples_the_plan_sizes", "work_law" = "work_sampling_design", "--law" = "--sampling-design", "--draw-law" = "--sample-design", "sampleLaw" = "sampleDesign", "test_lean_draw_laws" = "test_lean_sample_designs", "\"law\"" = "\"sampling_design\"", "secondLaw" = "secondSamplingDesign", "stratifiedLaw" = "stratifiedSamplingDesign", "flockLaw" = "flockSamplingDesign", "designOfLaw" = "designOfSamplingDesign", "replayLaw" = "replaySamplingDesign", "lawOver" = "samplingDesignOver", "_sampling_design" = "_design", ".law" = ".sampling_design", "a.law" = "a.sampling_design", "I.law" = "I.sampling_design", "T.law" = "T.sampling_design" }

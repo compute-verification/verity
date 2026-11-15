@@ -44,13 +44,13 @@ slots, and the Lean verifier accepts a session whose last message alone was chan
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import XINV, inv, kmul, mul, phi8
 
-__all__ = ["ACC_NAMES", "Claim", "CoinSource", "claim_names", "H_ROUND", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fold_points", "GfPorts",
+__all__ = ["ACC_NAMES", "Claim", "RoundCoins", "claim_names", "H_ROUND", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fast100_wide", "fold_points", "GfPorts",
            "free_names", "h_round", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",
            "verifier_rows", "witness"]
 
@@ -103,6 +103,18 @@ def fast100(m: int) -> Schedule:
         ls.append(Level(rate, q, cols, d, st, st[0], k0 if l == 0 else 4))
         cols -= 3
     return Schedule(m, n, k0, tuple(ls), ls[-1].cols)
+
+
+def fast100_wide(m: int) -> Schedule:
+    """The wide-leaf schedule (`Flock.fast100Wide`), a statement version of its own beside `fast100`'s: a table of 2^32 to
+    2^35 bits folds ``m - 25`` lanes at level 0, so its codeword stays at 2^19 symbols, and its levels are m = 31's; up to
+    m = 31 it is `fast100`. No session here selects it: a recursion's inner sessions are `fast100`'s."""
+    if m <= 31:
+        return fast100(m)
+    if m > 35:
+        raise ValueError(f"m = {m}: no fast100 schedule")
+    s = fast100(31)
+    return replace(s, m=m, n=m - 7, k0=m - 25, levels=(replace(s.levels[0], lanes=m - 25),) + s.levels[1:])
 
 
 @dataclass(frozen=True)
@@ -260,7 +272,7 @@ def rep_rounds(record: dict, stream: str) -> list[list[int]]:
     return [[G.of_hex(c) for c in rd["coins"]] for rd in st["rounds"]]
 
 
-class CoinSource:
+class RoundCoins:
     """The rep's coins in the order the verifier samples them (`Flock.Transcript`: a sample of n coins is one round of n; none is no round, so
     a recorded round of no coins, z_partial's in a holo session's `verity_flock.rec_live.holo_rounds`, is skipped)."""
 
@@ -634,7 +646,7 @@ def _registered(sh: Shape, M: Messages, extras: Sequence) -> list[Claim]:
     return [Claim(M.claims[k], tuple(e.skip), tuple(e.x)) for k, e in enumerate(extras)]
 
 
-def run(sh: Shape, coins: CoinSource, M: Messages, extras: Sequence[Claim], fold_only: bool = False) -> tuple[list, dict]:
+def run(sh: Shape, coins: RoundCoins, M: Messages, extras: Sequence[Claim], fold_only: bool = False) -> tuple[list, dict]:
     """The rep's residuals (zerocheck, lincheck, one per claim, Ligerito's c0 and c1, the absorbed T minus the batched sum)
     and the coin-derived points beside them; ``fold_only``: the zerocheck's and lincheck's alone (``extras`` unread). An
     opening-only shape's are the claims', Ligerito's and T's, its claims at ``extras``' points (`_registered`)."""
@@ -696,7 +708,7 @@ def run(sh: Shape, coins: CoinSource, M: Messages, extras: Sequence[Claim], fold
     return _opening(sh, coins, M, claims, out, info)
 
 
-def _opening(sh: Shape, coins: CoinSource, M: Messages, claims: list[Claim], out: list, info: dict) -> tuple[list, dict]:
+def _opening(sh: Shape, coins: RoundCoins, M: Messages, claims: list[Claim], out: list, info: dict) -> tuple[list, dict]:
     """`run` from the claims on: their ring switches, then Ligerito."""
     sch = sh.sched
     betas, sws = [], []
@@ -924,7 +936,7 @@ def _order(sh: Shape) -> dict:
     return out
 
 
-def _residual_lins(sh: Shape, coins: CoinSource, extras: Sequence[Claim]) -> tuple[list[Lin], dict]:
+def _residual_lins(sh: Shape, coins: RoundCoins, extras: Sequence[Claim]) -> tuple[list[Lin], dict]:
     out, info = run(sh, coins, symbolic(sh), extras)
     return [x if isinstance(x, Lin) else Lin() for x in out], info
 
@@ -991,14 +1003,14 @@ def _build(sh: Shape, lins: list[Lin]) -> tuple[dict, GfPorts, list[int], list]:
     return S, GfPorts(names, v_names, wi), v_vals, kappa
 
 
-def _dummy_coins(sh: Shape) -> CoinSource:
+def _dummy_coins(sh: Shape) -> RoundCoins:
     """Coins in the rounds a rep samples, all equal to one value: the structure depends on the rounds, not on the coins."""
     import random
 
     g = random.Random(0)
     rounds = []
 
-    class _Rec(CoinSource):
+    class _Rec(RoundCoins):
         def vec(self, n):
             if n == 0:
                 return []
@@ -1038,7 +1050,7 @@ def fold_points(sh: Shape, rounds: Sequence[Sequence[int]]) -> dict:
     """The lincheck's fold points at the rep's coins (`run`'s info ``fold``): the coins decide them before any message or
     extra claim is read (``sh.claims`` unread), so the verifier computes the comb from them and the inner statement
     (`verity_flock.rec_vstage`) before it knows the extra claims."""
-    return run(sh, CoinSource(rounds), symbolic(sh), [], fold_only=True)[1]["fold"]
+    return run(sh, RoundCoins(rounds), symbolic(sh), [], fold_only=True)[1]["fold"]
 
 
 def verifier_rows(sh: Shape, rounds: Sequence[Sequence[int]], extras: Sequence[Claim], comb: Sequence[int]) -> tuple[list[int], dict]:
@@ -1048,7 +1060,7 @@ def verifier_rows(sh: Shape, rounds: Sequence[Sequence[int]], extras: Sequence[C
     has no comb (``comb`` empty)."""
     if sh.opening_only and len(comb):
         raise ValueError("an opening-only shape has no lincheck, so no comb")
-    lins, info = _residual_lins(sh, CoinSource(rounds), extras)
+    lins, info = _residual_lins(sh, RoundCoins(rounds), extras)
     S, lay, vals, kappa = _build(sh, lins)
     if S != structure(sh)[0]:
         raise AssertionError("the structure moved with the coins")
@@ -1102,7 +1114,7 @@ def witness(sh: Shape, p: Proof, rounds: Sequence[Sequence[int]], extras: Sequen
     if info is None:
         _, info = verifier_rows(sh, rounds, extras, comb)
     M = messages(sh, p, comb, h=[0] * 64 if sh.holo else None, claims=claims, cons=cons)
-    val[T_NAME] = run(sh, CoinSource(rounds), M, extras)[1]["T"] if t is None else t
+    val[T_NAME] = run(sh, RoundCoins(rounds), M, extras)[1]["T"] if t is None else t
     cs = consistency(sh, p, info, cons)
     val.update({("acc0", r): acc0[r] for r in range(2)})
     val.update({("acc1", r): acc0[r] ^ cs[r] for r in range(2)})
@@ -1117,4 +1129,4 @@ def residuals(sh: Shape, p: Proof, rounds: Sequence[Sequence[int]], comb: Sequen
     """The reference: the rep's residuals on its proof at its coins (all zero iff the inner verifier's algebra accepts), with
     ``t`` the absorbed T (None: the verifier's own, so the last residual is zero); an opening-only shape's with its
     registered claims' values ``claims``."""
-    return run(sh, CoinSource(rounds), messages(sh, p, comb, t, h, claims, cons), extras)
+    return run(sh, RoundCoins(rounds), messages(sh, p, comb, t, h, claims, cons), extras)

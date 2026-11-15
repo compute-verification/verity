@@ -50,7 +50,7 @@ is the transport of the run's coins to the live session's:
 * `cols_plain`: an accepted plain run's reader looks up table 0's columns at the shape and level 0 `TxNoOff` reads, in
   its live session's rep streams and its proof files.
 * `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and on a statement of sample `d` (which the
-  record's sample then is, as a value: `recordDraw_of_decide`), a run whose reader looks up no column off `C` has
+  record's sample then is, as a value: `recordSample_of_decide`), a run whose reader looks up no column off `C` has
   `plainVerdict` at its live outcome and its link's root.
 -/
 
@@ -108,7 +108,7 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
 /-- **The deployed event gives `wrP`'s verdict**: an accepting run of `V false` at SHA-512 decides on its messages and
 coins, and on a statement of sample `d`, if the run's reader looks up no column off `C` at table 0, `plainVerdict` holds
 at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse `--public-inputs`
-(`publicInputs_none_of_checks`), flock-verify accepts what `wrP` writes for the run (`accepts_wrP`), and that
+(`publicInputs_none_of_checks`), verity-verify-proof accepts what `wrP` writes for the run (`accepts_wrP`), and that
 transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
 (`cols_plain`). -/
 theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
@@ -128,7 +128,7 @@ theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x :
   replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
         (Claims.coinSeq r))).eval sha512).1 = .acc := hacc
-  have hdraw := recordDraw_of_decide hact hacc
+  have hdraw := recordSample_of_decide hact hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 hact).1 hacc
   have hpi := publicInputs_none_of_checks hc
   simp only [Bool.false_eq_true, ite_false] at hv

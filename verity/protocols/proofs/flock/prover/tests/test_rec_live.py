@@ -167,14 +167,14 @@ def _session(proxy, n=1, hello=HELLO):
 
 def _proxy(schedule=SCHEDULE, coins=None):
     """A proxy held to ``schedule``, on live coins."""
-    return RL.Proxy(coins or RL.CoinServer(_counter_rand()), _salts(), schedule=schedule)
+    return RL.Proxy(coins or RL.LiveCoinPart(_counter_rand()), _salts(), schedule=schedule)
 
 
-def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):
-    coins = RL.CoinServer(_counter_rand())
+def test_the_live_coin_part_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):
+    coins = RL.LiveCoinPart(_counter_rand())
     proxy = _proxy(coins=coins)
     resp = _session(proxy)
-    assert resp[0] == (RL.RESP_DRAW, "null") and resp[1] == (RL.RESP_OK,)
+    assert resp[0] == (RL.RESP_SAMPLE, "null") and resp[1] == (RL.RESP_OK,)
     assert resp[2][0] == RL.RESP_COINS and len(resp[2][1]) == 8
     assert [(r[0], len(r[1])) for r in resp[5:8]] == [(RL.RESP_COINS, 6), (RL.RESP_COINS, 1), (RL.RESP_COINS, 2)]
     assert resp[-1][0] == RL.RESP_VERDICT
@@ -229,7 +229,7 @@ def _refusal(resp):
     return resp[1]
 
 
-def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_sees_it():
+def test_a_session_off_its_pinned_schedule_is_refused_before_the_live_coin_part_sees_it():
     assert _session(_proxy())[-1][0] == RL.RESP_VERDICT
     cases = {
         "Hello": lambda s: s["hello"].update(reps=1),
@@ -245,7 +245,7 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
         edit(s)
         proxy = _proxy(s)
         why = next(r[1] for r in _session(proxy) if r[0] == RL.RESP_REFUSED)
-        assert why.startswith(f"rec proxy: FIREWALL-REFUSED: {what}: "), (what, why)
+        assert why.startswith(f"rec proxy: ZK-SERVER-REFUSED: {what}: "), (what, why)
     s = json.loads(json.dumps(SCHEDULE))
     s["rounds"][1]["n"] = 2
     proxy = _proxy(s)
@@ -259,7 +259,7 @@ def test_a_link_whose_y_is_not_zero_is_refused():
     assert RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], [])))[0] == RL.RESP_COINS
     y = bytearray(32)
     y[17] = 1
-    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: FIREWALL-REFUSED: Link's y is not zero"
+    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: ZK-SERVER-REFUSED: Link's y is not zero"
     assert proxy.coins.link["y"] is None
 
 
@@ -293,7 +293,7 @@ def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
     assert [v[0] for v in verdicts] == [RL.RESP_VERDICT] * 3 and json.loads(verdicts[1][1])["accepted"] is False
     res = got["res"]
     assert [r["session"] for r in res] == [str(tmp_path / "s0" / "session"), None, str(tmp_path / "s2" / "session")]
-    assert res[1]["refused"].startswith("rec proxy: FIREWALL-REFUSED: round 1: ") and res[1]["rounds"] == 1
+    assert res[1]["refused"].startswith("rec proxy: ZK-SERVER-REFUSED: round 1: ") and res[1]["rounds"] == 1
     assert json.loads((tmp_path / "schedule.json").read_text()) == SCHEDULE
     assert RL.schedule_of(json.loads((tmp_path / "s0" / "public.json").read_text())) == SCHEDULE
     for k in (0, 2):
@@ -331,7 +331,7 @@ class _Logged(RL.OsTree):
 
 
 def _tree_coins(source=None):
-    return RL.CoinServer(_counter_rand(), TREE, source or _Logged(_counter_rand()))
+    return RL.LiveCoinPart(_counter_rand(), TREE, source or _Logged(_counter_rand()))
 
 
 def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_names_its_nonce():
@@ -359,7 +359,7 @@ def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_n
     assert RL.schedule_of(coins.record()) == SCHEDULE
 
 
-def test_on_the_coin_tree_each_round_is_opened_after_the_coin_servers_record_of_what_it_answers():
+def test_on_the_coin_tree_each_round_is_opened_after_the_live_coin_parts_record_of_what_it_answers():
     """The source opens the link points after ``Commit``'s salted tops and each round after its record without the coins,
     so a release log of the openings binds them to the challenger's live-coin part's record."""
     coins = _tree_coins()
@@ -427,16 +427,16 @@ def test_the_challengers_release_log_holds_an_inner_session_on_its_tree_and_refu
 
 
 def test_on_the_coin_tree_a_coin_that_does_not_open_stops_the_session():
-    class Altered(RL.CoinServer):
+    class Altered(RL.LiveCoinPart):
         def _draw(self, stream, k, n, after):
             got = super()._draw(stream, k, n, after)
             return [got[0] ^ 1, *got[1:]] if stream == "circuit/rep0" and k == 1 else got
 
     proxy = _proxy(coins=Altered(_counter_rand(), TREE, RL.OsTree(_counter_rand())))
     why = next(r[1] for r in _tree_session(proxy) if r[0] == RL.RESP_REFUSED)
-    assert why.startswith("rec proxy: FIREWALL-REFUSED: ") and "circuit/rep0 round 1" in why
+    assert why.startswith("rec proxy: ZK-SERVER-REFUSED: ") and "circuit/rep0 round 1" in why
 
-    class Forged(RL.CoinServer):
+    class Forged(RL.LiveCoinPart):
         def _draw(self, stream, k, n, after):
             got = super()._draw(stream, k, n, after)
             if stream == "circuit/rep0" and k == 1:
@@ -452,16 +452,16 @@ def test_the_prover_hello_names_the_challengers_tree_and_live_coins_refuse_one()
     other = CT.Spec(TREE.streams + ("sparse/rep0",), TREE.rounds_log, TREE.block)
     proxy = _proxy(coins=_tree_coins())
     why = next(r[1] for r in _tree_session(proxy, _tree_hello(other)) if r[0] == RL.RESP_REFUSED)
-    assert why.startswith("rec proxy: FIREWALL-REFUSED: Hello: coins ") and proxy.coins.hello is None
+    assert why.startswith("rec proxy: ZK-SERVER-REFUSED: Hello: coins ") and proxy.coins.hello is None
     live = _proxy()
     assert "live coins" in next(r[1] for r in _tree_session(live) if r[0] == RL.RESP_REFUSED) and live.coins.hello is None
     with pytest.raises(ValueError, match="at Hello"):
         _tree_coins().commit_coins(SCHEDULE)
 
 
-def test_the_coin_server_draws_no_coin_tree_of_its_own():
+def test_the_live_coin_part_samples_no_coin_tree_of_its_own():
     with pytest.raises(ValueError, match="takes it from a source"):
-        RL.CoinServer(_counter_rand(), TREE)
+        RL.LiveCoinPart(_counter_rand(), TREE)
 
 
 def test_a_session_that_stops_after_hello_reports_the_coin_tree_the_challenger_drew(tmp_path):
@@ -541,10 +541,10 @@ def test_tree_from_takes_the_trees_from_the_challengers_session_and_closes_it(tm
     (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
     (tmp_path / "secret").write_text("0a" * 32 + "\n")
     assert RL.main(["--listen", "127.0.0.1:0", "--out", str(tmp_path), "--schedule", str(tmp_path / "s.json"), "--coin-tree",
-                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret"), "--lean", "flock-firewall"]) == 0
+                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret"), "--lean", "flock-zk-server"]) == 0
     assert (got["at"], got["secret"]) == ("challenger:7000", bytes([10]) * 32)
     assert got["source"] is got["device"] and got["tree"] == RL.INNER_COIN_SPEC and got["device"].closed
-    assert got["lean"] == "flock-firewall"
+    assert got["lean"] == "flock-zk-server"
 
 
 def test_the_inner_coin_tree_holds_every_stream_a_schedule_opens():

@@ -1,6 +1,6 @@
 /-
-The coefficients of the MUFU tables' interpolants, copied from `verity/ml/circuits/ops/tables/mufu_quadratic.json` and
-`mufu_tanh_quadratic.json` (`verity.ml.circuits.ops.boolean.mufu`: `Fit`, `TanhFit`). `Evaluate.Mufu` reads them; that its
+The coefficients of the MUFU tables' interpolants, copied from `verity/circuits/ops/tables/mufu_quadratic.json` and
+`mufu_tanh_quadratic.json` (`verity.circuits.ops.boolean.mufu`: `Fit`, `TanhFit`). `Evaluate.Mufu` reads them; that its
 tables are the library's is checked by their SHA-512 (`Evaluate.Mufu.tableSha512`).
 -/
 module

@@ -9,17 +9,18 @@ import json
 import pytest
 from test_appends import NODE, P512, SOURCE, N, Run, payload, salts
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit
 
 
-def registered_in(registry: audit.Registry, nonce: bytes = bytes(32), node: bytes = NODE) -> audit.Store:
+def registered_in(registry: audit.Registry, nonce: bytes = bytes(32), node: bytes = NODE) -> audit_prover.Store:
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(node, payloads, ys).commitment.root
-    return audit.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce), payloads, ys)
+    return audit_prover.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce), payloads, ys)
 
 
-def accepted(store: audit.Store, registry: audit.Registry) -> Run:
+def accepted(store: audit_prover.Store, registry: audit.Registry) -> Run:
     r = Run(store, windows=1, registry=registry)
     assert r.run() is None
     r.boundary()
@@ -27,7 +28,7 @@ def accepted(store: audit.Store, registry: audit.Registry) -> Run:
     return r
 
 
-def rejected(store: audit.Store, registry: audit.Registry) -> Run:
+def rejected(store: audit_prover.Store, registry: audit.Registry) -> Run:
     """A session whose second pass names the first's step: rejected with `step`."""
     r = Run(store, windows=1, registry=registry)
     assert r.run() is None
@@ -35,13 +36,13 @@ def rejected(store: audit.Store, registry: audit.Registry) -> Run:
     return r
 
 
-def unended(store: audit.Store, registry: audit.Registry) -> Run:
+def unended(store: audit_prover.Store, registry: audit.Registry) -> Run:
     r = Run(store, windows=1, registry=registry)
     assert r.run() is None
     return r
 
 
-def test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing(monkeypatch) -> None:
+def test_a_second_registration_of_a_live_node_is_refused_and_gets_nothing(monkeypatch) -> None:
     nodes, register = [], audit.register
 
     def counted(*args, **kw):
@@ -87,7 +88,7 @@ def test_a_registration_ends_only_when_closed_with_every_session_counted() -> No
     assert accepted(again, registry).s.commitment.epoch == 0
 
 
-def test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_registry() -> None:
+def test_a_session_runs_only_over_its_node_s_live_registration_issued_by_the_registry() -> None:
     registry = audit.Registry()
     st = registered_in(registry)
     elsewhere = registered_in(audit.Registry(), bytes(range(32)))

@@ -31,6 +31,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
 from p2_v1 import serve  # noqa: E402
 

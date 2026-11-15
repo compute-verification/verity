@@ -193,7 +193,8 @@ def _daemon(root: Path, env: dict[str, str], idle_min: float) -> subprocess.Pope
 def _state(root: Path) -> dict:
     try:
         return json.loads((root / "guard" / "state.json").read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"the guard's state.json unread, read as empty: {type(e).__name__}: {e}")
         return {}
 
 
@@ -269,10 +270,10 @@ class FakeRunPod:
                 self.end_headers()
                 self.wfile.write(body.encode())
 
-            def do_DELETE(self):  # noqa: N802
+            def do_DELETE(self):
                 self._answer(rest_status, "{}" if rest_status == 200 else '{"error": "forbidden"}')
 
-            def do_POST(self):  # noqa: N802
+            def do_POST(self):
                 self._answer(200, gql_body)
 
             def log_message(self, *a):

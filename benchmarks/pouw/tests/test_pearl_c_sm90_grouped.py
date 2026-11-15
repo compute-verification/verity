@@ -1,46 +1,36 @@
-"""Pearl-C's grouped call on sm_90a off the card (benchmarks/pouw/pearl_c_sm90/grouped.py, and the vLLM call over it,
+"""Pearl-C's grouped call on sm_90a off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py, and the vLLM call over it,
 `pouw_pearl_c_grouped.gemm_grouped`), on a recording stand-in for the device: each expert's rows cut into units of at most
 pd_commit's 256 rows; each unit's record in the call's table is the launch `run.Pipeline` makes for that unit's rows called
 alone, at the unit's offsets; a call is eight launches whatever its experts; and the vLLM call's matmuls, tiles, keys, screen
 and retained records are those of each unit called alone through `PearlCDeviceRun.gemm`, in unit order."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import struct
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import load
 
 torch = pytest.importorskip("torch")
 
 from verity.protocols.accounting.pouw.verifier.audit import weights_root  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity_torch.pouw.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import grouped as PG  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
+from verity_torch.pouw.pearl_c.host import joined  # noqa: E402
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
 
 
-def load(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules[name]
-
-
-R = load("pearl_c_sm90_run", HERE / "run.py")
-F = load("pearl_c_sm90_fixture", HERE / "fixture.py")
-G = load("pearl_c_sm90_grouped", HERE / "grouped.py")
+R = load("pearl_c_sm90/run.py")
+F = load("pearl_c_sm90/fixture.py")
+G = load("pearl_c_sm90/grouped.py")
 
 
 class RecordingDev:
@@ -265,13 +255,13 @@ class OldCubinDev(RecordingDev):
 
 def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule="serial", dev=None):
     rng = np.random.default_rng(5)
-    weights = {w: torch.from_numpy((rng.standard_normal((n, k)).astype(np.float32) * 0.05)).to(torch.bfloat16)
+    weights = {w: torch.from_numpy(rng.standard_normal((n, k)).astype(np.float32) * 0.05).to(torch.bfloat16)
                for w in range(experts)}
     kernel = PPD.Kernel(R, dev or RecordingDev(), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
+    run = PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
                               schedule=schedule, salt_key=SALT_KEY)
     run.begin(retain=retain)
     return run, weights
@@ -298,13 +288,13 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
     assert [x[0] for x in launches(dev)] == lane_steps(schedule == "deferred-a")
     us = G.units(counts, n, R.PD_MAX_ROWS)
     g = run._groups[ws]
-    meta = PPD._bytes(g.b["meta"])
+    meta = PPDR._bytes(g.b["meta"])
     alone, _ = device_run(4, n, k, tmp_path / "alone")
     for j, u in enumerate(us):
         w = ws[u.pos]
         alone.gemm(w, x[u.src:u.src + u.m], weights[w], None)
         sh = alone.shapes[(u.m16, n, k)]
-        assert meta[G.REC * j + G.KEYS_AT:G.REC * j + G.KEYS_AT + G.KEY_BYTES] == PPD._bytes(sh.keys[:G.KEY_BYTES]), j
+        assert meta[G.REC * j + G.KEYS_AT:G.REC * j + G.KEYS_AT + G.KEY_BYTES] == PPDR._bytes(sh.keys[:G.KEY_BYTES]), j
     a, b = run.cur, alone.cur
     for p in (a, b):
         joined(p.writes)                                      # the files are written behind the calls: the pass's end joins them
@@ -363,19 +353,20 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     side = ("pd_tree_g_851", "pd_tiles_g_979")
     assert [(x[0], x[4]) for x in log] == [(x, lane if x in side else main) for lane in (1, 3, 1) for x in lane_steps(split)]
     by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
-    ptr = lambda j, x: g.sets[j][x].data_ptr()
+    def ptr(j, x):
+        return g.sets[j][x].data_ptr()
     for c, j in enumerate((0, 1, 0)):
         assert by["pd_commit_gm_851"][c] == (ptr(j, "meta"), ptr(j, "meta") + G.Grouped.map_at(us))
         assert by["pd_tiles_g_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
         assert by["gemm_pearlc_g_d"][c][2:4] == (ptr(j, "c"), ptr(j, "u"))
         assert by["pd_tree_g_851"][c:c + 1] == ([(ptr(j, "meta") + G.TREE_AT,)] if split else [])
     for j in (0, 1):
-        rec = np.frombuffer(PPD._bytes(g.sets[j]["meta"])[:G.REC * len(us)], np.uint8).reshape(len(us), G.REC)
+        rec = np.frombuffer(PPDR._bytes(g.sets[j]["meta"])[:G.REC * len(us)], np.uint8).reshape(len(us), G.REC)
         commit, tree = (rec[:, a:z].copy().view(G.ARGS).ravel() for a, z in ((0, G.TILES_AT), (G.TREE_AT, G.REC)))
         assert commit["i"][:, 2].tolist() == [int(split)] * len(us)
         assert tree["p"][:, 2].tolist() == [ptr(j, "tree_a") + G.tree_bytes(R) * i if split else 0 for i in range(len(us))]
     assert len({ptr(j, x) for j in (0, 1) for x in PG.ROTATED}) == 2 * len(PG.ROTATED)
-    assert [set(PPD._bytes(run.roots_buf[nb * i:nb * (i + 1)])) for i in range(3 * len(us))] == [
+    assert [set(PPDR._bytes(run.roots_buf[nb * i:nb * (i + 1)])) for i in range(3 * len(us))] == [
         {0x11 * (j + 1)} for j in (0, 1, 0) for _ in us]
 
 
@@ -403,7 +394,7 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
         g.grouped.b.update({x: t.data_ptr() for x, t in g.sets[j].items()})
         want = (g.grouped.meta(us, keys, run.leaves.data_ptr() + run.nb * tiles, split)
                 + struct.pack("<3q", run.nb * pos, 2 * flag_rows, 0))
-        assert PPD._bytes(g.sets[j]["meta"])[:len(want)] == want, call
+        assert PPDR._bytes(g.sets[j]["meta"])[:len(want)] == want, call
     assert len(g.calls) == len(g.sets) == (2 if split else 1)
 
 
@@ -412,7 +403,7 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
     count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
     ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
-    C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
+    C = load("pearl_c_sm90/grouped_check.py")
     empty = torch.empty
     monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
     ws, counts, n, k = (1, 3), [3, 20], 128, 1024
@@ -447,7 +438,7 @@ def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():
     assert launches(dev)[0][1] == (max(u.m16 for u in us), 2) and launches(dev)[0][5] == (run._groups[(1, 3)].b["meta"].data_ptr(),)
     assert not G.has_tree(dev) and G.has_tree(RecordingDev())
     assert (G.tiles_pd(dev), G.tiles_pd(RecordingDev())) == (G.PD, G.TILES_PD)
-    rec = np.frombuffer(PPD._bytes(run._groups[(1, 3)].b["meta"])[:2 * G.REC], np.uint8).reshape(2, G.REC)
+    rec = np.frombuffer(PPDR._bytes(run._groups[(1, 3)].b["meta"])[:2 * G.REC], np.uint8).reshape(2, G.REC)
     assert rec[:, :G.TILES_AT].copy().view(G.ARGS).ravel()["i"][:, 2].tolist() == [0, 0]
 
 

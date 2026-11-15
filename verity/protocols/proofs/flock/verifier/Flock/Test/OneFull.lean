@@ -1,12 +1,13 @@
-/-
-`RecSetup.oneFull` under F1's inner shape: one table holding its whole population passes, unsampled or sampled in full (a
-population of four, four instances); a table sampled short of its population (three of four, as a sampled RecCap table
-would be) is refused, and so are two tables and none. Without an inner shape it passes whatever the tables are.
--/
 module
 
 public import Flock.RecSetup
 meta import Flock.RecSetup
+
+/-!
+`RecSetup.oneFull` under F1's inner shape: one table holding its whole population passes, unsampled or sampled in full (a
+population of four, four instances); a table sampled short of its population (three of four, as a sampled RecCap table
+would be) is refused, and so are two tables and none. Without an inner shape it passes whatever the tables are.
+-/
 
 @[expose] public section
 

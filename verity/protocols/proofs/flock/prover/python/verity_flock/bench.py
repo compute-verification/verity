@@ -3,7 +3,7 @@
     python -m verity_flock.bench --relation bf16-hopper --bin target/release/flock-pure --out-dir D \\
         [--start 1024] [--max 65536] [--runs 5] [--verifier HOST:PORT] [--procs N]
 
-Each point writes its instance set range (``verity_flock.instances``), starts a live verifier on loopback (unless
+Each point writes its input set's range (``verity_flock.instances``), starts a live verifier on loopback (unless
 ``--verifier`` names one that serves the same range), and runs ``flock-pure prove --warm 1 --runs R --dump``: one untimed
 session, then ``R`` timed sessions, each committing its batch afresh (row digests and the three frame-v3 roots) before
 proving. A session's time is its prover's end to end: commitment, rows, both reps with their coin waits; the verifier's
@@ -19,7 +19,6 @@ import math
 import json
 import os
 import platform
-import shutil
 import statistics
 import subprocess
 import sys
@@ -185,7 +184,7 @@ def loopback_probe(a, q: dict, out: Path, net: Path) -> dict:
     pin = lowering.PINS[a.relation]
     per = []
     for i, _ in enumerate(q["subbatches"]):
-        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--circuit-description", str(net)]
         log = d / f"loopback-serve-s{i}.log"
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7391", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
                                 *common], stdout=open(log, "w"), stderr=subprocess.STDOUT)
@@ -253,7 +252,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
     t1 = time.time()
     parts, rcs, rss = [], [], None
     for i, _ in enumerate(subs):
-        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--circuit-description", str(net)]
         srv, addr = None, a.verifier
         if addr:
             _probe(addr)
@@ -431,7 +430,7 @@ def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j in jobs:
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
-                              "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(net), "--sessions", str(a.runs + 2),
+                              "--instances", str(d / f"instances-s{j}.bin"), "--circuit-description", str(net), "--sessions", str(a.runs + 2),
                               "--operator", a.operator], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
     return 0
@@ -466,7 +465,7 @@ def main(argv=None) -> int:
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     net = out / f"net-{a.relation}.txt"
-    net.write_text(lowering.netlist(a.relation))
+    net.write_text(lowering.circuit_description(a.relation))
     if hashlib.sha256(net.read_bytes()).hexdigest() != lowering.PINS[a.relation]:
         print("the lowering is not the pinned one", file=sys.stderr)
         return 2

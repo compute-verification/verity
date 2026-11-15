@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 import pytest
-import verity.definitions.registry as registry
+import verity_vllm.definitions.registry as registry
 
 CORE = ("verity.circuits.ops.prims", "verity.circuits.ops.scalar", "verity.circuits.ops.fp32", "verity.circuits.ops.mufu", "verity.circuits.ops.gemm", "verity.circuits.kernels.tc")
 
@@ -19,7 +19,7 @@ for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.circuits.defs import REGISTRY
 from verity.circuits.ops import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
-from verity.definitions.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM
+from verity_vllm.definitions.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM
 from verity_vllm.program.frontend import targets as T
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value

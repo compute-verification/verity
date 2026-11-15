@@ -3,10 +3,7 @@ directory or by a declared witness name, a witness piece raw or as hex at any of
 archive the guard can't read, and with ``--public`` a file of a path the record doesn't declare public) is moved to the
 quarantine outside the run dir, and the report names it by path alone; the gate's public files, their JSON written
 again and a witness file equal to a public one are no finds, and a declared allowlist entry excuses its piece (with
-``*``, any piece of its witness file; with ``keys``, only the pieces inside the witness file's values at those key
-paths) only in the records it names. chain_record.sh moves a gate sent under inputs/ to
-the quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/
-and the logs whole on a signal or when the guard can't run."""
+``*``, any piece of its witness file) only in the records it names, never by a key path."""
 from __future__ import annotations
 
 import gzip
@@ -19,65 +16,17 @@ import signal
 import stat
 import subprocess
 import sys
-import tarfile
 import zipfile
 from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[1]
-sys.path.insert(0, str(HERE))
-import leak_guard as LG  # noqa: E402
-
-GATE = "c20261027T000000Z-0000"
-_rnd = random.Random(7)
-SALTS = _rnd.randbytes(16 * 8)
-LINES = [{"window": w, "head": _rnd.randbytes(32).hex(), "sig": _rnd.randbytes(96).hex()} for w in range(4)]
-CERTIFIED = "".join(json.dumps(d) + "\n" for d in LINES).encode()
-DEPLOYMENT = json.dumps({"session": "s0", "windows": 4}).encode()
-
-
-def _sig_piece() -> tuple[bytes, int]:
-    """An aligned piece of certified.jsonl inside the first line's signature, which no public file holds."""
-    at = CERTIFIED.index(LINES[0]["sig"].encode())
-    o = -(-at // LG.TEXT) * LG.TEXT
-    return CERTIFIED[o:o + LG.TEXT], o
-
-
-#: A witness file holding a public certificate as a verifier writes it, indented: public only through `reprinted`.
-INDENTED = json.dumps({"window": LINES[0]["window"], "head": LINES[0]["head"]}, indent=1).encode()
-
-
-def _gate(root: Path) -> Path:
-    """A gate run: its witness (the certified lines, the cells' salts, a certificate indented, a deployment equal to the
-    public one) beside its public files (the certificates, each line's window and head, the deployment, end.json and
-    request.json)."""
-    g = root / GATE
-    for name, b in {"witness/certified.jsonl": CERTIFIED, "witness/cells.salts": SALTS, "witness/check.json": INDENTED,
-                    "witness/deployment.json": DEPLOYMENT, "out/deployment.json": DEPLOYMENT,
-                    "out/certificates.jsonl": "".join(json.dumps({"window": d["window"], "head": d["head"]}) + "\n"
-                                                      for d in LINES).encode(),
-                    "end.json": b'{"files": {}}', "request.json": b'{"minutes": 1}'}.items():
-        (g / name).parent.mkdir(parents=True, exist_ok=True)
-        (g / name).write_bytes(b)
-    return g
-
-
-def _tar(path: Path, members: dict[str, bytes], mode: str = "w:gz") -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(path, mode) as t:
-        for name, b in members.items():
-            info = tarfile.TarInfo(name)
-            info.size = len(b)
-            t.addfile(info, io.BytesIO(b))
-    return path
-
-
-def _put(run: Path, files: dict[str, bytes]) -> None:
-    for name, b in files.items():
-        (run / name).parent.mkdir(parents=True, exist_ok=True)
-        (run / name).write_bytes(b)
+from benchmarks.network_traces import leak_guard as LG
+from verity.protocols.accounting.certifier.device import runner_parts as rp
+from verity.protocols.accounting.certifier.prover.tests.test_released_keys import GOOD, LIST, _declared, _put as _put_json
+from verity.protocols.accounting.certifier.prover import released_keys as RK
+from benchmarks.network_traces.tests.gate_runs import (
+    CERTIFIED, DEPLOYMENT, GATE, INDENTED, LINES, SALTS, _gate, _put, _sig_piece, _tar)
 
 
 def _guard(tmp: Path, run: Path, *extra: str) -> tuple[int, dict, dict]:
@@ -203,54 +152,10 @@ def test_a_wildcard_entry_excuses_every_piece_of_its_witness_file_in_its_records
     assert [p["witness"] for p in held["found"][0]["pieces_found"]] == [f"{GATE}/witness/cells.salts"]
 
 
-def test_a_keyed_entry_excuses_only_the_pieces_inside_its_values(tmp_path):
-    """An entry's keys narrow it to the pieces cut wholly inside the witness file's values at those key paths: the
-    certifier's indented CPU list, which a verifier outcome's indented proved units repeat at the same depth, is
-    excused there, while a piece of the same witness file outside those values (a connection's head) is still a find,
-    and so is the CPU list under an entry whose key path the witness file doesn't have."""
-    g = _gate(tmp_path / "G" / "g1")
-    rnd = random.Random(5)
-    warden = {"connections": [{"ordinal": i, "head": rnd.randbytes(32).hex()} for i in range(2)],
-              "usage": {"cpu_s": 1.5, "cpus": list(range(32))}}
-    (g / "witness" / "warden.json").write_text(json.dumps(warden, indent=1))
-    entry = {"sha256": "*", "witness": "warden.json", "keys": ["usage/cpus"], "records": ["*"], "why": "its own CPUs"}
-    declared = json.loads(LG.DECLARED.read_text())
-    (tmp_path / "keyed.json").write_text(json.dumps({**declared, "allow": [entry]}))
-    (tmp_path / "other.json").write_text(json.dumps({**declared, "allow": [{**entry, "keys": ["usage/nice"]}]}))
-    run = tmp_path / "run"
-    outcome = {"audit": {"proved_units": list(range(32)), "verdict": "accept"}}
-    _put(run, {"out/tie/verifier/w000-outcome.json": json.dumps(outcome, indent=1).encode(),
-               "out/heads.json": json.dumps({"h": warden["connections"][1]["head"]}).encode()})
-    rc, report, _ = _guard(tmp_path, run, "--declared", str(tmp_path / "keyed.json"), "--dry")
-    assert rc == 3 and [d["path"] for d in report["found"]] == ["out/heads.json"]
-    assert [(e["entry"], e["records"]) for e in report["excused"]] == [(0, ["out/tie/verifier/w000-outcome.json"])]
-    assert report["excused"][0]["pieces"] >= 4
-    rc, report, _ = _guard(tmp_path, run, "--declared", str(tmp_path / "other.json"), "--dry")
-    assert sorted(d["path"] for d in report["found"]) == ["out/heads.json", "out/tie/verifier/w000-outcome.json"]
-    assert rc == 3 and report["excused"] == []
-
-
-def test_value_span_is_the_bytes_of_the_value_at_a_key_path():
-    """`value_span` finds a nested key's value by its byte offsets, past a non-ASCII string, in compact and indented
-    JSON alike, None for a key path the document doesn't have or a document that isn't an object there, and raises
-    where the value on the path isn't JSON, so the guard fails closed."""
-    doc = {"a": {"b": [1, 2], "c": "\u00e9t\u00e9"}, "d": {"b": 3}}
-    for indent in (None, 1, 2):
-        b = json.dumps(doc, indent=indent, ensure_ascii=False).encode()
-        s, e = LG.value_span(b, "a/b")
-        assert json.loads(b[s:e]) == [1, 2]
-        s, e = LG.value_span(b, "d/b")
-        assert b[s:e] == b"3"
-        assert LG.value_span(b, "a/x") is None and LG.value_span(b, "a/b/c") is None
-    assert LG.value_span(b"[1]", "a") is None and LG.value_span(b"{not json", "a") is None
-    with pytest.raises(ValueError):
-        LG.value_span(b'{"a": {"b": nope}}', "a/b")
-
-
 def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
     """A quarantine inside the run dir, a missing gates directory, or a declared entry without its reason, with a
-    sha256 that is neither a digest nor ``*``, or with keys that aren't a list of key paths refuses the guard before it
-    moves anything."""
+    sha256 that is neither a digest nor ``*``, or with anything beside its four fields (the key paths an entry once
+    narrowed itself by among them) refuses the guard before it moves anything."""
     run = tmp_path / "run"
     _put(run, {"out/n2/certified.jsonl": b"{}"})
     assert LG.main([str(run), str(run / "out" / "q")]) == 2
@@ -258,7 +163,7 @@ def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
     assert (run / "out" / "n2" / "certified.jsonl").is_file()
     ok = {"sha256": "0" * 64, "witness": "x", "records": ["*"], "why": "y"}
     for bad in ({**ok, "why": ""}, {**ok, "sha256": "A" * 64}, {**ok, "sha256": "**"}, {**ok, "keys": []},
-                {**ok, "keys": "usage/cpus"}, {**ok, "keys": ["usage//cpus"]}):
+                {**ok, "keys": ["usage/cpus"]}, {**ok, "kind": "structure"}):
         (tmp_path / "bad.json").write_text(json.dumps({"schema": LG.DECLARED_SCHEMA, "names": [], "allow": [ok, bad]}))
         with pytest.raises(SystemExit, match="entry 1 needs"):
             LG.main([str(run), str(tmp_path / "q"), "--declared", str(tmp_path / "bad.json")])
@@ -393,7 +298,7 @@ def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
     run, out, hold = _held(tmp_path)
     fifo = tmp_path / "fetch.tgz"
     os.mkfifo(fifo)
-    p = subprocess.Popen([sys.executable, str(HERE / "leak_guard.py"), str(run), str(tmp_path / "q"), "--hold",
+    p = subprocess.Popen([sys.executable, LG.__file__, str(run), str(tmp_path / "q"), "--hold",
                           str(hold), "--gates", str(tmp_path / "G"), "--gates", str(fifo)],
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     with open(fifo, "wb"):
@@ -404,9 +309,59 @@ def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
     assert not list(out.iterdir()) and (hold / "report.json").is_file() and (hold / "n2" / "planted.json").is_file()
 
 
+def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_path):
+    """A record head's bucket counts are witness, and a port's reads are positions, protocol structure. Where both
+    begin with a run of zeros, a registered-reads file in JSON's default form holds a piece of the witness line, a
+    key's end and ten zeros, and the guard holds it though nothing of the witness is in it. The verifier's
+    registered-reads files are written without spaces (`network_certifier_rows.reads_text`), and the same reads are then no piece
+    of the witness. The counts as the witness writes them are a find wherever they are written."""
+    from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+
+    g = _gate(tmp_path / "G" / "g1")
+    line = json.dumps({"salt_c": "ab" * 24, "head": {"window": 0, "counts": [0] * 16, "root": "ef" * 64}})
+    at = line.index('": [0, 0')
+    pad = json.dumps({"pad": "x" * (-(len(json.dumps({"pad": ""})) + 1 + at) % LG.TEXT)}) + "\n"
+    witness = (pad + line + "\n").encode()
+    piece = witness[len(pad) + at:len(pad) + at + LG.TEXT]
+    assert (len(pad) + at) % LG.TEXT == 0 and piece == b'": [' + b"0, " * 9 + b"0" and len(set(piece)) >= LG.DISTINCT
+    (g / "witness" / "certified.jsonl").write_bytes(witness)
+    reads = WR.reads_file({"prog0": {"leaves": 4, "reads": [0] * 16, "root": "cd" * 64}})
+    assert json.loads(WR.reads_text(reads)) == reads and " " not in WR.reads_text(reads)
+    run = tmp_path / "run"
+    _put(run, {"out/scan/honest/registered.json": WR.reads_text(reads).encode(),
+               "out/scan/honest/spaced.json": json.dumps(reads, sort_keys=True).encode(),
+               "out/copy.json": json.dumps({"counts": [0] * 16}).encode()})
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 3 and sorted(d["path"] for d in report["found"]) == ["out/copy.json", "out/scan/honest/spaced.json"]
+
+
+def test_a_list_of_consecutive_integers_is_no_piece_of_the_certifiers_usage_record(tmp_path):
+    """The certifier's run record, a witness file written indented, holds its processes' CPUs. Written as a list of
+    integers they are the same bytes as any indented list of consecutive integers at their depth, so a verifier
+    outcome's proved units were a find though nothing of the witness is in them. The usage record holds them as one
+    string of ranges (`runner_parts._usage`), and under the declared data as shipped the outcome is no find and nothing
+    is excused. The CPUs written as a list are a find again: the guard is as it was."""
+    record = _gate(tmp_path / "G" / "g1") / "witness" / "warden.json"
+    usage = rp._usage()
+    assert isinstance(usage["cpus"], str) and usage["cpus"] == rp.cpu_ranges(os.sched_getaffinity(0))
+    ranged = {k: {**usage, "cpus": rp.cpu_ranges(range(32))} for k in ("usage", "publisher_usage")}
+    record.write_text(json.dumps(ranged, indent=1))
+    run = tmp_path / "run"
+    outcome = {"audit": {"proved_units": list(range(32)), "verdict": "accept"}}
+    _put(run, {"out/tie/verifier/w000-outcome.json": json.dumps(outcome, indent=1).encode()})
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 0 and report["found"] == [] and report["excused"] == []
+    listed = {k: {**v, "cpus": list(range(32))} for k, v in ranged.items()}
+    record.write_text(json.dumps(listed, indent=1))
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 3 and [d["path"] for d in report["found"]] == ["out/tie/verifier/w000-outcome.json"]
+    assert report["excused"] == []
+
+
 def test_the_declared_data_is_well_formed():
-    """leak_guard.json, the guard's declared names and allowlist, loads, and its names are the gates' witness files that
-    no record file of the chain is named after."""
+    """leak_guard.json, the guard's declared names and allowlist, loads (so none of its entries excuses a piece by a
+    key path, which the loader refuses), and its names are the gates' witness files that no record file of the chain
+    is named after."""
     names, allow = LG.load_declared(LG.DECLARED)
     assert {"cells.salts", "certified.jsonl", "requests.records", "responses.records"} <= names
     assert not names & {"end.json", "request.json", "deployment.json", "cells.jsonl", "certificates.jsonl", "serve.log",
@@ -414,91 +369,119 @@ def test_the_declared_data_is_well_formed():
     assert all(e["witness"] in names for e in allow)
 
 
-def _chain(tmp: Path, gates: str, *, py: str = sys.executable, **kw) -> subprocess.Popen:
-    """chain_record.sh on run dir tmp/runs/r1 (its quarantine by default tmp/quarantine/r1), its gates `gates`."""
-    env = {"PATH": os.defpath, "HOME": str(tmp), "TMPDIR": str(tmp / "tmp"), "RESEARCH_RUN_DIR": str(tmp / "runs/r1"),
-           "CR_MEM_GB": "1", "CR_GATES": gates, "CR_CACHE": str(tmp / "cache"), "PY": py}
-    (tmp / "tmp").mkdir(exist_ok=True)
-    return subprocess.Popen(["bash", "benchmarks/network_traces/chain_record.sh"], cwd=ROOT, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **kw)
+CERTIFICATE = {"key_id": "k", "link": 0, "direction": "ingress", "window": 0, "digest": "00", "signature": "11"}
 
 
-def _sent(tmp: Path) -> Path:
-    """A run dir as a job sent gate.tgz leaves it, with the runner's logs and a record that leaked a piece."""
-    run = tmp / "runs" / "r1"
-    g = _gate(tmp / "src")
-    _tar(run / "inputs" / "gate.tgz", {f"{GATE}/{p.relative_to(g).as_posix()}": p.read_bytes()
-                                       for p in sorted(g.rglob("*")) if p.is_file()})
-    _put(run, {"stdout.log": b"", "stderr.log": b"", "out/n2/leak.json": json.dumps({"x": _sig_piece()[0].decode()}).encode()})
-    return run
+def _keys_guard(tmp: Path, *extra: str, declared: dict | None = None) -> tuple[int, dict | None, dict | None]:
+    """The guard on run dir tmp/run with ``--keys``: its exit, its report and the quarantine's (None if unwritten)."""
+    keys = ["--keys"]
+    if declared is not None:
+        (tmp / "declared.json").write_text(json.dumps(declared))
+        keys.append(str(tmp / "declared.json"))
+    report = tmp / "report.json"
+    if "--report" in extra:
+        report = Path(extra[extra.index("--report") + 1])
+        extra = tuple(x for x in extra if x not in ("--report", str(report)))
+    report.unlink(missing_ok=True)
+    rc = LG.main([str(tmp / "run"), str(tmp / "q"), *keys, "--report", str(report), *extra])
+    held = tmp / "q" / "leak-guard.json"
+    return (rc, json.loads(report.read_text()) if report.is_file() else None,
+            json.loads(held.read_text()) if held.is_file() else None)
 
 
-def test_chain_record_moves_a_sent_gate_out_and_the_guard_refuses_the_run(tmp_path):
-    """The gate sent under inputs/ goes to the quarantine once unpacked; the job's exit (here at the next gate, which
-    isn't there) runs the guard, which moves the leaked record there too and refuses the run by name, exit 3, with its
-    scratch (the unpacked gates) removed."""
-    run = _sent(tmp_path)
-    p = _chain(tmp_path, "gate.tgz absent.tgz")
-    out, _ = p.communicate()
-    q = tmp_path / "quarantine" / "r1"
-    assert p.returncode == 3, out
-    assert "leak guard: refused" in out and "out/n2/leak.json: 1 witness pieces" in out
-    log = (run / "out" / "job.log").read_text()
-    assert "gate 1's inputs/gate.tgz, which holds its witness, moved to the quarantine" in log
-    assert "chain: no tarball absent.tgz" in (run / "out" / "stdout.log").read_text()
-    assert (q / "files" / "inputs" / "gate.tgz").is_file() and (q / "files" / "out" / "n2" / "leak.json").is_file()
-    assert not (run / "inputs" / "gate.tgz").exists() and not (run / "out" / "n2" / "leak.json").exists()
-    report = json.loads((run / "out" / "leak-guard.json").read_text())
-    assert report["gate_runs"] == [GATE] and [d["path"] for d in report["found"]] == ["out/n2/leak.json"]
-    assert report["held"] == report["released"] == 2 and list((q / "held").iterdir()) == []
-    assert list((tmp_path / "tmp").iterdir()) == []
+def test_a_released_file_with_one_undeclared_key_fails_the_record(tmp_path):
+    """The control: a record whose released files hold declared keys alone passes the guard with its counts; the same
+    record with one undeclared key in one released file fails (exit 3), the file moved to the quarantine. The report
+    that is released names the file and how many keys, the quarantine's names the key's path with the fix, and a file
+    outside out/ is counted and not read by key."""
+    run = tmp_path / "run"
+    certs = "out/gates/c0/r0/out/certificates.jsonl"
+    _put_json(run, {certs: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(),
+               "out/n2/outcome.json": {"verdict": "accept"}, "out/n2/prove.log": b"text", "resources.jsonl": b"{}\n"})
+    rc, report, _ = _keys_guard(tmp_path)
+    assert rc == 0 and report["verdict"] == "clean" and report["found"] == []
+    assert report["keys"] == {"declared": RK.SCHEMA, "checked": 1, "not_yet": {"n2": 1}, "no_keys": {".log": 1},
+                              "outside": 1, "undeclared": 0}
+    _put_json(run, {certs: {"certificate": {**CERTIFICATE, "undeclared_key": "a value of any length " * 40}}})
+    rc, report, held = _keys_guard(tmp_path)
+    assert rc == 3 and report["verdict"] == "refused"
+    assert report["found"] == [{"path": certs, "bytes": (tmp_path / "q" / "files" / certs).stat().st_size,
+                                "why": ["1 key not declared public (--keys)"], "pieces": 0}]
+    assert report["keys"]["undeclared"] == 1 and not (run / certs).exists()
+    assert "undeclared_key" not in (tmp_path / "report.json").read_text()
+    [bad] = held["found"][0]["keys_undeclared"]
+    assert bad["key"] == "certificate/undeclared_key" and bad["count"] == 1
+    assert "is not declared public" in bad["fix"] and "auditor.py" in bad["fix"]
+    rc, report, _ = _keys_guard(tmp_path)
+    assert rc == 0 and report["keys"]["checked"] == 0
+    rc, report, _ = LG.main([str(run), str(tmp_path / "q"), "--report", str(tmp_path / "report.json")]), json.loads(
+        (tmp_path / "report.json").read_text()), None
+    assert rc == 0 and "keys" not in report
 
 
-def test_chain_record_withholds_the_record_when_the_guard_cant_run(tmp_path):
-    """A guard that can't run (here its interpreter fails) withholds out/, inputs/ and the logs whole: none is left for
-    custody, all are in the quarantine, and the run fails."""
-    run = _sent(tmp_path)
-    p = _chain(tmp_path, "gate.tgz absent.tgz", py="false")
-    out, _ = p.communicate()
-    assert p.returncode == 3, out
-    assert sorted(x.name for x in run.iterdir()) == []
-    assert sorted(x.name for x in (tmp_path / "quarantine" / "r1" / "files").iterdir()) == [
-        "inputs", "out", "stderr.log", "stdout.log"]
+def test_a_gate_runs_file_that_says_an_execution_phase_was_refused_fails_the_record(tmp_path):
+    """Which execution phases the signer refused depends on what the node sent and when, and no list declares the
+    key that says it. So a record of a gate run with one refused line fails (exit 3) on that file alone, by the key
+    and its count, and a record is released only of a run whose every execution phase was certified."""
+    run = tmp_path / "run"
+    files = [f"out/gates/c0/r0/out/{name}" for name in ("certificates.jsonl", "cells-certificates.jsonl",
+                                                         "rows-certificates.jsonl", "cells-registrations.jsonl")]
+    refused = (json.dumps({"refused": ["l", "egress", 1]}) + "\n").encode()
+    _put_json(run, {files[0]: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(), **dict.fromkeys(files[1:], b"")})
+    rc, report, _ = _keys_guard(tmp_path)
+    assert rc == 0 and report["keys"]["checked"] == 4 and report["keys"]["undeclared"] == 0
+    for path in files:
+        (run / path).write_bytes((run / path).read_bytes() + refused)
+    rc, report, held = _keys_guard(tmp_path)
+    assert rc == 3 and report["verdict"] == "refused" and report["keys"]["undeclared"] == 4
+    assert sorted(f["path"] for f in report["found"]) == sorted(files)
+    for found in held["found"]:
+        [bad] = found["keys_undeclared"]
+        assert (bad["key"], bad["count"]) == ("refused", 1) and "is not declared public" in bad["fix"]
+    assert not any((run / path).exists() for path in files)
 
 
-def test_chain_record_withholds_the_record_on_a_signal(tmp_path):
-    """A SIGTERM (a timeout's, which leaves the job seconds) withholds out/, inputs/ and the logs whole rather than start a
-    scan it can't finish. The job is held at its first gate, a FIFO it reads until the test closes it."""
-    run = _sent(tmp_path)
-    fifo = tmp_path / "gate.fifo"
-    os.mkfifo(fifo)
-    p = _chain(tmp_path, str(fifo))
-    with open(fifo, "wb"):
-        p.send_signal(signal.SIGTERM)
-    out, _ = p.communicate()
-    assert p.returncode == 143, out
-    assert "SIGTERM ended the run before the leak guard read it" in out
-    assert sorted(x.name for x in run.iterdir()) == []
-    assert (tmp_path / "quarantine" / "r1" / "files" / "inputs" / "gate.tgz").is_file()
+def test_a_held_file_with_an_undeclared_key_is_not_released(tmp_path, capsys):
+    """With --hold, a held file is read by key at the record path it is bound for: one with an undeclared key or under
+    no list goes to the quarantine and never to out/, the rest is released, and the guard's line says how many files
+    it checked by key and how many wait."""
+    run, hold = tmp_path / "run", tmp_path / "hold"
+    (run / "out").mkdir(parents=True)
+    _put_json(hold, {"step/a.json": GOOD, "step/b.json": {**GOOD, "rounds": [{"salt": "00"}, {"salt": "01"}]},
+                "scan/summary.json": {"admitted": 3}, "other/x.json": {"k": 1}, "step/prove.log": b"text"})
+    rc, report, held = _keys_guard(tmp_path, "--hold", str(hold), declared=_declared(LIST, not_yet=("scan/**",)))
+    assert rc == 3 and (report["held"], report["released"]) == (5, 3)
+    assert {d["path"]: d["why"] for d in report["found"]} == {
+        "out/other/x.json": ["1 key not declared public (--keys)"],
+        "out/step/b.json": ["1 key not declared public (--keys)"]}
+    assert sorted(p.relative_to(run / "out").as_posix() for p in (run / "out").rglob("*") if p.is_file()) == [
+        "scan/summary.json", "step/a.json", "step/prove.log"]
+    assert report["keys"] == {"declared": RK.SCHEMA, "checked": 2, "not_yet": {"scan": 1}, "no_keys": {".log": 1},
+                              "outside": 0, "undeclared": 2}
+    by_path = {d["path"]: d["keys_undeclared"] for d in held["found"]}
+    assert [(b["key"], b["count"]) for b in by_path["out/step/b.json"]] == [("rounds/*/salt", 2)]
+    assert by_path["out/other/x.json"][0]["key"] == "(the file)"
+    assert "2 files checked by key, 2 with a key not declared public; 1 not yet checked (scan 1); 1 with no keys" in (
+        capsys.readouterr().out)
 
 
-def test_chain_record_releases_nothing_when_sigterm_ends_its_guard(tmp_path):
-    """A timeout's SIGTERM to the job's process group while the guard reads (held here unpacking one more gate, a FIFO the
-    test closes once it has signalled) ends the guard and the job (exit 143) with nothing released: the run dir is left
-    empty, and the job's outputs and logs stay in the hold, out of the record."""
-    run = _sent(tmp_path)
-    fifo = tmp_path / "slow.tgz"
-    os.mkfifo(fifo)
-    py = tmp_path / "py"
-    py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@" --gates "{fifo}"\n')
-    py.chmod(0o755)
-    p = _chain(tmp_path, "gate.tgz absent.tgz", py=str(py), start_new_session=True)
-    with open(fifo, "wb"):
-        os.killpg(p.pid, signal.SIGTERM)
-    out, _ = p.communicate()
-    q = tmp_path / "quarantine" / "r1"
-    assert p.returncode == 143, out
-    assert "SIGTERM ended the leak guard (exit 143)" in out and "nothing released from" in out
-    assert sorted(x.name for x in run.iterdir()) == []
-    assert sorted(x.name for x in (q / "held").iterdir()) == ["job.log", "stdout.log"]
-    assert not (q / "files" / "out" / "job.log").exists()
+def test_the_guards_own_report_is_read_by_key_before_anything_is_released(tmp_path, capsys):
+    """A report the guard writes under out/ is a released file too: where its list doesn't declare each key it holds,
+    or no list and no ``not_yet`` glob names it, the guard is refused (exit 2) with nothing released or moved and no
+    report written; where its list isn't written yet it is counted with the files that wait. Declared data that
+    doesn't load refuses the guard too."""
+    run, hold = tmp_path / "run", tmp_path / "hold"
+    (run / "out").mkdir(parents=True)
+    _put_json(hold, {"step/a.json": GOOD})
+    own = {"name": "the guard's report", "writer": "leak_guard.py", "files": ["leak-guard.json"], "form": "json",
+           "keys": {"schema": "structure", "verdict": "output"}}
+    at = ("--hold", str(hold), "--report", str(run / "out" / "leak-guard.json"))
+    for declared, why in ((_declared(LIST, own), "holds keys the list \"the guard's report\""),
+                          (_declared(LIST), "no list of released_keys.json names this file"),
+                          ({**_declared(LIST), "allow": []}, "is not network-traces/released-keys/v1")):
+        rc, report, _ = _keys_guard(tmp_path, *at, declared=declared)
+        assert rc == 2 and report is None and why in capsys.readouterr().err
+        assert (hold / "step" / "a.json").is_file() and list((run / "out").iterdir()) == []
+    rc, report, _ = _keys_guard(tmp_path, *at, declared=_declared(LIST, not_yet=("leak-guard.json",)))
+    assert rc == 0 and report["keys"]["checked"] == 1 and report["keys"]["not_yet"] == {RK.TOP: 1}
+    assert report["released"] == 1 and (run / "out" / "step" / "a.json").is_file()

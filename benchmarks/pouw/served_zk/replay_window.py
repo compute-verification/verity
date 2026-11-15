@@ -30,18 +30,19 @@ import hashlib
 import json
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import asdict
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import verity_difftest as D
 from replay_core import store_runs
 
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import window as Wd
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/protocols/accounting/pouw/verifier/lean/window"

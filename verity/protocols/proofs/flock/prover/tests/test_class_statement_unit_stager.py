@@ -4,8 +4,8 @@ values `_stage_unit_at_base` does (`stage_unit`'s code before the stager, less i
 nothing) on `test_pouw_rows`' statements and a Boolean unit; a stager's rounds share its pin and are each the statement of
 their own rows; a lowering output that is not the reference's is refused, naming the first such instance, on both of the
 check's paths (bit-sliced for a Boolean Definition, the reference for the rest); and the stager's circuit renders the unit's
-netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; under
-FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows,
+circuit description once, the slot nets not again, and is the circuit composed with every circuit description rendered afresh;
+under FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows,
 refused while any switch `class_statement` reads at import is set."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from test_pouw_rows import POUW_TESTS, STAGED_TILES, V
+from test_pouw_rows import PC4_TESTS, STAGED_TILES, V
 from verity.circuits import evaluation as EV
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import add
@@ -28,7 +28,8 @@ from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SE
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc4
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.experimental.pearl_c4.prover import pc4
 
 #: a Boolean unit (a + b over 20 bits with its carry, a & c, and w[0] & w[2047] ^ w[1000]), its parameters' leaves off word
 #: boundaries in two rows that split c's, its 34-bit output padded to three words; w's row spans SHA-512 blocks, as a composed
@@ -91,7 +92,7 @@ def _anchor() -> tuple:
     """`test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation`' statement: three public input ports."""
     from verity.protocols.accounting.pouw.prover.circuit.anchors import public_ports
 
-    spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
+    spec = importlib.util.spec_from_file_location("pearl_c4_regions_vectors", PC4_TESTS / "pearl_c4_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(RV)
     t = RV.anchors("pc4-64", "pc4", 64, None)
@@ -242,22 +243,22 @@ def test_a_lowering_output_that_is_not_the_references_is_refused_naming_the_firs
 
 
 @pytest.mark.slow
-def test_the_stagers_circuit_renders_the_units_netlist_once_and_is_the_uncached_renders(monkeypatch):
-    """Composing a stager's circuit renders the unit's netlist once (its CIRCUIT section, which ``unit_sha256`` hashes with the
-    LEAVES line) and the slot nets `cache_slot_circuits` holds not at all; `Lowering.sha256` renders on its first read only;
-    and the circuit is, byte for byte, the one composed with every netlist rendered afresh and ``unit_sha256`` the digest of
-    `Lowering.text`, as `circuit.compose` did before it rendered once."""
+def test_the_stagers_circuit_renders_the_units_circuit_description_once_and_is_the_uncached_renders(monkeypatch):
+    """Composing a stager's circuit renders the unit's circuit description once (its CIRCUIT section, which ``unit_sha256`` hashes
+    with the LEAVES line) and the slot nets `cache_slot_circuits` holds not at all; `Lowering.sha256` renders on its first read
+    only; and the circuit is, byte for byte, the one composed with every circuit description rendered afresh and ``unit_sha256``
+    the digest of `Lowering.text`, as `circuit.compose` did before it rendered once."""
     args, _rows, _kw = _toy(0)
     CS.cache_slot_circuits()
-    netlist, renders = IL.netlist, []
-    monkeypatch.setattr(IL, "netlist", lambda lay, name, *a: renders.append(name) or netlist(lay, name, *a))
+    circuit_description, renders = IL.circuit_description, []
+    monkeypatch.setattr(IL, "circuit_description", lambda lay, name, *a: renders.append(name) or circuit_description(lay, name, *a))
     st = CS.UnitStager(*args)
     assert renders == [st.low.name]
     renders.clear()
     assert st.low.sha256 == st.low.sha256 == IL.digest(st.low.text) and renders == [st.low.name] * 2
     assert st.meta["unit_sha256"] == st.low.sha256
-    monkeypatch.setattr(IL, "netlist", netlist)
-    monkeypatch.setattr(FC, "_expanded", lambda lay, name: IL.netlist(lay, name, None, None))
+    monkeypatch.setattr(IL, "circuit_description", circuit_description)
+    monkeypatch.setattr(FC, "_expanded", lambda lay, name: IL.circuit_description(lay, name, None, None))
     monkeypatch.setattr(IL.Lowering, "sha256_of", lambda self, _expanded: IL.digest(self.text))
     assert CS.UnitStager(*args).text == st.text
 
@@ -294,22 +295,22 @@ WRITTEN = {"toy": _toy_as, "bound": _bound_toy, "non-ascii": lambda: _toy_as("un
 @pytest.mark.slow
 @pytest.mark.parametrize("which", list(WRITTEN))
 def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypatch):
-    """A stager given ``circuit`` writes it as it composes it (`circuit.compose_to`), the unit's netlist never rendered whole
-    (here in pieces of 7 rows), into the bytes, by SHA-512, of the text a stager without one holds written whole, as
-    `UnitStager` wrote ``circuit`` before (UTF-8): flat (unbound, bound, a non-ASCII name, the anchors' public inputs, a PoUW
+    """A stager given ``circuit`` writes it as it composes it (`circuit.compose_to`), the unit's circuit description never
+    rendered whole (here in pieces of 7 rows), into the bytes, by SHA-512, of the text a stager without one holds written whole,
+    as `UnitStager` wrote ``circuit`` before (UTF-8): flat (unbound, bound, a non-ASCII name, the anchors' public inputs, a PoUW
     tile, a unit with read slots, whose tail stages follow the unit), templated from the flat unit and structural. Its pin,
     class, META and text are that stager's, no partial file is left beside it, and a round's files and values are the same."""
     args, rows, kw, round_kw = WRITTEN[which]()
     whole = CS.UnitStager(*args, **kw)
     (tmp_path / "whole.txt").write_text(whole.text, encoding="utf-8")
-    netlist = IL.netlist
-    monkeypatch.setattr(IL, "netlist", lambda lay, name, *a: pytest.fail(f"{name} rendered whole") if name == args[1] else netlist(lay, name, *a))
-    monkeypatch.setattr(IL, "NETLIST_ROWS", 7)
+    circuit_description = IL.circuit_description
+    monkeypatch.setattr(IL, "circuit_description", lambda lay, name, *a: pytest.fail(f"{name} rendered whole") if name == args[1] else circuit_description(lay, name, *a))
+    monkeypatch.setattr(IL, "CIRCUIT_DESCRIPTION_ROWS", 7)
     st = CS.UnitStager(*args, **kw, circuit=tmp_path / "streamed" / "circuit.txt")
     assert hashlib.sha512(st.circuit.read_bytes()).hexdigest() == hashlib.sha512((tmp_path / "whole.txt").read_bytes()).hexdigest()
     assert (st.pin, st.class_sha512, st.meta) == (whole.pin, whole.class_sha512, whole.meta) and st.text == whole.text
     assert [p.name for p in st.circuit.parent.iterdir()] == ["circuit.txt"]
-    monkeypatch.setattr(IL, "netlist", netlist)
+    monkeypatch.setattr(IL, "circuit_description", circuit_description)
     _same(tmp_path / "whole", whole.stage(rows, tmp_path / "whole", b"k" * 32, **round_kw), tmp_path / "streamed",
           st.stage(rows, tmp_path / "streamed", b"k" * 32, **round_kw), st.circuit)
 
@@ -351,7 +352,8 @@ def test_a_packed_public_port_stages_on_the_rows_own_words(tmp_path):
 
 def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):
     """`unit_lowering` keeps no circuit (a GLM-5.3 norm unit's is 51 GiB, which nothing reads after the layout), and its compact
-    circuit (`_UnitCircuit`) lays out a plain `gf2.Circuit`'s netlist; `Lowering.domain` then reads the layout's assertions."""
+    circuit (`_UnitCircuit`) lays out a plain `gf2.Circuit`'s circuit description; `Lowering.domain` then reads the layout's
+    assertions."""
     from verity_flock import gf2
 
     rows = [(r, ps) for r, _s, _b, ps in TOY_ROWS]
@@ -366,7 +368,7 @@ def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):
 
 @pytest.mark.parametrize("chunk", [1, 5, 1 << 24])
 def test_a_lowerings_sha256_is_its_texts_in_pieces(chunk, monkeypatch):
-    """`Lowering.sha256_of` (``unit_sha256``) is SHA-256 of `Lowering.text`, its netlist encoded :data:`ir_lower.HASH_CHUNK`
+    """`Lowering.sha256_of` (``unit_sha256``) is SHA-256 of `Lowering.text`, its circuit description encoded :data:`ir_lower.HASH_CHUNK`
     characters at a time."""
     class Whole(str):
         def encode(self, *a):
@@ -374,7 +376,7 @@ def test_a_lowerings_sha256_is_its_texts_in_pieces(chunk, monkeypatch):
 
     low, _words = CS.unit_lowering(TOY, "unit/stager-toy", [(r, ps) for r, _s, _b, ps in TOY_ROWS])
     monkeypatch.setattr(IL, "HASH_CHUNK", chunk)
-    assert low.sha256_of(Whole(IL.netlist(low.layout, low.name))) == hashlib.sha256(low.text.encode()).hexdigest() == low.sha256
+    assert low.sha256_of(Whole(IL.circuit_description(low.layout, low.name))) == hashlib.sha256(low.text.encode()).hexdigest() == low.sha256
 
 
 def test_a_stagers_circuit_takes_flock_plain_leaves_leaf_scheme(monkeypatch):

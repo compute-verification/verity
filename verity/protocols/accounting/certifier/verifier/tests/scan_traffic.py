@@ -1,6 +1,6 @@
 """Network-certifier-form id requests and their responses served through the network certifier's own ingress and egress,
 both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
-cross-check of the network certifier, and `benchmarks/network_traces/scan_zk.py`'s). It imports no test framework, so a
+cross-check of the network certifier, and `verity/protocols/accounting/certifier/prover/scan_zk.py`'s). It imports no test framework, so a
 node's bare venv runs it."""
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from typing import Sequence
 
 from verity.protocols.accounting.certifier.prover import egress as EG, ingress_scan as IS
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, network_certifier as W
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.grid import Certifier, BlockGrid
 
 
@@ -22,7 +22,7 @@ class Served:
     execution phase), each connection's admission bucket and response ids (ordinal q = k + 1), and the network
     certifier's `fails` frames and the `fails` records its grid closed."""
 
-    params: W.WardenParams
+    params: W.NetworkCertifierParams
     ingress: tuple[BlockGrid, ...]
     egress: tuple[BlockGrid, ...]
     admitted: tuple[int, ...]
@@ -35,18 +35,18 @@ class Served:
         return {k + 1: xs for k, xs in enumerate(self.responses)}
 
     def rows(self) -> tuple[list[bytes], list[bytes]]:
-        """The network certifier's registered ingress and egress rows, bucket by bucket (`warden_rows.window_rows`)."""
+        """The network certifier's registered ingress and egress rows, bucket by bucket (`network_certifier_rows.window_rows`)."""
         return tuple([x for rec in recs for x in WR.window_rows(rec, self.params)]  # type: ignore[return-value]
                      for recs in (self.ingress, self.egress))
 
 
-def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
+def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
     there by its egress; a connection of `late` gets no byte from its server, so the network certifier fails it late at
     its first egress cell), and the network certifier ticks both links and `fails` for `windows` execution phases as
-    `Warden._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
+    `NetworkCertifier._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
     `_egress` until its own `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
     fails: list[bytes] = []
@@ -56,7 +56,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
         fails.append(frame)
         failed.enqueue(frame)
 
-    warden = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
+    network_certifier = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
     conns = []
     for k, (a, xs) in enumerate(zip(arrivals, responses, strict=True)):
         c = W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
@@ -78,9 +78,9 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None and c.failed is None:
-                for frame in W.Warden._ingress(warden, c, t):
+                for frame in W.NetworkCertifier._ingress(network_certifier, c, t):
                     grids[0].enqueue(frame)
-            for frame in W.Warden._egress(warden, c, t):
+            for frame in W.NetworkCertifier._egress(network_certifier, c, t):
                 grids[1].enqueue(frame)
         active = [c for c in active if c.ended is None]
         for grid in grids:
@@ -98,7 +98,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
 class Chain:
     """The scan of a run's ingress rows (`ingress_scan.scan`, the Programs' rows its outputs): the states S_{−1} (the
     empty state) … S_{T−1} as bit rows, the Programs' rows and the egress views; proof block t reads (ingress[t],
-    states[t], progs[t]), the first proof block no state, and computes (states[t + 1], views[t])."""
+    states[t], progs[t]), states[0] the empty state's row, and computes (states[t + 1], views[t])."""
 
     cls: IS.Class
     ingress: list[bytes]
@@ -107,11 +107,6 @@ class Chain:
     states: list[list[int]]
     progs: list[list[int]]
     views: list[list[int]]
-
-    def unit(self, t: int) -> tuple[bytes, list[int], list[int]] | tuple[bytes, list[int]]:
-        """Unit t's arguments: (row, prog) for t = 0 (`IngressScanFirst`), (row, sin, prog) after it
-        (`IngressScanBucket`)."""
-        return (self.ingress[0], self.progs[0]) if t == 0 else (self.ingress[t], self.states[t], self.progs[t])
 
     def outputs(self, t: int) -> tuple[list[int], list[int]]:
         """Unit t's o1 and o2: S_t and its egress view."""
@@ -129,7 +124,7 @@ def chain(cls: IS.Class, ingress: Sequence[bytes], egress: Sequence[bytes],
         raise ValueError("one ingress row and one egress row a bucket")
     got = IS.scan(cls, ingress, outputs)
     if got is None:
-        raise ValueError("the reference refuses the warden's own ingress rows")
+        raise ValueError("the reference refuses the network certifier's own ingress rows")
     states, progs = got
     scan = [IS.empty(cls)] + states
     return Chain(cls, ingress, egress, scan, [IS.encode(cls, s) for s in scan],
