@@ -26,10 +26,13 @@ _UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(
                        rf"|(?:{_DATE})?(?:{_PAC}(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})Z\)|(?P<bh>\d{{1,2}}):(?P<bm>\d{{2}})Z))(?![\w-])")
 #: a word just before a time that makes it a deadline (`by 20:00Z`, `ETA 4:00 AM PST`), not when the line was written
 DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}
-#: a stamp: `2:28 AM PST`, `Sun 15 Nov 2:28 AM PST`, `10:28Z`, `10:28 UTC`; `_CLOCKISH` is anything that looks like a clock
-_STAMP = re.compile(rf"(?<![\w:.-])(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*(?P<ap>[AP]M)\s+P[DS]?T"
-                    rf"|(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})(?:Z|\s+UTC))(?![\w-])")
-_CLOCKISH = re.compile(r"(?<![\w:.-])\d{1,2}:\w\w")
+#: a header's name token: a Slack token (`<!subteam^S1|@ci>`) or a word of letters, digits and `@*_().,'’/-`, never a `:`
+_NAME = r"(?:<[^>\s]+>|[@*_\w().,'\u2019/-]+)"
+#: the header position (`stamp_ahead`): up to 5 name tokens, an optional date, then `2:28 AM PST`, `10:28Z` or `10:28 UTC`
+_HEADER = re.compile(rf"^\W{{0,4}}(?P<names>(?:{_NAME} ){{0,5}}?)(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*"
+                     rf"(?P<ap>[AP]M)\s+P[DS]?T|(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})(?:Z|\s+UTC))(?![\w-])")
+#: what follows a header time with no comma before it (`ci 13:07Z: ...`, `*infra 11:45Z* (quiet)`), as `HEADER_TIME_RE` reads
+_HEADER_END = re.compile(r"\*?(?:[:,)]| \(| [-\u2014])")
 
 
 def _utc(t: dt.datetime | str | float) -> dt.datetime:
@@ -97,14 +100,24 @@ def slack_dates(text: str, now: dt.datetime | None = None) -> str:
 
 
 def stamp_ahead(text: str, now: dt.datetime) -> str | None:
-    """The refusal of a post whose first line is stamped later than `now`'s minute, else None. The stamp is the line's first
-    clock time, Pacific (`2:28 AM PST`) or UTC (`10:28Z`), on the date written before it, else on the day nearest `now` (so a
-    stamp across midnight is read on its own day). A line with no time, a deadline (`by 20:00Z`) or a time it can't read
-    (`10:5x PM PST`, an hour past 12) passes: a doubt never blocks a post."""
+    """The refusal of a post whose first line is stamped later than `now`'s minute, else None.
+
+    Only a time in the header position is a stamp. The header is the first line's start: at most 4 non-word characters,
+    then at most 5 name tokens, each a Slack token (`<!subteam^S1|@ci>`) or a word of letters, digits and `@*_().,'’/-`
+    (no `:`, so `ci: ...` ends a header), one space after each, then an optional date (`Sun 15 Nov`, `Nov 15, 2026`), then
+    the time, Pacific (`2:28 AM PST`) or UTC (`10:28Z`, `10:28 UTC`). It is a header only when the last name token ends in a
+    comma (`lean (lead), Sun 15 Nov 2:28 AM PST`, `lean's worker AREAS, 11:19 PM PST`) or the time is followed by `:`,
+    `,`, `)`, ` (`, ` -` or ` —` (`ci 10:28Z: ...`), and not when that last token is a deadline word (`by 20:00Z:`). So a time
+    later in the line, as an alert quoting `before the 20:30Z row` or `check starts 20:00Z`, is no stamp.
+
+    The stamp is read on the date written before it, else on the day nearest `now` (so a stamp across midnight is read on
+    its own day). A line with no header time, or one it can't read (`10:5x PM PST`, an hour past 12), passes: a doubt
+    never blocks a post."""
     line = (text or "").lstrip().split("\n", 1)[0]
-    m, first = _STAMP.search(line), _CLOCKISH.search(line)
-    if not m or first.start() != m.start("t") or any(w.strip("*_,()").lower() in DEADLINE_WORDS
-                                                     for w in line[:m.start()].split()[-1:]):
+    m = _HEADER.match(line)
+    names = m["names"].split() if m else []
+    if not m or names and names[-1].strip("*_,()").lower() in DEADLINE_WORDS or not (
+            names and names[-1].endswith(",") or _HEADER_END.match(line, m.end("t"))):
         return None
     g, u0 = m.groupdict(), _utc(now).replace(second=0, microsecond=0)
     pac = g["ph"] is not None
@@ -134,5 +147,5 @@ def stamp_ahead(text: str, now: dt.datetime) -> str | None:
     clock = ((f"{local:%a} " if g["wd"] else "") + f"{local.day} {local:%b} " if mon else "") + (
         f"{local:%I:%M %p}".lstrip("0") + f" {local.tzname()}" if pac else f"{local:%H:%M}Z")
     told = "TZ=America/Los_Angeles date" if pac else "date -u"
-    return (f"the first line says {m[0].strip()} and it is {clock}: write the time `{told}` gives now, leave the time out, "
+    return (f"the first line says {line[m.end('names'):m.end('t')].strip()} and it is {clock}: write the time `{told}` gives now, leave the time out, "
             "or, if it is a time to come, put `by`, `at` or `ETA` before it")

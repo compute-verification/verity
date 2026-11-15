@@ -924,7 +924,7 @@ STAMP_SLACK_S = 120                                              # a hand-typed 
 
 
 def not_ahead(text: str) -> str:
-    """`text`, unless its first line is stamped ahead of the clock (`timefmt.stamp_ahead`): then the refusal, with the fix."""
+    """`text`, unless its first line's header time is ahead of the clock (`timefmt.stamp_ahead`): then the refusal, with the fix."""
     if why := stamp_ahead(text, _now()):
         raise SlackError(why)
     return text

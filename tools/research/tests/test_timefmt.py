@@ -112,9 +112,16 @@ SUN_0820 = dt.datetime(2026, 11, 15, 16, 20, 5, tzinfo=UTC)                     
     (SAT_2358, "lean (lead), 12:01 AM PST: x", "the first line says 12:01 AM PST and it is 11:58 PM PST: " + PT_FIX),
     (dt.datetime(2026, 11, 15, 23, 58, 10, tzinfo=UTC), "ci 00:01Z: x",
      "the first line says 00:01Z and it is 23:58Z: " + Z_FIX),
-    (SUN_0820, "the window closes Sun 15 Nov 10:30 AM PST",                 # a time to come with no word before it
-     "the first line says Sun 15 Nov 10:30 AM PST and it is Sun 15 Nov 8:20 AM PST: " + PT_FIX),
-    (SUN_0820, "check starts 20:00Z", "the first line says 20:00Z and it is 16:20Z: " + Z_FIX),
+    (dt.datetime(2026, 11, 15, 10, 25, 20, tzinfo=UTC), "@top lean (lead), Sun 15 Nov 2:28 AM PST, to ci's 2:25 AM PST.",
+     "the first line says Sun 15 Nov 2:28 AM PST and it is Sun 15 Nov 2:25 AM PST: " + PT_FIX),
+    (dt.datetime(2026, 11, 15, 10, 7, 40, tzinfo=UTC), "@top @lean ci, Sun 15 Nov 2:24 AM PST, to your 1:55 AM item 2.",
+     "the first line says Sun 15 Nov 2:24 AM PST and it is Sun 15 Nov 2:07 AM PST: " + PT_FIX),
+    (dt.datetime(2026, 11, 15, 7, 18, 30, tzinfo=UTC), "lean's worker AREAS, Sat 14 Nov 11:19 PM PST",
+     "the first line says Sat 14 Nov 11:19 PM PST and it is Sat 14 Nov 11:18 PM PST: " + PT_FIX),
+    (dt.datetime(2026, 11, 15, 9, 55, 10, tzinfo=UTC), "Coordinator to TRAIN, Sun 15 Nov 2:05 AM PST.",
+     "the first line says Sun 15 Nov 2:05 AM PST and it is Sun 15 Nov 1:55 AM PST: " + PT_FIX),
+    (dt.datetime(2026, 11, 15, 21, 0, tzinfo=UTC), "node 2 reboot, 22:00Z: drain it now",   # a header time still can be to come
+     "the first line says 22:00Z and it is 21:00Z: " + Z_FIX),
 ])
 def test_a_first_line_stamped_ahead_of_the_clock_is_refused_with_the_stamp_the_clock_and_the_fix(now, text, says):
     """The lean lane's stamps ran up to 17 minutes ahead of the clock, kept right only by hand: one minute ahead is refused."""
@@ -136,8 +143,17 @@ def test_a_first_line_stamped_ahead_of_the_clock_is_refused_with_the_stamp_the_c
     (SUN_0225, "freeze 2026-11-15T12:00Z"), (SUN_0225, "lean, Sat 14 Nov 11:59 PM PST: yesterday"),
     (SUN_0001, "lean (lead), 11:59 PM PST: last night, across midnight"),
     (dt.datetime(2026, 11, 16, 0, 1, 10, tzinfo=UTC), "ci 23:59Z: across UTC midnight"),
-    (SUN_0820, "the review is due 8:30 AM PST today"),
-    (SUN_0820, "the window closes by Sun 15 Nov 10:30 AM PST"), (SUN_0820, "check starts at 20:00Z"),
+    (SUN_0820, "the review is due 8:30 AM PST today"), (SUN_0820, "the window closes Sun 15 Nov 10:30 AM PST"),
+    (SUN_0820, "check starts 20:00Z"), (SUN_0820, "the window closes by Sun 15 Nov 10:30 AM PST"),
+    (dt.datetime(2026, 11, 15, 21, 0, tzinfo=UTC), "node 2 reboots at 22:00Z: drain it now"),
+    (dt.datetime(2026, 11, 15, 19, 0, tzinfo=UTC), "<!subteam^S1|@lean> *Agent watch:* ROWS "
+     "(<https://cursor.com/agents/bc-1|bc-1>) stopped: \u201cwait before the 20:30Z row\u201d"),
+    (dt.datetime(2026, 11, 14, 23, 0, tzinfo=UTC), "lean: an ask from ci has waited over 4 h with no answer: "
+     "\u201cnode A booked Sun 00:30Z, take B\u201d"),
+    (dt.datetime(2026, 11, 15, 4, 50, tzinfo=UTC), "<!subteam^S2|@infra> *Agent watch:* G2-1 "
+     "(<https://cursor.com/agents/bc-2|bc-2>) went idle: \u201chold the node before the 05:10Z go\u201d"),
+    (dt.datetime(2026, 11, 15, 16, 0, tzinfo=UTC), "@lean ci, held for your 8:30 AM PST stop"),
+    (dt.datetime(2026, 11, 15, 16, 0, tzinfo=UTC), "the merge train is held for your 8:30 AM PST stop."),
 ])
 def test_a_stamp_at_or_behind_the_clock_no_stamp_and_a_doubt_all_pass(now, text):
     assert stamp_ahead(text, now) is None
