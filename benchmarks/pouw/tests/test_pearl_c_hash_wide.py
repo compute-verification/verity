@@ -21,13 +21,13 @@ import test_pearl_c_hash_host as HH  # hash_h3.cuh's host test: the host `Dev` (
 from conftest import load
 
 from verity.commitments.merkle import tree_levels
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.verifier import audit
-from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, rows_domain
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, rows_domain
 
 HERE = Path(__file__).resolve().parent
 POUW = HERE.parent
-KERNELS = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"
+KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 R = load("pearl_c_sm90/run.py")
 host = HH.host
 SOURCE = (KERNELS / "pearl_c" / "hash_wide.cuh").read_text()

@@ -49,7 +49,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
   - `tools/difftest/`: the Python held to each Lean (target, not yet: under `tools/`).
-    `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
+    `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).

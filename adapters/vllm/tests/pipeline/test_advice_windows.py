@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from verity.commitments.periods import rows as CS
-from verity.protocols.accounting.certifier.verifier import advice as A
+from verity.protocols.resource_accounting.network.verifier import advice as A
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.pipeline import advice_windows as AW
@@ -354,7 +354,7 @@ class _Coins:
 
 def _draw(rec: dict, sampling_design: dict) -> dict:
     """A challenger's sample under the registration's expanded `sampling_design` (`service.select_draw` past its rule)."""
-    from verity.protocols.proofs.spot.device import coins as T
+    from verity.protocols.proofs.spot.verifier.challenger import coins as T
 
     n = rec["population"]
     return {**sampling_design, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}

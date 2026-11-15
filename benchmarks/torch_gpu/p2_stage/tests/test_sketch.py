@@ -16,7 +16,7 @@ import torch
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((Path(__file__).resolve().parents[4] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[4] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_p2_stage as T  # noqa: E402

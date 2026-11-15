@@ -3225,9 +3225,9 @@ class Queue:
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
                   "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/proofs/flock/prover/python/",
-                  "verity/protocols/accounting/pouw/verifier/", "verity/protocols/accounting/pous/verifier/", "tools/pous_grader/",
-                  "verity/protocols/accounting/pous/device/challenger_session.py", "verity/protocols/accounting/pous/device/memory_challenger.py",
-                  "verity/protocols/accounting/poub/verifier/commitments/",
+                  "verity/protocols/resource_accounting/compute/pouw/verifier/", "verity/protocols/resource_accounting/memory/pous/verifier/", "tools/pous_grader/",
+                  "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py", "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
+                  "verity/protocols/resource_accounting/memory/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",

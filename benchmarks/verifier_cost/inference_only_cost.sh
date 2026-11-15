@@ -10,7 +10,7 @@ set -euo pipefail
 [ -z "${NCI_COST_FLAGS+set}" ] || { echo "NCI_COST_FLAGS is set: the variable is INFERENCE_ONLY_COST_FLAGS" >&2; exit 2; }
 O=${OUT:?run under research run, which sets OUT}
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
-L=$PWD/verity/protocols/policy/inference_only/verifier/lean
+L=$PWD/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

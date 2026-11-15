@@ -89,7 +89,7 @@ def _step(tmp_path: Path, d: Path, out: Path, python: str | None = None) -> tupl
     bin_, tree, calls, argv = tmp_path / "bin", tmp_path / "tree", tmp_path / "calls", tmp_path / "python.argv"
     for name in ("gpu-lease", "nvidia-smi", "lake"):
         _exe(bin_ / name, f'#!/bin/sh\necho "{name} $*" >> "$CALLS"\nexit 1\n')
-    for script in ("benchmarks/pous/served_case.sh", "verity/protocols/accounting/pous/prover/p2/p2_store/build.sh"):
+    for script in ("benchmarks/pous/served_case.sh", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh"):
         _exe(tree / script, f'#!/bin/sh\necho "{script} $*" >> "$CALLS"\n')
     py = _exe(tmp_path / "python", python or f'#!/bin/sh\nprintf "%s\\n" "$1" >> "{argv}"\nexec {sys.executable} "$@"\n')
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path / "home"), "D": str(d), "OUT": str(out),

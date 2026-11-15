@@ -4,7 +4,7 @@ names (`verity.device`'s `load_node` and `load_card`), through `timing.Figures.o
 from __future__ import annotations
 
 from verity.device import load_card, load_node
-from verity.protocols.accounting.poub.verifier import timing
+from verity.protocols.resource_accounting.memory.poub.verifier import timing
 
 NODE = "rtx-pro-6000-server-x8"
 

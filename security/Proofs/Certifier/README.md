@@ -216,7 +216,7 @@ Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`),
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-# the difftest is the certifier program's: see its package, ../../../verity/protocols/accounting/certifier/device/program/lean/
+# the difftest is the certifier program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/Certifier/`,
@@ -435,7 +435,7 @@ The other 16 are the rest of the Capacity table's bounds:
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the certifier program (`verity/protocols/accounting/certifier/device/program/lean/`, Lean core only, `NetworkCertifier`), and
+to the certifier program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
@@ -483,8 +483,8 @@ three axioms, but they have no record in `lean-audit.json`, so no citation may c
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them, and the review of the content versions is on the one stacked on it. Every
-statement, lemma and witness here is proved. The reference implementation, `verity/protocols/accounting/certifier`
-(`verity.protocols.accounting.certifier.verifier`), mirrors statements and lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
+statement, lemma and witness here is proved. The reference implementation, `verity/protocols/resource_accounting/network`
+(`verity.protocols.resource_accounting.network.verifier`), mirrors statements and lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks
 

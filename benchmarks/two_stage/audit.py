@@ -66,13 +66,13 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
 import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
-from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by

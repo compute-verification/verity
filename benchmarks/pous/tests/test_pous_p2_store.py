@@ -23,14 +23,14 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
-sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
-from verity.protocols.accounting.pous.verifier.p2_v1 import reference  # noqa: E402
+sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference  # noqa: E402
 from p2_store import store as S  # noqa: E402
 
-from verity.protocols.accounting.pous.verifier import protocol, setup, verifier  # noqa: E402
-from verity.protocols.accounting.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402
-from verity.protocols.accounting.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
-from verity.protocols.accounting.pous.verifier.verifier import VerifierKey  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier import protocol, setup, verifier  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey  # noqa: E402
 from verity.circuits import requirement  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
@@ -379,7 +379,7 @@ def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Pa
     `commit` run whole at `tiny`, where `setup.json` holds that name as `"program"`. The stand-in has no name, and its
     manifest no key, that the default generator's lacks."""
     monkeypatch.syspath_prepend(str(ROOT))
-    mod = importlib.import_module("verity.protocols.accounting.pous.prover.served_weights")
+    mod = importlib.import_module("verity.protocols.resource_accounting.memory.pous.prover.served_weights")
     seed, h200 = mod.TEST_SEED, mod.H200
     real = S.Generated(S.GENERATOR, "h200", seed)
     assert real.mod is mod and S.layout_sha512(real.store) == S.LAYOUT_SHA512

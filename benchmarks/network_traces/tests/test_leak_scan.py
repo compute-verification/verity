@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()

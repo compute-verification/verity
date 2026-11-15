@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "network_traces"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "prove_path"))
 import certifier_piece
 
-from verity.protocols.accounting.certifier.prover.scan_zk import SCAN_STATE_FILE
+from verity.protocols.resource_accounting.network.prover.scan_zk import SCAN_STATE_FILE
 import prove_path
 
 if __name__ == "__main__":

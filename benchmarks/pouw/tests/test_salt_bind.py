@@ -21,15 +21,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
 import served_commit as SC
 import of_record_lean as ORL
@@ -132,7 +132,7 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
 def _pub(priv, advice, t: int) -> bytes:
     """The sampled proof block's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
     verifier pins, then the unit's A row's and B row's b ‖ c."""
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}

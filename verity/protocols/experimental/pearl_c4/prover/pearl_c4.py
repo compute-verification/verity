@@ -128,8 +128,8 @@ from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 from verity.errors import InvalidArtifact
 
-from verity.protocols.accounting.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
-from verity.protocols.accounting.pouw.verifier.registration import (  # noqa: F401 - re-exported
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from verity.protocols.resource_accounting.compute.pouw.verifier.registration import (  # noqa: F401 - re-exported
     GAMMA_FOLD,
     HEAD_INTERLEAVE,
     REGISTRATION_STACKS,
@@ -139,10 +139,10 @@ from verity.protocols.accounting.pouw.verifier.registration import (  # noqa: F4
     check_registration,
 )
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from . import pearl_c4_c_L as CL
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import UnitRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64

@@ -60,7 +60,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.accounting.certifier.verifier import charge_chain as CC
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SRW
 from verity_vllm import messages as M

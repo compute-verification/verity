@@ -43,7 +43,7 @@ settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 #: the sm_120 kernel's directory, the default kernel
-SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",

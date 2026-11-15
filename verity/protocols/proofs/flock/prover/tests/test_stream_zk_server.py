@@ -40,7 +40,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from verity.protocols.proofs.spot.device import challenger as C, remote as R
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C, remote as R
 
 import settings
 from verity_flock import challengers as CH

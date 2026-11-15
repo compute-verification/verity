@@ -25,10 +25,10 @@ from verity.commitments.crypto.turboshake import turboshake128
 from verity.circuits.kernels.tc import group_sum_total_batch
 from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.verifier import audit as AU
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.experimental.pearl_c4.prover.kernels import twin as T
 
 SHAPE = (128, 128, 1024)

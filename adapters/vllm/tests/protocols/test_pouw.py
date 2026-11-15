@@ -1,5 +1,5 @@
 """The PoUW adapter (`protocol_options.pouw`): refusals, weights committed before any wrapper, the int7 linear served
-exactly, the executor's tiles equal to `verity.protocols.accounting.pouw.verifier`'s reference bit for bit, the weight read from the layer it is handed
+exactly, the executor's tiles equal to `verity.protocols.resource_accounting.compute.pouw.verifier`'s reference bit for bit, the weight read from the layer it is handed
 (so POUS's decoded weight is what the GEMM uses), and an uninstall that leaves the model as it was.
 
 CPU only, on numpy stand-ins for a linear layer; the hook site is the same ``quant_method.apply`` vLLM's ``LinearBase``
@@ -15,10 +15,10 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.pouw.prover import circuit
-from verity.protocols.accounting.pouw.prover.schemes import SCHEMES, get, pearl_c
-from verity.protocols.accounting.pouw.verifier import registration
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.prover import circuit
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES, get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.verifier import registration
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
     Epoch,
@@ -28,14 +28,14 @@ from verity.protocols.accounting.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.accounting.pouw.verifier.coins import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import (
     Challenger,
     CoinCommitment,
     CoinOpening,
     coin_reason,
 )
-from verity.protocols.accounting.pouw.verifier.protocol import Context as UnitContext
-from verity.protocols.accounting.pouw.verifier.protocol import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context as UnitContext
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
     DomainError,
     Matmul,
     Shape,
@@ -45,13 +45,13 @@ from verity.protocols.accounting.pouw.verifier.protocol import (
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as pouw_h1
-from verity.protocols.accounting.pouw.prover.serving import ncp as NCP
-from verity.protocols.accounting.pouw.prover.serving import operands as OPS
-from verity.protocols.accounting.pouw.prover.serving import lead as pouw_lead
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PPK
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
 
@@ -119,7 +119,7 @@ def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
     scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
-    on = {"pouw": {"device": "cuda", "kernel": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120"}}
+    on = {"pouw": {"device": "cuda", "kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"}}
     assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
     assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
     commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings=on)

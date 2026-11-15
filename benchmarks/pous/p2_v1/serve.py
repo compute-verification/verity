@@ -20,7 +20,7 @@ window closes at its deadline.
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
 leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
 the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/protocols/accounting/poub/verifier` is the interface). It is regenerated, not tracked: the repository's data
+`verity/protocols/resource_accounting/memory/poub/verifier` is the interface). It is regenerated, not tracked: the repository's data
 budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
@@ -37,15 +37,15 @@ import numpy as np
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
 
 from p2_store import store as S
 
-from verity.protocols.accounting.pous.verifier import setup
-from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
-from verity.protocols.accounting.poub.prover import audit_prover
-from verity.protocols.accounting.poub.prover import p2_prover
-from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
+from verity.protocols.resource_accounting.memory.pous.verifier import setup
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
+from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
 FIXTURE_SHA512 = ("4108408908b13f0b4b7912ce55ecc92c70f37ec71afc8f0b65e9b421831b08f6"
@@ -274,7 +274,7 @@ def fixture(passes: int = 2) -> dict:
         previous = root
     return {
         "schema": FIXTURE_SCHEMA,
-        "interface": "verity/protocols/accounting/poub/verifier/PROTOCOL.md §11",
+        "interface": "verity/protocols/resource_accounting/memory/poub/verifier/PROTOCOL.md §11",
         "store": {"toy": "toy.json", "c_star_sha512": doc["c_star_sha512"], "blocks": store.params.blocks,
                   "units": units, "unaudited": list(range(p2.UNIT_BLOCKS * units, store.params.blocks))},
         "registration": {"node": NODE.hex(), "rows": reg.rows, "digest": reg.digest.hex()},

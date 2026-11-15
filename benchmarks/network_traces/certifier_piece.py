@@ -49,7 +49,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
      late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_certifier_chain.rows_audit_case` of the
-     run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/accounting/certifier/verifier/lean;
+     run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
      `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
      deployment's key in its session, then runs the certifier program's rows audit (`NetworkCertifier.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
@@ -70,7 +70,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   4. The period's execution phase is the scan's (``answers.json``'s one window; the chain keeps its scan's answers on
      its private side, `chain_witness`): every window request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the network certifier run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
+     (``--lean``, else built in verity/protocols/resource_accounting/network/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the machine the network certifier ran on, and the machine that ran each of
      the piece's own steps, the chain and the period check, each read from the machine as it runs the step (`ran_on`).
      The names are labels: the piece establishes no `trusted-device` and gives no bound on that ground (`UNMET`).
@@ -217,7 +217,7 @@ LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
 #: split's `CHAINED`, the certificates and `PUBLIC`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
-LEAN_DIR = TREE / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "lean"
+LEAN_DIR = TREE / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
@@ -542,7 +542,7 @@ def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]]
     (`network_certifier_chain.io`) and its certified ingress, each execution phase's number and rows (`network_certifier_rows.window_rows`);
     None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
     from benchmarks.network_traces import network_certifier_chain as WC
-    from verity.protocols.accounting.certifier.verifier import relay_check as RC, network_certifier_rows as WRW
+    from verity.protocols.resource_accounting.network.verifier import relay_check as RC, network_certifier_rows as WRW
 
     if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
         return None
@@ -783,7 +783,7 @@ def lean_exe(name: str, given: str | None) -> str:
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
-    from verity.protocols.accounting.certifier.prover import scan_period as SP
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
     try:
         return SP.lean_check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
@@ -794,7 +794,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
     """Step 1's rows audit of the network certifier run ``run`` (module docstring) by ``network-rows`` ``exe``, under
     ``record``, the record of its deployment (`network_certifier_chain.RECORD`): `Rejected` on its reject, `NotRun` where the case
     can't be read or the check gives no `ROWS` accept or reject."""
-    from verity.protocols.accounting.certifier.prover import scan_period as SP
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
     from benchmarks.network_traces import network_certifier_chain as WC
     try:
         case = WC.rows_audit_case(run, record)
@@ -835,7 +835,7 @@ def chain_witness(keep: Path, run: str) -> Path:
 
 
 def case_of(network_certifier: Path, scan: Path, answers: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
-    from verity.protocols.accounting.certifier.prover import scan_period as SP
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
     try:
         return SP.rows_case(network_certifier, scan, v3c=v3c, circuit=circuit, answers=answers)
     except (SystemExit, OSError, KeyError, ValueError) as e:
@@ -846,7 +846,7 @@ def class_circuit(v3c: Path) -> str:
     """The class circuit V3c's audit is held to: the Program of the verifier's own window-circuit record beside V3C
     (`served_verdicts.sh`'s ``window-circuit-w<K>-<class>.json`` beside ``v3c-w<K>-<class>``,
     `scan_period.circuit_of_record`); `NotRun` without one."""
-    from verity.protocols.accounting.certifier.prover import scan_period as SP
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
     try:
         return SP.circuit_of_record(v3c.parent / f"window-circuit-{v3c.name.removeprefix('v3c-')}.json")
     except (SystemExit, OSError, ValueError) as e:
@@ -966,7 +966,7 @@ def certificates(evidence: bytes) -> dict:
     records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
     with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""
-    from verity.protocols.accounting.certifier.prover.scan_period import CERTIFICATE_KEYS
+    from verity.protocols.resource_accounting.network.prover.scan_period import CERTIFICATE_KEYS
     windows = json.loads(evidence)["windows"]
     rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
              "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}

@@ -1560,7 +1560,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
 
 
 #: what the era's code imports from a run's commit
-ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "verity/protocols/accounting/pouw/prover/kernels/served_zk")
+ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")
 
 
 def era_tree(run: Run, commit: str) -> Path:
@@ -1590,7 +1590,7 @@ def era_python(tree: Path, code: str, *args: str) -> Any:
 #: served_zk's verifier copies at each level, by the era's own `served_commit`
 SERVED_ZK_ERA = r'''
 import json, sys
-sys.path.insert(0, "verity/protocols/accounting/pouw/prover/kernels/served_zk")
+sys.path.insert(0, "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")
 import served_commit as SC
 from verity.protocols.verification.spot.one_stage import partition as PT
 from verity.primitives.circuits.codec import encode_program
@@ -1627,7 +1627,7 @@ SERVED_OUTSIDE = (
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof system (`verity/protocols/accounting/pouw/prover/kernels/served_zk`): the request's docket of PoUW's
+    """served_zk's window through the proof system (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk`): the request's docket of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the sampling design of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
@@ -1636,8 +1636,8 @@ def served_window(run: Run) -> Iterator[Case]:
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1784,13 +1784,13 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's docket passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
-    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py"],
+    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py"],
                          capture_output=True, text=True) if commit else None
     if src is None or src.returncode != 0:
-        raise Missing(f"verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py at {commit} (git history)")
+        raise Missing(f"verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py at {commit} (git history)")
     binding_run = "def run_of" in src.stdout
     prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles, the record's "
                                                 "version)",

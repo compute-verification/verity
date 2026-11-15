@@ -94,9 +94,9 @@ KNOWN = {
     ("verity/protocols/proofs/spot/verifier/tests/test_served_select.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/spot/verifier/tests/test_served_select.py", "verity_vllm.definitions.registry.prims"),
     # network-accounting's: the certifier's tests take the sampling Definitions from `verity`.
-    ("verity/protocols/accounting/certifier/verifier/network/tests/period_case.py", "verity_vllm.definitions.registry.sampling"),
-    ("verity/protocols/accounting/certifier/verifier/network/tests/test_slot_entry_pins.py", "verity_vllm.definitions.registry"),
-    ("verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_response_tie.py", "verity_vllm.definitions.registry"),
+    ("verity/protocols/resource_accounting/network/verifier/network/tests/period_case.py", "verity_vllm.definitions.registry.sampling"),
+    ("verity/protocols/resource_accounting/network/verifier/network/tests/test_slot_entry_pins.py", "verity_vllm.definitions.registry"),
+    ("verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_response_tie.py", "verity_vllm.definitions.registry"),
 }
 
 

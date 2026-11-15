@@ -40,15 +40,15 @@ HERE = Path(__file__).resolve().parent
 GiB = 1 << 30
 #: (module, attribute) of each part timed by `serve`, by its name in the profile; a dotted attribute is a class's method
 PARTS = {
-    "gemm": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun._gemm"),
-    "after": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun._after"),
-    "begin": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.begin"),
-    "poison": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.poison"),
-    "join_sides": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.join_sides"),
+    "gemm": ("verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c", "PearlCDeviceRun._gemm"),
+    "after": ("verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c", "PearlCDeviceRun._after"),
+    "begin": ("verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c", "PearlCDeviceRun.begin"),
+    "poison": ("verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c", "PearlCDeviceRun.poison"),
+    "join_sides": ("verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c", "PearlCDeviceRun.join_sides"),
     "retained_call": ("verity_torch.pouw.pearl_c.ends", "PassEnds._retained"),
     "excluded": ("verity_torch.pouw.pearl_c.ends", "excluded"),
     "excluded_host": ("verity_torch.pouw.pearl_c.ends", "excluded_host"),
-    "y_tree": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y", "y_tree"),
+    "y_tree": ("verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.served_y", "y_tree"),
     "write_behind": ("verity_torch.pouw.pearl_c.ends", "write_behind"),
     "copies": ("verity_torch.pouw.pearl_c.host", "_Copies.start"),
     "arena_take": ("verity_torch.pouw.pearl_c.host", "_Arena.take"),
@@ -245,14 +245,14 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
     if args.seed is not None:
         import random
 
-        from verity.protocols.accounting.pouw.verifier import verifier
-        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
         draw = random.Random(args.seed)
         verifier.coins = draw.randbytes
         PPD.new_salt_key = lambda scheme: draw.randbytes(32)
     if args.wait_ends:
-        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
         PPDR.PearlCDeviceRun.retain_behind = False
     prof = _Profile()

@@ -1,6 +1,6 @@
 """served-session: the session of record, the network certifier in front of a served model, as jobs on the nodes
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
-`verity/protocols/compose/device/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
+`verity/protocols/compose/verifier/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
 KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the
 network certifier late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is
@@ -167,7 +167,7 @@ def guard_argv(*args: str | Path) -> list[str]:
     path (pytest's `pythonpath`, a `sys.path` insert) doesn't reach the child, but ``-m`` puts its working directory
     first on its path. So each `Path` in ARGS is made absolute; a `str` (a record path) is passed as it is."""
     return [sys.executable, "-m", LEAK_GUARD, *(str(a.absolute()) if isinstance(a, Path) else a for a in args)]
-sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
+sys.path.insert(0, str(TREE / "verity/protocols/compose/verifier/live_challenger"))
 import auditor as A  # noqa: E402
 
 #: this directory's settings registry, by its path: a bare ``settings`` is whichever one sys.path has first

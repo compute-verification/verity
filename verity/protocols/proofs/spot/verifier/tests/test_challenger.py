@@ -14,7 +14,7 @@ import random
 
 import pytest
 
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.commitments.merkle import merkle_depth
 from verity.commitments.crypto import lms
 

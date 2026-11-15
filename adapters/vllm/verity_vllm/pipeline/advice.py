@@ -1,4 +1,4 @@
-"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.accounting.certifier.verifier.advice`) for a served run, from its
+"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.resource_accounting.network.verifier.advice`) for a served run, from its
 scheduler step trace and its Commit record.
 
 The precommitted compiler turns advice into each step's circuit; the advice says everything serving decided that nothing
@@ -65,8 +65,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.accounting.certifier.verifier.advice as I1
-from verity.protocols.accounting.registration.verifier import registration as REG
+import verity.protocols.resource_accounting.network.verifier.advice as I1
+from verity.protocols.registration.verifier import registration as REG
 from verity.commitments.periods import interface as IF
 from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
@@ -110,7 +110,7 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
     """B's item in the deployment's registration log
-    (`verity.protocols.accounting.registration.verifier.registration`, kind ``builder``): the inner compiler's digest,
+    (`verity.protocols.registration.verifier.registration`, kind ``builder``): the inner compiler's digest,
     the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
     return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
 

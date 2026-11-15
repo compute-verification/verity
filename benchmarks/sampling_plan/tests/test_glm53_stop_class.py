@@ -14,7 +14,7 @@ import pytest
 
 from verity.commitments.periods.interface import proof_block_k_log
 from verity.circuits.defs import bind
-from verity.protocols.accounting.certifier.prover import response_tie
+from verity.protocols.resource_accounting.network.prover import response_tie
 from verity.protocols.proofs.spot.prover.cost import glm53 as G
 from verity.protocols.proofs.spot.prover.optimize import Objective, certify
 from verity_vllm.definitions.registry import boolean_stop_rule
