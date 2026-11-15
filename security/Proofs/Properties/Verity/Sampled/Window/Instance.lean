@@ -691,7 +691,8 @@ verifier accepts files that passed the commit phase's check while one of its thr
 most their errors summed, at the vocabulary `ExecutionPhaseInstance.vocab` builds from the deployment and the constructions
 `ExecutionPhaseInstance.constructionsAt` assembles, wherever what the claim reads of the window (`ClaimReads`), the
 verifier's window at an accepted play (`ExecutionPhaseAt`), what the verifier's acceptance gives of each play
-(`ExecutionPhaseReads`), and the base's PoUW and inference-only targets hold.
+(`ExecutionPhaseReads`), the base's PoUW target, the wires' statement at that vocabulary and gate A's row hold
+(`RemoteSoundness`).
 The sampled subprotocol's error at a window is `ExecutionPhase.delta`: the sample's own miss and the members' knowledge and binding
 terms summed (`JointShareV5`), each member's registration's roots term (`ExecutionPhase.rootsErr`), a two-continuation term
 per round opened after a digest in every member's session, its closing round among them, one for the record and one
@@ -704,9 +705,11 @@ theorem remote_soundness_executionPhase (I : ExecutionPhaseInstance d α) (K₀ 
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt .remote) (hWR : I.ExecutionPhaseReads .remote ev filesDec)
-    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hW : I.base.PouwSound .remote)
+    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).WiresSound .remote)
+    (hG : GateARow) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote :=
   Verity.remote_soundness_of_subprotocols ι α d _
-    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR) hW hI
+    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR) hW hWi hG
 
 end Verity.Sampled
