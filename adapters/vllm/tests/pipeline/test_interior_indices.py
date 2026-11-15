@@ -20,13 +20,13 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.commitments.windows import rows as CS
-from verity.definitions.registry import dead_free as DF
+from verity.commitments.periods import rows as CS
+from verity_vllm.definitions.registry import dead_free as DF
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.pipeline import boundary_rows as BR
 from verity_vllm.pipeline import boundary_tables as BT
@@ -113,7 +113,7 @@ def _first(links=LINKS):
     draws = iter([[0, 2]])
     stream = S.Stream(spec, (A, B), span_values=IR.span_values(links), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
-                      sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
+                      sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                             "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)

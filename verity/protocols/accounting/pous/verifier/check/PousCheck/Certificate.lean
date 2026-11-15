@@ -5,7 +5,7 @@ public import PousCheck.Wire
 /-!
 # What an accepted timed audit establishes: the certificate gate and the StorageProfile
 
-`verity/core/protocols/pous/protocol.py` (`CapacityBound`, `TimedAudit`, `StorageProfile`) at the scheme
+`verity/protocols/accounting/pous/verifier/protocol.py` (`CapacityBound`, `TimedAudit`, `StorageProfile`) at the scheme
 `schemes/p2.py` names (`P2`, `p2-<w>/v4`). P2 has one certificate, at its registered point `(w, c0, blocks per segment) =
 (16448, 21065, 2^16)`: `Pous.SecurityProofs.P2SlackFamilyUncond`'s `λ = 128` row, `k = 105` challenges each answered
 within no sequential root (`rounds = 0` calls of `ROOT_CALL_NS`), about `W` of 8 segments.
@@ -48,7 +48,7 @@ def CERT_BLOCKS : Nat := 2 ^ 19
 def CERT_K : Nat := 105
 def EXPANDER : String := "sha512-ctr-v4"
 def P2_CLAIMS : List String := ["m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle",
-  "perfect-isolation", "cr/sha-512", "live-verifier", "designated-verifier", "trusted-host"]
+  "perfect-isolation", "cr/sha-512", "live-verifier", "designated-verifier", "trusted-device"]
 /-- Why P2 is experimental (`p2.EXPERIMENTAL`): every profile of it says so. -/
 def EXPERIMENTAL : String := "abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not " ++
   "accepted, and the XOR-then-reduce compression attack on it is open"

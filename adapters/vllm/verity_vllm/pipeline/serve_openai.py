@@ -14,7 +14,7 @@
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
-It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what a network certifier's client sends: ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
@@ -22,7 +22,7 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
-certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+certifier's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
 ``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
@@ -103,13 +103,13 @@ it is written before the pending seals too, and its ``final`` is true only once 
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
-``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
 product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
 (`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
 its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
-``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor host's challenger,
+``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor device's challenger,
 reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
@@ -135,7 +135,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
+from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
@@ -740,7 +740,7 @@ def main(opts: Options) -> int:
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
-    (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
+    M.write(out / "serve.json", "ServingConfiguration", json.dumps(record, indent=1, default=str).encode())
     if mirror is not None:
         mirror()
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
@@ -758,7 +758,7 @@ def main(opts: Options) -> int:
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
-            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            M.write(out / "summary.json", "RunTotals", json.dumps(got, indent=1).encode())
             if mirror is not None:
                 mirror()
             return got

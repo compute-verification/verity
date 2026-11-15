@@ -1,6 +1,6 @@
-"""Row units under Flock's block (``Shape.row_k``): each row unit of Pearl-C's (`pc8`) and Pearl-C4's (`pc4`) tile
-check cut along k into a head, one form per segment of row_k positions and a tail.  It is opt-in: a shape without
-``row_k`` builds today's Programs, which this module leaves alone.
+"""Row units under Flock's block (``Shape.row_k``): each row unit of Pearl-C's (`pc8`) tile check, and of the tile
+checks built the same way (Pearl-C4's, `pc4_rowk`), cut along k into a head, one form per segment of row_k positions and
+a tail.  It is opt-in: a shape without ``row_k`` builds today's Programs, which this module leaves alone.
 
 Flock proves one instance in at most a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it
 long before the served k (Pearl-C's row of A on sm_120 past k = 2,560).  Cut at row_k = 2,048 (`ROW_K`), no piece grows
@@ -25,15 +25,14 @@ as the whole row, and the carry is exact.  The tail concatenates the codes (wiri
 chains, and the row's admission from the head's bits and the dead count.  So every value is the whole row's, each computed
 in exactly one unit, and a tile reads the tail's fp8-p and ok rows as it reads today's row unit's.
 
-Pearl-C4's pieces (`Pc4Row{A,B}{Head,First,Form,Tail}`) are the same cut: its head is `pc4._stats` (its admission is
-complete there, so the head writes the row's ok row), its forms `pc4._form` on the segment with the NVF4 chains carried,
-and its tail Ẽ and P.  Each form decodes its segment's BF16 words again (`Bf16ToF32`, core's wiring), the only gate that
-two units hold.
+Pearl-C4's pieces (`Pc4Row{A,B}{Head,First,Form,Tail}`, `pc4_rowk`) are the same cut, and read this module's row
+layouts (`HEAD4`, `HEAD4_OUT`, `CARRY4`), its batching (`_rows`) and its ports' and slice anchors' forms (`_ports`,
+`_slices`).
 
-Each piece's rows (`PORTS8`, `PORTS4`; `leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and nvfp4-codes) are
-Flock-committed ports in the row's session, and a form reads its segment of F_A and F_B as a public input region under
-the anchor's slice rule (`DERIVATIONS8`, `DERIVATIONS4`, `anchors.Derivation.per_segment`).  Every form opens the row of A
-whole, so a form's SHA work still grows with k.  Flock pads each output port to whole words and reads an input row as
+Each piece's rows (`PORTS8`, `pc4_rowk.PORTS4`; `leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and
+nvfp4-codes) are Flock-committed ports in the row's session, and a form reads its segment of F_A and F_B as a public input
+region under the anchor's slice rule (`DERIVATIONS8`, `pc4_rowk.DERIVATIONS4`, `anchors.Derivation.per_segment`).  Every
+form opens the row of A whole, so a form's SHA work still grows with k.  Flock pads each output port to whole words and reads an input row as
 its parameters' bits run together, so the head returns its row in whole-word ports (`HEAD8_OUT`, `HEAD4_OUT`: a_E with
 its pad, and the finite and floor bits with theirs, one port each) and commits the very words the forms and tail read.
 """
@@ -47,14 +46,15 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.fp32 import F32AddV2, F32FmaV2
-from verity.circuits.ops.prims import Bf16ToF32, E4m3ToF32, F2fpBf16
+from verity.circuits.ops.prims import E4m3ToF32, F2fpBf16
 from verity.circuits.ops.scalar import BitAnd, F32Neg, I32Le
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from ..schemes.pearl_c_device import DEVICES
 from . import anchors as A
 from . import leaves as L
-from . import pc4, pc8
+from . import pc8
+from . import tile_units as U
 from . import words as W
 
 #: the deployed segment length: a multiple of every device's window, of 32 and of Pearl-C4's 64-position atom
@@ -91,7 +91,7 @@ def _head_out(head: tuple, ports: tuple) -> tuple:
 # ---- Pearl-C's pieces ----------------------------------------------------------------------------------------------------
 
 def _head8_body(B, S_, x, line):
-    e = pc4._Emit(B)
+    e = U._Emit(B)
     s, rho, alpha, beta, th = pc8._moments(e, x, S_.K)
     floor, finite = pc8._bounds(e, s, rho, alpha)
     return tuple_of(alpha, array_of(pc8._ep(e, beta, line)), th, tuple_of(finite, floor, e.c(14, 0)))
@@ -105,7 +105,7 @@ def _seg8_sig(S_, own: str, other: str, carry: bool):
 
 
 def _seg8(B, S_, j: int, x, alpha, ep, th, _finite, _floor, _pad, *rest):
-    e, n, dev = pc4._Emit(B), S_.KS, S_.DEV
+    e, n, dev = U._Emit(B), S_.KS, S_.DEV
     dead, tot, _fill, own, other = rest if len(rest) == 5 else (0, [0] * R, None, *rest)
     lo = j * n
     codes = array_of(pc8._codes(e, x, alpha, ep, own, lo, lo + n, dev))
@@ -119,19 +119,19 @@ def _tail8_sig(S_, extra: tuple = ()):
     return HEAD8 + (("cs", Array(k // n, Array(n, E4M3))),) + CARRY8 + extra, Tuple(Array(k, E4M3), pc8.P_ROW, OK)
 
 
-def _ok8(e: pc4._Emit, finite, floor, dead, k: int):
-    return pc4.ok_word(e, e.call(BitAnd, finite, e.call(BitAnd, floor, e.call(I32Le, dead, k // 64))))
+def _ok8(e: U._Emit, finite, floor, dead, k: int):
+    return U.ok_word(e, e.call(BitAnd, finite, e.call(BitAnd, floor, e.call(I32Le, dead, k // 64))))
 
 
 def _tail8a_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot, fill):
-    e, k = pc4._Emit(B), S_.K
+    e, k = U._Emit(B), S_.K
     ew = [e.call(E4m3ToF32, ep[p]) for p in range(R)]
     p_row = [e.call(F2fpBf16, w) for w in ew] + [e.call(F2fpBf16, tot[p]) for p in range(R)]
     return tuple_of(cs.reshape(Array(k, E4M3)), array_of(p_row), _ok8(e, finite, floor, dead, k))
 
 
 def _tail8b_body(B, S_, alpha, ep, th, finite, floor, pad, cs, dead, tot, fill, g):
-    e, k = pc4._Emit(B), S_.K
+    e, k = U._Emit(B), S_.K
     ew = [e.call(E4m3ToF32, ep[p]) for p in range(R)]
     mid = []
     for q in range(R):
@@ -175,90 +175,6 @@ Pc8RowBTailDef = CompositeDefinition(
     conformance="protocol-defined")
 
 
-# ---- Pearl-C4's pieces ---------------------------------------------------------------------------------------------------
-
-def _head4_body(B, S_, x):
-    e = pc4._Emit(B)
-    _w, alpha, ae, ok = pc4._stats(e, x, S_.K)
-    return tuple_of(alpha, tuple_of(ae, e.c(8, 0)), pc4.ok_word(e, ok))
-
-
-def _seg4_sig(S_, own: str, other: str, carry: bool):
-    n = S_.KS
-    params = ((("x", Array(S_.K, BF16)),) + HEAD4 + (CARRY4 if carry else ())
-              + (("e", pc4.LINE), (own, pc4.BASIS(n)), (other, pc4.BASIS(n))))
-    return params, Tuple(Array(n, E2M1), Array(n // pc4.BLOCK, U8), Array(R, F32))
-
-
-def _seg4(B, S_, j: int, x, alpha, ae, _pad, *rest):
-    e, n = pc4._Emit(B), S_.KS
-    tot, line, own, other = rest if len(rest) == 4 else ([0] * R, *rest)
-    lo = j * n
-    w = [e.call(Bf16ToF32, x[t]) for t in range(lo, lo + n)]
-    codes, scales = pc4._form(e, w, alpha, ae, line, own, n)
-    ones = pc4._ones(e, n)
-    return tuple_of(codes, scales, array_of([pc4._chain(e, codes, other.take(1, p), scales, ones, n, tot[p])
-                                             for p in range(R)]))
-
-
-def _tail4_sig(S_, extra: tuple = ()):
-    k, n = S_.K, S_.KS
-    params = HEAD4 + (("cs", Array(k // n, Array(n, E2M1))), ("ss", Array(k // n, Array(n // pc4.BLOCK, U8)))) + CARRY4
-    return params + (("e", pc4.LINE),) + extra, Tuple(Array(k, E2M1), Array(k // pc4.BLOCK, U8), pc4.P_ROW)
-
-
-def _tail4a_body(B, S_, alpha, ae, pad, cs, ss, tot, line):
-    e, k = pc4._Emit(B), S_.K
-    af = [e.call(F2fpBf16, tot[p]) for p in range(R)]
-    return tuple_of(cs.reshape(Array(k, E2M1)), ss.reshape(Array(k // pc4.BLOCK, U8)),
-                    array_of(pc4._e_tilde(e, line, ae) + af))
-
-
-def _tail4b_body(B, S_, alpha, ae, pad, cs, ss, tot, line, g):
-    e, k = pc4._Emit(B), S_.K
-    et = pc4._e_tilde(e, line, ae)
-    ew = [e.call(Bf16ToF32, v) for v in et]
-    mid = []
-    for q in range(R):
-        acc = 0
-        for p in range(R):
-            acc = e.call(F32FmaV2, ew[p], g[p][q], acc)
-        mid.append(e.call(F2fpBf16, e.call(F32AddV2, acc, e.call(F32Neg, tot[q]))))
-    return tuple_of(cs.reshape(Array(k, E2M1)), ss.reshape(Array(k // pc4.BLOCK, U8)),
-                    array_of(mid + [e.call(W.PouwBf16Neg, v) for v in et]))
-
-
-def _pieces4(side: str):
-    own, other = ("fa", "fb") if side == "A" else ("fb", "fa")
-    head = CompositeDefinition(
-        f"Pc4Row{side}Head", 1, ("K",), lambda S_: ((("x", Array(S_.K, BF16)),), Tuple(*_head_out(HEAD4, HEAD4_OUT), OK)),
-        _head4_body, doc=f"Row {side}'s head: its statistics (α, a_E) and its admission (`pc4._stats`).",
-        conformance="protocol-defined")
-    first = CompositeDefinition(
-        f"Pc4Row{side}First", 1, ("K", "KS"), lambda S_: _seg4_sig(S_, own, other, False),
-        lambda B, S_, *a: _seg4(B, S_, 0, *a),
-        doc=f"Row {side}'s first segment: its KS codes and scale bytes, and the clean-up's NVF4 chains over it from +0.",
-        conformance="protocol-defined")
-    form = CompositeDefinition(
-        f"Pc4Row{side}Form", 1, ("K", "KS", "J"), lambda S_: _seg4_sig(S_, own, other, True),
-        lambda B, S_, *a: _seg4(B, S_, S_.J, *a),
-        doc=f"Row {side}'s segment J >= 1: its KS codes and scale bytes, and the clean-up's NVF4 chains carried over it.",
-        conformance="protocol-defined")
-    return head, first, form
-
-
-Pc4RowAHeadDef, Pc4RowAFirstDef, Pc4RowAFormDef = _pieces4("A")
-Pc4RowBHeadDef, Pc4RowBFirstDef, Pc4RowBFormDef = _pieces4("B")
-Pc4RowATailDef = CompositeDefinition(
-    "Pc4RowATail", 1, ("K", "KS"), _tail4_sig, _tail4a_body,
-    doc="Row A's tail: A′'s codes and scale bytes (its segments' in order) and P_A = [Ẽ ‖ RNE_bf16(A′·F_B)].",
-    conformance="protocol-defined")
-Pc4RowBTailDef = CompositeDefinition(
-    "Pc4RowBTail", 1, ("K", "KS"), lambda S_: _tail4_sig(S_, (("g", pc4.GRAM),)), _tail4b_body,
-    doc="Row B's tail: B̃'s codes and scale bytes (its segments' in order) and P_B = [RNE_bf16(Ẽ·G − B̃·F_A) ‖ −Ẽ].",
-    conformance="protocol-defined")
-
-
 @lru_cache(maxsize=32)
 def pieces8(k: int, ks: int, dev: str, side: str) -> tuple:
     """Pearl-C's pieces of a row of ``side`` ("a" or "b") at depth ``k`` cut every ``ks``: (head, first form, the forms
@@ -267,15 +183,6 @@ def pieces8(k: int, ks: int, dev: str, side: str) -> tuple:
                                "b": (Pc8RowBHeadDef, Pc8RowBFirstDef, Pc8RowBFormDef, Pc8RowBTailDef)}[side]
     return (bind(head, K=k), bind(first, K=k, KS=ks, DEV=dev),
             tuple(bind(form, K=k, KS=ks, J=j, DEV=dev) for j in range(1, k // ks)), bind(tail, K=k, KS=ks))
-
-
-@lru_cache(maxsize=32)
-def pieces4(k: int, ks: int, side: str) -> tuple:
-    """Pearl-C4's pieces of a row of ``side``, as `pieces8`."""
-    head, first, form, tail = {"a": (Pc4RowAHeadDef, Pc4RowAFirstDef, Pc4RowAFormDef, Pc4RowATailDef),
-                               "b": (Pc4RowBHeadDef, Pc4RowBFirstDef, Pc4RowBFormDef, Pc4RowBTailDef)}[side]
-    return (bind(head, K=k), bind(first, K=k, KS=ks), tuple(bind(form, K=k, KS=ks, J=j) for j in range(1, k // ks)),
-            bind(tail, K=k, KS=ks))
 
 
 def _col(out, m: int, f: int):
@@ -312,23 +219,11 @@ def rows8(B, k: int, ks: int, dev: str, side: str, x, e, own, other, *extra):
     return outs
 
 
-def rows4(B, k: int, ks: int, side: str, x, e, own, other, *extra):
-    """Pearl-C4's rows of ``side`` cut every ``ks``, in a root body: [codes, scale bytes, P, ok] by row, as `pc4`'s row
-    units return them (ok the head's)."""
-    heads, outs = _rows(B, pieces4(k, ks, side), ks, x, (), (e,), HEAD4_OUT, 2, (own, other, *extra))
-    return outs + [_col(heads, len(x), len(HEAD4_OUT))]
-
-
 def check8(shape) -> None:
     step = math.lcm(pc8.SLICE, DEVICES[shape.dev].window)
     if not (type(shape.row_k) is int and shape.row_k > 0 and shape.row_k % step == 0 and shape.k % shape.row_k == 0):
         raise DomainError(f"Pearl-C's row cut needs row_k a multiple of {step} (whole windows and 32-position blocks) "
                           f"that divides k: {shape}")
-
-
-def check4(shape) -> None:
-    if not (type(shape.row_k) is int and shape.row_k > 0 and shape.row_k % pc4.ATOM == 0 and shape.k % shape.row_k == 0):
-        raise DomainError(f"Pearl-C4's row cut needs row_k a multiple of {pc4.ATOM} that divides k: {shape}")
 
 
 # ---- the roots: today's signatures, each row unit cut -------------------------------------------------------------------
@@ -338,12 +233,7 @@ def _check8_body(B, S_, a, ea, b, eb, fa, fb, g, hidden: bool):
     return tuple_of(*pc8._call_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, a, ea, fa, fb, bc, pb, hidden, S_.KS), ok_b)
 
 
-def _check4_body(B, S_, a, ea, b, eb, fa, fb, g, hidden: bool):
-    bc, bs, pb, ok_b = pc4._weight_units(B, S_.K, b, eb, fa, fb, g, row_k=S_.KS)
-    return tuple_of(*pc4._call_units(B, S_.K, (S_.TM, S_.TN), a, ea, fa, fb, bc, bs, pb, hidden, S_.KS), ok_b)
-
-
-_BLOCK8, _BLOCK4 = ("M", "K", "N", "TM", "TN", "DEV", "KS"), ("M", "K", "N", "TM", "TN", "KS")
+_BLOCK8 = ("M", "K", "N", "TM", "TN", "DEV", "KS")
 _HIDDEN = "with each row unit cut every KS positions (`rowk`)."
 Pc8WeightRowKDef = CompositeDefinition(
     "Pc8WeightRowK", 1, ("K", "N", "DEV", "KS"), pc8._weight_sig,
@@ -357,37 +247,15 @@ Pc8CheckRowKDef = CompositeDefinition(
     "Pc8CheckRowK", 1, _BLOCK8, pc8._check_sig, lambda B, S_, *a: _check8_body(B, S_, *a, False),
     doc="`Pc8Check` " + _HIDDEN, conformance="protocol-defined")
 Pc8CallHiddenRowKDef = CompositeDefinition(
-    "Pc8CallHiddenRowK", 1, _BLOCK8, lambda S_: (pc8._call_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK))),
+    "Pc8CallHiddenRowK", 1, _BLOCK8, lambda S_: (pc8._call_sig(S_)[0], Tuple(U.DIGESTS(S_), Array(S_.M, OK))),
     lambda B, S_, *a: tuple_of(*pc8._call_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, *a, hidden=True, row_k=S_.KS)),
     doc="`Pc8CallHidden` " + _HIDDEN, conformance="protocol-defined")
 Pc8CheckHiddenRowKDef = CompositeDefinition(
     "Pc8CheckHiddenRowK", 1, _BLOCK8,
-    lambda S_: (pc8._check_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))),
+    lambda S_: (pc8._check_sig(S_)[0], Tuple(U.DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))),
     lambda B, S_, *a: _check8_body(B, S_, *a, True), doc="`Pc8CheckHidden` " + _HIDDEN, conformance="protocol-defined")
-Pc4WeightRowKDef = CompositeDefinition(
-    "Pc4WeightRowK", 1, ("K", "N", "KS"), pc4._weight_sig,
-    lambda B, S_, *a: tuple_of(*pc4._weight_units(B, S_.K, *a, row_k=S_.KS)),
-    doc="`Pc4Weight` " + _HIDDEN, conformance="protocol-defined")
-Pc4CallRowKDef = CompositeDefinition(
-    "Pc4CallRowK", 1, _BLOCK4, pc4._call_sig,
-    lambda B, S_, *a: tuple_of(*pc4._call_units(B, S_.K, (S_.TM, S_.TN), *a, row_k=S_.KS)),
-    doc="`Pc4Call` " + _HIDDEN, conformance="protocol-defined")
-Pc4CheckRowKDef = CompositeDefinition(
-    "Pc4CheckRowK", 1, _BLOCK4, pc4._check_sig, lambda B, S_, *a: _check4_body(B, S_, *a, False),
-    doc="`Pc4Check` " + _HIDDEN, conformance="protocol-defined")
-Pc4CallHiddenRowKDef = CompositeDefinition(
-    "Pc4CallHiddenRowK", 1, _BLOCK4, lambda S_: (pc4._call_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK))),
-    lambda B, S_, *a: tuple_of(*pc4._call_units(B, S_.K, (S_.TM, S_.TN), *a, hidden=True, row_k=S_.KS)),
-    doc="`Pc4CallHidden` " + _HIDDEN, conformance="protocol-defined")
-Pc4CheckHiddenRowKDef = CompositeDefinition(
-    "Pc4CheckHiddenRowK", 1, _BLOCK4,
-    lambda S_: (pc4._check_sig(S_)[0], Tuple(pc4.DIGESTS(S_), Array(S_.M, OK), Array(S_.N, OK))),
-    lambda B, S_, *a: _check4_body(B, S_, *a, True), doc="`Pc4CheckHidden` " + _HIDDEN, conformance="protocol-defined")
-
 _ROOTS8 = {("weight", False): Pc8WeightRowKDef, ("weight", True): Pc8WeightRowKDef, ("call", False): Pc8CallRowKDef,
            ("call", True): Pc8CallHiddenRowKDef, ("check", False): Pc8CheckRowKDef, ("check", True): Pc8CheckHiddenRowKDef}
-_ROOTS4 = {("weight", False): Pc4WeightRowKDef, ("weight", True): Pc4WeightRowKDef, ("call", False): Pc4CallRowKDef,
-           ("call", True): Pc4CallHiddenRowKDef, ("check", False): Pc4CheckRowKDef, ("check", True): Pc4CheckHiddenRowKDef}
 
 
 def root8(shape, side: str) -> SpecializedDefinition:
@@ -397,28 +265,18 @@ def root8(shape, side: str) -> SpecializedDefinition:
     return bind(defn, K=shape.k, N=shape.n, DEV=shape.dev, KS=shape.row_k, **block)
 
 
-def root4(shape, side: str) -> SpecializedDefinition:
-    """``pc4.weight``, ``call`` or ``check`` (``side``) of a shape with ``row_k``."""
-    defn = _ROOTS4[side, shape.hidden]
-    block = {} if side == "weight" else {"M": shape.m, "TM": shape.tile[0], "TN": shape.tile[1]}
-    return bind(defn, K=shape.k, N=shape.n, KS=shape.row_k, **block)
-
-
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
-#: each side's roles in the order its root body first uses them (`pc4.ROLES` under the cut)
+#: each side's roles in the order its root body first uses them (`tile_units.ROLES` under the cut)
 ROLES = {"weight": ("row_b_head", "row_b_first", "row_b_form", "row_b_tail"),
          "call": ("row_a_head", "row_a_first", "row_a_form", "row_a_tail", "tile")}
 ROLES["check"] = ROLES["weight"] + ROLES["call"]
-#: the roles whose units are one segment of a row, `pc4.ProofBlock.where` (row, segment)
+#: the roles whose units are one segment of a row, `tile_units.ProofBlock.where` (row, segment)
 FORMS = ("row_a_first", "row_a_form", "row_b_first", "row_b_form")
 ROLE_OF = {id(d): f"row_{side.lower()}_{piece}"
-           for scheme in (
-               {"A": (Pc8RowAHeadDef, Pc8RowAFirstDef, Pc8RowAFormDef, Pc8RowATailDef),
-                "B": (Pc8RowBHeadDef, Pc8RowBFirstDef, Pc8RowBFormDef, Pc8RowBTailDef)},
-               {"A": (Pc4RowAHeadDef, Pc4RowAFirstDef, Pc4RowAFormDef, Pc4RowATailDef),
-                "B": (Pc4RowBHeadDef, Pc4RowBFirstDef, Pc4RowBFormDef, Pc4RowBTailDef)})
-           for side, defs in scheme.items() for piece, d in zip(("head", "first", "form", "tail"), defs)}
+           for side, defs in {"A": (Pc8RowAHeadDef, Pc8RowAFirstDef, Pc8RowAFormDef, Pc8RowATailDef),
+                              "B": (Pc8RowBHeadDef, Pc8RowBFirstDef, Pc8RowBFormDef, Pc8RowBTailDef)}.items()
+           for piece, d in zip(("head", "first", "form", "tail"), defs)}
 
 
 def _flat(pieces: tuple) -> list:
@@ -433,17 +291,10 @@ def unit_templates8(shape, side: str) -> list[SpecializedDefinition]:
     return {"weight": b, "call": a + [tile], "check": b + a + [tile]}[side]
 
 
-def unit_templates4(shape, side: str) -> list[SpecializedDefinition]:
-    """The side's unit templates under the cut, in the order its root body first uses them (`pc4.query`)."""
-    b, a = (_flat(pieces4(shape.k, shape.row_k, s)) for s in ("b", "a"))
-    tile = pc4.templates(shape.k, shape.tile, shape.hidden)["tile"]
-    return {"weight": b, "call": a + [tile], "check": b + a + [tile]}[side]
-
-
 # ---- the ports and the slice anchors ------------------------------------------------------------------------------------
 
 def _ports(head_row: str, carry_row: str, codes_row: str, data_row: str, input_row: str, scheme: str) -> dict:
-    """One scheme's ports under the cut, as `pc4.PORTS`: each piece's committed rows and public input regions."""
+    """One scheme's ports under the cut, as `pc8.PORTS`: each piece's committed rows and public input regions."""
     out = {}
     head8 = scheme == "pc8"
     names, carry = (_NAMES8, tuple(n for n, _t in CARRY8)) if head8 else (_NAMES4, ("tot",))
@@ -472,7 +323,6 @@ def _ports(head_row: str, carry_row: str, codes_row: str, data_row: str, input_r
 
 #: each piece's ports under hiding, by role (`pc8.PORTS`'s form; the tile's are today's)
 PORTS8 = _ports("pc8-head", "pc8-carry", "fp8-codes", "fp8-p", "fp32", "pc8") | {"tile": pc8.PORTS["tile"]}
-PORTS4 = _ports("pc4-head", "pc4-carry", "nvfp4-codes", "nvfp4-p", "bf16", "pc4") | {"tile": pc4.PORTS["tile"]}
 
 
 def _segment_of(basis):
@@ -494,9 +344,7 @@ def _slices(today: dict) -> dict:
 
 #: each anchor's recomputation under the cut: today's, and each form's segment of F_A and F_B under its slice rule
 DERIVATIONS8 = pc8.DERIVATIONS | _slices(pc8.DERIVATIONS)
-DERIVATIONS4 = pc4.DERIVATIONS | _slices(pc4.DERIVATIONS)
 
 
-__all__ = ["CARRY4", "CARRY8", "DERIVATIONS4", "DERIVATIONS8", "FILL8", "FORMS", "HEAD4", "HEAD4_OUT", "HEAD8", "HEAD8_OUT",
-           "PORTS4", "PORTS8", "ROLES", "ROLE_OF", "ROW_K", "check4", "check8", "pieces4", "pieces8", "root4", "root8", "rows4",
-           "rows8", "segment", "unit_templates4", "unit_templates8"]
+__all__ = ["CARRY4", "CARRY8", "DERIVATIONS8", "FILL8", "FORMS", "HEAD4", "HEAD4_OUT", "HEAD8", "HEAD8_OUT", "PORTS8",
+           "ROLES", "ROLE_OF", "ROW_K", "check8", "pieces8", "root8", "rows8", "segment", "unit_templates8"]

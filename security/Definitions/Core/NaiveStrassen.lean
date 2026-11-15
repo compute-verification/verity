@@ -9,7 +9,7 @@ free.
 **Atoms.** An exact path for one sub-product is an MMA format (`Atom`): the tensor units a MAC uses, in eighths of an
 s8 MAC (`weight8`), the most consecutive integers it holds per operand entry (`cap`), and, for a float format, the
 instruction's `k` and the width `w` within which its dot of `k` products is exact (`k · ⌊d_A/2⌋ · ⌊d_B/2⌋ ≤ 2^w`).
-These are the cards' tables' numbers (`Accel.H200`, `Accel.Sm120`): each card's `weight`, the formats' integer runs,
+These are the card files' numbers (`hardware/cards/<sku>.toml`): each card's `weight`, the formats' integer runs,
 and the widths within which a dot is exact (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float
 dot as exact as FP32 allows and accumulation across MMAs as exact only adds atoms. `b1` is at the H200's weight 1/8;
 costs are monotone in the weights, so a lower bound here holds at every weight at least these.
@@ -135,7 +135,7 @@ end Sched
 
 /-- INT8 MMA, s32 accumulate: weight 1, all 256 values. -/
 def s8 : Atom := ⟨8, 256, none⟩
-/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at the H200's weight 1/8 (`Accel.H200.card`'s `weight .b1`). -/
+/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at the H200's weight 1/8 (`weight.b1` in `h200-sxm-141gb.toml`). -/
 def b1 : Atom := ⟨1, 2, none⟩
 
 /-- The H200 SXM at its data sheet's instruction `k` (f16 and bf16 at 8, tf32 at 4): s8, e4m3, e5m2, f16, bf16,
@@ -146,7 +146,7 @@ def h200Sheet : List Atom :=
 
 /-- The RTX PRO 6000 (sm_120) at its data sheet's `k`: s8, e4m3, e5m2, e2m1, nvf4 (`k = 64`, weight 1/2), f16,
 bf16, tf32, b1. Its `b1` is at the H200's weight 1/8, where the card's own file, `rtx-pro-6000-server.toml`, has 1
-(`Accel.Sm120.card`'s `weight .b1`): the lighter atom makes this the more permissive table, on purpose, so that a
+(`weight.b1`): the lighter atom makes this the more permissive table, on purpose, so that a
 lower bound on it holds at the card's own weight too. -/
 def rtx6000Sheet : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,

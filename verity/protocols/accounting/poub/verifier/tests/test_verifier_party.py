@@ -1,6 +1,6 @@
 """The bandwidth session split across a connection (`verifier_party`): the verifier's side and the prover's, each in its
 own thread over a socket pair, or the verifier's in a process of its own (`period_with`), make exactly the case and
-answer `period.run` makes in one process, and the side follows `period.json`'s challenger host."""
+answer `period_prover.run` makes in one process, and the side follows `period.json`'s challenger host."""
 
 from __future__ import annotations
 
@@ -12,9 +12,11 @@ import sys
 import threading
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.runtime.stream import Side
+from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import audit, codec, verifier_party
 from verity.protocols.accounting.poub.verifier import period as P
 
@@ -33,7 +35,7 @@ class _Dropped:
         return bytes(codec.BLOCK_BYTES) if j % 2 else self.blocks[j]
 
 
-def dropping(honest: audit.Store) -> audit.Store:
+def dropping(honest: audit_prover.Store) -> audit_prover.Store:
     out = copy.copy(honest)
     out.blocks = _Dropped(honest.blocks)
     return out
@@ -52,14 +54,14 @@ def _split(cheat=None) -> tuple[P.Run, int]:
     t = threading.Thread(target=verifier)
     t.start()
     with b, b.makefile("rwb") as f:
-        passes = verifier_party.prove(f, P.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts")))
+        passes = PP.prove(f, PP.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts")))
     t.join()
     return got["period"], passes
 
 
 def _in_process(cheat=None) -> P.Run:
     c = Clock(10 ** 9, 1_000)
-    return P.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(b"salts"), cheat=cheat)
+    return PP.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(b"salts"), cheat=cheat)
 
 
 @pytest.mark.parametrize("cheat, verdict", [(None, "accept"), (dropping, "reject")], ids=["honest", "dropping"])
@@ -93,15 +95,15 @@ print(json.dumps({{"answer": p.answer, "case": p.case, "host": "auditor"}}, sort
 
 
 def test_period_with_runs_the_session_against_its_side(monkeypatch) -> None:
-    """`period_with` against a side of its own process on the verifier's clock (`SIDE`): the period `period.run` makes
+    """`period_with` against a side of its own process on the verifier's clock (`SIDE`): the period `period_prover.run` makes
     in one process, and the side's host; a side that exits before it listens is refused."""
     monkeypatch.setattr(audit, "register", functools.partial(audit.register, nonce=bytes(audit.NONCE_BYTES)))
     request = verifier_party.request_of("n0")
-    period, side = verifier_party.period_with(Side("auditor", (sys.executable, "-c", SIDE)), request, STORE,
+    period, side = PP.period_with(Side("auditor", (sys.executable, "-c", SIDE)), request, STORE,
                                               entropy=Entropy(b"salts"))
     assert period == _in_process() and side == {"host": "auditor", "passes": 2}
     with pytest.raises(RuntimeError, match="the side on auditor exited 3 before it listened"):
-        verifier_party.period_with(Side("auditor", (sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)")),
+        PP.period_with(Side("auditor", (sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)")),
                                    request, STORE)
 
 
@@ -122,10 +124,10 @@ def test_the_party_follows_period_json() -> None:
         "command": ["ssh", "auditor-host", "verifier"], "address": "192.0.2.7:7961"}}}, "n0", "bandwidth",
         verifier_party.command())
     assert wired == Side("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
-    assert verifier_party.placement("n0", "n0")["trusted-host"].startswith("unmet: ")
+    assert verifier_party.placement("n0", "n0")["trusted-device"].startswith("unmet: ")
     held = verifier_party.placement("n0", "auditor-host")
     assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
-    assert held["trusted-host"].startswith("holds: ")
+    assert held["trusted-device"].startswith("holds: ")
 
 
 class Handed(Exception):
@@ -143,5 +145,5 @@ def test_a_period_asks_its_caller_for_the_bandwidth_side(tmp_path) -> None:
         raise Handed
 
     with pytest.raises(Handed):
-        P.leg(tmp_path, "n0", tmp_path / "out", side_of=side_of)
+        PP.subprotocol(tmp_path, "n0", tmp_path / "out", side_of=side_of)
     assert handed == [({}, "n0", "bandwidth", verifier_party.command(), None)]

@@ -9,8 +9,9 @@ import Proofs.Properties.Pouw.Grid
 # Proofs of PoUW's check properties (`Properties.Pouw.Check`)
 
 By unfolding the check: `registered_ok` and `outcome_accept` say what each of its two rules accepts, and `acceptMeans`
-composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRange` from the window's grid properties
-`PointEnumerates` and `floorPoint_greatest`, which `Proofs.Properties.Pouw.Grid` proves. `acceptMeans_complete` is the
+composes them; the rest follow. `outcome_accept_subset` reads off `outcome_accept` that an accepted profile is of one
+level sampled `subset:K′`, so none holds a work design. `acceptedInRange_of_grid` proves `AcceptedInRange` from the
+window's grid properties `PointEnumerates` and `floorPoint_greatest`, which `Proofs.Properties.Pouw.Grid` proves. `acceptMeans_complete` is the
 converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
 leave: the service's reject is the check's.
 -/
@@ -28,10 +29,10 @@ theorem neverNull : NeverNull := fun _ _ => ⟨nofun, nofun⟩
 
 theorem digestIsOneStage's : DigestIsOneStage's := fun _ => rfl
 
-theorem check_eq (p : Params) (c : WindowCommitmentRecord) (e : Evidence) :
+theorem check_eq (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) :
     protocol.check p c e = PouwCheck.check p c e := rfl
 
-theorem serviceReject_rejects (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (r : String)
+theorem serviceReject_rejects (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (r : String)
     (h : e.said = .reject r) :
     ∃ r', protocol.check p c e = .reject r' := by
   rw [check_eq]
@@ -57,7 +58,7 @@ theorem wrongItems_nil (p : Params) (items : Lean.Json) (f : Fixed) :
   · intro h kv hkv
     simpa using h kv hkv
 
-theorem registered_ok (p : Params) (c : WindowCommitmentRecord) (f : Fixed) :
+theorem registered_ok (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) :
     registered p c = .ok f ↔ RecordKeeps p c f := by
   constructor
   · intro h
@@ -92,7 +93,7 @@ theorem registered_ok (p : Params) (c : WindowCommitmentRecord) (f : Fixed) :
         by_cases h5 : c.population = (PouwWindow.Work.at p.gridBits ell).n
         case neg => rw [ite_eq_left h5] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h5)] at h
-        by_cases h6 : cs c.law = cs (subsetLaw s.k)
+        by_cases h6 : cs c.samplingDesign = cs (subsetSamplingDesign s.k)
         case neg => rw [ite_eq_left h6] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h6)] at h
         by_cases h7 : c.query = p.query
@@ -121,7 +122,7 @@ theorem registered_ok (p : Params) (c : WindowCommitmentRecord) (f : Fixed) :
       ite_eq_right (Classical.not_not.mpr hlaw),
       ite_eq_right (Classical.not_not.mpr hq), ite_eq_right (Classical.not_not.mpr hsch)]
 
-theorem outcome_accept (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) (pub : Public)
+theorem outcome_accept (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     outcome p c f e = .accept pub prof ↔
       ∃ draw, ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
@@ -159,7 +160,7 @@ theorem outcome_accept (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e 
     rw [ite_eq_left h6]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨rfl, -⟩, -, -, -, h, -⟩, -⟩; exact h6 h
   rw [ite_eq_right (Classical.not_not.mpr h6)]
-  by_cases h7 : draw.law ≠ .subset f.sampling.k ∨ draw.population ≠ f.work.n
+  by_cases h7 : draw.samplingDesign ≠ .subset f.sampling.k ∨ draw.population ≠ f.work.n
   case pos =>
     rw [ite_eq_left h7]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨-, rfl⟩, -, -, -, -, hk, hn, -⟩, -⟩; exact h7.elim (· hk) (· hn)
@@ -169,17 +170,17 @@ theorem outcome_accept (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e 
     rw [ite_eq_left h8]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨-, rfl⟩, -, -, -, -, -, -, hu⟩, -⟩; exact h8 hu
   rw [ite_eq_right (Classical.not_not.mpr h8)]
-  by_cases h9 : (windowSaltReason p c e.salt).isSome = true
+  by_cases h9 : (executionPhaseSaltReason p c e.salt).isSome = true
   case pos =>
     rw [ite_eq_left h9]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, -, hw, -⟩; simp [hw] at h9
   rw [ite_eq_right h9]
-  have hw : windowSaltReason p c e.salt = none := by
-    cases h : windowSaltReason p c e.salt
+  have hw : executionPhaseSaltReason p c e.salt = none := by
+    cases h : executionPhaseSaltReason p c e.salt
     · rfl
     · simp [h] at h9
   simp only [Core.Outcome.accept.injEq]
-  have hk : draw.law = .subset f.sampling.k := Classical.byContradiction fun h => h7 (.inl h)
+  have hk : draw.samplingDesign = .subset f.sampling.k := Classical.byContradiction fun h => h7 (.inl h)
   have hn : draw.population = f.work.n := Classical.byContradiction fun h => h7 (.inr h)
   constructor
   · rintro ⟨rfl, rfl⟩
@@ -187,9 +188,18 @@ theorem outcome_accept (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e 
   · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, _, rfl⟩
     exact ⟨rfl, rfl⟩
 
+/-- A profile `outcome` accepts with is of one level sampled `subset:K′`: it refuses every other, among them one whose
+level records a work design. So PoUW's check reads no work design's `k_s`, and what it accepts rests on no rule that
+sizes them. -/
+theorem outcome_accept_subset {p : Params} {c : ExecutionPhaseCommitmentRecord} {f : Fixed} {e : Evidence} {pub : Public}
+    {prof : Core.Integrity} (h : outcome p c f e = .accept pub prof) :
+    ∃ l, prof.levels = #[l] ∧ l.draw = some (.subset f.sampling.k) := by
+  obtain ⟨_, ⟨-, -, -, -, hl, -⟩, -⟩ := (outcome_accept p c f e pub prof).mp h
+  exact ⟨_, hl, rfl⟩
+
 /-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes, with
 the window's salt. -/
-theorem acceptMeans_iff (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public)
+theorem acceptMeans_iff (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     protocol.check p c e = .accept pub prof ↔
       ∃ f draw, RecordKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
@@ -211,9 +221,9 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 
 /-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes
 with the window's salt, is accepted, publishing the rule's items and the service's sample. -/
-theorem acceptMeans_complete (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (f : Fixed)
+theorem acceptMeans_complete (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (f : Fixed)
     (prof : Core.Integrity)
-    (draw : Flock.Draw.UnitDraw) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw)
+    (draw : Flock.Draw.UnitSample) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw)
     (hw : SaltKept p c e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=
   (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, hw, rfl⟩

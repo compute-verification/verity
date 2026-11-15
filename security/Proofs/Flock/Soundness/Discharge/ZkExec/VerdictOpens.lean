@@ -214,7 +214,7 @@ theorem ligeritoPadZC_reqs {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounti
     (hl : sch.levels = lv₀ :: lv₁ :: rest) (z₀ cβ₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1)
     (hβ₀ : cβ₀.size = 1) (y₀ : 𝔽) (m₀ : 𝕂 × 𝕂) {msF : List Msg} {csF : List (Array F128)}
     (hfold : ∀ s q, ∃ out, Plays fOf (ZkSession.foldRoundsZK execArith P sch.k0 0 s q) msF csF out)
-    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} (hρ : ∃ ρ, Plays fOf (Model.drawKs execArith 2) [] csρ ρ) (T' : 𝕂)
+    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} (hρ : ∃ ρ, Plays fOf (Model.sampleKs execArith 2) [] csρ ρ) (T' : 𝕂)
     (ybar : Fin tp → 𝕂) (m' : 𝕂 × 𝕂) (C₁ : Cap D) (req₀ : Req) {Q : PendL 𝔽 D → Prop}
     {msO msQ msR : List Msg} {csO csQ csR : List (Array F128)}
     (htwo : ∀ s q, ∃ out, Plays fOf (Model.twoOodC (D := D) execArith (sch.m - 7 - sch.k0 + 1) 0 s q) msO csO out)
@@ -230,7 +230,7 @@ theorem ligeritoPadZC_reqs {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounti
   unfold ZkLink.ligeritoPadZC
   rw [hl]
   dsimp only
-  refine exQ_drawVec z₀ hz₀ hm7 fun z => exQ_recv y₀ (exQ_drawOne cβ₀ hβ₀ fun β => ?_)
+  refine exQ_sampleVec z₀ hz₀ hm7 fun z => exQ_recv y₀ (exQ_sampleOne cβ₀ hβ₀ fun β => ?_)
   refine exQ_recv m₀ (exQ_bind (hfold _ _) (fun ⟨ini, s⟩ => ?_) rfl rfl)
   dsimp only
   refine exQ_recv ev (exQ_bind0 hρ (fun ρ => ?_) rfl)
@@ -705,7 +705,7 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     (t.rounds[t.k]!).coins (t.rounds[t.k + 1]!).coins hz₀ (by show sch.m - 7 ≠ 1; omega) hβ₀
     (fOf p.oodValues[0]!) (gOf p.messages[0]!.1, gOf p.messages[0]!.2)
     (fun s q => foldRoundsZK_any P p sch.k0 0 1 s q _ hFl hFs)
-    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (drawKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
+    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (sampleKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
     (fun i => gOf zl.msgs.ybar[i.val]!) (gOf p.messages[sch.k0]!.1, gOf p.messages[sch.k0]!.2)
     (capDig p.recursiveCaps[0]!)
     ⟨0, Model.positions execArith (levelOf (sch.levels.getD 0 default)).queries
@@ -759,7 +759,7 @@ rounds, the ring switch's `claims + 1` and Ligerito's `k0 + 8`. -/
 theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -774,7 +774,7 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
       ∃ (R : Req) (rest : List Req), pend.lig.reqs = R :: rest ∧ R.level = 0 ∧
         R.positions = (Flock.positions (sch.levels.getD 0 default)
           (rounds[(st.m + (st.kLog - 6)) + (2 + extras.size + 1) + (sch.k0 + 8)]!).coins).toList := by
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
   unfold repProg at hrun
@@ -911,7 +911,7 @@ wide), at the level-0 cap the proof's cap reads as and openings whose rep-`r` ro
 theorem zk_opens_ok {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round)
     (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig) (os : ZkLink.OpensZ 𝔽 Dig (List UInt8))
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hms : st.merkle = MerkleScheme.hm96Sha512)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hms : st.merkle = MerkleScheme.hm96Sha512)
     (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
@@ -925,7 +925,7 @@ theorem zk_opens_ok {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 �
     (hp : Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
       (rounds.toList.map (·.coins)) pend) :
     ZkLink.OpensOKZ H512 enc512 leaf512 (ZkLink.width₀ T) cap₀ r.val pend.lig os.rows os.salts := by
-  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨-, h2, hl0, -⟩ := hdim
   obtain ⟨pend', hp', hcaps, hreqs, -⟩ :=
     zk_rep_reqs hs512 T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk

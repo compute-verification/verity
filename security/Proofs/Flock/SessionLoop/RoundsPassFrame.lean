@@ -27,7 +27,7 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree passes check standIn firstDiff inFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree passes check standIn firstDiff inFree)
 open FlockSoundness.Refine (Frame encs toBytes_length)
 
 namespace HonestPass
@@ -68,13 +68,13 @@ theorem firstDiff_eq_none {v r : ByteArray} {free : Array ℕ}
 /-- **The frame's check passes a device round that `passes` and that `round` takes**, at a rep not stopped. -/
 theorem check_of_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
     (hs : s.stopped = false) (hp : passes c s v r n = .ok none)
-    (h : _root_.Flock.Firewall.Frame.round c s v n = .ok (out, s')) : check c s v r n = .ok (out, s', none) := by
+    (h : _root_.Flock.ZkServer.Frame.round c s v n = .ok (out, s')) : check c s v r n = .ok (out, s', none) := by
   unfold check
   simp only [hs, Bool.false_eq_true, ↓reduceIte]
   rw [hp]
-  show (match _root_.Flock.Firewall.Frame.round c s v n with
+  show (match _root_.Flock.ZkServer.Frame.round c s v n with
     | .ok (out, s') => (Except.ok (out, s', none) : Except String _)
-    | .error e => if e.startsWith _root_.Flock.Firewall.Frame.STOP then throw e else standIn c s r n e) = _
+    | .error e => if e.startsWith _root_.Flock.ZkServer.Frame.STOP then throw e else standIn c s r n e) = _
   rw [h]
 
 /-- **A scheduled round with values in its free words**: where the frame takes the scheduled round of frames `fs`
@@ -104,7 +104,7 @@ theorem fill_frames {c : Cfg} {m : Masker} {fs : List Frame} {k : UInt8} {n : �
   have hfree : ∀ p ∈ fr, ∀ i, p ≤ i → i < p + 16 → valBytes fs i :=
     roundFree_free c m fs k n hs hmid hk h0 hn hq
   refine ⟨hlen, fun i hi => hout i fun j hj => ?_, ?_⟩
-  · unfold _root_.Flock.Firewall.Frame.inFree at hi
+  · unfold _root_.Flock.ZkServer.Frame.inFree at hi
     have hj' := Array.any_eq_false.1 hi j hj
     rw [getElem!_pos fr j hj]
     rcases Nat.lt_or_ge i fr[j] with h | h
@@ -191,7 +191,7 @@ theorem roundOk_valsDev (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
         (fun j => Loop.vsAt vs L x w ρ g ((L.cfg x ρ g).order[m.pos + j]!)) = (Loop.inner0 w').data.toList := by
     rintro ⟨w', hw', he⟩
     have hq0 : roundFree (L.cfg x ρ g) { m with stopped := false }
-        (_root_.Flock.Firewall.Frame.ownRound (L.cfg x ρ g) m w' (ByteArray.mk (Array.replicate 64 0))
+        (_root_.Flock.ZkServer.Frame.ownRound (L.cfg x ρ g) m w' (ByteArray.mk (Array.replicate 64 0))
           (L.coins x g.length) 0) (L.coins x g.length) = .ok (o', t', fr) := by
       rw [he, Array.toArray_toList] at hq'
       exact hq'

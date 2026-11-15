@@ -60,12 +60,12 @@ def stopWhy : String :=
 #guard why (checkFinished ((transcript).setObjVal! "end" (Json.str "stop"))) == some stopWhy
 #guard why (checkFinished (transcript)) == none
 #guard why (checkFinished (Json.mkObj [("kind", Json.str TRANSCRIPT_FORMAT)])) ==
-  some "rec inner transcript: the coin server's record names no end; only a finished session is read"
+  some "rec inner transcript: the challenger's live-coin part's record names no end; only a finished session is read"
 #guard why (innerCommits ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
 
 -- the link points: the inner session's record (the prover's, which check 5 reads) holds the challenger's live-coin part's
 def pointsWhy : String :=
-  "rec inner transcript: the inner session's record's link points are not the ones the coin server drew (link.points): " ++
+  "rec inner transcript: the inner session's record's link points are not the ones the challenger's live-coin part drew (link.points): " ++
     "check 5 would take the extra claims at points the prover chose"
 #guard why (innerLink (transcript) (record [[10, 11], [12, 14]])) == some pointsWhy
 #guard why (innerLink (transcript (points := [10, 11, 12, 14])) (record)) == some pointsWhy
@@ -106,11 +106,11 @@ def rows (xs : List Nat) (r : Nat) : ByteArray := b (xs.getD r 0)
 #guard why (checkTopRowsAt "u" "out" "rec-top-L0" link 0 #[1, 0, 1] (rows [2, 1, 2])) == none
 #guard why (checkTopRowsAt "u" "out" "rec-top-L1" link 1 #[0, 2, 1] (rows [3, 5, 4])) == none
 #guard why (checkTopRowsAt "u" "out" "rec-top-L0" (linkOf (transcript (root := [1, 9]))) 0 #[1, 0] (rows [2, 1])) ==
-  some "rec-tops: u: port out's table row 0 is not node 1 of circuit's root_B, which the coin server committed"
+  some "rec-tops: u: port out's table row 0 is not node 1 of circuit's root_B, which the challenger's live-coin part committed"
 #guard why (checkTopRowsAt "u" "out" "rec-top-L1" (linkOf (transcript (top0 := [3, 6]))) 1 #[0, 1] (rows [3, 4])) ==
-  some "rec-tops: u: port out's table row 1 is not node 1 of rep 0's level 1 top, which the coin server committed"
+  some "rec-tops: u: port out's table row 1 is not node 1 of rep 0's level 1 top, which the challenger's live-coin part committed"
 #guard why (checkTopRowsAt "u" "out" "rec-top-L1" (linkOf (transcript (top1 := [6]))) 1 #[0, 2] (rows [3, 5])) ==
-  some "rec-tops: u: port out's table row 1 is not node 0 of rep 1's level 1 top, which the coin server committed"
+  some "rec-tops: u: port out's table row 1 is not node 0 of rep 1's level 1 top, which the challenger's live-coin part committed"
 #guard why (checkTopRowsAt "u" "out" "rec-top-L1" link 1 #[3] (rows [5])) ==
   some "rec-tops: u: port out's table row 0 reads row 3 of rec-top-L1, and the reps' level 1 tops have 3 nodes, no row 3"
 #guard why (checkTopRowsAt "u" "out" "rec-top-L2" link 2 #[0] (rows [5])) ==
@@ -194,7 +194,7 @@ def roundsOf (j : Json) : Array Json := (j.getObjValAs? (Array Json) "rounds").t
 def withRounds (f : Array Json → Array Json) (j : Json := onSched i25) : Json :=
   j.setObjVal! "rounds" (Json.arr (f (roundsOf j)))
 def offWhy (i : Inner) (why : String) : Option String :=
-  some (s!"rec inner transcript: the coin server's record is off the schedule of the verifier's inner shape " ++
+  some (s!"rec inner transcript: the challenger's live-coin part's record is off the schedule of the verifier's inner shape " ++
     s!"(m {i.m}, k_log {i.kLog}, claims {i.claims}): {why}")
 def c3i : Inner :=
   { i25 with holo := true, sparse := some { nu := 18, ell := 13, sLog := 6, tLog := 0 }, stacked := some ⟨23, 2⟩ }

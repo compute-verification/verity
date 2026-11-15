@@ -108,7 +108,7 @@ def released(allocation: int, enqueued: Sequence[int], queue: int = 0) -> list[i
 
 @dataclass(frozen=True, slots=True)
 class BlockGrid:
-    """W5: the network certificate of one link-window is exactly the grid and one status."""
+    """W5: the network certificate of one execution phase is exactly the grid and one status."""
 
     link: str
     window: int
@@ -121,7 +121,7 @@ class Certifier:
 
     - **Enqueue.** The sender hands frames with `enqueue`. A frame handed during bucket t, before its cutoff, is eligible
       for bucket t. With `first`, it goes to the head of the queue, ahead of every frame queued: the ingress
-      certifier's own salt frame (`active.Bucketer`). Release counts don't read the order, so `released` is unchanged.
+      certifier's own salt frame. Release counts don't read the order, so `released` is unchanged.
     - **Tick.** `tick` releases bucket t: min(queue, r) frames in queue order, then padding, so the wire always carries r.
     - **Faults.** A fault is an overflow beyond Q, a frame of the wrong size, or one reported with `fault`. It makes the
       rest of the window padding and drops the queue, since nothing is forwarded uncertified, and it records the first

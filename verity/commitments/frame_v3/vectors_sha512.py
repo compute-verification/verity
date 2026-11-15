@@ -43,7 +43,7 @@ ROW_SEG_WORD_CASES = (("bf16/k4096", 16, 4096), ("fp32/k4096", 32, 4096), ("bf16
 #: sha512/row/v2 rows of elements at a small K, ``(name, ((element bits, count), ...))``; the name is a label, never hashed
 FORMAT_ROW_CASES = (("nvfp4/k32", ((4, 32), (8, 2))), ("mxfp4/k64", ((4, 64), (8, 2))), ("e4m3/k5", ((8, 5),)),
                     ("bf16/k3", ((16, 3),)), ("e2m1/k3", ((4, 3),)))
-#: row trees over a 64-byte binding, ``(n, owner)``: the weights' owner, the boundary's and a replay unit's; the binding is
+#: row trees over a 64-byte binding, ``(n, owner)``: the weights' owner, the boundary's and a replay block's; the binding is
 #: ``identity_digest_sha512(BINDING64_TAG, {"n": n, "owner": owner})``
 BINDING64_CASES = ((1, -2), (3, -1), (5, 4))
 BINDING64_TAG = "frame-v3-sha512/vectors/binding64"

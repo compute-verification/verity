@@ -41,13 +41,13 @@ the right stamps out of N order (`order`). Records the rule can't read are refus
 stamped response past its `max_tokens` (`over`).
 
 **The records.** `Response` is one released request and its response as certified records give them, whatever their
-form. `read` reads the network certifier's own records (`warden.py`'s schedule in the id egress form: `Record`s of
-`WardenParams.window` buckets) up to b, through `warden.read_cell`, `io_tie.parse_cell` and `active.id_request`: a
+form. `read` reads the network certifier's own records (`network_certifier.py`'s schedule in the id egress form: `Record`s of
+`NetworkCertifierParams.window` buckets) up to b, through `network_certifier.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
 number of complete execution phases the records cover, a cell that isn't the certifier's, a request that isn't a
 canonical id request, an egress cell out of the id form, an id cell before its request's release or after its end
-cell, and a request cell after its `END`. That each cell is in its schedule's slot is `warden.audit`'s check, which
+cell, and a request cell after its `END`. That each cell is in its schedule's slot is `network_certifier.audit`'s check, which
 this one doesn't repeat. `edge` is the rule on those records: the stamps and the continuations at b.
 """
 from __future__ import annotations
@@ -55,10 +55,11 @@ from __future__ import annotations
 import json
 from typing import Collection, NamedTuple, Sequence
 
-from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 
 #: why the rule refuses: what `check` names in a record's stamps, then what the records themselves show
 REFUSALS = ("extra", "missing", "duplicate", "release", "count", "order", "over", "records")
@@ -75,7 +76,7 @@ class Refused(ValueError):
 # --- the reference ---------------------------------------------------------------------------------------------------
 
 class Request(NamedTuple):
-    """A certified id request's fields, `active.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
+    """A certified id request's fields, `id_form.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
     offset=0)` is the request in the network certifier's cells."""
 
     model: str
@@ -239,7 +240,7 @@ def _request(q: int, data: bytes, cell_bytes: int) -> Request:
     return r
 
 
-def _buckets(params: W.WardenParams, records: Sequence[BlockGrid], b: int, what: str):
+def _buckets(params: W.NetworkCertifierParams, records: Sequence[BlockGrid], b: int, what: str):
     """Each bucket before b of a link's records with its cells, in bucket order."""
     T, by_window = params.window, {rec.window: rec for rec in records}
     if len(by_window) != len(records):
@@ -258,7 +259,7 @@ def _buckets(params: W.WardenParams, records: Sequence[BlockGrid], b: int, what:
             yield t, out
 
 
-def read(params: W.WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int) -> list[Response]:
+def read(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int) -> list[Response]:
     """The requests released before b and their responses' cells before b, in release order, from the network
     certifier's ingress and egress records (the module docstring's "The records"). Raises `Refused` (`records`)."""
     if type(b) is not int or b < 0 or b % params.window:
@@ -297,7 +298,7 @@ def read(params: W.WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[
     return [Response(q, n, t, requests[q], tuple(ids[q]), ended.get(q)) for q, (n, t) in at.items()]
 
 
-def edge(params: W.WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int,
+def edge(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int,
          eos: Collection[int]) -> Edge:
     """The close at b on the network certifier's records: the stamps it writes and the continuations they give,
     `eos` the deployment's end-of-sequence ids."""

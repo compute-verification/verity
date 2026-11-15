@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.HmNets
+
+/-!
 Level 3: where `Flock.HmNets.layout` puts a built circuit's rows. Input bit `i`'s row is `[i]` in A and B; the `k`-th AND
 in creation order is row `inRows + k`, its forms' columns (`cols`); output `j` is row `start + j`, its form's columns in A
 and the constant in B (`layout_rows`). A committed bit's column is `col`: an input bit its own, the bit after the inputs
 committed `k`-th `inRows + k` (`col_input`, `col_and`). `shaLaid_eq` and `hmLaid_eq` are the two nets' layouts as
 `layout` of the builder's run, stated without running it.
 -/
-module
-
-public import Flock.HmNets
 
 @[expose] public section
 

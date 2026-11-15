@@ -7,7 +7,7 @@
 OOM guard.  The kernel's OOM killer picks by size alone and can take the lease loop (which stops the VM on time), sshd sessions or
 the samplers.  When MemAvailable falls under ACT_PCT of MemTotal, the guard stops the largest process group of this user by
 resident memory, outside PROTECT: SIGTERM, then SIGKILL after 10 s.  Under WARN_PCT it only alerts.  Every OOM kill anywhere
-(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup cap) is an alert, with the user journal's line naming
+(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup limit) is an alert, with the user journal's line naming
 the unit.
 
 Page: OUT/status.md, with who holds which GPU (gpu-lease status), the GPUs' latest sample (gpu_util_sampler's JSONL, so no NVML
@@ -173,7 +173,7 @@ QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MAT
 # a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
 # --timed lease would otherwise freeze a train's check for the whole window. The check's directory either way a tree spells it
 # (slot_only.CHECK_DIRS; this file is installed alone), as a whole path (slot_only.check_file)
-CHECK_DIRS = ("tools/verity/check/", "tools/check/")
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 CHECK_PY = rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))})(?:check|slot)\.py(?![\w.-])"
 QUIET_EXEMPT = re.compile(rf"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |{CHECK_PY}")
 # of those, the ones whose descendants in groups of their own (ninja's compiles, a check's subprocesses) are spared too; a research

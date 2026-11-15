@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.TmplLayout
+
+/-!
 The lincheck fold of a templated unit under layout (iv), lenient, from its description. No verifier path reads
 it yet.
 
@@ -20,9 +24,6 @@ caller binds, copy by copy.
 Cost: per call path, its Definition's own entries and its calls' bound inputs times their copies, each an `eq` of at
 most `sl` coordinates and a position read through the call tree; `work` counts the entries and binding terms.
 -/
-module
-
-public import Flock.TmplLayout
 
 @[expose] public section
 

@@ -23,7 +23,7 @@ from verity_vllm.commit.challenge import challenge_positions
 
 CTX = b"ctx/request-A/step-3"
 CTX_B = b"ctx/request-B/step-3"
-#: the run's positions coin, as the auditor host's challenger would open it after the root
+#: the run's positions coin, as the auditor device's challenger would open it after the root
 COIN = b"positions coin"
 
 

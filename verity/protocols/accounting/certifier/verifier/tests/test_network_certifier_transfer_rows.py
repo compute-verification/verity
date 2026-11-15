@@ -12,7 +12,7 @@ import pytest
 
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import transfer_rows as TR
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -118,7 +118,7 @@ def test_check_registration_refuses_a_field_not_the_verifiers(tmp_path, field, v
 
 
 @pytest.mark.parametrize("other", ["link", "window", "direction"])
-def test_check_registration_refuses_a_certificate_for_another_link_window_or_direction(tmp_path, other):
+def test_check_registration_refuses_a_certificate_for_another_phase_or_direction(tmp_path, other):
     t, _cert, issuer = attested(tmp_path)
     at = {"link": LINK, "direction": Direction.INGRESS, "window": 0}
     at[other] = {"link": "s1/uplink", "window": 2, "direction": Direction.EGRESS}[other]

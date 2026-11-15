@@ -39,7 +39,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 verifier's own at the record's sample (`ZkReg.OwnReadsH`) opens the root `own` holds at the position `own` gives, through
 `ZkReg.regPathsH`, at the leaf of the population's row: the one table's statement is setupHidden's at the record's sample
 (`HiddenExec.setupTables_okH`), `checkRegistered` is `Registered.check` (`ZkReg.checkRegistered_ok`), and the sampled
-instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`).
+instance at `u`'s rank holds the population's row of `u` (`Hidden.sampled_digestW`).
 
 The leaf of the population's row at `(u, q)` is the registered leaf of both hidden layouts, the unit's (`layAtH`) and
 the template instance's (`layAtHI`), each the population's public file's (`regLeaf_bytes`), so:
@@ -112,7 +112,7 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hnD, -, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D', hD', -, hnD, -, -⟩ := Layout.sampled_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -130,7 +130,7 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
     exact this
   have hdig : pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.sampled_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
@@ -142,7 +142,7 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
 that is the verifier's own at the outcome's sample (`OwnReadsH`) has its registered leaf open the root `own` holds at the
 position `own` gives, through `regPathsH`. -/
 theorem checked_of_acceptsRH (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
     (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
     (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
@@ -163,7 +163,7 @@ theorem checked_of_acceptsRH (I : Inputs) (ht : I.tags.typed = false) (own : Arr
 /-- **The registered reads are checked at every accepted hidden-output outcome, at the template instance's layout.**
 `checked_of_acceptsRH` at `layAtHI` and `rsAtHI`, the general form's. -/
 theorem checked_of_acceptsRHI (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c)
     (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
     (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)

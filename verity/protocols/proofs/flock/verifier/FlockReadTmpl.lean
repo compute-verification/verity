@@ -1,7 +1,8 @@
-/- The `flock-read-tmpl` executable: `Flock.ReadTmplCmd.cmd`. -/
 module
 
 public import Flock.ReadTmplCmd
+
+/-! The `flock-read-tmpl` executable: `Flock.ReadTmplCmd.cmd`. -/
 
 @[expose] public section
 

@@ -10,7 +10,7 @@ These are steps of proofs, not guarantees: they sit with the proofs, and no reco
 GRIND: a unit's seed is `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`: the salt is a live coin, the roots are
 hiding commitments, and a cheater re-rolls a root for free through its blinds, so `T` hash queries give it `T` fresh
 seeds (the random-oracle model, `random-oracle`). These are the lemmas that price that, each `def G : Prop` proved as
-`Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Grind`. They are stated over abstract per-query bounds, so a
+`Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.Grind`. They are stated over abstract per-query bounds, so a
 service statement cites them without these definitions reaching into its own:
 
 * `ExchangeTail`: a gain whose exponential moment at rate `θ` is at most `M` exceeds `π` with probability at most

@@ -58,7 +58,9 @@ def _gate():
 
 
 SG = _gate()
-SOURCE = HERE / "ieee_pin.cu"
+#: the pinned builds' source: the tree's, beside the pins, or the copy beside this file where the two were copied out
+_TREE_SOURCE = HERE.parent.parent.parent / "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
+SOURCE = _TREE_SOURCE if _TREE_SOURCE.is_file() else HERE / "ieee_pin.cu"
 ARCHS = {"sm_120a": 120, "sm_90a": 90}
 
 

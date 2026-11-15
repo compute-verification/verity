@@ -1,9 +1,11 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import PousCheck.Certificate
 public import PousCheck.Run
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import PousCheck.Certificate
@@ -13,7 +15,7 @@ meta import PousCheck.Run
 # A PoUS run as a core protocol
 
 `PousCheck.Run.checkAt` behind the core interface (`Core.Protocol`), PoUS's component of onsite Verity
-(`verity/core/protocols/onsite`), each byte string canonical JSON:
+(`verity/protocols/compose/verifier/onsite`), each byte string canonical JSON:
 
 * params `{"point": {"k", "limit_ns", "params": {"blocks_per_segment", "c0", "segments", "w"}}, "session_id": hex,
   "trusted": [hex, …]}`: the point the run is checked at, the id the auditor designated for the period's session, and
@@ -164,8 +166,10 @@ def WIDE320_CLAIMS : List String := WIDE_CLAIMS ++ ["prf/sha-512"]
 
 /-- `p2.wide320_certificate`: `Pous.SecurityProofs.ObligationWide320` for a store at the registered width and prime of
 any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
-state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
-beside `2^eps_log2 = 2^-128`. `certificate` doesn't take it. -/
+state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20` at uniform indices: `δ` is
+that `2^-20`, the theorem's whole bound. `2^eps_log2 = 2^-127` is the advantage of `prf/sha-512` for the memory
+challenger's SHA-512 indices, assumed at that figure: `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter,
+which no model fixes, and the theorem doesn't read it. `certificate` doesn't take it. -/
 def wide320Certificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
@@ -306,6 +310,20 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/pous/p2/v4/run`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
+/-- **What a run accounts for** (`Core.Account`): the bits of `C*` a node held in its GPUs' memory (`.hbm`, where PoUS
+keeps `C*`) when the challenges arrived (`s_bits`), verified from below at the error its certificate states (`eps`), at
+a moment. A run off every certificate publishes `certified` false, and its rows say so.
+
+Its answers name no auditor's device's key, so they are of the whole site (`witness`): the memory challenger's key the
+session was signed under is in the parameters' `trusted` list, not in the answer. They name no step the bits were held
+at (`held`). The figure a run is computed at, its certificate's `call_ns` (`Certificate.ROOT_CALL_NS`), is in the
+profile's `certificate` object, which no `Core.Account.Key` reaches, so it is no `params` entry. -/
+def account : Core.Account :=
+  { protocol := ID, witness := none
+    amounts := [{ metric := "held", part := .memory [.hbm], key := .published "s_bits", unit := Core.Account.bits,
+                  side := .verified, time := .moment, error := .published "eps",
+                  uncertified := .flagged (.published "certified") }] }
+
 /-- **The protocol accepts exactly when `accepts` does**, on the case's point, keys, setup, table, session and id. -/
 theorem protocol_accepts (p : Params) (pub : SetupProtocol.Public) (e : Evidence) :
     protocol.Accepts p pub e ↔
@@ -376,5 +394,6 @@ private def TIE_PUB : SetupProtocol.Public :=
   s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard ((wide320Certificate 16448 21065 (2 ^ 19)).map (·.theoremName)) == some "Pous.SecurityProofs.ObligationWide320"
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
+#guard account.Formed ∧ account.protocol = protocol.id
 
 end PousCheck.RunProtocol

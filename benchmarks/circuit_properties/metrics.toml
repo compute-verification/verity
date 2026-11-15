@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "training/smallest-product-subcircuit"
-title = "s_×, the fewest Boolean gates in any counted product's subcircuit, least over the Boolean GEMM and every reference layer"
+title = "Smallest counted product subcircuit"
 owner = "training"
-unit = "Boolean gates in the smallest counted product's subcircuit"
+unit = "Boolean gates"
+axis = "s_×, the fewest Boolean gates in any counted product's subcircuit, least over the Boolean GEMM and every reference layer."
 better = "higher"
 command = "research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/circuit_properties/run.py --out \"$OUT\"'"
 every = "7d"

@@ -33,7 +33,7 @@ pub const K_LOG: usize = 13;
 pub const K_SKIP: usize = 6;
 
 #[derive(Debug)]
-pub struct Netlist {
+pub struct CircuitDescription {
     pub useful: usize,
     pub const_pos: usize,
     pub n_in: usize,
@@ -55,9 +55,9 @@ fn bit(v: &[u8], i: usize) -> u8 {
     (v[i >> 3] >> (i & 7)) & 1
 }
 
-impl Netlist {
+impl CircuitDescription {
     pub fn load(path: &str) -> Self {
-        let text = std::fs::read_to_string(path).expect("netlist");
+        let text = std::fs::read_to_string(path).expect("circuit description");
         let mut lines = text.lines();
         let h: Vec<usize> = lines.next().unwrap().split_whitespace().map(|t| t.parse().unwrap()).collect();
         let (useful, const_pos, n_in) = (h[0], h[1], h[2]);
@@ -176,7 +176,7 @@ impl Netlist {
     }
 }
 
-impl Netlist {
+impl CircuitDescription {
     /// The unit as a plain (non-union, RowMajor) block R1CS, for `prove_ligerito` and Flock-CUDA.
     pub fn block_r1cs(&self, n_blocks_log: usize) -> BlockR1cs {
         let k = 1usize << K_LOG;
@@ -225,14 +225,14 @@ impl Netlist {
 #[derive(Debug)]
 pub struct CombinedSetup {
     pub nu: usize,
-    pub net: Netlist,
+    pub net: CircuitDescription,
     pub blake3_r1cs: BlockR1cs,
     pub unit_r1cs: BlockR1cs,
     pub registry: Registry,
 }
 
 impl CombinedSetup {
-    pub fn new(net: Netlist, max_count: usize) -> Self {
+    pub fn new(net: CircuitDescription, max_count: usize) -> Self {
         let nu = min_n_blocks_log(max_count);
         let blake3_r1cs = crate::r1cs_hashes::blake3::build_block_r1cs(nu);
         let unit_r1cs = net.block_r1cs(nu);
@@ -330,14 +330,14 @@ pub fn min_n_blocks_log(n: usize) -> usize {
 #[derive(Debug)]
 pub struct VerityUnitSetup {
     pub n_units: usize,
-    pub net: Netlist,
+    pub net: CircuitDescription,
     pub r1cs: BlockR1cs,
     pub registry: Registry,
     pub pcs_params: PcsParams,
 }
 
 impl VerityUnitSetup {
-    pub fn new(net: Netlist, n_units: usize) -> Self {
+    pub fn new(net: CircuitDescription, n_units: usize) -> Self {
         assert!(n_units >= 1);
         let profile = LigeritoProfile::Fast;
         let n_log = min_n_blocks_log(n_units);
@@ -445,7 +445,7 @@ impl UnitNet {
         let sha256: [u8; 32] = sha2::Sha256::digest(text.as_bytes()).into();
         let mut lines = text.lines();
         let h: Vec<&str> = lines.next().expect("header").split_whitespace().collect();
-        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 netlist");
+        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 circuit description");
         let n = |i: usize| -> usize { h[i].parse().unwrap() };
         let (useful, const_pos, n_in) = (n(2), n(3), n(4));
         let ni = n(5);
@@ -478,7 +478,7 @@ impl UnitNet {
     }
 
     pub fn load(path: &str) -> Self {
-        Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+        Self::parse(&std::fs::read_to_string(path).expect("circuit description"))
     }
 
     pub fn block_r1cs(&self, n_blocks_log: usize) -> BlockR1cs {

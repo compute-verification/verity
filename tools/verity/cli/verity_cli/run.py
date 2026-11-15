@@ -11,7 +11,7 @@
 soundness covers; H1's development composite is refused), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
-parties are those of the static table `REGISTRY` names: the served window's (`demos/onsite_served/served_table.py`);
+parties are those of the static table `REGISTRY` names: the served window's (`tools/verity/cli/verity_cli/served_table.py`);
 `verity_cli`'s tests also run the toy's (`tools/verity/cli/tests/step0.py`). With no table, `verity run` and
 `verity config` are refused by name (``no-table``).
 
@@ -31,7 +31,7 @@ binding an entry needs that the file lacks ``unbound``.
 A party that is an entry there, a function of the configuration, the state and
 whether every party is on one machine, runs first, each in a process of its own, one after another in the table's
 order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
-(sampled proofs', the core parties) run together in one live run of the deployment layer (the table's ``live``): in
+(SPOT's, the core parties) run together in one live run of the deployment layer (the table's ``live``): in
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 
@@ -40,6 +40,9 @@ onsite, its id the line's ``product``), printed as a line and written to ``STATE
 
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
+
+onsite's line also has ``trusted-device``: each memory challenger's premise that its device ran on a machine the
+developer doesn't control (`memory_challenger.trusted_device`), by component, from the outcome of its run here.
 
 ``coins`` is ``simulated`` when the challenger's host is a machine a prover's party is on, else ``development`` (the
 keys are made for the run). ``simulated`` names each premise the placement leaves unmet (a party that sends coins on a
@@ -77,7 +80,7 @@ from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
 #: the static table: the directory on its import path, and its module (module docstring)
-REGISTRY: tuple[Path, str] | None = (ROOT / "demos" / "onsite_served", "served_table")
+REGISTRY: tuple[Path, str] | None = (Path(__file__).resolve().parent, "served_table")
 #: the deploy bindings `begin` keeps beside the run (module docstring)
 BINDINGS = "bindings.json"
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools
@@ -434,6 +437,9 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
     try:
         reg = reg or registry()
         cfg = load(Path(a.config), reg)
+        if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
+            raise NotImplementedError(f"verity run doesn't run {cid} ({', '.join(K.UNACCEPTED[cid])}) yet: "
+                                      "goal demos/onsite-demo")
         bound = bindings(Path(a.bindings) if a.bindings else None, cfg, reg)
         machine = a.machine or K.LOCAL
         if a.dry_run:

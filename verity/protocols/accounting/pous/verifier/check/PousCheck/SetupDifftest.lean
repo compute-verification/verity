@@ -7,8 +7,8 @@ public import PousCheck.Setup
 # The setup difftest: `PousCheck`'s functions behind `Difftest.serve`
 
 `pous-setup-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
-(`tests/test_setup_difftest.py`) samples inputs and holds each function's output to `verity.core.protocols.pous`
-(`schemes/p2.py`, `setup.py`) and `verity.ml.commitments.identity`. The functions:
+(`tests/test_setup_difftest.py`) samples inputs and holds each function's output to `verity.protocols.accounting.pous.verifier`
+(`schemes/p2.py`, `setup.py`) and `verity.commitments.identity`. The functions:
 
 * `maps`: `P2.d`, `P2.sigma` and `P2.decodeValue` on canonical values (Python's `_Field.sq`, `sigma`);
 * `keys`: `Keys.packagePrefix` and `Expander.keys` (`expand_prefix`, `sha512_keys`): K, t and which candidate t is, or
@@ -16,7 +16,7 @@ public import PousCheck.Setup
 * `decode`: `Setup.decodeSegment` (`decode_segment`): the payload, or the kind of refusal;
 * `commit`: `Commit.commit` and `Commit.manifest` (`setup.commit`, `canonical_json_bytes(params.manifest())`), the
   commitment over `Identity.taggedState` (the identity hash itself is `core_identity`'s, difftested there);
-* `vector` and `sigma`: an entry of the vectors file (`benchmarks/pous/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
+* `vector` and `sigma`: an entry of the vectors file (`verity/protocols/accounting/pous/verifier/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
   its own `sha512` (of its canonical JSON without it) and whether `ENTRY_SHA512` pins it, its K, t, rejection index and `D(c)` under the
   spec's prefix (`Keys.specPrefix`); a σ rejection case's `p`, `r ⊕ K` and `σ_K(r)`. The test holds these to the file's
   recorded values, and the file to `reference.VECTORS_SHA512`.

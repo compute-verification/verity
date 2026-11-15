@@ -34,7 +34,7 @@ private def keepOf? (record : Json) (side : Side) : Except String (List Int) :=
   | none => .error s!"the record's keep[{PouwCommit.pyRepr side.name}] is not a list of integers"
 
 /-- `window_problem`: the execution phase statement on the entry rows, or `none`. -/
-def windowProblem (rows : List ByteArray) (work : Work) (bound : Int) (rootH3 : ByteArray) (bits : Nat := gridBits)
+def executionPhaseProblem (rows : List ByteArray) (work : Work) (bound : Int) (rootH3 : ByteArray) (bits : Nat := gridBits)
     (records : Option (List Json) := none) (indices : Option (List Json) := none) : Except String (Option String) := do
   if rootH3.size != 64 then throw "the pass's -h3 tile root is 64 bytes"
   if (rows.length : Int) != bound then return some s!"{rows.length} entries, not the bound {bound}"
