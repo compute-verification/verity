@@ -60,6 +60,7 @@ from __future__ import annotations
 import ast
 import bisect
 import fnmatch
+import importlib.util
 import json
 import math
 import posixpath
@@ -70,8 +71,20 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from research import suite_layout
+from .. import ROOT
 
+
+def _suite_layout():
+    """`research.suite_layout` (stdlib only), loaded by its path in this checkout, so the graph depends on that one file and
+    not on the research distribution."""
+    spec = importlib.util.spec_from_file_location("suite_layout_for_verity_graph",
+                                                  ROOT / "tools" / "research" / "src" / "research" / "suite_layout.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+suite_layout = _suite_layout()
 KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
 GUARD = ("tools/check/guard/verity_suite_guard.py", "tools/check/guard/child/sitecustomize.py",

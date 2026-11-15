@@ -2553,12 +2553,6 @@ provides-extras = ["bench"]
 name = "verity-graph"
 version = "0.0.0"
 source = { editable = "tools/verity/graph" }
-dependencies = [
-    { name = "research" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "research", editable = "tools/research" }]
 
 [[package]]
 name = "verity-landq"

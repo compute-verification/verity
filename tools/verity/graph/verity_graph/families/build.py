@@ -61,7 +61,7 @@ TREE_PATH = "lean-build/lake-build.tar.gz"
 CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
                                                      "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
                                                      "spans.py", "suites.py", "verdicts.py")),
-               "tools/research/src/research/__init__.py", "tools/research/src/research/suite_layout.py",
+               "tools/research/src/research/suite_layout.py",
                ".agents/skills/using-slack/registry.json")
 
 
