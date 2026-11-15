@@ -1,9 +1,20 @@
 # compute: the share of a served model's MACs that Pearl+ credits
 
+What you may change is how the work is done: the kernels that compute the served model's matmuls, how the model is
+served under Pearl+ (how the load's requests become engine steps and passes, and the streams, graphs and overlap on the
+card), and the give-up rule (which rows each matmul gives up before the coin, within the verifier's cap). A better
+kernel, schedule or give-up raises the number.
+
+What is fixed is what the number is of: the model and its revision, and the load (`load.toml`: Llama 3.2 1B at its
+pinned revision, 4 requests of 32 prompt tokens and 4 output tokens each), the verifier and its Lean (`pouw-pearlplus`,
+whose verdict the number needs), and the formula (`run.py`'s docstring). A record whose policy registers another model,
+revision or load is refused. Change any of these and the number is another benchmark's.
+
 `verity bench compute` prints the compute audit's number for one served run. The number is a share: the
 multiply-accumulates (MACs) that the Pearl+ verifier credits, over the MACs the served model computes on the tokens of
 the run's registered class. The command measures nothing itself. It reads the verifier's side of the run's record, and
-nothing the developer's node reports of what it served.
+nothing the developer's node reports of what it served. The number is the Pearl+ piece's own answer, not PoUW's row in
+the run's record of verdicts, and the line under it says which coins and parameters the record states the run used.
 
 You give it a run's record in one of two ways:
 
@@ -22,8 +33,11 @@ uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN
 The two options are separate, so the command never guesses: a path that names no directory is refused as a path, and
 a run id never reads a local file. `tests/fixtures/record/` is a record directory, so
 `verity bench compute --record benchmarks/compute/tests/fixtures/record` runs from a clone. Its record is made up: it
-shows the format, not a served run's number. `verity bench` runs the command from the clone's root, so a relative DIR
-is taken from there.
+shows the format, not a served run's number. Run the command from the clone's root as `verity bench compute`, which
+starts it there, so a relative DIR is taken from the root.
+
+The tests run from this directory, which is not a workspace member, in the workspace's environment:
+`uv run --project ../.. pytest tests`.
 
 Outside `research run` it only prints. To keep what it prints as files too (`compute.json` and `result.json`, below),
 set `OUT` to a directory: `OUT=/tmp/compute verity bench compute --record DIR`.
