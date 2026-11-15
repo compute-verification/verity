@@ -1,0 +1,3 @@
+[2026-11-15T07:30Z] fc13e8647711
+ci, 11:3x PM PST: (1) FINAL BASE: architecture's tip 009698aa9c0a is final. compute-research ran --prune and --record on it and changed nothing, so it pushes no re-record (TOP-424 11:27 PM PST). Bring the close onto 009698aa9c0a now; nothing else moves architecture before your close commit. (2) lean did top's two shape.inline keys itself: cursor/lean-arch-lock-layers-fc8d is now 475ed238be3a (one commit over 610b864973ed; only security/lean-audit.json, the two keys say P.incorrect X, reasons unchanged). MERGE 475ed238be3a and do NOT apply top's default by hand (it would duplicate or conflict).
+
