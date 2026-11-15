@@ -23,6 +23,9 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
   stays, and a suite whose inputs replace its dependencies (`inputs_only`) or that `exports` narrows reads `X` by name; the files map then moves it with the tests. Its
   `conftest.py` beside the pyproject (the vLLM adapter's) is the suite's and goes into `X/tests/` too: pytest reads none
   above the suite's directory. A dependency group the distribution keeps for its own tests is the member's too.
+- **A virtual member that stays a member where it is** (`MEMBERS_KEPT`, with why): `split` treats it as a distribution's
+  suite, but the member `NAME-tests` has its dependencies, not a dependency on it (nothing installs a virtual member),
+  and reads `X` by name.
 - **Every other suite's pyproject**: the suites map moves it to `tests/X/pyproject.toml` (`testpaths` `tests` to `.`,
   `strip_suite_relative`, `pythonpath_from`), with `X` added to its inputs where nothing else of its inputs covers it: its
   own directory did.
@@ -79,6 +82,9 @@ ARTIFACTS = "artifacts.json"
 FUTURE = re.compile(r"^from __future__ import [^\n]*\n", re.M)
 #: the tables a suite's pyproject holds for pytest and the check, which `split` moves
 SUITE_TABLES = ("tool.pytest", "tool.verity.tests")
+#: virtual workspace members that stay members where they are, their suite split off as a distribution's is: {dir: why}
+MEMBERS_KEPT = {"tools/check": "ci's rule: a cold `uv run tools/check/*.py` syncs `verity-check`'s project, the whole "
+                               "workspace; with no project there it syncs only the root's default groups"}
 
 
 def git(*args: str, root: Path = ROOT) -> str:
@@ -128,6 +134,10 @@ class Tree:
         return (d in self.members and bool(data.get("project")) and "build-system" in data
                 and data.get("tool", {}).get("uv", {}).get("package") is not False)
 
+    def splits(self, d: str) -> bool:
+        """Whether `split` moves the suite at `d` to a member in its tests/: a distribution's, or a member's that stays one."""
+        return self.distribution(d) or (d in self.members and d in MEMBERS_KEPT)
+
     def test_dirs(self) -> dict[str, list[str]]:
         """{`X/tests`: its tracked files}, the outermost `tests` of each path under `AREAS`."""
         out = defaultdict(list)
@@ -174,6 +184,8 @@ def inventory(t: Tree) -> dict:
             snags["a suite whose pyproject is in its own tests/ (moves whole)"].append(d)
         if kind == "distribution":
             snags["a suite whose pyproject builds a distribution (split first)"].append(f"{d} ({t.pyprojects[suite]['project']['name']})")
+        elif suite and t.splits(suite):
+            snags["a suite of a member that stays one (split first)"].append(f"{d} ({t.pyprojects[suite]['project']['name']})")
         if t.kept(d):
             snags["a tests/ package its modules import as `tests` (one level kept)"].append(d)
         elif f"{d}/__init__.py" in t.tracked:
@@ -251,13 +263,17 @@ def _exports(body: str) -> tuple[str, str] | None:
 
 
 def split(t: Tree, d: str) -> dict[str, str]:
-    """The files `split` writes for the distribution at `d`: its pyproject without the suite's tables, the member's in
-    `d/tests/`, the root's with the member; and the conftest beside it moved in. {path: text, or None to delete}."""
+    """The files `split` writes for the distribution, or the member that stays one, at `d`: its pyproject without the
+    suite's tables, the member's in `d/tests/`, the root's with the member; and the conftest beside it moved in. {path:
+    text, or None to delete}."""
     text = t.read(f"{d}/pyproject.toml")
     data = t.pyprojects[d]
     name, project = data["project"]["name"], data["project"]
-    keep, moved = [], []
+    virtual = not t.distribution(d)
+    keep, moved, sources = [], [], ""
     for table, body in _tables(text):
+        if table == "tool.uv.sources":
+            sources = body
         if table == "tool.verity.tests" and (kept := _exports(body)):
             keep.append("[tool.verity.tests]\n" + kept[0] + "\n")
             body = kept[1]
@@ -269,19 +285,23 @@ def split(t: Tree, d: str) -> dict[str, str]:
     # the extras that name a workspace package, which the suite's key reads; another (torch) would change the environment
     extras = sorted(e for e, reqs in project.get("optional-dependencies", {}).items()
                     if any((m := REQUIREMENT.match(r)) and norm(m.group(1)) in t.names for r in reqs))
-    dep = name + (f"[{','.join(extras)}]" if extras else "")
+    deps = project.get("dependencies", []) if virtual else [name + (f"[{','.join(extras)}]" if extras else "")]
     head = [f"# The suite of the distribution `{name}`: a virtual member that depends on it, so the suite keys on what the\n"
-            "# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.\n",
+            "# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.\n" if not virtual else
+            f"# The suite of the workspace member `{name}`, which stays a member where it is: a virtual member with its\n"
+            "# dependencies, which `tools/check/suites.py` names as the member.\n",
             f'[project]\nname = "{norm(name)}-tests"\nversion = "0.0.0"\n'
-            f'requires-python = "{project.get("requires-python", ">=3.12")}"\ndependencies = [{json.dumps(dep)}]\n\n']
+            f'requires-python = "{project.get("requires-python", ">=3.12")}"\ndependencies = {json.dumps(deps)}\n\n']
     if groups := data.get("dependency-groups"):
         head.append("[dependency-groups]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in groups.items()) + "\n")
     head.append("# Not an installable package: a workspace member so that its tests run in the workspace environment.\n"
                 "[tool.uv]\npackage = false\n\n")
+    if virtual and sources:
+        head.append(sources.rstrip("\n") + "\n\n")
     body = "".join(moved)
     member = "".join(head) + _strip_suite_relative(body, "tests/").rstrip("\n") + "\n"
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
-    if tests.get("inputs_only") or "exports" in tests:
+    if virtual or tests.get("inputs_only") or "exports" in tests:
         member = _add_inputs(member, [d], first=True)
     out = {f"{d}/pyproject.toml": keep_text, f"{d}/tests/pyproject.toml": member}
     rootp = t.read("pyproject.toml")
@@ -289,7 +309,7 @@ def split(t: Tree, d: str) -> dict[str, str]:
         m = re.search(r"^members\s*=\s*\[[^\]]*\]", rootp, re.M)
         listed = m.group(0).replace(f'"{d}"', f'"{d}", "{d}/tests"', 1)
         rootp = rootp[:m.start()] + listed + rootp[m.end():]
-    if norm(name) not in {norm(s) for s in t.sources}:
+    if not virtual and norm(name) not in {norm(s) for s in t.sources}:
         # a member's own `workspace = true` source for a member whose directory holds it is refused by uv: the root names it
         m = re.search(r"^\[tool\.uv\.sources\]\n(?:[^\[\n].*\n)*", rootp, re.M)
         rootp = rootp[:m.end()] + f"{name} = {{ workspace = true }}\n" + rootp[m.end():]
@@ -316,7 +336,7 @@ def _merge_conftests(outer: str, inner: str) -> str:
 
 
 def run_split(t: Tree, names: list[str]) -> list[str]:
-    todo = [s for s in t.suites if s != "." and s.split("/")[0] in AREAS and t.distribution(s)
+    todo = [s for s in t.suites if s != "." and s.split("/")[0] in AREAS and t.splits(s)
             and (not names or norm(t.pyprojects[s]["project"]["name"]) in {norm(n) for n in names})]
     done = []
     for d in sorted(todo):
@@ -420,7 +440,7 @@ def _covered(t: Tree, s: str) -> bool:
 def suites_map(t: Tree) -> str:
     rows, tables = {}, []
     for s, tps in sorted(t.suites.items()):
-        if s == "." or s.split("/")[0] not in AREAS or t.distribution(s) or s.endswith("/tests") or tps != [f"{s}/tests"]:
+        if s == "." or s.split("/")[0] not in AREAS or t.splits(s) or s.endswith("/tests") or tps != [f"{s}/tests"]:
             continue
         kept = t.kept(f"{s}/tests")
         new = f"{MIRROR}/{s}/{'tests/' if kept else ''}pyproject.toml"
