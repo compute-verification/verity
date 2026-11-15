@@ -54,8 +54,10 @@ an ask (RUN_MEM_ENV) of no more than its mem=, a part that fitted the whole slot
 share GB whatever that run asks (`booked`): CMD still gets mem= as SLOT_MEM_ENV and gets share as BOOK_ENV, so check.py
 grants its steps no more than the share between them, and the check plans inside what the ledger holds for it. A run that
 asks more than mem=, or names no ask (a whole check), is the heavy kind: it takes only a line without share=, a whole slot,
-and on a machine that lists none for it the waiter exits NOT_STARTED at once. Nothing limits a share's memory but the
-machine's own limits: a check past its share counts as over its reservation from there. A waiter with others ahead of it
+and on a machine that lists none for it the waiter exits NOT_STARTED at once. With scope=1 on the line the check's
+scope gets its share as MemoryHigh (`scoped`), a soft limit: past it the kernel takes the scope's page cache back and
+slows its processes, and kills nothing; without scope=1 nothing limits a share's memory but the machine's own limits, and a
+check past its share counts as over its reservation from there. A waiter with others ahead of it
 still takes a share when none of them could (`passing`): each is heavy, and the memory free holds their asks beside its
 share, so a heavy part waiting for its whole slot keeps the line's order for that slot and the memory it waits for, and
 holds no share idle. A line whose share= isn't a whole number of GB from 1 to its mem=, or that has book= beside it or no
@@ -332,17 +334,19 @@ def session_limit(dropins: Path | None = None) -> str | None:
     return None if limit in (None, "infinity") else limit
 
 
-def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
+def scoped(cmd: list[str], slot: str, run_id: str, high: int | None = None) -> tuple[list[str], str]:
     """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
     per-check peak, and summed RSS counts shared pages over and over). On a node that
     limits each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
     to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
-    a scoped check (exit 75)."""
+    a scoped check (exit 75). HIGH GiB (a share's scope: what it reserves) is the scope's MemoryHigh, a soft limit: past it
+    the kernel takes the scope's page cache back and slows its processes, and kills nothing, so a shard in a share keeps
+    its cache out of the memory the slot's other share reserved."""
     unit = f"check-{slot}-{run_id}"
     limit = session_limit()
-    props = [f"--property=MemoryMax={limit}"] if limit else []
+    props = [*([f"--property=MemoryMax={limit}"] if limit else []), *([f"--property=MemoryHigh={high}G"] if high else [])]
     return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", *cmd], unit
 
 
@@ -1449,10 +1453,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if slot.get("scope") and (why := scope_refusal()):
         print(f"slot: scope=1 but systemd-run --user doesn't run here ({why}); running unscoped", file=sys.stderr, flush=True)
     elif slot.get("scope"):
-        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()))
+        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()), slot.get("share"))
         env[SCOPE_ENV] = unit
-        record_slot(run_dir, {**held, "scope": f"{unit}.scope"})
-        print(f"slot: check in its own scope {unit}.scope", file=sys.stderr, flush=True)
+        record_slot(run_dir, {**held, "scope": f"{unit}.scope", **({"high_gib": slot["share"]} if slot.get("share") else {})})
+        print(f"slot: check in its own scope {unit}.scope" + (f", its page cache taken back past {slot['share']} GiB"
+                                                               if slot.get("share") else ""), file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 
 

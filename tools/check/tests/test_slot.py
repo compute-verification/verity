@@ -277,6 +277,36 @@ def test_a_scoped_check_on_a_node_that_limits_login_sessions_gets_the_same_memor
     assert "--property=MemoryMax=600G" not in SLOT.scoped(["true"], "b", "r1")[0], "the last drop-in that sets it wins"
 
 
+def test_a_share_with_a_scope_of_its_own_takes_its_page_cache_back_past_its_share_and_a_whole_slot_has_no_such_limit(
+        tmp_path, monkeypatch):
+    """Two shards in the shares of one slot each reserve their share, and a shard's peak with its page cache is about twice
+    what it holds without: with no limit the cache of one fills the memory the other reserved. MemoryHigh reclaims and slows;
+    it never kills, so a shard that outgrows its share is slow, not red."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", tmp_path / "no-dropins")
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.Poll, "memory_gb", lambda self: 700.0)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "250")
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    for line, props in (("c 0 only=trains mem=300 share=150 scope=1", ["--property=MemoryHigh=150G"]),
+                        ("d 0 only=trains mem=300 share=150", None), ("e 0 only=trains mem=300 scope=1", [])):
+        (tmp_path / "slots").write_text(line + "\n")
+        with pytest.raises(Exec):
+            SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+        name = line[0]
+        assert ran["argv"] == (["check.py"] if props is None else
+                               ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit=check-{name}-r1", *props,
+                                "--", "check.py"]), line
+
+
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
     """Fail open: a run with no user manager or bus would otherwise fail every train check the slot
     takes, which drive reads as the train failing."""
