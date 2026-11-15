@@ -1136,7 +1136,7 @@ def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_
     # `one_numa_node` is none: a row whose cores span two NUMA nodes, and one that doesn't say, are priced as the good row
     for cores, status in (({"count": 10, "list": "8-17", "numa_nodes": [0, 1]}, S.FAIL), ({"count": 10}, S.CANNOT_TELL)):
         row = good | {"cores": cores}
-        assert S.one_numa_node(row).status == status
+        assert S.one_numa_node(row, lambda path: None).status == status
         assert R.row_why(row) is None and R.steady_row(row, "r1").gpu_seconds == R.steady_row(good, "r1").gpu_seconds
 
 
