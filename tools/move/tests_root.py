@@ -527,6 +527,8 @@ def suites_map(t: Tree) -> str:
 ANCHOR = r"(?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?(?P<up>(?:\.parent\b)+|\.parents\[\d+\](?:\.parent\b)*)"
 #: literal joins after an anchor
 JOINS = r"(?P<joins>(?:\s*/\s*(?:\"[^\"\n]*\"|'[^'\n]*'))*)"
+#: `Path(__file__).with_name("N")`: a file beside this one, which the mover moves with it unless it is kept
+WITH_NAME = re.compile(r"(?P<style>(?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?)\.with_name\((?P<q>[\"'])(?P<name>[\w.\-]+)(?P=q)\)")
 NAMED = re.compile(r"^(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*(?P<open>\(?)" + ANCHOR + JOINS + r"(?P<close>\)?)\s*$", re.M)
 
 
@@ -690,7 +692,8 @@ def _target(start: str, name: str | None, levels: int, segs: list[str]) -> str:
 def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
     """Each anchor of a Python file, moved or not, that no longer names what it named at `base`, the commit before the moves
     (the mover recomputes the anchors it reads as joins; a name bound to one, `NAME.parent` or `NAME / "x"`, and an anchor
-    of a file that stays naming a test that moved, it can't). With `write`, each is rewritten to name it again; and each
+    of a file that stays naming a test that moved, it can't), and a moved file's `Path(__file__).with_name(N)` whose `N`
+    is kept. With `write`, each is rewritten to name it again; and each
     suite whose tests imported a kept module from beside them gets its directory on its `pythonpath` (`_kept_paths`).
     {file: [what changed]}."""
     rows, held = _rows(t.root), _held(t.root)
@@ -734,6 +737,19 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
                       and not re.search(r"[\w)\]]$", after[:s1 - 1])):
                     s1, e1 = s1 - 1, e1 + 1             # the parentheses the mover put around a join it no longer is
                 edits.append((s1, e1, expr, f"{new}:{line + 1}: {after[s1:e1].strip()} -> {expr} ({want})"))
+        if new != old:
+            strings = _strings(after)
+            for m in WITH_NAME.finditer(after):
+                kept = posixpath.join(posixpath.dirname(old), m.group("name"))
+                if posixpath.dirname(kept) not in held or _mapped(kept, rows) != kept or any(x <= m.start() < y for x, y in strings):
+                    continue
+                start = posixpath.dirname(new)
+                common = posixpath.commonpath([start, kept])
+                up = start.count("/") + 1 - (common.count("/") + 1 if common else 0)
+                expr = _expression(None, up + 1, posixpath.relpath(kept, common or ".").split("/"), m.group("style"))
+                if after[m.end():m.end() + 1] in (".", "["):
+                    expr = f"({expr})"
+                edits.append((m.start(), m.end(), expr, f"{new}:{after.count(chr(10), 0, m.start()) + 1}: {m.group(0)} -> {expr} ({kept}, kept)"))
         if edits:
             out[new] = [e[3] for e in edits]
             for s1, e1, expr, _ in sorted(edits, reverse=True):
