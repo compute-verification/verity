@@ -1,6 +1,6 @@
 module
 
-public import Definitions.InferenceOnly.Dark
+public import Definitions.Slowdown.Dark
 
 /-!
 # The inference-only policy's θ rule: the named premise

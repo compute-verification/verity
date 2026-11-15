@@ -50,7 +50,7 @@ bits costs at least `(2x/b)·c_root`. A completion measured below that, by a fac
 term divided by `θ`.
 
 **The stated instance is the deployed codec's**, Sloth over `p = 2^1024 − 105`, masked, at `k = 3` (`codec.DEFAULT`
-of `verity/core/protocols/remote_bandwidth/codec.py`, as ruled; `k = 2` at the same width the
+of `verity/core/protocols/poub/codec.py`, as ruled; `k = 2` at the same width the
 fallback): `WorkHardness 1024 3 c_root cost`, `x` of a word's 1,024 bits at `(3x/b)·c_root`. The `Prop` reads the codec
 only through `b`, `rounds` and `c_root`, so the mask changes no statement, only what the price rests on. The
 guarantees hold at every `rounds`; `k = 3` is the one they are read at.
@@ -90,7 +90,7 @@ codec and the coins of the appends before it, every layout `slot` of `N` distinc
   `Pr_{ω,κ}[appendCoinBlocks enc choose slot (ω, κ) ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
 
 `ω` is the codec in the ideal encoding model (its rounds' random function, below). The coins are the appends'
-(remote_bandwidth's PROTOCOL.md §3–§4), sampled at the node's one live registration and after: the registration is
+(poub's PROTOCOL.md §3–§4), sampled at the node's one live registration and after: the registration is
 append `0`, whose coin is the seed, sampled after its payload root; every other append's coin `c_a` is 32 bytes, sampled
 once, when the append's root arrives, after that root has committed every digest. A registered block is its payload
 encoded under the seed's key. An appended block is its payload `p_j` encoded with the bound tweak
@@ -116,7 +116,7 @@ values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a 
 choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
 after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
 block's encoding by writing its decoding: measured in
-`verity/core/protocols/remote_bandwidth/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
+`verity/core/protocols/poub/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
 keys a block under each coin apart. -/
 def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : ℕ) (δ : ℝ≥0∞)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B) : Prop :=
@@ -142,7 +142,7 @@ $$\Pr_x\big[E(\mathrm{keys}(b, D, x))\big] \le \Pr_\kappa\big[E(\kappa)\big] + \
 It is the one random-oracle step `SketchBoundRun` takes: the bound is derived over the model's coins
 (`Accounting.Remote.Sketch.ModelCoins`, each candidate's key uniform and independent of the prover's coins, the store and
 the other keys), and this premise carries it to the trace's outcomes, whose keys are SHA-512's, at a cost of `ε`. The
-signs are `S_i`, which `remote_bandwidth.receipts` expands from the seed by SHA-512, and the receipt hash is SHA-512
+signs are `S_i`, which `poub.receipts` expands from the seed by SHA-512, and the receipt hash is SHA-512
 keyed by the seed (`SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)`) read as a function of the block's index and sketch words.
 
 SHA-512 is one fixed function, and for it the premise is false in Lean at small `ε`: a fixed function's outputs are one

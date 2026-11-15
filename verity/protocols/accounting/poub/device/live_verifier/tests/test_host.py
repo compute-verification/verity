@@ -1,7 +1,7 @@
-"""The verifier host's gate (`host.py`) with its root steps (chown, systemctl) and the clock injected, on the deployed
-`verifier.json` with a dummy challenger ssh: a run is held to the whitelist, written as its request and started as its
-one unit, and its command line is one verifier.py's own parser reads as the request; the gate refuses any other verb,
-any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
+"""The verifier host's gate (`host.py`) with its root steps (chown, systemctl) and the clock injected, on `verifier.json`
+here, the deployed one's shape with a dummy challenger ssh (infra's packaging test holds the deployed one to it): a run
+is held to the whitelist, written as its request and started as its one unit, and its command line is one verifier.py's
+own parser reads as the request; the gate refuses any other verb, any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
 stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved, or on a
 host with no first-parent list of main, doesn't run. The slow test runs a run through the stub verifier
 (`stub_verifier.py`, a real paced session): its out/ is verifier.py's, which `auditor_line.py` reads, `fetch` ships it
@@ -28,7 +28,6 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[7]
 RS = ROOT / "benchmarks" / "remote_session"
-PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))
@@ -57,10 +56,7 @@ SESSIONS = ["run", "--peer", "gpu-node", "--port", "7958", "--period", "memory-l
 
 @pytest.fixture
 def svc(tmp_path) -> H.Host:
-    settings = json.loads((PACKAGING / "verifier.json").read_text())
-    settings["challenger"].update(ssh=SSH, peer="auditor-host")
-    settings["peers"] = {"gpu-node": {**next(iter(settings["peers"].values())), "addresses": [NODE_ADDRESS]}}
-    (tmp_path / "verifier.json").write_text(json.dumps(settings))
+    (tmp_path / "verifier.json").write_text((HERE / "verifier.json").read_text())
     (tmp_path / "var" / "runs").mkdir(parents=True)
     host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
                   main=tmp_path / "main-first-parent.txt")
@@ -202,18 +198,10 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
         V.pace_of(spec, 17.0)
 
 
-def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
-    conf = (PACKAGING / "12-vy-verifier.conf").read_text()
-    prover = conf.split("Match User prover")[1].split("Match User")[0]
-    opened = re.search(r"^\s*PermitOpen (.*)$", prover, re.M).group(1).split()
-    assert opened == [f"127.0.0.1:{p}" for p in H.PORTS]
-    challenger = conf.split("Match User challenger")[1]
-    listened = re.search(r"^\s*PermitListen (.*)$", challenger, re.M).group(1).split()
-    assert listened == [f"127.0.0.1:{p}" for p in challengers.GATE_PORTS] and H.GATE_PORTS == challengers.GATE_PORTS
-    assert not set(H.PORTS) & set(H.GATE_PORTS)
-    tunnel = (PACKAGING / "vy-verifier-tunnel").read_text()
-    pattern = re.search(r"\$4 ~ /\^(.*)\$/", tunnel).group(1).replace("\\.", ".")
-    assert [p for p in range(7000, 8000) if re.fullmatch(pattern, f"127.0.0.1:{p}")] == list(H.PORTS)
+def test_the_runs_ports_are_not_the_challenger_gates():
+    """The deployed sshd and tunnel files are held to these ports by infra's packaging test
+    (`tools/research/tests/test_nebius_verifier_packaging.py`)."""
+    assert H.GATE_PORTS == challengers.GATE_PORTS and not set(H.PORTS) & set(H.GATE_PORTS)
 
 
 @pytest.mark.parametrize("words, why", [
@@ -389,23 +377,10 @@ def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_las
     assert [(p["line"], p["commit"]) for p in json.loads(out)["pins"]] == [(0, PIN), (1, "d" * 40), (2, PIN)]
 
 
-def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it():
-    """Infra's review: elan is a release, its archive checked against a pinned sha256 before it runs (never a
-    script fetched from a branch), and the pin is logged (`host.py pinned`) before `current` moves to it."""
-    code = "\n".join(ln for ln in (PACKAGING / "pin.sh").read_text().splitlines() if not ln.lstrip().startswith("#"))
-    assert "raw.githubusercontent.com" not in code and not re.search(r"\|\s*(ba)?sh\b", code)
-    assert re.search(r"^ELAN=v\d+\.\d+\.\d+ ELAN_SHA256=[0-9a-f]{64}$", code, re.M)
-    assert "https://github.com/leanprover/elan/releases/download/$ELAN/" in code
-    assert code.index('echo "$ELAN_SHA256  $e/elan.tar.gz" | sha256sum -c') < code.index('"$e/elan-init"')
-    assert code.index('host.py" pinned "$c"') < code.index('ln -sfn "$c" "$O/current.tmp"')
-
-
-def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces_one():
+def test_the_provers_tunnel_client_asks_no_pty_and_the_challengers_forces_one():
     """ssh ends a session whose forced pty (`-tt`) the server refuses (OpenSSH 9.6, checked against a real sshd), so the
     prover's key, whose client is run.sh's `ssh -T`, has no `pty`, and the challenger's keeps it only while serve.py
-    forces one."""
-    setup = (PACKAGING / "setup.sh").read_text()
-    assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
+    forces one; infra's packaging test holds the keys `setup.sh` writes to the same."""
     verifier_host = (RS / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
     assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
     serve = (ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "serve.py").read_text()
@@ -424,18 +399,17 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     assert call(svc, PACED)[0] == 0
     (svc.runs / RUN / "end.json").write_text(json.dumps({"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}))
     got = []
-    assert H.publish(svc, RUN, put=lambda argv: got.append(argv) or 0) == 0
-    (argv,) = got
-    assert argv[:2] == ["put", "--kind"] and argv[2] == "verifier-run/v1" and argv[-3:] == [
-        "--tree", str(svc.runs / RUN), "--preserve"]
-    assert json.loads(argv[argv.index("--meta") + 1]) == {
+    assert H.publish(svc, RUN, put=lambda *a: got.append(a) or 0) == 0
+    ((kind, meta, tree),) = got
+    assert (kind, tree) == ("verifier-run/v1", svc.runs / RUN)
+    assert meta == {
         "run": RUN, "by": LANE, "pinned": PIN, "peer": "gpu-node", "period": "memory-line-1",
         "requested_utc": "2026-10-21T13:00:00Z", "end": {"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}, "replay": None}
 
 
 @pytest.mark.parametrize("code", [
     "print(host.replay_module().__file__)",
-    "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
+    "sys.path.insert(0, str(host.RESEARCH)); from research.store import local; print(local.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
     "sys.argv = ['auditor_line.py', '--help']; "
     "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
@@ -853,6 +827,8 @@ def _member(name: str, kind: bytes = tarfile.REGTYPE, link: str = "") -> tarfile
     (tar_of(HANDED, extra=((_member("/etc/x"), b"x"),)), "the hand-off's member '/etc/x' isn't a path under the serve dir"),
     (tar_of(HANDED, extra=((_member("h1/../../x"), b"x"),)), "isn't a path under the serve dir"),
     (tar_of(HANDED, extra=((_member("h1/log.jsonl"), b"{}\n"),)), "the hand-off carries h1/log.jsonl twice"),
+    (tar_of(HANDED, extra=((_member("h1"), b"x"),)), "the hand-off's member h1 can't be written under the serve dir"),
+    (tar_of(HANDED, extra=((_member("h1/log.jsonl/x"), b"x"),)), "member h1/log.jsonl/x can't be written under the serve"),
     (tar_of(HANDED, unlisted=("h1/log.jsonl",)), "the hand-off carries h1/log.jsonl, which its sums don't list"),
     (tar_of(HANDED, sums={"h1/log.jsonl": "0" * 64}), "h1/log.jsonl isn't the file the served node hashed"),
     (tar_of(HANDED, extra=((_member(H.COMPOSE_SUMS), b"0" * 64 + b"  h1/gone.json\n"),)),
@@ -881,6 +857,9 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  h1/gone.json\n")), tmp_path / "lacks")
     with pytest.raises(H.Refused, match=r"sums list the served run's witness: private/h1/key \(H1's prover state"):
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  private/h1/key\n")), tmp_path / "listed")
+    for i, outside in enumerate(("../../etc/passwd", "/etc/passwd", "h1/../../x")):
+        with pytest.raises(H.Refused, match="lacks .*, which its sums list"):
+            H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  {outside}\n")), tmp_path / f"outside{i}")
     with pytest.raises(H.Refused, match="a line that isn't sha256sum's"):
         H.receive(io.BytesIO(tar_of(HANDED, more="nonsense\n")), tmp_path / "line")
     with pytest.raises(H.Refused, match="over 10 bytes"):
@@ -889,6 +868,86 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
     assert got == {**{f: hashlib.sha256(b).hexdigest() for f, b in HANDED.items()},
                    H.COMPOSE_SUMS: hashlib.sha256((tmp_path / "ok" / H.COMPOSE_SUMS).read_bytes()).hexdigest()}
     assert oct((tmp_path / "ok").stat().st_mode & 0o777) == "0o700"
+
+
+@pytest.mark.parametrize("line, why", [
+    ("K=$(touch {ran})", "its line 1 sets K to a value of other characters"),
+    ("K=`touch {ran}`", "its line 1 sets K to a value of other characters"),
+    ("K=7; touch {ran}", "its line 1 sets K to a value of other characters"),
+    ("K=7 touch {ran}", "its line 1 sets K to a value of other characters"),
+    ("K=7\r", "its line 1 sets K to a value of other characters"),
+    ("touch {ran}", "its line 1 is not NAME=VALUE"),
+    ("", "its line 1 is not NAME=VALUE"),
+    ("$(touch {ran})=7", "its line 1 names no setting"),
+    ("ONSITE_PIECES=x", "its line 1 sets no setting of a hand-off"),
+    ("K=7\nK=8", "its line 2 sets K a second time"),
+    ("K=7\nPRODUCT=x\nSTEPS=0\\,3\nGAMMA=$(touch {ran})", "its line 4 sets GAMMA to a value of other characters"),
+])
+def test_a_hand_off_whose_settings_are_not_data_is_refused_before_they_are_written_and_runs_nothing(
+        composer, tmp_path, line, why):
+    """A hand-off's compose.env is the prover's bytes, which the compose's script reads on this host: `receive`
+    refuses one that isn't NAME=VALUE lines of the hand-off's settings in handoff's characters before writing it, so a
+    `$(...)` in it reaches no shell; nothing composes, and the command it carries never ran."""
+    ran = tmp_path / "ran"
+    handed = tar_of({**HANDED, H.COMPOSE_ENV: f"{line.format(ran=ran)}\n".encode()})
+    (rc, out), seen = compose(composer, handed)
+    said = refused((rc, out))
+    assert f"{H.COMPOSE_ENV}, which the compose reads as data and never runs: {why}" in said, said
+    assert str(ran) not in said and "env" not in seen and not seen["scratch"].exists() and not ran.exists()
+    d = tmp_path / "serve"
+    with pytest.raises(H.Refused, match="reads as data"):
+        H.receive(io.BytesIO(handed), d)
+    assert not (d / H.COMPOSE_ENV).exists() and not ran.exists()
+
+
+def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp_path):
+    """The served node's compose.env as handoff writes it (`printf '%s=%q\\n'`: a comma as `\\,`, an empty value as
+    `''`), its last line with or without a newline, is received whole and reads as the settings it was written from."""
+    settings = {"K": "7", "PRODUCT": "remote", "STEPS": "0,3", "AUDITED_ON": "", "SERVED_DIR": "/workspace/research/r-1",
+                "ALPHA": "0.25", "GAMMA": "1e-3", "COMPOSE_TREE": "a+b@c:d=e"}
+    body = subprocess.run(["bash", "-c", 'printf "%s=%q\\n" "$@"', "_", *(x for kv in settings.items() for x in kv)],
+                          capture_output=True, check=True).stdout
+    assert b"STEPS=0\\,3\n" in body and b"AUDITED_ON=''\n" in body
+    for i, b in enumerate((body, body.rstrip(b"\n"))):
+        got = H.receive(io.BytesIO(tar_of({**HANDED, H.COMPOSE_ENV: b})), tmp_path / f"ok{i}")
+        assert (tmp_path / f"ok{i}" / H.COMPOSE_ENV).read_bytes() == b and H.COMPOSE_ENV in got
+        assert H.compose_settings(b) == settings
+    assert H.compose_settings(b"") == {}
+    with pytest.raises(H.Refused, match="over 65536 bytes"):
+        H.compose_settings(b"K=7\n" * 20000)
+
+
+def test_a_compose_answers_no_byte_a_link_in_its_out_points_at(composer, tmp_path):
+    """The answer is $OUT's own files: a link there, to a file or a directory outside it, is named and never followed,
+    so no byte of the auditor's host outside $OUT reaches the caller."""
+    (tmp_path / "secret").write_text("SECRET\n")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "key").write_text("KEY\n")
+
+    def run(env, log):
+        out = Path(env["OUT"])
+        (out / "record").mkdir(parents=True)
+        (out / "verdicts.txt").write_text("RECORD {}\n")
+        (out / "record" / "a.json").symlink_to(tmp_path / "secret")
+        (out / "dir").symlink_to(tmp_path / "secrets", target_is_directory=True)
+        return 0
+
+    rc, doc = H.compose_handoff(composer, tmp_path / "scratch", io.BytesIO(tar_of(HANDED)), pinned=PIN, on=None, run=run)
+    assert rc == 0, doc
+    assert doc["files"] == {"verdicts.txt": "RECORD {}\n"} and doc["links"] == ["dir", "record/a.json"]
+    assert "SECRET" not in json.dumps(doc) and "KEY" not in json.dumps(doc)
+
+
+def test_the_settings_rule_is_the_compose_scripts():
+    """`COMPOSE_SETTINGS` is served_verdicts.sh's COMPOSES, and `ENV_NAME` and `ENV_VALUE` its read_env's patterns once
+    it states them: one edited alone fails here, so the gate refuses no hand-off the script reads and passes none it
+    refuses."""
+    sh = (ROOT / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    (composes,) = re.findall(r'^COMPOSES="([^"]*)"$', sh, re.M)
+    assert tuple(composes.split()) == H.COMPOSE_SETTINGS, "make COMPOSE_SETTINGS served_verdicts.sh's COMPOSES"
+    value = re.findall(r"^ENV_VALUE='\^(.*)\$'$", sh, re.M)
+    assert value in ([], [H.ENV_VALUE.pattern]), "make ENV_VALUE served_verdicts.sh's, without its ^ and $"
+    assert not value or f"$_n =~ ^{H.ENV_NAME.pattern}$" in sh, "make ENV_NAME read_env's name pattern"
 
 
 def witness_rule(source: str) -> tuple[dict[str, list], str]:

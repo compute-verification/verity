@@ -57,7 +57,7 @@ theorem mem_goodTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wo
       P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g)))
         j)
     (hcap : TR.capOK H s U g (act ((TR.tiling U.layout).unit g))) :
-    g ∈ goodTiles P TR U H s (honestTranscript P H s U act) := by
+    g ∈ goodTiles P TR U H s (honestTrace P H s U act) := by
   classical
   unfold goodTiles
   rw [mem_filter]
@@ -65,7 +65,7 @@ theorem mem_goodTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wo
     fun i j => wordOf (P.ticket H s U ((TR.tiling U.layout).unit g) (act ((TR.tiling U.layout).unit g)) i j),
     fun i j => wordOf (P.useful H s U ((TR.tiling U.layout).unit g) (act ((TR.tiling U.layout).unit g)) i j)⟩, ?_, hcap,
     hB, ?_⟩
-  · unfold honestTranscript
+  · unfold honestTrace
     exact ite_eq_left_iff.2 fun h => absurd hu h
   · intro a _ _ b _
     exact ⟨wordOf_spec (hW a b).1, wordOf_spec (hW a b).2⟩
@@ -73,12 +73,12 @@ theorem mem_goodTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wo
 /-- A tile of a unit past the layout is blank in the honest transcript. -/
 theorem mem_blankTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Codes) {g : ℕ} (hg : g < (TR.tiling U.layout).NT) (hu : ¬ (TR.tiling U.layout).unit g < U.layout.N) :
-    g ∈ blankTiles TR U (honestTranscript P H s U act) := by
+    g ∈ blankTiles TR U (honestTrace P H s U act) := by
   classical
   unfold blankTiles
   rw [mem_filter]
   refine ⟨mem_range.2 hg, ?_⟩
-  unfold honestTranscript
+  unfold honestTrace
   exact ite_eq_right_iff.2 fun h => absurd h hu
 
 /-- **Completeness from the honest words and the measured cap rate.** If every reference value of a unit of an
@@ -96,8 +96,8 @@ theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
   let F : Fin t → (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) → Prop := fun i x =>
     (TR.tiling U.layout).unit (x.2.2 i).1 < U.layout.N ∧ ¬ TR.capOK x.1 x.2.1 U (x.2.2 i).1 (act ((TR.tiling U.layout).unit (x.2.2 i).1))
   have hsub : ∀ x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT),
-      ¬ AuditAccepts (goodTiles P TR U x.1 x.2.1 (honestTranscript P x.1 x.2.1 U act) ∪
-        blankTiles TR U (honestTranscript P x.1 x.2.1 U act)) x.2.2 → ∃ i ∈ (univ : Finset (Fin t)), F i x := by
+      ¬ AuditAccepts (goodTiles P TR U x.1 x.2.1 (honestTrace P x.1 x.2.1 U act) ∪
+        blankTiles TR U (honestTrace P x.1 x.2.1 U act)) x.2.2 → ∃ i ∈ (univ : Finset (Fin t)), F i x := by
     intro x hx
     obtain ⟨i, hi⟩ := not_forall.1 hx
     refine ⟨i, mem_univ _, ?_⟩
@@ -108,8 +108,8 @@ theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
           (fun j hj => hWU _ hu j (hcols _ _ j hj)) hcap))⟩
     · exact absurd (mem_union_right _ (mem_blankTiles_honest P TR U x.1 x.2.1 act hg hu)) hi
   calc pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          ¬ AuditAccepts (goodTiles P TR U x.1 x.2.1 (honestTranscript P x.1 x.2.1 U act) ∪
-            blankTiles TR U (honestTranscript P x.1 x.2.1 U act)) x.2.2)
+          ¬ AuditAccepts (goodTiles P TR U x.1 x.2.1 (honestTrace P x.1 x.2.1 U act) ∪
+            blankTiles TR U (honestTrace P x.1 x.2.1 U act)) x.2.2)
       ≤ pr (fun x => ∃ i ∈ (univ : Finset (Fin t)), F i x) := pr_mono hsub
     _ ≤ ∑ i : Fin t, pr (F i) := Proofs.pr_exists_le_sum _ _
     _ ≤ ∑ _i : Fin t, ε := sum_le_sum fun i _ =>

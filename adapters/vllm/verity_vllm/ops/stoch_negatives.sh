@@ -4,7 +4,7 @@
 #   N1 wrong-seed      the RUN is served with a different per-request seed than the MANIFEST OF RECORD declares
 #   N2 chain-mutation  the RUN is served with a different sampler chain (top_p 0.9) than the Program was BUILT for (top_p 0.95)
 #
-# Each negative re-serves the row's workload from a MUTATED copy of the manifest (GPU: m1_capture with snapshots of steps 0,1),
+# Each negative re-serves the row's workload from a MUTATED copy of the manifest (GPU: match_capture with snapshots of steps 0,1),
 # folds it, and then runs the row's OWN Match checks against the UNMUTATED Program / manifest of record:
 #   cb_a.compare  (derived request Program vs the fold)      -- N2 must FAIL here: the fold's Const32[top_p] differs from the Program's
 #   stoch_recompute --workload <manifest of record>          -- N1 and N2 must FAIL here, NAMED (header seed/top_p != manifest; recomputed token != served)

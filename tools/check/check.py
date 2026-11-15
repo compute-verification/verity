@@ -477,7 +477,7 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     (("lean-agreement",), 390),                                  # the agreement beside lean-build, Flock suite: 339 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
     (("circuit-check",), 290),                                   # circuit-check granted the slot once alone: 251 + 15%
-    (("pytest:verity/definitions", "lean-suites:verity-vllm:1/3"), 170),   # its test beside the parallel suites: 144 + 15%
+    (("pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm:1/3"), 170),   # its test beside the parallel suites: 144 + 15%
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 110),                                      # lean-build and the Flock suite alone: 94 + 15%
@@ -1815,7 +1815,7 @@ OPT_IN = {
     "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
         "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
         "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
-    "verity/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
+    "adapters/vllm/verity_vllm/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
         "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
         "tests/test_figures.py::test_figures_writes_every_figure",)},
@@ -1844,7 +1844,7 @@ OPT_IN = {
             "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
             "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
-    "benchmarks/prove_path": {"VERITY_SLOW": (
+    "verity/protocols/proofs/spot/prover": {"VERITY_SLOW": (
         "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
         "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }

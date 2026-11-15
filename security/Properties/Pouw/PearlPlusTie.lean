@@ -377,14 +377,14 @@ def drawnAt (tk : List ((ℕ × ℕ) × ℕ)) {t : ℕ} (c : TicketDraws tk t) :
 
 open Classical in
 /-- **The run's wrong ticket weight**: the tickets of its tiles that its table does not tie at W's entries. -/
-noncomputable def Run.wrongWeight (R : Run) : ℕ :=
+noncomputable def Run.incorrectWeight (R : Run) : ℕ :=
   ∑ u : Fin (tickets R.passes).length,
     if TileTiedAtW R.w R.rounds R.passes R.table ((tickets R.passes).get u).1 then 0
     else weightsOf (tickets R.passes) u
 
 /-- **The run's wrong share**: its wrong ticket weight over its tickets' total (0 where the run holds no ticket). -/
-noncomputable def Run.wrongShare (R : Run) : ℝ :=
-  (R.wrongWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
+noncomputable def Run.incorrectShare (R : Run) : ℝ :=
+  (R.incorrectWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
 
 /-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`collisionIn`) among
 the messages checking the opener's rows on `c` and the table's hashes (`Run.hashed`). Its coins are the play's, `t`
@@ -410,7 +410,7 @@ def YAtWIsTheCall : Prop :=
     _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
     _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
-        ε < R.wrongShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
+        ε < R.incorrectShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
 /-! ## The period's statements -/
 
@@ -459,7 +459,7 @@ def Runs.AcceptedUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) (
 /-- **The tied share of a sequence's prefix**: ∏ (1 − wrong share) over phase `k` and the earlier phases of its
 sequence, each a share of its own run's ticket weight. -/
 noncomputable def Runs.tiedUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) (k : Fin n) : ℝ :=
-  ∏ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then 1 - (P.run x w).wrongShare else 1)
+  ∏ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then 1 - (P.run x w).incorrectShare else 1)
 
 /-- The messages a period's play hashes in checking its row openings against its tables (`Run.hashed`), phase by
 phase. -/
@@ -586,7 +586,7 @@ table alone, and it needs no premise that the run is held to W. The tile a credi
 record, whose id is the record's offset plus `x` (`Pass.tile?`'s numbering), and every tile has a width `n > 0`, so
 its ticket is its cells at `cellTicket`. Proved: `untiedCellsAtMost` (`Proofs.Properties.Pouw.PearlPlus.Tie`). -/
 def UntiedCellsAtMost : Prop :=
-  ∀ (R : Run) (ε : ℝ), R.wrongShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
+  ∀ (R : Run) (ε : ℝ), R.incorrectShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
 
 /-- **PoUW's guarantee at W's entries, as cells.** On `YAtWIsTheCall`'s premises: over `t` uniform work-weighted
 tickets, the run is accepted on the tiles they name with openings its table holds while more than n(ε)

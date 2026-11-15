@@ -1,7 +1,7 @@
 """PoUB's read session's statements, handed to the proof system as any integration hands a window over
 (`verity.commitments.periods.interface`): one opening unit (`block_check.BlockOpeningUnitV2`, `BlockOpeningCheck_v2` in
 its six rows) a sample of the session's window, its values recorded into a `Window`. The verifier decides the window from
-the proof system's accepted runs of those units (`RemoteAudit.Span.checkSpan`), opening each unit's ``pub``, ``signs``
+the proof system's accepted runs of those units (`Poub.Span.checkSpan`), opening each unit's ``pub``, ``signs``
 and ``o0`` rows (the verifier's `span`).
 
 `SessionIntegration` is a window's statements, an `Integration`: its `circuit()` and its `run(window)`, and the rows the

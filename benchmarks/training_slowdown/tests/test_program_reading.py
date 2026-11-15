@@ -63,7 +63,7 @@ from circuit_properties import work as WK  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.bits import compile as compile_bits  # noqa: E402
 from verity.circuits.program import Program, is_input  # noqa: E402
-from verity_vllm.definitions.boolean import boolean_version  # noqa: E402
+from verity.circuits.ops.boolean.versions import boolean_version  # noqa: E402
 from verity_vllm.definitions.registry import prims as PRIMS  # noqa: E402
 from verity_torch.frontend.train_step import AdamW, step_program  # noqa: E402
 

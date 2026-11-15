@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly.Threads
 public import Proofs.Properties.InferenceOnly
-public import Proofs.InferenceOnly.Threads
+public import Proofs.Slowdown.Threads
 
 /-!
 # A verdict of compliance carries the thread bound, proved
@@ -10,7 +10,7 @@ public import Proofs.InferenceOnly.Threads
 Each statement of `Properties.InferenceOnly.Threads`, from the verdict's compliance at its rate
 (`InferenceOnlyCheck.Properties.SecurityProofs.Witnesses`) and the thread bound's proof at a rate
 (`InferenceOnly.SecurityProofs.ThreadedThrottled_rate`, `ThreadedThrottledDark_rate` and their `Slots` forms, in
-`Proofs.InferenceOnly.Threads`), at `c = gamma` and `α = num / den`, so `k = α c`.
+`Proofs.Slowdown.Threads`), at `c = gamma` and `α = num / den`, so `k = α c`.
 -/
 
 @[expose] public section

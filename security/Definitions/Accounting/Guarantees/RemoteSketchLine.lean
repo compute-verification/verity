@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The receipts' sketch bound on the memory line's coins (trusted)
 
-The memory line (`Properties.RemoteAudit.Line.LineHeld`) takes the receipts' sketch bound
+The memory line (`Properties.Poub.Line.LineHeld`) takes the receipts' sketch bound
 wherever computed, `SketchBoundAt T O δs`, as a premise on its trace over the session's coins
 (`Accounting.Remote.Draw.DrawCoins n κ X`). `SketchBoundDeployed` derives the sketch bound on any trace over a session's
 sketch outcomes (`Accounting.Remote.Sketch.Outcome`: the prover's own coins, the registered store, SHA-512's outputs),
