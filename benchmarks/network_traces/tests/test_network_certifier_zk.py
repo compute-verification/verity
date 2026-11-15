@@ -1,4 +1,4 @@
-"""warden_zk's host side on a network certifier run driven tick by tick (`relay_runs._run`): the driver reads the
+"""network_certifier_zk's host side on a network certifier run driven tick by tick (`relay_runs._run`): the driver reads the
 egress registration under the deployment's key and session and holds the network certifier's opening to its head; the
 Program's proof blocks read the egress cells of the connection admitted in the execution phase with the most cells, from
 cell D·r on, chosen from the wiring and the schedule alone, each at its bucket's row and the slot the network
@@ -6,10 +6,10 @@ certifier's wiring places it; each member's statement is accepted or refused by 
 reads exactly as the member says (sender and receiver accepted; unsigned and altered by their rows; pad and swapped,
 made for other proof blocks' wiring, by their value, swapped at the Program's own rows; pad-named, under the Program's
 value, by its row's position); the
-scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
+scan's public pieces hold every pad the network certifier wrote, pad's read among them, and none of the Program's cells; the toy
 unit is the identity on a row's bits. Lean's statement setup (`verity-verify-proof statement`, the verifier's checks before
 any proof, `Registered.checkComplete` among them) holds staged members to the verifier's registered reads of every
-port. Nothing here proves (`warden_zk.prove` does, on a node)."""
+port. Nothing here proves (`network_certifier_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -23,11 +23,11 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
-from verity.protocols.accounting.certifier.verifier.warden import END
+from verity.protocols.accounting.certifier.verifier.network_certifier import END
 from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
-from verity.protocols.accounting.certifier.prover import warden_zk as wz
+from verity.protocols.accounting.certifier.prover import network_certifier_zk as wz
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
@@ -66,7 +66,7 @@ def statement(m: dict, tmp: Path, *, ports: dict | None = None, header: tuple[st
 
 @pytest.fixture(scope="module")
 def at(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("warden-zk")
+    tmp = tmp_path_factory.mktemp("network-certifier-zk")
     out, key = tmp / "run", tmp / "key"
     out.mkdir()
     requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
@@ -161,9 +161,9 @@ def reads_of(m: dict) -> dict:
 
 @pytest.fixture(scope="module")
 def staged(at, tmp_path_factory):
-    """The sender's, receiver's and altered's statements, staged as `warden_zk.prove` stages them."""
+    """The sender's, receiver's and altered's statements, staged as `network_certifier_zk.prove` stages them."""
     M = wz._statement()
-    sg = wz.stager(M, WR.row_bytes(tws.PARAMS), UNITS, tmp_path_factory.mktemp("warden-zk-stager"))
+    sg = wz.stager(M, WR.row_bytes(tws.PARAMS), UNITS, tmp_path_factory.mktemp("network-certifier-zk-stager"))
     return sg, {name: wz.stage(M, sg, at, name) for name in ("sender", "receiver", "altered")}
 
 
@@ -171,8 +171,8 @@ def staged(at, tmp_path_factory):
 @needs_lean
 def test_lean_holds_every_port_of_each_members_statement_to_the_verifiers_registered_reads(at, staged, tmp_path):
     """Lean's statement setup, `Registered.checkComplete` with it: sender and receiver pass under the verifier's file,
-    which names both ports, the warden's at its root and the other at the member's committed value; altered fails at the
-    warden's port; the sender's statement shaped as before every port was registered (its row port's rows stated by the
+    which names both ports, the network certifier's at its root and the other at the member's committed value; altered fails at the
+    network certifier's port; the sender's statement shaped as before every port was registered (its row port's rows stated by the
     public file) fails for the port it leaves out; and a row port at a value committed afresh, under other salts, fails
     at its rows. The host reads above only mirror Lean: this holds the staged files to the checks the verifier runs, so
     a staging or a refusal that drifts from Lean's fails here (lowering the unit takes about 20 s)."""

@@ -20,7 +20,7 @@ open NetTiming
 each have at most `E` egress cells, in execution phases of `T` buckets: every egress cell `j` of a connection `c`
 admitted before bucket `t` is sent in a phase at most `⌊t/T⌋ + spanTail`. The cells of the connections admitted before
 `t` are all of the server's bytes the device reads by `t`: its code reads the server's bytes only on a connection it
-opened when it admitted the client's (`warden.py`). -/
+opened when it admitted the client's (`network_certifier.py`). -/
 def HeldCutInTail : Prop :=
   ∀ {κ : Type} (s : CertifierSchedule κ) (E T t : ℕ) (c : κ) (j : ℕ),
     s.cells c ≤ E → s.adm c < t → j < s.cells c →
