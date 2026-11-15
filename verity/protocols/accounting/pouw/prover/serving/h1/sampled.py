@@ -3,7 +3,7 @@ unit's lanes and combine), and the statements file core's credit verifies
 (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
 is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``), binds
 ``check`` to credit's own verification (``verified``) and ``stage`` to the stagers on Flock's Python (``recomposed``,
-``file_stager``: ``h1_prove/stagers.py``), running `run` on its arguments.
+``file_stager``: ``lowering/stagers.py``), running `run` on its arguments.
 
     sampled stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
@@ -139,7 +139,7 @@ Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, st
 
 
 class Stager(Protocol):
-    """A statement staged on a circuit, which ``stage`` takes from its caller (``benchmarks/pouw/h1_prove/stagers.py``'s,
+    """A statement staged on a circuit, which ``stage`` takes from its caller (``verity/protocols/accounting/pouw/prover/lowering/stagers.py``'s,
     on Flock's Python, which verity does not import): the circuit's ports, those the rows fill, its pin (SHA-512), each
     instance's outputs (None: the lowering's), and `stage`, which writes a set's inst.bin and pub.bin to `out_dir`."""
     ports: Sequence[Any]

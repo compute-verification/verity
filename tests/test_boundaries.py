@@ -156,8 +156,6 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    "adapters/vllm/tests/protocols/pouw_h1_circuits.py": "compute-accounting: H1's prover and the auditor's lowering "
-                                                        "(`benchmarks/pouw/h1_prove`, `hidden_zk`)",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
