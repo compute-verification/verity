@@ -4612,6 +4612,12 @@
         "verity/protocols/accounting/certifier/device/released_keys.json": "verity/protocols/accounting/certifier/prover/released_keys.json",
         "verity/protocols/accounting/certifier/device/tests/test_released_keys.py": "verity/protocols/accounting/certifier/prover/tests/test_released_keys.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/device/tests/test_network_certifier_serve.py": "verity/protocols/accounting/certifier/prover/tests/test_network_certifier_serve.py",
+        "verity/protocols/accounting/certifier/device/tests/verdict_records.py": "verity/protocols/accounting/certifier/prover/tests/verdict_records.py"
+      }
     }
   ]
 }

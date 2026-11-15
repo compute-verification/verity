@@ -254,7 +254,8 @@ theorem templateCircuits_readsWf {proofs query : Json} {cs : Array (String × St
       obtain ⟨e, he, hce⟩ := array_mapM_mem (by assumption) c hc
       have hwe : Wf e := by
         have hw := wf_getD hj "templates"
-        rw [(Prod.ext_iff.1 heq).2] at hw
+        rw [Prod.mk.injEq] at heq
+        rw [heq.2] at hw
         cases hw with
         | arr hall => exact hall e he
       rw [match_entry_ok hce]

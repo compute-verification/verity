@@ -71,7 +71,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
   `flock-circuit prove --zk --zk-server-state DIR --session ID --part NAME`: the ZK server's Lean session loop behind
   the release side's own Lean loop (`core-zk-server session`), which holds each verdict to its release time and stops the
   session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the
-  schedule and the Lean loop's `ZK-SERVER-TIMES` lines (when it decided each part) into `out/oprove/release.json`; the step
+  schedule and the Lean loop's `FIREWALL-TIMES` lines (when it decided each part) into `out/oprove/release.json`; the step
   fails unless every part was released at its time. With `--env TREE_FROM=local` the challenger runs beside the inner
   step, every inner coin is its coin tree's, and `rec_inner.py tree-held` holds the inner session to its signed release log
   (`out/inner/tree-held.json`, by `rec_live.tree_held_reason`, the Python mirror of the check the recursive audit reads,

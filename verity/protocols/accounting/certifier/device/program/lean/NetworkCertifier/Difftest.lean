@@ -12,7 +12,7 @@ public import Lean.Data.Json
 which computes the same results from the program's definitions (`NetworkCertifier`), gives every one of them. The Lean
 audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.Certifier.Code`
 (`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`) equal to
-the reference definitions in `Security/Definitions/Certifier/`, which the guarantees read: the program's windows
+the reference definitions in `security/Definitions/Certifier/`, which the guarantees read: the program's windows
 as one execution block, its frames sent at the hand ticks it computes from the syncs.
 
 An instance is `L` egress links and `K ≥ L` boundary links (the egress links first), windows of `T` buckets, `W` of

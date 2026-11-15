@@ -400,7 +400,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
             fw = {}
             for b in v.get("buckets") or []:
                 for key, x in (b or {}).items():
-                    if (key.startswith("t.zk_server") or key.startswith("cpu.zk_server")) and isinstance(x, (int, float)):
+                    if key.startswith(("t.zk_server", "cpu.zk_server", "t.firewall", "cpu.firewall")) and isinstance(x, (int, float)):
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
                           **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",

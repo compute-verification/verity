@@ -847,7 +847,7 @@ FIELDS = """\
 - `plan.jsonl`: the one request plan every trace serves, in order (`traffic.plan`): `i`, `prompt_ids` (BOS first),
   `prompt_len`, `prefix` (the shared-prefix group, or null) and `prefix_len`, `doc` (the C4 document the body is cut from)
   and `gap` (tokens left between the prompt's end and the document's), `max_tokens`, and `gap_draw`, the unit-rate
-  exponential gap before the request (a trace at rate λ sends request i at Σ_{j≤i} gap_draw_j / λ seconds).
+  exponential gap before the request (a trace at rate λ sends request i at Σ_{j≤i} gap_sample_j / λ seconds).
 - `meta.json`, `summary.json`: the run (model, variant, sampling, versions, host, leased GPU) and the statistics below, per
   trace; `summary.json`'s `overrun` per trace counts the rows that sample past a request's last output (async scheduling
   schedules a step before the previous one's tokens are back), its `serving` per trace is the client's throughput and

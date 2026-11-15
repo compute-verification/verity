@@ -266,8 +266,8 @@ def main(argv=None) -> int:
         bm = members[0]
         tv = Staged(tw, out / "tampered")
         mm = tv.member(bm["k"])
-        arms = [("zk_served", True)] if a.zk_server else []
-        for arm, fw in [*arms, ("unserved", False)]:
+        arms = [("firewalled", True)] if a.zk_server else []
+        for arm, fw in [*arms, ("unfirewalled", False)]:
             s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", zk_server=fw, forged=True)
             # behind the ZK server no proof may leave the prover; without it Lean's own verdict must refuse the proof
             refused = (str(s["prover"]["stopped"]).startswith("ZK-SERVER-REFUSED") and s["lean"]["accepted"] is not True

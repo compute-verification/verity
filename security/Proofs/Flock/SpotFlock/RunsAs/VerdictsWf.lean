@@ -68,28 +68,12 @@ theorem push_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {program
   split at h
   · obtain rfl := Except.ok.inj h
     exact hr.push (verdictJson_wf ..)
-  · first
-      | (repeat' split at h
-         all_goals first
-           | exact absurd h (throw_ne' _ _)
-           | (obtain ⟨units, -, h⟩ := bind_ok' h
-              obtain rfl := Except.ok.inj h
-              exact hr.push (verdictJson_wf ..))
-         done)
-      | (cases programSha with
-         | none =>
-           try dsimp only at h
-           rw [if_pos (by rfl)] at h
-           exact absurd h (throw_ne' _ _)
-         | some sha =>
-           try dsimp only at h
-           by_cases hj : Spot.jsonStrIs want sha = true
-           · rw [if_neg (by simp [hj])] at h
-             obtain ⟨units, -, h⟩ := bind_ok' h
-             obtain rfl := Except.ok.inj h
-             exact hr.push (verdictJson_wf ..)
-           · rw [if_pos (by simpa using hj)] at h
-             exact absurd h (throw_ne' _ _))
+  · repeat' split at h
+    all_goals first
+      | exact absurd h (throw_ne' _ _)
+      | (obtain ⟨units, -, h⟩ := bind_ok' h
+         obtain rfl := Except.ok.inj h
+         exact hr.push (verdictJson_wf ..))
 
 theorem step_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {bs : Core.Blobs}
     {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}

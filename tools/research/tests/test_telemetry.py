@@ -17,12 +17,13 @@ import pytest
 HERE = Path(__file__).resolve().parent
 PKG_ROOT = HERE.parent / "src"          # tools/research/src (research is installed; kept for the subprocess PYTHONPATH below)
 
+from research import settings  # noqa: E402
 from research.telemetry import CLASSIFIER_VERSION, events, job, policy  # noqa: E402
 from research.telemetry.classify import classify  # noqa: E402
 from waits import Gate  # noqa: E402
 
 # The r17 campaign's RULES.md seed lives in veritor and keeps moving; compare against it only when asked to.
-SEED = Path(os.environ["RESEARCH_SEED_RULES"]) if os.environ.get("RESEARCH_SEED_RULES") else None
+SEED = Path(settings.need("RESEARCH_SEED_RULES")) if settings.get("RESEARCH_SEED_RULES") else None
 
 
 # ---- (b) the append helper ------------------------------------------------------------------------------------------------------------------

@@ -32,7 +32,7 @@ exclude each other.
   the session's proofs, two a table. A stop is recorded, the prover is told of it in a verdict that does not accept,
   and the auditor's connection is cut without `Finish`. A session that goes waits for its release time; then its proofs
   and `Finish` leave, and the auditor's verdict is its release or its stop. Either way the loop's stderr gets one
-  `ZK-SERVER-TIMES` line: the time it decided (`ready_ms`), the release time and the decision, which is what a run times
+  `FIREWALL-TIMES` line: the time it decided (`ready_ms`), the release time and the decision, which is what a run times
   its release windows by. Nothing of it reaches the auditor.
 * An admitted session cut before its `Finish` was decided, or a fault of the loop's, is its stop.
 
@@ -124,7 +124,7 @@ def hold (dir : System.FilePath) (s part : String)
         if proofs == need then .ok else .err s!"the prover sent Finish with {proofs} of the session's {need} proofs"
       let now ← nowMs
       let times := fun (out : String) => do
-        IO.eprintln s!"ZK-SERVER-TIMES {Lean.Json.compress (Lean.Json.mkObj [("session", .str s), ("part", .str part),
+        IO.eprintln s!"FIREWALL-TIMES {Lean.Json.compress (Lean.Json.mkObj [("session", .str s), ("part", .str part),
           ("ready_ms", Lean.toJson now), ("release_ms", match a.releaseMs with | some t => Lean.toJson t | none => .null),
           ("outcome", .str out)])}"
         (← IO.getStderr).flush

@@ -374,7 +374,7 @@ def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_prove
                for x in w["members"]["tampered"]["reference"].values())
     assert [x["expect"] for x in other] == [1] * sz.W63.windows
     rc, *_, held = _n2(run, tmp_path / "x", "--draw", "3")
-    assert rc == 1 and "a period draw takes 1 to 2" in held
+    assert rc == 1 and "a period sample takes 1 to 2" in held
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
