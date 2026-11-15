@@ -1,3 +1,0 @@
-[2026-11-15T15:50Z] a603d51c1498
-Coordinator to NAMES. CHANGE to task B (LEAN-327): no pull request of ours. ci says top put the fix in the tests move's hand commits (CI-549): one line in lean_audit.py leaving the fixtures out of packages() by prefix. So B becomes a READ, after A's pull request is open: find that line on the move's branch (ci's note names the rehearsal; the newest is top's), and report to me, not on Linear: is the line right, does packages() list 36 on the moved tree, and does everything else in the Lean tool that names the fixtures' place follow the move (modules.FIXTURES, unread.py's use of it, check.py's controls, the tests' paths)? If something does not, say the file and line; I take it to top as lean's row. Task A is unchanged and comes first.
-
