@@ -33,7 +33,7 @@
     {"file": "benchmarks/one_stage/served_util.py", "count": 2, "lane": "proofs"},
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/capacity_of.py", "count": 2, "lane": "compute-accounting"},
-    {"file": "benchmarks/pouw/filler/dcap.cu", "count": 1, "lane": "compute-accounting"},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/share.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/opcode_probe/clock_calib_lease.sh", "count": 1, "lane": "compute-research"},
     {"file": "benchmarks/pouw/opcode_probe/clock_ceiling_lease.sh", "count": 1, "lane": "compute-research"},

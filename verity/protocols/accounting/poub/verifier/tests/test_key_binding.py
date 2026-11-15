@@ -12,6 +12,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params
 
@@ -46,7 +47,7 @@ def one_decode(block: bytes, j: int, k: codec.Key, d: bytes) -> bytes:
                     .to_bytes(s, "little") for w in range(f.block_words))
 
 
-def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tuple[audit.Verdict, list, list]:
+def window(store: audit_prover.Store, prover_store: audit_prover.Store, passes: int = 2) -> tuple[audit.Verdict, list, list]:
     """One window of `passes` whole-store passes, every receipt sampled: the verifier's verdict on `prover_store`'s
     openings, the samples and the passes."""
     reg = store.registration
@@ -54,7 +55,7 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     clock = Clock()
     s = AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                  clock=clock)
-    prover = audit.Prover(prover_store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(prover_store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, out = s.start(), reg.digest, []
     for i in range(passes):
         out.append(prover.run(challenge, i, previous))
@@ -82,7 +83,7 @@ def test_under_the_seeds_key_a_block_written_after_the_seed_takes_the_encoding_i
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
     reg = audit.Registration(NODE, 2, root, SEED, codec.DEFAULT, receipts.DEFAULT, False, receipts.LAYOUT,
                              receipts.SKETCH_ROWS)
-    store = audit.Store(reg, payloads, salts)
+    store = audit_prover.Store(reg, payloads, salts)
     assert store.blocks[KV] == PICKED
 
     cheater = copy.copy(store)
