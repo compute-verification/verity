@@ -1,0 +1,45 @@
+# The slowdown calculator's older name where prose says it: what `tools/move/rename.py --map
+# tools/move/slowdown_prose_map.toml` renames, on a tree `slowdown_calculator_map.toml`'s move has run on. The
+# calculator was called "rho" after the symbol its number had, and "the overhead calculator" after the number's older
+# word; the number is the slowdown (GLOSSARY.md, Older names), and the package that computes its lower bound is the
+# slowdown calculator.
+#
+# This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
+# string, backticks or a data file, so it moves no path, renames no declaration, leaves every lock and pin as it is, and
+# `move_check.py` certifies it without a build. Every row is under a [[words_in]] that names its files: "rho" and ρ are
+# other quantities in most of the tree (Flock's coins, Pearl-C's statistic, a clock sync's rate, a replay block, the
+# ACCEL model's rates), so no row stands in [words].
+# What it leaves: ρ and `rho` inside a formula or in backticks, which a word can't replace ("ρ = m·c/|C|" is rewritten
+# by hand as "slowdown = m·c/|C|"); the Python names (`slowdown_python_map.toml`); the harness under
+# `benchmarks/training_slowdown/`, whose two quantities get a map of their own; and Lean's comments.
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/circuit_properties/circuit_properties/references.py", "benchmarks/nci/kappa.py"]
+words = { "A rho model's shape" = "The shape of one of the slowdown calculator's models", "the rho model" = "the slowdown calculator's model" }
+
+[[words_in]]
+files = ["benchmarks/circuit_properties/tests/test_references.py", "benchmarks/nci/tests/test_kappa.py"]
+words = { "rho has" = "the slowdown calculator has" }
+
+[[words_in]]
+files = ["benchmarks/slowdown/README.md"]
+words = { "rho: the slowdown's lower bound on training" = "The slowdown calculator: the slowdown's lower bound on training" }
+
+[[words_in]]
+files = ["benchmarks/network_traces/leak_bounds.py"]
+words = { "the slowdown ρ" = "the slowdown" }
+
+[[words_in]]
+files = ["benchmarks/nci/statement.py", "benchmarks/nci/tiers.py"]
+words = { "the overhead calculator's" = "the slowdown calculator's" }
+
+[[words_in]]
+files = ["verity/protocols/compose/verifier/remote/README.md"]
+words = { "the overhead calculator turns them into overhead" = "the slowdown calculator turns them into the slowdown bound" }
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps, the archive, lock files, and the cards a digest names.
+exclude = ["tools/move/**", "archive/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/cards/**"]

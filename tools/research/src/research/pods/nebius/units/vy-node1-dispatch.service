@@ -1,0 +1,30 @@
+# The dispatcher's settings are /workspace/jobs/dispatch/dispatch.env, which each tick rereads; a variable set here would
+# override it, so /etc/vy/env/vy-node1-dispatch.env sets none of its keys.
+[Unit]
+Description=node 1's dispatcher: ready items to Kueue Jobs, and each finished Job's next task (dispatch.py loop)
+After=network-online.target k3s.service
+Wants=network-online.target
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/workspace/jobs/dispatch/infra/nebius
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/workspace/jobs/venv312/bin/python -u /workspace/jobs/dispatch/infra/nebius/dispatch.py loop --every 60
+# SIGTERM to the loop alone: it lets the tick in flight finish, then exits; whatever is left at TimeoutStopSec is killed
+KillMode=mixed
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=15
+Nice=0
+IOSchedulingClass=best-effort
+StandardOutput=append:/workspace/jobs/dispatch/loop.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

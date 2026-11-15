@@ -1,0 +1,48 @@
+{
+ "definitions": {
+  "Bf16SumSquares_v1{J=1}": {
+   "and": 627,
+   "type": "4371be45f7d456db507888b6c7e3b5b93048618b63c414d5eb1907adb9a45b6494934f3903948a6f038237377089e4234cabdcbba042730d7e421dd21400dbb8"
+  },
+  "ClipCoef_v1": {
+   "and": 4607,
+   "type": "64dde1c3c1abbeed8117c56979e97330a785bac02532f5b6acd4ffad434cd79434daffd4a2d3b47ecd6aef12d4757e006a6d90cda46bc72e5a925a88ce5eda65"
+  },
+  "ForeachNorm_v1{N=3}": {
+   "and": 14295,
+   "type": "324ebeb1fd27656a575f9f156014b5560bda8c4c923cfe95939317627c2d292f859b1c86b6f96612013d1bf458539c564c131e29a34e61728ac1146bbdebe989"
+  },
+  "LpNormChunkSum_v1{P=3,ALIGNED=0}": {
+   "and": 7547,
+   "type": "a44afcea6b63d5936905d83062fe51e922c30f4eb8174f243fb09d0d61fb433c00f3eee90addc61ee6d0b50edede97b24a5ea0375b4b39c442937a07d0696013"
+  },
+  "LpNormChunkSum_v1{P=4,ALIGNED=1}": {
+   "and": 6333,
+   "type": "fe491bc1f95dac06fe224d117e52bdfbf8040933566b811c10f9a77b240b6607fb2f45c08f67244b28b20986fb02f2164561ecd64ad8fd82ad69c8690ac1ecc1"
+  },
+  "LpNormChunk_v1{N=3,ALIGNED=0}": {
+   "and": 9346,
+   "type": "af935d8d555f4ea2d46100fd8698dc4523df9c7320f576bff5870e6f26d2b09da4b62a3bbf112918913700aaf3c6f55b4f0b61ba0f27bb6c132c7404829891f2"
+  },
+  "LpNormCleanup_v1{C=1}": {
+   "and": 4993,
+   "type": "0323c12e1bb940b9947d873c161c07415b12a9faef0cc50160b6a653def689cdba7322a8e84d20b5bc3b67258ee5654c627c13f81b468e84c844672555a2461b"
+  },
+  "NormSqrtBf16_v1": {
+   "and": 1003,
+   "type": "b5165bd4ccfa95fa03867f25272bc615fa709b1ff9d987d2b3f26f1badc308153e7e8c48001415004dbfa5be67f77c9b461f0d3309e339c0e728bdf8ec663968"
+  },
+  "NormThreadSum_v1{K=2}": {
+   "and": 781,
+   "type": "6bec3f0f3bf4234497facf767eee04fc77942b0f98585ff09ddd613472e103367a6f890be52cf07689e038e28d72eb222bee121fa3baf3aa4250b8487e2b6d14"
+  },
+  "NormThreadSum_v1{K=4}": {
+   "and": 2343,
+   "type": "0e7e3ebe3c7e200041367754c01d8d80ad26ebe395a88cad5b5f768466e05d6a6bdab32b2d85f07eb7ecf151bead5d5359c5e1dccdfdb05209d2619f257f0ab6"
+  },
+  "VectorNormBf16_v1{L=2}": {
+   "and": 8553,
+   "type": "7f620a28e6cf090a925557a2922aabb6f01f122635ed44b1e56731abef2c178d2944b326dd0cf26e623b5c7311c8bde69dae6b608f48331205df26d2f30c3643"
+  }
+ }
+}

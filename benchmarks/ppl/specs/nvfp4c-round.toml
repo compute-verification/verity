@@ -1,0 +1,41 @@
+description = "NVFP4 on E2M1's contiguous region (0, +-0.5, ..., +-2: every coin's bilinear coefficient odd) in blocks of 16 along k, each block's scale the smallest UE4M3 odd integer that holds it, one float scale per token and per output row after accumulation; both operands rounded, after SmoothQuant 0.5 and the rotation; the adopted int8 attention"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "grid"
+grid = "fp4c"
+act = "round"
+weight = "round"
+block = 16
+scales = "odd"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "q"
+width = 64
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

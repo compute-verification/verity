@@ -1,0 +1,39 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-fp8-1gpu-commit-served-width"
+# The served Commit's overhead, commit@compiled / stock-fp8@compiled, across batch sizes (the width sweep, b1 to b32):
+# llama31-8b-fp8-1gpu-commit-served's two compiled arms only, on its preset's engine settings, so its b8 and b32 rows are
+# that spec's served ratio measured again. `resident_gpu_memory_utilization` is the `blocks` one: two engines of 0.80
+# can't share the GPU, so every point runs in `blocks` on the pinned 60 GiB pool (458,752 tokens) as that spec's four arms
+# did, rather than resident on an unpinned one. Six reps: an even count, so each `blocks` cycle holds three and drift over
+# the run cancels in the means.
+arms = ["stock-fp8@compiled", "commit@compiled"]
+arm_modules = ["verity_bench.vllm.commit_arm:COMMIT_COMPILED"]
+sweep = "width"
+reps = 6
+eager = true
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama31-8b-fp8-1gpu-commit-served-width"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+case = "LLAMA31_8B"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.80
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 16384
+block_kv_cache_memory_bytes = 60129542144
+
+[admission]
+max_minutes = 40

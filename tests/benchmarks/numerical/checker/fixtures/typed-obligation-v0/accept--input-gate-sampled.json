@@ -1,0 +1,325 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "b599cb96b0ea800e330a2c1bb91b8d994380f009d55885a606abf7c9e7ecc38d",
+  "public_values": "b599cb96b0ea800e330a2c1bb91b8d994380f009d55885a606abf7c9e7ecc38dc9a66bbfc6bb2e74aafd4e7da840ac5162c7da2cc435f07451fa00a88e3e85dd01",
+  "statement_digest": "c9a66bbfc6bb2e74aafd4e7da840ac5162c7da2cc435f07451fa00a88e3e85dd"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"in/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"w\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"y\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"w\"],\"out\":[\"in/0\",\"y\"]},\"roots\":[\"boundary\",\"ru0\"],\"subcircuit\":\"bcbeafe820fad2435780b6e4ba3007fe759ca71d8b80228d3d662300be41b15d\",\"target\":{\"encoding\":\"region\",\"id\":\"region=0\"}}],\"references\":[{\"leaf\":\"in/0\",\"offset\":[],\"ref\":\"in/0\"},{\"leaf\":\"w\",\"offset\":[],\"ref\":\"w\"},{\"leaf\":\"y\",\"offset\":[],\"ref\":\"y\"}],\"roots\":[{\"count\":2,\"domain\":\"741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"624a25f46889a49abecef4a12688b988c79887e1be8f07073cbf5e61eff245a4\"},{\"count\":1,\"domain\":\"53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"3c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe9\"}],\"subcircuits\":[{\"definition\":{\"name\":\"q7/input-times-incoming\"},\"digest\":\"bcbeafe820fad2435780b6e4ba3007fe759ca71d8b80228d3d662300be41b15d\",\"gates\":[{\"op\":\"Input\",\"value\":\"03\",\"width\":8},{\"args\":[[\"in\",0],[\"gate\",0]],\"op\":\"mul8\"},{\"args\":[[\"gate\",1]],\"op\":\"requant_s8\"}],\"in\":[8],\"out\":[0,2]}]}",
+ "description": "A prescribed input as a sampled gate (IR \u00a7E): Input[0] with prescribed value 0x03 is a gate of the subcircuit body; its produced value 'in/0' is on the outgoing boundary (protected). The lowering, not this level, turns it into the backend's pinned position (expected = 03); the relation includes claimed == 0x03.",
+ "digest": "b599cb96b0ea800e330a2c1bb91b8d994380f009d55885a606abf7c9e7ecc38d",
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "w",
+      "schema": "u8"
+     },
+     {
+      "ref": "in/0",
+      "schema": "u8"
+     },
+     {
+      "ref": "y",
+      "schema": "u8"
+     }
+    ],
+    "expected": {
+     "in/0": "03"
+    },
+    "inputs": [
+     0
+    ],
+    "kind": "693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c7",
+    "outputs": [
+     1,
+     2
+    ],
+    "ranges": 0,
+    "slots": 3
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [],
+      "op": "in"
+     },
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        1
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "kind": "693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c7",
+    "outputs": [
+     0,
+     2
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     }
+    ],
+    "subcircuit": "bcbeafe820fad2435780b6e4ba3007fe759ca71d8b80228d3d662300be41b15d"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {
+     "in/0": "03"
+    },
+    "inputs": [
+     0
+    ],
+    "kind": "693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c7",
+    "outputs": [
+     1,
+     2
+    ],
+    "positions": [
+     "w",
+     "in/0",
+     "y"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [],
+      "op": "in"
+     },
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        1
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "kind": "693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c7",
+    "outputs": [
+     0,
+     2
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     }
+    ],
+    "subcircuit": "bcbeafe820fad2435780b6e4ba3007fe759ca71d8b80228d3d662300be41b15d"
+   }
+  ]
+ },
+ "name": "accept/input-gate-sampled",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "in/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "w",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "y",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "w"
+     ],
+     "out": [
+      "in/0",
+      "y"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "bcbeafe820fad2435780b6e4ba3007fe759ca71d8b80228d3d662300be41b15d",
+    "target": {
+     "encoding": "region",
+     "id": "region=0"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "in/0",
+    "offset": [],
+    "ref": "in/0"
+   },
+   {
+    "leaf": "w",
+    "offset": [],
+    "ref": "w"
+   },
+   {
+    "leaf": "y",
+    "offset": [],
+    "ref": "y"
+   }
+  ],
+  "roots": [
+   {
+    "count": 2,
+    "domain": "741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "624a25f46889a49abecef4a12688b988c79887e1be8f07073cbf5e61eff245a4"
+   },
+   {
+    "count": 1,
+    "domain": "53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "3c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe9"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "q7/input-times-incoming"
+    },
+    "digest": "bcbeafe820fad2435780b6e4ba3007fe759ca71d8b80228d3d662300be41b15d",
+    "gates": [
+     {
+      "op": "Input",
+      "value": "03",
+      "width": 8
+     },
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "gate",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        1
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "in": [
+     8
+    ],
+    "out": [
+     0,
+     2
+    ]
+   }
+  ]
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000001693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c70000000300000001000000000000000300000002696e00000000000000046d756c3800000002000000000001000000000000000a72657175616e745f7338000000010100000001000000020000000000000002000000011111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c7000000020000000000000001741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7624a25f46889a49abecef4a12688b988c79887e1be8f07073cbf5e61eff245a40000000000000002000000000000000253c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e03c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe900000000000000010000000300000000000000000000000100000000000000010000000275380000000000000000000000000000000000000000000000000275380100000001030000000100000000000000000000000000000000000000027538000000000100000000000000020000000100000002",
+ "statement_digest": "c9a66bbfc6bb2e74aafd4e7da840ac5162c7da2cc435f07451fa00a88e3e85dd",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000001693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c70000000300000001000000000000000300000002696e00000000000000046d756c3800000002000000000001000000000000000a72657175616e745f7338000000010100000001000000020000000000000002000000011111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000693491114c5ba25438e3a026f18913127b46bb7a5940d2c9df8621045ebdf5c7000000020000000000000001741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7624a25f46889a49abecef4a12688b988c79887e1be8f07073cbf5e61eff245a40000000000000002000000000000000253c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e03c1c0bd72fa354d2710e1677aba985ed8d2616d7dc4cd98a6f0629e1ef3febe900000000000000010000000300000000000000000000000001000000000000000100000002753800000000000000000000000000000000000000000000000000027538010000000103000000000100000000000000000000000000000000000000027538000000000100000000000000020000000100000002",
+ "statement_v3_digest": "9d5753c9f4520cb165c8c5c7c83b331d120b07f97c10c01621ac2f19186b8f15",
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "stage-1",
+  "witness",
+  "input-gate"
+ ],
+ "values": [
+  [
+   42,
+   3,
+   0
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f7632000000000100000003000000012a0000000119257db472df1241c7f6cefe3035d88ed0cfd909795cb7ced42adbdd390bbb740000000103000000011f5fa214f6f3c848059c5fc49d88d532879002bc032987a9967a0b7d7117c546000000010000000000",
+ "witness_verdict": "accept"
+}

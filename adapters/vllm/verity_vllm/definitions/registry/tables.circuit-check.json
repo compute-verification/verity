@@ -1,0 +1,16 @@
+{
+ "pieces": {
+  "TableRead10x1_v1": {
+   "and": 16368,
+   "type": "e77fcd7070192b4695c2caa33463b5f64b7a4cd8bd6ebcbc26ce38b8d158e9d9cffc664249d5c5cf7134da612407350fd84ddc5e06858af00894d8c5e116d4f3"
+  },
+  "TableRead6x1_v1": {
+   "and": 1008,
+   "type": "1718950a6266b1d60e556cd662beea1d9342d89e0c56aa86710ff06f591972efc20042f36ebe599b04e2bd9c68cc461feb3c058f8ceae2419d4eb361c28abd6e"
+  },
+  "TableRead8x2_v1": {
+   "and": 8160,
+   "type": "eb0f927cfc0914821ad33a66547702edc875a20f406aa91b7a3abc158cdff6b54e522885b794ea842925a23ca5ed3b91ffbce42421c922409cca1f4f3e660b8f"
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "QkSoftmaxRow_v1{T=1,D=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 39924,
+   "type": "32f22a9d37b902bc523147c90074523a0bf45b290a34e7f39fdf1a428df5e80030bfc08dea8ae5e18e287fd82fc54779f171dad767d31800ab1482517048f11b"
+  },
+  "SoftmaxRowPad_v1{N=4}": {
+   "and": 28275,
+   "type": "ff36c1631d393427f80d386132cba6ba094182954d0da78d0e3f119306d30fcd23948f7919f893394529a800022f94a3b0bffad2ae68fc9fc70c21b9cac8c39a"
+  },
+  "SoftmaxRow_v1{N=1}": {
+   "and": 8669,
+   "type": "e686d43a5d66f78a276f278daf24981e7b7cfa3c70bc1a99087285bb4cd2abd0b9997df5933d94a3a4797284fcc9081d341c172224e3a9e07850b310b2e6e7ff"
+  }
+ }
+}

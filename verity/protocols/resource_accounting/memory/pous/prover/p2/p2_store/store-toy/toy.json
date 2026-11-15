@@ -1,0 +1,104 @@
+{
+ "schema": "verity-pous/p2-store-toy/v1",
+ "layout": {
+  "schema": "verity-pous/p2-store-layout/v1",
+  "scheme": "p2-16448/v4",
+  "model": {
+   "name": "toy-mqa-d64",
+   "d": 64,
+   "layers": 2,
+   "heads": 1,
+   "kv_heads": 1,
+   "head_dim": 64,
+   "ff": 64,
+   "vocab": 256,
+   "dtype": "int8",
+   "order": "[N, K] row-major"
+  },
+  "params": {
+   "scheme": "p2",
+   "w": 16448,
+   "c0": 21065,
+   "profile": "p2-2054B",
+   "blocks_per_segment": 11,
+   "segments": 3,
+   "expander": "sha512-ctr-v4"
+  },
+  "block_bytes": 2056,
+  "payload_bytes": 2054,
+  "blocks": 33,
+  "used_blocks": 32,
+  "w_bytes": 67782,
+  "c_star_bytes": 67848,
+  "segment_file_bytes": 22616,
+  "tensor_bytes": 65536,
+  "staging_align": 256,
+  "staging_bytes": 24576,
+  "framing": {
+   "block": "i = blocks_per_segment * s + v; W[2054 i : 2054 (i + 1)] is block i's payload m_i, big-endian",
+   "c_star": "block i is 2056 bytes, big-endian, at byte 2056 i; on disk one file per segment s, blocks in v order",
+   "keys": "prefix = schemes.p2.expand_prefix(params, salt) (128 B); base = prefix || u64be(s) || u64be(v); K = stream(base, 'K', 2056); t = the first 2056-byte word of stream(base, 't') below p",
+   "decode": "m = sq(sigma_K(sq(c))) - t mod p; sq(a) = a^2 mod p, negated for odd a; sigma_K(r) = r xor K if below p, else r; refused: c >= p, m >= 2^16432, nonzero padding past a tensor's end",
+   "staging": "layer l's tensors back to back from 0; staging[staging_offset + b] = W[offset + b] for b < size",
+   "leaf": "SHA512(0x00 || salt || u64le(s) || u16le(v) || sha512/row/v2(c_i)); nodes SHA512(0x01 || l || r), RFC 6962"
+  },
+  "tensor_columns": ["name", "layer", "n", "k", "offset", "size", "first_block", "blocks", "staging_offset"],
+  "tensors": [
+   ["model.layers.0.self_attn.qkv_proj.weight", 0, 192, 64, 0, 12288, 0, 6, 0],
+   ["model.layers.0.self_attn.o_proj.weight", 0, 64, 64, 12324, 4096, 6, 2, 12288],
+   ["model.layers.0.mlp.up_proj.weight", 0, 64, 64, 16432, 4096, 8, 2, 16384],
+   ["model.layers.0.mlp.down_proj.weight", 0, 64, 64, 20540, 4096, 10, 2, 20480],
+   ["model.layers.1.self_attn.qkv_proj.weight", 1, 192, 64, 24648, 12288, 12, 6, 0],
+   ["model.layers.1.self_attn.o_proj.weight", 1, 64, 64, 36972, 4096, 18, 2, 12288],
+   ["model.layers.1.mlp.up_proj.weight", 1, 64, 64, 41080, 4096, 20, 2, 16384],
+   ["model.layers.1.mlp.down_proj.weight", 1, 64, 64, 45188, 4096, 22, 2, 20480],
+   ["lm_head.weight", 2, 256, 64, 49296, 16384, 24, 8, 0]
+  ],
+  "layer_columns": ["layer", "first_block", "blocks", "staging_bytes"],
+  "layers": [
+   [0, 0, 12, 24576],
+   [1, 12, 12, 24576],
+   [2, 24, 8, 16384]
+  ]
+ },
+ "source": "120e30fca673fd34d3ce1f258c8352add467f41805eb73e1dc7333c02bc06fe8b2c38e96192bae555a8873e5ef01e6ac1c8ff11d46ab9751efda38ccc3d63a45",
+ "commitment": "41a0fe53aceb4d59e1e96f4c46acf87be8cafc7aa3b3d71fd1224c056672ceadd2f79100dc30d7ccc0840c8ed87a7d52cc182f3246bb47fb08676580c8410141",
+ "salt": "5df4c89f85cefcdd61ef3648ea3825abae84394cc3d95dd3",
+ "prefix": "7665726974792f706f75732f70322f6b6579732f76340073000000000000000570322f763473000000000000001070322d7031363434382d6332313036356200000000000000185df4c89f85cefcdd61ef3648ea3825abae84394cc3d95dd3000000000000000000000000000000000000000000000000000000000000000000",
+ "root": "e8a7de001aa4f89ce1722473bff53eff154ab9eb87db76a687ca58dd40d4cade4ad901a222896d505c584f6b59e635ec53b106e6076faaccbaf41c1c944faa88",
+ "w_sha512": "649c5e3d6282af8f4b03eb0aca8700802cfc283d9b55f968419ebe14f7c821daec062e3d7bb36e3ff89801f3f535bf3983ba19035ef068e24d221c4ef30e7362",
+ "c_star_sha512": "05bbf577c2687a59f8df9c88d25eed1319e2ad4488c2d2c13ad812703bcfe2c123d5017c4c3a7ed0e94b979b0e978956ed82ff037fa2c4e4e7722dcb4bfbfd2e",
+ "staging_sha512": "16d72870eabd7df25f4021bbf6a0f0ba1b10fd6ff375b7c9d9e590cf281bfaf20460ad66463efc9aad47325769dace6ff2a21ad51147d57aaf51ccec036faa72",
+ "staging_columns": ["layer", "start", "bytes", "sha512"],
+ "staging": [
+  [0, 0, 24576, "8dd22182303c0c3b05078cdeb5e59793d4e9d009709206c48be6e75f0955501e9e92a8c80e7c9e81cbd9eafc44012019286e88ad604dda75d4422a1ae0b1cdd7"],
+  [1, 24576, 24576, "abc9dc6edc31d5b01d10addb387329da912141346fd64722917bd8bc0a2f5104f7e7192d6b586f4871966e335da7745dc15b9442e4eb3ed89af68b8dfc5844f0"],
+  [2, 49152, 16384, "dc4a3e08461e8f9b43529c0d38be661da5bb440e6f8b8d3b3e1b570d7610eb1ea051d920d990af00959c3e949391de0bf16a5487ea539365d2db488e0127f73c"]
+ ],
+ "negatives": [
+  {
+   "id": "padding",
+   "layer": 0,
+   "block": 5,
+   "flag": 3,
+   "c": "fafeca242c55cacfa3505211a0ff7b48cff4b97f1335288224703ec8c6cb051a2db7ba6dc2692cdb3d0bf5d3d1370b453cb27b04b5ba21d2d450ba0f02f3a54317ef7130ac6c1f0a0dd7b9591d533b11a29d8129a8e56df156e50e203bca25c94e47b1c566c67f6d9ff371dcdceb1ec905a0a4760b74e310b59677f28ea21e4b4b832a7eab77c661d30413cfb5ef458967f5ff97cc3744345c3c767fe6dee89d8c7c129f7c887dabccdab4892781bc72c3066ae1ffc26435535f2bcba1b599c6405db437ab0a79582dabeff5490de79bd9fcefecd9614b0f2f65775ca20fe4515d097693b2be129b61cc183364a976a31a9756804bfd2595a309386cf02d68e494c094c5b322a30ad26aa57a13783335c1fa9157b6ac991785ec246e65ee42122929597ada6eaa8f723bde95bda9d62957819778bd0daceded2308cfa7879323cd183aef67778efc77b1e513234661ba806da0ff38fc0ea08cadeed479f3eb709282ae32436c46fee81c715c25de64459c679fcf35a3857fa3192a9d8e7c2e50fe6daa0cf3160cd3cc2f2761c0f3e3eda2ac4c2374ffd3ae77cddc303df23af3676d32baf02334d2f88b0f40500e181246d8b816c05ba836bc3bb2d372f1d8e0b89cab4c89f6c2071cd49f6ef447e985baebae49e377dad6a65f3cbf04e968d0f62bdf75c11fbe221b583fa3f983a3cfdcaaf24bfde791b915377b143d05d5aba59f48fa515453425fc4f502efdb5d30ec036f9db16f62e1c49ca0d68d0789d8f8f85cca5184f999ba503c19ea99e79682e337a5eb5f9f51b4ce2902fb1ede6c6d0ba7d37b94b01456437cca3219b2dbcbad78240281bb0f20435dbaedfda4265138a0d50454c4c3d43e9ad324917c929fe4fa1b73cb240bdd3ec19fbbbd37cc0d33e1e96a1230b219a595ce2718a775c3780850535c8f77942dfdada6ffb2185b701b45835f3de2de2dd747431104caf532e1dd1c204ca8a4f5ffe65ce5b8785cc3cacec3481af4467270cd3622d6e0bbcb287c5991ffcdff2bdec8132916b83a1b1e700171c9e70d389b9ffbe7640731128610864f04c238e42e3e5a0cf3aec6a8a2b3856ad9d66dfed50198ebb0b5996ed989975f93f5d2eade4138362c9310cc24b3e8b25c62b376df52fbcf7d182c586a3e03355a8d237b2bbb42e1e7097d1046d6187ecddcd858f2001b17dd8b8128779b900e0cbc2a8865b29fc3fd15b2919b5a89228d9864a85e967baa5b5db7b15aad04ea2d0939036436bea03c49de3fab808471e6f8cce7ad554f08f151dc415f1fc1d4279feea6549c25f1f1963f4333e60e4c2e7087a7af4d793af6c72cad645acf85f468e9ae8b303cf6c937b66279069593def7cc62eb4d6a5321957465c1e7c50de36b99bde93190930d62a0713f20b22f10484e5d6afab76384f3a24c93ef56ded6795590d5b54887cc3e0e14a2afe6167515b96884330630fac25565d185f03ffcc635709b624a19ac06153b393978358fa8fe428afdc85747199e01851fd58de3ee1a7a3f7682e014a97dd03c6d08e47275450d15a4a9a7e7941b419a532172f1ce62c5803a63e78611e79f9a8f9b0ec2075d6ac0d25e852927e6bca7c0a6f3bdcb2fd97cd2db7054ebf102f9f983a17d745363f651323fe7c480eacc52ee4bfe8011e15b84aa81cf190d21cb59b07cfd6f70c59e1725acd6051c46a4dadbf35f02ca60fd6cb9c837722efb03086ca833b528aed4cc41956506a876f80b5972a4aeab3103e7122e738f2a9788bacfe3f0162b465bb0ff8ade3cc5c3eedeb98154ee058b19a9f62c71169c36575c79a717ab571cc8236d178b03b34f45f54bf008676b1a5e6182473a1800f727fa6a6dbed60d9b50353a5019ad9dc2acf2a7747316768636fe55c44a2f969ec7d0d90c4e75cbaeea27b0fa602b9a13ab327475c99554a5dc692cd22e0b35e007c9c2b17fd4b87b2f6491f1f65f7f1825aa25c8844b558f348ae89e3323ce7330e6faa243c27ec37750945d717ad473b15a4650f4b1699d9e5568c28ddbe97d1f2f6237bcb50ff488e6fe6a1f2a2bf8705c76a1d521e1199c4ddca04ec3995266540aac49ba7963e0f212724c2ab396ab7b7f397a74f82b3da28181f5550a4dd66bea5482c96f14310ba7573b678dbf95d10c55d9975851e359f341ecac9b0475925734d90cbd6a9353a9c60b6868e86ef20a028412315f3f4945c8b74d7d4a2afd91a2bc2f49c90031b7d7e20b0e41d7309dad90889607a0effc810fafa3c32bbbc70ada61890ae52f39a21aa7a2fa39a953efc3bf9cc1982f9998c24a0d10d10c6f24b99794481c4c63782c32dabe4062ab198558bb7ce400cf17c3e8d4d79b00273822536b142ae029a39e019c8edb7719a070101797e6edfabd718e877693186dfa770fca522cb28dca528a70998673571c33d2152a642eab6b5149db8ed5794d431997260c7e9fd516739000974d7fcc3c458d9e82fa70de31e80fdf4ffa318a4edd227e162b645366099135bebdc237c64641e0df7d2fdde34c1e78c3d92244a0fcacb05526cefff809010ff069ff5c354348b707732639aafa74ec7cb9b4406c813d42bc77de48310347c992fe77db05f75b6584d79cb0dfe9ca775692ded298faea4ccaba765fca669388701986b9bd88ca9e3bb4487c4b96523b0c6ae8749bafc94980057e82156b6105ce8d13421585a0b278b620fa655c7a5bb21c57b24e42aafe19150b467b1ae5e8d116a2b0dc818b330aebdc4d9c693c86e54094c73ce54f802b8fb59ba2fcf71360a58592373b5c8a4bd39eaeac949ebde7bbe8fdb8967ccfe30ea0251249016ccd45c4743222d20db98cae78f579cdbfde8c222806a92aa27624bed6e24b1b6e0bc2d223534e192276a4352f873708714a6833dc889e97",
+   "why": "the true payload with its last byte, past the tensor's end, xor 1"
+  },
+  {
+   "id": "not-below-p",
+   "layer": 0,
+   "block": 0,
+   "flag": 2,
+   "c": "p",
+   "why": "c = p"
+  },
+  {
+   "id": "flipped",
+   "layer": 0,
+   "block": 8,
+   "flag": 2,
+   "xor": [1000, 1],
+   "why": "C*'s block 8 with byte 1000 xor 1: decodes to more than 16,432 bits"
+  }
+ ]
+}

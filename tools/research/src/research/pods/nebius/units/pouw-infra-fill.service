@@ -1,0 +1,23 @@
+# Node 2's fill runner, research's user unit (`systemctl --user`, lingering) in place of tmux pouw-infra-fill.
+[Unit]
+Description=node 2's fill runner: preemptible fill jobs on GPUs nobody else wants (fill_runner.py)
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+WorkingDirectory=/home/research
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+ExecStart=/usr/bin/python3 /workspace/pouw/infra/bin/fill_runner.py
+# Each GPU job's gpu-lease, holding its GPUs' locks, runs in this cgroup (the job in a scope of its own), and every job must
+# outlive a restart: the next runner adopts them from their .pgid files
+KillMode=process
+Restart=on-failure
+RestartSec=5
+Nice=0
+IOSchedulingClass=best-effort
+StandardError=append:/workspace/pouw/infra/logs/fill.err
+
+[Install]
+WantedBy=default.target

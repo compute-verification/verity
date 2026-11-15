@@ -1,0 +1,124 @@
+{
+ "schema": "telemetry/job/v0.2",
+ "written_utc": "2026-09-22T12:00:00.000Z",
+ "writer_stream": "vy-g5:4242:1000",
+ "ownership": {
+  "project": "verity",
+  "task": null,
+  "job": "r20260922-120000-abcd",
+  "attempt": 1,
+  "lane": null,
+  "generation": 1
+ },
+ "computation": {
+  "tree_sha": "0123456789abcdef0123456789abcdef01234567",
+  "tree_sha_reason": null,
+  "release_tag": null,
+  "workload_digest": null,
+  "workload_digest_reason": "not supplied",
+  "stage": "bench",
+  "inputs": [],
+  "profile": {}
+ },
+ "environment": {
+  "pod_id": "podfixture",
+  "hostname": "vy-g5",
+  "boot_id": "b00t",
+  "kernel": "6.8.0-85-generic",
+  "machine": "x86_64",
+  "python": "3.11.10",
+  "cpu_count": 16,
+  "cpu_count_host": 64,
+  "host_memory_total_bytes": 270000000000,
+  "host_class": "gpu",
+  "gpu": {
+   "available": true,
+   "reason": null,
+   "devices": [
+    {"index": "0", "uuid": "GPU-fixture", "name": "NVIDIA H100 80GB HBM3", "memory_total_bytes": 85520809984, "driver": "580.126.09"}
+   ],
+   "cuda_visible_devices": null
+  },
+  "cgroup": {},
+  "limits_visibility": []
+ },
+ "execution": {
+  "command": ["python", "-m", "backends.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000"],
+  "command_redacted": [],
+  "declared_outputs": [],
+  "timeout_s": 600.0,
+  "reservation": {"gpu": null, "host_memory_bytes": null},
+  "policy_version": null,
+  "policy_sha256": null
+ },
+ "telemetry": {
+  "schema": "telemetry/v0.1",
+  "collector_version": "0.1.1",
+  "classifier_version": "0.1.2",
+  "instruments": ["process"],
+  "instruments_unavailable": {},
+  "cadence_s": 1.0,
+  "pss_every_s": 5.0,
+  "level": 0
+ },
+ "tool": {
+  "research_version": "0.1.0",
+  "research_git_sha": null,
+  "research_git_sha_reason": "shipped snapshot",
+  "research_dirty": null,
+  "research_snapshot": "ddccf338a7d94ad0",
+  "telemetry_schema": "telemetry/v0.1",
+  "job_schema_base": "telemetry/job/v0.1",
+  "collector_version": "0.1.1",
+  "classifier_version": "0.1.2"
+ },
+ "run": {
+  "id": "r20260922-120000-abcd",
+  "runs_root": "/workspace/research/runs",
+  "created_utc": "2026-09-22T12:00:00.000Z",
+  "launched_from": "vy-g5",
+  "remote": {"machine": "vy-g5", "pod_id": "podfixture", "root": "/workspace/research", "source_sha": "0123456789abcdef0123456789abcdef01234567"}
+ },
+ "workload_fingerprint": {
+  "expected": null,
+  "observed_in": "result.json (workload_fingerprint); expected and observed are never merged"
+ },
+ "cost": {
+  "provider": "runpod",
+  "pod_id": "podfixture",
+  "machine": "vy-g5",
+  "currency": "USD",
+  "rate_usd_per_hour": 2.69,
+  "rate_observed_utc": "2026-09-22T11:59:00.000Z",
+  "reason": null,
+  "shared": false,
+  "concurrent_runs_at_launch": []
+ },
+ "store": {
+  "tool": {"name": "bench_vu", "version": "1", "spec": "backends.direct.ligero.tool:BENCH_VU"},
+  "derivation": "drv:1111111111111111111111111111111111111111111111111111111111111111",
+  "reuse_key": "2222222222222222222222222222222222222222222222222222222222222222",
+  "key_params": ["cmd", "mode", "zk", "batch", "total_vus", "reps", "rate_log2", "target", "hints", "hvzk_label", "root"],
+  "key_conditions": ["hw.family"],
+  "params": {"cmd": "bench-vu", "mode": "fiat-shamir", "zk": true, "batch": 4096, "total_vus": 1000, "reps": 5, "rate_log2": 2, "target": -128.0,
+             "hints": "torch", "hvzk_label": false, "root": "fixtures/bench-instances/v1", "device": null, "out": null, "run_id": null,
+             "argv": ["python", "-m", "backends.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000"]},
+  "key_params_resolved": {"cmd": "bench-vu", "mode": "fiat-shamir", "zk": true, "batch": 4096, "total_vus": 1000, "reps": 5, "rate_log2": 2,
+                          "target": -128.0, "hints": "torch", "hvzk_label": false,
+                          "root": "sha256:6b464017dda797e646a1d9a07a48d6d4834be4c8ab77448e1793b264cf567a9a"},
+  "inputs": {},
+  "closure": {"backends/direct/ligero/run.py": "3333333333333333333333333333333333333333333333333333333333333333"},
+  "conditions": {
+   "source.commit": "0123456789abcdef0123456789abcdef01234567", "source.tree": "89abcdef0123456789abcdef0123456789abcdef", "source.dirty": false,
+   "source.dirty_digest": null, "source.lockfiles.uv.lock": "4444444444444444444444444444444444444444444444444444444444444444",
+   "rt.os": "Linux", "rt.kernel": "6.8.0-85-generic", "rt.python": "3.11.10", "rt.rust": null, "rt.cuda": "13.0", "rt.driver": "580.126.09",
+   "rt.torch": "2.8.0+cu128", "rt.triton": "3.4.0", "rt.nvcc": "12.8.93",
+   "hw.family": "h100", "hw.sku": "NVIDIA H100 80GB HBM3", "hw.count": 1, "hw.vram_mb": 81559, "hw.cpu": "AMD EPYC 9354 x64", "hw.hostname": "vy-g5",
+   "exec.exclusive": true, "exec.load_start": 0.5, "exec.load_end": null, "exec.project": "verity", "exec.campaign": "r21-fixture",
+   "exec.runs_root": "/workspace/research/runs"
+  },
+  "scratch": {"triton": "/workspace/research/store/scratch/2222222222222222222222222222222222222222222222222222222222222222/triton"},
+  "campaign": "r21-fixture",
+  "store_root": "/workspace/research/store"
+ }
+}

@@ -1,0 +1,249 @@
+{
+ "run_root": "e81bfee2a1c4d0e9a632e9e9f52e44787c67de0006e17e92132172305544320d",
+ "seeds": [
+  {
+   "challenge": "audit-2026-09-20",
+   "seed": 8248938476393296226,
+   "source": "verifier challenge 'audit-2026-09-20' bound to the run root (sha256(challenge|root)[:8], post-commitment)"
+  },
+  {
+   "challenge": "x",
+   "seed": 5715651856264720357,
+   "source": "verifier challenge 'x' bound to the run root (sha256(challenge|root)[:8], post-commitment)"
+  }
+ ],
+ "samples": [
+  {
+   "per_stratum": 2,
+   "seed": 7,
+   "targets": null,
+   "picked": [
+    50,
+    65,
+    6,
+    81,
+    52,
+    37,
+    18,
+    63,
+    34,
+    69,
+    20,
+    55,
+    76,
+    11,
+    2,
+    7,
+    38,
+    3,
+    4,
+    9
+   ],
+   "strata": {
+    "s0|a|b|decode": {
+     "population": 9,
+     "sampled": 2
+    },
+    "s0|a|b|prefill": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s1|a|b|decode": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s1|a|b|prefill": {
+     "population": 9,
+     "sampled": 2
+    },
+    "s2|a|b|decode": {
+     "population": 9,
+     "sampled": 2
+    },
+    "s2|a|b|prefill": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s3|a|b|decode": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s3|a|b|prefill": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s4|a|b|decode": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s4|a|b|prefill": {
+     "population": 8,
+     "sampled": 2
+    }
+   },
+   "targets_out": {
+    "hits": {},
+    "added": 0,
+    "stratified": 20
+   }
+  },
+  {
+   "per_stratum": 3,
+   "seed": 12345678901234,
+   "targets": null,
+   "picked": [
+    0,
+    65,
+    76,
+    21,
+    52,
+    47,
+    28,
+    73,
+    14,
+    69,
+    20,
+    45,
+    36,
+    51,
+    82,
+    7,
+    68,
+    53,
+    74,
+    79,
+    60,
+    35,
+    16,
+    11,
+    32,
+    17,
+    38,
+    33,
+    44,
+    19
+   ],
+   "strata": {
+    "s0|a|b|decode": {
+     "population": 9,
+     "sampled": 3
+    },
+    "s0|a|b|prefill": {
+     "population": 8,
+     "sampled": 3
+    },
+    "s1|a|b|decode": {
+     "population": 8,
+     "sampled": 3
+    },
+    "s1|a|b|prefill": {
+     "population": 9,
+     "sampled": 3
+    },
+    "s2|a|b|decode": {
+     "population": 9,
+     "sampled": 3
+    },
+    "s2|a|b|prefill": {
+     "population": 8,
+     "sampled": 3
+    },
+    "s3|a|b|decode": {
+     "population": 8,
+     "sampled": 3
+    },
+    "s3|a|b|prefill": {
+     "population": 8,
+     "sampled": 3
+    },
+    "s4|a|b|decode": {
+     "population": 8,
+     "sampled": 3
+    },
+    "s4|a|b|prefill": {
+     "population": 8,
+     "sampled": 3
+    }
+   },
+   "targets_out": {
+    "hits": {},
+    "added": 0,
+    "stratified": 30
+   }
+  },
+  {
+   "per_stratum": 1,
+   "seed": 0,
+   "targets": [
+    "layers.1.mlp@2"
+   ],
+   "picked": [
+    60,
+    65,
+    6,
+    41,
+    82,
+    77,
+    68,
+    43,
+    74,
+    59,
+    10,
+    22,
+    34,
+    46,
+    58,
+    70
+   ],
+   "strata": {
+    "s0|a|b|decode": {
+     "population": 9,
+     "sampled": 3
+    },
+    "s0|a|b|prefill": {
+     "population": 8,
+     "sampled": 1
+    },
+    "s1|a|b|decode": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s1|a|b|prefill": {
+     "population": 9,
+     "sampled": 1
+    },
+    "s2|a|b|decode": {
+     "population": 9,
+     "sampled": 2
+    },
+    "s2|a|b|prefill": {
+     "population": 8,
+     "sampled": 1
+    },
+    "s3|a|b|decode": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s3|a|b|prefill": {
+     "population": 8,
+     "sampled": 1
+    },
+    "s4|a|b|decode": {
+     "population": 8,
+     "sampled": 2
+    },
+    "s4|a|b|prefill": {
+     "population": 8,
+     "sampled": 1
+    }
+   },
+   "targets_out": {
+    "hits": {
+     "layers.1.mlp@2": 7
+    },
+    "added": 6,
+    "stratified": 10
+   }
+  }
+ ]
+}

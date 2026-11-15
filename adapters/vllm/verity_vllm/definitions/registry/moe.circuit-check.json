@@ -1,0 +1,12 @@
+{
+ "pieces": {
+  "F32FmaRm_v1": {
+   "and": 4531,
+   "type": "3e44c5e72c44965865cc473411820123743734036a19d1e18bccd5d1ce8119d47c2a53b3b60253cf31fee1a5324561dac32dc38f7c649df4077c964429792bef"
+  },
+  "F32FmaRm_v2": {
+   "and": 4531,
+   "type": "3c72a651cf500e8feb4baa3ea0803b6c2922b10a896fe157a0c418d3edcfff308e28bebb91f6872bd7d4b8149eaf125c6755dc9002e6f2bc2ab4b933ec634d59"
+  }
+ }
+}

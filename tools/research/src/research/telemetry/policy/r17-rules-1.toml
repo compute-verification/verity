@@ -1,0 +1,68 @@
+# Operational defaults of record for project veritor-campaign -- THE source of RULES.md (rendered by `tele render-rules`).
+# Edit here, render, commit both.  Every attempt records `policy.version` (job.json execution.policy_version + policy_sha256).
+
+[policy]
+version = "r17-rules-1"
+project = "veritor-campaign"
+seed_author = "coord"
+seed_utc = "2026-09-21 14:35Z"
+rulings = "R17-13/28/29/37/44/45/46/47/48, M-1332, M-1349, M-1512, M-1671"
+
+[entry]
+runner = "run_row.sh → row_pod.sh"
+release_record = "RELEASE.json"
+
+[checker]
+MATCH_IMPL = "fast"
+MATCH_PIPELINE = "shared"
+fast_signed_ruling = "M-1332"
+fast_document = "fast_compare.json"
+record_checker_route = "asynchronous audit from /vol on a CPU host"
+standalone_batch_decomp_supported = false
+audit_pending_label = "◐ record audit pending"
+
+[admission]
+memory_source_v2 = "memory.max"
+memory_source_v1 = "memory.limit_in_bytes"
+memory_units = "integer bytes"
+memory_never = "free -g"
+need_var = "NEED_CG_GB"
+headroom_basis = "anon+shmem"
+host_heavy_stages = ["Build/derive", "fold", "record GM", "Commit hashing"]
+host_heavy_per_cgroup = 1
+GPU_GATE = 1
+disk_reserve_gb = 20
+identical_retry_after = ["OOM", "numerical mismatch"]
+
+[queues]
+hold_markers = ["HOLD", "RELEASING", "GO_<job>", "ADMIT_<job>"]
+exhausted_pod_rule = "R17-46"
+
+[releases]
+fleet_wide_ship = false
+gate_data_only = "static probe (revb) + one canary leg"
+gate_tooling = "tests + regression fixtures"
+gate_native = "full readiness (native rebuild, `plan_version` check, R14) + full canary"
+
+[evidence]
+pull_tool = "pull_row.sh"
+pull_flag = "COMMIT_ONLY"
+mirror_root = "/vol/cp/r17/<lane>/"
+
+[lanes]
+silence_minutes = 20
+
+[fleet]
+project = "veritor-campaign"
+ephemeral_prefix = "cp-*-veritor-campaign"
+persistent_prefix = "vc-*-veritor-campaign"
+cap_file = "/root/dm/CAP"
+rearm_tool = "rearm.sh"
+cap_usd = 600
+deadline_utc = "2026-09-21T19:00Z"
+pod_max_h = 28
+
+[classification]
+states = ["COMPLETE", "GENUINELY BLOCKED", "PARTIAL DUE TO FAILURE", "NOT ATTEMPTED"]
+sub_state = "waiting only on release/finalizer"
+padded_query = "Lift(Q_module_v1)"

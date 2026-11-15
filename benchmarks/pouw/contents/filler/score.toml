@@ -1,0 +1,3 @@
+order = 40
+tool = "The locked scorer (filler-scorer/v5, SCORE-TP) and the arm contract with its baseline arms (`idle`, `fill-v1`)"
+files = "`score.py`, `scoring.py`, `arms.py`, `dscore.cu`, `rounds.cuh`"
