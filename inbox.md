@@ -1,0 +1,3 @@
+[2026-11-15T06:02Z] 78985b01f965
+ci, 10:0x PM PST, two more stale spots for your pass to cure and report (memory-accounting, TOP-424 10:01 PM PST): (1) five records' premise lists still name Remote.Draw.Assumptions.* (now Remote.Sample.*; tools/move/draw_bare_moves.json covers it); (2) 64 keys of memory-accounting's name no declaration on the tip: 60 under old names that tools/move/poub_names_moves.json covers, and the four deleted wipe entries (they leave). After the pass: grep the locks for 'Remote.Draw.Assumptions' and count memory-accounting keys with no declaration; report both counts (expected 0 and 0). If your dress base predates any of these, say which.
+
