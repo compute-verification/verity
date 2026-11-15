@@ -26,8 +26,8 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
   own directory did.
 
 `maps` reads the tree as it is, so it reruns on `main` after any later move: each run writes both maps whole. Its
-`[split]` rows are `SPLIT`'s, those whose file still names the directory; its `[modules]` is what `layout.py --modules`
-derives. `layout.py --map` then runs each map in turn (files first)."""
+`[modules]` is what `layout.py --modules` derives, and its `[split]` rows are what a dry run of the files map finds: a
+test's reference to a directory whose tests alone move means what stays. `layout.py --map` then runs each map in turn (files first)."""
 from __future__ import annotations
 
 import argparse
@@ -36,6 +36,7 @@ import posixpath
 import re
 import subprocess
 import sys
+import tempfile
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -51,11 +52,8 @@ MIRROR = "tests"
 FILES_MAP, SUITES_MAP = "tools/move/tests_root_map.toml", "tools/move/tests_root_suites_map.toml"
 #: a module of a `tests/` package imports its siblings as `tests.X`: the package keeps its name (`KEPT`)
 IMPORTS_TESTS = re.compile(r"^\s*(?:from|import)\s+tests(?:\.|\s|$)", re.M)
-#: [split] rows: (file, the directory it names) -> (where the reference goes, why); kept while the file still names it
-SPLIT = {
-    ("verity/commitments/cuda/commit_slots/tests/test_host_twin.py", "verity/commitments/cuda/sha512_rows"):
-        ("verity/commitments/cuda/sha512_rows", "the host twin is the engine's code, not its tests"),
-}
+#: why a test's reference to a directory only whose tests move means the rest of it (`split_rows`)
+SPLIT_WHY = "the code beside the tests, which stays"
 #: never rewritten: records of what was, files whose bytes a digest pins, and every Lean input; as the earlier maps'
 EXCLUDE = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
@@ -342,7 +340,6 @@ def files_map(t: Tree) -> str:
     rows = {f"{d}/": t.destination(d) for d in dirs}
     r = roots(t)
     inline = "{ " + ", ".join(f'{k} = "{v}"' for k, v in r.items()) + " }"
-    split_rows = [(f, d, to, why) for (f, d), (to, why) in SPLIT.items() if f in t.tracked and d in t.read(f)]
     out = ["# Every test in the tree to the root's `tests/`, mirrored by path: `X/tests/REST` becomes `tests/X/REST` (a `tests/`\n"
            "# package its modules import as `tests` keeps its level: `tests/X/tests/REST`). Written by `tools/move/tests_root.py\n"
            "# maps` from the tree it ran on; `tools/move/layout.py --map tools/move/tests_root_map.toml` moves and rewrites.\n\n",
@@ -354,10 +351,21 @@ def files_map(t: Tree) -> str:
     for d in dirs:
         if f"{d}/pyproject.toml" in t.tracked and _pythonpath(t, d):
             out.append(f"\n[pyproject.{json.dumps(t.destination(d) + 'pyproject.toml')}]\npythonpath_from = {json.dumps(d)}\n")
-    if split_rows:
-        out.append("\n[split]\n" + "".join(f'{json.dumps(f"{f}: {d}")} = {{ to = {json.dumps(to)}, why = {json.dumps(why)} }}\n'
-                                            for f, d, to, why in split_rows))
     return "".join(out)
+
+
+def split_rows(path: str, root: Path = ROOT) -> str:
+    """The `[split]` table for the map at `path`: each reference `layout.py` finds to a directory the map splits, which is a
+    directory of the tree whose tests alone move, so the reference means what stays (`SPLIT_WHY`)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        report = Path(tmp) / "report.json"
+        r = subprocess.run([sys.executable, str(HERE / "layout.py"), "--root", str(root), "--map", path, "--dry-run", "--no-lock", "--allow-dirty",
+                            "--report-splits", "--report", str(report)], cwd=root, capture_output=True, text=True)
+        if r.returncode:
+            raise SystemExit(f"tests_root: layout.py --dry-run on {path}: {r.stderr.strip()[-2000:]}")
+        notes = json.loads(report.read_text())["notes"].get("references to a split directory [split] doesn't acknowledge", [])
+    rows = sorted({m.group(1) for x in notes if (m := re.match(r"^(\S+: \S+) \(", x))})
+    return "".join(f"{json.dumps(k)} = {{ to = {json.dumps(k.split(': ', 1)[1])}, why = {json.dumps(SPLIT_WHY)} }}\n" for k in rows)
 
 
 def _pythonpath(t: Tree, s: str) -> list[str]:
@@ -415,6 +423,7 @@ def modules(path: str, root: Path = ROOT) -> str:
 
 
 def write_maps(t: Tree) -> list[str]:
+    """Both maps, each with the `[modules]` its rows imply; the files map with its `[split]` rows, which its dry run finds."""
     out = []
     for path, text in ((FILES_MAP, files_map(t)), (SUITES_MAP, suites_map(t))):
         (t.root / path).parent.mkdir(parents=True, exist_ok=True)
@@ -422,7 +431,10 @@ def write_maps(t: Tree) -> list[str]:
         derived = modules(path, t.root)
         if derived.strip():
             body = derived if derived.lstrip().startswith("[modules]") else "[modules]\n" + derived
-            (t.root / path).write_text(text.rstrip("\n") + "\n\n\n# the rename [paths] implies (`layout.py --modules`)\n" + body)
+            text = text.rstrip("\n") + "\n\n\n# the rename [paths] implies (`layout.py --modules`)\n" + body
+            (t.root / path).write_text(text)
+        if path == FILES_MAP and (rows := split_rows(path, t.root)):
+            (t.root / path).write_text(text.rstrip("\n") + "\n\n[split]\n" + rows)
         out.append(path)
     return out
 
