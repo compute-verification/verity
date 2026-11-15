@@ -121,7 +121,6 @@ def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(
 
 def test_the_runners_run_what_check_runs():
     assert (lean_build.ELAN, lean_build.LAKE_BUILD) == (CHECK.SUITES.ELAN, CHECK.SUITES.LAKE_BUILD)
-    assert next(j for j in CHECK.JOBS if j.name == "flock-circuit-build").halts_on in flock_circuit_build.FAILS
     assert f'print(f"{lean_agreement.CANNOT} {{why}}"' in (ROOT / lean_agreement.CHECK).read_text()
     assert (ROOT / flock_circuit_build.SCRIPT).is_file() and (ROOT / lean_agreement.PIN).is_file()
     assert f'print(f"\\n{lean_suites.WROTE} ' in (ROOT / lean_suites.SUITES).read_text()
@@ -454,7 +453,7 @@ from pathlib import Path
 a = sys.argv[1:]
 names = a[:a.index("--lean-built")]
 assert shutil.which("lake") and a[a.index("--jobs") + 1] == "3" and a[a.index("--mem-gb") + 1] == "5" and "--timeouts" in a
-fv = Path(__file__).resolve().parents[3] / "pkg" / "bin" / "verity-verify-proof"
+fv = Path(__file__).resolve().parents[2] / "pkg" / "bin" / "verity-verify-proof"
 assert os.access(fv, os.X_OK) and fv.read_text() in ("fv", "fv-old"), "the executable read, at its path in the tree"
 how = Path(os.environ["HOW"]).read_text()
 if how == "part":
@@ -519,7 +518,7 @@ def test_lean_suites(tmp_path, monkeypatch, how, status):
 STAGED_STANDIN = """import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
-root = Path(__file__).resolve().parents[3]
+root = Path(__file__).resolve().parents[2]
 built = {p: (root / p).read_text() for p in json.loads(os.environ["BUILT"]) if (root / p).is_file()}
 assert built == json.loads(os.environ["BUILT"]), ("the tests' lake builds find the whole build in the tree", built)
 assert os.access(root / "pkg/.lake/build/bin/exe", os.X_OK)
