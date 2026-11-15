@@ -89,6 +89,17 @@ def test_a_suite_moved_whole_passes(repo: Path) -> None:
     assert gone(repo, WHOLE)["count"] == 0
 
 
+def test_a_suite_mirrored_under_the_roots_tests_with_its_pyproject_beside_them_passes(repo: Path) -> None:
+    """Every test under the root's `tests/`, mirrored by path: `old/pkg/tests/` to `tests/old/pkg/` and the pyproject beside
+    it, whose `testpaths` the map rewrites from `tests` to `.`: each test keeps its place in its test path, and an input `X`
+    covers its mirror `tests/X`. Without the rewrite, every test is parted from its suite."""
+    rows = ROOTS + ('[paths]\n"old/pkg/tests/" = "tests/old/pkg/"\n"old/pkg/pyproject.toml" = "tests/old/pkg/pyproject.toml"\n\n'
+                    '[pyproject."tests/old/pkg/pyproject.toml"]\n')
+    r = suites(repo, rows + 'testpaths_replace = { "tests" = "." }\n')
+    assert (r["orphans"], r["parted"], r["inputs"]) == ([], [], [])
+    assert len(suites(repo, rows)["parted"]) == 4
+
+
 def test_the_tree_as_it_is_passes(repo: Path) -> None:
     r = suites(repo)
     assert (r["orphans"], r["parted"], r["inputs"]) == ([], [], [])
