@@ -581,6 +581,10 @@ def gammaFn (j : Json) : V Json := do
   let g ← if J.has rj "groups_per_coin" then J.nat rj "groups_per_coin" "record" else pure 1
   gammaOn reg (← hex rj "registration") (← summaryOf rj) g j
 
+/-- `audit.named_bits` of `{"k"}` (`Gamma.namedBits`), or why the bracket of log₂ k! doesn't decide it. -/
+def namedBitsFn (j : Json) : V Json := do
+  pure (refusedOr (toJson <$> Gamma.namedBits (← nat j "k")))
+
 /-- `gammaFn` of the record of one of the accepted sessions `r` runs, that session's own: the registration it ran on
 and its record as `outcome` writes it equal to `record`, at its own windows a coin; refused unless one is. -/
 def gammaOfRegistry (r : Registry) (j : Json) : V Json := do
@@ -782,6 +786,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
   ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn), ("gamma", gammaFn),
+  ("named_bits", namedBitsFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
   ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 

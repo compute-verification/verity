@@ -673,12 +673,78 @@ def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | 
             len(verdicts) == windows and all(v["accepted"] for v in verdicts.values()))
 
 
+GAMMA_HELD_LOG2 = 40
+"""How near `ledger.gamma`'s floats are held to the Lean's exact γ terms: a share of the capacity within 2^-40 of it, an
+error within 2^-40 of itself.  The floats round each term and sum, and a timing term near 0 cancels to about 2^-52 of
+the capacity, so a share is held absolutely."""
+
+
+def _gamma_differs(lean: object, python: object, at: str = "") -> tuple[str, object, object] | None:
+    """Where `python`, `GammaTerms.to_json()`, is not the Lean's exact `lean` (`GAMMA_HELD_LOG2`), with both values there,
+    or None: the same keys and lengths, the same integers, booleans and nulls, and each float near its rational."""
+    if isinstance(python, dict):
+        if not isinstance(lean, dict) or sorted(lean) != sorted(python):
+            return at or ".", lean, python
+        return next((d for k in sorted(python) if (d := _gamma_differs(lean[k], python[k], f"{at}.{k}"))), None)
+    if isinstance(python, list):
+        if not isinstance(lean, list) or len(lean) != len(python):
+            return at or ".", lean, python
+        return next((d for i, (x, y) in enumerate(zip(lean, python)) if (d := _gamma_differs(x, y, f"{at}[{i}]"))), None)
+    if type(python) is float:
+        try:
+            q = line.number(lean)
+        except line.Malformed:
+            return at, lean, python
+        slack = abs(q) if at.startswith(".error") else 1
+        return None if abs(Fraction(python) - q) <= slack / 2 ** GAMMA_HELD_LOG2 else (at, lean, python)
+    return None if type(lean) is type(python) and lean == python else (at, lean, python)
+
+
 def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacity_bytes_per_s: float,
                  python: dict) -> dict:
     """The Lean's γ terms for an accepted session's record against the node's R (`capacity_bytes_per_s`), from PoUB's
-    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`), the ones `Verifier.ledgers` declares, held to
-    `python`, `ledger.gamma`'s `Gamma.ledger.to_json()`. Until it is written the reading is undecided."""
-    raise NotImplementedError(coins.UNWRITTEN)
+    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`, its `gamma`: `Poub.Gamma`, exact rationals, on
+    the session it ran and accepted, whose record `lv.summary_json` writes), the ones `Verifier.ledgers` declares, at
+    the node's S_chip and squaring ceiling and the record's δ, each float read as its exact value.  It is held to
+    `python`, `ledger.gamma`'s `Gamma.ledger.to_json()` (`_gamma_differs`), each worst window to one of the Lean's
+    largest γ within the slack (`gamma_held`); a refusal, an error of the process or a disagreement is a `ValueError`
+    naming both."""
+    deltas = {w.profile.delta for w in record.windows}
+    if len(deltas) != 1:
+        raise ValueError(f"the record's windows are sampled at {len(deltas)} δ, and the Lean's γ terms read one")
+    request = {"op": "gamma", "record": lv.summary_json(record), "delta": line.text(Fraction(deltas.pop())),
+               "block_bytes": record.block_bytes, "chip_bytes": node.chip_bytes,
+               "capacity_bytes_per_s": line.text(Fraction(capacity_bytes_per_s)),
+               "squarings_per_s": line.text(Fraction(node.rebuild(record.codec).squarings_per_s))}
+    try:
+        got = lean.call(request)
+    except lv.LeanError as e:
+        raise ValueError(f"the Lean verifier gave no γ terms: {e}") from e
+    return gamma_held(got, python)
+
+
+def gamma_held(got: object, python: dict) -> dict:
+    """The Lean's γ terms `got` (`Poub.Gamma`'s answer), held to `python`, `GammaTerms.to_json()`: a `ValueError` naming
+    both values where it refuses or they differ (`_gamma_differs`), each of `python`'s worst windows taken as the
+    Lean's where the Lean's γ there is within twice the slack of its largest."""
+    if not isinstance(got, dict) or "refused" in got:
+        raise ValueError(f"the Lean verifier refuses the γ terms the Python ledger computed: "
+                         f"{got.get('refused') if isinstance(got, dict) else got!r}")
+    held = json.loads(json.dumps(python))
+    try:
+        gs = [line.number(w["gamma"]) for w in got["windows"]]
+        hs = [line.number(w["horizon"]["gamma"]) for w in got["windows"]]
+        if max(gs) - gs[held["worst"]["window"]] <= Fraction(2, 2 ** GAMMA_HELD_LOG2):
+            held["worst"]["window"] = got["worst"]["window"]
+        if max(hs) - hs[held["worst"]["horizon"]["window"]] <= Fraction(2, 2 ** GAMMA_HELD_LOG2):
+            held["worst"]["horizon"]["window"] = got["worst"]["horizon"]["window"]
+    except (KeyError, IndexError, TypeError, ValueError):
+        pass
+    if (d := _gamma_differs(got, held)) is not None:
+        at, a, b = d
+        raise ValueError(f"the Lean verifier's γ terms and the Python ledger's disagree at {at}: the Lean's "
+                         f"{json.dumps(a)}, the Python's {json.dumps(python if at == '.' else b)}")
+    return got
 
 
 class Pair:
@@ -1422,7 +1488,9 @@ class Verifier:
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
-        had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
+        had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
+        reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
+        nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
         forms carry.
@@ -1476,9 +1544,9 @@ class Verifier:
                 continue
             try:
                 gamma_answer(self.lean, record, stated, r, g.ledger.to_json())
-            except NotImplementedError:
+            except ValueError as e:
                 del readings[name]
-                out[name] = {"capacity_bytes_per_s": r, "undecided": coins.undecided("γ terms")}
+                out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
             whole = r * record.span_ns / 1e9
             out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
@@ -1490,8 +1558,8 @@ class Verifier:
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
-                           if len(readings) == 2 else next({w: out[n][w]} for w in ("refused", "undecided")
-                                                           for n in ("spec", "measured") if w in out[n]))
+                           if len(readings) == 2 else next({"refused": out[n]["refused"]}
+                                                           for n in ("spec", "measured") if "refused" in out[n]))
         out["sketch_failure"] = {"queries_log2": audit.QUERIES_LOG2,
                                  "log2": timing.log2(timing.sketch_failure(record.passes, record.rows,
                                                                            blocks=record.blocks))}
