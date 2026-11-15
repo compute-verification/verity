@@ -29062,11 +29062,11 @@
     "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.Compose": {
-    "Eq (P.wrong X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ComposeCone": {
-    "Disjoint (P.wrong X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem T t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
