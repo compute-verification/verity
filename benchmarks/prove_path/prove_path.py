@@ -315,9 +315,11 @@ class I2Compiler:
                 trace = trace_dir(self.units[dg]) if dg in self.units else "?"
                 have = ", ".join(f"{Path(p).name} {k[:16]}" for k, p in sorted(by.items(), key=lambda kv: kv[1])) or "none"
                 raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program {dg[:16]} "
-                                 f"(its trace: {trace}/; the Builds there: {have}). I2's request Programs end in "
-                                 f"their length rule (`steps.stop_of`), which a `verity-vllm row run` Build's declared Programs "
-                                 f"don't: the single-GPU arm audits a Commit made under I2's Programs, their Builds in its row dir")
+                                 f"(its trace: {trace}/; the Builds there: {have}). A row dir `verity-vllm row run` "
+                                 f"made (a5_llama1b_h200.sh's among them) cannot be proved by the single-GPU arm: its Commit "
+                                 f"is under the row's declared Programs, and I2's end in their length rule (`steps.stop_of`). "
+                                 f"Prove a serve-openai run's window instead: run.sh's served arm (PP_SERVE_RUN, PP_WINDOW, "
+                                 f"PP_SERVE_ROWS), whose row dir holds the Builds of I2's Programs")
             if (d, q["digest"]) not in held:
                 try:
                     held[d, q["digest"]] = build_of(d, q["digest"])
@@ -347,6 +349,31 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
         program, named = i2.builds.pop(dg)
         have[dg] = str(Path(i2.programs_root) / trace_dir({**named.shape, "policy": named.shape["sampling"]}))
         write_build(have[dg], program, named)
+
+
+def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> str:
+    """The line a table's printer reads for a run's coins and parameters, ``ran with: coins C; parameters development|deployed
+    (DETAIL)``. The parameters are those of the LMS key the sample's coins are signed under, the one parameter set the run
+    hands the verifier (Lean's `verify` takes none of its own): a local challenger's key is at
+    `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
+    A gate without its key record states none."""
+    from verity.commitments.crypto import lms
+    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.device import challenger_session as AC
+
+    dep = lms.DEPLOYED
+    if challenger == "local":
+        at = lms.Params(64, *AC.LOCAL_PARAMS)
+        return (f"ran with: coins local challenger; parameters development (the local challenger's LMS key at W={at.W}, "
+                f"H={at.H}, not the deployed W={dep.W}, H={dep.H})")
+    if not challenger.startswith("gate:"):
+        raise ValueError(f"PP_CHALLENGER {challenger!r}: local, or gate:USER@HOST")
+    coins = f"coins the auditor device's challenger ({challenger})"
+    if key_record is None:
+        return f"ran with: {coins}; parameters not stated (no challenger key record given)"
+    key = Ch.key_of_record(dict(key_record))
+    word = "deployed" if (key.W, key.H) == (dep.W, dep.H) else "development"
+    return f"ran with: {coins}; parameters {word} (the challenger's LMS key at W={key.W}, H={key.H}, its key record's)"
 
 
 def code_identity() -> str:
@@ -489,13 +516,18 @@ def ingress_of(ctx: Mapping[str, Any]) -> dict[str, dict]:
 def workload_hf_config(doc: Mapping[str, Any], hf_config: str | None = None) -> Path:
     """The checkpoint's ``config.json`` a declared run's φ reads: ``hf_config``, else the config of record of the pin the workload
     ``doc`` serves (its ``model`` at its engine's revision, `dense_generic.pinned_hf_config`, as `phi_of_serve` reads a served
-    one's), else for a model no manifest pins unsloth/Llama-3.2-1B's. An int8 row's pin carries its ``quantization_config``."""
-    from verity_vllm.config import RowEngine
+    one's), else for a model no manifest pins unsloth/Llama-3.2-1B's. An int8 row's pin carries its ``quantization_config``.
+    A doc with no ``engine.revision`` (the old flat layout among them) is refused by name."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 
     if hf_config:
         return Path(hf_config)
-    return pinned_hf_config(str(doc.get("model")), str(RowEngine.of(dict(doc)).revision)) or LLAMA32_1B_CONFIG
+    engine = doc.get("engine")
+    revision = engine.get("revision") if isinstance(engine, Mapping) else None
+    if not revision:
+        raise ValueError(f"the workload of {doc.get('model')!r} names no engine.revision, so no pin's config of record is known: "
+                         f"give a workload file in the engine-block layout (`verity-vllm workload`), or --hf-config")
+    return pinned_hf_config(str(doc["model"]), str(revision)) or LLAMA32_1B_CONFIG
 
 
 def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None, cap_bits: int = CAP_BITS,
@@ -1946,6 +1978,9 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
+    p = sub.add_parser("ran-with", help="the line naming the coins and the parameters a run's sessions are sampled under (`ran_with`)")
+    p.add_argument("--challenger", required=True, help="run.sh's PP_CHALLENGER: local, or gate:USER@HOST")
+    p.add_argument("--challenger-key", help="with gate:USER@HOST: the challenger's key record (challenger-key/v1)")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--serve-run")
@@ -2054,6 +2089,9 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     for name in ("compiler", "circuit", "window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
+    if a.cmd == "ran-with":
+        print(ran_with(a.challenger, json.loads(Path(a.challenger_key).read_text()) if a.challenger_key else None))
+        return 0
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate, a.serve), sort_keys=True))
         return 0
