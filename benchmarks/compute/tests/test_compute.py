@@ -261,6 +261,10 @@ def test_pouws_row_in_the_composed_record_is_printed_whatever_it_says(store, tmp
     ({"LEAN_CHECK": to("differ", value=["work"])},
      "the record's comparison of the Lean verifier's verdict with the answer differs on ['work']"),
     ({"LEAN_CHECK": lambda d: d.pop("differ")}, "the run's Pearl+ verdicts don't read as verdicts"),
+    ({"ANSWER": lambda d: (d["profile"].update(test_instance=True), d["public"]["work"].update(credited=0)),
+      "LEAN": to("work", "credited", value=0)},
+     "Pearl+'s answer is a test instance's (its profile's test_instance): its passes are not the served instance's"),
+    ({"ANSWER": to("profile", "test_instance", value=True)}, "Pearl+'s answer is a test instance's"),
 ])
 def test_an_answer_that_is_not_an_accept_the_lean_verifier_shares_prints_no_number_and_exits_1(store, tmp_path, capsys,
                                                                                               edits, why):

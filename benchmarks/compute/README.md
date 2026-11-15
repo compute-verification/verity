@@ -55,7 +55,8 @@ A directory missing a required file is refused with exit 2, and the message name
 
 ## What it refuses
 
-It prints no number, and exits 1, unless the Pearl+ answer is an accept with a credit. It also prints none when the
+It prints no number, and exits 1, unless the Pearl+ answer is an accept with a credit, and not a test instance's (the
+answer's `profile.test_instance`, whose passes are not the served instance's). It also prints none when the
 record holds no Lean verdict, or when the Lean verifier's verdict differs from the answer in verdict, run commitment or
 credit. It
 exits 2 when a file can't be read, when the policy's model or class can't give the model's MACs, or when the credit is

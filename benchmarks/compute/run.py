@@ -1,7 +1,8 @@
 """`verity bench compute`: the share of a served model's multiply-accumulates (MACs) that Pearl+ credits, over the tokens
 one served run served: the MACs the Pearl+ verifier credits over the MACs the model computes on those tokens, as text
 and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target (`TARGET`). An answer that isn't an
-accept, or that the record holds no Lean verdict of, prints no number and exits 1.
+accept, is a test instance's (`profile.test_instance`), or that the record holds no Lean verdict of, prints no number
+and exits 1.
 
     verity bench compute --record DIR                                a run's record in a directory on disk
     verity bench compute --from RUN                                  a recorded run in our evidence store
@@ -287,7 +288,8 @@ def _held(tree: Path, path: str) -> Any:
 
 def credit(tree: Path) -> dict:
     """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is Pearl+'s accept with a
-    credit, and the record holds the Lean verifier's verdict and its comparison with the answer, both the answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its sample's."""
+    credit that is no test instance's, and the record holds the Lean verifier's verdict and its comparison with the
+    answer, both the answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its sample's."""
     try:
         answer, lean, check = (_held(tree, p) for p in (ANSWER, LEAN, LEAN_CHECK))
         if answer is None:
@@ -308,6 +310,9 @@ def credit(tree: Path) -> dict:
         raise NoNumber(f"the answer is {protocol}'s, not {PROTOCOL}'s")
     if verdict != "accept":
         raise NoNumber(f"Pearl+'s answer is {verdict}, not accept ({answer.get('reason') or 'no reason recorded'})")
+    if (answer.get("profile") or {}).get("test_instance"):
+        raise NoNumber("Pearl+'s answer is a test instance's (its profile's test_instance): its passes are not the served "
+                       "instance's, and it credits nothing")
     if not _count(credited) or passes is not None and not _count(passes):
         raise NoNumber(f"Pearl+'s answer accepts and holds no credit in MACs (credited {credited!r}, macs {passes!r})")
     for name, lean_s, answer_s in zip(("verdict", "run commitment", "credit"), theirs, mine):
