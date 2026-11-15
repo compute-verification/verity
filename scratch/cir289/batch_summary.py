@@ -1,4 +1,4 @@
-"""batch_summary.py BATCH RUN RUN_DIR: one bound.sh run's kinds as scratch/cir289/results/BATCH.json, and its BATCH line.
+"""batch_summary.py BATCH RUN RUN_DIR: one bound.sh run's kinds as scratch/cir289/batch-results/BATCH.json, and its BATCH line.
 
 A kind is accepted when B.verify.held exits 0 with accepted true and B.verify.no-program and B.verify.other-def both
 exit 1 with accepted false. Anything else is a stop, named by the last step it reached."""
@@ -87,7 +87,7 @@ span = (ts[-1] - ts[0]) % 86400 if ts else None
 res = {"batch": batch, "run": run, "kinds": len(kinds), "accepted": acc,
        "stopped": [{"kind": k["kind"], "outcome": k["outcome"], "why": k.get("why")} for k in kinds if k["outcome"] != "accepted"],
        "hours": round(span / 3600, 2) if span is not None else None, "peak_gb": round(peak, 2), "records": kinds}
-Path("scratch/cir289/results").mkdir(parents=True, exist_ok=True)
-Path(f"scratch/cir289/results/{batch}.json").write_text(json.dumps(res, indent=1) + "\n")
+Path("scratch/cir289/batch-results").mkdir(parents=True, exist_ok=True)
+Path(f"scratch/cir289/batch-results/{batch}.json").write_text(json.dumps(res, indent=1) + "\n")
 print(f"BATCH {batch} done: accepted {acc} of {len(kinds)}")
 print(json.dumps({k: res[k] for k in ("run", "hours", "peak_gb", "stopped")})[:1500])
