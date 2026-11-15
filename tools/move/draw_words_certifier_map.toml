@@ -1,6 +1,6 @@
 # `draw_words_map.toml`'s words in network-accounting's files, which that map excludes: what `tools/move/rename.py --map
-# tools/move/draw_words_certifier_map.toml` renames, to that map's targets, in `verity/protocols/accounting/certifier/**`
-# and `security/**/Certifier/**` alone ([rewrite] exclude names every other path).
+# tools/move/draw_words_certifier_map.toml` renames, to that map's targets, in `verity/protocols/accounting/certifier/**`, `security/**/Certifier/**`
+# alone ([rewrite] exclude names every other path).
 # Kept bytes ([keep]): that map's own, `warden_map.toml`'s and `warden_tokens_map.toml`'s, and what a passing run or a
 # hash reads: a domain tag or format id, a one-token string (a record or JSON key, a kind, a file name, an env
 # variable), a flag, a test's byte seed, an env variable in shell, the public items' reasons a spec's digest takes in
@@ -328,6 +328,8 @@ patterns = [
     "\\bdraw(?= as [A-Z])",
     "\\bcoins\\.drawn\\(\\)",
     "\\bDraws\\.skip\\b",
+    "\\bfirst_draw\\b",
+    "(?<=``)drawn(?=``)",
 ]
 strings = [
     "the PoUW window's keyed draw takes A4 and A5",

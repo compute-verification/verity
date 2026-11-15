@@ -376,7 +376,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
     with its ``wrong_units`` at the stream's δ (``a.delta``, by default `DELTA`), on the sample of
     record: the Lean verifier's (``--lean``) sample on the coins the period flip read (`service.lean_draw`),
-    which the windows proved must be. Coins with a ``sampled`` (the challenger's, `a5_coins.RankCoins`) end their turn
+    which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
     on the session once the sample has read them, and the result's ``segment`` is what they released. ``forge``, a
     negative, is the prover's: of the period sample, the K windows it registers and proves instead, under a sample
     object listing them (`other_subset`), which is what ``period.json`` then holds."""
