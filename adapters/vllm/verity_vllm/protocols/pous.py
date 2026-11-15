@@ -24,7 +24,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
-* **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
+* **The period** (`PousOption.audit`, `PousOption.leg`): `period_prover.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
@@ -183,11 +183,11 @@ class PousOption(Option):
         return ws.answer(self.store, index)
 
     def prover(self, blocks: Sequence[bytes]) -> Callable[[int], bytes]:
-        """`period.Prover`: each index answered from ``C*`` where it is held (``blocks`` is the same store)."""
+        """`period_prover.Prover`: each index answered from ``C*`` where it is held (``blocks`` is the same store)."""
         return self.answer
 
     def audit(self, node: str, coins: bytes, **kw: Any) -> Any:
-        """`weight_store.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period.audit`'s (the
+        """`weight_store.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period_prover.audit`'s (the
         prover by default this option's)."""
         if self.closed or self.store is None:
             raise RuntimeError(f"{self.name} is closed: nothing is held to audit")

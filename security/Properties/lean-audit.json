@@ -65,6 +65,7 @@
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Component",
+  "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -108,7 +109,20 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
- "assumptions": {},
+ "assumptions": {
+  "Accounting.Assumptions.KeyBinding": {
+   "owner": "@compute-accounting",
+   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+  },
+  "Hash.Assumptions.Sha512Prf": {
+   "owner": "@memory-accounting",
+   "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
+  },
+  "Pous.Period.Instantiates": {
+   "owner": "@memory-accounting",
+   "digest": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e"
+  }
+ },
  "domain": {
   "Accounting.Compose.Declared.Reads": {
    "owner": "@compute-accounting",
@@ -154,6 +168,31 @@
    "owner": "@lean",
    "digest": "2084ad09848208a75e1bfc1e8b7c999edbffd64fe89959e2e6c2d4c21abbac86",
    "why": "The gates a clause of the record's circuit speaks of: each leaf of the output row a reader row is wired to."
+  },
+  "Pous.Guarantees.RoundsBound": {
+   "owner": "@memory-accounting",
+   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
+   "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
+  },
+  "Pous.Period.Audits.OnTime": {
+   "owner": "@memory-accounting",
+   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
+   "why": "Inside DeviceModel, the coins on which it bounds each round's program: those on which the memory challenger's signed record has every answer on time."
+  },
+  "Pous.Period.CountMeets": {
+   "owner": "@memory-accounting",
+   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
+   "why": "The counts the pooled bound speaks of: M at least ((z − 1)·U·(δ + ε_max) + ln(1/δ'))/ln z."
+  },
+  "Pous.Period.Drawn": {
+   "owner": "@memory-accounting",
+   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
+   "why": "Inside DeviceModel and Instantiates, the samples they speak of: the indices and coin view the memory challenger's code reads from the coin's own streams."
+  },
+  "Pous.Period.Fits": {
+   "owner": "@memory-accounting",
+   "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
+   "why": "The certificates the bound speaks of: S bits a tick over the capacity window, with the device's on-chip state and its side channels' capacity over a round, within the state bound S₀."
   },
   "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
@@ -233,12 +272,6 @@
   "Accounting.Assumptions.HelpWithinCertifier": {
    "owner": "@compute-research",
    "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Assumptions.KeyBinding": {
-   "owner": "@compute-accounting",
-   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -377,7 +410,7 @@
   "Accounting.Remote.Held.Assumptions.Covered": {
    "owner": "@memory-accounting",
    "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
-   "issue": "LEAN-186",
+   "issue": "MEM-289",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Covers": {
@@ -389,7 +422,7 @@
   "Accounting.Remote.Held.Assumptions.IngressCounted": {
    "owner": "@memory-accounting",
    "digest": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e",
-   "issue": "LEAN-186",
+   "issue": "MEM-289",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Paced": {
@@ -431,12 +464,6 @@
   "Claims.ExpectedCR": {
    "owner": "@proofs",
    "digest": "83125752f67066703612e6c2f5f7f9a3da5f44b0db4f4072efface41ec981eaf",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Hash.Assumptions.Sha512Prf": {
-   "owner": "@memory-accounting",
-   "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -572,12 +599,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Guarantees.RoundsBound": {
-   "owner": "@memory-accounting",
-   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "a22cc6653b91f423e9ec2af90439f16b13fd83a20e5f51729151ec083856ca4b",
@@ -602,59 +623,23 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Audits.Certified": {
-   "owner": "@memory-accounting",
-   "digest": "4da8f2178342cde3571dbf23c427e688fce47637a942f800ee8d51f81e8e2518",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Audits.OnTime": {
-   "owner": "@memory-accounting",
-   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.CountMeets": {
-   "owner": "@memory-accounting",
-   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.DeviceModel": {
    "owner": "@memory-accounting",
    "digest": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Drawn": {
-   "owner": "@memory-accounting",
-   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Fits": {
-   "owner": "@memory-accounting",
-   "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.FixedBefore": {
    "owner": "@memory-accounting",
    "digest": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Instantiates": {
-   "owner": "@memory-accounting",
-   "digest": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e",
-   "issue": "LEAN-186",
+   "issue": "MEM-134",
    "due": "2026-11-30"
   },
   "Pous.Period.ReadsNoPrimitive": {
    "owner": "@memory-accounting",
    "digest": "941286e788e84d808d5f58d95004d4e5cb4762a1eb9bf82b9f04d854577e552c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Pous.Period.RingDeviceAt": {
    "owner": "@memory-accounting",
@@ -857,8 +842,8 @@
   "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Properties.Spot.ExpectsV2": {
    "owner": "@proofs",
@@ -1100,6 +1085,7 @@
   "Properties.Accounting",
   "CircuitRequirement",
   "Definitions.Accounting",
+  "Definitions.Assumptions",
   "Definitions.Claims",
   "Definitions.Hash",
   "Definitions.Pouw.Basic",
@@ -1126,6 +1112,7 @@
   "Properties.Challenger",
   "Definitions.Pouw.Dither",
   "Definitions.Pouw.Assumptions.ServedWork",
+  "Properties.Assumptions",
   "Properties.ZkServer",
   "ZkServer"
  ],
@@ -2248,7 +2235,12 @@
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity"
    ],
-   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe", "Properties.Pous.PeriodGame"],
+   "except": [
+    "Properties.Pous.Period",
+    "Properties.Pous.Wipe",
+    "Properties.Pous.PeriodGame",
+    "Properties.Pous.MemoryChallenger.Session"
+   ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Pous.Period": {
@@ -2260,10 +2252,11 @@
     "MemoryChallenger",
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity",
-    "Definitions.Accounting"
+    "Definitions.Accounting",
+    "Properties.Assumptions"
    ],
    "except": [],
-   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
+   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, and its named assumption the instantiation (Properties.Assumptions.Pous), never over a proof"
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
@@ -2413,9 +2406,9 @@
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.WindowFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Core": {
-   "imports": ["Definitions.Core", "CoreProtocol.Site"],
+   "imports": ["Definitions.Core", "CoreProtocol.Site", "RegistrationLog.SiteCheck"],
    "except": [],
-   "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
+   "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`, and registration's check on it, `RegistrationLog.SiteCheck`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
   },
   "Properties.Remote": {
    "imports": [
@@ -2450,10 +2443,10 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity",
     "Definitions.Accounting",
-    "Definitions.Hash.Assumptions"
+    "Definitions.Assumptions.Hash"
    ],
    "except": [],
-   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Hash.Assumptions), never over a proof"
+   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Assumptions.Hash), never over a proof"
   },
   "Properties.Annot": {
    "imports": ["Flock.Annot", "Flock.AnnotExpand"],
@@ -2659,6 +2652,21 @@
    "imports": ["ZkServer"],
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`ZkServer.Record`, `ZkServer.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
+  },
+  "Properties.Assumptions": {
+   "imports": ["Mathlib", "Properties.Pous", "Properties.Assumptions"],
+   "except": [],
+   "why": "a named assumption stated over the code reads the code's definitions it is about (PoUS's instantiation: the period's audit and the ring game, Properties.Pous.Period.Audits), never a guarantee or a proof"
+  },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "imports": [
+    "Mathlib",
+    "Properties.Pous.MemoryChallenger",
+    "MemoryChallenger",
+    "Definitions.Accounting.Assumptions.Parties"
+   ],
+   "except": [],
+   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
   }
  },
  "reads_exempt": {
@@ -2720,12 +2728,11 @@
    "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
     "open": [
      "Pous.P2.Assumptions.P2RingAuditSecure",
      "Pous.Period.DeviceModel",
-     "Pous.Period.Instantiates",
      "PousCheck.Properties.AcceptsDecodes",
      "PousCheck.Properties.PublishesRoot"
     ],
@@ -3186,6 +3193,51 @@
    },
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
+  },
+  "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests :",
+    "  MemoryChallenger.Session.Properties.AuditorSeesDigests"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Assumptions.Parties.Confined",
+     "Accounting.Assumptions.Parties.Faithful",
+     "Accounting.Assumptions.Parties.WitnessPathPrivate"
+    ],
+    "reads": [
+     "Accounting.Assumptions.Parties.Code",
+     "Accounting.Assumptions.Parties.Code.init",
+     "Accounting.Assumptions.Parties.Code.messages",
+     "Accounting.Assumptions.Parties.Code.mk",
+     "Accounting.Assumptions.Parties.Code.step",
+     "Accounting.Assumptions.Parties.Code.trace",
+     "Accounting.Assumptions.Parties.Code.trace._f",
+     "Accounting.Assumptions.Parties.Dest",
+     "Accounting.Assumptions.Parties.Dest.casesOn",
+     "Accounting.Assumptions.Parties.Dest.clear",
+     "Accounting.Assumptions.Parties.Dest.ctorIdx",
+     "Accounting.Assumptions.Parties.Dest.rec",
+     "Accounting.Assumptions.Parties.Dest.witness",
+     "Accounting.Assumptions.Parties.Run",
+     "Accounting.Assumptions.Parties.Run.coins",
+     "Accounting.Assumptions.Parties.Run.emitted",
+     "Accounting.Assumptions.Parties.Run.mk",
+     "Accounting.Assumptions.Parties.Run.overheard",
+     "Accounting.Assumptions.Parties.Run.sent",
+     "Accounting.Assumptions.Parties.Run.states",
+     "Accounting.Assumptions.Parties.Run.taken",
+     "Accounting.Assumptions.Parties.Run.truth",
+     "Accounting.Assumptions.Parties.auditorView",
+     "Accounting.Assumptions.Parties.instDecidableEqDest"
+    ]
+   },
+   "type_hash": "967034dac532b3c68f13d3fbe4c795315c6152d238cfb451ef4db5b3e953bbfa",
+   "unfolded_hash": "d5380f4bbc65593c052c9a2dff29b36c23950e3f776f8f04f79ac28f72193c46"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -4121,9 +4173,9 @@
    "signature": ["Pous.Period.SecurityProofs.obligationHeld : Pous.Period.ObligationHeld"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
@@ -4134,14 +4186,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodCapacity : Pous.Period.PeriodCapacity"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": [
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.Audits.Accepts",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Instantiates"
-    ],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.Audits.Accepts", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
@@ -4152,9 +4199,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeld : Pous.Period.PeriodHeld"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309",
@@ -4178,15 +4225,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldCoins : Pous.Period.PeriodHeldCoins"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Fits",
-     "Pous.Period.Instantiates",
-     "Pous.Period.ReadsNoPrimitive"
-    ],
+    "assumptions": ["Pous.Period.Instantiates"],
+    "domain": ["Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.ReadsNoPrimitive"],
     "reads": []
    },
    "type_hash": "12162ed978d2f4b82b49a5f69bdc8df71a7620ed3600fa2dedef89650a68ec5f",
@@ -4198,14 +4239,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": [
-     "Pous.Guarantees.RoundsBound",
-     "Pous.P2.Assumptions.P2RingRoundSecureWide",
-     "Pous.Period.Fits",
-     "Pous.Period.ReadsNoPrimitive",
-     "Pous.Period.RingDeviceAt"
-    ],
+    "domain": ["Pous.Guarantees.RoundsBound", "Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingRoundSecureWide", "Pous.Period.ReadsNoPrimitive", "Pous.Period.RingDeviceAt"],
     "reads": []
    },
    "type_hash": "3297a948950cd089f3404b63c20c4e252366402b7b48ebc70784f0b249b96322",
@@ -4246,9 +4281,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldDeployed : Pous.Period.PeriodHeldDeployed"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
@@ -4283,16 +4318,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldSha512 : Pous.Period.PeriodHeldSha512"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Hash.Assumptions.Sha512Prf",
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Fits",
-     "Pous.Period.Instantiates",
-     "Pous.Period.ReadsNoPrimitive"
-    ],
+    "assumptions": ["Hash.Assumptions.Sha512Prf", "Pous.Period.Instantiates"],
+    "domain": ["Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.ReadsNoPrimitive"],
     "reads": []
    },
    "type_hash": "9a23bf115f0d3f48f589eea3e677f7477beb892a128fe95bb27a0eef5b0708fe",
@@ -4303,16 +4331,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldSha512At : Pous.Period.PeriodHeldSha512At"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Hash.Assumptions.Sha512Prf",
-     "Pous.Guarantees.RoundsBound",
-     "Pous.P2.Assumptions.P2RingRoundSecureWide",
-     "Pous.Period.Fits",
-     "Pous.Period.ReadsNoPrimitive",
-     "Pous.Period.RingDeviceAt"
-    ],
+    "assumptions": ["Hash.Assumptions.Sha512Prf"],
+    "domain": ["Pous.Guarantees.RoundsBound", "Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingRoundSecureWide", "Pous.Period.ReadsNoPrimitive", "Pous.Period.RingDeviceAt"],
     "reads": []
    },
    "type_hash": "a171afb09bfd59cbe89aad4a6ecaf03d0b840c2c3d02e99a07f3498915b33225",
@@ -4340,16 +4361,9 @@
    "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.CountMeets",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Fits",
-     "Pous.Period.FixedBefore",
-     "Pous.Period.Instantiates"
-    ],
+    "assumptions": ["Pous.Period.Instantiates"],
+    "domain": ["Pous.Period.CountMeets", "Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.FixedBefore"],
     "reads": []
    },
    "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b",
@@ -4361,9 +4375,9 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Pous.Period.Audits.Certified", "Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
-    "reads": []
+    "domain": ["Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [],
+    "reads": ["Pous.Period.Instantiates"]
    },
    "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b",
    "unfolded_hash": "aa16d3a67603e7624414180988c2f7136600b9b7621222bd7588a931fdb62eba"
@@ -8667,12 +8681,11 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
      "Accounting.Assumptions.CircuitCarriers",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -14064,6 +14077,10 @@
    "Properties.Spot.SecurityProofs.sampleMisses": {
     "function": "Spot.Slots.select",
     "outcome": "accept"
+   },
+   "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+    "function": "MemoryChallenger.Session.Properties.code",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -15352,7 +15369,7 @@
    }
   },
   "Commitments.FV3": {
-   "digest": "11b4707d2e489649023187f2d9968a77e274aafefdc256181a2dfb43a6b5f0bb",
+   "digest": "0250401b8dbaa73b7c0f534b51784108bd38fedede32231db6332ee68bce660f",
    "definitions": {
     "Flock.FV3.Domain": "36a9410f0bb424a2c38165b764ed69a1207ee86948fa393f705d1ddc0fbdd692",
     "Flock.FV3.Domain.climb": "99fcc386553517f89ea585cbe1cc9a8cee9e5fb19434a237ebb775106fb7ddeb",
@@ -15387,12 +15404,14 @@
     "Flock.FV3.Sha512.hash": "65eb0dc95ee344351cca2dd0437d7ff6313b9a242f42a499e16a680766319b0d",
     "Flock.FV3.Sha512.leafAs": "b0f201a7ace51ea5c4e9c2cf9b4abd20feb7efe774025a43fca5d29e44e3730c",
     "Flock.FV3.Sha512.node": "2b5a1399f0c3465babd3baa43fcd702f9e6b625f22297197a46124a1881ec695",
+    "Flock.FV3.Sha512.path": "32f46488fed3dcce02ce5a8a9fa3a127b3fb83f0c355a2c2802868d49a9ebee6",
     "Flock.FV3.Sha512.scheme": "0a2e745f691ffb3b648a322d3e45fb092e0e8cb428f54f10f1cbe498f488dffc",
     "Flock.FV3.Sha512.sibs": "fdcede501b2029181c011c52e3a6349b6b6fab3870183b59194d76dc645fbc21",
     "Flock.FV3.Sha512.taggedSha512": "7ce543bed847ab1a41082253496f3001a227e9eb208cb74f462b08fcc3a80355",
     "Flock.FV3.hash": "cc9e4c8cff49884c029e2dcd72eacfcff412be1262f7605a1340423d22de694c",
     "Flock.FV3.input": "40f6284bef69a01c2183abb181d134f0933c86d920af89dbdd6287181a68493c",
     "Flock.FV3.leaf": "4b7af71c043502c3b39a0c104b4738a7d793224b9a774a8f16ab9bd06cab139f",
+    "Flock.FV3.path": "44efffc387746567108f8f00ded084ce41dbdc0bbe0439e15e702a5c84dfdc99",
     "Flock.FV3.root": "6a22de22bbca2178bc03fcea105a21368f1b0b34dd561c136c085d25319ad51f",
     "Flock.FV3.uint": "1ac23222e67f6d80d0114374a4088da24daf3d7b1315e5239d849bb2606fce47"
    }
@@ -16001,10 +16020,9 @@
    }
   },
   "Definitions.Accounting.Assumptions.Stacking": {
-   "digest": "7ca9cf40b573c0ed2539443841c61596498817734f127b03ec9a8417a2184751",
+   "digest": "b8f75823131861d8621705f29586ec46e956b3d164aafae46358fab3398a9ec8",
    "definitions": {
     "Accounting.Assumptions.CircuitCarriers": "99f59232cf288d13cb7c5f394e99aa3978d8c3bc7d7c2f67e22acc18cc608b56",
-    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
     "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    }
   },
@@ -16875,6 +16893,18 @@
     "Accounting.Wipe.Strategy.wipe": "a325b788108fae99d194a8ece5cc8e5ac607aea67587bb567e1e5154219ecab4"
    }
   },
+  "Definitions.Assumptions.Accounting": {
+   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "definitions": {
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+   }
+  },
+  "Definitions.Assumptions.Hash": {
+   "digest": "b83985bbe9f93402e3f0cbebf4c0a96289357e5f389aea0dd3bc932f2327e130",
+   "definitions": {
+    "Hash.Assumptions.Sha512Prf": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
+   }
+  },
   "Definitions.Claims.Sampling": {
    "digest": "8e195d56a6d11ded245c351bc4d78d8ccbde867b671a6e4059752b389aaab858",
    "definitions": {
@@ -17741,12 +17771,6 @@
     "Hash.Assumptions.LmsForger.out": "dafe9f95753d92eca9a374d881df489b8bd4100eefa614e0a3fa18fb2601b800",
     "Hash.Assumptions.LmsForger.signed": "0b4c65cb0cf719411f5b39ca329d28293faa5fa6eaca1f670f42bba4821d8f17",
     "Hash.Assumptions.LmsUnforgeable": "53b0ceae6abe1e800ca2ed8e64c70ff33d5cf5656bcbb5427fa2ee7ccab09648"
-   }
-  },
-  "Definitions.Hash.Assumptions.Prf": {
-   "digest": "b83985bbe9f93402e3f0cbebf4c0a96289357e5f389aea0dd3bc932f2327e130",
-   "definitions": {
-    "Hash.Assumptions.Sha512Prf": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
    }
   },
   "Definitions.Hash.HistoryTable": {
@@ -21826,7 +21850,7 @@
    }
   },
   "MemoryChallenger.Records": {
-   "digest": "e9a94507b7261268b3bfda69986402a0c359d3f7e89e45b8d37192a108d3af6c",
+   "digest": "01ce8b79a23d15304fdc8f57e559676b25a69956de8a6c6d652261e6d1277802",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -21845,8 +21869,11 @@
     "MemoryChallenger.CoinTree.indices": "0e2a5a6b2f1d9384d8c065719db0a803e4ed76eda6d8c4007bee243d8838ec18",
     "MemoryChallenger.CoinTree.k": "0fe8aeeeb3186fb5063b393791f98f4236d413ca3dc958078ddf4a6e7e85e332",
     "MemoryChallenger.CoinTree.key": "e8816d917e1f7c0ccc43c08d439e4ad304c904862440adbfc63920be73f80a8d",
+    "MemoryChallenger.CoinTree.levels": "d8c5b8a4a23b24b3a0c941db0374b12a2dd982dfccb6cb9980e6617fbedf3352",
     "MemoryChallenger.CoinTree.make": "ecdcaed9b38f54aea78987c8574779aa108bb975e03a5bb48d289a05b9a242fa",
+    "MemoryChallenger.CoinTree.opening": "a9419c8c9dde0dcc9767ff959855b2fd22fad373d54c2c674bf9f414bc63a512",
     "MemoryChallenger.CoinTree.root": "6100657735795727f4f3c969337fe4da8714f3aecbc95171fdd107ee517664e2",
+    "MemoryChallenger.CoinTree.salts": "21721c80f3a11baa192bf2114e3d194b65f8f4f66aabf5ba98e0b005e8ab4d24",
     "MemoryChallenger.CoinTree.session": "c904b761372eb2eb6541aeaa462b3d624c67d24df9b4b358d0c7fc360701a82b",
     "MemoryChallenger.DRAW_BYTES": "68f85e41afb606989e1aaa0bbfe522d5c78ce32c0feecfbd531c263925303fe0",
     "MemoryChallenger.E": "a375a27998813b4bdcd78a978652f133230b90354170dd67d190c2b8b6d02730",
@@ -24741,6 +24768,12 @@
     "Properties.Requirement.wiring": "f07bdcd481f3743cb9a717f4955604d5673374699246cf53592ee35907ddc365"
    }
   },
+  "Properties.Assumptions.Pous": {
+   "digest": "541e9a70b9b88b65ca9e21ccedae68349a28c68d0b8fe44e25130eed263e13c2",
+   "definitions": {
+    "Pous.Period.Instantiates": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e"
+   }
+  },
   "Properties.Attest": {
    "digest": "ad1003ceed60b3eab97d8d9dd5ca53b2f5aa3fc3111fc410e39fe91b20c645f6",
    "definitions": {
@@ -25671,6 +25704,51 @@
     "MemoryChallenger.Properties.treeStrings": "3d99dea70208f39c41d1968350b39acae0c06cca6efe071224abeae848f97f27"
    }
   },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "digest": "2a9e89d6a3a39e1ae2d887d28a31050364bf299454e176a7902a6f03ec8087b3",
+   "definitions": {
+    "MemoryChallenger.Session.Properties.AuditorSeesDigests": "2cc9af34d7fd6af5c99eb80a9c776dd8b69b1923ee99db1c1f25b2032dde4992",
+    "MemoryChallenger.Session.Properties.AuditorSeesSkeletonAt": "286b03f5bdf675d4754b4128355099f00746816beaeed9a8eb911708b3145de4",
+    "MemoryChallenger.Session.Properties.Ch": "d1cc517fb053f1e0236e0b6b2760dfc968724b2e86a982e6a330eee142ef319e",
+    "MemoryChallenger.Session.Properties.Ch.casesOn": "a79fec91a297918526117d682125eed75d8135d49090bc65397ee3916a5e560d",
+    "MemoryChallenger.Session.Properties.Ch.challenge": "8b6c8d28260a317aeb094d66d0a4d0f88e347cda3e9875cd2541e94e5f798620",
+    "MemoryChallenger.Session.Properties.Ch.rec": "f8d30cb904ea28796aa60ca933e0aa492a975e19d98a1a1d109895d1a2e81077",
+    "MemoryChallenger.Session.Properties.Ch.report": "93a467ae715992c99e7cf7a041c7c7a3bb8782a72983680a6833d989717fe56c",
+    "MemoryChallenger.Session.Properties.Msg": "554422fc728dcdea36c00a207d01aaeb074518554c3134f66693874dfcc3b3c6",
+    "MemoryChallenger.Session.Properties.Msg.done": "bdbbdec64dadabcfd35b77dbf0127f95cc5a71a525b67d4bfc6f52a6eec9c9d1",
+    "MemoryChallenger.Session.Properties.Msg.index": "71c805c0fd13633a22595385e9cd40dfee8c1194b03eaae60317478b9d0927fd",
+    "MemoryChallenger.Session.Properties.Msg.report": "12316f6f3f3b98078180e200c5cddb670364a154443242e7602eb891025ad457",
+    "MemoryChallenger.Session.Properties.Msg.warmup": "730d7ecd51fae85c0d82831e6652aeb5379724f9bbe40190d5ed9c98dd303144",
+    "MemoryChallenger.Session.Properties.Params": "bc5d22732ef9f95a0e4de698d1684b39478e934db6a3398276b75e691eb412aa",
+    "MemoryChallenger.Session.Properties.Params.binding": "5cf041e82ec317e1df5fd82adb7f8b76c79c823554e0c5c42a71ae69fd607a4f",
+    "MemoryChallenger.Session.Properties.Params.blockBytes": "3f7aa4f9667ed1758fbc79abc2b254e6f4915187814be51fd1c0b285e5a4abe4",
+    "MemoryChallenger.Session.Properties.Params.closing": "189ae930fb22749991e54d0c7a651a29e42ea067764e09bd6bc46354a9078015",
+    "MemoryChallenger.Session.Properties.Params.coins": "0333f1083798d55d1389d99a3db8d2a18656abcc66ac89b40e277b972e90b263",
+    "MemoryChallenger.Session.Properties.Params.commitment": "07370ddfd24bb75a3c660abc92636e704268ea77bbdaa848c12abc712f55bb90",
+    "MemoryChallenger.Session.Properties.Params.limitNs": "0eec80b629998964d3b88a08ff3403a067ff3ab6e3558d2df87950c32358a1d5",
+    "MemoryChallenger.Session.Properties.Params.publicKey": "bff0bd162785473747ad53f80978af162e7d8dac2ae6e95f23ad60a7d361f995",
+    "MemoryChallenger.Session.Properties.Params.scheme": "a36f0b4b42d54b0b292399e7a5cbd0dacae3500ce88d279ecb4ce9e55fc76491",
+    "MemoryChallenger.Session.Properties.Params.sign": "09e1950c32c9aad0e95ef13dfa2f35a7b28092992ed6e8cd36016d76389d1e72",
+    "MemoryChallenger.Session.Properties.Seen": "8114f05e228a79695a15da6946e50610779b09d989ef2b9e4c0670db508dffad",
+    "MemoryChallenger.Session.Properties.Seen.digest": "8af5557521e565aa463dc71f6f41e847ad4a2f7d0a2c96a738b78ee347e9a9dd",
+    "MemoryChallenger.Session.Properties.Seen.receiptNs": "5d92d87f68c53ee9b0193fb8896bd920de5b07edccf97369a3bbc97a86ae49d6",
+    "MemoryChallenger.Session.Properties.Seen.sendNs": "f31adb1f953101c65234ff90be02834757faee21e8e548d317e80e71b179eff6",
+    "MemoryChallenger.Session.Properties.Seen.size": "5e0f67191ef846157da422444f1410e8d964110db1953b5c1d357637b25a9e7c",
+    "MemoryChallenger.Session.Properties.Step": "325076aa0c61199d0623921a2b49218997eb579da10198c088d3ccff0c75c34f",
+    "MemoryChallenger.Session.Properties.Step.casesOn": "deefe14649f52569c5f5d10d818d71e93f0d53864e9d3fd506f462683a8d058c",
+    "MemoryChallenger.Session.Properties.Step.rec": "2c1a8c689d4f0c8294ff14f4d4f06218d7467e747dc0381739c1b2a5b871915c",
+    "MemoryChallenger.Session.Properties.Step.round": "694244dd4567fb7a5ff07e5e5fe937e399f33435f8464c9b938a5cb651ae50fb",
+    "MemoryChallenger.Session.Properties.Step.skeleton": "63e4e8bf48550c252893e91f79b32624ebef115278f83253691287d0df316a23",
+    "MemoryChallenger.Session.Properties.Step.warmup": "d910e5e6c2351ce4990875b957390917cd58b8bceefc55cb4d5ef8491c4eef9c",
+    "MemoryChallenger.Session.Properties.code": "6039c6582f41e4e839661960eb43e0a31895a82db52586f5b9e2e6570b7b2214",
+    "MemoryChallenger.Session.Properties.codeOn": "7cf29e2aa0613093bb94b35c9d9657b32f3c74f2e3ef40f560ad045ffb64d960",
+    "MemoryChallenger.Session.Properties.inClear": "33a2dec2814689572842c7da42a2665611850a8167e72e0e24f3b04c43921872",
+    "MemoryChallenger.Session.Properties.reportPublic": "ca3c4f571227e3a7816c898a7564c0f0e1528e9a1b5b4552a295fc90591e01b5",
+    "MemoryChallenger.Session.Properties.roundSeen": "35679b2095b14e003e6bab18ba32543035ebc30723a85f80aaf3b814885b89ff",
+    "MemoryChallenger.Session.Properties.seen": "1a776558bddcb8f52ead6073db8a30b2e4600021b126fe1e5c3aa328de0da74b",
+    "MemoryChallenger.Session.Properties.seenCode": "db167dd3c3ba0212886fbe0ad6efe44f65538513d7f84bff75503a0116a3272b"
+   }
+  },
   "Properties.Pous.Obligation": {
    "digest": "3e82f123b4093cd34f4c57ab24f84c417ef804c891e769f2a67fa28b1cf489a4",
    "definitions": {
@@ -25678,7 +25756,15 @@
    }
   },
   "Properties.Pous.Period": {
-   "digest": "83564e1f922394f6f522b5f8b6d301c52ed604e8d356eddadc1a39b6e3a01bfc",
+   "digest": "fb880be420dd3766b9e3e09960eef6956283327b1a58ada46fed3ecb5d1c4ce9",
+   "definitions": {
+    "Pous.Period.DeviceModel": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
+    "Pous.Period.PeriodCapacity": "6deff84b6199c805126cc0d8e2d90a05a009dfef0d053d64d4171780fd3be117",
+    "Pous.Period.PeriodHeld": "d06dcf0011fc36e635235ec050e48099130853e2e6fd7d132251099c902e3162"
+   }
+  },
+  "Properties.Pous.Period.Audits": {
+   "digest": "b396e74c8e078d53561494c94c11b5fa12b54bba1bcd0aa6f540a23ff46164f6",
    "definitions": {
     "Pous.Period.Audits": "62adb11e6027a89511984a34f72fdb381632569f16085d8fcce4bd84631a51b0",
     "Pous.Period.Audits.Accepts": "9c59a62ff9f63e44a0a428705d76fa30ccfb0d8ad8075c50591f2bc4c108c803",
@@ -25696,11 +25782,7 @@
     "Pous.Period.Audits.store": "48c5ed32a90b4013cec8cece8b54fbf47e8f6e42ac2dfc78780a55f232add1f8",
     "Pous.Period.Audits.trace": "b778ea243aac385cc95584b8c89aba65fe095dab2d1d221df0cf2ae76cacac42",
     "Pous.Period.Audits.trusted": "b17da66a5d8acb82246074cec18a14315b812993923ce16038faa44d919ae0f1",
-    "Pous.Period.DeviceModel": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
     "Pous.Period.Drawn": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-    "Pous.Period.Instantiates": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e",
-    "Pous.Period.PeriodCapacity": "6deff84b6199c805126cc0d8e2d90a05a009dfef0d053d64d4171780fd3be117",
-    "Pous.Period.PeriodHeld": "d06dcf0011fc36e635235ec050e48099130853e2e6fd7d132251099c902e3162",
     "Pous.Period.Strategy": "ed199d30a98be5fa95987d783e637fca18a1bee1dfdec8739d04b0e05473b050",
     "Pous.Period.Strategy.pre": "9b452a9084c82c7df820973e2057765e71fa974a1d28f092add285d92c28ce74",
     "Pous.Period.Strategy.step": "763d2ff6837aaaf6be99aecf1f11a06768e76fe56981c5c0c9e670b5cbb3ec02"

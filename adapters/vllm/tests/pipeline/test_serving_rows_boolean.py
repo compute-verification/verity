@@ -31,8 +31,7 @@ from tests.pipeline.served_rope import HEADS, LAW, ROPE, D
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.query.program_view import specialization
-from verity_vllm.query.program_view import spec_base, spec_statics
+from verity_vllm.query.program_view import spec_base, spec_statics, specialization
 
 ROPE_BITS = f"RoPEHead_v2{{D={D}}}"
 GEMM, GEMM_BITS = "GemmCoordinate_v1{K=16}", "GemmCoordinate_v4{K=16}"

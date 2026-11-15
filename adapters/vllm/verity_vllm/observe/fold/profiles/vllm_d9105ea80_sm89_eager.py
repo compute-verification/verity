@@ -284,13 +284,9 @@ def make_patterns(C: dict[str, Any]) -> list:
     ]
 
 
-# the census allowlist is PROTECTED (verity_vllm/observe/fold/profiles/kernel_allowlist.py); profiles only reference it
-from verity_vllm.observe.fold.profiles.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
-
-
 def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_note: str = "") -> Profile:
     """The κ profile for a static configuration (`b1.<case>_CONFIG`, `BN` derived if absent).  Shared: the κ pins,
-    the pattern list, the weight-name map, the kernel allowlist.  Per model: `C` (and so EPS / V / BN / BIAS), the
+    the pattern list and the weight-name map.  Per model: `C` (and so EPS / V / BN / BIAS), the
     Record the fold's `weights` parameter has, and the header consistency check."""
     C = config if "BN" in config else with_geometry(config)
     wf = make_weight_field(C)
@@ -300,7 +296,6 @@ def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_n
         config=C,
         weight_field=wf,
         accepted=False,
-        kernel_allowlist=KERNEL_ALLOWLIST,
         step_passes=(fuse_bias_adds,),
         notes={
             "case": case,

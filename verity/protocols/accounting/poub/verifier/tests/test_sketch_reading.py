@@ -171,12 +171,11 @@ def test_the_sketch_charges_the_provers_budget() -> None:
     parts = ledger.delta_parts(record)
     assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == "sketch"
     assert parts["profile"] == audit.DELTA
-    assert parts["slack"] == p * 2.0 ** -audit.SLACK_LOG2
-    assert parts["sketch"] == ledger.sketch(record) == float(timing.sketch_failure(p, blocks=n))
-    assert parts["hiding"] == 2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys)
-    total = 0.0
-    for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
-        total += parts[name]
+    assert parts["slack"] == Fraction(p, 2 ** audit.SLACK_LOG2)
+    assert parts["sketch"] == ledger.sketch(record) == timing.sketch_failure(p, blocks=n)
+    assert parts["hiding"] == pytest.approx(
+        2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys), rel=1e-12)
+    total = sum(parts.values(), Fraction(0))
     assert [x.delta for x in ledger.memory(record, ledger.Node.stated(timing.RTX_PRO_6000_NODE))] == [total] * 3
     assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
     for bad in (0, -1, 1.5, 2.0 ** 80):
