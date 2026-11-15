@@ -118,7 +118,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
             place.mkdir(parents=True, exist_ok=True)
             (place / f"{name}.json").write_text(line + "\n")
         if measured := list(measured):
-            from verity_bench.kit import writer  # kit re-exports this module, so it is imported here and not above
+            # kit re-exports this module, so it is imported here and not above
+            from verity_bench.kit import writer
 
             w = writer(place)
             for m in measured:

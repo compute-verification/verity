@@ -509,6 +509,7 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
 
 
 # the core benchmarks' interface, written in kit_report and called as the kit's
-from verity_bench.kit_report import COINS as COINS, NOT_STATED as NOT_STATED, PARAMETERS as PARAMETERS  # noqa: E402
-from verity_bench.kit_report import NoRecord as NoRecord, ran_with as ran_with, record_dir as record_dir  # noqa: E402
-from verity_bench.kit_report import report as report  # noqa: E402
+from verity_bench import kit_report  # noqa: E402
+
+COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
+NoRecord, ran_with, record_dir, report = kit_report.NoRecord, kit_report.ran_with, kit_report.record_dir, kit_report.report
