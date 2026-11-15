@@ -30,7 +30,7 @@ Public: `topp_split_row(x_in_f32, p, S, F, R, cfg) -> (x_out_f32, stats[S,4], pa
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import cache, lru_cache
+from functools import cache
 
 import numpy as np
 

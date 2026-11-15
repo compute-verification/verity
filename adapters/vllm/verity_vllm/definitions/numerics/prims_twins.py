@@ -3,7 +3,7 @@ the twins (`kernels.twins`) and the replay driver read them.  The primitives are
 
 from __future__ import annotations
 
-from functools import cache, lru_cache
+from functools import cache
 
 
 @cache

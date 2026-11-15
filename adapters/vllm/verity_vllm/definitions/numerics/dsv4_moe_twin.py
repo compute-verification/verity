@@ -5,7 +5,7 @@ Programs are the reference: tests/properties/test_dsv4_moe_capture.py holds each
 capture tests/properties/dsv4_moe_capture_gpu.py holds the kernels to the twins on every captured row."""
 from __future__ import annotations
 
-from functools import cache, lru_cache
+from functools import cache
 
 import numpy as np
 from verity.circuits.ops import mufu as MU

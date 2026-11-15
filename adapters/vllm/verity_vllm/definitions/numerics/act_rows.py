@@ -8,7 +8,7 @@ up word through `+ 0.0f` (-0 to +0), and the product's `cvt.rn.bf16.f32` with Na
 from __future__ import annotations
 
 from collections.abc import Sequence
-from functools import cache, lru_cache
+from functools import cache
 from typing import Any
 
 import numpy as np

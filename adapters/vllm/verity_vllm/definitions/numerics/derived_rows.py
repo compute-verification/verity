@@ -36,7 +36,7 @@ Validation: `tests/program/test_derived_rows.py` (gate-by-gate circuit evaluatio
 
 from __future__ import annotations
 
-from functools import cache, lru_cache
+from functools import cache
 
 import numpy as np
 

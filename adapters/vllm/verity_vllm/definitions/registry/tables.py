@@ -26,7 +26,7 @@ request (`verity/circuits/evaluate`'s difftest).
 """
 from __future__ import annotations
 
-from functools import cache, lru_cache
+from functools import cache
 
 from verity.circuits.boolean import table as BT
 from verity.circuits.codec import register_lazy_family
