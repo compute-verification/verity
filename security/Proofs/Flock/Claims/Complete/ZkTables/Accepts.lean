@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 public import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 public import Proofs.Flock.Claims.Complete.Coins
 public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
 import Proofs.Flock.Claims.Recursion.DeployChecked
 
 /-!
