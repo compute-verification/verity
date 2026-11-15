@@ -23,6 +23,13 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
   stays, and a suite whose inputs replace its dependencies (`inputs_only`) or that `exports` narrows reads `X` by name; the files map then moves it with the tests. Its
   `conftest.py` beside the pyproject (the vLLM adapter's) is the suite's and goes into `X/tests/` too: pytest reads none
   above the suite's directory. A dependency group the distribution keeps for its own tests is the member's too.
+- **A virtual member that stays a member where it is** (`MEMBERS_KEPT`, with why): `split` treats it as a distribution's
+  suite, but the member `NAME-tests` has its dependencies, not a dependency on it (nothing installs a virtual member),
+  and reads `X` by name.
+- **A file under a `tests/` that is no test** (`KEEP_FILES`, with why: code outside the tests imports it, a lock's
+  `generate` runs it): it stays where its reader reaches it, by a row of the files map to itself (`[keep_files]` says
+  why). A reference to its directory means it, but from a file that was in that directory; and a suite whose tests
+  imported it from beside them puts its directory on its `pythonpath` (`anchors`).
 - **Every other suite's pyproject**: the suites map moves it to `tests/X/pyproject.toml` (`testpaths` `tests` to `.`,
   `strip_suite_relative`, `pythonpath_from`), with `X` added to its inputs where nothing else of its inputs covers it: its
   own directory did.
@@ -62,6 +69,7 @@ IMPORTS_TESTS = re.compile(r"^\s*(?:from|import)\s+tests(?:\.|\s|$)", re.M)
 #: why a test's reference to a directory only whose tests move means the rest of it (`split_rows`)
 REQUIREMENT = re.compile(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 SPLIT_WHY = "the code beside the tests, which stays"
+KEPT_WHY = "the files kept there ([keep_files]), which stay, but from a file that was there"
 #: never rewritten: records of what was, files whose bytes a digest pins, and every Lean input; as the earlier maps'
 EXCLUDE = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
@@ -79,6 +87,27 @@ ARTIFACTS = "artifacts.json"
 FUTURE = re.compile(r"^from __future__ import [^\n]*\n", re.M)
 #: the tables a suite's pyproject holds for pytest and the check, which `split` moves
 SUITE_TABLES = ("tool.pytest", "tool.verity.tests")
+#: virtual workspace members that stay members where they are, their suite split off as a distribution's is: {dir: why}
+MEMBERS_KEPT = {"tools/check": "ci's rule: a cold `uv run tools/check/*.py` syncs `verity-check`'s project, the whole "
+                               "workspace; with no project there it syncs only the root's default groups"}
+#: files under a `tests/` that code outside the tests runs, so no test: each stays where its reader reaches it, {path: why}.
+#: An entry no longer tracked under a `tests/` drops out; a kept module's import of a module beside it that isn't kept stops
+#: `maps`.
+KEEP_FILES = {
+    "verity/protocols/accounting/poub/verifier/lean/tests/replay.py":
+        "the auditor device's verifier host (`poub/device/live_verifier/host.py`, `REPLAY`) puts its directory on the path "
+        "and imports it, and the device is pinned from `git archive COMMIT verity ...`, which ships no root `tests/`",
+    "verity/protocols/accounting/poub/verifier/lean/tests/ra_cases.py": "`replay.py` imports it",
+    "verity/protocols/accounting/poub/verifier/tests/poub_vectors.py":
+        "`poub/prover/word_codec/kv_bench.py` imports it (`REMOTE_VECTORS`), as `benchmarks/vllm_encoded`'s paged and rekey "
+        "gates do",
+    "verity/protocols/accounting/poub/verifier/tests/poub_fakes.py": "`poub_vectors.py` imports it",
+    "verity/protocols/accounting/poub/verifier/tests/vectors.json": "`poub_vectors.py` reads and writes it beside itself (`PATH`)",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/tests/difftest_vectors.py":
+        "the package's lock runs it (`lean-audit.json`'s `generate`, `tests/difftest_vectors.py` from the package)",
+}
+#: an import of a module by its bare name, as a kept module imports one beside it
+BARE_IMPORT = re.compile(r"^\s*(?:from\s+(\w+)\s+import|import\s+(\w+))", re.M)
 
 
 def git(*args: str, root: Path = ROOT) -> str:
@@ -128,6 +157,25 @@ class Tree:
         return (d in self.members and bool(data.get("project")) and "build-system" in data
                 and data.get("tool", {}).get("uv", {}).get("package") is not False)
 
+    def splits(self, d: str) -> bool:
+        """Whether `split` moves the suite at `d` to a member in its tests/: a distribution's, or a member's that stays one."""
+        return self.distribution(d) or (d in self.members and d in MEMBERS_KEPT)
+
+    def keep_files(self) -> dict[str, str]:
+        """{path: why} of `KEEP_FILES` still tracked under a `tests/` this tree moves; each kept module's import of a module
+        beside it is kept too, or this stops, naming it."""
+        dirs = self.test_dirs()
+        kept = {p: why for p, why in KEEP_FILES.items() if p in self.tracked and any(under(p, d) for d in dirs)}
+        for p in sorted(set(KEEP_FILES) - set(kept)):
+            print(f"tests_root.py: {p} is no longer tracked under a tests/: not kept", file=sys.stderr)
+        lacking = [f"{p} imports {n}" for p in kept if p.endswith(".py")
+                   for m in BARE_IMPORT.finditer(self.read(p)) for n in [posixpath.join(posixpath.dirname(p), (m.group(1) or m.group(2)) + ".py")]
+                   if n in self.tracked and n not in kept]
+        if lacking:
+            raise SystemExit("tests_root.py: a kept module imports one beside it that would move; add it to KEEP_FILES, with "
+                             "why:\n  " + "\n  ".join(lacking))
+        return kept
+
     def test_dirs(self) -> dict[str, list[str]]:
         """{`X/tests`: its tracked files}, the outermost `tests` of each path under `AREAS`."""
         out = defaultdict(list)
@@ -174,6 +222,8 @@ def inventory(t: Tree) -> dict:
             snags["a suite whose pyproject is in its own tests/ (moves whole)"].append(d)
         if kind == "distribution":
             snags["a suite whose pyproject builds a distribution (split first)"].append(f"{d} ({t.pyprojects[suite]['project']['name']})")
+        elif suite and t.splits(suite):
+            snags["a suite of a member that stays one (split first)"].append(f"{d} ({t.pyprojects[suite]['project']['name']})")
         if t.kept(d):
             snags["a tests/ package its modules import as `tests` (one level kept)"].append(d)
         elif f"{d}/__init__.py" in t.tracked:
@@ -187,6 +237,8 @@ def inventory(t: Tree) -> dict:
         base = parts[-1]
         if parts[0] in AREAS and "tests" not in parts[:-1] and (base == "conftest.py" or re.match(r"test_.*\.py$", base)):
             snags["a test-like file outside every tests/ (conftest beside a suite's pyproject, or a module named test_*)"].append(f)
+    for p, why in t.keep_files().items():
+        snags["a file under a tests/ that is no test (kept where it is)"].append(f"{p}: {why}")
     for s in t.suites:
         if s != "." and s.split("/")[0] in AREAS and not any(under(d, tp) or under(tp, d) for d in dirs for tp in t.suites[s]):
             snags["a suite with no tests/ directory"].append(s)
@@ -251,13 +303,17 @@ def _exports(body: str) -> tuple[str, str] | None:
 
 
 def split(t: Tree, d: str) -> dict[str, str]:
-    """The files `split` writes for the distribution at `d`: its pyproject without the suite's tables, the member's in
-    `d/tests/`, the root's with the member; and the conftest beside it moved in. {path: text, or None to delete}."""
+    """The files `split` writes for the distribution, or the member that stays one, at `d`: its pyproject without the
+    suite's tables, the member's in `d/tests/`, the root's with the member; and the conftest beside it moved in. {path:
+    text, or None to delete}."""
     text = t.read(f"{d}/pyproject.toml")
     data = t.pyprojects[d]
     name, project = data["project"]["name"], data["project"]
-    keep, moved = [], []
+    virtual = not t.distribution(d)
+    keep, moved, sources = [], [], ""
     for table, body in _tables(text):
+        if table == "tool.uv.sources":
+            sources = body
         if table == "tool.verity.tests" and (kept := _exports(body)):
             keep.append("[tool.verity.tests]\n" + kept[0] + "\n")
             body = kept[1]
@@ -269,19 +325,23 @@ def split(t: Tree, d: str) -> dict[str, str]:
     # the extras that name a workspace package, which the suite's key reads; another (torch) would change the environment
     extras = sorted(e for e, reqs in project.get("optional-dependencies", {}).items()
                     if any((m := REQUIREMENT.match(r)) and norm(m.group(1)) in t.names for r in reqs))
-    dep = name + (f"[{','.join(extras)}]" if extras else "")
+    deps = project.get("dependencies", []) if virtual else [name + (f"[{','.join(extras)}]" if extras else "")]
     head = [f"# The suite of the distribution `{name}`: a virtual member that depends on it, so the suite keys on what the\n"
-            "# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.\n",
+            "# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.\n" if not virtual else
+            f"# The suite of the workspace member `{name}`, which stays a member where it is: a virtual member with its\n"
+            "# dependencies, which `tools/check/suites.py` names as the member.\n",
             f'[project]\nname = "{norm(name)}-tests"\nversion = "0.0.0"\n'
-            f'requires-python = "{project.get("requires-python", ">=3.12")}"\ndependencies = [{json.dumps(dep)}]\n\n']
+            f'requires-python = "{project.get("requires-python", ">=3.12")}"\ndependencies = {json.dumps(deps)}\n\n']
     if groups := data.get("dependency-groups"):
         head.append("[dependency-groups]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in groups.items()) + "\n")
     head.append("# Not an installable package: a workspace member so that its tests run in the workspace environment.\n"
                 "[tool.uv]\npackage = false\n\n")
+    if virtual and sources:
+        head.append(sources.rstrip("\n") + "\n\n")
     body = "".join(moved)
     member = "".join(head) + _strip_suite_relative(body, "tests/").rstrip("\n") + "\n"
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
-    if tests.get("inputs_only") or "exports" in tests:
+    if virtual or tests.get("inputs_only") or "exports" in tests:
         member = _add_inputs(member, [d], first=True)
     out = {f"{d}/pyproject.toml": keep_text, f"{d}/tests/pyproject.toml": member}
     rootp = t.read("pyproject.toml")
@@ -289,7 +349,7 @@ def split(t: Tree, d: str) -> dict[str, str]:
         m = re.search(r"^members\s*=\s*\[[^\]]*\]", rootp, re.M)
         listed = m.group(0).replace(f'"{d}"', f'"{d}", "{d}/tests"', 1)
         rootp = rootp[:m.start()] + listed + rootp[m.end():]
-    if norm(name) not in {norm(s) for s in t.sources}:
+    if not virtual and norm(name) not in {norm(s) for s in t.sources}:
         # a member's own `workspace = true` source for a member whose directory holds it is refused by uv: the root names it
         m = re.search(r"^\[tool\.uv\.sources\]\n(?:[^\[\n].*\n)*", rootp, re.M)
         rootp = rootp[:m.end()] + f"{name} = {{ workspace = true }}\n" + rootp[m.end():]
@@ -316,7 +376,7 @@ def _merge_conftests(outer: str, inner: str) -> str:
 
 
 def run_split(t: Tree, names: list[str]) -> list[str]:
-    todo = [s for s in t.suites if s != "." and s.split("/")[0] in AREAS and t.distribution(s)
+    todo = [s for s in t.suites if s != "." and s.split("/")[0] in AREAS and t.splits(s)
             and (not names or norm(t.pyprojects[s]["project"]["name"]) in {norm(n) for n in names})]
     done = []
     for d in sorted(todo):
@@ -368,6 +428,7 @@ def _registered(t: Tree) -> list[str]:
 def files_map(t: Tree) -> str:
     dirs = t.test_dirs()
     rows = {f"{d}/": t.destination(d) for d in dirs}
+    kept = t.keep_files()
     r = roots(t)
     inline = "{ " + ", ".join(f'{k} = "{v}"' for k, v in r.items()) + " }"
     out = ["# Every test in the tree to the root's `tests/`, mirrored by path: `X/tests/REST` becomes `tests/X/REST` (a `tests/`\n"
@@ -375,6 +436,10 @@ def files_map(t: Tree) -> str:
            "# maps` from the tree it ran on; `tools/move/layout.py --map tools/move/tests_root_map.toml` moves and rewrites.\n\n",
            f"[roots]\nold = {inline}\nnew = {inline}\n\n\n[paths]\n",
            "".join(f"{json.dumps(o)} = {json.dumps(n)}\n" for o, n in rows.items()),
+           "# [keep_files]: each stays where it is\n" if kept else "",
+           "".join(f"{json.dumps(p)} = {json.dumps(p)}\n" for p in kept),
+           "\n[keep_files]\n# under a tests/, no test: code outside the tests runs it, so it stays where its reader reaches it\n"
+           + "".join(f"{json.dumps(p)} = {json.dumps(why)}\n" for p, why in kept.items()) if kept else "",
            "\n[retired]\n# the paths this map empties\npaths = " + _toml_list(list(rows)) + "\n\n",
            "[rewrite]\n# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input.\n",
            "exclude = " + _toml_list(EXCLUDE + _registered(t)) + "\n", "include = " + _toml_list(INCLUDE) + "\n",
@@ -388,7 +453,17 @@ def files_map(t: Tree) -> str:
 
 def split_rows(path: str, root: Path = ROOT) -> str:
     """The `[split]` table for the map at `path`: each reference `layout.py` finds to a directory the map splits, which is a
-    directory of the tree whose tests alone move, so the reference means what stays (`SPLIT_WHY`)."""
+    directory of the tree whose tests alone move, so the reference means what stays (`SPLIT_WHY`); or a tests/ directory
+    holding a file the map keeps, which a reference means, but from a file that was in it (`KEPT_WHY`)."""
+    data = tomllib.loads((root / path).read_text())
+    held = {posixpath.dirname(p) for p in data.get("keep_files", {})}
+
+    def row(k: str) -> str:
+        file, d = k.split(": ", 1)
+        if d not in held:
+            return f"{{ to = {json.dumps(d)}, why = {json.dumps(SPLIT_WHY)} }}"
+        to = _mapped(d, list(data["paths"].items())) if under(file, d) else d
+        return f"{{ to = {json.dumps(to)}, why = {json.dumps(KEPT_WHY)} }}"
     with tempfile.TemporaryDirectory() as tmp:
         report = Path(tmp) / "report.json"
         r = subprocess.run([sys.executable, str(HERE / "layout.py"), "--root", str(root), "--map", path, "--dry-run", "--no-lock", "--allow-dirty",
@@ -397,7 +472,7 @@ def split_rows(path: str, root: Path = ROOT) -> str:
             raise SystemExit(f"tests_root: layout.py --dry-run on {path}: {r.stderr.strip()[-2000:]}")
         notes = json.loads(report.read_text())["notes"].get("references to a split directory [split] doesn't acknowledge", [])
     rows = sorted({m.group(1) for x in notes if (m := re.match(r"^(\S+: \S+) \(", x))})
-    return "".join(f"{json.dumps(k)} = {{ to = {json.dumps(k.split(': ', 1)[1])}, why = {json.dumps(SPLIT_WHY)} }}\n" for k in rows)
+    return "".join(f"{json.dumps(k)} = {row(k)}\n" for k in rows)
 
 
 def _pythonpath(t: Tree, s: str) -> list[str]:
@@ -420,7 +495,7 @@ def _covered(t: Tree, s: str) -> bool:
 def suites_map(t: Tree) -> str:
     rows, tables = {}, []
     for s, tps in sorted(t.suites.items()):
-        if s == "." or s.split("/")[0] not in AREAS or t.distribution(s) or s.endswith("/tests") or tps != [f"{s}/tests"]:
+        if s == "." or s.split("/")[0] not in AREAS or t.splits(s) or s.endswith("/tests") or tps != [f"{s}/tests"]:
             continue
         kept = t.kept(f"{s}/tests")
         new = f"{MIRROR}/{s}/{'tests/' if kept else ''}pyproject.toml"
@@ -537,13 +612,55 @@ def _rows(root: Path) -> list[tuple[str, str]]:
     return rows
 
 
+def _held(root: Path) -> set[str]:
+    """The directories that hold a file the files map keeps (`[keep_files]`)."""
+    if not (root / FILES_MAP).is_file():
+        return set()
+    return {posixpath.dirname(p) for p in tomllib.loads((root / FILES_MAP).read_text()).get("keep_files", {})}
+
+
 def _mapped(p: str, rows: list[tuple[str, str]]) -> str:
+    """Where path `p` went: its own row (a kept file's is itself), else its directory's."""
+    for o, n in rows:
+        if p == o:
+            return n
     for o, n in rows:
         if o.endswith("/") and (p + "/").startswith(o):
             return posixpath.normpath(n + p[len(o):]) if p + "/" != o else n.rstrip("/")
-        if p == o:
-            return n
     return p
+
+
+def _meant(target: str, old: str, rows: list[tuple[str, str]], held: set[str]) -> str:
+    """Where what file `old` named, `target`, went: a directory holding kept files stays, but for a file that was in it."""
+    return target if target in held and not under(old, target) else _mapped(target, rows)
+
+
+def _add_pythonpath(text: str, entry: str) -> str:
+    """A pyproject's pytest `pythonpath` with `entry` last, the line made after `testpaths` where it had none."""
+    if m := re.search(r"^(pythonpath\s*=\s*\[)([^\]]*)\]", text, re.M):
+        items = json.loads("[" + m.group(2) + "]")
+        return text if entry in items else text[:m.start()] + m.group(1) + ", ".join(map(json.dumps, items + [entry])) + "]" + text[m.end():]
+    m = re.search(r"^testpaths\s*=\s*\[[^\]]*\]\n", text, re.M)
+    return text[:m.end()] + f"pythonpath = [{json.dumps(entry)}]\n" + text[m.end():]
+
+
+def _kept_paths(t: Tree, rows: list[tuple[str, str]], held: set[str]) -> dict[str, tuple[str, list[str]]]:
+    """{pyproject: (its new text, what changed)} for each suite whose moved tests import a kept module from beside them, as
+    pytest let them where they were: its directory on the suite's `pythonpath`."""
+    out = {}
+    for d in sorted(held):
+        names = {posixpath.splitext(posixpath.basename(p))[0] for p in t.files if posixpath.dirname(p) == d and p.endswith(".py")}
+        mirror = _mapped(d, rows)
+        importers = [f for f in t.files if f.endswith(".py") and under(f, mirror)
+                     and any((m.group(1) or m.group(2)) in names for m in BARE_IMPORT.finditer(t.read(f)))]
+        if not importers or (suite := t.owner(mirror)) is None:
+            continue
+        p = posixpath.join(suite, "pyproject.toml")
+        entry = posixpath.relpath(d, suite)
+        text, said = out.get(p, (t.read(p), []))
+        if (added := _add_pythonpath(text, entry)) != text:
+            out[p] = (added, said + [f"{p}: pythonpath + {entry} ({importers[0]} imports a module kept in {d})"])
+    return out
 
 
 def _expression(name: str | None, levels: int, segs: list[str], style: str) -> str:
@@ -572,9 +689,10 @@ def _target(start: str, name: str | None, levels: int, segs: list[str]) -> str:
 def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
     """Each anchor of a Python file, moved or not, that no longer names what it named at `base`, the commit before the moves
     (the mover recomputes the anchors it reads as joins; a name bound to one, `NAME.parent` or `NAME / "x"`, and an anchor
-    of a file that stays naming a test that moved, it can't). With `write`, each is rewritten to name it again.
+    of a file that stays naming a test that moved, it can't). With `write`, each is rewritten to name it again; and each
+    suite whose tests imported a kept module from beside them gets its directory on its `pythonpath` (`_kept_paths`).
     {file: [what changed]}."""
-    rows = _rows(t.root)
+    rows, held = _rows(t.root), _held(t.root)
     out = {}
     for old in git("ls-tree", "-r", "--name-only", base, root=t.root).split("\n"):
         new = _mapped(old, rows)
@@ -591,7 +709,7 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
                 pairs[line_of(text, x[0])][k].append(x)
         names_old, names_new = _names(before), _names(after)
         # a use of a name counts from what the name will name once its own anchor is rewritten: what it named at `base`
-        meant = {n: _mapped(_start(old, n, names_old), rows) for n in names_new if n in names_old}
+        meant = {n: _meant(_start(old, n, names_old), old, rows, held) for n in names_new if n in names_old}
         edits = []
         for line, (ax, ay) in sorted(pairs.items()):
             if len(ax) != len(ay):
@@ -600,7 +718,7 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
                 if n0 != n1:
                     continue
                 start = meant.get(n1) or _start(new, n1, names_new) if n1 else posixpath.dirname(new)
-                want = _mapped(_target(_start(old, n0, names_old), n0, l0, g0), rows)
+                want = _meant(_target(_start(old, n0, names_old), n0, l0, g0), old, rows, held)
                 have = _target(start, n1, l1, g1)
                 if want == have:
                     continue
@@ -618,6 +736,10 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
                 after = after[:s1] + expr + after[e1:]
             if write:
                 (t.root / new).write_text(after)
+    for p, (text, said) in _kept_paths(t, rows, held).items():
+        out[p] = said
+        if write:
+            (t.root / p).write_text(text)
     return out
 
 
