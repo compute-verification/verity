@@ -16,6 +16,7 @@ from verity_bench import (
     lean_verify,
     overhead,
     overhead_records,
+    proof_layers,
     prove_records,
     served_render,
     served_table,
@@ -27,9 +28,9 @@ from verity_bench import (
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
+from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
 from verity_bench.vllm.result import write
-from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
 
@@ -299,6 +300,11 @@ def _prove_parser(commands: Any) -> None:
                                                     "as the record `prove` reads")
     lean_verify.add_arguments(timed)
     timed.set_defaults(run=lean_verify.run, command_parser=timed)
+
+    layers = commands.add_parser("prove-layers", help="the proof system by layer (Flock, with zero knowledge, with "
+                                                      "sampling, with recursion), a row each read from its run's output")
+    proof_layers.add_arguments(layers)
+    layers.set_defaults(run=proof_layers.run, command_parser=layers)
 
 
 def _parser() -> argparse.ArgumentParser:
