@@ -336,33 +336,43 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
   have hDp : Flock.canon programJ = .ok (Firewall.printJson programJ) :=
     hJ.canon_plain (show Firewall.plain programJ = true from hpp)
   obtain ⟨hNθ, hNp⟩ := hN
-  refine ⟨?p, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }], ?decode,
-      { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, ?find, ?pchain⟩,
-      ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-  case decode =>
-    -- Rewrite the outer `canonicalJson` by `hA`, then `norm θJ` to the literal `θJ` so field lookups are on a concrete
-    -- object (`norm` is well-founded-recursive and does not reduce in the kernel).
-    show (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
-      [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)]
+  -- The decode: `θJ` is canon-tainted only through the `paramsJ` constant, which the walk hands whole to `canon`; so
+  -- generalize `paramsJ` to a fresh value, detainting the literal, and give the walk `canon`'s equation over it.
+  have hdec : (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
+      [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)] := by
     rw [hA, hNθ]
     unfold θJ
-    fwd_walk [hBp] block [Flock.canon] shallow []
-  case find => kernel_rfl'
-  case pchain =>
-    -- Likewise rewrite the outer `canonicalJson` by `hC`, then `norm paramsJ` to the literal `paramsJ`.
-    show (Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = _
+    generalize hgpj : paramsJ = gpj
+    have rC : Flock.canon gpj = .ok (Firewall.printJson gpj) := by rw [← hgpj]; exact hBp
+    fwd_walk [rC] block [Flock.canon] shallow []
+  -- The parameters and every field `paramsOfJson` reads. `paramsJ` is canon-tainted only through `partitionObj`, whose
+  -- one tainted leaf is the program digest `hexOf programSha`; expose it (unfold the partition builder) and generalize it
+  -- to a fresh string, so the whole literal the walk descends into mentions no `canon`.
+  have hpar : ∃ P : Spot.OneStageZk.Params,
+      (Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) =
+        .ok (.inl P) ∧
+      P.own.partition = partitionObj ∧ P.own.program = programFile ∧ P.own.circuit = hexOf circuitSha ∧
+      P.own.pub = hexOf (Sha512.hash publicFile) ∧ P.base.verifier.program = program ∧
+      P.base.verifier.query = query ∧ P.base.verifier.law = law ∧ P.base.verifier.workTable = none ∧
+      P.base.challenger = some (key₀, label₀) := by
     rw [hC, hNp]
-    unfold paramsJ
-    fwd_walk [hDp, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
-  case f1 => kernel_rfl'            -- own.partition = partitionObj
-  case f2 => rw [hpf]               -- own.program = programFile
-  case f3 => kernel_rfl'            -- own.circuit
-  case f4 => kernel_rfl'            -- own.pub
-  case f5 => rfl                    -- verifier.program = program
-  case f6 => kernel_rfl'            -- verifier.query = query
-  case f7 => kernel_rfl'            -- verifier.law = law
-  case f8 => rfl                    -- verifier.workTable = none
-  case f9 => kernel_rfl'            -- challenger = some (key₀, label₀)
+    unfold paramsJ partitionObj Spot.Partition.build
+    generalize hgh : hexOf programSha = gh
+    refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
+    case walk => fwd_walk [hDp, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    case f1 => kernel_rfl'            -- own.partition = partitionObj
+    case f2 => rw [hpf]               -- own.program = programFile
+    case f3 => kernel_rfl'            -- own.circuit
+    case f4 => kernel_rfl'            -- own.pub
+    case f5 => rfl                    -- verifier.program = program
+    case f6 => kernel_rfl'            -- verifier.query = query
+    case f7 => kernel_rfl'            -- verifier.law = law
+    case f8 => rfl                    -- verifier.workTable = none
+    case f9 => kernel_rfl'            -- challenger = some (key₀, label₀)
+  obtain ⟨P, hwalk, hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩ := hpar
+  exact ⟨P, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }], hdec,
+      { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, by rfl, hwalk⟩,
+      hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩
 
 theorem params_spec (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) : ∃ p, ParamsAt θ₀ p ∧
     p.own.partition = partitionObj ∧ p.own.program = programFile ∧ p.base.verifier.program = program ∧
