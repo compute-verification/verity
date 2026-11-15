@@ -39,12 +39,14 @@ done
 '''
 #: lake: its call and the cards it sees logged; fails, unless $LAKE_OK
 LAKE = '#!/usr/bin/env bash\necho "lake $* cvd=[${CUDA_VISIBLE_DEVICES-unset}]" >> "$CALLS"\n[ -n "${LAKE_OK:-}" ]\n'
+#: date: the clock the job reads, $NOW's epoch seconds for `+%s` when $NOW names a file, else the system's
+DATE = f'#!/usr/bin/env bash\nif [ -n "${{NOW:-}}" ] && [ "$*" = +%s ]; then cat "$NOW"; else exec {shutil.which("date")} "$@"; fi\n'
 #: findmnt -no OPTIONS|TARGET -T PATH: a mount that allows exec, unless $NOEXEC
 FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime${NOEXEC:+,noexec} ;; *) echo / ;; esac\n'
 #: window.py stage|prove UNITS | route UNITS GPU CPU: its call, groups, allowed cards and visible cards logged; `stage`
 #: stages one statement; `route` sends a line naming $TO_CPU to CPU; under $PROVED `prove` proves each line's statement,
 #: its name the unit's after `census:`, lower case, with two kept sessions and its exit, $PROVER_EXIT or 0; one named in
-#: $BOUND is staged bound, with its program.json
+#: $BOUND is staged bound, with its program.json; under $LATE it sets the clock ($NOW) to $LATE when it ends
 WINDOW = r'''import os, sys
 from pathlib import Path
 a = os.environ.get("GPU_LEASE_ALLOWED_FILE")
@@ -73,6 +75,8 @@ if sys.argv[1] == "prove" and os.environ.get("PROVED"):
             (out / "kept" / nm / "sessions" / s / "session.json").write_text(s)
         (out / "kept" / nm / "pub.bin").write_text("p")
         (out / "kept" / nm / "exit").write_text(os.environ.get("PROVER_EXIT", "0") + "\n")
+    if os.environ.get("LATE"):
+        Path(os.environ["NOW"]).write_text(os.environ["LATE"] + "\n")
 if sys.argv[1] == "stage":
     d = Path(os.environ["FLOCK_WORK"]) / "data" / "s"
     d.mkdir(parents=True, exist_ok=True)
@@ -119,7 +123,8 @@ def job(tmp_path, monkeypatch):
     bin_.mkdir()
     monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
     monkeypatch.delenv("GPU_LEASE_ALLOWED_FILE", raising=False)
-    for name, text in (("nvidia-smi", NVIDIA_SMI), ("gpu-lease", GPU_LEASE), ("lake", LAKE), ("findmnt", FINDMNT), ("uv", UV)):
+    for name, text in (("nvidia-smi", NVIDIA_SMI), ("gpu-lease", GPU_LEASE), ("lake", LAKE), ("findmnt", FINDMNT), ("uv", UV),
+                       ("date", DATE)):
         (bin_ / name).write_text(text)
         (bin_ / name).chmod(0o755)
     (tmp_path / "units").write_text("census:EmbeddingRead_v1{V=256,H=4}@full\t4.8\t1.5\t197\t30\n")
@@ -208,6 +213,7 @@ def test_ram_work_stage_alone_keeps_a_partial_staging_without_staged(job, tmp_pa
 def test_ram_work_refuses_a_disk_work_in_ram_or_on_a_noexec_mount(job, tmp_path: Path, shm: Path):
     rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=f"{shm}-exec")
     assert rc == 4 and f"REFUSED: DISK_WORK {shm}-exec is in RAM" in steps, steps
+    assert not shm.exists(), "the FLOCK_WORK in RAM the job made is left behind"
     rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "d"),
                        NOEXEC="1")
     assert rc == 4 and f"REFUSED: DISK_WORK {tmp_path / 'd'} is on a noexec mount" in steps, steps
@@ -337,3 +343,15 @@ def test_a_statement_whose_prover_failed_has_no_proof_to_check(job, tmp_path: Pa
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", PROVER_EXIT="1")
     assert rc == 0 and "LEAN: small: its prover exited 1: no proof to check" in steps, steps
     assert "the Lean verifier: 0 proved statements accepted, 0 refused" in steps and not any(c.startswith("lake") for c in calls)
+
+
+def test_a_check_kill_at_leaves_no_time_for_is_not_checked_and_not_refused(job, tmp_path: Path):
+    """Proving ends within 60 s of KILL_AT: the Lean verifier isn't started on a negative timeout, which `timeout` would
+    refuse (exit 125) and the job would read as a refusal; each proof is NOT CHECKED, and the job exits 7."""
+    fw = staged(tmp_path, TWO)
+    now = tmp_path / "now"
+    now.write_text("1000000\n")
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", LAKE_OK="1", NOW=str(now),
+                           KILL_AT="1001000", MIN_LEFT_S="600", LATE="1000950")
+    assert rc == 7 and "LEAN NOT CHECKED: small l0001-1: -10 s to KILL_AT less 60 s" in steps, steps
+    assert "LEAN REFUSED" not in steps and not any(c.startswith("lean-verify") for c in calls) and not fw.exists()
