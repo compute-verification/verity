@@ -40,7 +40,7 @@ POINT, RUN = "gemm64-k2", "r-own"
 STAGE = {"definition": "Gemm_v1{K=64}", "k_log": 20, "blocks": 1, "full": 8}
 #: what a row of a run of the point holds beyond the script's own fields, and its statement's units as the script writes
 #: them (`n` and `stage.blocks`)
-OWN = {"pin": PIN, "n": 1, "stage": STAGE, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
+OWN = {"pin": PIN, "n": 1, "stage": STAGE, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]}, S.CARD_NUMA: 0,
        SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}}
 #: the made-up tree's files beside its spec: the prover's source, its tests and its document, a build script, the timing
 #: script and the spec's setup
@@ -1136,11 +1136,13 @@ class Node:
     """A stand-in for the node under one run of the point: the stager, gpu-lease, the timing script and what the node
     answers. `row`: fields of the row the script writes; `texts`: the run's files as `test_steady.made` takes them;
     `answers`: an answer replaced (None: the command fails); `stamp`: fields of the host stamp replaced; `circuit`,
-    `said` (its pin.txt) and `units`: what the stager stages; `point_id`: the point the run is of."""
+    `said` (its pin.txt) and `units`: what the stager stages; `point_id`: the point the run is of; `card_node`: the NUMA
+    node the timed step reads of the leased card (`steady_node.card_numa_node`, which `numa` and its own test read)."""
 
     def __init__(self, tmp_path: Path, monkeypatch, *, row: dict | None = None, answers: dict | None = None,
                  circuit: str = CIRCUIT, said: str = PIN, units: int = 1, cpus: int = 10, lease_exit: int | None = None,
-                 spec: dict | None = None, stamp: dict | None = None, point_id: str = POINT, **texts):
+                 spec: dict | None = None, stamp: dict | None = None, point_id: str = POINT, card_node: int | None = 0,
+                 **texts):
         self.root, self.spec, self.point_id = *tree(tmp_path, spec=spec), point_id
         self.host = STAMP | (stamp or {})
         self.run_dir = tmp_path / "run"
@@ -1161,6 +1163,7 @@ class Node:
         self.sys = tmp_path / "sys"
         monkeypatch.setattr(N, "NODES", self.sys / "node")
         monkeypatch.setattr(N, "DEVICES", self.sys / "pci")
+        monkeypatch.setattr(N, "card_numa_node", lambda device, ask: card_node)
         self.row, self.files = made(OWN | {SP.VERSIONS: DROP} | (row or {}), **texts)
         self.answers = ANSWERS | (answers or {})
         self.circuit, self.said, self.units, self.cpus, self.lease_exit = circuit, said, units, cpus, lease_exit
@@ -1256,7 +1259,8 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert scratch.parent == node.scratch_root and not scratch.exists(), "the scratch is removed"
     assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage"), "--unbound"]
     assert kit.lease(1, 90) == ["gpu-lease", "1", "--wait", "--max-min", "90", "--"], "the kit's lease, and beside it:"
-    assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--preemptible", "--mem-gb", "80", "--",
+    assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--cores", "20-29", "--preemptible",
+                          "--mem-gb", "80", "--",
                           sys.executable, "-m", "verity_bench.steady_node", "--spec", node.spec, "--point", POINT,
                           "--identity", node.identity, "--inside", str(scratch)]
     assert timer == [sys.executable, SP.TIMER, "--bin", str(node.binary), "--staged", str(scratch / "z"),
@@ -1278,7 +1282,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert point["prover"] == {"path": str(node.binary), "sha256": hashlib.sha256(b"#!/bin/sh\n").hexdigest()}
     assert point["cores"] == {"count": 10, "list": "20-29"}
     assert point["statement"]["pin"] == PIN and point["statement"]["from"] == SP.STAGER
-    assert point["timed"] == {"refused": None, "device": "3", "host": STAMP,
+    assert point["timed"] == {"refused": None, "device": "3", "host": STAMP, S.CARD_NUMA: 0,
                               SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1,
                               "kept_session": {"session": None, "why": "the verifiers filed no session"}}
     assert STAMP["cuda"] != CUDA, "the stamp's `cuda` is the driver's newest, never the toolkit's version"
@@ -1291,8 +1295,9 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert result["schema"] == kit.RESULT_SCHEMA
     assert result["measurements"] == [{
         "name": "benchmarks/flock-steady.statements-per-s", "value": row["statements_per_s"], "unit": "1/s", "mark": "measured",
-        "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": ["measured"],
-        "host": STAMP}], "the kit's writer's"
+        "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None,
+        "inputs": ["measured", "spec steady", f"identity {node.identity}"], "member": POINT, "host": STAMP}], (
+        "the kit's writer's: the point's own, by its id, from its spec at its identity")
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
@@ -1324,8 +1329,8 @@ def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_p
     numa(node)
     assert node.point() == 0
     lease = node.ran[1]
-    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "2,3", "--preemptible",
-                                         "--mem-gb", "80"]
+    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "2,3", "--cores", "20-29",
+                                         "--preemptible", "--mem-gb", "80"]
     assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [2, 3]}
 
 
@@ -1336,8 +1341,8 @@ def test_a_booked_card_is_leased_alone_once_it_is_on_the_numa_node_of_the_runs_c
     numa(node)
     assert node.point(card=3) == 0
     lease = node.ran[1]
-    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "3", "--preemptible",
-                                         "--mem-gb", "80"]
+    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "3", "--cores", "20-29",
+                                         "--preemptible", "--mem-gb", "80"]
     assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [3]}
 
 
@@ -1770,6 +1775,45 @@ def test_a_timed_step_stopped_before_its_end_is_a_refusal_that_says_it_began(tmp
     assert node.read("result.json")["validation"]["status"] == "failed"
 
 
+@pytest.mark.parametrize("ended, record, says", [
+    (RuntimeError("the stand-in fell over"), {"error": "RuntimeError: the stand-in fell over"},
+     "the timed step failed: RuntimeError: the stand-in fell over (out/lease.log)"),
+    (SystemExit(N.STOPPED), {"stopped": "SystemExit: 143"},
+     "the timed step was stopped before its end and left no row, as a preempted lease stops it: gpu-lease exited 1 "
+     "(out/lease.log)"),
+], ids=["raised", "stopped"])
+def test_a_timed_step_that_raises_or_is_stopped_still_writes_its_record_and_the_point_says_what_ended_it(
+        tmp_path, monkeypatch, ended, record, says):
+    node = Node(tmp_path, monkeypatch)
+    timer = node.run
+
+    def crashing(argv, log):
+        if argv[1:2] == [SP.TIMER]:
+            raise ended
+        if argv[0] == "gpu-lease":
+            with pytest.raises(type(ended)):
+                timer(argv, log)
+            return 1
+        return timer(argv, log)
+
+    node.run = crashing
+    assert node.point() == N.REFUSED
+    step = node.read(N.TIMED_FILE)
+    assert step == step | {"refused": None, "device": "3"} | record and "exit" not in step
+    assert node.read(N.POINT_FILE)["refused"] == says
+
+
+def test_the_leased_cards_numa_node_is_the_kernels_word_on_its_pci_address(tmp_path, monkeypatch):
+    node = Node(tmp_path, monkeypatch)
+    monkeypatch.undo()
+    monkeypatch.setattr(N, "DEVICES", node.sys / "pci")
+    numa(node, pci_0000_65_00_0_numa_node="-1\n", pci_0000_b1_00_0_numa_node=None)
+    assert [N.card_numa_node(card, node.ask) for card in ("0", "1", "2", "3", "7", "GPU-3")] == [0, None, None, 1, None,
+                                                                                                None]
+    node.answers = node.answers | {" ".join(N.CARDS): None}
+    assert N.card_numa_node("3", node.ask) is None
+
+
 @pytest.fixture
 def signals():
     """TERM's and INT's handlers, put back after a test that lets the node side set its own."""
@@ -1850,6 +1894,13 @@ TIMED_NOT_PASSED = [
     ({"answers": {"gpu-lease status": ANSWERS["gpu-lease status"] + "3 held 9m pid=5 run=r-third who=x cmd=y\n"}},
      "fail: `card_clear_start_end` (fail): GPU 3 wasn't its own: at its start, another run's lease (3 held 9m pid=5 run=r-third who=x)"),
     ({"row": {"type": "gemm32"}}, "cannot tell: the run's `out/rate/rate.json` holds 0 rows of `gemm64` at 2 provers"),
+    ({"card_node": 1}, "fail: `one_numa_node` (fail): its card is on NUMA node 1, and its CPUs on NUMA node 0"),
+    ({"card_node": None}, ("cannot tell: `one_numa_node` (cannot tell): its node didn't say which NUMA node its card is "
+                           "on (its row's `card_numa_node` is null)")),
+    # a status that ran and named no card says nothing of the row's card
+    ({"answers": {"gpu-lease status": ""}},
+     ("cannot tell: `card_clear_start_end` (cannot tell): `out/cotenants-k2-start.txt` has no list of other runs' leases: "
+      "gpu-lease status gave no answer (no card's line in its output)")),
 ]
 
 
