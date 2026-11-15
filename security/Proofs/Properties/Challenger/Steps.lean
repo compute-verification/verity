@@ -154,7 +154,7 @@ theorem ledgerEntry_some_of_steps {text session tag t : String} {e : Json} {r : 
       pure, failure]
 
 /-- No lane has a period open, so a window joins none. -/
-theorem join_none (periods : Array MonitoringPeriod) (i : Nat) (lane session : String) :
+theorem join_none (periods : Array PeriodRecord) (i : Nat) (lane session : String) :
     join periods #[] i lane session = .ok (periods, none) := by
   unfold join
   simp [pure, Except.pure]
@@ -190,7 +190,7 @@ theorem verifyLedger_two {key : ChallengerKey} {o e : LedgerEntry} {mo me : Byte
 
 /-- `checked` returns what `verifyLedger` returns of a ledger's two lines, an open under the pinned key and an end,
 each read by `ledgerEntry?`. -/
-theorem checked_two {key : ChallengerKey} {l0 l1 : Json} {o e : LedgerEntry} {r : Array Win × Array MonitoringPeriod}
+theorem checked_two {key : ChallengerKey} {l0 l1 : Json} {o e : LedgerEntry} {r : Array Win × Array PeriodRecord}
     (h0 : ledgerEntry? l0 = some o) (h1 : ledgerEntry? l1 = some e) (hok : o.kind = "open") (hek : e.kind = "end")
     (hkey : strOf (getD o.body "key_sha512") = Flock.hexOf (Flock.Sha512.hash key.pub))
     (hv : verifyLedger #[o, e] key = .ok r) : checked (.arr #[l0, l1]) key = .ok r := by
