@@ -640,7 +640,7 @@ def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cov
         assert (p["tail"], p["p_evade"]) == (0.0, 0.0)
         assert p["windows"]["year"] == [8760, pytest.approx(8760 * p["window_ks"])]
     assert f": the terms of `{periods.PERIOD_BOUND}`, one statement pooled over the period" in text
-    assert "`PouwPerWindow` (open; `ε'` and `p/ε'`)" in text and "year 8.76e+03, 1.59e-08" in text
+    assert "`PouwPerExecutionPhase` (open; `ε'` and `p/ε'`)" in text and "year 8.76e+03, 1.59e-08" in text
     monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", names[1]])
     periods.main()
     assert "--bounds" not in capsys.readouterr().out

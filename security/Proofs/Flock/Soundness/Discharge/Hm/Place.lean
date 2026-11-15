@@ -40,7 +40,7 @@ namespace FlockSoundness.Discharge.Hm
 open Compose Flock.DeriveAll Types.Dag
 
 /-- The block's bit at column `y` of block `o` (0 past the block). -/
-def blockBit (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) (y : ℕ) : Bool :=
+def chunkBit (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) (y : ℕ) : Bool :=
   FlockSoundness.bit (if h : y < 2 ^ S.kLog then S.block z o ⟨y, h⟩ else 0)
 
 theorem sum_count_nat {k : ℕ} (L : List ℕ) (hL : ∀ y ∈ L, y < k) (v : Fin k → ZMod 2) :
@@ -172,7 +172,7 @@ theorem laidRows_of_sat (hd : deriveChecked types ls info words unit = .ok done)
     {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2) :
     LaidRows l ((st.c.nets.getD n default).2.inWords * Flock.WORD)
-      fun j => blockBit (T.model regs) z o ((st.c.rangeOf n).slot s + j) := by
+      fun j => chunkBit (T.model regs) z o ((st.c.rangeOf n).slot s + j) := by
   have hnn := rowNet_lt T hn
   obtain ⟨hm, hk, -, hsl⟩ := T.range hnn
   obtain ⟨-, ha, hb, -, hcp, -, -, hin, hca, hcb, -, -, -, -⟩ := Net.ofRows_ok hl
@@ -181,16 +181,16 @@ theorem laidRows_of_sat (hd : deriveChecked types ls info words unit = .ok done)
     fun off ho => ⟨hs, ho, rfl⟩
   have hxlt : ∀ off < 2 ^ (st.c.rangeOf n).slotLog, (st.c.rangeOf n).slot s + off < 2 ^ st.c.kLog :=
     fun off ho => (hat off ho).lt T.bound hm
-  have hbit : ∀ y (hy : y < 2 ^ (T.model regs).kLog), blockBit (T.model regs) z o y =
+  have hbit : ∀ y (hy : y < 2 ^ (T.model regs).kLog), chunkBit (T.model regs) z o y =
       FlockSoundness.bit ((T.model regs).block z o ⟨y, hy⟩) := by
     intro y hy
-    unfold blockBit
+    unfold chunkBit
     split
     · rfl
     · exact absurd hy ‹_›
   refine ⟨?_, fun off hlo hoff => ?_⟩
   · have hx := hxlt _ hfit
-    show blockBit (T.model regs) z o ((st.c.rangeOf n).slot s + l.constPos) = true
+    show chunkBit (T.model regs) z o ((st.c.rangeOf n).slot s + l.constPos) = true
     rw [hbit _ hx]
     by_cases hp : (st.c.rangeOf n).slot s + l.constPos = st.pin
     · have hpin : (⟨(st.c.rangeOf n).slot s + l.constPos, hx⟩ : Fin (2 ^ (T.model regs).kLog)) = (T.model regs).pin :=
@@ -241,14 +241,14 @@ theorem laidRows_of_sat (hd : deriveChecked types ls info words unit = .ok done)
           ((((r.getD off #[]).toList.map ((st.c.rangeOf n).slot s + ·)).count j.val +
             (constPairs st.c st.pin).count ((st.c.rangeOf n).slot s + off, j.val) : ℕ) : ZMod 2)) →
         FlockSoundness.bit (M.mulVec ((T.model regs).block z o) ⟨(st.c.rangeOf n).slot s + off, hx⟩) =
-          xorRow (fun j => blockBit (T.model regs) z o ((st.c.rangeOf n).slot s + j)) (r.getD off #[]) := by
+          xorRow (fun j => chunkBit (T.model regs) z o ((st.c.rangeOf n).slot s + j)) (r.getD off #[]) := by
       intro r M hlt hM
       simp only [Matrix.mulVec, dotProduct, hM, hC, Nat.add_zero]
       rw [sum_count_nat _ hlt]
       exact bit_sum_row _ _ _
     have h := congrArg FlockSoundness.bit (hz.1 o ⟨(st.c.rangeOf n).slot s + off, hx⟩)
     rw [bit_mul] at h
-    show _ = blockBit (T.model regs) z o ((st.c.rangeOf n).slot s + off)
+    show _ = chunkBit (T.model regs) z o ((st.c.rangeOf n).slot s + off)
     rw [hbit _ hx]
     refine Eq.trans ?_ h
     exact congrArg₂ (· && ·) (hmv l.ra (T.model regs).A₀ (hcols _ _ ha) fun j => (hE j.val).1).symm
@@ -268,7 +268,7 @@ theorem shaSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) 
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) (hck : Flock.HmNets.check st.c = .ok ())
     {g i : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD st.c.shaNet 0) :
-    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (T.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
+    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => chunkBit (T.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
   have h := laidRows_of_sat hd hul T U hz o (Or.inl rfl) (slot_lt_count T (Or.inl rfl) hg hi) (shaNet_ofRows hck)
   rw [shaNet_inRows hck] at h
   exact h
@@ -279,7 +279,7 @@ theorem hmSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) (
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) (hck : Flock.HmNets.check st.c = .ok ())
     {g i : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD st.c.hmNet 0) :
-    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (T.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
+    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => chunkBit (T.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
   have h := laidRows_of_sat hd hul T U hz o (Or.inr rfl) (slot_lt_count T (Or.inr rfl) hg hi) (hmNet_ofRows hck)
   rw [hmNet_inRows hck] at h
   exact h

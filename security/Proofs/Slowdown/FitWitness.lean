@@ -5,7 +5,7 @@ public import Proofs.Slowdown.Fit
 /-!
 # The fit bound's hypotheses hold together
 
-A five-gate reference circuit where `FitBound`'s hypotheses all hold with counted multiplications to count, so its
+A five-gate reference training algorithm where `FitBound`'s hypotheses all hold with counted multiplications to count, so its
 premises are not contradictory. Gates 0 and 1 are two-bit weights, gate 2 a one-bit activation of the one thread, and
 gates 3 and 4 the thread's counted multiplications, of weight 0 and weight 1 by the activation. The baseline is empty.
 Window 0 holds gate 3 and starts the thread; window 1 holds gate 4 and enters it.
