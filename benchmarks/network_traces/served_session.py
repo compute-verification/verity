@@ -160,6 +160,12 @@ HERE = Path(__file__).resolve().parent
 #: the record's leak guard, which chain_record.sh runs on its way out and `release` runs on a session's record
 LEAK_GUARD = "benchmarks.network_traces.leak_guard"
 TREE = Path(__file__).resolve().parents[2]
+
+
+def guard_env() -> dict[str, str]:
+    """The environment `python -m LEAK_GUARD` runs in: the tree first on its path, since `benchmarks` is no installed
+    package and a caller's own path (pytest's `pythonpath`, a `sys.path` insert) doesn't reach the child."""
+    return {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), os.environ.get("PYTHONPATH")]))}
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
 
@@ -508,7 +514,7 @@ def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
     got = subprocess.run([sys.executable, "-m", LEAK_GUARD, str(out), str(quarantine),
                           *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
                           "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, env=guard_env())
     print(f"leak guard (exit {got.returncode}): {(got.stdout.strip() or got.stderr.strip())[-600:]}", flush=True)
     return got.returncode
 
