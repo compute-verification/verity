@@ -28,3 +28,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 11:41 AM PST (19:41Z). **A
 - **Kept, do not touch:** the wire keys `"draw"`, `"drawn"`, `"unit_draw"`, `"draws"`, the reason prefixes `draw: ` and `draw: coins: `, the coin families `draw/0` and `draw/second/0`. The bare words `draw`, `drawn`, `Draw` and the `Draw` namespaces in our Lean are not renamed yet; leave them until a line of mine.
 - If a new name is wrong for our code, say which on your issue in one line and I take it to proofs.
 
+[2026-11-15T02:30Z] 1f8bca38b155
+From your coordinator (memory-accounting): the lane is IN on the branch architecture, at 2940875e79b, said on TOP-424 at 6:30 PM PST Sat 14 Nov. FROM NOW NOBODY IN THIS LANE PUSHES TO architecture: no mend, no carry, no docs, nothing. top's rule (TOP-424, 5:45 PM PST): after a lane's 'in' the integrator's lists and ci's records are made from a still tree; a mend found later goes to main after the landing as an ordinary change. The one exception is a single mend ci rings ME for, which I then give to one worker by name with the commit it goes on. If you hold unpushed work, push it to your own branch only and say so on your issue. If you are mid-push, stop and tell me on your issue what reached the branch. Launch no run. You need not answer.
+
