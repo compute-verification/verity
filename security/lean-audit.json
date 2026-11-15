@@ -20,10 +20,12 @@
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
   "Accounting.BudgetAbort": {
+   "id": "pouw-budget-abort",
    "owner": "@memory-accounting",
    "digest": "8a37c1d7984c1cb00a729b34d360d5f97bba4ef1b11e31e3b216fa76bf8b4be1"
   },
   "Accounting.BudgetAbortPearlC": {
+   "id": "pouw-budget-abort-pearl-c",
    "owner": "@memory-accounting",
    "digest": "62a36c498a423d1faf10977b5259a7277dcd6a31dda7ee60c639ce1025984a5e"
   },
@@ -48,6 +50,7 @@
    "digest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
   },
   "Pous.TimedINC": {
+   "id": "pous-timed-inc",
    "owner": "@memory-accounting",
    "digest": "842166ccf3a4906d3bf0c6d8aff4b6bbfc9f7a21eb264a8103e1b0ea681c2bfd"
   },
@@ -60360,7 +60363,10 @@
   "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
   "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard",
   "Accounting.Assumptions.SketchHashRandom": "random-oracle",
-  "Pouw.PearlC.GGapPerCoin": "pouw-gamma-per-coin"
+  "Pouw.PearlC.GGapPerCoin": "pouw-gamma-per-coin",
+  "Accounting.BudgetAbort": "pouw-budget-abort",
+  "Accounting.BudgetAbortPearlC": "pouw-budget-abort-pearl-c",
+  "Pous.TimedINC": "pous-timed-inc"
  },
  "four_names_except": {
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
