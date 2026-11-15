@@ -4,7 +4,7 @@ SPOT's cost model for one served workload under Flock: each file plans a workloa
 it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from the measured inputs under `benchmarks/sampling_plan/`
 (`inputs.json`, `glm53_blocks.json`, `served_window_inputs.json`, which `inputs.py` loads, `glm53.py` and
 `served_window.py` read), each with its source and status, measured or
-assumed. `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
+assumed. `benchmarks/prove_path/`'s `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
 
 Each row gives the cost model fitted from proving measurements, the cuts the candidate generator finds, the frontier of
 ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the break-even
@@ -125,7 +125,7 @@ uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result rec
 
 ## The class circuit's size and its window's commit
 
-`../audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `class_rows.py` counts its rows by what fills them and
+`../audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `benchmarks/prove_path/class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
 census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
@@ -137,6 +137,6 @@ record (`native_host.schedule_stream_bound`), whole and without the attention in
 reads after the seal:
 
 ~~~text
-python verity/protocols/proofs/spot/prover/cost/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
+python benchmarks/prove_path/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
     [--measure-cpu SCRATCH] [--stream adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~
