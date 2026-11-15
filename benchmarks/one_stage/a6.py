@@ -390,10 +390,13 @@ def main() -> int:
     if proved:
         v = V.check_proved(lean_draw, proved[1:], len(proved) - 1)
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-        moved = sorted(proved)
-        moved[0] = next(u for u in range(n_all) if u not in lean_draw["units"])
-        v = V.check_proved(lean_draw, sorted(moved), instances)
-        neg["proved-unit-not-drawn"] = {"refused": not v.ok, "codes": list(v.codes)}
+        drawn = set(lean_draw["units"])
+        undrawn = next((u for u in range(n_all) if u not in drawn), None)
+        if undrawn is not None:
+            moved = sorted(proved)
+            moved[0] = undrawn
+            v = V.check_proved(lean_draw, sorted(moved), instances)
+            neg["proved-unit-not-drawn"] = {"refused": not v.ok, "codes": list(v.codes)}
     m0 = members[0]
     other_pd = P.digest(P.partition(fewer, query))
     c = statement_checks({**m0, "st": {**m0["st"], "meta": {**m0["st"]["meta"], "partition": {"rule": P.FORMAT, "digest": other_pd}}}}, rec, want)
