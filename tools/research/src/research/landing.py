@@ -878,6 +878,21 @@ def suite_rows(run_dir: Path) -> dict[str, dict]:
     return out
 
 
+def unread_suites(run_dir: Path) -> set[str]:
+    """The suite steps (`SUITE_STEPS`) a check's steps.jsonl in ``run_dir`` says failed while no failed suite of theirs is
+    there (`suite_rows`) and its copy of their reports may not be their last: a remote run's, which no fetch begun after the
+    run ended brought them to (`_final`).  Which suites such a step failed, and whether an allowance covers them, is unknown
+    until then."""
+    from .remote import _read_json
+
+    if not (_read_json(run_dir / "remote.json") or {}).get("remote_run_dir"):
+        return set()
+    rows = {row["step"] for row in suite_rows(run_dir).values() if row["status"] == "failed"}
+    final = _final(run_dir)
+    return {s for st in failed_steps(run_dir) if (s := st.get("step")) in SUITE_STEPS and s not in rows and not not_run(st)
+            and not {n for n, x in SUITE_REPORTS.items() if x == s} <= final}
+
+
 def step_records(run_dir: Path) -> list[dict]:
     out = []
     with contextlib.suppress(OSError):
