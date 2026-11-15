@@ -1179,7 +1179,7 @@
   "Properties.Core.Period",
   "Properties.Core",
   "CoreProtocol.Site",
-  "CoreProtocol.Registration",
+  "RegistrationLog",
   "Definitions.Flock.Audit",
   "Definitions.Flock.Game",
   "Properties.Flock.Nets",
