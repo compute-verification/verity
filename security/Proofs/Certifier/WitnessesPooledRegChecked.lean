@@ -95,12 +95,12 @@ theorem twoPhase_registered_none (ω : Ω₂) (i : Fin 1) :
 /-- **`PooledLeakRegisteredChecked`'s premises at an instance that accepts, with a checked input.** Toy code: one
 execution phase audited by `twoL` against the prover that sends nothing, the program of two inputs sampled whole (rate
 `1`), the gate `0` the ingress, no input registered, the gate `1` checked, the registered openings `certOps`, the record
-`twoObs`, the phase's own error. The check pins the run's gate `1` to the value of the run at the trace with the
-registered openings there: it pins the checked input (`CheckedUnique`, by `checkedUnique_pin`) and its miss is `0`
-(`PhaseChecks`), since that run passes it by construction; it is not a check any deployed system runs. The network
-certifier has no connection, so no cell reaches the client, and one secret: the read-back and the channel hold
-trivially. At every history the phase is accepted, registered as the period's and its record complete, which is the
-guarantee's event. -/
+`twoObs`, the phase's error `e₂` (`twoL`'s committed form's, with the collision finder against `certOps`). The check
+pins the run's gate `1` to the value of the run at the trace with the registered openings there: it pins the checked
+input (`CheckedUnique`, by `checkedUnique_pin`) and its miss is `0` (`PhaseChecks`), since that run passes it by
+construction; it is not a check any deployed system runs. The network certifier has no connection, so no cell reaches
+the client, and one secret: the read-back and the channel hold trivially. At every history the phase is accepted,
+registered as the period's and its record complete, which is the guarantee's event. -/
 theorem PooledLeakRegisteredChecked_honest :
     (twoA Bool).KS shaD ∧ (twoL Bool).commit.Binds shaD ∧ (twoL Bool).Sessions shaD ∧ PhaseRounds D₂ 2 x₂ ∧
       PhasesAdaptive x₂ P₂ ops₂ ∧
