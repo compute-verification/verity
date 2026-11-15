@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import signal
 import subprocess
 import sys
@@ -2461,3 +2462,25 @@ def test_a_scratch_tree_refuses_a_tracked_link_and_in_tree_resolves_before_it_co
     with pytest.raises(LA.lean_check().OutsideTree, match=f"'pkg/b/deps', which resolves to '{victim}', outside the tree"):
         LA.path_deps("pkg/b")
 
+
+@pytest.mark.parametrize("how", ["output", "directory"])
+def test_an_output_the_build_made_a_link_is_not_indexed_and_what_it_leads_to_is_left_as_it_was(tmp_path, how):
+    """A build writes its `.lake`, so it can leave an output (or the directory holding it) as a link to any file. `_built`
+    checked an output with `is_file`, which follows the link, and `_index` then hard-linked the file it led to into the
+    store and made it read-only. An output that is no regular file, or lies under a link, is not indexed, nor is anything
+    importing it, and the file it leads to keeps its mode."""
+    pkg = _package(tmp_path)
+    lib, store = pkg / ".lake/build/lib/lean", tmp_path / "store"
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    if how == "output":
+        victim = elsewhere / "A.olean"
+        shutil.move(lib / "P/A.olean", victim)
+        (lib / "P/A.olean").symlink_to(victim)
+    else:
+        shutil.move(lib / "P", elsewhere / "P")
+        (lib / "P").symlink_to(elsewhere / "P")
+        victim = elsewhere / "P" / "A.olean"
+    victim.chmod(0o644)
+    arts = LA.LakeArtifacts(store)
+    assert arts.put({pkg: SANDBOXED}, log=lambda s: None) == 0 and arts.added == []
+    assert stat.S_IMODE(victim.stat().st_mode) == 0o644 and victim.stat().st_nlink == 1

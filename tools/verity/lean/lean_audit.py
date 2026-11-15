@@ -121,6 +121,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -1256,7 +1257,10 @@ class LakeArtifacts:
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
             f = MK.output(build, mod, name)
             hashed = f.parent / f"{f.name}.hash"
-            if not f.is_file() or not hashed.is_file() or hashed.read_text().strip() != name.split(".", 1)[0]:
+            for g in (f, hashed):
+                if (why := _plain(g, build.parent.parent)) is not None:
+                    return why if why else f"{f.name} isn't in the build under {name}"
+            if hashed.read_text().strip() != name.split(".", 1)[0]:
                 return f"{f.name} isn't in the build under {name}"
             if f.stat().st_mtime_ns > hashed.stat().st_mtime_ns:
                 return f"{f.name} was written after {hashed.name}, which names what was there before"
@@ -1530,6 +1534,23 @@ class LakeArtifacts:
             if e.stat().st_mtime <= horizon:
                 e.unlink(missing_ok=True)
         return n
+
+
+def _plain(f: Path, base: Path) -> str | None:
+    """None when ``f`` is a regular file reached from ``base`` (a package's directory) through no link; "" when it is
+    missing; else why it is refused: a build writes its `.lake`, so an output that is a link, or lies under one, is the
+    build's choice of a file anywhere, which the index would hard-link and make read-only."""
+    try:
+        st = f.lstat()
+    except FileNotFoundError:
+        return ""
+    except OSError as e:
+        return f"{f.name} can't be read ({e.strerror})"
+    if not stat.S_ISREG(st.st_mode):
+        return f"{f.name} is no regular file of the build (a link, a directory or a special file)"
+    if f.resolve() != base.resolve() / f.relative_to(base):
+        return f"{f.name} lies under a link in the build, to {str(f.resolve())!r}"
+    return None
 
 
 def _strings(j) -> list[str]:
