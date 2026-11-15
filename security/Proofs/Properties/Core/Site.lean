@@ -709,7 +709,7 @@ theorem refuses_nontrivial :
 /-- The honest log's uplink, from its host to the outside, is a boundary link of its Site. -/
 theorem honestLog_boundary :
     (site (Core.Site.ofLog honestLog)).Boundary
-      (link { id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }) :=
+      (link { id := "uplink", ends := ("h0", Core.Site.outside), β := some 1, latency := 1 }) :=
   (boundary_site _ _).mpr (by decide +kernel)
 
 /-- `EntryValid`'s honest witness: the code accepts `honestEntry` against the empty Site at the genesis, and it is
@@ -719,7 +719,7 @@ theorem entryValid_honest :
       Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote
         (site emptySite) "genesis" (regEntry honestEntry) ∧
       (site (Core.Site.ofLog honestLog)).Boundary
-        (link { id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }) :=
+        (link { id := "uplink", ends := ("h0", Core.Site.outside), β := some 1, latency := 1 }) :=
   ⟨honestEntry_refusal, (entryValid _ _ _ _ _ _).mp honestEntry_refusal, honestLog_boundary⟩
 
 /-- `EntryValid`'s nontrivial witness: an entry check that accepts everything accepts `staleEntry`, which is not
@@ -759,7 +759,7 @@ theorem refusedAt_honest :
     Core.Site.Registration.check witnessDigests witnessAuditor .remote honestLog = .ok (Core.Site.ofLog honestLog) ∧
       Core.Site.Registration.check witnessDigests witnessAuditor .remote staleLog = .error (1, .previous) ∧
       (site (Core.Site.ofLog honestLog)).Boundary
-        (link { id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }) :=
+        (link { id := "uplink", ends := ("h0", Core.Site.outside), β := some 1, latency := 1 }) :=
   ⟨check_honestLog, check_staleLog, honestLog_boundary⟩
 
 /-- `RefusedAt`'s nontrivial witness: a log check that refuses everything at its first entry, as not following the
