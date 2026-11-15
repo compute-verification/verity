@@ -7,9 +7,10 @@
 # window, in the same job, so the window's private bodies (m*-private.bin, v*-private.bin: rows and salts) never leave the node.
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --mem-gb 192 --timeout 6h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
-# Needs on the node what served_verdicts.sh does: vLLM's venv /workspace/cp/venv312, the int8 checkpoint in /workspace/hf, the
-# sm_90 taps under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
-# its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
+# Needs on the node what served_verdicts.sh does: vLLM's venv /workspace/cp/venv312 (VENV), the int8 checkpoint in /workspace/hf
+# (HF_HOME), the sm_90 taps under /workspace/research/vllm-composed-h200int8 (A5_TAPS; the unguarded FA3 build only where it is
+# there, as the row runs the guarded one) and gpu-lease (the row leases the GPU for its Match capture and its Commit's engine
+# only; A5_CARD=N leases card N alone, on a node whose other cards are others'). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
 # while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
 # there; $OUT, published as the run's record, keeps the row's records that adapters/vllm/tools/served_run/published.sh lists (each with the
 # reason it holds nothing of a request) and verdicts.txt, the window's public files, a5.sh's out ($OUT/a5) and summary.txt,
@@ -25,17 +26,25 @@ ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 TREE=$PWD
 . "$TREE/adapters/vllm/tools/served_run/published.sh" || exit 2
-H=/workspace/research/vllm-composed-h200int8
+H=${A5_TAPS:-/workspace/research/vllm-composed-h200int8}
 FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
 PART=$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 ROOT=${A5_ROOT:-/workspace/research/vllm-sha512-a5}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=$ROOT/flock-work KEPT=$BASE/unpublished
-VENV=/workspace/cp/venv312
+VENV=${VENV:-/workspace/cp/venv312}
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-for f in "$FA3" "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
+for f in "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
+UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
+if [ -n "${A5_CARD:-}" ]; then
+  real=$(command -v gpu-lease) || { echo "a5_llama1b_h200.sh: A5_CARD=$A5_CARD and no gpu-lease" >&2; exit 2; }
+  mkdir -p "$BASE/bin"
+  printf '#!/usr/bin/env bash\n[ "$1" = status ] && exec %q status\nn=$1; shift\nexec %q "$n" --on %q "$@"\n' \
+    "$real" "$real" "$A5_CARD" > "$BASE/bin/gpu-lease" && chmod +x "$BASE/bin/gpu-lease"
+  GPU_LEASE=$BASE/bin/gpu-lease
+fi
 
 # the CPU side's builds, in the background: the tree's venv, Lean's verity-verify-proof, flock-zk-server and spot-verifier, M0
 ( export PATH=$CLEAN_PATH; unset PYTHONPATH PY PY312 VIRTUAL_ENV; cd "$TREE" || exit 1
@@ -48,9 +57,15 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
 
-export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
+export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
 if [ -z "${CUDA_HOME:-}" ]; then
   for c in /usr/local/cuda-12.9 /usr/local/cuda-12 /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done
+fi
+if [ ! -f "$CUDA_HOME/include/cusparse.h" ]; then  # a toolkit without the math libraries' headers: the venv's wheels hold them
+  for lib in cusparse cusolver cufft curand; do
+    for d in "$VENV"/lib/python*/site-packages/nvidia/"$lib"/include; do [ -d "$d" ] && CPATH=${CPATH:+$CPATH:}$d; done
+  done
+  export CPATH
 fi
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
@@ -61,7 +76,7 @@ export VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED SERVING_ROWS
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; echo "CUDA_HOME $CUDA_HOME"; nvidia-smi -L
-  sha256sum "$FA3" "$FA3G" "$NT"; } | tee "$OUT/machine.txt"
+  sha256sum ${UNGUARDED[1]+"${UNGUARDED[1]}"} "$FA3G" "$NT"; echo "HF_HOME $HF_HOME VENV $VENV GPU_LEASE $GPU_LEASE"; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
   --why "A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
 
@@ -69,7 +84,7 @@ row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
   (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
-     --research-run-dir "$KEPT" --hidden-so-fa3 "$FA3" --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$KEPT/$name.out" 2>&1
+     --research-run-dir "$KEPT" ${UNGUARDED[@]+"${UNGUARDED[@]}"} --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$KEPT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"
   verdicts "$D/stages.txt" "$OUT"
@@ -138,6 +153,23 @@ print(f"REGISTERED kind={w.get('kind')} commitment={w.get('commitment')} run_roo
 print("WEIGHTS root_bytes=" + ",".join(sorted({str(len(r) // 2) for r in roots}) or ["?"]))
 PY
 grep -a '^A5 ' "$OUT/a5/a5.log" 2>/dev/null | tail -1 | cut -c1-4000 | tee -a "$OUT/summary.txt"
+"$PY" - "$OUT/a5/a5" <<'PY' | tee -a "$OUT/summary.txt"
+import json, os, pathlib, sys
+d = pathlib.Path(sys.argv[1])
+def read(name):
+    try:
+        return json.loads((d / name).read_text())
+    except (OSError, ValueError):
+        return {}
+s, c = read("summary.json"), read("draw.coins.json")
+law = s.get("law") or {}
+coins = (s.get("coins") or {}).get("source") or c.get("source") or "?"
+own = "a local challenger of its own" if os.environ.get("FLOCK_CHALLENGER", "1") == "1" else "its own coin tree"
+print(f"COINS draw: {coins}, by Lean's draw, law {law.get('law', '?')} k={law.get('k', '?')} of {s.get('population', '?')} units, "
+      f"delta {s.get('delta', '?')}, drew {s.get('draw', '?')}; sessions: Flock {'plain' if s.get('plain') else '--zk'}, each on {own} "
+      f"(coin trees {s.get('coin_trees', '?')}), arm {s.get('arm', '?')} ({'the ZK server' if s.get('firewall') else 'no ZK server'}); "
+      "development parameters, no auditor's device")
+PY
 tail -8 "$OUT/verdicts.txt" 2>/dev/null | tee -a "$OUT/summary.txt"
 echo "replay rc=$rr a5 rc=$ar" | tee -a "$OUT/summary.txt"
 exit $(( rr != 0 ? 17 : ar != 0 ? 18 : 0 ))
