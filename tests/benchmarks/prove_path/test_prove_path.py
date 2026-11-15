@@ -63,7 +63,7 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = (Path(__file__).resolve().parent)
-VLLM = HERE.parents[2] / "adapters" / "vllm"
+VLLM = HERE.parents[2] / "tests" / "adapters" / "vllm"  # where adapters/vllm's `tests` imports from
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import prove_path as PP  # noqa: E402
 import records_audit as RA  # noqa: E402
