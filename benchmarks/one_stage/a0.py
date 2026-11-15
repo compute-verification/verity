@@ -216,7 +216,18 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
     """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
     keyed coin tree)."""
     senv = {**os.environ, **(env or {})}
-    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+    return _flock_challenger(senv) == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
+def challenger_off(env: dict | None = None) -> bool:
+    """Whether ``env`` opts its sessions out of every challenger (FLOCK_CHALLENGER=0, a development run's): each samples its
+    coin tree itself, even where the audit's challenger session could give it one (`a5.window_trees`)."""
+    return _flock_challenger({**os.environ, **(env or {})}) == "0"
+
+
+def _flock_challenger(senv: dict) -> str | None:
+    """FLOCK_CHALLENGER in a session's environment, read here alone (`own_challenger`, `challenger_off`)."""
+    return senv.get("FLOCK_CHALLENGER")
 
 
 #: `session` reads its verifier's log for ``SERVING`` this often, for this long at most (seconds): the prover starts
