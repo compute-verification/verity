@@ -33,7 +33,7 @@ from verity_machine_model.lean_headline import Q
 #: What other files read of it: the command and its test, and its own test in `benchmarks/pouw/tests/`.
 __all__ = ["OUT", "main", "render_measured", "write"]
 
-OUT = LH.ROOT / "security" / "Definitions" / "Accounting" / "HeadlineDc"
+OUT = LH.ROOT / "security" / "Definitions" / "Pouw" / "HeadlineDc"
 
 
 def _as_written(path: str) -> str:

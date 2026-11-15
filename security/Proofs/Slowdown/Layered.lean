@@ -264,7 +264,7 @@ theorem LayeredTraining : Guarantees.LayeredTraining := by
   exact ThreadedTraining Γ α b_w b_a κ r dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
     (threaded_of_layered L Γ (α * Γ) E hS) hW hκ
 
-/-- **The reference circuit is threaded, at Kimi K2's shapes.** -/
+/-- **The reference training algorithm is threaded, at Kimi K2's shapes.** -/
 theorem ReferenceThreaded : Guarantees.ReferenceThreaded := by
   intro c T hL Γ S hS
   unfold Assumptions.ReferenceLayered at hL

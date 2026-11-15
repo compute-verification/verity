@@ -1,0 +1,8 @@
+{
+ "Flock.HmRow.blockBit": "Flock.HmRow.chunkBit",
+ "Flock.RecOpen.shaBlock": "Flock.RecOpen.shaChunk",
+ "Flock.RecSparse.ROW_BLOCK": "Flock.RecSparse.ROW_CHUNK",
+ "Pouw.H1Zy.blockBit": "Pouw.H1Zy.chunkBit",
+ "VStar.ROW_BLOCK": "VStar.ROW_CHUNK",
+ "VStar.shaBlock": "VStar.shaChunk"
+}

@@ -64,8 +64,8 @@ def OutputsCommittedTail : Prop :=
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-          outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-        (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+          outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+        (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
 /-- **`OutputsBindingTail`** (under `cr/sha-512`): `OutputsBinding` under `OutputsCommittedTail`'s conditions. Two sampled
 statements `Stmt.setupHidden` accepts on one circuit file, public file and tables, and satisfying witnesses of their
@@ -93,14 +93,14 @@ def OutputsBindingTail : Prop :=
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
     D.proved[o.val * st.c.g + g] = D'.proved[o'.val * st'.c.g + g'] →
-    outBytes (Hm.blockBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j →
+    outBytes (Hm.chunkBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j →
     Binding.Collides (commitPair
       ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-        outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-      (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+        outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+      (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
       ((HmRow.rowPrefix (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words).data.toList ++
-        outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j)
-      (Hm.bytesOf (Hm.blockBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
+        outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
+      (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
 /-! ## `sha512/row/v2` rows -/
 
@@ -127,8 +127,8 @@ def OutputsCommittedV2 : Prop :=
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
       Binding.commitString
         ((HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default)).data.toList ++
-          outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-        (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+          outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+        (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
 /-- **`OutputsBindingV2`** (under `cr/sha-512`): `OutputsBindingTail` under `OutputsCommittedV2`'s conditions, each
 row's prefix its own (`HmRow.prefixOf`). -/
@@ -155,14 +155,14 @@ def OutputsBindingV2 : Prop :=
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
     D.proved[o.val * st.c.g + g] = D'.proved[o'.val * st'.c.g + g'] →
-    outBytes (Hm.blockBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j →
+    outBytes (Hm.chunkBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j →
     Binding.Collides (commitPair
       ((HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default)).data.toList ++
-        outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-      (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+        outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+      (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
       ((HmRow.prefixOf (st'.c.ports.getD (HmOut.nIn st'.c + j) default)).data.toList ++
-        outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j)
-      (Hm.bytesOf (Hm.blockBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
+        outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
+      (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
 /-! ## Shared rows -/
 
@@ -188,8 +188,8 @@ def OutputsCommittedWide : Prop :=
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
       Binding.commitString
         ((HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default)).data.toList ++
-          outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-        (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+          outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+        (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
 /-- **`OutputsBindingWide`** (under `cr/sha-512`): `OutputsBindingV2` under `OutputsCommittedWide`'s conditions. -/
 def OutputsBindingWide : Prop :=
@@ -215,13 +215,13 @@ def OutputsBindingWide : Prop :=
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
     D.proved[o.val * st.c.g + g] = D'.proved[o'.val * st'.c.g + g'] →
-    outBytes (Hm.blockBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j →
+    outBytes (Hm.chunkBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j →
     Binding.Collides (commitPair
       ((HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default)).data.toList ++
-        outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-      (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+        outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+      (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
       ((HmRow.prefixOf (st'.c.ports.getD (HmOut.nIn st'.c + j) default)).data.toList ++
-        outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j)
-      (Hm.bytesOf (Hm.blockBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
+        outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
+      (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
 end FlockSoundness.Discharge.Hidden

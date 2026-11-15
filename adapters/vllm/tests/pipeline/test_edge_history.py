@@ -153,5 +153,14 @@ class _Dsa:
                 ("prefix_iks", Array(2, Array(C, Value(32))))]
 
 
+class _DsaFp8(_Dsa):
+    """The stand-in over an fp8_ds_mla cache: per layer and position the row's e4m3 NoPE bytes, its four scales and its k_pe."""
+
+    def prefix_params(self, C: int) -> list:
+        return [("prefix", Array(3, Array(C, Array(512, Value(8))))), ("prefix_scale", Array(3, Array(C, Array(4, Value(32))))),
+                ("prefix_rope", Array(3, Array(C, Array(64, Value(16))))), *super().prefix_params(C)[1:]]
+
+
 def test_a_row_is_one_position_of_one_layer_of_its_group():
     assert E.row_words(_Dsa()) == {"edge.kv": 576, "edge.ik": 128, "edge.iks": 1, "edge.last": 1}
+    assert E.row_words(_DsaFp8()) == {"edge.kv": 512, "edge.scale": 4, "edge.rope": 64, "edge.ik": 128, "edge.iks": 1, "edge.last": 1}
