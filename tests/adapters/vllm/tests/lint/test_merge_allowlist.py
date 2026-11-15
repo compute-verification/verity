@@ -12,7 +12,7 @@ from research.clone import RECORD_DRIVER
 from . import _ratchet as R
 from . import merge_allowlist as MA
 
-KEEP = R.ROOT / "tests" / "dead_code_keep.json"
+KEEP = R.HERE.parent / "dead_code_keep.json"
 
 
 def _entry(file: str, count: int = 1) -> dict:
