@@ -24,6 +24,7 @@
 # Env: UNITS KIT_ART KIT_SHA256 RECORDS; LEAN_DISK_GB (default 200: circuits kept for pass 2 while their bytes fit); LEAN_MAX
 # (only the first so many statements).
 set -uo pipefail
+. "$(dirname "$0")/lean_check.sh"
 R=$RESEARCH_RUN_DIR; IN=$R/inputs; O=$R/out; mkdir -p "$O/lean" "$O/restage"
 UNITS=${UNITS:?}; [ -f "$UNITS" ] || UNITS=$IN/$UNITS
 log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/shard.log"; }
@@ -70,15 +71,15 @@ EOF
 
 log "1. build"
 uv sync -q --all-packages --extra torch-cpu > "$O/uv.log" 2>&1 || { tail -20 "$O/uv.log"; exit 3; }
-exes=$(uv run python -c 'import sys, tomllib
-r = {e.get("root"): e["name"] for e in tomllib.load(open(sys.argv[1], "rb"))["lean_exe"]}
-print(r["FlockVerify"], r["FlockReadTmpl"])' "$L/lakefile.toml")
+LEAN_PY=(uv run python); LEAN_BENCH=(uv run verity bench); LEAN_TMP=$S/t
+exes=$(lean_exes "$L")
 exe=${exes% *}; rt=${exes#* }
 t0=$(date +%s); (cd "$L" && lake build "$exe" "$rt") > "$O/build.log" 2>&1 || { tail -40 "$O/build.log"; log "VERIFIER BUILD FAILED"; exit 3; }
 EXE=$L/.lake/build/bin/$exe; sha256sum "$EXE" > "$O/verifier.sha256"; log "verifier $exe and $rt built in $(( $(date +%s) - t0 )) s, sha256 $(cut -c1-16 "$O/verifier.sha256")"
 export PATH=$L/.lake/build/bin:$PATH
 PY=$S/py/bin/python; uv venv -q --python 3.12 "$S/py" && uv pip install -q --python "$PY" numpy blake3 || exit 3
 SP=$REPO:$F/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
+LEAN_PY=(env "PYTHONPATH=$SP" "$PY")
 
 nm() { "$PY" -c 'import importlib.util as u, sys; s = u.spec_from_file_location("w", "benchmarks/served_units/window.py"); m = u.module_from_spec(s); sys.modules["w"] = m; s.loader.exec_module(m); print(m.name(sys.argv[1], sys.argv[2]))' "$1" "$2"; }
 restage() {   # restage UNIT N NAME: $S/st/NAME holds the statement and its program-word.json, held to kept/NAME; 0 or why not
@@ -97,44 +98,14 @@ restage() {   # restage UNIT N NAME: $S/st/NAME holds the statement and its prog
   cmp -s "$d/pub.bin" "$k/pub.bin" || log "$name: the restaged pub.bin differs from the kept one (values are seeded by the staged name); the kept one, which the session was proved on, is verified"
   kw=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["word"])' "$k/stage.json"); rw=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["word"])' "$d/stage.json")
   [ "$kw" = "$rw" ] || log "$name: kept as $kw; restaged as $rw, the same circuit"
-  PYTHONPATH=$SP "$PY" - "$d" > "$O/restage/$name/program-word.json.txt" 2>&1 <<'EOF' || { log "$name: program-word.json NOT WRITTEN: $(tail -1 "$O/restage/$name/program-word.json.txt" | cut -c1-200)"; rm -rf "$d"; return 1; }
-import hashlib, json, sys
-from pathlib import Path
-from verity.circuits.codec import descriptor_chunks
-from verity.circuits.program import Program
-from verity_vllm.pipeline.serving_rows import template
-d = Path(sys.argv[1]); word = json.loads((d / "stage.json").read_text())["word"]
-h = hashlib.sha512()
-with open(d / "program-word.json", "wb") as f:
-    for c in descriptor_chunks(Program(template(word).fn)):
-        f.write(c); h.update(c)
-desc = json.loads((d / "program-word.json").read_text())
-assert desc.get("program_fn") == word and "annotations" not in desc, (desc.get("program_fn"), word)
-print(json.dumps({"word": word, "sha512": h.hexdigest()}))
-EOF
+  lean_word "$d" > "$O/restage/$name/program-word.json.txt" 2>&1 \
+    || { log "$name: program-word.json NOT WRITTEN: $(tail -1 "$O/restage/$name/program-word.json.txt" | cut -c1-200)"; rm -rf "$d"; return 1; }
   echo ok > "$d/.ok"
 }
-check_session() {   # check_session NAME SESSION_DIR
-  local name=$1 sd=$2 sid=$(basename "$2") t=$S/t/$1-$(basename "$2") d=$S/st/$1 o=$O/lean/$1/$(basename "$2")
-  rm -rf "$t"; mkdir -p "$t" "$o"
-  cp -r "$sd" "$t/session"; ln -s "$d/circuit.txt" "$t/circuit.txt"; ln -s "$d/program-word.json" "$t/program-word.json"
-  ln -s "$d/stage.json" "$t/stage.json"   # the restaged one, its circuit held to the kept pin
-  for f in pub.bin partition.json; do [ -e "$S/kept/$name/$f" ] && ln -s "$S/kept/$name/$f" "$t/$f"; done
-  [ -d "$S/kept/$name/tables" ] && cp -r "$S/kept/$name/tables" "$t/tables"   # rglob descends into no linked directory
-  local st; st=$("$PY" -c 'import json, sys; f = open(sys.argv[1], "rb"); f.readline(); print(json.loads(f.readline()[5:])["statement"])' "$d/circuit.txt")
-  uv run verity bench prove lean-verify --lean "$EXE" --proof "$t" --statement "$st" --repeat 1 --out "$o" > "$o/stdout.txt" 2>&1; local rc=$?
-  "$PY" - "$o/lean-verify.json" "$name" "$sid" "$rc" "$(stat -c %s "$d/circuit.txt")" >> "$O/lean.tsv" <<'EOF'
-import json, sys
-from pathlib import Path
-p, name, sid, rc, cb = sys.argv[1:]
-r = json.loads(Path(p).read_text()) if Path(p).exists() else {}
-run = ((r.get("verifier") or {}).get("runs") or [{}])[0]
-why = "" if r.get("accepted") else run.get("why") or (run.get("verdict") or {}).get("why", "")
-print("\t".join(map(str, (name, sid, r.get("accepted", f"no record (exit {rc})"), r.get("label") or why, run.get("wall_s", ""),
-                          run.get("maxrss_gib", ""), cb))))
-EOF
-  log "$name $sid: exit $rc, $(tail -1 "$O/lean.tsv" | cut -f3-6)"
-  rm -rf "$t"
+check_session() {   # check_session NAME SESSION_DIR: lean_check at the restaged statement, with the kept public files
+  local name=$1 sd=$2
+  lean_check "$name" "$sd" "$S/st/$name" "$S/kept/$name" "$O/lean/$name/$(basename "$sd")" "$EXE" "$O/lean.tsv"
+  log "$name $(basename "$sd"): $(tail -1 "$O/lean.tsv" | cut -f3-6)"
 }
 printf 'name\tsession\taccepted\tlabel\twall_s\tpeak_gib\tcircuit_bytes\n' > "$O/lean.tsv"
 printf 'name\tseconds\tpeak_gb\tcircuit_bytes\tpin\tvs_kept\n' > "$O/restage.tsv"
