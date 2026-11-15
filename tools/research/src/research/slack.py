@@ -2231,7 +2231,7 @@ def unrung_note(names: list[str], lane: str | None, reg: dict, posted: bool) -> 
     handle whose branch suffix its checkout carries)."""
     sfx = _branch_suffix()
     lane = lane or next((h["handle"] for h in reg["handles"] if sfx and sfx in h.get("branch_suffixes", [])), None) or "LANE"
-    me = m[0] if (m := AGENT_ID_RE.search(os.environ.get("RESEARCH_AGENT_URL", ""))) else "BC_ID"
+    me = self_agent_id() or "BC_ID"
     return (f"not rung: {', '.join('@' + n for n in names)}. A worker's comment rings no one"
             + (", and this one is posted: don't post it again. " if posted else ". ")
             + f"Return its text to your lead (@{lane}) to ring, or have your lead grant this run with `research msg names "

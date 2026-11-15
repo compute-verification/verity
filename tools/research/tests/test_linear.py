@@ -1118,9 +1118,10 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     (_, v, _), = lin.sent("commentCreate")
     assert v["i"] == {"issueId": "I1", "body": "the trace is up", "createAsUser": "infra/LINTOOLS"}
     monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
+    monkeypatch.setattr(slack, "self_agent_id", lambda: None)
     rc, out, _ = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--worker", "lintools-2")
     assert rc == 1 and lin.sent("commentCreate")[-1][1]["i"]["createAsUser"] == "infra/lintools-2"
-    assert "not rung: @circuits. A worker's comment rings no one" in out
+    assert "not rung: @circuits. A worker's comment rings no one" in out and "--as LANE --poster BC_ID" in out
     assert bells(fake, infra) == [] and bells(fake, circuits) == []                                     # rings no one
     for argv, says in ((["comment", "INF-1", "x", "--worker", "W", "--as", "infra"], "never with --as"),
                        (["state", "INF-1", "Done", "--worker", "W"], "--worker goes with `comment` alone"),
