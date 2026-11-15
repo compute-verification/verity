@@ -272,21 +272,23 @@ LENGTH_BITS = 32
 
 
 def check_length_slots(st: dict) -> dict:
-    """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v7`): refused
-    where an output length, LW = bitlen(L) bits, is wider than a length slot's `LENGTH_BITS`."""
+    """`st`, a compile slice's statics, as a slice charging the length terms takes them
+    (`verity_vllm.compiler.compile_slice_v7`): refused where an output length, LW = bitlen(L) bits, is wider than a
+    length slot's `LENGTH_BITS`."""
     if (lw := max(int(st["L"]).bit_length(), 1)) > LENGTH_BITS:
         raise ValueError(f"statics {dict(st)}: an output length of {lw} bits, wider than a length slot's {LENGTH_BITS}")
     return st
 
 
 class SliceCharge:
-    """The compile slice's charge (`compile_slice.CODE`): `ChargeLink_v1{D}` on ``pub``'s book from ``cin`` to ``cout``
-    over ``adv``'s decisions; `compile_slice_v7`'s adds the length terms. `pub_fields`, ``pub``'s fields past c;
-    `carry_bits`, a carry row's width; `cert_fields`, ``cert``'s past its arrivals and their tokens; `link`, the
-    circuit's (ok, charged) on the unit's rows split into their fields' elements and the decisions' enables;
-    `reference`, its (ok, bits, carry' row) on a unit's rows (bits each); `book`, ``pub``'s values for the registered
-    book (its JSON) and the session's first carry; `charge`, the (ok, bits, carry') of D slots of decisions from a carry
-    with ``cert``'s arrivals; `encode`, a carry's row; `cert`, ``cert``'s bits past its arrivals and their tokens."""
+    """The compile slice's charge (`verity_vllm.compiler.compile_slice.CODE`): `ChargeLink_v1{D}` on ``pub``'s book from
+    ``cin`` to ``cout`` over ``adv``'s decisions; `verity_vllm.compiler.compile_slice_v7`'s adds the length terms.
+    `pub_fields`, ``pub``'s fields past c; `carry_bits`, a carry row's width; `cert_fields`, ``cert``'s past its
+    arrivals and their tokens; `link`, the circuit's (ok, charged) on the unit's rows split into their fields' elements
+    and the decisions' enables; `reference`, its (ok, bits, carry' row) on a unit's rows (bits each); `book`, ``pub``'s
+    values for the registered book (its JSON) and the session's first carry; `charge`, the (ok, bits, carry') of D slots
+    of decisions from a carry with ``cert``'s arrivals; `encode`, a carry's row; `cert`, ``cert``'s bits past its
+    arrivals and their tokens."""
 
     carry_bits = ROW_BITS
 
