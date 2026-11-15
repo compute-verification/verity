@@ -988,7 +988,7 @@ class Run:
         if path.endswith("lean-audit.json"):
             out = lean_module_sub(out, self.lean_mods)
         if posixpath.basename(path) == "pyproject.toml":
-            out = self._pyproject(path, out)
+            out = self._pyproject(path, out, text)
         return out
 
     def _count(self, path: str, kind: str, n: int = 1):
@@ -1809,7 +1809,7 @@ class Run:
 
     # pyprojects -------------------------------------------------------------------------------------------------------
 
-    def _pyproject(self, path: str, text: str) -> str:
+    def _pyproject(self, path: str, text: str, original: str | None = None) -> str:
         merged = self.L.merged
         try:
             data = tomllib.loads(text)
@@ -1833,7 +1833,7 @@ class Run:
         if prefix := conf.get("strip_suite_relative"):
             out = _strip_suite_relative(out, prefix)
         if was := conf.get("pythonpath_from"):
-            out = _pythonpath_from(out, was, posixpath.dirname(path))
+            out = _pythonpath_from(out, was, posixpath.dirname(path), original or text)
         for n in merged:
             dep = re.compile(r'"' + re.escape(n) + r'(\[[^\]]*\])?"')
             if dep.search(out):
@@ -2182,14 +2182,17 @@ def _strip_suite_relative(text: str, prefix: str) -> str:
     return "".join(out)
 
 
-def _pythonpath_from(text: str, was: str, now: str) -> str:
-    """pytest's `pythonpath`, each entry written from directory `was`, written from `now`, the pyproject's new directory, so
-    it names the same directory (`[pyproject] pythonpath_from`)."""
-    def fix(m: re.Match) -> str:
-        items = json.loads("[" + m.group("items") + "]")
-        moved = [posixpath.relpath(posixpath.normpath(posixpath.join(was, i)), now) for i in items]
-        return m.group("head") + ", ".join(json.dumps(i) for i in moved) + "]"
-    return re.sub(r"^(?P<head>pythonpath\s*=\s*\[)(?P<items>[^\]]*)\]", fix, text, flags=re.M)
+PYTHONPATH = re.compile(r"^(?P<head>pythonpath\s*=\s*\[)(?P<items>[^\]]*)\]", re.M)
+
+
+def _pythonpath_from(text: str, was: str, now: str, original: str) -> str:
+    """pytest's `pythonpath` as the pyproject's `original` text gives it, each entry written from directory `was`, written
+    from `now`, the pyproject's new directory, so it names the same directory (`[pyproject] pythonpath_from`); whatever the
+    rewrite of relative paths made of it is replaced."""
+    if not (m := PYTHONPATH.search(original)):
+        return text
+    moved = [posixpath.relpath(posixpath.normpath(posixpath.join(was, i)), now) for i in json.loads("[" + m.group("items") + "]")]
+    return PYTHONPATH.sub(lambda n: n.group("head") + ", ".join(json.dumps(i) for i in moved) + "]", text, count=1)
 
 
 def _replace_list_item(text: str, key: str, old: str, new: list[str]) -> str:
