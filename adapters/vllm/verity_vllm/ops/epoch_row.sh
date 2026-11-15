@@ -177,7 +177,7 @@ say "commit verdict=${OUTCOME/#-/none} manifest_verify=${MANIFEST_VERIFY/#-/none
 # ---- 5 store, then the regression record ------------------------------------------------------------------------------------------------
 small; store
 VERITY_REGRESSION_CANDIDATE=$SWEEP_DIR run_stage record "$EV/rebaseline_run.log" \
-  "$PY" -m tests.regression.rebaseline run --record "$EV/record" --tier T0,T1,T2 -- -k "r$ROWNUM" -ra
+  env -C "$T/tests/adapters/vllm" "$PY" -m tests.regression.rebaseline run --record "$EV/record" --tier T0,T1,T2 -- -k "r$ROWNUM" -ra
 say "rebaseline run rc=$? $(grep -E 'passed|failed|error' "$EV/rebaseline_run.log" | tail -n 1 | cut -c1-200)"
 finish
 [ "$src" = 0 ] || exit 30
