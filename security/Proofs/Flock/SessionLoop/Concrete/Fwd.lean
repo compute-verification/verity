@@ -406,6 +406,20 @@ meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
   let x' := x.headBeta.consumeMData
   if isExcept && x'.isAppOfArity ``ForIn.forIn 8 then
     if let some r ← summarize x' then return r
+  -- A `mapM` over data: its collection (the last argument) is untainted but trapped inside the well-founded `mapM`
+  -- recursion, which the kernel will not reduce. Reduce the collection in place so a rule (`Array.mapM_empty`, a `cons`
+  -- unfolding) fires on the concrete array; the body is left untouched, so a tainted body is never reduced. `File.lean`'s
+  -- walks use `forIn`, never `mapM`, so this case never fires there.
+  if isExcept && (x'.getAppFn.isConstOf ``Array.mapM || x'.getAppFn.isConstOf ``List.mapM) then
+    let args := x'.getAppArgs
+    if args.size ≥ 2 then
+      let as := args[args.size - 1]!
+      unless ← exprTainted as do
+        let as' ← kwhnf as
+        if as' != as then
+          let x2 := mkAppN x'.getAppFn (args.set! (args.size - 1) as')
+          let (w, q) ← evalVal x2
+          return (w, ← mkEqTrans (← hint (← mkEqRefl x) (← mkEq x x2)) q)
   let jump ← if x'.getAppFn.isFVar then pure (← x'.getAppFn.fvarId!.getValue?).isSome else pure false
   let structural := x'.isLet || x'.isAppOfArity ``Bind.bind 6 || x'.isAppOfArity ``ite 5 || x'.isAppOfArity ``dite 5 ||
     (← isMatcherApp x') || jump
