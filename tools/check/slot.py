@@ -43,7 +43,7 @@ expected to reach, not the most it may. mem= stays the slot's size for everythin
 MIN_MEM_ENV tests. A run that asks more than book (RUN_MEM_ENV: a train check's shard asks what its steps took, check.py's
 `shard_ask_gib`) waits for and reserves its ask, as on any slot. CMD gets what the slot books as BOOK_ENV, and check.py
 grants its steps no more than that between them (`check.slot_mem_gb`). A check past book meets nothing here: the
-reservation caps nothing and the machine's own limits act, and where OOM kills are ordered by reservation (research's
+reservation bounds nothing and the machine's own limits act, and where OOM kills are ordered by reservation (research's
 `oom_order.py`) it counts as over its reservation from book, not from mem=. A line whose book= isn't a whole number of GB
 from 1 to its mem= starts no check, and the wait and `--status` say so with the fix. A slot.py from before the key, which a
 check of an older tree runs, reads the line as its mem= alone and reserves that.
@@ -264,7 +264,7 @@ def lane_pools(slots_file: Path) -> list[Path]:
     return out
 
 
-#: where a Nebius node caps each login session's memory (deploy.toml's 50-vy-job-memory.conf; research.telemetry.cgroup reads the
+#: where a Nebius node limits each login session's memory (deploy.toml's 50-vy-job-memory.conf; research.telemetry.cgroup reads the
 #: same files)
 SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
 
@@ -293,7 +293,7 @@ def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
     per-check peak, and summed RSS counts shared pages over and over). On a node that
-    caps each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
+    limits each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
     to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
     a scoped check (exit 75)."""
     unit = f"check-{slot}-{run_id}"

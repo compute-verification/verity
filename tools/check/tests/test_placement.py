@@ -60,7 +60,7 @@ def test_the_first_machine_with_a_free_check_slot_and_a_free_lean_check_slot_is_
     free = machine([slot("d")])                                                 # no lean-slots file: Lean audits run unslotted
     got, why, skipped = CHECK.choose([N1, N2], {N1: busy, N2: free})
     assert (got, skipped) == (N2, [])
-    assert why == "a check slot and a Lean check slot are free (check slots: d free; 0 waiting ahead; no Lean audit cap)"
+    assert why == "a check slot and a Lean check slot are free (check slots: d free; 0 waiting ahead; no Lean audit limit)"
     both = machine([slot("c", HOLDER), slot("a")], pools=lean(free=1))
     assert CHECK.choose([N1, N2], {N1: both, N2: free})[0] == N1                # both free: the first listed
     assert CHECK.choose([N2, N1], {N1: both, N2: free})[0] == N2
@@ -99,7 +99,7 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
     spoken = machine([slot("a")], [waiter()])                                      # a free slot the waiter ahead takes next
     assert CHECK.placement(spoken)[:2] == (False, 1) and CHECK.placement(spoken, priority=True)[:2] == (True, 0)
     trains = machine([{**slot("d"), "trains": True}, slot("e", HOLDER)])           # node 2's d is only=trains
-    assert CHECK.placement(trains) == (False, 0, "check slots: e held; 0 waiting ahead; no Lean audit cap")
+    assert CHECK.placement(trains) == (False, 0, "check slots: e held; 0 waiting ahead; no Lean audit limit")
     assert CHECK.placement(trains, priority=True)[:2] == (True, 0)
     with pytest.raises(ValueError, match="every slot in .* is for train checks"):
         CHECK.placement(machine([{**slot("d"), "trains": True}]))
@@ -345,9 +345,9 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
         "  check d  cores 0-47  free; blocked: window 2026-10-03T18:05Z (20 min) is open or starts within 30 min",
         "    window 2026-10-03T18:05Z (20 min), starts in 15 min: served qwen3-8b timed",
         "  check line: nobody waiting",
-        "  Lean audit slots: no cap (/workspace/research/locks/lean-slots): audits run unslotted",
+        "  Lean audit slots: no limit (/workspace/research/locks/lean-slots): audits run unslotted",
         f"--on auto would take {N2}: the fewest waiting ahead, as no machine has a check slot and a Lean check slot free "
-        "(check slots: d blocked; 0 waiting ahead; no Lean audit cap)"]
+        "(check slots: d blocked; 0 waiting ahead; no Lean audit limit)"]
     assert CHECK.slots_view(["--json", N2], read=lambda names: {n: n2 for n in names}) == 0
     assert json.loads(capsys.readouterr().out) == {N2: n2}
     assert CHECK.slots_view(["m"], read=lambda names: {"m": "exit 255: ssh"}) == 1

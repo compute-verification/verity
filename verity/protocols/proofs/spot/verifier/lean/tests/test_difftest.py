@@ -66,6 +66,7 @@ from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
+    caller as C,
     draw as DR,
     hello as H,
     hidden_draw as HD,
@@ -92,6 +93,7 @@ from verity.commitments.window import window_binding
 from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
+CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 XOR8 = PrimitiveDefinition("CoreSpotXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -705,6 +707,14 @@ def _registration(p: dict, rec) -> tuple[str, ...]:
     return _registration_verdict(p, rec).codes
 
 
+def _caller_verdict(p: dict, rec) -> Verdict:
+    return C.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
+                   p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
+                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
+                   day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
+                   pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"))
+
+
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
     """`OneStage.coinsOf`: with the verifier's challenger, the coins `coins.draw_coins` reads from the evidence's `coins`
     under its key, on the verifier's window, of its family, after the docket's digest; none without one, when the
@@ -866,6 +876,13 @@ def registration(j):
     v = _registration_verdict(p, j.get("record"))
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
             **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
+
+
+def caller(j):
+    """`spot-flock-caller`'s `caller` (`VStar.Recursive.Caller.check`): the caller's codes for a record against the
+    parameters (`caller.check`), whatever SPOT's check makes of the record."""
+    j = _json(j)
+    return {"codes": list(_caller_verdict(_params_of(j), j.get("record")).codes)}
 
 
 def registered(j):
@@ -3365,6 +3382,7 @@ REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits([CERTIFIED], 1, 1).map(_REGISTRATION_OF),
     changed_audits([CERTIFIED, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     st.builds(lambda a, r: {"params": a["params"], "record": r}, changed_audits(most=0), JSON)), package=PACKAGE)
+CALLER = D.Port("spot-flock-caller", "caller", caller, REGISTRATION.inputs, package=CALLER_PACKAGE)
 
 
 @st.composite
@@ -6378,6 +6396,7 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
                         package=PACKAGE)
 
 pieces = D.server_fixture(DECODE)
+callers = D.server_fixture(CALLER)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
@@ -6397,6 +6416,14 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_the_callers_check_agrees(callers):
+    """The caller's check (`VStar.Recursive.Caller.check`, `spot-flock-caller`) gives the Python's codes
+    (`caller.check`) on the registration piece's inputs: SPOT's check no longer makes these codes, so this port is the
+    one that holds them."""
+    stats = D.run(CALLER, examples=700, server=callers)
+    assert stats.outputs > 175 and stats.rejects > 0, stats
 
 
 def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
@@ -7029,7 +7056,19 @@ def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
             assert codes(case(earlier=e))[0] == "R7-output", (name, e)
 
 
-def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
+def _codes_of(case, pieces, callers) -> list[str] | str:
+    """SPOT's codes for `case` (`REGISTRATION`), then the caller's (`CALLER`), Lean and Python agreeing on each; the kind
+    of the first that doesn't answer, where the parameters are refused."""
+    out: list[str] = []
+    for port, server in ((REGISTRATION, pieces), (CALLER, callers)):
+        kind, got = D.replay(port, case, server)
+        if kind != "output":
+            return kind
+        out += json.loads(got)["codes"]
+    return out
+
+
+def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces, callers):
     """The supplied setup whose seeds read the window's salt and positions, bound to one stream and prover: its record, as
     another stream's (or prover's) verifier checks it in the same window, is refused as it stands (`R6-stream` or
     `R6-prover`, and `R7-supplied`) and relabeled to that verifier's binding (`R7-supplied`: its seeds are the first
@@ -7039,14 +7078,13 @@ def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
     a = _v2_audit(s, s.values[0])
 
     def codes(b):
-        kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
-        return json.loads(out)["codes"] if kind == "output" else kind
+        return _codes_of(_json(_REGISTRATION_OF(b)), pieces, callers)
 
     assert codes(a) == []
     for k, other in (("stream", "3d" * 64), ("prover", "d1" * 32)):
         b = copy.deepcopy(a)
         b["params"]["binding"] = {**BINDING, k: other}
-        assert codes(b) == [f"R6-{k}", "R7-supplied"], k
+        assert codes(b) == ["R7-supplied", f"R6-{k}"], k
         b["record"]["window"] = {**b["record"]["window"], k: other}
         assert codes(b) == ["R7-supplied"], k
     b = copy.deepcopy(a)
@@ -7121,7 +7159,7 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
             "R7-registered"]
 
 
-def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
+def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces, callers):
     """Lean and Python agreeing: a verifier naming its window's open root that read the window's seed salt from its
     challenger accepts a record whose window names that salt, and refuses one naming another salt, one in another form or
     none (`R6-seed-salt`). A verifier that read none (no `seed_salt`, or null) accepts a window naming none and refuses one
@@ -7135,8 +7173,7 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
               "scheme": SCHEME, "seed_salt": SEED_SALT, "window_root": WROOT, "work_table": None}
 
     def codes(window, p=params):
-        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
-        return json.loads(out)["codes"] if kind == "output" else kind
+        return _codes_of(_json({"params": p, "record": {**rec, "window": window}}), pieces, callers)
 
     assert codes(rec["window"]) == []
     for salt in (OTHER_SEED_SALT, SEED_SALT.upper(), None, 5):
@@ -7151,7 +7188,7 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
     assert codes(rec["window"], {**params, "window_root": None}) == "reject"
 
 
-def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
+def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces, callers):
     """Lean and Python agreeing on the registered compiler (`compiler`, the registration log's item, with the public
     length ℓ of the advice it reads): a window naming it by its digest with advice of at most ℓ bits is accepted, one
     naming another compiler or none is refused by name (`R6-compiler`), and advice over ℓ, in another form or none too
@@ -7174,8 +7211,7 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
     none = {**params, "compiler": None}
 
     def codes(window, p=params):
-        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
-        return json.loads(out)["codes"] if kind == "output" else kind
+        return _codes_of(_json({"params": p, "record": {**rec, "window": window}}), pieces, callers)
 
     cases = [(named(digest, b), params, []) for b in (0, 32)]
     cases += [(named(digest, b), params, ["R6-advice-length"]) for b in (33, -1, "8", None, True)]
@@ -7190,7 +7226,7 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
         assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
 
 
-def test_a_window_opens_the_pool_its_chain_left(pieces):
+def test_a_window_opens_the_pool_its_chain_left(pieces, callers):
     """Lean and Python agreeing on the pool chain: a window opens the pool the previous window of record left, of the
     same program, `pin` the previous record's `pout` entry, its domain and root, whatever the verifier made of that
     window; it opens the empty pool, `pin` filled from `genesis`, at a docket's first window, after the verifier
@@ -7215,8 +7251,7 @@ def test_a_window_opens_the_pool_its_chain_left(pieces):
                         previous=R.digest(log[-1]) if log else None, registered=[pout, *([pin] if pin else [])])
 
     def codes(p, rec):
-        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": rec}), pieces)
-        return json.loads(out)["codes"] if kind == "output" else kind
+        return _codes_of(_json({"params": p, "record": rec}), pieces, callers)
 
     (pout0,), (pout1,) = s.entries({"pout": 16}, EARLIER_WROOT), s.entries({"pout": 16}, WROOT)
     empty = G.supplied_value(s.program, "pin", [[("bytes", GENESIS)]], record(EARLIER, pout0), ["pin"]).entry()
@@ -7271,7 +7306,7 @@ def test_a_window_opens_the_pool_its_chain_left(pieces):
         assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
 
 
-def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces):
+def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces, callers):
     """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
     network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
     each at the values it arrived with and the outputs released of it); its rows (`req`) are its own, under its open
@@ -7318,8 +7353,7 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
         return {**next(e for e in rec["registered"] if e["value"] == "pout"), "value": "pin"}
 
     def codes(p, rec):
-        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": rec}), pieces)
-        return json.loads(out)["codes"] if kind == "output" else kind
+        return _codes_of(_json({"params": p, "record": rec}), pieces, callers)
 
     first = record(0, None)
     second = record(1, carried(first), [first])
