@@ -31,7 +31,7 @@ import pytest
 
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "tests" / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "period_case.py"
 BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json"
 
 

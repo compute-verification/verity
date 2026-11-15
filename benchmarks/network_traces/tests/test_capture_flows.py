@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
+from tests.verity.protocols.accounting.certifier.device.relay_runs import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock

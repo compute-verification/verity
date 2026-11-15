@@ -21,7 +21,7 @@ import pytest
 from verity.protocols.accounting.certifier.verifier import arith_encode as AE, charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 
-FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures"
+FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "tests" / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 
 

@@ -26,7 +26,7 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.network_certifier import END
-from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
+from tests.verity.protocols.accounting.certifier.device import relay_runs as tws
 from verity.protocols.accounting.certifier.prover import network_certifier_zk as wz
 from benchmarks.network_traces import zk_drivers
 

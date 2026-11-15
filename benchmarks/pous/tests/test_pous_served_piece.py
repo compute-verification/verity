@@ -76,8 +76,8 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
+fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 

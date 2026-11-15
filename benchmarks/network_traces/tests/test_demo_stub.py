@@ -27,7 +27,7 @@ import demo_stub as S  # noqa: E402
 from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
 
-from verity.protocols.accounting.certifier.device.tests.relay_runs import _run  # noqa: E402
+from tests.verity.protocols.accounting.certifier.device.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name

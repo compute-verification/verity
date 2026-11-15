@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests" / "verity" / "protocols" / "accounting" / "pouw" / "verifier"))
 import clear_work as CW
 import test_circuit_inert_bound as T
 from verity.protocols.accounting.pouw.prover.circuit import inert_bound

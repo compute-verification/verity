@@ -213,5 +213,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `../../tests/verity/circuits/ops/` is a suite
 of its own.

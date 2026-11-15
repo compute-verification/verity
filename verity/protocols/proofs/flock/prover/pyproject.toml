@@ -92,7 +92,7 @@ inputs = [
     "tools/verity/circuit_check", "benchmarks/census",
     # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.commitments.randomness against
     # its pinned vectors
-    "verity/protocols/proofs/spot", "verity/commitments/randomness", "verity/commitments/randomness/tests",
+    "verity/protocols/proofs/spot", "verity/commitments/randomness", "tests/verity/commitments/randomness",
     # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
     "verity/protocols/policy/inference_only/verifier/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
@@ -205,7 +205,7 @@ tests = [
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
-paths = ["verity/protocols/accounting/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
+paths = ["tests/verity/protocols/accounting/pouw/verifier", "tests/verity/protocols/experimental/pearl_c4"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
@@ -254,7 +254,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_lean_verifier.py", "tests/test_lean_width_refusals.py"]
-paths = ["verity/circuits/tests", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+paths = ["tests/verity/circuits", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -298,4 +298,4 @@ paths = ["verity/commitments/cuda/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]
-paths = ["verity/*/lakefile.toml", "verity/protocols/proofs/flock/prover/tests"]
+paths = ["verity/*/lakefile.toml", "tests/verity/protocols/proofs/flock/prover"]

@@ -34,7 +34,7 @@ export HZ_CONFIGS=m1-forms HZ_MEM_GB=${MF_MEM_GB:-128}
 source benchmarks/pouw/hidden_zk/job.sh
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-TU=$(cached tmplunit "$(tree_key verity/protocols/proofs/flock/verifier verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+TU=$(cached tmplunit "$(tree_key verity/protocols/proofs/flock/verifier tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
 [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }
 # the Lean verifier with its verify call under timed.py (seconds, peak RSS); its other commands pass through
 cat > "$W/lean-timed" <<EOF

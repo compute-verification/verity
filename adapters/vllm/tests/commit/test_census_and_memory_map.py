@@ -60,7 +60,7 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 
 #: The requirement suite's difftest, whose Port, instance format and Programs this test shares; a file of another suite,
 #: so loaded by its path.
-REQUIREMENT_DIFFTEST = Path(__file__).resolve().parents[4] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
+REQUIREMENT_DIFFTEST = Path(__file__).resolve().parents[4] / "tests/verity/circuits/requirement/test_requirement_difftest.py"
 _spec = importlib.util.spec_from_file_location("test_requirement_difftest", REQUIREMENT_DIFFTEST)
 assert _spec is not None and _spec.loader is not None
 _RD = importlib.util.module_from_spec(_spec)

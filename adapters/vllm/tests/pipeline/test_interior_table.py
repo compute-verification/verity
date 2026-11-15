@@ -49,7 +49,7 @@ LENGTHS = (5, 4, 3)
 #: sampled span s's two keys: span 0's key 5 and span 2's key 4 are past their lengths, so each opens a fill row
 TOKS = ((1, 5), (0, 4))
 #: core's history-read vector: a table of 5 rows of 4 words at 8 leaves, and the supplied value its reads take
-VECTOR = Path(__file__).resolve().parents[4] / "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json"
+VECTOR = Path(__file__).resolve().parents[4] / "tests/verity/protocols/proofs/spot/verifier/fixtures/history_read_vector.json"
 
 
 def _block():

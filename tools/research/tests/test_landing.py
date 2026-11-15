@@ -381,7 +381,7 @@ def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/landing.py"])
-    assert not forces_cold(["security/Proofs/X.lean", "verity/circuits/README.md", "verity/circuits/tests/test_x.py"])
+    assert not forces_cold(["security/Proofs/X.lean", "verity/circuits/README.md", "tests/verity/circuits/test_x.py"])
     assert not forces_cold([])
 
 

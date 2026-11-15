@@ -617,7 +617,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 
 POUS = "tools/pous_grader"
-TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json"
+TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "tests/verity/protocols/proofs/spot/verifier/fixtures/exfiltration_lean.json"
 UP = posixpath.relpath("security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["security/Proofs/lakefile.toml", "x.lean"]

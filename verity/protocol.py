@@ -26,7 +26,7 @@ machines with no link is refused in either mode.
 Monitoring periods: ticks, spans of ticks and the monitoring period, the Python mirror of the code's
 `CoreProtocol.Period` (`verity/protocols/interface/CoreProtocol/Period.lean`), which is the code's copy of
 `security/Definitions/Core/Period.lean`. The difftest port `core-periods-difftest` holds this section to that Lean
-(`verity/tests/tests/test_periods_difftest.py`).
+(`tests/verity/tests/test_periods_difftest.py`).
 
 - `TickSpan(start, len)`: the ticks ``[start, start + len)`` on the one clock (`OneClock`), ending at `stop`. `ticks` is
   their range, and `within` says one span lies inside another.

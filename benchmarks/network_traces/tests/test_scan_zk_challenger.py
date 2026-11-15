@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-STUB = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = ROOT / "tests" / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "stub_serve.py"
 
 
 from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402

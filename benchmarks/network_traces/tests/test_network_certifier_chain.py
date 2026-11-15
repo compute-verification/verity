@@ -32,8 +32,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
 
 import auditor as G  # noqa: E402
-from verity.protocols.accounting.certifier.device.tests.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
-from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
+from tests.verity.protocols.accounting.certifier.device.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
+from tests.verity.protocols.accounting.certifier.prover.test_scan_zk import published, sz  # noqa: E402
 
 from benchmarks.network_traces import network_certifier_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import blob_files as bf  # noqa: E402

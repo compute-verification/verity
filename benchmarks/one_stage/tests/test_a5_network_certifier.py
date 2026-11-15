@@ -29,7 +29,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
 import a5_network_certifier as AW  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.device.tests import relay_runs as tws  # noqa: E402
+from tests.verity.protocols.accounting.certifier.device import relay_runs as tws  # noqa: E402
 
 N, REST = 8, 4
 

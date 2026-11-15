@@ -68,7 +68,7 @@ ALLOWED: dict[str, int] = {
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-b71a-w30.json": 7,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r1-window10.json": 4,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json": 8,
-    "verity/circuits/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
+    "tests/verity/circuits/ops/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
     # stand-ins that predate the documentation ranges
     "tools/check/tests/test_verdicts.py": 2,
     # version numbers the scan reads as addresses

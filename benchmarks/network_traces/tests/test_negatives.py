@@ -529,7 +529,7 @@ def test_frame_on_a_network_certifier_run_reads_its_data_cells_row_and_refuses_t
     and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
-    from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
+    from tests.verity.protocols.accounting.certifier.device import relay_runs as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()

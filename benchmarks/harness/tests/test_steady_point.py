@@ -48,7 +48,7 @@ FILES = {
     "uv.lock": "lock\n", "pyproject.toml": "",
     "verity/protocols/proofs/flock/prover/src/main.rs": "fn main() {}\n",
     "verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// kernel\n",
-    "verity/protocols/proofs/flock/prover/tests/test_prover.py": "def test(): pass\n",
+    "tests/verity/protocols/proofs/flock/prover/test_prover.py": "def test(): pass\n",
     "verity/protocols/proofs/flock/prover/README.md": "the prover\n",
     "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O3\n",
     "benchmarks/one_stage/server_rate.py": "# times\n",
@@ -251,7 +251,7 @@ UNBOUND = {
     "where a statement is staged": {"spec": {"row0": {"staged": "/dev/shm/gemm64"}}},
     "the row's other counts": {"spec": {"row0": {"provers": [2]}}},
     "another row": {"spec": {"row": [SPEC["row"][0], SPEC["row"][1] | {"n": 8, "warm": 4}]}},
-    "the prover's tests": {"files": {"verity/protocols/proofs/flock/prover/tests/test_prover.py": "def test(): assert 1\n"}},
+    "the prover's tests": {"files": {"tests/verity/protocols/proofs/flock/prover/test_prover.py": "def test(): assert 1\n"}},
     "a document": {"files": {"verity/protocols/proofs/flock/prover/README.md": "the prover, again\n"}},
     "a file outside the closure": {"files": {"benchmarks/harness/verity_bench/cli.py": "# the harness\n"}},
 }

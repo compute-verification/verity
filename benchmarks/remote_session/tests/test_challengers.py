@@ -30,7 +30,7 @@ LIVE = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests"))
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "accounting" / "poub" / "verifier"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402

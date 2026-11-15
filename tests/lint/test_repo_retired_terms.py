@@ -132,9 +132,9 @@ OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
 LIVE_CAPS = ("verity/protocols/accounting/pouw/prover/circuit/live.py",
              "verity/protocols/accounting/pouw/verifier/live_reads.py",
-             "verity/protocols/accounting/pouw/verifier/tests/test_circuit_live.py",
-             "verity/protocols/accounting/pouw/verifier/tests/test_pouw_window.py",
-             "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py")
+             "tests/verity/protocols/accounting/pouw/verifier/test_circuit_live.py",
+             "tests/verity/protocols/accounting/pouw/verifier/test_pouw_window.py",
+             "tests/verity/protocols/accounting/pouw/verifier/window_vectors.py")
 #: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the continuation
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap

@@ -33,7 +33,7 @@ from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, servi
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "tests" / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
 TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")

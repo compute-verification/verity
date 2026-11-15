@@ -16,7 +16,7 @@ import pytest
 HERE = Path(__file__).parent
 REPO = HERE.parents[3]
 RUN = HERE / "fixtures" / "vllm-8eb1"
-SLICE = REPO / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_w212.json"
+SLICE = REPO / "tests" / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "fixtures" / "compile_slice_w212.json"
 CLASS = SLICE.with_name("compile_slice_w212_class.json")
 ARITH = SLICE.with_name("arith_encode_vectors.json")
 

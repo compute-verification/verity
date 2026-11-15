@@ -715,7 +715,7 @@ def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
     fresh process, where the ``settings`` the verifier's tests import is their own registry."""
     code = f"""
 import sys
-sys.path[:0] = [{str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests")!r}, {str(HERE.parent)!r}]
+sys.path[:0] = [{str(Path(__file__).resolve().parents[3] / "tests" / "verity" / "protocols" / "proofs" / "spot" / "verifier")!r}, {str(HERE.parent)!r}]
 import records_audit as RA
 from verity.circuits.codec import descriptor_id
 import json

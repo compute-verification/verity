@@ -72,7 +72,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
     return PP.kept_scan(serve_dir, cls, users, kept_ingress=CP.kept_ingress)
 
 
-_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py")
+_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "tests/verity/protocols/accounting/certifier/verifier/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 

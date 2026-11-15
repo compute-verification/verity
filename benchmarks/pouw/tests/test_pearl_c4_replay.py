@@ -15,8 +15,8 @@ import pytest
 
 # the replay is imported by name so that its forkserver workers find it
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "experimental" / "pearl_c4" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests" / "verity" / "protocols" / "accounting" / "pouw" / "verifier"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests" / "verity" / "protocols" / "experimental" / "pearl_c4"))
 import pearl_c4_vectors as V
 import replay as R
 import test_pouw_pearl_c4 as T

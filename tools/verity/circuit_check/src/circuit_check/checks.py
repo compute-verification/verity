@@ -1641,7 +1641,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
     if not isinstance(low, IL.Lowering):
         rec["compared"] = 0
-        rec["correspondence"] = ("verity/protocols/proofs/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
+        rec["correspondence"] = ("tests/verity/protocols/proofs/flock/prover/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
                                  "vocabulary position of the row")
         return rec
     params, _ = signature_of(d)

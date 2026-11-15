@@ -12,7 +12,7 @@ import random
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_advice import FIXTURE, RANDOM, packed, rebuild
+from tests.verity.protocols.accounting.certifier.verifier.test_network_certifier_advice import FIXTURE, RANDOM, packed, rebuild
 
 from verity.protocols.accounting.certifier.verifier import advice as V
 from verity_vllm.compiler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators,

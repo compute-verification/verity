@@ -53,7 +53,7 @@ for line in sys.stdin:
                       "verdict": "undecided"}}))
 """
 
-SIGNER = ROOT / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py"
+SIGNER = ROOT / "tests/verity/protocols/accounting/pous/verifier/pous_test_signer.py"
 
 #: `p2_parties` as the gate starts it, its memory challenger's key the test signer at S1's deployed parameters
 #: (`pous_test_signer.AtLeaf`) handed to `main` in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes

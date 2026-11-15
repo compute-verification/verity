@@ -40,7 +40,7 @@ CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in demo.sh's judge, on this host
 DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
-PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
+PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "tests" / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "wipe_side.py"))["key_sha512"]()
 #: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
 AUDITOR_PIN = hashlib.sha512(b"the configuration's pin of the memory challenger's wipe key").hexdigest()
 PINS = [{"key-sha512": hashlib.sha512(b"its PoUS key").hexdigest(), "party": "memory-challenger", "protocol": "pous",

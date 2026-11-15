@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/lean/check/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/pouw/verifier/lean/check"))
 import composite as C
 import pouw_check_cases
 import pouw_period_cases
@@ -31,7 +31,7 @@ from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
-STATEMENTS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit_statements.py"
+STATEMENTS = Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/pouw/verifier/test_pouw_credit_statements.py"
 
 
 @pytest.fixture

@@ -33,13 +33,13 @@ inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/__init__.py", "verity/circuits",
           # the JSON parser's port reads the recorded public files' headers (`RECORDED_FIXTURES`), fetched fixtures
-          "verity/protocols/proofs/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs",
-          "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/proofs/flock/prover/tests/fixtures/rec-coins",
-          "verity/protocols/proofs/flock/prover/tests/fixtures/rec-links", "verity/protocols/proofs/flock/prover/tests/fixtures/zk-sessions",
+          "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs", "tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs",
+          "tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks", "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins",
+          "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links", "tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions",
           "verity/protocols/__init__.py",
           # the JSON parser's port reads the JSON the verifiers' tests hold (`VERIFIER_FIXTURES`), which `Core.canonicalJson` reads
-          "verity/protocols/accounting/certifier/verifier/network/tests/fixtures", "verity/protocols/accounting/certifier/verifier/tests/fixtures",
-          "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
-          "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
-          "verity/protocols/proofs/recursion/verifier/zk_server/tests/fixtures",
-          "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served", "verity/protocols/proofs/spot/verifier/tests/fixtures"]
+          "tests/verity/protocols/accounting/certifier/verifier/network/fixtures", "tests/verity/protocols/accounting/certifier/verifier/fixtures",
+          "tests/verity/protocols/accounting/poub/verifier/fixtures", "tests/verity/protocols/accounting/poub/verifier/vectors.json",
+          "tests/verity/protocols/accounting/pous/verifier/fixtures", "tests/verity/protocols/accounting/pouw/verifier/vectors",
+          "tests/verity/protocols/proofs/recursion/verifier/zk_server/fixtures",
+          "tests/verity/protocols/proofs/flock/prover/fixtures/inner-trees-served", "tests/verity/protocols/proofs/spot/verifier/fixtures"]

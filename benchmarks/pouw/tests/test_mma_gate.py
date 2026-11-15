@@ -4,7 +4,7 @@ through each kernel's own `sass_gate.py`): its CLI's exit code, OUT_JSON and pri
 
 The cases: a clean listing of every kernel the gate wants (`pass`, and `pass_sm120a` for a gate given ARCH), the same with
 one of each refusal (`refused`), and the harness's real sm_120a `cuobjdump -sass` listings (`plain` and `fast_math`
-in `verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/`) under a ptxas report of their functions. The listings are generated here from each gate's own tables, so a
+in `tests/verity/protocols/accounting/pouw/prover/fixtures/sass_gate/`) under a ptxas report of their functions. The listings are generated here from each gate's own tables, so a
 change that means to move a verdict (a kernel added to WANT, say) rewrites the pins: `python test_mma_gate.py --write`.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
-SASS_FIX = ROOT / "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate"
+SASS_FIX = ROOT / "tests/verity/protocols/accounting/pouw/prover/fixtures/sass_gate"
 GATES = {"pearl_c_sm90": ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/sass_gate.py", None),
          "pearl_c_sm120": ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/sass_gate.py", None),
          "s8_linear": ("benchmarks/kernels/s8_linear/sass_gate.py", None)}

@@ -170,7 +170,7 @@ def unit(d: Path, session: str) -> int:
     argv += ["--params", ",".join(map(str, cfg["params"])), "--keygen-workers", "4"]
     if cfg["coins"] == "stub":
         os.environ["COINS_LOG"] = str(d / "units" / f"{session}.coins")
-        argv[2:2] = [str(Path(cfg["tree"]) / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py")]
+        argv[2:2] = [str(Path(cfg["tree"]) / "tests" / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "stub_serve.py")]
     signer = A.key_signer(host, _params(cfg), 4)
     try:
         e = A.run(host, session, signer=signer, pinned=A.pinned_commit(), now=_now, argv=argv)

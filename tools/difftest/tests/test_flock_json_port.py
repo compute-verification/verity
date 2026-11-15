@@ -347,16 +347,16 @@ def test_parse_core(server):
     D.run(PARSE_CORE, examples=3000, server=server)
 
 
-#: The public files Flock's producers wrote, recorded in `verity/protocols/proofs/flock/prover/tests`' fetched fixtures
+#: The public files Flock's producers wrote, recorded in `tests/verity/protocols/proofs/flock/prover`' fetched fixtures
 #: (`artifacts.json`), whose header line the SPOT verifier reads (`Spot.FilePart.header`).
-RECORDED = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "tests" / "fixtures"
+RECORDED = Path(__file__).resolve().parents[3] / "tests" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "fixtures"
 RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
 
 
 def test_recorded_public_headers(server):
     """Both parsers read each recorded public file's header line (`RECORDED`) to the mirror's value, so to each other's:
     moving a read of it from Lean core's parser to `Flock.JsonParse.parse` changes the value read on none."""
-    missing = [f"verity/protocols/proofs/flock/prover/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    missing = [f"tests/verity/protocols/proofs/flock/prover/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
     assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
     files = sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
                    if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))
@@ -371,13 +371,13 @@ def test_recorded_public_headers(server):
 #: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories, and the
 #: served inner session SPOT's Lean `innerTreesReason` reads in Flock's prover tests.
 VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
-    "verity/protocols/accounting/certifier/verifier/network/tests/fixtures",
-    "verity/protocols/accounting/certifier/verifier/tests/fixtures",
-    "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
-    "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
-    "verity/protocols/proofs/recursion/verifier/zk_server/tests/fixtures",
-    "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served",
-    "verity/protocols/proofs/spot/verifier/tests/fixtures"))
+    "tests/verity/protocols/accounting/certifier/verifier/network/fixtures",
+    "tests/verity/protocols/accounting/certifier/verifier/fixtures",
+    "tests/verity/protocols/accounting/poub/verifier/fixtures", "tests/verity/protocols/accounting/poub/verifier/vectors.json",
+    "tests/verity/protocols/accounting/pous/verifier/fixtures", "tests/verity/protocols/accounting/pouw/verifier/vectors",
+    "tests/verity/protocols/proofs/recursion/verifier/zk_server/fixtures",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/inner-trees-served",
+    "tests/verity/protocols/proofs/spot/verifier/fixtures"))
 
 
 def _has_float(v) -> bool:

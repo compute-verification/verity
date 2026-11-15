@@ -44,7 +44,7 @@ SMALL = P2Params(period.W, period.C0, 8)
 
 
 def _signer_module():
-    path = config.ROOT.parent.parent / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
+    path = config.ROOT.parent.parent / "tests" / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "pous_test_signer.py"
     spec = importlib.util.spec_from_file_location("pous_test_signer", path)
     assert spec is not None and spec.loader is not None, path
     mod = importlib.util.module_from_spec(spec)

@@ -24,7 +24,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, bit_row, row_leaf, sha512_row_v2_digest
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "tests" / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "fixtures" / "compile_slice_smallkv.json"
 COUNT, POS = 1 << ST.FLAGS.index("count"), 1 << ST.FLAGS.index("pos")
 
 

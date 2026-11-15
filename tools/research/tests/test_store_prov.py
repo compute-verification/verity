@@ -415,7 +415,7 @@ def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     _, key2 = tc.resolve_params(argv + ["--instruction", "mma.sync.m16n8k16"], REPO)
     assert key2["instruction"] == "mma.sync.m16n8k16"
     assert D.derivation_id(tc, {}, key, {"hw.family": "rtx4090"}, tc.key_conditions) != D.derivation_id(tc, {}, key2, {"hw.family": "rtx4090"}, tc.key_conditions)
-    _, key3 = tc.resolve_params(argv + ["--replay-golden", "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
+    _, key3 = tc.resolve_params(argv + ["--replay-golden", "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
     assert key3["replay_golden"].startswith("sha256:")
 
 

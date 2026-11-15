@@ -21,7 +21,7 @@ from verity.circuits.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 
-CAPTURES = Path(__file__).resolve().parents[4] / "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07"
+CAPTURES = Path(__file__).resolve().parents[4] / "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07"
 DEVICES = ("4090", "a100")
 
 #: `Serve_v1{C=B0,LP=32,STEPS=7}`'s digest under the v1 codec, with the k16 step's id re-keyed to core's `AmpereBF16TcDot16_v2`

@@ -2792,7 +2792,7 @@ fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &
 /// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
 /// coins, and N control sessions (zero pads, zero mask slot: M0's values in M1's format), each rep's checked fields printed as
 /// `ZKREAL`, `ZKSIM`, `ZKCONTROL` lines, and each session's cross-rep functionals ([`session_relations`]) as `ZKREL` lines, for
-/// `verity/protocols/proofs/flock/prover/tests/zk_stats.py`. Needs the `seed-injection` harness.
+/// `tests/verity/protocols/proofs/flock/prover/zk_stats.py`. Needs the `seed-injection` harness.
 #[cfg(feature = "seed-injection")]
 fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "32").parse().unwrap();
@@ -3500,7 +3500,7 @@ fn outer_round(view: &View, rep0: &str) -> Option<usize> {
 /// `zkrewind --zk --n N`: per verifier strategy (`--strategies`, default all), N real sessions and N Goldreich–Kahan
 /// simulations against V* on one tape, each view printed as `ZKVIEW` (its summary), `ZKVIEWP` (each received proof's
 /// checked fields) and, when complete, `ZKVIEWREL` (the session's cross-rep relations) for
-/// `verity/protocols/proofs/flock/prover/tests/zk_rewind_stats.py`, and each strategy's simulator statistics as `ZKREWIND`. With
+/// `tests/verity/protocols/proofs/flock/prover/zk_rewind_stats.py`, and each strategy's simulator statistics as `ZKREWIND`. With
 /// `--session-tables J`, every view is a session of J tables: each proof and relation line names its table, and V*'s targeted
 /// round is table 0's rep 0's.
 #[cfg(feature = "seed-injection")]
@@ -3585,7 +3585,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
 /// `late-gated`, `--eps`), A real sessions give its completion rate; then, conditioned on an extraction run that reached the
 /// proofs with its gate "bad", A rewinds with a fresh dummy opening each (as `gk_simulate` does) must complete at the same
 /// rate, not at ε. `--reuse-dummy` also runs A rewinds on the extraction run's own dummy opening, the defect, to show the
-/// comparison has power. Prints `ZKGK` lines for `verity/protocols/proofs/flock/prover/tests/zk_rewind_stats.py`. `--session-tables J`: sessions of
+/// comparison has power. Prints `ZKGK` lines for `tests/verity/protocols/proofs/flock/prover/zk_rewind_stats.py`. `--session-tables J`: sessions of
 /// J tables, as in `zkrewind`.
 #[cfg(feature = "seed-injection")]
 fn zkgk(st: &Arc<Stmt>, inst: &Arc<Instances>) {

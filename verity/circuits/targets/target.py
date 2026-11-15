@@ -166,7 +166,7 @@ __all__ = [
 
 #: The tensor-core gate families' names and versions.  Each ``veritor.*`` spelling is baked into a ``*_FAMILY_DIGEST``
 #: pin, fixtures and recorded runs, so it stays; a new family takes a fresh id outside ``veritor.*``
-#: (``verity/circuits/tests/test_targets_frozen_families.py``).
+#: (``tests/verity/circuits/test_targets_frozen_families.py``).
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
 #: The family-name prefix of FIRST's vocabulary on another BF16 pipeline.
 TC_BF16_NAME_PREFIX = "veritor.tc-bf16."

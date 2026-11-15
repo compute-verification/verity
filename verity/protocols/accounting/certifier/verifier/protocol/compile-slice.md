@@ -74,7 +74,7 @@ class is protocol structure. So a session proves every window at its engine's cl
 D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1). The scheduler is engine configuration, so it
 is the class's and never a window's: an AS chosen per window would show whether the window's schedule matched sync
 order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
-(`verity/protocols/accounting/certifier/verifier/tests/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
+(`tests/verity/protocols/accounting/certifier/verifier/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
 decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv``
 (`verity_vllm.compiler.served_rows.step_rows`), each held to its request's slot through ``map``.
 - It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of

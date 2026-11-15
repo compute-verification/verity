@@ -20,7 +20,7 @@ from verity.commitments.periods import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 
-_SERVICE_TESTS = Path(__file__).resolve().parents[4] / "verity/protocols/proofs/spot/verifier/tests"
+_SERVICE_TESTS = Path(__file__).resolve().parents[4] / "tests/verity/protocols/proofs/spot/verifier"
 if str(_SERVICE_TESTS) not in sys.path:
     sys.path.insert(0, str(_SERVICE_TESTS))
 

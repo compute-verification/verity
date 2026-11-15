@@ -64,7 +64,7 @@ def _stage(tp, wt, out: Path, reads: str) -> Path:
     rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
     out.mkdir()
     st = CS.UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", reads=reads)
-    st.stage(rows, out, hashlib.sha256(b"verity/tests/serving-rows-gates").digest())
+    st.stage(rows, out, hashlib.sha256(b"tests/verity/serving-rows-gates").digest())
     return out
 
 

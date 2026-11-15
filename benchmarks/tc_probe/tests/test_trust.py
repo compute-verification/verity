@@ -52,7 +52,7 @@ TARGET = "fp8-ada-mma-draft/2026-09-22"
 INSTRUCTION = "sm89.mma.m16n8k32.e4m3"
 MODEL = "ada_e4m3_m16n8k32"
 ANCHOR = "rtx4090"
-GOLDEN = "verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json"
+GOLDEN = "tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json"
 FAMILIES = ("randn_zero_acc", "randn_random_acc", "uniform_bits", "adder_width_cancellation", "zero_products_nonzero_acc",
             "acc_only_lsb_walk", "specials")
 
@@ -598,7 +598,7 @@ def test_canary_seed_changes_the_tiles_but_the_plan_shape_stays(canary: ModuleTy
 def test_canary_bf16_anchor_prefers_its_own_capture_directory(canary: ModuleType) -> None:
     plan = canary.canary_plan("sm80.mma.m16n8k16.bf16", REPO_ROOT)
     assert "D2" in plan.regression
-    assert plan.replays == ("verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",)
+    assert plan.replays == ("tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",)
     assert {"adder_width_cancellation", "acc_only_lsb_walk", "zero_products_nonzero_acc", "specials"} <= set(plan.families)  # pin-bf16: BF16 has them too
     assert "fp8_floor_probe" not in plan.families                                             # the D15(b) probe is FP8-only
 
@@ -666,7 +666,7 @@ def test_tc_probe_tool_declaration_keys_the_canary_flag() -> None:
 def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> None:
     """``tc_probe --replay-capture`` compares the hardware with the recorded words and with the declared model; a replay is clean only
     if all three counts are zero (veritor's H100 wgmma capture, the reference of sm90.wgmma.m64n8k16.bf16)."""
-    clean = {"file": "verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz", "records": 44046, "mismatches": 0,
+    clean = {"file": "tests/verity/circuits/ops/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz", "records": 44046, "mismatches": 0,
              "model_mismatches": 0, "other_positions_nonzero": 0, "pipeline": "veritor tc-hopper-2026-09-07"}
     assert trust._replay_summary("capture_replay", clean)["mismatches"] == 0
     assert trust._replay_summary("capture_replay", {**clean, "model_mismatches": 3})["mismatches"] == 3

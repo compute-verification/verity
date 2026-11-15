@@ -102,8 +102,8 @@ _A100_RUN = (
     "accumulators, 0 mismatches against silicon.tc_dot (verity/circuits/silicon/discrepancy_log.json D2, D9)"
 )
 _ADA_RUN = "the verity `run` (RTX 4090, sm_89): the same 25,698,304 elements, 0 mismatches (D2, D9)"
-_GOLDEN_BF16 = "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json (360 records)"
-_GOLDEN_E4M3 = "verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json"
+_GOLDEN_BF16 = "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json (360 records)"
+_GOLDEN_E4M3 = "tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json"
 _H100_PROBE = "verity on an H100 80GB HBM3 (cc 9.0, driver 570.211.01, nvcc 12.4.131), one PTX op per tile, seed 20260902"
 _H100_WGMMA_E4M3 = (_H100_PROBE + ": the `run` of wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 / 1x QGMMA.64x8x32.F32.E4M3.E4M3, "
                     "descriptor (LBO,SBO)=(128,256) K-major no-swizzle, 25,554,432 elements, 0 mismatches; adder-width residual survives at 2^-13 and "
@@ -169,7 +169,7 @@ _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
     "570.195.03, SASS 166a24a0...): lockfile records 1,574,998/1,574,998 dot statements bit-exact under model5 "
     "(the JSON itself scores the clip-less model2 at 1,574,997/1,574,998, D12); the 1,601 recorded sample vectors "
-    "replay 1,601/1,601 in verity (verity/circuits/ops/tests/test_models.py) -- replicas verity/circuits/silicon/captures/autoproof-{SEMANTICS.lock.v1,"
+    "replay 1,601/1,601 in verity (tests/verity/circuits/ops/test_models.py) -- replicas verity/circuits/silicon/captures/autoproof-{SEMANTICS.lock.v1,"
     "probe-vectors}.json"
 )
 _AUTOPROOF_UNSCALED = (
