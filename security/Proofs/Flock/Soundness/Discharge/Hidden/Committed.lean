@@ -110,7 +110,7 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
     (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
-      bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) := by
+      bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g p) := by
   unfold Binding.bytesAt Binding.bitsAt bytesOf
   congr 1
   funext j
@@ -125,7 +125,7 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
   show FlockSoundness.bit ((L.model regs).block z o
     (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) = _
   rw [hin]
-  exact (blockBit_of_lt _ z o hy).symm
+  exact (chunkBit_of_lt _ z o hy).symm
 
 /-- **The `b ‖ c` a satisfying witness of a sampled hidden-output statement holds at a proved unit's `hm96` slot** is the
 unit's `b ‖ c` in the registered population's public file, at every row `p`, input or output (`Layout.bc_sampled` at
@@ -184,19 +184,19 @@ include L L0 F0 hv1 hda hrows
 of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
-    (hzero : blockBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
+    (hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) :
-    bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
+    bytesOf (chunkBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
         (Typed.msgCol st.c g (HmOut.nIn st.c + j)) =
-      outBytes (blockBit (L.model regs) z o) st.c g j := by
+      outBytes (chunkBit (L.model regs) z o) st.c g j := by
   have hG := outGroup_single hrows.2.1 hj
   unfold bytesOf outBytes
   congr 1
   funext b
   have hb := b.isLt
   have hcopy : ∀ t : Fin 8,
-      blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
-        blockBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
+      chunkBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
+        chunkBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
     have ht := t.isLt
     have e1 : 2 * (b.val / 2) + (8 * (b.val % 2) + t.val) / 8 = b.val := by omega
     have e2 : (8 * (b.val % 2) + t.val) % 8 = t.val := by omega
@@ -212,7 +212,7 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     rw [hcopy t, outSrc, hG]
     simp only [hk, ↓reduceIte, Nat.add_assoc]
   · simp only [hk, ↓reduceIte]
-    have h0 : (fun t : Fin 8 => blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val)) =
+    have h0 : (fun t : Fin 8 => chunkBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val)) =
         fun _ => false := by
       funext t
       rw [hcopy t, outSrc, hG]
@@ -236,14 +236,14 @@ theorem outputs_committed' : OutputsCommitted := by
   have hrows : OutRows st.c := out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := sat_flat L L0 F0 hv1 hda hrows hz
   have hupv := upv_pos F0.check ho
-  have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false := zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
+  have hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false := zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
   obtain ⟨hpl, -⟩ := hrows.2.2 j hj
-  have hbc : bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
+  have hbc : bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-          bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
+          bytesOf (chunkBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
             (Typed.msgCol st.c g (HmOut.nIn st.c + j)))
-        (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
+        (bytesOf (chunkBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
     have := row_bc_flat L0 F0 rfl hupv hv1 hz0 o hg hpl
     rw [getElem!_eq_getD'] at this
     exact this
