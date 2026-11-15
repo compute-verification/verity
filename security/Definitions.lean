@@ -47,6 +47,9 @@ public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
 public import Definitions.Certifier.ResponseTie
 public import Definitions.Registration.Sheets
+public import Definitions.Registration.View
+public import Definitions.Registration.Guarantees
+public import Definitions.Registration.Guarantees.Witnesses
 public import Definitions.ResourceAccounting
 public import Definitions.Spot
 public import Definitions.Claims

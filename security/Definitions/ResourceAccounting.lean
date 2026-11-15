@@ -50,9 +50,6 @@ public import Definitions.Poub.RateAuditSketch
 public import Definitions.Poub.RateAuditSketchDeployed
 public import Definitions.Poub.RateAuditSketchInteractive
 public import Definitions.Poub.RateAuditSketchLayout
-public import Definitions.Registration.View
-public import Definitions.Registration.Guarantees
-public import Definitions.Registration.Guarantees.Witnesses
 public import Definitions.ResourceAccounting.ReadUnit
 public import Definitions.ResourceAccounting.Records
 public import Definitions.ResourceAccounting.RecordsToy
