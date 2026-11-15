@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import struct
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,7 @@ from verity_vllm.observe.events import (
     ViewDesc,
 )
 from verity_vllm.observe.log import LogWriter
+from verity_vllm.program import lifting
 from verity_vllm.records.workload import SCHEMA
 
 V, S, PROMPT_LEN, MAX_TOKENS = 64, 4, 5, 3
@@ -51,12 +54,15 @@ def _launch(event: int, step: int, kernel: str, args: dict, constexprs: dict) ->
 def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple[str, int] | None = None, without_logits: tuple[int, ...] = (),
              without_arg: str | None = None, masked_xor: int | None = None, device_seed: int | None = None, header_seeds: dict | None = None,
              manifest_seeds: dict | None = None, header_first: bool = True, attested_lag: bool = True,
-             header_sampling: Any = HEADER_SAMPLING) -> tuple[Path, Path]:
+             header_sampling: Any = HEADER_SAMPLING, top_p_arg: str = "P", masked_dtype: str = "float32",
+             manifest_top_k: int | None = None) -> tuple[Path, Path]:
     """Write the capture under `root/capture` and its workload manifest; return (the run directory, the manifest).  The keywords
     each change one thing: the served token of step `served_xor`'s first row, a launch that is absent (`(kernel, step)`), steps whose
     logits rows were not snapshotted, a small buffer of the Gumbel launch that was not, one word of step `masked_xor`'s masked row,
     the seed the kernels consumed for the first request, the seeds the header or the manifest declares, a log without its header, a
-    header that does not attest the scheduler's profile, the sampling the header's workload states (`ABSENT`: it states none)."""
+    header that does not attest the scheduler's profile, the sampling the header's workload states (`ABSENT`: it states none), the
+    name the mask launch gives its top-p buffer, the dtype the Gumbel launch states for its masked rows (under `bfloat16` the
+    snapshot holds each word's upper half), the top-k the manifest's variant declares (none: it declares none)."""
     capture = root / "capture"
     (capture / "values").mkdir(parents=True)
     entries = []
@@ -83,7 +89,7 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
                                 num_reqs=n, num_tokens=n, num_tokens_padded=n))
             logits = (np.sin(np.arange(n * V) * 0.37 + step).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16).reshape(n, V)
             alloc = 100 * (step + 1)
-            logits_view, masked_view = _view(alloc, (n, V), "bfloat16"), _view(alloc + 1, (n, V), "float32")
+            logits_view, masked_view = _view(alloc, (n, V), "bfloat16"), _view(alloc + 1, (n, V), masked_dtype)
             small = {"P": _view(alloc + 2, (n,), "float32"), "seeds_ptr": _view(alloc + 3, (n,), "int64"),
                      "pos_ptr": _view(alloc + 4, (n,), "int64"), "temp_ptr": _view(alloc + 5, (n,), "float32"),
                      "expanded_idx_mapping_ptr": _view(alloc + 6, (n,), "int32")}
@@ -95,7 +101,7 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
                 masked.append(masked_row)
             mask_event, gumbel_event = 2 * step + 1, 2 * step + 2
             if without_launch != ("_topp_sb_mask_kernel", step):
-                log.write(_launch(mask_event, step, "topk_topp_triton._topp_sb_mask_kernel", {"P": small["P"]}, {"S": S}))
+                log.write(_launch(mask_event, step, "topk_topp_triton._topp_sb_mask_kernel", {top_p_arg: small["P"]}, {"S": S}))
             if without_launch != ("_gumbel_sample_kernel", step):
                 log.write(_launch(gumbel_event, step, "gumbel._gumbel_sample_kernel",
                                   {"logits_ptr": masked_view} | {k: v for k, v in small.items() if k != "P"}, {}))
@@ -104,13 +110,13 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
             masked_words = np.concatenate(masked)
             if masked_xor == step:
                 masked_words[3] ^= 1
-            put(gumbel_event, "logits_ptr", masked_view, masked_words, step)
+            put(gumbel_event, "logits_ptr", masked_view, masked_words >> 16 if masked_dtype == "bfloat16" else masked_words, step)
             consumed = {"P": [_f32(TOP_P)] * n, "seeds_ptr": [device_seed if device_seed is not None and r == REQUESTS[0][0] else s
                                                               for r, s in REQUESTS],
                         "pos_ptr": [pos] * n, "temp_ptr": [_f32(TEMPERATURE)] * n, "expanded_idx_mapping_ptr": list(range(n))}
             for arg, words in consumed.items():
                 if arg != without_arg:
-                    put(mask_event if arg == "P" else gumbel_event, arg, small[arg], words, step)
+                    put(*((mask_event, top_p_arg) if arg == "P" else (gumbel_event, arg)), small[arg], words, step)
             if served_xor == step:
                 tokens[0] ^= 1
             if without_launch != ("SampleEnd", step):
@@ -121,7 +127,8 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
     manifest.write_text(json.dumps({"schema": SCHEMA, "model": "m", "engine": {}, "sampling": {"variant": "stoch"},
                                     "requests": [{"request_id": r, "prompt_len": PROMPT_LEN, "max_tokens": MAX_TOKENS, "seed": declared[r]}
                                                  for r, _ in REQUESTS],
-                                    "variants": {"stoch": {"temperature": TEMPERATURE, "top_p": TOP_P}}}))
+                                    "variants": {"stoch": {"temperature": TEMPERATURE, "top_p": TOP_P}
+                                                 | ({} if manifest_top_k is None else {"top_k": manifest_top_k})}}))
     return root, manifest
 
 
@@ -241,7 +248,7 @@ def test_an_early_eos_is_unjudged_without_the_scheduler_profile_and_never_read_a
     assert (_ledger(rep)["requests"]["a"]["finish"], _ledger(rep)["requests_unjudged"], len(_ledger(rep)["problems"])) == ("unjudged", 1, 1)
     assert len(rep["reasons"]) == 1 and "is unattested: the lag slot cannot be judged" in rep["reasons"][0]
     monkeypatch.setattr(SR, "expected_executed_slots", lambda served, bound, A, eos_ids: ([1, 2, 3], {"t_eos": 1, "n_executed": 3}))
-    with pytest.raises(TypeError, match="sample ledger a: an EOS at slot 1 of 3 was judged without the scheduler profile"):
+    with pytest.raises(TypeError, match=r"int\(\) argument must be .*, not 'NoneType'"):
         _recompute(run, manifest, build_dir=run)
 
 
@@ -271,6 +278,31 @@ def test_the_programs_split_count_is_held_to_the_mask_kernels_at_every_row(tmp_p
     assert rep["reasons"][0] == "step 0 row 0 (a): the Build has no request Program for this request's shape -- its S is undeclared"
 
 
+def test_a_run_told_no_evaluator_walks_the_lane_and_one_told_no_reference_rows_walks_none_beside_the_rows(tmp_path):
+    run, manifest = _capture(tmp_path)
+    log, snapshots = run / "capture" / "log.jsonl.gz", run / "capture"
+    lane = SR.recompute_run(log, snapshots, workload=str(manifest), jobs=1)
+    assert (lane["summary"]["verdict"], lane["summary"]["rows"], lane["evaluator"]["name"]) == ("PASS", _tally(exact=6), "lane")
+    assert (lane["log"], lane["workload"], lane["build"]) == (str(log), str(manifest), None)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", lane["utc"])
+    rows = SR.recompute_run(log, snapshots, workload=str(manifest), jobs=1, evaluator="rows")
+    reference = rows["evaluator"]["reference"]
+    assert (rows["summary"]["verdict"], rows["evaluator"]["name"]) == ("PASS", "rows")
+    assert (reference["reference_evaluator"], reference["rows_requested"], reference["rows_checked"]) == (None, 0, 0)
+
+
+def test_a_build_result_that_cannot_be_read_fails_the_check_by_its_path_beside_one_that_declares_the_split_count(tmp_path):
+    run, manifest = _capture(tmp_path)
+    torn = run / "build_request1" / "result.json"
+    torn.parent.mkdir()
+    torn.write_text("{")
+    rep = _recompute(run, manifest, build_dir=_build(run, S))
+    assert (rep["summary"]["verdict"], rep["summary"]["rows"], rep["program_splits"]) == ("FAIL", _tally(exact=6), {"a": S, "b": S})
+    (reason,) = rep["reasons"]
+    assert reason.startswith(f"Build result unreadable ({torn}: JSONDecodeError(")
+    assert reason.endswith("): the Program's S of its request shape is not read")
+
+
 def test_a_seed_the_kernels_consumed_that_is_not_the_declared_one_fails_though_the_token_matches(tmp_path):
     run, manifest = _capture(tmp_path, device_seed=8)
     rep = _recompute(run, manifest)
@@ -294,6 +326,27 @@ def test_a_fact_the_kernels_consumed_that_was_not_snapshotted_is_not_tied_to_the
                                  "tied to the execution at this step")
 
 
+def test_the_top_p_the_mask_kernel_consumed_is_read_under_its_buffers_other_name(tmp_path):
+    run, manifest = _capture(tmp_path, top_p_arg="p_ptr")
+    rep = _recompute(run, manifest)
+    s = rep["summary"]
+    assert (s["verdict"], rep["reasons"], s["device_facts_all_match"], s["device_facts_rows"]) == ("PASS", [], True, 6)
+    assert all(r["device"]["top_p"] == pytest.approx(TOP_P) and r["device_facts_not_snapshotted"] == [] for r in rep["rows"])
+
+
+def test_a_masked_row_its_launch_states_in_bfloat16_is_held_to_the_definitions_as_the_fp32_of_its_values(tmp_path):
+    """The snapshot holds the upper half of each word of the Definition's masked row.  Read as fp32 it is that word with a zero
+    lower half: a lane the mask put out (-inf) is equal, and a lane whose word has a lower half differs and is named."""
+    run, manifest = _capture(tmp_path, masked_dtype="bfloat16")
+    rep = _recompute(run, manifest)
+    assert (rep["summary"]["verdict"], rep["summary"]["rows"], rep["summary"]["masked_rows_all_equal"]) == ("FAIL", _tally(exact=6), False)
+    for r in rep["rows"]:
+        diffs = [(int(d["recomputed"], 16), int(d["observed"], 16)) for d in r["masked_row_first_diffs"]]
+        assert 0 < r["masked_row_equal_lanes"] < V and len(diffs) == min(8, V - r["masked_row_equal_lanes"])
+        assert all(observed == recomputed & 0xFFFF0000 != recomputed for recomputed, observed in diffs)
+    assert rep["reasons"][0].startswith("step 0 row 0 (a): the kernel-consumed masked fp32 row differs from TemperatureScale->TopPMask")
+
+
 def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the_declared_fact(tmp_path):
     run, manifest = _capture(tmp_path, header_seeds={"b": 10})
     rep = _recompute(run, manifest)
@@ -307,6 +360,28 @@ def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the
     assert rep["summary"]["verdict"] == "FAIL" and rep["summary"]["rows"]["mismatch"] + rep["summary"]["rows"]["exact-match"] == 6
     assert "a: manifest declares seed=8 but the run's header records seed=7" in rep["reasons"]
     assert "step 0 row 0 (a): the sampler kernels consumed seed=7 but the manifest declares seed=8" in rep["reasons"]
+
+
+def test_a_seed_is_held_to_the_header_s_as_an_integer(tmp_path):
+    """Two seeds that round to one fp32 disagree: only the temperature and the top-p are held at that width."""
+    rep = _recompute(*_capture(tmp_path, manifest_seeds={"b": 2 ** 24}, header_seeds={"b": 2 ** 24 + 1}))
+    assert rep["header_vs_manifest"] == ["b: manifest declares seed=16777216 but the run's header records seed=16777217"]
+
+
+def test_a_top_k_is_held_to_the_header_s_as_an_integer(tmp_path):
+    """As a seed is: two top-k values that round to one fp32 disagree."""
+    rep = _recompute(*_capture(tmp_path, manifest_top_k=2 ** 24, header_sampling=HEADER_SAMPLING | {"top_k": 2 ** 24 + 1}))
+    assert rep["header_vs_manifest"] == [f"{r}: manifest declares top_k=16777216 but the run's header records top_k=16777217" for r, _ in REQUESTS]
+
+
+def test_a_header_whose_temperature_and_top_p_are_the_manifest_s_as_fp32_agrees_with_it(tmp_path):
+    """The kernels consume both as fp32, so the two are held to each other at that width: a header that records the fp32
+    values the manifest's round to declares the same facts."""
+    as_fp32 = {"temperature": float(np.float32(TEMPERATURE)), "top_p": float(np.float32(TOP_P)), "top_k": 0}
+    assert as_fp32["temperature"] != TEMPERATURE and as_fp32["top_p"] != TOP_P
+    rep = _recompute(*_capture(tmp_path, header_sampling=as_fp32))
+    assert (rep["summary"]["verdict"], rep["header_vs_manifest"], rep["reasons"]) == ("PASS", [], [])
+    assert rep["run_header_facts"]["a"]["temperature"] == as_fp32["temperature"] and rep["declared_facts"]["a"]["temperature"] == TEMPERATURE
 
 
 @pytest.mark.parametrize("left_out", [ABSENT, None, {}], ids=["absent", "null", "empty"])
@@ -355,6 +430,48 @@ def test_an_evaluator_it_does_not_know_is_refused_and_a_log_without_its_header_i
     run, manifest = _capture(tmp_path / "headless", header_first=False)
     with pytest.raises(AttributeError, match="object has no attribute 'workload'"):
         _recompute(run, manifest)
+
+
+def test_a_run_loads_the_continuation_only_for_a_request_whose_rule_its_ledger_reads(tmp_path, monkeypatch):
+    """The continuation registers its Definitions in the core's table as it loads, so a run whose ledger reads no request's
+    rule leaves the table as it found it."""
+    run, manifest = _capture(tmp_path)
+    monkeypatch.delattr(lifting, "continuation", raising=False)
+    monkeypatch.setitem(sys.modules, f"{lifting.__name__}.continuation", None)   # an import of it from here on fails
+    rep = _recompute(run, None)                                                  # no manifest: no length bound, so no rule is read
+    assert rep["summary"]["verdict"] == "PASS" and all("finish" not in e for e in _ledger(rep)["requests"].values())
+    with pytest.raises(ImportError, match="continuation"):
+        _recompute(run, manifest)
+
+
+def test_the_run_loads_the_lane_before_it_reads_its_log_and_the_pool_loads_none_in_its_parent(tmp_path, monkeypatch):
+    """A worker the pool forks starts with the lane's interpreter and Definition loaded because the run loaded both at its
+    opening, under either evaluator; the pool itself loads neither where it is called."""
+    class Loaded(Exception):
+        pass
+
+    def lane():
+        raise Loaded
+
+    monkeypatch.setattr(SR, "_lane", lane)
+    with pytest.raises(Loaded):
+        SR.recompute_run(tmp_path / "no log.jsonl.gz", tmp_path, evaluator="rows")
+    handed = []
+
+    class Pool:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def imap(self, fn, jobs, chunksize):
+            handed.append((fn, list(jobs), chunksize))
+            return [fn.__name__ for _ in jobs]
+
+    monkeypatch.setattr(SR, "fork_pool", lambda workers: Pool())
+    jobs = [(V, S, None), (V, S, None)]
+    assert SR._evaluate_all(jobs, 2) == ["_eval_job", "_eval_job"] and handed == [(SR._eval_job, jobs, 1)]
 
 
 @pytest.mark.parametrize("kw, verdict, code", [({}, "PASS", 0), ({"served_xor": 0}, "FAIL", 1), ({"without_logits": (1,)}, "INCOMPLETE", 1),

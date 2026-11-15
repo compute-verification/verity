@@ -10,7 +10,11 @@ to a deployment configuration (`config.Component`), which is where it says what 
   and the messages sent before them (`after`);
 - its messages: the wire schemas (`verity.channel.Schema`), each with its kind.
 
-`ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`).
+`ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`), and
+for a party a deployment starts on its machine, its starter (`starts`): from the configuration as data, the party's deploy
+bindings for the protocol (`[PARTY.COMPONENT]`, the hosts and addresses no configuration states) and its state directory,
+what the run hands it (`Start`): its parameters and its machine's capabilities by name. The clock a party reads is
+the deployment's, by the name the party's header gives.
 
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
@@ -34,6 +38,10 @@ Monitoring periods: ticks, spans of ticks and the monitoring period, the Python 
   presented for (week, month, year), each with its length in seconds, and `DELTAS`, the δs its bounds are stated at
   (1/100 and 10⁻⁶). PoUS's wipe table, PoUB's session table and the block record each pool their figures over every
   period at every δ.
+- The one rule for a row's error. A row's error is the sum of the errors of everything the row covers: every check of
+  its period on every machine of its scope (`summed`). A sum of 1 or more bounds nothing, so the row prints `NO_BOUND`
+  with that sum in place of every amount (`no_bound`), its `free` and its `verified` included; the error itself is still
+  printed.
 - `block_count(seconds, block_s, machines)`: the blocks a monitoring period of `seconds` holds over `machines` machines,
   each audited in whole `block_s`-second blocks: the one count every period table scales a block's figures by.
 
@@ -47,6 +55,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from verity.channel import NAME, MessageTypes, Refused, Schema
@@ -141,11 +150,30 @@ class Manifest:
 
 
 @dataclass(frozen=True)
+class Start:
+    """What a run hands a party it starts: its parameters and its machine's capabilities by name
+    (`Identity.capabilities`)."""
+
+    params: Mapping[str, Any]
+    capabilities: Mapping[str, Any] = field(default_factory=dict)
+
+
+type Starter = Callable[[Mapping[str, Any], Mapping[str, Any], Path | None], Start]
+"""A party's start from the configuration, its deploy bindings for the protocol and its state directory."""
+
+
+@dataclass(frozen=True)
 class ProtocolDef:
-    """A protocol as a run takes it: its manifest, and a factory for each of its parties."""
+    """A protocol as a run takes it: its manifest, a factory for each of its parties, and a starter for each party a
+    deployment starts on its machine."""
 
     manifest: Manifest
     parties: Mapping[str, Callable[[], Party]]
+    starts: Mapping[str, Starter] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if extra := sorted(set(self.starts) - set(self.parties)):
+            raise ValueError(f"{self.manifest.protocol} starts {extra}, which it has no factory for")
 
 
 # --- placement ----------------------------------------------------------------------------------------------------------
@@ -266,6 +294,20 @@ def site_of(machines: Sequence[Mapping[str, Any]], links: Sequence[Mapping[str, 
 MONITORING_PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
 #: The δs a period's bounds are stated at.
 DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10 ** 6))
+#: What a row prints in place of every amount where its error is 1 or more.
+NO_BOUND = "no bound at this period"
+
+
+def summed(error: Fraction | float | int, checks: int = 1) -> Fraction:
+    """The error of a row that covers `checks` checks alike, each failing with at most `error`: their sum, exactly (a
+    float counts at its exact value)."""
+    return Fraction(error) * checks
+
+
+def no_bound(error: Fraction | float | int) -> str | None:
+    """Why a row whose error is `error` (`summed`) states no amount: None while the error is under 1, and at 1 or more
+    `NO_BOUND` with the error, which the row prints in place of every amount."""
+    return None if error < 1 else f"{NO_BOUND}: the row's error, {float(error):.4g}, is 1 or more"
 
 
 class PeriodError(ValueError):
@@ -409,5 +451,6 @@ class MonitoringPeriod:
         return cls.of(span, execution, [_ticks(bs, "monitoring period.sampling") for bs in o["sampling"]])
 
 
-__all__ = ["DELTAS", "MONITORING_PERIODS", "Channel", "Cut", "Manifest", "MonitoringPeriod", "PeriodError", "PlaceResult",
-           "ProtocolDef", "Role", "TickSpan", "Topology", "block_count", "place", "site_of"]
+__all__ = ["DELTAS", "MONITORING_PERIODS", "NO_BOUND", "Channel", "Cut", "Manifest", "MonitoringPeriod", "PeriodError",
+           "PlaceResult", "ProtocolDef", "Role", "Start", "Starter", "TickSpan", "Topology", "block_count", "no_bound",
+           "place", "site_of", "summed"]

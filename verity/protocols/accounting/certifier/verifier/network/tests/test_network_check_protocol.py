@@ -325,7 +325,7 @@ def _grid_json(g: GridParams) -> dict:
 
 
 @dataclasses.dataclass
-class Drawn:
+class Sampled:
     """A generated spatial unit before it is encoded: the change `m` (sampled with `n`), its parameters as JSON, the
     certified records, each execution phase's raw record and grid by `(direction, link, window)`, the egress links'
     frames and syncs, and the execution phase the change aims at (`target`, and an egress one, `egress_target`, when
@@ -344,7 +344,7 @@ class Drawn:
 
 
 @st.composite
-def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = False) -> Drawn:
+def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = False) -> Sampled:
     m = draw(st.sampled_from(only))
     n = draw(st.integers(0, 1 << 16))
     carries = m in ("late", "frames")
@@ -432,9 +432,9 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         ingress_parameters = parameters_digest(certified_grid)
 
     signer = _Signer(key)
-    drawn_salts = itertools.count()
+    sampled_salts = itertools.count()
     issuer = Issuer(signer, session,
-                    coins=lambda k: hashlib.shake_256(session + next(drawn_salts).to_bytes(8, "big")).digest(k))
+                    coins=lambda k: hashlib.shake_256(session + next(sampled_salts).to_bytes(8, "big")).digest(k))
     records: list[CertifiedRecord] = []
     raws: dict[tuple[str, str, int], tuple[BlockGrid, GridParams]] = {}
 
@@ -536,10 +536,10 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
                                                               "toy": KEYS[ki][3]},
                    "session": session.hex(),
                    "sync_set": {"deltas": deltas, "rhos": [[r.numerator, r.denominator] for r in rhos]}, "windows": W}
-    return Drawn(m, n, case_params, list(records), raws, egress, frames, syncs, target, egress_target)
+    return Sampled(m, n, case_params, list(records), raws, egress, frames, syncs, target, egress_target)
 
 
-def evidence_bytes(d: Drawn) -> bytes:
+def evidence_bytes(d: Sampled) -> bytes:
     return D.canonical({"links": [{"frames": [[f.payload.hex(), f.anchor, f.index] for f in d.frames[l]],
                                    "syncs": [_sync_json(s) for s in d.syncs[l]]} for l in d.egress]}).encode()
 

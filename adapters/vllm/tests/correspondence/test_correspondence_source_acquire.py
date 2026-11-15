@@ -1,4 +1,4 @@
-"""The plan reads its owning modules off ONE reader -- the `runtime-correspondence/v1` record (`verity_vllm.correspondence.runtime`) -- and
+"""The plan reads its owning modules off ONE reader -- the `runtime-correspondence/v1` record (`verity_torch.correspondence.runtime`) -- and
 falls back to the manifest's v1-annotation reading only when a Build carries no record; either way the plan says which (`correspondence`
 block), and the plan's CONTENT (sites, digest) is the same under both sources on the same manifest + tree."""
 from __future__ import annotations
@@ -7,7 +7,7 @@ import pytest
 
 from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
 from verity_vllm.acquire import plan as P
-from verity_vllm.correspondence import runtime as RC
+from verity_torch.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ReturnSlot,

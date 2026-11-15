@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Accounting.RateAudit.Honest
-public import Definitions.Accounting.BandwidthAudit
+public import Proofs.Poub.RateAudit.Honest
+public import Definitions.Poub.BandwidthAudit
 public import Mathlib.Logic.Equiv.PartialEquiv
 public import Std.Tactic.BVDecide.Normalize.Prop
 import Mathlib.Algebra.Order.Floor.Extended
@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.RateAudit.Interactive
+import Proofs.Poub.RateAudit.Interactive
 import Proofs.Pouw.Prob
 
 /-!

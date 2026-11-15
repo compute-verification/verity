@@ -60,7 +60,7 @@ The proof never looks inside the parser: each side reads one parse of one text.
 
 `coinTie_core` is the tie in the verifier's code: rep `r`'s round `m` has the coins of `readFull`'s round of that stream
 at round `sp m`, where `sp` is the identity or skips the split round. `staged_coinTie` takes it to a staged part, at the
-record `shownOf recRead` reads, and `staged_coinTie_drawn` to `showsTr`: each such round's coins are the values its coin
+record `shownOf recRead` reads, and `staged_coinTie_sampled` to `showsTr`: each such round's coins are the values its coin
 drew (`Drawn`).
 -/
 
@@ -586,7 +586,7 @@ theorem some_beq_some {α : Type} [BEq α] [LawfulBEq α] {a b : α} : ((some a 
 (`tt`, its JSON `tr`) and the inner session's record (`record`), and `Record.decode` decodes that record, each round
 `m` of the record's stream `name` has the coins of a round of the record `checkReads` reads in its own format
 (`readFull`): of that stream, at round `sp m`, where `sp` is the identity or skips the one split round of a holo
-session's z_partial. `hq` is `qsort`'s membership (`FlockSoundness.Audit.DrawExec.mem_qsort`). -/
+session's z_partial. `hq` is `qsort`'s membership (`FlockSoundness.Audit.SampleExec.mem_qsort`). -/
 theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
@@ -754,7 +754,7 @@ theorem staged_coinTie {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
     exact Option.some.inj hsrc
   rw [hrec] at hdec
   obtain ⟨R', hRead', sp, hsp, hall⟩ := coinTie_core
-    (fun a lt x hx => (FlockSoundness.Audit.DrawExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
+    (fun a lt x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
   rw [hRead] at hRead'
   cases hRead'
   refine ⟨spec'.tables[0]!, sp, hsp, fun m hm => ?_⟩
@@ -765,7 +765,7 @@ theorem staged_coinTie {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
 whose statement shows coins `c`, each round `m` of rep `r`'s coins, as check 5 loads them, is the values its coin
 drew at the inner round `g + 1` that the record holds it at (`Record.msgs`: the link, then the record's rounds), a
 round of rep `r`'s stream at round `sp m`. -/
-theorem staged_coinTie_drawn {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
+theorem staged_coinTie_sampled {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧
       shownOf recRead x xO = some (R.msgs.map fun mc => (mc.1, mc.2.toArray)) ∧

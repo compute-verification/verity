@@ -35,12 +35,12 @@ open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {Reg : Type}
 
 include hU hpub in
 /-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan, with or without shared rows: at a sample
-flock-verify sets up by `tableH_bcSiteS`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
+verity-verify-proof sets up by `tableH_bcSiteS`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
 theorem sitesAtH_bcSiteS :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtH dj x₀) (tabAtH dj x₀) S R u), Binding.Sat (planAtH dj x₀) (tabAtH dj x₀) S R u M →
@@ -50,7 +50,7 @@ theorem sitesAtH_bcSiteS :
   intro S R u h M hM
   show BcSiteH ((tableAtH dj x₀ S).acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub ((tableAtH dj x₀ S).o u h)
     ((tableAtH dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupH I mPts S (dj S))
   · have e : tableAtH dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtH
       rw [dite_eq_left_of_eq_true (eq_true hS)]

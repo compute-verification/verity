@@ -1,10 +1,11 @@
-/-
-The table read's comparator and select as builder programs (`gates.embedding._below`, `_select`; the traced Definition
-`EmbeddingReadSelect_v1{V, H}`).
--/
 module
 
 public import Flock.HmNets
+
+/-!
+The table read's comparator and select as builder programs (`gates.embedding._below`, `_select`; the traced Definition
+`EmbeddingReadSelect_v1{V, H}`).
+-/
 
 @[expose] public section
 

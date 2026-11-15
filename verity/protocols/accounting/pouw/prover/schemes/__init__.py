@@ -1,5 +1,7 @@
 """The named PoUW schemes.  `get(name)` returns a configured `verity.protocols.accounting.pouw.verifier.protocol.PoUWScheme`; each name's module
-docstring states its steps, and its pinned vectors are under ``verifier/tests/vectors``."""
+docstring states its steps, and its pinned vectors are under ``verifier/tests/vectors``.  A name in `EXPERIMENTAL` is
+named here and brought by an experimental package, which `register`s its factory when imported: PoUW imports nothing of
+``verity/protocols/experimental/``, so until then `get` raises `NotImplementedError` naming the seam."""
 
 from __future__ import annotations
 
@@ -29,10 +31,13 @@ def _pearl_c(forming: str, device: str = "h100", *, hashing: str) -> Callable[..
     return make
 
 
-def _pearl_c4(fmt: str, *, hashing: str) -> Callable[..., PoUWScheme]:
+#: name -> the seam of the experimental package that registers it (Pearl-C4: ``verity/protocols/experimental/pearl_c4/``)
+EXPERIMENTAL: dict[str, str] = {"pearl-c-nvfp4-v0": "compute-accounting/pearl-c4-experimental"}
+
+
+def _experimental(name: str) -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
-        from .pearl_c4 import PearlC4
-        return PearlC4(fmt, hashing=hashing, **config)
+        raise NotImplementedError(EXPERIMENTAL[name])
     return make
 
 
@@ -46,7 +51,7 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-c-h100-v1-h3": _pearl_c("v1", hashing="h3"),
     "pearl-c-sm120-v1": _pearl_c("v1", "sm120", hashing="h0"),
     "pearl-c-sm120-v1-h3": _pearl_c("v1", "sm120", hashing="h3"),
-    "pearl-c-nvfp4-v0": _pearl_c4("nvfp4", hashing="h0"),
+    "pearl-c-nvfp4-v0": _experimental("pearl-c-nvfp4-v0"),
 }
 
 
@@ -59,4 +64,11 @@ def get(name: str, **config: Any) -> PoUWScheme:
     return make(**config)
 
 
-__all__ = ["SCHEMES", "get"]
+def register(name: str, make: Callable[..., PoUWScheme]) -> None:
+    """Install ``make`` as the factory of ``name``, a name `EXPERIMENTAL` holds: its package calls this when imported."""
+    if name not in EXPERIMENTAL:
+        raise KeyError(f"{name!r} is not registered by an experimental package; those are: {', '.join(EXPERIMENTAL)}")
+    SCHEMES[name] = make
+
+
+__all__ = ["EXPERIMENTAL", "SCHEMES", "get", "register"]

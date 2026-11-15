@@ -21,21 +21,21 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 # The soundness half of one `--zk` sampled session of `J` tables
 
 `zk_session_soundJ`: `zk_session_sound` at any number of tables. For any live prover `τ` of a public-output `--zk`
-session of `J ≥ 1` tables (`flock-verify verify --zk --session-tables J`, `J = nTab I`),
-`Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+session of `J ≥ 1` tables (`verity-verify-proof verify --zk --session-tables J`, `J = nTab I`),
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesZJ`, `tabZJ`) and bound to the rows it commits
 (`rsZJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the `J` tables `planZJ`.
 
 The same bound shape and assumptions as `zk_session_sound`, with two changes that `J > 1` forces:
 
-* the sampling design is the live subset sample `Law.execOS src (.subset kd) n`, the one flock-verify takes at more than one table
+* the sampling design is the live subset sample `SamplingDesign.execOS src (.subset kd) n`, the one verity-verify-proof takes at more than one table
   (`accepts_tables`; at one table it takes either), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)`
-  at `K ≤ n` (`Law.subset_miss`), under A3 at its one byte source;
-* the tags, the record and the samples are `TagsOk`, `RecordsLiveZK` and `DrawOkZK` at `J` tables (`TagsOkZJ`,
-  `RecordsLiveZKJ`, `DrawOkZKJ`): `TagsOk` without `count ≤ 1`, the record giving each table's `root_B` and rep streams,
+  at `K ≤ n` (`SamplingDesign.subset_miss`), under A3 at its one byte source;
+* the tags, the record and the samples are `TagsOk`, `RecordsLiveZK` and `SampleOkZK` at `J` tables (`TagsOkZJ`,
+  `RecordsLiveZKJ`, `SampleOkZKJ`): `TagsOk` without `count ≤ 1`, the record giving each table's `root_B` and rep streams,
   and the challenger's live-coin part's sample setting each table up at its part.
 
-`ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the sampling design's samples, and `δ_link` reads the plan
+`ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the sampling design's samples, and `ε_bind` reads the plan
 only through the positions the sample reads and `ρ`, a bound on every table's rate, so neither grows with `J`.
 -/
 
@@ -53,7 +53,7 @@ variable {mPts n : ℕ} {Reg : Type}
 theorem zk_session_soundJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -64,29 +64,29 @@ theorem zk_session_soundJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _ (runsZCJ_live I ht dj y₀ wr _ hTags hRec hDraw)) τ
     -- cr/sha-512 for the knowledge finders of its simulation
-    (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
             ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
           k Rw M ρ t' (reg σ) (cont σ) := by

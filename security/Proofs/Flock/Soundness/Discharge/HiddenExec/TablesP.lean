@@ -21,11 +21,11 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 `Tables.lean` at the verifier's public inputs `own` (`Exec.setupOfP I own`):
 
-* `DrawSetupHP I own mPts S d`: `DrawSetupH` with `Stmt.setupHidden … own`;
+* `SampleSetupHP I own mPts S d`: `SampleSetupH` with `Stmt.setupHidden … own`;
 * `TableHP I own mPts S`: `TableH` with that run, and its regions holding the statement's (`hregs`, which
   `AcceptedHP` reads);
-* `DrawSetupHP.table`, `DrawSetupHP.refused`, `tableAtHP`, `planAtHP`, `tabAtHP`, `tablesAtHP`: `DrawSetupH.table`,
-  `DrawSetupH.refused`, `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH` at `own`.
+* `SampleSetupHP.table`, `SampleSetupHP.refused`, `tableAtHP`, `planAtHP`, `tabAtHP`, `tablesAtHP`: `SampleSetupH.table`,
+  `SampleSetupH.refused`, `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH` at `own`.
 -/
 
 @[expose] public section
@@ -34,17 +34,17 @@ namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model Refine Audit
 open FlockSoundness.Discharge.Exec (Inputs)
-open FlockSoundness.Discharge.Integrate (DrawSetup)
+open FlockSoundness.Discharge.Integrate (SampleSetup)
 
 variable {n : ℕ} (I : Inputs) (own : Option ByteArray) (mPts : ℕ)
 
-/-- **A sample flock-verify sets up under hidden outputs at the verifier's public inputs `own`**: `DrawSetupH` with
+/-- **A sample verity-verify-proof sets up under hidden outputs at the verifier's public inputs `own`**: `SampleSetupH` with
 `Stmt.setupHidden … own`. -/
-structure DrawSetupHP (S : Finset (Fin n)) (d : Lean.Json) where
+structure SampleSetupHP (S : Finset (Fin n)) (d : Lean.Json) where
   st : Stmt
   h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program own = .ok st
-  D : Draw.UnitDraw
-  hD : Draw.UnitDraw.ofJson d = .ok D
+  D : Draw.UnitSample
+  hD : Draw.UnitSample.ofJson d = .ok D
   hS : ∀ u ∈ S, u.val ∈ D.proved
   hg : 0 < st.c.g
   hblk : D.proved.size ≤ st.c.g * 2 ^ st.nbl
@@ -76,11 +76,11 @@ structure TableHP (S : Finset (Fin n)) where
 
 variable {I own mPts}
 
-namespace DrawSetupHP
+namespace SampleSetupHP
 
-variable {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetupHP I own mPts S d)
+variable {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetupHP I own mPts S d)
 
-/-- The table at statement regions `regs` (`DrawSetupH.specAt`). -/
+/-- The table at statement regions `regs` (`SampleSetupH.specAt`). -/
 noncomputable def specAt (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) : TabSpec mPts where
   S := stmtOf x.st x.wf.1 regs
@@ -119,7 +119,7 @@ theorem rank_div_lt {u : Fin n} (h : u ∈ S) : x.rank u / x.st.c.g < 2 ^ (x.st.
   rw [Nat.div_lt_iff_lt_mul x.hg, hr.hm, Nat.add_sub_cancel_left, Nat.mul_comm]
   exact lt_of_lt_of_le (x.rank_lt h) x.hblk
 
-/-- **The sample's table** (`DrawSetupH.table`): `stmtOf` of the statement at its regions, each unit at its rank `r`:
+/-- **The sample's table** (`SampleSetupH.table`): `stmtOf` of the statement at its regions, each unit at its rank `r`:
 block `r / c.g`, template instance `r % c.g`. -/
 noncomputable def table : TableHP I own mPts S where
   T := x.specAt (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
@@ -135,21 +135,21 @@ noncomputable def table : TableHP I own mPts S where
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
 /-- The regions of a refused sample's table: the reference setup's, and Integrate's `contra`. -/
-theorem refused_wf : ∀ R ∈ regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog),
+theorem refused_wf : ∀ R ∈ regionsOf x.st ++ SampleSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
   rcases List.mem_append.1 hR with hR | hR
   · exact (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1 R hR
-  · exact DrawSetup.contra_wf R hR
+  · exact SampleSetup.contra_wf R hR
 
-/-- **The table of a refused sample `S'`** (`DrawSetupH.refused`): the reference setup's statement with `contra`'s
+/-- **The table of a refused sample `S'`** (`SampleSetupH.refused`): the reference setup's statement with `contra`'s
 regions, which no witness satisfies. -/
 noncomputable def refused (S' : Finset (Fin n)) : TableHP I own mPts S' where
-  T := x.specAt (regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
+  T := x.specAt (regionsOf x.st ++ SampleSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
   st := x.st
   d := d
   h := x.h
-  regs := regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)
+  regs := regionsOf x.st ++ SampleSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)
   hregs _ hr := List.mem_append_left _ (List.mem_map_of_mem hr)
   hwf := x.wf.1
   hT := rfl
@@ -159,19 +159,19 @@ noncomputable def refused (S' : Finset (Fin n)) : TableHP I own mPts S' where
 
 theorem refused_unsat (S' : Finset (Fin n)) (z : Witness (x.refused S').T.S.m) :
     ¬ (x.refused S').T.S.Satisfies z :=
-  DrawSetup.contra_unsat (S := (x.refused S').T.S) (fun _ hR => List.mem_append_right _ hR) z
+  SampleSetup.contra_unsat (S := (x.refused S').T.S) (fun _ hR => List.mem_append_right _ hR) z
 
-end DrawSetupHP
+end SampleSetupHP
 
-variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupHP I own mPts S₀ (dj S₀))
+variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupHP I own mPts S₀ (dj S₀))
 
 open Classical in
 /-- **The table at sample `S`** at `own` (`tableAtH`). -/
 noncomputable def tableAtHP (S : Finset (Fin n)) : TableHP I own mPts S :=
-  if h : Nonempty (DrawSetupHP I own mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
+  if h : Nonempty (SampleSetupHP I own mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
 
 /-- **A refused sample's table is unsatisfiable** (`tableAtH_unsat`). -/
-theorem tableAtHP_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetupHP I own mPts S (dj S)))
+theorem tableAtHP_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (SampleSetupHP I own mPts S (dj S)))
     (z : Witness (tableAtHP dj x₀ S).T.S.m) : ¬ (tableAtHP dj x₀ S).T.S.Satisfies z := by
   revert z
   unfold tableAtHP

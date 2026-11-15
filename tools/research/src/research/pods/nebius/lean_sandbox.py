@@ -14,7 +14,7 @@ the few below), --elan DIR (default ~research/.elan, read-only at /opt/elan), --
 --memory SIZE, --max-sec N, --user NAME (default lean-build; never root, research or a member of research, sudo, docker or
 adm). Every DEST must exist: systemd would make a missing one on the host's disk (`vy-lean-build-setup` makes /opt/elan).
 
-Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/verity/check/lean_slot.py`'s
+Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/check/lean_slot.py`'s
 format (`lean-build-I.lock` and `.who` beside the file, waiting in arrival order in `lean-line-build`), unless the caller holds
 one (`--held-slot`, which must be held). The lock directory is research's, so root opens nothing there through a link, takes
 only regular files with one name, and gives research only what it made itself; anything else there is refused. It holds the
@@ -164,9 +164,9 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
 
     def privileges():
         st = dict(ln.split(":", 1) for ln in status().splitlines() if ":" in ln)
-        caps = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
+        capabilities = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
         nnp = st.get("NoNewPrivs", "").strip() == "1"
-        return nnp and not any(caps.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in caps.items() if v)
+        return nnp and not any(capabilities.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in capabilities.items() if v)
 
     def sudo_():
         path = which("sudo", path="/usr/bin:/bin:/usr/sbin:/sbin")

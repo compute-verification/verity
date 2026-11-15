@@ -50,7 +50,7 @@ theorem honest_boundedBy :
     (pricedHonest_bounded (D1.m1 D1.m1Wref) (M1.queryBound D1.m1Wref) M1.sixteen H s).2⟩
 
 theorem dot_correct (H : Unit → Unit) (s : Unit) (u : Fin 1) :
-    (u : ℕ) ∈ correctSet acceptAll dot H s (commitAll.transcript dot H s) := by
+    (u : ℕ) ∈ correctSet acceptAll dot H s (commitAll.trace dot H s) := by
   classical
   unfold correctSet
   rw [Finset.mem_filter]
@@ -92,7 +92,7 @@ theorem SpareCapacityAtDeadline_honest :
 probability 1, above `(1 − 1/2)^1 + 0`, while the run spends nothing. -/
 theorem WorkBetweenSaltAndDeadline_nontrivial :
     ¬ pr (fun x : (Unit → Unit) × Unit × (Fin 1 → Ticket (acceptAll.Wref dot.layout) dot.layout.N) =>
-        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.transcript dot x.1 x.2.1))
+        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.trace dot x.1 x.2.1))
             x.2.2 ∧
           (0 : ℝ) < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout ∧
           ¬ commitAll.Breaks dot x.1 x.2.1)
@@ -107,7 +107,7 @@ theorem WorkBetweenSaltAndDeadline_nontrivial :
 one sample passes with probability 1, above `(1 − 1/2)^1 + 0`. -/
 theorem SpareCapacityAtDeadline_nontrivial :
     ¬ pr (fun x : (Unit → Unit) × Unit × (Fin 1 → Ticket (acceptAll.Wref dot.layout) dot.layout.N) =>
-        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.transcript dot x.1 x.2.1))
+        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.trace dot x.1 x.2.1))
             x.2.2 ∧
           0 * (0 - idleRun.ts) - (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout < 0 ∧
           ¬ commitAll.Breaks dot x.1 x.2.1)

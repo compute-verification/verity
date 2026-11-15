@@ -22,7 +22,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (
@@ -93,7 +93,7 @@ GEMM_NUM_STAGES = 3
 #: this value is only the profile's own default (the RTX 4090's 128 SMs) for headers that carry no device — one source.
 GEMM_NUM_SMS = DEFAULT_TARGET.num_sms
 
-#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `verity/definitions/numerics/
+#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `adapters/vllm/verity_vllm/definitions/numerics/
 #: rms_triton_model.py`): one CTA of 4 warps per row, 8 columns per thread per 1024-column chunk, warp butterfly
 #: xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)` — the reduction tree `RMSNormTriton_v1` writes out.
 RMS_CONSTEXPRS: dict[str, Any] = {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}
@@ -284,13 +284,9 @@ def make_patterns(C: dict[str, Any]) -> list:
     ]
 
 
-# the census allowlist is PROTECTED (verity_vllm/properties/kernel_allowlist.py); profiles only reference it
-from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
-
-
 def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_note: str = "") -> Profile:
     """The κ profile for a static configuration (`b1.<case>_CONFIG`, `BN` derived if absent).  Shared: the κ pins,
-    the pattern list, the weight-name map, the kernel allowlist.  Per model: `C` (and so EPS / V / BN / BIAS), the
+    the pattern list and the weight-name map.  Per model: `C` (and so EPS / V / BN / BIAS), the
     Record the fold's `weights` parameter has, and the header consistency check."""
     C = config if "BN" in config else with_geometry(config)
     wf = make_weight_field(C)
@@ -300,7 +296,6 @@ def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_n
         config=C,
         weight_field=wf,
         accepted=False,
-        kernel_allowlist=KERNEL_ALLOWLIST,
         step_passes=(fuse_bias_adds,),
         notes={
             "case": case,

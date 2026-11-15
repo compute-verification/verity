@@ -3,6 +3,8 @@
 
     python3 tools/move/rename.py --map MAP              rename and move, then stage it all; prints what it changed
     python3 tools/move/rename.py --map MAP --dry-run    print what it would change, and change nothing
+    python3 tools/move/rename.py --map MAP --only FILE  rename only in the files FILE lists, one path a line, and those it
+                                                        moves: a carry of a merge (every file still moves)
     python3 tools/move/rename.py --map MAP --moves      print the declaration renames that the Lean locks' records need
                                                         ({old: new}), the map `tools/verity/lean/check.py --update --moved`
                                                         takes; run it on the tree you re-record, since a branch's records
@@ -22,7 +24,7 @@ branch across it):
 3. in a `lean-audit.json`, renames module names and prose but not the records the Lean check's `--update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
 4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before, and likewise a
-   Lake manifest's digest in a JSON pin of `tools/verity/check/pins.py`: a move changes a manifest only in where its path
+   Lake manifest's digest in a JSON pin of the check's `pins.py`: a move changes a manifest only in where its path
    packages sit, which no pinned output reads (`layout.repin_manifests`, as `layout.py` repins one; a pin of any other
    file the move changes is left for its command);
 5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
@@ -33,7 +35,7 @@ It refuses a dirty worktree, and a second run changes nothing. The first step ru
 default the cores it may use, at most 32), since `restack.py` runs it once for each branch it carries; a file's new text
 reads only that file and the map, so the result is one process's.
 
-A map with `scope = "prose"` renames only prose, the part of a move `tools/verity/check/move_check.py` certifies without a
+A map with `scope = "prose"` renames only prose, the part of a move the check's `move_check.py` certifies without a
 build: a word that stands as a word in a comment, a docstring or Markdown's text (`regions`, `prose_word`), never one in
 code, a string literal, a data file, backticks, a name, a path or a constant's name, nor in a file a JSON pin records (its
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
@@ -481,8 +483,7 @@ class Words:
             starts.append(s)
             far = max(far, e)
             reach.append(far)
-        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
-        skip = {w for g, ws in held_in if path and _match(path, g) for w in ws}
+        skip = self.held(path, protect)
 
         def one(m: re.Match) -> str:
             w = m.group(0)
@@ -497,6 +498,11 @@ class Words:
                 counts[re.sub(GAP, " ", w), new[m.lastindex - 1]] += 1
             return to
         return pattern.sub(one, text)
+
+    def held(self, path: str, protect: bool = True) -> set[str]:
+        """The words [keep_in] (and, without ``protect``, [keep_paths]) lists for `path`, which stand there as they are."""
+        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
+        return {w for g, ws in held_in if path and _match(path, g) for w in ws}
 
     def path(self, p: str) -> str:
         return p if self.scope else self.sub(p, p, protect=False)
@@ -736,9 +742,9 @@ def repin(root: Path, words: Words, pins: str, texts: dict[str, str], dest: dict
 
 
 def json_pins(root: Path) -> list[tuple[str, str, str]]:
-    """The pins `tools/verity/check/pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
+    """The pins the check's `pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
     its paths are below); none in a tree without it."""
-    return [(p, key, under) for p, key, under in L.pins(root / L.PINS_PY) if key is not None]
+    return [(p, key, under) for p, key, under in L.pins(root / L.pins_py(lambda p: (root / p).is_file())) if key is not None]
 
 
 def pinned(root: Path) -> set[str]:
@@ -868,6 +874,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--allow-dirty", action="store_true")
     ap.add_argument("--jobs", type=int, default=min(JOBS, len(os.sched_getaffinity(0))),
                     help=f"the processes that rewrite files (default: the cores this process may use, at most {JOBS})")
+    ap.add_argument("--only", type=Path, metavar="FILE",
+                    help="rename only in the files FILE names, one path a line, and those the run moves: a rerun over what a "
+                         "merge brought (every file still moves, and the rest of the tree is not rewritten)")
     a = ap.parse_args(argv)
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
@@ -895,6 +904,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("paths that would differ only in case:\n  " + "\n  ".join(fold[:50]))
 
     todo = [p for p in present if not (words.excluded(p) or os.path.islink(root / p) or p in fixed)]
+    if a.only:
+        only = L.only_paths(a.only)
+        todo = [p for p in todo if p in only or p in dest]
     L.refuse_unread({p: os.path.getsize(root / p) for p in todo if L.oversize(root / p)})
     texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}

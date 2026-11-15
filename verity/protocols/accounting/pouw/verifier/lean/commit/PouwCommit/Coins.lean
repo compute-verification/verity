@@ -6,7 +6,7 @@ public import PouwCommit.Py
 public import PouwCommit.Tagged
 
 /-!
-# The execution phase's coins' check (`verity.core.protocols.pouw.coins`)
+# The execution phase's coins' check (`verity.protocols.accounting.pouw.verifier.coins`)
 
 The challenger commits to execution phase `e`'s coins, one 32-byte coin per label of `LABELS`, before the execution phase:
 

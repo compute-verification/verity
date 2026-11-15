@@ -1,7 +1,7 @@
 """The network certifier's output value: the output it relayed, committed by the certifier as a registered value
 (`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
 that certificate alone (`check_out`), so every output proof block's row is a registered read of it, opened against
-the certifier's signed root by the Lean verifier's registered reads (`flock-verify --registered`), not compared in the
+the certifier's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
 clear.
 
 **The commitment** is the reading program's registered value `value` (``out`` by default), as the prover would commit
@@ -76,7 +76,7 @@ REFUSALS = {
     "out-rows": "the record's row count isn't the registration's",
     "out-domain": "the record's program or value isn't the verifier's, or its domain isn't the one its fields name",
     "out-digest": "the certificate doesn't sign the record's head",
-    "out-signature": "the signature doesn't verify under the key in the session for the link-window",
+    "out-signature": "the signature doesn't verify under the key in the session for the execution phase",
 }
 _HEX64 = re.compile("[0-9a-f]{128}")
 _HEX = re.compile("(?:[0-9a-f]{2})+")

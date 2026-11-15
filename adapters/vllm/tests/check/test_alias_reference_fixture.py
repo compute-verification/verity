@@ -2,7 +2,7 @@
 (opening.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
 table) SHARE.  "Reader and oracle sharing one alias mechanism prevents drift AND lets them share the same bug" -- so this file derives what
 every side must say BY COUNTING (layers x members x steps x requests, invocation k = layer order, ordinal = position in acquisition order),
-never by reading `op_path_aliases`, `entry_read_name`, `same_name_invocations` or the inverse table; then drives the production chain
+never by reading `op_path_aliases`, `entry_read_name`, `same_name_invocations` or the inverse table; then drives the library's chain
 end-to-end -- `binding.build_binding_map` (the invocation numbering), `OpenedReader` + `CommittedStore` (the reader), `oracle_compare`
 over a REAL `MatchOracle` of a per-layer-hinted synthetic Match dir (the oracle) -- and checks each against the enumerator.  A bug the two
 sides share fails HERE, not each other.
@@ -16,7 +16,7 @@ Rules it pins: "different logical producer/version -> never merged solely becaus
 Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest tests), not this
 fixture's: the binding map carries no spec.
 
-It tests the COMMON MECHANISM on one synthetic record, not every production record."""
+It tests the COMMON MECHANISM on one synthetic record, not every served record."""
 from __future__ import annotations
 
 import gzip

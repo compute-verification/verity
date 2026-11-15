@@ -73,7 +73,7 @@ def main() -> None:
     from stage import gb, nets
     from verity_flock.class_statement import UnitStager
     from verity.circuits.call_scope import spec_base, spec_statics
-    from verity.commitments.windows import flock_inputs as FI
+    from verity.commitments.periods import flock_inputs as FI
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline import serving_rows as SRW
 

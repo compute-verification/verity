@@ -29,10 +29,10 @@ fixture's async-kv-pressure stream, window 1 costs 23 bits from window 0's carry
 counts. The tests check that each forged carry is refused, whether it is committed under a fresh salt or under the
 public start salt, and whether window 0's carry-out claims it.
 
-**Why a value of its own.** The carry-out isn't a field of `replay_chain`'s window row. `ReplayLoad` writes that row
-and checks it in full at the window's start, before any decision is coded, so a carry-out there would need ReplayLoad
-to leave a field unchecked and change its pins. A sibling value under the same carry rule gives the same guarantee and
-leaves the scan's chain as it is.
+**Why a value of its own.** The carry-out isn't a field of `verity_vllm.compiler.replay_chain`'s window row.
+`ReplayLoad` writes that row and checks it in full at the window's start, before any decision is coded, so a carry-out
+there would need ReplayLoad to leave a field unchecked and change its pins. A sibling value under the same carry rule
+gives the same guarantee and leaves the scan's chain as it is.
 
 **The compile slice takes the chain** ([compile-slice.md](compile-slice.md)):
 
@@ -45,9 +45,9 @@ leaves the scan's chain as it is.
 
 ## One carry for proof blocks and windows
 
-The charge's one carried representation is `replay-charge`'s two rows above, and `replay_chain`'s state row holds none
-of it: the charge runs whole in the window's load proof block, so no step proof block carries a coder state, KT counts,
-a context or a code position.
+The charge's one carried representation is `replay-charge`'s two rows above, and `verity_vllm.compiler.replay_chain`'s
+state row holds none of it: the charge runs whole in the window's load proof block, so no step proof block carries a
+coder state, KT counts, a context or a code position.
 
 - **Where.** The load proof block (proof block 0, `ReplayLoad`'s) runs `ChargeLink_v1{D}` from row 0 to row 1 on the
   decisions it loads: `adv`'s `dec`, en_i = i < `count`, bit_i = dec_i. Those are the window's own decisions, the ones
@@ -179,7 +179,7 @@ widens with the slots before it, and the build is linear in N + H + O + L.
 **The bound.** The proof block's charge is `code_v1`'s length for the whole window, its segment and its tail, so "The bound"
 (PROTOCOL.md) covers every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its
 strings are prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
-premise (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
+premise (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`). It rests on two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
   The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
   (⌊(n_j − 1) / 2^15⌋ + 1) · 2^15 ≥ n_j for the two chunks. So
@@ -202,7 +202,7 @@ premise (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharg
   before the advice, so each term's 2^(bitlen(m) + 1) values each take exactly bitlen(m) + 1 bits: appended after the
   segment, the tail keeps the window's code prefix-free and its Kraft sum unchanged.
 
-The Lean definitions (`security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
+The Lean definitions (`security/Definitions/Certifier/WindowCharge.lean`) mirror `reference_window` one for one,
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
@@ -210,15 +210,16 @@ them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, w
 **The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its
 windows send no order entries, and v1's windows send no hits. A session where the pool's eviction changed a hit is
 outside the class: the slice's cache never evicts, so its rows aren't the served ones and ``rows`` refuses. Such a
-session needs a pool slice (`CompileSlice_v4` on, `compile_slice_v4`), and no pool slice charges the length terms yet.
-`CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length terms.
-`CompileSlice_v7` (`compile_slice_v7`, the served windows' slice except under the certified tick) charges them with
-`ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
-max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
-certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the
-certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits passes at a lower
-charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the arrivals the replay
-loads. A class whose windows send order entries or length terms (or a code's that sends hits) does the following:
+session needs a pool slice (`CompileSlice_v4` on, `verity_vllm.compiler.compile_slice_v4`), and no pool slice charges
+the length terms yet. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length
+terms. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`, the served windows' slice except under the certified
+tick) charges them with `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its
+``a_valid``, mt its certified max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What
+holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens
+is read from the certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits
+passes at a lower charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the
+arrivals the replay loads. A class whose windows send order entries or length terms (or a code's that sends hits) does
+the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
   `replay-charge`'s.
