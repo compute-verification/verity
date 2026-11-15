@@ -13,7 +13,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# A sample flock-verify accepts sets up
+# A sample verity-verify-proof accepts sets up
 
 `tableAt` is setupH's statement at a sample with a `DrawSetup`, and unsatisfiable elsewhere. A `DrawSetup` is more than
 setupH's acceptance: the sample proves the sampled proof blocks, `0 < c.g`, the proved units fit the blocks, `m` has a `fast100`
@@ -23,12 +23,12 @@ from a one-table acceptance:
   outputs (`g_pos`);
 * the blocks: setupH's `nbl` is at least `log2ceil ⌈n / c.g⌉`, and a sampled statement's `n` is the sample's proved units
   (`setupH_n`, `Layout.drawn_spec`);
-* the schedule: flock-verify ran `fast100` on the table's `m` (`verify_one_ok`), and every executable `fast100` schedule
+* the schedule: verity-verify-proof ran `fast100` on the table's `m` (`verify_one_ok`), and every executable `fast100` schedule
   is `Accounting.fast100`'s (`fast100_schedOf`) with at least two levels (`fast100_two`).
 
 `drawSetup_of_accepts`: a one-table acceptance whose record's sample is `d` gives setupH's statement at `d` and the
 sample `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
-then `tableAt`'s table at `S` is `stmtOf` of the statement flock-verify accepted. The link points are setupH's
+then `tableAt`'s table at `S` is `stmtOf` of the statement verity-verify-proof accepted. The link points are setupH's
 `PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (`Exec.setupH_mPts_drawn`).
 -/
 
@@ -133,7 +133,7 @@ theorem drawSetup_of_setupH {st : Stmt}
   exact ⟨⟨st, h, D, hD, hS, hg, hblk, st.m, k0, l₀, l₁, rest, ext, hsch,
     by have := exec_fast100_ge hf; omega, hmPts⟩, rfl⟩
 
-/-- **A sample flock-verify accepts sets up.** A one-table acceptance whose record's sample is `d`: setupH accepted its
+/-- **A sample verity-verify-proof accepts sets up.** A one-table acceptance whose record's sample is `d`: setupH accepted its
 inputs at `d` (`st`), the sample decodes (`D`), and whenever `D` proves `S` and `st`'s link points are `mPts`, a
 `DrawSetup` at `d` has statement `st`. -/
 theorem drawSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
@@ -149,7 +149,7 @@ theorem drawSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count 
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a sample flock-verify accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
+/-- **At a sample verity-verify-proof accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
 session's record carries the challenger's sample `dj S`, that sample proves `S`, and setupH's statement at it has link
 points `mPts`. -/
 theorem tableAt_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)

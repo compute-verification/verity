@@ -33,19 +33,16 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The family -/
 
-open Classical in
-/-- **The sample's family at the parameters `θ`**: the challenger's family v2's parameters in `θ` name (`ParamsAt`),
-or the empty string where they name none. -/
+/-- **The sample's family at the parameters `θ`**: the challenger's family v2's parameters in `θ` name (`ParamsAt`,
+`paramsOf`), or the empty string where they name none. -/
 noncomputable def labelAt (θ : ByteArray) : String :=
-  if h : ∃ l p key, ParamsAt θ p ∧ p.base.challenger = some (key, l) then h.choose else ""
+  match paramsOf θ with
+  | some p => (p.base.challenger.map (·.2)).getD ""
+  | none => ""
 
 theorem labelAt_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {key} {l : String}
     (hp : ParamsAt θ p) (hc : p.base.challenger = some (key, l)) : labelAt θ = l := by
-  have h : ∃ l p key, ParamsAt θ p ∧ p.base.challenger = some (key, l) := ⟨l, p, key, hp, hc⟩
-  rw [labelAt, dite_eq_left h]
-  obtain ⟨p', key', hp', hc'⟩ := h.choose_spec
-  rw [ParamsAt.unique hp' hp, hc] at hc'
-  exact (Prod.mk.inj (Option.some.inj hc')).2.symm
+  simp only [labelAt, paramsOf_eq hp, hc, Option.map_some, Option.getD_some]
 
 /-- **v2 samples at the parameters' family**: where composite `k` accepted what the prover sent and v2's case in it
 accepts at the sample `dr`, `dr`'s family is the one v2's parameters in what was sent name. -/

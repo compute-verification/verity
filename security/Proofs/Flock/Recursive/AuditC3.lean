@@ -25,7 +25,7 @@ registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conju
   (`HoloSatSome`: the slots' types are the partition's, private, so the statement binds them existentially — for some
   hidden types — below `2^tLog`, the range the zero outputs pin), with
   probability at most `RecursiveSound`'s bound with candidate 3's error (`holoError`) as its inner term;
-* (ii) zero knowledge: `RecursiveFirewallPrivate`, as in `PublicAudit`.
+* (ii) zero knowledge: `RecursiveZkServerPrivate`, as in `PublicAudit`.
 
 What it takes, against `PublicAudit`:
 
@@ -387,8 +387,8 @@ slack, and candidate 3's error.
 
 At a private inner shape (`ish.holo`), the verifier's list is V*'s holo statements (`FlockC3.VStarList.statements_holo`):
 each part's file is V*'s holo one (`RecVStar.circuitFile` at `ish.holo`), and the event counts those runs as it counts
-plain ones. Every deployed candidate-3 run is at a private inner shape (`--holo`, `88-rec-c3-inner.sh`); at a plain
-shape no honest rep unit passes (`DrawnRounds`).
+plain ones. Candidate 3 is not deployed: its inner session is run by `88-rec-c3-inner.sh` alone, at a private inner
+shape (`--holo`), for its tests' fixture; at a plain shape no honest rep unit passes (`DrawnRounds`).
 
 Check 5's source `coins` is any, a record of what check 5 reads (`Source.coins`) included, though no reader builds one
 (`RecCoins.refuseCoins` refuses `--rec-inner-coins`). The verifier never accepts one at candidate 3 either: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the
@@ -474,12 +474,12 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (_hbr : ∀ h : Typed zr, ∃ τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog),
       Flock.Premises.VBridgeCOff
         (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv)
-        (fun R ω t R₂ =>
+        (fun R ω t R₂ o =>
           ValueColl (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
               (fun t => coins (wr t).2) bind rows zr _hCust h)
             (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) R ω t R₂ ∨
           LeafColl (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
-            (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
+            (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ o ∨
           SaltColl (holoAt st hp).rsch.sch.level₀ cap salt
             (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
               (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
@@ -503,7 +503,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
+      (topFinder wr st reg bcs'
         (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -654,12 +654,12 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (_hbr : ∀ h : Typed zr, ∃ τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog),
       Flock.Premises.VBridgeCOff
         (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv)
-        (fun R ω t R₂ =>
+        (fun R ω t R₂ o =>
           ValueColl (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
               (fun t => coins (wr t).2) bind rows zr _hCust h)
             (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) R ω t R₂ ∨
           LeafColl (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
-            (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
+            (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ o ∨
           SaltColl (holoAt st hp).rsch.sch.level₀ cap salt
             (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
               (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
@@ -683,7 +683,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
+      (topFinder wr st reg bcs'
         (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -758,7 +758,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
 coins of their coin kinds in the run's order (`holoCTs`: the link points, then the coins of the stages' shapes,
 `holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
-`RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
+`RecursiveZkServerPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
 and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
@@ -767,10 +767,10 @@ statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `ve
 accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at `κ + t'·ε`.
 -/
 def RecursiveAuditHolo : Prop :=
-  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveZkServerPrivate
 
 /-- **`RecursiveAuditHolo` with no A3**: `RecursiveAuditHolo` with its first part with no A3. -/
 def RecursiveAuditHoloNoA3 : Prop :=
-  RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveZkServerPrivate
 
 end Flock.Guarantees

@@ -5,7 +5,9 @@ setup compute it. A sample over several members samples a random count of each m
 per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points per member. A sample that runs out of the
 verifier's public coins fails the window (`OneStageZk.RAN_OUT`), so only a sample that ends gives counts: between the
 member's fewest and most units (`ended`, `bounds`), and the registration refuses a member whose fewest and most give
-different counts, and a sampling design no sample of which ends (`refused`, `Registration.check`'s `link-points`).
+different counts, a member whose fewest is none, and a sampling design no sample of which ends (`refused`,
+`Registration.check`'s `link-points`). A member whose fewest is none is one some sample that ends misses: that sample
+gives it no statement (`OneStageZk.sampledHeld`), so the check sets up no session of its circuit.
 
 A sample that ends (`Draw.drawUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
 population never ends); under `bernoulli a b`, none when `a = 0`, each unit when `a ≥ b > 0`, and any number of them
@@ -26,10 +28,10 @@ meta import Spot.Draw
 # A member's link points over the samples that end
 
 `nbl`, the link points of a session past `PT_LOCAL`; `ended`, the fewest and most of a member's units a sample under a
-sampling design holds when it ends; `bounds` and `refused`, each member's counts and the members whose fewest and most
-give different link points; `ends` and `NEVER_ENDS`, a sampling design no sample of which ends; `lawOf`, the sampling
-design the sample runs on. `Registration.check` fails a registration `link-points` through `refused`
-(`linkRefused`), and `Pieces.table`'s `link_points` serves `piece` to the difftest.
+sampling design holds when it ends; `bounds` and `refused`, each member's counts and the members some sample that ends
+misses or whose fewest and most give different link points; `ends` and `NEVER_ENDS`, a sampling design no sample of
+which ends; `lawOf`, the sampling design the sample runs on. `Registration.check` fails a registration `link-points`
+through `refused` (`linkRefused`), and `Pieces.table`'s `link_points` serves `piece` to the difftest.
 -/
 
 @[expose] public section
@@ -89,15 +91,16 @@ def ends (law : Flock.Draw.Law) (population : Nat) : Bool := (ended law populati
 /-- The refusal of a sampling design no sample of which ends (`ends`). -/
 def NEVER_ENDS : String := "link points: no draw under the law ends, so each of its windows fails"
 
-/-- The members whose fewest and most sampled proof blocks, over the samples that end, give different link points (`bounds`), by
-index; refused (`NEVER_ENDS`) when no sample under `law` ends. -/
+/-- The members the registration refuses, by index: one some sample that ends misses (its fewest sampled proof blocks
+is none), and one whose fewest and most sampled proof blocks, over the samples that end, give different link points
+(`bounds`); refused (`NEVER_ENDS`) when no sample under `law` ends. -/
 def refused (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat × Nat) × Nat)) : V (Array Nat) := do
   let bs ← bounds law population ms
   if !ends law population then throw NEVER_ENDS
   return (List.range ms.size).toArray.filter fun i =>
     let g := ms[i]!.2
     match bs[i]! with
-    | some (lo, hi) => nbl g lo != nbl g hi
+    | some (lo, hi) => lo == 0 || nbl g lo != nbl g hi
     | none => false
 
 /-- The sampling design the sample runs on (`OneStage.drawnFrom`): the verifier's own expanded over its program and query
@@ -108,19 +111,24 @@ def lawOf (p : Program) (query law : Json) (table : Option Json) : V (Flock.Draw
   | some l => pure (l, population)
   | none => pure (← Draw.flockLaw law population, population)
 
-/-- `{"law", "population", "members"}` (the sampling design as `Draw.flockLaw` reads it, each member `{"units", "vus_per_block"}`) to
-`{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a sampling design no sample of which ends
-(`NEVER_ENDS`), is refused. -/
-def piece (j : Json) : V Json := do
-  let some population := nat? (getD j "population") | throw "the population is not a natural number"
-  let law ← Draw.flockLaw (getD j "law") population
-  let .arr ms := getD j "members" | throw "the members are not a list"
-  let ms ← ms.mapM fun m => do
+/-- The members a difftest piece is handed (`piece`, `Pieces.registration`): a list, each `{"units", "vus_per_block"}`,
+its units' `[lo, hi)` ranges and its circuit's units a proof block. -/
+def membersOfJson (j : Json) : V (Array (Array (Nat × Nat) × Nat)) := do
+  let .arr ms := j | throw "the members are not a list"
+  ms.mapM fun m => do
     let some g := nat? (getD m "vus_per_block") | throw "a member's vus_per_block is not a natural number"
     let some us := (Draw.ranges? (getD m "units")).bind fun rs =>
         rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
       | throw "a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
     pure (us, g)
+
+/-- `{"law", "population", "members"}` (the sampling design as `Draw.flockLaw` reads it, the members as `membersOfJson`
+reads them) to `{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed sampling design or member, or
+a sampling design no sample of which ends (`NEVER_ENDS`), is refused. -/
+def piece (j : Json) : V Json := do
+  let some population := nat? (getD j "population") | throw "the population is not a natural number"
+  let law ← Draw.flockLaw (getD j "law") population
+  let ms ← membersOfJson (getD j "members")
   let bs ← bounds law population ms
   let pair : Option (Nat × Nat) → Json
     | some (a, b) => Json.arr #[Lean.toJson a, Lean.toJson b]
@@ -137,6 +145,11 @@ def piece (j : Json) : V Json := do
   10 #[(2, 8)] == some (0 + 1, 2 + 3)
 #guard (refused (.subset 20) 40 #[(#[(0, 30)], 1), (#[(0, 30)], 4)]).toOption == some #[0]
 #guard (refused (.subset 2) 10 #[(#[(0, 10)], 1)]).toOption == some #[]
+#guard (refused (.subset 2) 10 #[(#[(0, 5)], 1), (#[(5, 10)], 1)]).toOption == some #[0, 1]
+#guard (refused (.subset 9) 10 #[(#[(0, 5)], 1), (#[(5, 10)], 1)]).toOption == some #[]
+#guard (refused (.bernoulli 0 1) 10 #[(#[(0, 10)], 1)]).toOption == some #[0]
+#guard (refused (.stratified 2 #[{ template := "a", units := #[(0, 4)], k := 1 },
+  { template := "b", units := #[(4, 10)], k := 1 }]) 10 #[(#[(0, 4)], 1), (#[(4, 10)], 1)]).toOption == some #[]
 #guard ends (.subset 10) 10 && !ends (.subset 11) 10 && ends (.bernoulli 0 0) 10 && !ends (.bernoulli 1 0) 10
 #guard !ends (.stratified 3 #[{ template := "a", units := #[(0, 2)], k := 3 }]) 10
 #guard [Flock.Draw.Law.subset 11, .bernoulli 1 0, .stratified 3 #[{ template := "a", units := #[(0, 2)], k := 3 }]].all

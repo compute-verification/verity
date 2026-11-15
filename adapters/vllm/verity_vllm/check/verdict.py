@@ -73,10 +73,10 @@ from verity_vllm.check.result import (
     worst,
 )
 from verity_vllm.check.verdict_names import GROUPS
-from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.property_record import citations
 
 __all__ = ["REQUIRED_CLASSES_DEFAULT", "commit_verdict", "from_record"]
 
@@ -159,7 +159,7 @@ def _sha256(p: Path) -> str:
 
 def run_checks(commit: dict, tokens_equal: Any, *, min_openings: int = 64, declaration: dict | None = None, required_classes: Any = None,
                ctx: dict | None = None) -> list[CheckResult]:
-    """Every rule of `commit_verdict` (+ commit_delta's compiled conditions, row_pod's manifest verify) for ONE instrumented run,
+    """Every rule of `commit_verdict` (+ commit_delta's compiled conditions, the row driver's manifest verify) for ONE instrumented run,
     each with its own outcome.  `ctx`: record-level facts (program_digest, manifest_digest, required_classes_source, manifest_verify, file_digests,
     replay_cache)."""
     ctx = dict(ctx or {})
@@ -288,7 +288,7 @@ EXECUTION_KEYS = ("committer", "collector_variant", "retention", "engine_setting
 
 def execution_of_record(row_dir: str | os.PathLike) -> dict:
     """The execution configuration the Commit ran with, read from ITS OWN evidence (never typed): `cmd` = the commit_delta command line
-    (first line of commit.log, written by row_pod.sh before the run), `committer` (commit/summary.json), `collector` = the instrumented
+    (first line of commit.log, written by the row's driver before the run), `committer` (commit/summary.json), `collector` = the instrumented
     runs' own collector record (runs.jsonl commit.binding.collector: variant, retention, window_mb, window_slots, arena_mb, layout, gpu_tree),
     `collector_variant` / `retention` ('windowed' iff window_mb > 0 else 'whole-block'; retention from the record, else --retain in cmd),
     `engine_settings` = --engine-arg k=v pairs + --max-num-seqs / --openings / --pairs / --open-after-release / --required-manifest /
@@ -365,7 +365,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         treatment = [(r, r.commit) for r in runs if r.arm != "control" and r.commit is not None]
     if min_openings is None:
         es = _d(execution.get("engine_settings"))
-        min_openings = min(64, _int(es.get("openings"), 64)) if es.get("openings") is not None else 64
+        min_openings = min(64, _int(es.get("openings"), "engine_settings.openings", "the Commit's execution configuration")) if es.get("openings") is not None else 64
     ctx: dict[str, Any] = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
                            "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
     required_classes = vd.get("required_classes")
@@ -388,7 +388,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
                                "reconstructed_failing": [x.name for x in checks if x.outcome in (FAIL, INSUFFICIENT)]})
     rules = aggregate_runs(per_run)
     groups = group_checks(rules)
-    # commit_delta's decision (commit_pass) covers every rule EXCEPT manifest_of_record_verified, which row_pod.sh grades after the Commit
+    # commit_delta's decision (commit_pass) covers every rule EXCEPT manifest_of_record_verified, which the row's driver grades after the Commit
     # (EXEC-05: a verify FAIL is a Commit FAIL); reconcile the two scopes separately, then take the worst
     mv_rule = next((r for r in rules if r.name == "required_value_coverage/manifest_of_record_verified"), None)
     delta_rules = [r for r in rules if r is not mv_rule]
@@ -399,14 +399,15 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         outcome = NOT_RUN
         notes.append("no instrumented run on the record (control arm only, or the Commit never ran)")
     rc_v = rc if rc is not None else (_d(summary).get("rc") if summary else None)
-    if rc_v is not None and _int(rc_v) != 0 and outcome == PASS:
+    exited = rc_v is not None and _int(rc_v, "rc", "commit_summary.json" if rc is None else "the caller of build") != 0
+    if exited and outcome == PASS:
         outcome = INSUFFICIENT
         notes.append(f"commit_delta exited rc={rc_v}: the stage did not close although every graded rule passed (crash / timeout / verify)")
     commit_pass = vd.get("commit_pass")
     if commit_pass is None and treatment:
         passes = [c.commit_pass for _, c in treatment]
         commit_pass = all(passes) if None not in passes else None
-    if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not (rc_v is not None and _int(rc_v) != 0):
+    if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not exited:
         notes.append(f"RECONSTRUCTION MISMATCH: recorded commit_pass={commit_pass} but the rule-by-rule outcome is {outcome}; the recorded decision stands")
         outcome = PASS if commit_pass else (FAIL if outcome == PASS else outcome)
     if mv_rule is not None and mv_rule.outcome != NOT_RUN and treatment:
@@ -439,23 +440,31 @@ RECORD_FILES = ("commit/verdict.json", "commit/runs.jsonl", "commit_summary.json
                 "match_summary.json", "build_summary.json")
 
 
-def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: str | None = None) -> CommitChecks:
+def _replay_records(row_dir: Path, runs: Sequence[CommitRun]) -> tuple[str, ...]:
+    """The replay records under `row_dir`'s `commit/` that are `runs`' own, as paths from `row_dir`: for each pair with a run that
+    is not the control arm, its `sampled_replay_p<pair>.json` and its ranks' `sampled_replay_p<pair>_rank<r>.json`.  A replay is of
+    a run that commits, so a record of any other pair is another Commit's, left under the same `--out`."""
+    names = {name for r in runs if r.arm != "control" for name in (f"sampled_replay_p{r.pair}.json", f"sampled_replay_p{r.pair}_rank*.json")}
+    return tuple(sorted(os.path.relpath(p, row_dir) for name in names for p in (row_dir / "commit").glob(name)))
+
+
+def from_record(row_dir: str | os.PathLike, *, rc: int | None = None) -> CommitChecks:
     """Rebuild the `CommitChecks` from a row dir's evidence (`commit/runs.jsonl`, `commit/verdict.json`, `commit/summary.json` + `commit.log`
-    (`execution_of_record`), `commit/manifest_verify.json`, `commit/sampled_replay_p*.json` for their digests; an older row's
-    `commit_summary.json` is read when present).  A row whose Commit never ran gives NOT_RUN with the missing files named.
-    `rc` = commit_delta's exit code when the caller (row_pod.sh) knows it; `stage_ok` = a stage decision made OUTSIDE this verdict (older
-    rows: the commit_summary word), recorded under `compat.stage_ok` and compared (a disagreement is a note, never a changed decision).
-    The verdict's `outcome` IS the Commit stage's decision (row_pod.sh reads it back).  Every `<row>/properties/*.json` is cited
+    (`execution_of_record`), `commit/manifest_verify.json`, the replay records of the runs `commit/runs.jsonl` holds (`_replay_records`)
+    for their digests; an older row's `commit_summary.json` is read when present).  A row whose Commit never ran gives NOT_RUN with the
+    missing files named.
+    `rc` = commit_delta's exit code when the caller (the row's driver, `pipeline.row_stages`) knows it.
+    The verdict's `outcome` IS the Commit stage's decision (the row's driver reads it back).  Every `<row>/properties/*.json` is cited
     under `properties` by digest; a record that does not hold, or whose digest does not recompute, is a note, never a changed decision.
     A `build_summary.json` its record (`records.build_summary`) refuses is a note too, and the wrappers' own `result.json` give the
     correspondence digest."""
     d = Path(row_dir)
+    rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     digests: dict[str, str] = {}
-    for rel in RECORD_FILES + tuple(sorted(os.path.relpath(p, d) for p in glob.glob(str(d / "commit" / "sampled_replay_p*.json")))):
+    for rel in RECORD_FILES + _replay_records(d, rows):
         p = d / rel
         if p.is_file():
             digests[rel] = _sha256(p)
-    rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     vd = json.loads((d / "commit" / "verdict.json").read_text()) if (d / "commit" / "verdict.json").is_file() else None
     summ = json.loads((d / "commit_summary.json").read_text()) if (d / "commit_summary.json").is_file() else None
     mv = json.loads((d / "commit" / "manifest_verify.json").read_text()) if (d / "commit" / "manifest_verify.json").is_file() else None
@@ -472,7 +481,8 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         for path in sorted(glob.glob(str(d / "build_*" / "result.json"))):
             w = os.path.basename(os.path.dirname(path))
             try:
-                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.loads(Path(path).read_text())
+                with open(path) as f:
+                    results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(f)
             except (OSError, ValueError) as e:
                 unreadable.append(f"{os.path.relpath(path, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,
@@ -491,10 +501,6 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         if stage:
             v.compat["stage_line"] = stage[-1][:200]
             v.compat["stage_outcome"] = stage[-1].split()[1]
-    if stage_ok is not None:
-        v.compat["stage_ok"] = stage_ok
-        if (stage_ok.upper() == PASS) != (v.outcome == PASS):
-            v.notes.append(f"STAGE MISMATCH: row_pod.sh's Commit stage says {stage_ok} but the rule-by-rule outcome is {v.outcome}; the stage decision stands")
     v.properties, notes = citations(d)
     v.notes += notes
     return v

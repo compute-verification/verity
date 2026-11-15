@@ -840,8 +840,9 @@ def is_git_data(p: Path) -> bool:
 def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime | None = None) -> dict | None:
     """Commit every change in the notes repo except files over `max_bytes` (dumps belong in the store; .gitignore drops the known
     kinds), git data (`refused`) and evidence or renders (`evidence`: `notes_sync.is_evidence`, the store holds them).  Only the
-    coordinator's watcher calls this, so lanes never contend for the index lock.  None: not a repo, or clean."""
-    from .notes_sync import is_evidence  # noqa: PLC0415
+    coordinator's watcher calls this, so lanes never contend for the index lock.  The commit is the clone's own author's and
+    committer's (`notes_sync.identity_env`).  None: not a repo, or clean."""
+    from .notes_sync import identity_env, is_evidence  # noqa: PLC0415
 
     if not (root / ".git").exists():
         return None
@@ -879,7 +880,8 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
     now = now or _utcnow()
     msg = (f"snapshot {now:%Y-%m-%dT%H:%MZ}: {len(paths)} paths" + (f"; {len(big)} too big, not committed" if big else "")
            + (f"; {len(refused)} git data refused" if refused else "") + (f"; {len(evidence)} evidence left out" if evidence else ""))
-    if subprocess.run(["git", "-C", str(root), "commit", "-q", "--no-verify", "-m", msg], capture_output=True, timeout=60).returncode:
+    if subprocess.run(["git", "-C", str(root), "commit", "-q", "--no-verify", "-m", msg], capture_output=True, timeout=60,
+                      env=identity_env(root)).returncode:
         return {"commit": None, "paths": 0, **left}
     return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), **left}
 
@@ -1227,7 +1229,7 @@ def run_custody_r2(pod_id: str) -> tuple[bool, str]:
 
 def reap_custody(root: Path, lane: str, pod_id: str, arts: Callable[[list[str]], tuple[bool, str]] = art_custody,
                  runs: Callable[[str], tuple[bool, str]] = run_custody) -> tuple[bool, str]:
-    """Both custody legs for terminating a stale lane's pod: (a) the art: ids the lane's newest report cites, (b) the runs on the pod."""
+    """Both custody checks for terminating a stale lane's pod: (a) the art: ids the lane's newest report cites, (b) the runs on the pod."""
     rep = report_for(root, lane)
     cited = sorted(set(ART_RE.findall(rep.read_text(errors="replace")))) if rep else []
     ok, why = arts(cited) if cited else (True, "no art: cited")
@@ -1338,10 +1340,10 @@ def budget_lines(root: Path, fleet: Fleet, now: dt.datetime, state: dict) -> lis
     lines = []
     for lane, usd in sorted(spend.items()):
         text = _binding_json(root, lane).get("budget")
-        cap = budget_usd(text)
-        if cap is not None and usd > cap and alerted.get(lane) != cap:
-            alerted[lane] = cap
-            lines.append(f"{now:%H:%MZ} OVER-BUDGET {lane} ${usd:.2f} on pods > ${cap:g} (budget: {text[:60]}); "
+        limit = budget_usd(text)
+        if limit is not None and usd > limit and alerted.get(lane) != limit:
+            alerted[lane] = limit
+            lines.append(f"{now:%H:%MZ} OVER-BUDGET {lane} ${usd:.2f} on pods > ${limit:g} (budget: {text[:60]}); "
                          f"now ${rate.get(lane, 0.0):.2f}/h")
     return lines
 

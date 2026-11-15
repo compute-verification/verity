@@ -364,7 +364,8 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if not isinstance(scores, ViewDesc) or not isinstance(bias, ViewDesc):
             return unsupported(node, "grouped_topk arguments not bound as expected", args={k: repr(v) for k, v in ra.items()})
         got = (ra.get("n_group"), ra.get("topk_group"), ra.get("topk"), ra.get("renormalize"), ra.get("scoring_func"))
-        rsf, want = as_float(ra.get("routed_scaling_factor")), float(C["ROUTED_SCALING_FACTOR"])
+        factor: Any = as_float(C["ROUTED_SCALING_FACTOR"])   # None for a value `match` has refused, which `float` refuses in turn
+        rsf, want = as_float(ra.get("routed_scaling_factor")), float(factor)
         if got != (1, 1, TOPK, True, 1) or rsf != want:
             return unsupported(node, "grouped_topk is not one group, renormalized, sigmoid, TOPK at the profile's routed_scaling_factor",
                                observed=list(got) + [rsf], expected=[1, 1, TOPK, True, 1, want])
@@ -391,7 +392,8 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
     def _gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
         """The router gate: the in-scope `aten.mm.dtype` (cuBLAS), or, with no mm, the cuteDSL kernel bound by the empty it fills."""
         C, ra = self.config, bound_args(sc.router)
-        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, ra["bias"]), hidden, hint,
+        bias: Any = ra.get("bias")   # None where the router binds none, which `_router` has refused
+        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, bias), hidden, hint,
                           C["NUM_EXPERTS"], C["H"], self.gate_spec, self.name)
 
     def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:

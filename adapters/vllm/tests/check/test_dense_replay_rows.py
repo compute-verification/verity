@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits.call_scope import specialization
 from verity.definitions.numerics import ir_rows
 from verity.definitions.numerics.rows import EVALUATORS, ROWS
 from verity.definitions.registry import dense
@@ -21,6 +20,7 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import spec_statics
 
 PROMPT = [0, 1, 2, 3, 4, 5, 9]

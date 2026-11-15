@@ -18,7 +18,7 @@ session input split back into its header and records root (`session_split`), a b
 namespace MemoryChallenger.Properties.SecurityProofs.WipeInputs
 
 open MemoryChallenger Flock
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
 
 theorem beInt_ok {n : Nat} {x : Int} {w : String} {b : ByteArray} (h : StreamedWipe.beInt n x w = .ok b) :
     0 ≤ x ∧ beN n x.toNat w = .ok b := by
@@ -129,12 +129,13 @@ theorem recordsRoot_ok {session root : ByteArray} {batches : Array StreamedWipe.
     simp only [hv, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     exact ⟨vs, rfl, h.symm⟩
 
-theorem message_ok {c : StreamedWipe.Commitment} {e : String} {fs fe : Int} {batches : Array StreamedWipe.Batch}
-    {eg : Int} {rec : ByteArray} (h : StreamedWipe.message c e fs fe batches eg = .ok rec) :
+theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+    {batches : Array StreamedWipe.Batch} {rec : ByteArray}
+    (h : StreamedWipe.message c e sm fs fe batches = .ok rec) :
     ∃ root, StreamedWipe.recordsRoot c.session batches = .ok root ∧
       rec = Sha512.hash (StreamedWipe.SESSION_TAG ++
-        be64 (StreamedWipe.header c e fs fe batches.size eg).toUTF8.size.toUInt64 ++
-        (StreamedWipe.header c e fs fe batches.size eg).toUTF8 ++ root) := by
+        be64 (StreamedWipe.header c e sm fs fe batches.size).toUTF8.size.toUInt64 ++
+        (StreamedWipe.header c e sm fs fe batches.size).toUTF8 ++ root) := by
   unfold StreamedWipe.message at h
   cases hr : StreamedWipe.recordsRoot c.session batches with
   | error _ => simp [hr, bind, Except.bind] at h

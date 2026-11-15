@@ -7,7 +7,7 @@ With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-run
 run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
-With `--auditor` (an auditor host's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
+With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
 vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/device/live_challenger/auditor.py).
 
@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
-#: an auditor host's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
+#: an auditor device's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
 AUDITOR = Path("/etc/vy/auditor")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
@@ -57,19 +57,40 @@ POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/wor
 POOL_WAIT_S = 14400
 
 
-def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S) -> list[str]:
+def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
+            twin: str | None = None) -> list[str]:
     """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
-    LANE [--wait-max POOL_WAIT_S --run-max S] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own shipped tree
-    (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one (`node_copy`).
-    `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
+    LANE [--wait-max POOL_WAIT_S --run-max S] [--twin PAIR] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own
+    shipped tree (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one
+    (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
     isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
-    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S)."""
+    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S). `twin` is slot.py's --twin: the
+    pair a run `--on auto` placed carries, so a late twin on another machine can take the run from this line (`late_twin`)."""
     if not POOL_NAME.fullmatch(pool):
         raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
                          f"{', '.join(sorted(POOLS))}; a node's own, as node 1's leanrec, are under {LOCKS})")
     limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []
-    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, "--", "nice", "-n", "19",
+    pair = ["--twin", twin] if twin else []
+    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, *pair, "--", "nice", "-n", "19",
             *command]
+
+
+def late_twin(command: list[str], home: str, wait_s: float) -> list[str]:
+    """`in_pool`'s command for a run that carries a pair, as its late twin on another machine runs it: the pair names
+    ``home``, the first's machine (slot.py's `--twin PAIR@HOME`: the twin runs only if it claims the pair there first), and it
+    waits in its own line no longer than ``wait_s``. ValueError for a command with no pair."""
+    end = command.index("--") if "--" in command else 0
+    opts = command[:end]
+    if not through_slot(command) or "--twin" not in opts:
+        raise ValueError("the run carries no pair (slot.py's --twin), so no twin of it could take its place")
+    out = list(command)
+    at = opts.index("--twin") + 1
+    out[at] = f"{out[at].partition('@')[0]}@{home}"
+    if "--wait-max" in opts:
+        out[opts.index("--wait-max") + 1] = f"{max(wait_s, 1):g}"
+    else:
+        out[end:end] = ["--wait-max", f"{max(wait_s, 1):g}"]
+    return out
 
 
 def pool_slots(pool: str) -> str:
@@ -109,7 +130,7 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
-    """The commands an auditor host runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    """The commands an auditor device runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
     try:
         lines = marker.read_text().splitlines()
     except (OSError, UnicodeDecodeError):
@@ -118,13 +139,13 @@ def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
 
 
 def auditor_allows(command: object, marker: Path = AUDITOR) -> bool:
-    """Whether a workload command is exactly one of the auditor host's commands: no wrapper, pool or extra argument."""
+    """Whether a workload command is exactly one of the auditor device's commands: no wrapper, pool or extra argument."""
     return isinstance(command, list) and command in auditor_commands(marker)
 
 
 def auditor_refusal(marker: Path = AUDITOR) -> str:
     allowed = " or ".join(f"`{shlex.join(c)}`" for c in auditor_commands(marker)) or "nothing (its list is empty or unreadable)"
-    return (f"this machine is an auditor host ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
+    return (f"this machine is an auditor device ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
             f"take other work to another machine")
 
 
@@ -228,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.renice is not None:
             rec = renice(o, a.renice, dry_run=a.dry_run)
         elif a.auditor:
-            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor host's {a.marker}")
+            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor device's {a.marker}")
         else:
             rec = stop(o, dry_run=a.dry_run)
         if not rec.get("sigterm" if a.renice is None else "reniced"):

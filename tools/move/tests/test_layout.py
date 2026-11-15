@@ -2,6 +2,7 @@
 it must leave alone."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -335,6 +336,156 @@ def test_a_lake_file_that_does_not_parse_stops_the_move(tmp_path):
     assert L.lake_dirs("lake-manifest.json", "") == [] == L.lake_dirs("lake-manifest.json", '{"packages": {"dir": "x"}}')
     assert L.lake_dirs("lakefile.toml", 'require = "inner"\n') == [] == L.lake_dirs("README.md", "not TOML [")
     assert L.lake_dirs("lake-manifest.json", '[{"type": "path", "dir": "x"}]') == []
+
+
+PINNED_MANIFEST = '{"packages": [{"type": "path", "name": "check", "inherited": true, "dir": "../../pol/verifier/check/lean"}]}\n'
+PINNED_README = "The check: pol/verifier/check/README.md.\n"
+PINNED_MAP = """[roots]
+old = {{}}
+new = {{}}
+
+[paths]
+"pol/verifier/check/" = "pol/verifier/"
+{rows}
+[modules]
+"pol.verifier.check" = "pol.verifier"
+{modules}
+[rewrite]
+exclude = ["fix/**", "**/TRUSTED.sha256"]
+include = ["**/lake-manifest.json"{include}]
+"""
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _pinned_tree(tmp_path: Path, json_pins: dict[str, dict], more: dict[str, str] | None = None, include: str = "",
+                 rows: str = "", modules: str = "") -> tuple[Path, subprocess.CompletedProcess]:
+    """The mover's run on a tree whose `sec/Proofs` manifest names a package the map moves, as a requirement it inherits:
+    `pous/TRUSTED.sha256` pins the manifest and a lakefile, `pins.py` lists it and each of `json_pins` ({pin: {path:
+    digest}} under "inputs"), and the map excludes them from the rewrite as a move's map does, unless `include` names one.
+    `more` adds files, `rows` and `modules` the map's rows."""
+    listed = "".join(f'Pin("{p}", "inputs", ""), ' for p in json_pins)
+    files = {"sec/Proofs/lake-manifest.json": PINNED_MANIFEST, "sec/Proofs/lakefile.toml": 'name = "proofs"\n',
+             "pol/verifier/check/lean/lakefile.toml": 'name = "check"\n', "pol/verifier/check/README.md": "# check\n",
+             "README.md": PINNED_README,
+             "pous/TRUSTED.sha256": f"{_sha(PINNED_MANIFEST)}  ../sec/Proofs/lake-manifest.json\n"
+                                    f"{_sha(chr(10))}  ../sec/Proofs/lakefile.toml\n",
+             "tools/verity/check/pins.py":
+                 "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+                 "    path: str\n    key: str | None\n    under: str\n\n\n"
+                 f'PINS = (Pin("pous/TRUSTED.sha256", None, "pous"), {listed})\n',
+             **{p: json.dumps({"inputs": d}, indent=2) + "\n" for p, d in json_pins.items()}, **(more or {})}
+    return _run(tmp_path, files, PINNED_MAP.format(include=include, rows=rows, modules=modules))
+
+
+def test_a_pin_follows_a_lake_manifest_the_move_rewrites_and_a_second_run_changes_nothing(tmp_path):
+    """A pin of `pins.py`, a `sha256sum` listing or a JSON pin, that held the digest of a Lake manifest the move rewrites
+    gets its new digest, as `rename.py` repins one: a move changes a manifest only in where its path packages sit, which no
+    pinned output reads. A digest it holds of any other file the move rewrites (the README), or one that was stale, stays
+    for its command."""
+    vec = {"README.md": _sha(PINNED_README), "sec/Proofs/lake-manifest.json": _sha(PINNED_MANIFEST),
+           "sec/Proofs/lakefile.toml": "0" * 64}
+    r, p = _pinned_tree(tmp_path, {"fix/vec.json": vec})
+    assert p.returncode == 0, p.stderr
+    manifest = (r / "sec/Proofs/lake-manifest.json").read_text()
+    assert manifest == PINNED_MANIFEST.replace("pol/verifier/check/lean", "pol/verifier/lean")
+    assert (r / "README.md").read_text() == "The check: pol/verifier/README.md.\n"
+    assert (r / "pous/TRUSTED.sha256").read_text() == (f"{_sha(manifest)}  ../sec/Proofs/lake-manifest.json\n"
+                                                       f"{_sha(chr(10))}  ../sec/Proofs/lakefile.toml\n")
+    assert json.loads((r / "fix/vec.json").read_text()) == {"inputs": {**vec, "sec/Proofs/lake-manifest.json": _sha(manifest)}}
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "move")
+    again = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                           capture_output=True, text=True)
+    assert again.returncode == 0, again.stderr
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_sha256sum_pins_repinned_manifest_is_certified_a_pure_move(tmp_path):
+    """`move_check.py` takes a `TRUSTED.sha256` line rewritten to its file's digest at the head as part of a pure move."""
+    r, p = _pinned_tree(tmp_path, {})
+    assert p.returncode == 0, p.stderr
+    manifest = (r / "sec/Proofs/lake-manifest.json").read_text()
+    assert (r / "pous/TRUSTED.sha256").read_text().startswith(f"{_sha(manifest)}  ../sec/Proofs/lake-manifest.json\n")
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
+def test_a_pinned_digest_the_rewrite_changes_other_than_a_manifests_stops_the_move(tmp_path):
+    """A digest of a pin file the map rewrites that changes other than by a manifest's repin (here a recorded run's
+    directory, named by a digest the map renames) stops the move, which names the pin, though the same pin's manifest
+    digest would follow."""
+    old, new = "a" * 64, "b" * 64
+    vec = {f"runs/{old}/out.txt": _sha("a run\n"), "sec/Proofs/lake-manifest.json": _sha(PINNED_MANIFEST)}
+    r, p = _pinned_tree(tmp_path, {"runs/vec.json": vec}, {f"runs/{old}/out.txt": "a run\n"}, include=', "runs/vec.json"',
+                        rows=f'"runs/{old}/" = "runs/{new}/"\n', modules=f'"runs.{old}" = "runs.{new}"\n')
+    assert p.returncode == 1, p.stdout
+    assert p.stderr.strip().endswith("runs/vec.json: the rewrite would change a pinned digest"), p.stderr
+    assert json.loads((r / "runs/vec.json").read_text()) == {"inputs": vec}
+
+
+LEAN_MOVE_MAP = """[roots]
+old = {}
+new = {}
+
+[paths]
+"a/lean/A/M.lean" = "b/lean/B/M.lean"
+
+[modules]
+
+[rewrite]
+exclude = []
+include = []
+"""
+LEAN_M = "namespace A.M\n\ndef foo : Nat := 1\n\nend A.M\n"
+LEAN_B = "module\n\npublic import A.M -- the moved module\nmeta import A.Mx\n\nopen A.M in\ndef bar : Nat := A.M.foo\n"
+
+
+def _lean_lock(signature: str) -> str:
+    return json.dumps({"guarantees": {"B.G": {"owner": "@x", "signature": [signature]}}, "layers": ["A.M", "B"],
+                       "reads": {"A.M": {"definitions": {"A.M.foo": "00"}, "digest": "11"}}}, indent=1) + "\n"
+
+
+def _lean_tree(tmp_path: Path, signature: str = "B.G : A.M.foo = 1") -> tuple[Path, subprocess.CompletedProcess]:
+    """The mover's run on two Lake packages, `a` and `b`, moving module `A.M` of `a` to `B.M` of `b`: `a`'s root and `b`'s
+    module import it, and `b`'s lock reads it."""
+    return _run(tmp_path, {"a/lean/lakefile.toml": 'name = "a"\n', "a/lean/A.lean": "import A.M\n", "a/lean/A/M.lean": LEAN_M,
+                           "b/lean/lakefile.toml": 'name = "b"\n', "b/lean/B.lean": LEAN_B,
+                           "b/lean/lean-audit.json": _lean_lock(signature)}, LEAN_MOVE_MAP)
+
+
+def test_a_lean_modules_move_rewrites_its_importers_and_a_locks_module_names_and_nothing_else(tmp_path):
+    """A `.lean` file moved to another package is another module: each `import` of it names the new module, and a lock's
+    `reads` key and other whole module names follow it. Its declarations keep their namespace, so `open A.M` and `A.M.foo`
+    stay, as does a module whose name only starts with the moved one's; `move_check.py` certifies the commit."""
+    r, p = _lean_tree(tmp_path)
+    assert p.returncode == 0, p.stderr
+    assert not (r / "a/lean/A/M.lean").exists() and (r / "b/lean/B/M.lean").read_text() == LEAN_M
+    assert (r / "a/lean/A.lean").read_text() == "import B.M\n"
+    assert (r / "b/lean/B.lean").read_text() == LEAN_B.replace("public import A.M", "public import B.M")
+    lock = json.loads((r / "b/lean/lean-audit.json").read_text())
+    assert lock["layers"] == ["B.M", "B"] and lock["reads"] == {"B.M": {"definitions": {"A.M.foo": "00"}, "digest": "11"}}
+    assert lock["guarantees"] == json.loads(_lean_lock("B.G : A.M.foo = 1"))["guarantees"]
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
+def test_a_lean_modules_move_it_could_not_certify_is_still_refused(tmp_path):
+    """A guarantee's record that names the moved module whole would change with it, and a pure move keeps the records byte
+    for byte: the move stops and names the lock. An edit of a Lean line other than an import, after the move, is refused
+    by `move_check.py`."""
+    r, p = _lean_tree(tmp_path, signature="B.G : A.M")
+    assert p.returncode == 1, p.stdout
+    assert p.stderr.strip().endswith("b/lean/lean-audit.json: the rewrite would change a guarantee or reads record"), p.stderr
+    r, p = _lean_tree(tmp_path / "edited")
+    assert p.returncode == 0, p.stderr
+    (r / "b/lean/B.lean").write_text((r / "b/lean/B.lean").read_text().replace("open A.M in", "open B.M in"))
+    git(r, "add", "-A")
+    assert not _certify(r, git(r, "rev-parse", "HEAD"))["certified"]
 
 
 def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
@@ -722,6 +873,20 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
         "verity/empty/__init__.py"]
     assert not (r / "verity/core").exists()
     assert "`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted: 2" in p.stdout
+
+
+def test_an_anchor_inside_a_string_literal_stays_as_written(tmp_path):
+    """A moved file's own anchor is recounted from its new place; one inside a string (a toy's source, a docstring's
+    example) is no anchor of the file's, and recounting it would change the toy (or, joined back in parentheses with
+    double quotes inside a double-quoted string, leave the file unparseable)."""
+    toy = 'LIB = "ROOT = Path(__file__).resolve().parents[2]\\n"\n'
+    r, p = _run(tmp_path, {"tools/a/b/t.py": '"""`Path(__file__).parents[1]` names b."""\nROOT = Path(__file__).resolve().parents[3]\n'
+                           + toy, "tools/a/b/data.json": "{}\n"},
+                LEVELS_MAP.replace('"benchmarks/live/" = "verity/composite/device/live/"', '"tools/a/b/" = "tools/b/"')
+                .replace('"benchmarks.live" = "verity.composite.device.live"', '"tools.a.b" = "tools.b"'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "tools/b/t.py").read_text() == ('"""`Path(__file__).parents[1]` names b."""\n'
+                                                 'ROOT = Path(__file__).resolve().parents[2]\n' + toy)
 
 
 @pytest.mark.parametrize("text, comments", [

@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 # The decoder is right at a plain session of `J` hidden-output tables
 
 `decodesOnPHJ_exec`: `PlainJ.decodesOnPJ_exec` under hidden outputs, the plain counterpart of the decoder
-`ZkHidden.zk_session_soundHJ` reads (without its masks). At an outcome flock-verify accepts, at table `j`:
+`ZkHidden.zk_session_soundHJ` reads (without its masks). At an outcome verity-verify-proof accepts, at table `j`:
 
 * `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `setupOf_tablePHJ` sets table `j` up with setupHidden under `tagsAt` at `drawJ` (`HiddenExec.setupTables_okH` at one
@@ -59,7 +59,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **flock-verify sets table `j` up under its tags at its sample, under hidden outputs**, without `--zk`
+/-- **verity-verify-proof sets table `j` up under its tags at its sample, under hidden outputs**, without `--zk`
 (`PlainJ.setupOf_tablePJ` with `setupHidden`, `ZkHidden.setupOf_tableJH` at the plain inputs): at the record's sample `d`,
 `setupTables` at `I` has `nTab I` tables, table `j` setupHidden's statement under `tagsAt` at `drawJ`. -/
 theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
@@ -92,7 +92,7 @@ theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : 
     rw [e1, hpart]
     exact hall j hj
 
-/-- **flock-verify's acceptance under hidden outputs, table by table and rep by rep** (`DecodeZLJ.accepts_reps_at`
+/-- **verity-verify-proof's acceptance under hidden outputs, table by table and rep by rep** (`DecodeZLJ.accepts_reps_at`
 under hidden outputs): the acceptance lemmas without `hh` (`accepts_verdict_leafAny`, `accepts_rep_roundsAny`,
 `setupTables_pointsAny`) at every table `j`, the verdict at `leaf512` under `hm96-sha512/v1` leaves (`leafOfId_hm96`). -/
 theorem accepts_reps_atH {I : Inputs} {t : Exec.Transcript}

@@ -196,13 +196,13 @@ def check_whole(fn, unit_cut, units, tp, layout) -> None:
         local = reads_of(tg, tin)
         o = nin + at
         for q in range(cnt):
-            reloc = lambda a: port(q, a) if a < tin else o + q * ln + (a - tin)   # noqa: E731
             for r in range(ln):
                 gc = at + q * ln + r
                 assert owner[gc] == unit + q
                 assert g.width[gc] == tg.width[r]
                 assert names[g.prim[gc]] == tnames[tg.prim[r]]
-                assert whole[gc] == {reloc(a) for a in local[r]}, (role, q, r)
+                relocated = {port(q, a) if a < tin else o + q * ln + (a - tin) for a in local[r]}
+                assert whole[gc] == relocated, (role, q, r)
             bound = bound_ports(fn, us[unit + q], tp[role], tin)
             assert sorted(bound) == list(range(tin))
             assert all(port(q, a) == (b if b < nin else compact[b - nin]) for a, b in bound.items()), (role, q)

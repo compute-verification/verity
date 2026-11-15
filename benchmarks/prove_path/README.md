@@ -7,7 +7,7 @@ units on live coins, proves them with Flock `--zk` behind the Lean ZK server, an
 Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
-`run.sh`, `benchmarks/one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
+`run.sh`, `verity/protocols/proofs/spot/prover/audit/window_audit.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
 deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
 (`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
@@ -80,7 +80,7 @@ Each guarantee below is listed in the lock (`security/lean-audit.json`), which r
 reads and its named assumptions.
 
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
-(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
+(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `verity-verify-proof verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
@@ -156,9 +156,9 @@ guarantee above.
   `security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
   (`security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
   and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
-- `Verity.Assumptions.TrustedHost` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
+- `Verity.Assumptions.TrustedDevice` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The certifier's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).
@@ -248,12 +248,14 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.commitments.windows.interface`): the window's `circuit.json`, which its registration binds
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
-  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
-  catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
+  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition one a
+  catalog registers or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
   table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own Build of
   each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
-  unchanged digests is refused (`circuit`). It imports no `verity_vllm` code.
+  unchanged digests is refused (`circuit`). Of `verity_vllm` it loads only a catalog package
+  (`verity.circuits.defs.catalog_package`), where a served template's Definition is registered, and nothing else of the
+  adapter.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to

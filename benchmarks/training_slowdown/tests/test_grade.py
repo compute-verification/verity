@@ -265,9 +265,30 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert s["S"] == {"honest": pytest.approx(1.5 * want["rho"]), "any": pytest.approx(1.5 * want["rho"]),
                       "why": None, "lower_bound": want["partial"]}
     assert s["rests_on"]["rho"] == want["rests_on"] and "4 of the 5 starts on data d" in s["rests_on"]["gain"]
+    premise = f"attention: that {products.ATTENTION_PREMISE}"
+    assert s["rests_on"]["attention"] is None and premise not in G.text(s)
+    assert premise in G.text(s | {"rests_on": s["rests_on"] | {"attention": products.ATTENTION_PREMISE}})
     at = graded(runs, ref, CONFIG | {"policy": "v4-pro-session"})
     assert at["policy"]["kind"] == policy.FIXED and at["rho"]["rho"] is None and at["S"]["any"] is None
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
+
+
+def test_a_grown_models_own_numbers_price_neither_the_policy_nor_c0():
+    """A job of a route that grows the start (`grow`) records the grown model's forward MACs a token and c, and its
+    map (`origin`). Nothing that prices the policy reads them: the grade's (c, k), at the console's rule and at a
+    registry's policy, is the policy's at the start's shape, and C0 and the fit are the starts registry's, as for a
+    job of the start's own shape."""
+    search = traced([OVER, UNDER, UNDER])
+    grown = copy.deepcopy(search)
+    fwd = 3 * grown["record"]["forward_macs_per_token"]
+    grown["record"] |= {"forward_macs_per_token": fwd, "c": 4096 * fwd, "origin": {"blocks": 24, "sha256": "0" * 64,
+                                                                                 "map": {"blocks.23.wo.weight": None}}}
+    runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1)], [job([OVER, UNDER])]
+    for name in ("console", "v4-pro-session"):
+        plain, deep = (graded(runs + [s], ref, CONFIG | {"policy": name}) for s in (search, grown))
+        assert plain["policy"] == deep["policy"] == policy.named(name, SHAPE)
+        assert plain["fit"] == deep["fit"] and plain["p"] == deep["p"]
+    assert policy.c0(registry()["starts"]["s"])[0] == 1e15 * PER_MAC
 
 
 def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
@@ -787,19 +808,21 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
 def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an_earlier_captures(ran):
     """Where the two rules of one price meet, on a record whose op log names dtypes. `two_pricings` is about records
     among themselves, C over H. `work.repriced` is about a slowdown over a trace's own circuit, which the grade never
-    takes: it divides the trace's products by the record's count, so their one price is that each product the trace
-    prices is priced in the dtype the record names for it.
+    takes: it divides the trace's products of M by the record's count, so their one price is that each of them is
+    priced in the dtype the record names for it.
 
     With the trace its job took, of this capture: neither rule speaks. Every traced product with fewer than two
     token dims, which M's all are, is priced in the dtype it was traced in, the one the record's log names for it.
-    Attention's products, which M leaves out for their two token dims, are float32 on both sides: the trace runs
-    them under the math kernel, and so does a job on a CPU (`run.cpu_attention`).
+    Attention's products, which M leaves out for their two token dims, are float32 in the trace, as the math kernel
+    computes them, and in the record's log, since a job on a CPU runs that kernel too (`run.cpu_attention`); the
+    trace states the bf16 their call computes in on a card (a row's `attention`), which is their price.
 
-    With the same rows under an earlier capture, whose rule prices those float32 products at bf16: `work.repriced`
-    lists them and nothing else, so over the trace's own circuit there is no slowdown, with that reason, and the
-    grade's ρ and bound of record are what they are with the job's own trace, since nothing M holds moved."""
+    With the same rows as an earlier capture's, which states no call, that capture's rule prices those float32
+    products at bf16 too, so the work is priced as it is with the job's own trace; but that capture's circuit
+    counted them in float32, so `work.repriced` lists them and nothing else, and over the trace's own circuit there
+    is no slowdown, with that reason. The grade's ρ and bound of record are what they are with the job's own trace."""
     tr = ran["trace"]
-    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.CAPTURE
     names: dict = {}
     for _, _, op, shapes, _, _, dtype in ran["structures"][ran["steps"][tr["step"]]["struct"]]["log"]:
         if op in (*F.PLAIN_PRODUCTS, "bmm"):
@@ -813,13 +836,20 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     attentions = [r for r in tr["rows"] if sum(x in r["token_dims"] for x in "mkn") >= 2]
     others = [r for r in tr["rows"] if r not in attentions]
     assert others and all(named_for(r) == {products.traced_dtype(r)} == {"bfloat16"} for r in others)
-    assert attentions and all((r["op"], products.traced_dtype(r), named_for(r)) == ("bmm", "float32", {"float32"})
-                              for r in attentions)
+    assert attentions and all((r["op"], products.traced_dtype(r), r["attention"], named_for(r)) == (
+        "bmm", "float32", "bfloat16", {"float32"}) for r in attentions)
+    assert all({products.priced_dtype(r, tr["capture"])} == named_for(r) for r in others)
+    assert {products.priced_dtype(r, tr["capture"]) for r in attentions} == {"bfloat16"}
+
+    def no_call(rows: list) -> list:
+        return [{k: v for k, v in r.items() if k != "attention"} for r in rows]
 
     earlier = products.READS[0]
-    old = tr | {"capture": earlier}
+    old = tr | {"capture": earlier, "rows": no_call(tr["rows"]),
+                "at": {k: b | {"rows": no_call(b["rows"])} for k, b in tr["at"].items()}}
     moved = work.repriced(old)
-    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in attentions for r in moved)
+    assert products.on_premise(tr["rows"]) and not products.on_premise(old["rows"])
+    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in no_call(attentions) for r in moved)
     pol = policy.named(CONFIG["policy"], synthetic.SHAPE)
     alone = calculator.slowdown(pol, old)
     assert calculator.slowdown(pol, tr)["slowdown"] is not None and alone["slowdown"] is None
@@ -828,9 +858,8 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     row = G.rows_of(ran)[-1]
     now, then = (G.traced(ran | {"trace": t}, row)["formalism"] for t in (tr, old))
     assert then["products"]["he"] == now["products"]["he"] and now["products"]["he"]["groups"]
-    prices = [(x["op"], x["gates_per_mac"], y["gates_per_mac"])
-              for x, y in zip(now["trace"]["products"]["rows"], then["trace"]["products"]["rows"]) if x != y]
-    assert prices == [("bmm", gates.per_mac("gemm/f32"), PER_MAC)] * len(attentions)
+    assert then["trace"]["products"]["rows"] == now["trace"]["products"]["rows"]
+    assert {x["gates_per_mac"] for x in now["trace"]["products"]["rows"] if x["op"] == "bmm"} == {PER_MAC}
 
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     runs = [{"seed": 0, "split": "search", "record": ran}]
@@ -860,8 +889,8 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     this capture, each is priced as traced, nothing is apart and the record grades. The same rows as an earlier
     capture's are priced by that capture's rule, a product traced wider than bf16 at bf16: the builds are then bf16
     in the work and float32 in the count, and ρ is refused, saying how many, the largest with its two dtypes and the
-    way out, the job traced again at capture `PRICED_AS_TRACED_FROM` or later. A job with no product of M wider than
-    bf16 has none apart under either capture: attention's float32 products are outside M.
+    way out, the job traced again by this capture. A job with no product of M wider than bf16 has none apart under
+    either capture.
 
     A trace whose step ran M's products in another dtype than the job did is refused at this capture too, and there
     the way out is a trace whose step runs them as the job did: the job traced again on a device of the kind the
@@ -871,7 +900,7 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     old = tr | {"capture": earlier}
     builds = [r for r in tr["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
     assert len(builds) == 2 and all(r["phase"] == "forward" and not r["token_dims"] for r in builds)
-    assert G.names_dtypes(adapted) is True and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.names_dtypes(adapted) is True and tr["capture"] == products.CAPTURE
     assert G.priced_apart(tr, row["macs_log"]) == [] and G.traced(adapted, row)["formalism"]["products"]["he"]["groups"]
     apart = G.priced_apart(old, row["macs_log"])
     assert sorted(apart, key=str) == sorted(({"row": r, "priced": "bfloat16", "named": ["float32"]} for r in builds),
@@ -882,8 +911,8 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     said = (f"2 of the traced step's matrix products in M are priced in another dtype than the search record's op log "
             f"names for them (the largest: 1 forward mm of {d['m']}×{d['k']} by {d['k']}×{d['n']}, priced in "
             f"bfloat16 where the record names float32), and one slowdown has one price: trace the job again at "
-            f"capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product in the dtype it was "
-            f"traced in (float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
+            f"capture {products.CAPTURE} or later, which prices each product in the dtype its circuit counts it in "
+            f"(float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
     with pytest.raises(F.Refused) as refused:
         G.traced(adapted | {"trace": old}, row)
     assert str(refused.value) == said and G.RETRACE in said
@@ -981,25 +1010,29 @@ def test_rho_is_the_bound_of_record_where_products_bind():
 
 
 def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
-    """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
-    β_x, b_y, F and |C|, with no n, and ρ's products term is its blocks times c/|C|: with the calculator's `bound`
-    replaced, each choice of the work is scored by it, and ρ and S follow it. Without a traced step, or on one whose
-    M is empty (no operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
+    """The bound of record is the calculator's choice on the traced step's products (`min_cut.slowdown_of`) at the
+    policy's (c, k) and |C|, with no n, and ρ's products term is its term: with `slowdown_of` replaced by one that
+    gives 300 blocks wherever it chooses a work, the bound of record is its `Bound` on the work it chose, and ρ and S
+    follow it. Without a traced step, or on one whose M is empty (no operand holds a bit, so there is no β to hand
+    over), it is not available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
-    calls = []
+    calls, real = [], calculator._min_cut()
 
-    def stub(c, k, n, **kw):
-        calls.append((c, k, n, kw))
-        return SimpleNamespace(slowdown=300.0 * c / kw["size"], blocks=300.0, statement="HE",
-                               rests_on="given (H) and (E)")
+    def stub(c, k, n, *, size, work, scale):
+        calls.append((c, k, n, size))
+        got = real.slowdown_of(c, k, n, size=size, work=work, scale=scale)
+        if got.choice is None:
+            return got
+        return real.Chosen(SimpleNamespace(slowdown=300.0 * c / size, blocks=300.0, statement="HE",
+                                           rests_on="given (H) and (E)"), got.choice, got.products, 300.0 * c / size,
+                           got.terms, got.K_thr, got.q, got.beta_w, got.beta_x, got.b_y, got.F, got.alpha, got.N, got.O)
 
-    stubbed = SimpleNamespace(**vars(calculator._min_cut()) | {"bound": stub, "HE": "the statement"})
+    stubbed = SimpleNamespace(**vars(real) | {"slowdown_of": stub, "HE": "the statement"})
     monkeypatch.setattr(calculator, "_min_cut", lambda: stubbed)
     s = graded(runs, ref)
     w, got = s["rho"]["work"], s["bound_of_record"]
     assert len(calls) > 1 and all(call[:3] == (*policy.CONSOLE, None) for call in calls)
-    assert calls[-1][3] == {"N": w["N"], "O": w["O"], "size": w["C_gates"], "beta_w": w["beta_w"],
-                            "beta_x": w["beta_x"], "b": w["b_y"], "F": w["F"]}
+    assert calls[-1][3] == w["C_gates"]
     slowdown = 300.0 * policy.CONSOLE[0] / w["C_gates"]
     assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, slowdown, 300.0, "HE")
     assert s["rho"]["rho"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
@@ -1015,7 +1048,7 @@ def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
         b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
     empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
     assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
-    assert not empty["bound_of_record"]["available"] and len(calls) == made
+    assert not empty["bound_of_record"]["available"]
 
 
 def test_the_grades_slowdown_is_the_entry_points(monkeypatch):

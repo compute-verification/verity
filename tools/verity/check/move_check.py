@@ -717,13 +717,14 @@ def sh_anchor_rewrite(old: str, new: str, old_path: str, new_path: str, names_ol
     return True
 
 
-CHAIN = re.compile(r'"[\w.\-]+"(?:\s*/\s*"[\w.\-]+")+')
+CHAIN = re.compile(r'"[\w.\-]+"(?P<call>\))?(?:\s*/\s*"[\w.\-]+")+')
 DOTTED = re.compile(r"([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)")
 
 
 def join_chains(text: str) -> str:
-    """Each pathlib chain of string parts (`ROOT / "a" / "b"`) as one path string (`ROOT / "a/b"`)."""
-    return CHAIN.sub(lambda m: '"' + "/".join(re.findall(r'"([^"]+)"', m.group(0))) + '"', text)
+    """Each pathlib chain of string parts (`ROOT / "a" / "b"`) as one path string (`ROOT / "a/b"`), one that starts at a
+    call's string (`Path("a") / "b"`) inside the call (`Path("a/b")`)."""
+    return CHAIN.sub(lambda m: '"' + "/".join(re.findall(r'"([^"]+)"', m.group(0))) + '"' + (m["call"] or ""), text)
 
 
 def dotted_rewrite(old: str, new: str, modules: Modules) -> bool:

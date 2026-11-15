@@ -331,7 +331,7 @@ def blockByte {k : ℕ} (α β : ℚ) (x : Fin k → ℚ) (e : Fin 32 → Nib) (
   (formRow α β x e F).bind fun r => r.2[b]?
 
 /-- **Block `b`'s modal scale byte given `E_i`** (§6.2's "modal A0"): the byte `formRow` sets on the block at the most
-bases `F`, every basis equally likely, so the mode of the byte's exact law given the row's `E` line `e`. Ties go to the
+bases `F`, every basis equally likely, so the mode of the byte's exact distribution given the row's `E` line `e`. Ties go to the
 smaller byte. It is salt-free given `E_i`. -/
 def modalByte {k : ℕ} (α β : ℚ) (x : Fin k → ℚ) (e : Fin 32 → Nib) (b : ℕ) : Fin 256 :=
   ((List.finRange 256).argmax fun v =>
@@ -344,7 +344,7 @@ def codeAt (α x β : ℚ) (e : Fin 32 → Nib) (s : Fin 256) (f : Fin 32 → Ni
 
 /-- **`p_t` under the exact noise distribution** (§6.2; the FP4 condition (2)): the chance that an element's code value at
 the scale byte `s` is not its modal value, the one `A0` takes. The basis line `f` is uniform over all `16^32`, and the
-value is a function of `f` given `E_i`, so this is the discrete law of the row's noise `E_i·F_t` through the noise atom
+value is a function of `f` given `E_i`, so this is the discrete distribution of the row's noise `E_i·F_t` through the noise atom
 itself, not the Gaussian at `σα`. -/
 def leaveProb (α x β : ℚ) (e : Fin 32 → Nib) (s : Fin 256) : ℚ :=
   1 - (((univ : Finset (Fin 32 → Nib)).sup fun f₀ =>
@@ -412,7 +412,7 @@ def f1BOverfit : ℚ := 10
 /-- **F1′'s charge per word of one row** (theory §6.2; the FP4 condition (1), with `κ` inside the expectation;
 the reference's `split_units` and `split_saving`), in FP4 units: over each aligned window `w` of 128 (8 blocks),
 `128·min(1, ovf·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]))` with `κ = min(c·M_w, 1/8)`. The expectation is
-under the exact law of the row's codes given its `E` line `e` (`rowLeave`), at §6.2's sorted in-block layout and modal
+under the exact distribution of the row's codes given its `E` line `e` (`rowLeave`), at §6.2's sorted in-block layout and modal
 `A0`. The row is the clean `x` at the scales `α`, `β`, with salt-dead elements `sd`, and `r` is its forming in the
 sampled tile. The overfit `ovf` is 1 on A′'s rows and `f1BOverfit` on B̃'s.
 - The two routes: one 2:4 pass plus a CUDA-core patch, or a skip or patch per k64 half. The sum bounds the better of

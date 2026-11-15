@@ -13,7 +13,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: typed attention (4 instances) staged by `typed_statement.stage` with its `rows/`, and the ex2 and rcp tables it reads
 FIXTURE = "art:e1673794"
 
@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 @pytest.fixture(scope="module")
 def attn(tmp_path_factory):
     sys.path.insert(0, str(VERIFIER))
-    import ci  # noqa: PLC0415
+    import ci
 
     try:
         stage = ci.fetch(f"{FIXTURE}/stage", tmp_path_factory.mktemp("store"))

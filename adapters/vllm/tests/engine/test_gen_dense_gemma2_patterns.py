@@ -1,6 +1,6 @@
 """[GEN dense / ov-dense] the Gemma-2 patterns (`profiles/gen_dense_gemma2_patterns.py`) on a synthetic step that replays
 the exact ATen sequence of vLLM d9105ea80's eager `Gemma2ForCausalLM` (see the module docstring there): every root resolves
-to the intended `quarantine.dense` specialization, the widened-bf16 operands are re-pointed to their narrow sources, the
+to the intended `registry.dense` specialization, the widened-bf16 operands are re-pointed to their narrow sources, the
 Triton `mean_kernel` child is consumed by the `aten.mean.dim` compute, and the pins reject a foreign launch geometry."""
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
 from tests.observe.test_patterns_synthetic import CUDA, Builder, bf, by_spec, context, decode_step, i64
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
 
 M, H, I, V = 2, 8, 4, 16
 ADD = "aten::add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor"
@@ -199,11 +198,3 @@ def test_mean_kernel_pins_reject_a_foreign_launch(over, needle):
     uns = [r for r in res if isinstance(r, Unsupported)]
     assert len(uns) == 1 and uns[0].op == "aten.mean.dim" and needle in uns[0].detail["mismatches"]
 
-
-def test_quarantine_dense_registry_is_the_pattern_target_set():
-    ids = {d.id.split("{")[0] for d in ALL_DEFINITIONS}
-    used = {"Bf16MulScalarTensor_v1", "AddScalarBf16_v1", "AddScalarF32_v1", "SquareBf16_v1", "SquareF32_v1", "MeanTriton_v1", "RsqrtF32_v1",
-            "ScaleRowBf16_v1", "ScaleRowF32_v1", "MulVecF32_v1", "NarrowF32ToBf16_v1", "AddWidenedBf16_v1", "GeluTanhMul_v1", "Bf16DivScalar_v1",
-            "Bf16Tanh_v1", "Bf16MulScalar_v1"}
-    assert used == ids, ids ^ used
-    assert {p.id.split("{")[0] for p in ALL_PRIMITIVES} == {"TanhF32Rn_v1", "GeluTanhMulBf16_v1"}

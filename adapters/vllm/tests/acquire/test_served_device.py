@@ -7,7 +7,9 @@ kernel's tile unsplit, causal when a sequence has more than one query row.  The 
 `set_params_splitkv` (vllm-flash-attn 506341a1)."""
 from __future__ import annotations
 
+import dataclasses
 import json
+from typing import Any
 
 import pytest
 from verity.definitions.registry import bf16_gemm_check as BC
@@ -92,6 +94,20 @@ def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[in
     assert str(e.value) == f"the device is not its registered card hardware/cards/{card}.toml: {off}"
 
 
+def test_a_card_whose_arch_names_no_compute_capability_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(SD, "load_card", lambda sku: {"arch": "hopper", "sm": {"count": {"value": 132}}})
+    with pytest.raises(Unmodelled) as e:
+        SD.check_card((9, 0), 132, "a-card")
+    assert str(e.value) == "hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
+
+
+def test_fa3_splitting_a_prefill_chunk_is_refused() -> None:
+    """A split launch is a decode row's: one query row.  A chunk of several rows that the heuristic splits is no Definition."""
+    with pytest.raises(Unmodelled) as e:
+        SD.attention_rows(3, 300, 2, NH=32, KVH=8, D=64, BM=128, BN=128, dot=None)
+    assert str(e.value) == "FA3 splits a prefill chunk of 3 rows 2 ways: a split prefill is not modelled"
+
+
 def test_acquisition_holds_the_engines_device_to_the_card_its_name_registers() -> None:
     """`served_match.device_of`, which served-match and the Commit's served mode take the served Build's device from: the engine's
     reported name picks the card, and the one name `NO_CARD` excepts (the B200) is held to none."""
@@ -115,9 +131,14 @@ def test_a_device_registered_on_no_card_and_not_excepted_is_refused(name: str) -
                             f"({sorted(NO_CARD)}): add its card under hardware/cards/ and map it in CARD")
 
 
+def full_decode(device: SD.DeviceBindings) -> tuple[list[int], list[list[dict[str, Any]]], dict[str, Any]]:
+    """A FULL graph's decode launch of three sequences, padded to the capture batch 4."""
+    return SD.launch(device, [1, 1, 1], [10, 300, 700], HEADS, mode="FULL", padded=4, split_cap=32, capture_sizes=[1, 2, 4])
+
+
 def test_fa2_full_decode_splits_at_the_capture_batch_and_max_model_len() -> None:
     # bnm = 4 x 8 x ceil(4 / 64) = 32 < 0.8 x 376; 16 key blocks of 256; 8 splits fill 256 of 376 SM slots, the eligible best
-    NS, rows, plan = SD.launch(fa2_device(), [1, 1, 1], [10, 300, 700], HEADS, mode="FULL", padded=4, split_cap=32, capture_sizes=[1, 2, 4])
+    NS, rows, plan = full_decode(fa2_device())
     assert plan == {"fa2": {"swapped": True, "BN": 256, "NS": 8, "batch": 4, "max_seqlen_k": 4096}}
     assert NS == [8, 8, 8]
     assert [[(r["base"], r["statics"]["T"], r["statics"]["NS"], r["statics"]["MASKED_FROM"]) for r in rs] for rs in rows] == [
@@ -153,10 +174,14 @@ def test_fa2_unswapped_launch_runs_the_split_tile_unsplit() -> None:
     assert [r["statics"]["MASKED_FROM"] for r in SD.fa2_attention_rows(1, 600, la, NH=8, KVH=8, D=64, dot=fa2_device().dot)] == [2]
 
 
-def test_fa2_swapped_launch_without_max_seqlen_k_is_refused() -> None:
-    """`device_of` binds no FA2 device without max_model_len, so no served launch lacks it; a swapped launch given none is refused
-    by name where the split count would read it, and an unswapped launch, which reads none, is what it is with one."""
-    with pytest.raises(Unmodelled, match="reads max_seqlen_k and the launch has none: a FULL graph's is the device's max_model_len"):
-        SD.fa2_launch([1, 1, 1], NH=32, KVH=8, D=64, sms=SMS, batch=4, max_seqlen_k=None)
-    assert (SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=None)
+def test_fa2_swapped_launch_without_max_seqlen_k_fails_where_the_split_count_reads_it() -> None:
+    """`device_of` binds no FA2 device without max_model_len, so no served launch lacks it.  A swapped launch given none fails where
+    the split count reads it, a `TypeError` and no refusal a Build's caller would take for one, alone and under a FULL graph on a
+    device built without one; an unswapped launch, which reads none, is what it is with one."""
+    none: Any = None
+    with pytest.raises(TypeError):
+        SD.fa2_launch([1, 1, 1], NH=32, KVH=8, D=64, sms=SMS, batch=4, max_seqlen_k=none)
+    with pytest.raises(TypeError):
+        full_decode(dataclasses.replace(fa2_device(), max_model_len=None))
+    assert (SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=none)
             == SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=4096))

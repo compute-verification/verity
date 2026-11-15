@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.DeviceSm120KernelGap
 public import Proofs.Pouw.PearlC.UOnlyGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.PearlC.TTOutW1
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset

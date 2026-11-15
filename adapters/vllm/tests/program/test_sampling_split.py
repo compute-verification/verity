@@ -155,6 +155,16 @@ def spec_keys(defs: dict[str, object]) -> list[str]:
     return out
 
 
+def fixture_text(modules: dict[str, str | None], pins: dict[str, dict]) -> str:
+    """The fixture's text: a line for each Definition's module, then a line for each pin, in the order given."""
+    lines = ["{", '  "modules": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in modules.items()]]
+    lines[-1] = lines[-1].rstrip(",")
+    lines += ["  },", '  "pins": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in pins.items()]]
+    lines[-1] = lines[-1].rstrip(",")
+    lines += ["  }", "}"]
+    return "\n".join(lines) + "\n"
+
+
 def _load() -> dict:
     return json.loads(FIXTURE.read_text())
 
@@ -186,6 +196,11 @@ def test_the_pins_cover_every_circuit_check_target_of_the_family():
     have = set(_load()["pins"])
     want = {"GumbelTopPTokenSelect_v1{V=128256}", "TopPKeepWord_v1{V=16,S=4}", "GumbelSelectF32_v2{V=2}"}
     assert len(have) > 100 and want <= have, REWRITE
+
+
+def test_the_fixture_is_the_text_its_writer_writes():
+    doc = _load()
+    assert fixture_text(doc["modules"], doc["pins"]) == FIXTURE.read_text(), REWRITE
 
 
 # --- the boundary --------------------------------------------------------------------------------------------------------------
@@ -244,11 +259,7 @@ if __name__ == "__main__":
         sys.exit("usage: test_sampling_split.py --write")
     defs = family_definitions()
     keys = spec_keys(defs)
-    data = {"modules": {k: defining_module(d) for k, d in sorted(defs.items())}, "pins": {k: pin(k, defs) for k in keys}}
-    lines = ["{", '  "modules": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in data["modules"].items()]]
-    lines[-1] = lines[-1].rstrip(",")
-    lines += ["  },", '  "pins": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in data["pins"].items()]]
-    lines[-1] = lines[-1].rstrip(",")
-    lines += ["  }", "}"]
-    FIXTURE.write_text("\n".join(lines) + "\n")
-    print(f"{FIXTURE}: {len(data['modules'])} Definitions, {len(data['pins'])} pins")
+    modules = {k: defining_module(d) for k, d in sorted(defs.items())}
+    pins = {k: pin(k, defs) for k in keys}
+    FIXTURE.write_text(fixture_text(modules, pins))
+    print(f"{FIXTURE}: {len(modules)} Definitions, {len(pins)} pins")

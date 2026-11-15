@@ -34,7 +34,7 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 TABLES = Tables(64, 8, 6)
 #: H1's leaf at K = 64: 16 u32 of codes, then the f32 scale, in u16 words

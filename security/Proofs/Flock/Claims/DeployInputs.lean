@@ -41,7 +41,7 @@ import VCVio.Prelude.Core
 # The deployed verifier's statement: its bytes, its parser and its setup
 
 A statement `x` of Flock's deployed verifier is the canonical byte encoding (`Raw.encode`) of exactly what
-`flock-verify verify` reads besides the session directory: the `--statement` id, the circuit and public files, the lookup
+`verity-verify-proof verify` reads besides the session directory: the `--statement` id, the circuit and public files, the lookup
 tables, `--zk` and whether it names `--coins os`, `--session-tables`, the sampled session's sample (the record's `unit_draw`), and the bytes of
 `--partition`, `--program`, `--work K` with `--work-table`, `--stratified`, `--closure`, `--registered` and
 `--public-inputs`. Fields are length-prefixed (8 bytes, little-endian), options and flags one tag byte, after a format
@@ -75,7 +75,7 @@ open Lean (Json)
 
 /-! ## The statement's bytes -/
 
-/-- **What `flock-verify verify` reads of a statement**, as bytes and flags: the `--statement` id, the circuit and public
+/-- **What `verity-verify-proof verify` reads of a statement**, as bytes and flags: the `--statement` id, the circuit and public
 files, the lookup tables the circuit pins, `--zk`, whether it names `--coins os` (which it refuses), `--session-tables`, the sampled session's sample (JSON text),
 and the files and numbers of `--partition`, `--program`, `--work`, `--work-table`, `--stratified`, `--closure`,
 `--registered` and `--public-inputs`. -/

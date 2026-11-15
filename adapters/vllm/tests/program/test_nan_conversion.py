@@ -1,8 +1,8 @@
-"""The registered f32 -> bf16 conversions of the library and the production configuration's binding.
+"""The registered f32 -> bf16 conversions of the library and the serving configuration's binding.
 
 `F2fpBf16_v1` (NaN -> 0x7FFF, the measured `cvt.rn.bf16.f32` word) is the conversion B0/B1 bind; it is the same
 function as `veritor.core.tc.f32_to_bf16_hw_word` (`veritor.tc-ampere-bf16@2`).  `F32ToBf16Rn_v1` (NaN -> 0x7FC0)
-stays registered, byte for byte, as the software canonicalisation (`veritor.tc-ampere-bf16@1`); the production
+stays registered, byte for byte, as the software canonicalisation (`veritor.tc-ampere-bf16@1`); the serving
 program never binds it, so it is in neither B0/B1 program digest.
 """
 
@@ -13,14 +13,13 @@ import random
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
+from verity.circuits.silicon.cast import f32_is_nan as is_nan_f32_word
+from verity.circuits.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
-
-from verity.circuits.silicon.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
 
 CAPTURES = Path(__file__).resolve().parents[4] / "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07"
 DEVICES = ("4090", "a100")
@@ -60,7 +59,7 @@ def test_f2fp_matches_every_measured_cvt_word(device: str):
     assert nan == 84
 
 
-def test_production_binds_the_hardware_conversion_and_the_b0_digest_is_unchanged():
+def test_serving_binds_the_hardware_conversion_and_the_b0_digest_is_unchanged():
     program = Program(bind(b1.Serve, C=b1.B0_CONFIG, LP=32, STEPS=7))
     desc = encode_program(program)
     ids = set(desc["definitions"])

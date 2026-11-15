@@ -28,7 +28,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # Flock's one-stage audit, end to end, with registered reads (trusted)
 
-`EndToEndRegistered` is `EndToEndHidden`'s statement for `flock-verify verify --zk --registered F` sessions, over a
+`EndToEndRegistered` is `EndToEndHidden`'s statement for `verity-verify-proof verify --zk --registered F` sessions, over a
 public file with or without shared-row tables, and with the registered check's consequence at every accepted outcome
 as a second conjunct, and `EndToEndRegisteredDrawn` is the same statement with its first conjunct at the sampled proof blocks
 (`EndToEndDrawn`'s event). Their proofs are
@@ -58,15 +58,15 @@ open scoped ENNReal
 
 open Classical in
 /-- **Flock's one-stage audit, end to end, with registered reads.** As in `EndToEndHidden`, for
-`flock-verify verify --zk --registered F --session-tables J` (`own` F's ports), over hidden outputs and a public file
+`verity-verify-proof verify --zk --registered F --session-tables J` (`own` F's ports), over hidden outputs and a public file
 with or without shared-row tables. Every row is registered under the public file's `b ‖ c` (`layShHJSt`'s population is
 the public file). Then
 for every live prover `τ`:
-1. $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
+1. $$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
    with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at
    registration) at the rows `rsZHJSt`, and `ε_ks`, `δ_link` `EndToEnd`'s terms;
-2. at every outcome flock-verify accepts, each registered read that is the verifier's own at the sample of the table its
+2. at every outcome verity-verify-proof accepts, each registered read that is the verifier's own at the sample of the table its
    unit is sampled into (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`): the SHA-512
    leaf of the public file's `b ‖ c` at the read row opens the root `own` holds, at the position `own` gives, through
    the path that table's sampled statement gives (`regPathsHJ`).
@@ -79,15 +79,15 @@ Its named assumptions, each a hypothesis, are `EndToEnd`'s, for the first conjun
 executable's checks:
 * A3 (`uniform/io-getrandombytes`, `Assumptions.UniformRandomBytes`): the verifier's bytes are uniform;
 * `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`, with A6 `uniform/flock-coin-server` for its coins): the record
-  `flock-verify` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
-  `flock-verify draw` printed for the verifier's own sample;
+  `verity-verify-proof` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
+  `verity-verify-proof draw` printed for the verifier's own sample;
 * `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for the knowledge finders of each table of the
   prover's session, at budgets `qF` (rewinding) and `qS` (self-clash);
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 
 The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an untyped statement, the count curve's
 numeric conditions, and `EndToEndHidden`'s reference setup `y₀`: table 0's, at the session's link points, at some sample
-`d₀`, which every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of
+`d₀`, which every sample verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of
 tables. -/
 def EndToEndRegistered : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -213,10 +213,10 @@ def EndToEndRegisteredPerTest : Prop :=
 open Classical in
 /-- **Flock's one-stage audit, end to end, with registered reads, at the sampled proof blocks.** `EndToEndRegistered`'s
 setting, with its first conjunct at the sampled proof blocks: for every live prover `τ`,
-1. $$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
+1. $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
    with "wrong" `EndToEndRegistered`'s (`wrongRegZ` at the rows `rsZHJSt`), and `ε_ks`, `δ_link` `EndToEnd`'s terms,
    averaged over the verifier's sample;
-2. `EndToEndRegistered`'s second conjunct: at every outcome flock-verify accepts, each registered read the verifier owns
+2. `EndToEndRegistered`'s second conjunct: at every outcome verity-verify-proof accepts, each registered read the verifier owns
    (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`, through `regPathsHJ`).
 The first conjunct's bound has no miss term, so it holds whatever the verifier's bytes: it needs no A3, and the sample need
 not be uniform.
@@ -227,7 +227,7 @@ coins), `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for each
 `qF` and `qS`, and `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an untyped statement, the bound's numeric
 conditions, and `EndToEndHidden`'s reference setup `y₀`: table 0's, at the session's link points, at some sample `d₀`,
-which every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of
+which every sample verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of
 tables. -/
 def EndToEndRegisteredDrawn : Prop :=
   ∀ (n : ℕ) (Reg : Type)

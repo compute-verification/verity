@@ -17,8 +17,8 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions import boolean as SW
 from verity.circuits.kernels import tc as CK
+from verity.definitions import boolean as SW
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.registry import boolean_flashmla as BF
 from verity.definitions.registry import flashmla as F
@@ -29,10 +29,6 @@ TWIN_TARGETS = [t for family in T.KERNELS for t in T._targets(DEFS, family)]
 NAN, PINF, NINF = 0x7FFFFFFF, 0x7F800000, 0xFF800000
 SPECIAL = [0, 0x80000000, PINF, NINF, 0x7FC00000, NAN, 0xFFFFFFFF, 1, 0x80000001, 0x00800000, 0x3F800000, 0xBF800000,
            0xC2FC0000, 0xC3000000, 0x42FE0000, 0x7F7FFFFF, 0xFF7FFFFF]
-
-
-def _f32(x) -> np.ndarray:
-    return np.asarray(x, dtype=np.float32).view(U)
 
 
 def _bf16_f64(w) -> np.ndarray:
@@ -49,8 +45,8 @@ def test_the_twin_is_the_reference(target):
 
 
 def test_the_twin_claims_only_the_hopper_step():
-    from verity.definitions.numerics import kernel_registry as KR
     from verity.circuits.ops.prims import AmpereBF16TcDot16
+    from verity.definitions.numerics import kernel_registry as KR
 
     hopper = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=F.HopperBF16WgmmaDot16, SCALE=0.25)
     ampere = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=AmpereBF16TcDot16, SCALE=0.25)

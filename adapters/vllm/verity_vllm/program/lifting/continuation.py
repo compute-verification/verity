@@ -43,7 +43,6 @@ from verity_vllm.program.lifting import lifted_records
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (recorder, builder and Match share one version)
 PROFILES = {0: "synchronous (zero lag: run moves with emit)", 1: "admitted one-step-ahead async (run trails emit by exactly one slot after early EOS)"}
 PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.async_scheduling -- the ONE resolved field A and LAG both read
-FAMILIES = ("is_eos", "emit", "run", "out", "in")  # b_t, e_t, r_t, o_t, u_t: Q(P) identities with named families
 #: the Definition's statement about randomness.  The sampler of slot `t` EXECUTES iff `r_t = 1` (it is the
 #: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program samples exactly once
 #: per executed slot: the lag slot (e, r) = (0, 1) consumes ONE sample after the served EOS, an inactive slot none.  With the counter RNG of
@@ -322,7 +321,7 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
     """The sample positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
     `pos` fact = the query position whose logits are sampled: the sample ledger's 'sample k at pos = prompt_len - 1 + k', slot t = k + 1;
     the counter RNG is keyed by `(seed, pos)`), read from the recurrence over the SERVED list (the one mechanism).
-    An ORDERED list: the served slots' samples, then the one lag sample (A = 1, EOS before the cap), nothing after -- so an over-cap sample without
+    An ORDERED list: the served slots' samples, then the one lag sample (A = 1, EOS before the cap), nothing after -- so a sample past the cap without
     an EOS, a second post-EOS sample, or a sample at an inactive slot is an EXTRA position by name, a missing served sample a MISSING one
     (`compare_draw_positions`).  `A in {0, 1}` (check_profile) -- a lag >= 2 has no admitted profile."""
     check_profile(A)

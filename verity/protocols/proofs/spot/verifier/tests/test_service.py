@@ -9,14 +9,14 @@ import random
 
 import pytest
 
-import verity.circuits.ops.prims  # noqa: F401  (the one-stage tests' primitives)
+import verity.circuits.ops.prims  # the one-stage tests' primitives
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 
 import fake_challenger as FC
 
@@ -805,7 +805,7 @@ def test_a_closure_map_is_refused_before_any_coin_is_read():
 
 @pytest.mark.parametrize("text", ["rate:1/3", "stratified-rate:1/3", "work-rate:1/3"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
-    """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
+    """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `verity-verify-proof draw` on the same bytes
     samples the same proof blocks."""
     table = WORK if text.startswith("work") else None
     for seed in range(8):

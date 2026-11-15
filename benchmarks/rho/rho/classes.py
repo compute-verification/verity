@@ -78,6 +78,8 @@ class Structure:
     s_times: float | str
     #: `ω_max`: the most counted weight one operation carries
     omega_max: float = 1.0
+    #: `μ`: the most counted operations whose bodies hold one gate (`Accounting.ServingBlocks.Overlap`)
+    mu: float = 1.0
     #: where `s_×`'s gates come from, as `Units.basis` says it for `gates_per_flop` (`REFERENCE` is the FLOP model's);
     #: none needed at `s_× ≤ 1`, which holds in every design
     basis: str = ""
@@ -109,16 +111,24 @@ class Structure:
         """`u = ω_max / s_×`."""
         return self.omega_max / self.gates(w)
 
+    @property
+    def per_bit(self) -> float:
+        """`ω_max μ`: the serving cut's boundary term per unregistered input bit (`theorem.Cut.boundary`)."""
+        return self.omega_max * self.mu
+
     def cites(self) -> tuple[str, ...]:
         return self.STRADDLE + self.evidence if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
 
     def elementary(self) -> Structure:
         """One counted operation per gate, at most: the cap that needs no straddling premise."""
-        return Structure("elementary", 1.0, self.omega_max)
+        return Structure("elementary", 1.0, self.omega_max, self.mu)
 
 
 def structure(registry: Registry, name: str) -> Structure:
     t = f"structure.{name}"
+    if f"{t}.mu" not in registry:
+        raise ValueError(f"{t} states no mu: add mu = {{ value = ..., source = ..., status = ... }} to [{t}] in "
+                         f"data/exclusion.toml, the most counted operations whose bodies share one gate")
     return registry.fields(Structure, t, evidence=tuple(registry.get(f"{t}.evidence", ())))
 
 
@@ -278,6 +288,7 @@ DEPTH = ("layers", "layer_weights")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("cover", ("Nci.Cover.Guarantees.CoverTraining", "Nci.Cover.Assumptions.UpdateHardness",
+                      "Nci.Cover.Assumptions.BlockFits", "Nci.Cover.Assumptions.CapBelowDepth",
                       "Nci.Cover.MulBlocks.Upstream", "Nci.Assumptions.ThetaRegistered"),
             ("b",), cover, share=upstream_share, share_reads=("b", *DEPTH)),
     Formula("covering", ("Nci.Guarantees.CoveringBound", "Nci.Assumptions.ParameterHard",

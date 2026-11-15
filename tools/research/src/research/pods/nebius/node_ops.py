@@ -7,7 +7,7 @@
 OOM guard.  The kernel's OOM killer picks by size alone and can take the lease loop (which stops the VM on time), sshd sessions or
 the samplers.  When MemAvailable falls under ACT_PCT of MemTotal, the guard stops the largest process group of this user by
 resident memory, outside PROTECT: SIGTERM, then SIGKILL after 10 s.  Under WARN_PCT it only alerts.  Every OOM kill anywhere
-(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup cap) is an alert, with the user journal's line naming
+(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup limit) is an alert, with the user journal's line naming
 the unit.
 
 Page: OUT/status.md, with who holds which GPU (gpu-lease status), the GPUs' latest sample (gpu_util_sampler's JSONL, so no NVML

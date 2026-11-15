@@ -3,13 +3,13 @@ module
 public import Flock.Canon
 public import Flock.Circuit
 public import Flock.Draw
-public import Flock.Firewall
+public import Flock.ZkServer
 public import Flock.HmRow
 public import Flock.Public
 public import Flock.Registered
 public import Mathlib
 public import Proofs.Flock.EndToEndRegistered.Inputs
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 public import Proofs.Flock.SessionLoop.Concrete.Public
 public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Binding.Layout
@@ -216,7 +216,7 @@ def drawW : Json := Json.mkObj [("k", jn 1), ("law", .str "subset"), ("populatio
 
 def recW : Json := Json.mkObj [("unit_draw", drawW)]
 
-def tr0 : Exec.Transcript := { record := Flock.Firewall.printJson recW, proofs := #[] }
+def tr0 : Exec.Transcript := { record := Flock.ZkServer.printJson recW, proofs := #[] }
 
 /-- The public file: one instance, at population index 0, with no digests, outputs or registered tables. -/
 def pubW : Flock.Public :=
@@ -230,33 +230,33 @@ theorem drawW_obj : drawW = .obj ⟨⟨FlockDeploy.Concrete.objT drawW⟩⟩ := 
 theorem drawW_model : (FlockDeploy.Concrete.objT drawW).toListModel =
     [⟨"k", jn 1⟩, ⟨"law", .str "subset"⟩, ⟨"population", jn 1⟩, ⟨"units", .arr #[jn 0]⟩] := by kernel_rfl
 
-theorem drawW_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT drawW) = true := by kernel_rfl
+theorem drawW_asc : Flock.ZkServer.ascending (FlockDeploy.Concrete.objT drawW) = true := by kernel_rfl
 
 /-- `plainStr` reads its strings through `String.all`, which the kernel doesn't evaluate, so `simp` decides them. -/
-theorem plain_drawW : Flock.Firewall.plain drawW = true := by
+theorem plain_drawW : Flock.ZkServer.plain drawW = true := by
   rw [drawW_obj]
   refine FlockDeploy.Concrete.plain_obj_of drawW_model drawW_asc ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  simp [Flock.Firewall.plain, Flock.Firewall.plainList, Flock.Firewall.plainStr, String.all_bool_eq, jn]
+  simp [Flock.ZkServer.plain, Flock.ZkServer.plainList, Flock.ZkServer.plainStr, String.all_bool_eq, jn]
 
 theorem recW_obj : recW = .obj ⟨⟨FlockDeploy.Concrete.objT recW⟩⟩ := by kernel_rfl
 
 theorem recW_model : (FlockDeploy.Concrete.objT recW).toListModel = [⟨"unit_draw", drawW⟩] := by kernel_rfl
 
-theorem recW_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT recW) = true := by kernel_rfl
+theorem recW_asc : Flock.ZkServer.ascending (FlockDeploy.Concrete.objT recW) = true := by kernel_rfl
 
-theorem plain_recW : Flock.Firewall.plain recW = true := by
+theorem plain_recW : Flock.ZkServer.plain recW = true := by
   rw [recW_obj]
   refine FlockDeploy.Concrete.plain_obj_of recW_model recW_asc ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq]
-  exact ⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], plain_drawW⟩
+  exact ⟨by simp [Flock.ZkServer.plainStr, String.all_bool_eq], plain_drawW⟩
 
-theorem norm_recW : Recursion.FirewallJson.norm recW = recW := by kernel_rfl
+theorem norm_recW : Recursion.ZkServerJson.norm recW = recW := by kernel_rfl
 
 theorem recordDraw_tr0 : recordDraw tr0.record = some drawW := by
-  show recordDraw (Flock.Firewall.printJson recW) = some drawW
+  show recordDraw (Flock.ZkServer.printJson recW) = some drawW
   unfold recordDraw
-  rw [Recursion.FirewallJson.parse_printJson plain_recW, norm_recW]
+  rw [Recursion.ZkServerJson.parse_printJson plain_recW, norm_recW]
   kernel_rfl
 
 theorem ofJson_drawW : Flock.Draw.UnitDraw.ofJson drawW = .ok drawU := by kernel_rfl

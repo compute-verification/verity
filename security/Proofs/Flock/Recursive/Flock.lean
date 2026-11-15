@@ -29,7 +29,7 @@ import Proofs.Flock.Soundness.Game
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
 
 The outer proof at a history `(R, ω, t)` (the registration, the sample of the hidden circuit's units, the rounds'
-commitments and coins) is `S` sessions in a row, session `j` one `flock-verify verify --zk --registered F` session of
+commitments and coins) is `S` sessions in a row, session `j` one `verity-verify-proof verify --zk --registered F` session of
 the public circuit `(Vs j).c` under its sampling design `(Vs j).law` (`VStmt`), with hidden outputs and `(Vs j).J` tables, and with
 inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the challenger's live-coin part's record). The audit accepts when every
 session accepts (`Accepts`), and the decoded witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
@@ -105,6 +105,21 @@ structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
     (rsShHJS dj y₀ ht hcH (Layout.scopeOkH_of_scopeOk hscope) hU hpub)
   hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
     OwnReadsHJ I own c pub (wr (Lv.draw ω) R' o) (rd.restrict (rowIn (Lv.draw ω))).isRead rd.port rd.readAt
+
+/-- **A session's commit strings, written out**: each unit's row ports in order, then the single gates
+(`Positions.list` at `Readers.ofRows`' positions, which `layShHJ`'s are). The searches over a session's registered
+reads run through this list, so their order is computed. -/
+noncomputable def ZkOuterD.posList {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (z : ZkOuterD mPts nv J Reg' c hU hscope Lv) :
+    List (layShHJ (Reg := Reg') z.dj z.y₀ z.ht z.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := z.pub)).Pos :=
+  (Positions.list : List ((Fin nv × Fin c.ports.size) ⊕ Fin _))
+
+/-- The list holds every commit string. -/
+theorem ZkOuterD.mem_posList {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (z : ZkOuterD mPts nv J Reg' c hU hscope Lv)
+    (p : (layShHJ (Reg := Reg') z.dj z.y₀ z.ht z.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := z.pub)).Pos) :
+    p ∈ z.posList :=
+  Positions.mem (P := (Fin nv × Fin c.ports.size) ⊕ Fin _) p
 
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
@@ -573,24 +588,25 @@ noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray 
   exG (fun rs => ∑ j, F j ((zs j).ofBase dg N (rs j).1)) (sessions zs dg N) s
 
 /-- **V*'s sessions at one history**: when every outcome at which every session accepts and every layer is `Good`
-satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundIf`
-(`accepts_le`, `prob_seqC_exists_le`). -/
-theorem sessions_le
+satisfies `Q` of the sessions' outcomes and the layers, the sessions accept with `Q` failing at most the expected sum
+of the sessions' `boundIf` (`accepts_le`, `prob_seqC_exists_le`). -/
+theorem sessions_le_out
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
+    (qF qS qW qR : ℝ)
+    (Q : ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
       (∀ j, Game.Outcome ((zs j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
-      Q fun j => (zs j).layer dg N k Rw (τ j))
+      Q o fun j => (zs j).layer dg N k Rw (τ j))
     (s : Strategy (sessions zs dg N)) :
-    prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
+    prob (fun b => Accepts zs b ∧ ¬ Q (fun j => (b j).2) (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
       sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   classical
   have hmono : ∀ b : VRec Vs Reg' dg N, Game.Outcome (sessions zs dg N) s b →
-      Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
+      Accepts zs b ∧ ¬ Q (fun j => (b j).2) (layers zs dg N k Rw b) →
       ∃ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)) := by
     rintro b hout ⟨hacc, hnq⟩
@@ -611,6 +627,22 @@ theorem sessions_le
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N r.1)))
       (fun j τ₀ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
+
+/-- **`sessions_le_out` at a `Q` of the layers alone.** -/
+theorem sessions_le
+    (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
+      (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs j).game dg N) (τ j) (o j)) →
+      (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
+      Q fun j => (zs j).layer dg N k Rw (τ j))
+    (s : Strategy (sessions zs dg N)) :
+    prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
+      sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s :=
+  sessions_le_out zs dg N hk hRw hM hρ hr ht' qF qS qW qR (fun _ => Q) hQ s
 
 variable {Reg₂ : Type}
 
@@ -665,7 +697,7 @@ theorem outerV_le
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **What V*'s circuits compute** (`k, Rw` the count curve's): at every history `(R, ω, t)`, registration `R₂` of the
-outer proof and strategies `τ` of V*'s sessions there, when every session's outcome flock-verify `--zk --registered`
+outer proof and strategies `τ` of V*'s sessions there, when every session's outcome verity-verify-proof `--zk --registered`
 accepts and every session's value layer is `Good`, the messages `wmsg` reads from the layers hold an inner transcript
 the inner verifier accepts on the hidden circuit's statement `x R ω` at the rounds' coins. -/
 def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

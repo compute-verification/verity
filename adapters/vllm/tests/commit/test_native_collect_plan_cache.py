@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import gc
 import hashlib
+import json
 import pickle
 import types
 from types import SimpleNamespace
@@ -355,7 +356,7 @@ class _Runner:
     def __init__(self) -> None:
         self.committer: NC.NativeCollectCommitter | None = None
         self.tensors: list[tuple[str, object]] = []
-        self.input_batch = None
+        self.input_batch: SimpleNamespace | None = None
 
     def execute_model(self, scheduler_output, *a, **kw):
         com = self.committer
@@ -375,9 +376,10 @@ class _Sched:
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
-def committer(mp, *, retain: str = "none", bounded: bool | None = None) -> NC.NativeCollectCommitter:
+def committer(mp, *, retain: str = "none", bounded: bool | None = None, staging: str = "arena") -> NC.NativeCollectCommitter:
     """The served committer of the network traces (the windowed worker: wrap, gather, the native worker and the window ring, under
-    rows-sha512) over the fakes; `bounded` None leaves the staging's default (bounded, since it is windowed)."""
+    rows-sha512) over the fakes; `bounded` None leaves the staging's default (bounded, since it is windowed). A `staging` other
+    than "arena" leaves it no device arena."""
     for k in ENV:
         mp.delenv(k, raising=False)
     mp.setenv("VERITY_RETAIN", retain)
@@ -392,7 +394,7 @@ def committer(mp, *, retain: str = "none", bounded: bool | None = None) -> NC.Na
     mp.setattr(NC, "ext", lambda *a, **k: ext)
     eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
     com = NC.NativeCollectCommitter(eng, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, retain_values=False, arena_bytes=None,
-                                    fast_copy=False, gather=True, native_worker=True)
+                                    fast_copy=False, gather=True, native_worker=True, staging=staging)
     com.enable_windows(None)
     com._nc.slots = com.win_tensors
     com.pool = _HostPool(block_bytes=4096, exact=False, populate_threads=0)
@@ -617,3 +619,117 @@ def test_a_windowed_hit_step_exports_the_hinted_plan_the_worker_has_not_absorbed
     assert (key, 1) not in com._metas_cache and job.plan_hint == (key, 1) and job.hint_entries is not None
     got = com._metas_for(job, (*job.plan_hint, job.hint_entries))
     assert [(m.name, m.dev_off, m.nbytes) for m in got] == [(com._names[nid], off, nb) for nid, _dt, _sz, nb, off, _gap in entries]
+
+
+@pytest.mark.parametrize(("retain", "keeps"), [("host", True), ("none", False)])
+def test_a_root_over_kept_levels_waits_for_their_copies(monkeypatch, retain, keeps):
+    """A step that keeps its levels copies each fold's window levels to host on the collector's copy stream, and the upper
+    tree's stream waits for that stream before the tree over the window tops is built: every such tree comes straight after a
+    wait for the copy stream. A step that keeps no level makes no copy stream, and its tree waits for none."""
+    log: list[Any] = []
+    tree = _Hasher.rows_tree
+
+    def wait_logged(self, stream) -> None:
+        log.append(stream)
+
+    def tree_logged(self, *a, **k):
+        log.append("tree")
+        return tree(self, *a, **k)
+
+    monkeypatch.setattr(_Stream, "wait_stream", wait_logged)
+    monkeypatch.setattr(_Hasher, "rows_tree", tree_logged)
+    com = committer(monkeypatch, retain=retain)
+    assert com.retain_levels is keeps and com._copy is None
+    sched = rising()[0]
+    com.install()
+    for kv in sched:
+        com._commit_step(serve(com, kv))
+    assert com.errors == [], com.errors[:3]
+    trees = [i for i, e in enumerate(log) if e == "tree"]
+    assert len(trees) == len(sched)
+    if keeps:
+        assert isinstance(com._copy, _Stream) and all(i and log[i - 1] is com._copy for i in trees), log
+    else:
+        assert com._copy is None and log == ["tree"] * len(sched)
+
+
+def test_a_footprint_takes_each_step_the_worker_absorbs_with_its_bytes_by_value_family(monkeypatch, tmp_path):
+    """A committer with a footprint writes three events a step: `begin_step` and `end_step` from the serving thread's side, then the
+    worker's `absorbed`. That one holds the step's stream length, its length in whole rows, where its bytes are kept, and the bytes
+    and the tensor count of each value family the step staged."""
+    com = committer(monkeypatch)
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    sched = schedule(40, 2)
+    run(com, sched)
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    kinds = ("begin_step", "end_step", "absorbed")
+    assert [(e["event"], e["step"]) for e in events] == [(kind, step) for step in range(len(sched)) for kind in kinds]
+    family_of = {"embed_tokens/in": "input_ids", "qkv_proj": "gemm_qkv", "fa2.m1/": "fa2_hidden_m1", "down_proj": "gemm_down",
+                 "logits": "logits", "sampled_token_ids": "sampled_ids"}
+    for absorbed, kv in zip(events[2::3], sched, strict=True):
+        want: dict[str, dict[str, int]] = {}
+        for name, t in step_tensors(kv):
+            (family,) = [f for part, f in family_of.items() if part in name]
+            of_family = want.setdefault(family, {"bytes": 0, "tensors": 0})
+            of_family["bytes"] += t.numel() * t.element_size()
+            of_family["tensors"] += 1
+        used = sum(f["bytes"] for f in want.values())
+        assert absorbed["families"] == want and sum(f["tensors"] for f in want.values()) == TENSORS
+        assert (absorbed["used"], absorbed["padded"]) == (used, -(-used // R.ROW_BYTES) * R.ROW_BYTES)
+        kept = (absorbed["retain"], absorbed["keep_bytes"], absorbed["keep_device"], absorbed["arena_block_bytes"])
+        assert kept == ("none", 0, None, None)
+
+
+def test_a_footprints_step_begin_holds_the_device_arenas_bytes_and_its_free_blocks(monkeypatch, tmp_path):
+    """Each `begin_step` event carries the device arena's bytes, every block it holds, and the size of each block free when the
+    step begins. The windowed worker stages into its window ring, so the step's own block is 0 bytes and no step takes one."""
+    com = committer(monkeypatch)
+    free = [torch.empty(n, dtype=torch.uint8) for n in (4096, 1024)]
+    com.arena.all, com.arena.free = [*free, torch.empty(512, dtype=torch.uint8)], list(free)
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    run(com, schedule(40, 2))
+    begins = [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "begin_step"]
+    assert [(e["arena_block_bytes"], e["arena_total_bytes"], e["arena_free_blocks"]) for e in begins] == [(0, 5632, [4096, 1024])] * 2
+
+
+def test_a_committer_with_no_device_arena_begins_its_footprints_steps_with_none_and_commits_them(monkeypatch, tmp_path):
+    """A committer staged other than into a device arena has none. Its `begin_step` events say 0 arena bytes and no free block,
+    as they say 0 for the step's own block, and its steps commit what the arena's committer commits."""
+    com = committer(monkeypatch, staging="direct")
+    assert com.arena is None
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    sched = schedule(40, 2)
+    rc, keys = run(com, sched)
+    begins = [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "begin_step"]
+    assert [(e["arena_block_bytes"], e["arena_total_bytes"], e["arena_free_blocks"]) for e in begins] == [(0, 0, [])] * 2
+    assert [s.root for s in rc.steps] == reference(sched, keys)
+
+
+def test_a_footprints_step_end_holds_the_resident_set_or_says_why_it_has_none(monkeypatch, tmp_path):
+    """Each `end_step` event carries the process's resident set beside the pinned pool's bytes, read from `/proc/self/statm`.
+    Where that file cannot be opened the event has no resident set and says what the read met, under `rss_unreadable`, and the
+    step commits what it committed."""
+    com = committer(monkeypatch)
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    sched = schedule(40, 1)
+
+    def step_ends() -> list[dict[str, Any]]:
+        return [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "end_step"]
+
+    def no_proc(file: str, *a: Any, **kw: Any) -> None:
+        raise FileNotFoundError(2, "No such file or directory", file)
+
+    rc, keys = run(com, sched)
+    monkeypatch.setattr(NC, "open", no_proc, raising=False)
+    com.replay_row_keys = keys
+    again, _ = run(com, sched)
+    read, unread = step_ends()
+    assert read["rss_bytes"] > 0 and read["rss_bytes"] % 4096 == 0 and "rss_unreadable" not in read
+    assert unread["rss_bytes"] is None
+    assert unread["rss_unreadable"] == "FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/statm'"
+    assert list(unread) == [*(k for k in read if k != "cuda"), "rss_unreadable", "cuda"]
+    assert [s.root for s in again.steps] == [s.root for s in rc.steps] == reference(sched, keys)

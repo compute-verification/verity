@@ -7,7 +7,7 @@ and z against its CPU twin and the Definition (`h1tile.reference` and `h1tile.j1
 `verity/protocols/accounting/pouw/prover/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
 
 The arms' names (`dither`, `dither-1s`, `dither-a`, ...) are identifiers the runs' records carry. What they serve are
-H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/accounting/pouw/verifier/dither/`).
+H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/experimental/dither/`).
 
 ## The arm of record
 
@@ -33,13 +33,12 @@ docstring lists every arm and flag, and `settings.py` every variable they read (
 
 ## What the rest of the tree reads
 
-- `h1u.cu`: the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` and `benchmarks/torch_gpu/j10r_sm90`
-  build it, and `verity/protocols/accounting/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
-- `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
+- `h1u.cu` (with the kernels, below): the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` builds
+  it, and `verity/protocols/accounting/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one table (`form_of`).
 - `sbench.sh`'s receipts-only build of `h1u.cu`, which `benchmarks/pouw/served_h1`'s producer loads; and the execution phase
-  modules (`dither_a.py`, `dither_fused.py`, `dither_one.py`), `h1c.py`, `h1r.py` and `settings.py`, which
+  modules (`dither_a.py`, `dither_fused.py`, `dither_one.py`), `h1c.py`, `h1r_torch.py` and `settings.py`, which
   the `benchmarks/pouw` suite imports on the CPU.
 
 ## The arms
@@ -59,8 +58,12 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
 
 ## Kernels
 
+The kernels are in `verity/protocols/experimental/dither/prover/kernels/`, beside Dither's circuit. Two front ends are in
+`prover/`: `h1r.py`, whose tensor runtime is `h1r_torch.py` here, and `j10r_ws.py`, a J10-R call's workspace sized from the
+loaded build's own flags (`workspace_bytes`). The other front ends and the scripts that build the kernels stay here.
+
 - `h1c.cu` (`h1c.py`): the execution phase's tables on the device, bit for bit `benchmarks/pouw/served_h1/commit.py`'s.
-- `h1r.cu` (`h1r.py`): a step's H1 + fx1 proof blocks in two launches.
+- `h1r.cu` (`prover/h1r.py`, on torch through `h1r_torch.py`): a step's H1 + fx1 proof blocks in two launches.
 - `h1o.cu`, `h1f.cu`: the one-stream and fused served linears.
 - `h1sha.cuh`: the SHA-512 of the noise chunks, which `h1u.cu` includes.
 
@@ -74,8 +77,7 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   `PYTHONPATH`).
 - `job.sh`: `h1u.cu`'s libraries built on a CPU node, then `benchmarks/pouw`'s partials tests on each build on a leased
   H200 or B200.
-- `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed. `native.sh` (`native.py`):
-  vLLM serving the int8 pin natively, one arm a process.
+- `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed.
 
 ## Tools
 

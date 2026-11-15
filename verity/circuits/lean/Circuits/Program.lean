@@ -181,6 +181,13 @@ def axisDims : Ty → Nat → Option (Nat × Nat)
 
 end Ty
 
+/-- **A return's fields**: a Tuple's or a Record's, else the return itself. A Tuple or a Record of no field has no
+field. -/
+def fieldsOf : Ty → List Ty
+  | .tuple fs => fs.toList
+  | .record fs => fs.toList.map (·.2)
+  | t => [t]
+
 /-! ### §3 Reference sequences -/
 
 /-- A body-scoped reference: space `p` (a parameter of the body) when `p`, else `n` (a node's output); the collection; the leaf. -/

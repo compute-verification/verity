@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The execution refinement for one-table sessions at the verifier's public inputs
 
-`LiveOn.lean` at flock-verify's acceptance at the verifier's public inputs `own` (`AcceptsP I own`) in place of
+`LiveOn.lean` at verity-verify-proof's acceptance at the verifier's public inputs `own` (`AcceptsP I own`) in place of
 `Accepts I`: `LiveAcceptsP`, `DecodesOnP`, `simAuditOnP`, `execRefines_onP` and `Prog.flock_headline_live_onXP`, with
 the same bound. At `own = none` each is the deployed one (`acceptsP_none`). The headline reads the event only through
 the refinement (`exec_le_of_refines`), so `flock_headline_live_onXP` is `Prog.flock_headline_LX` at the simulated
@@ -41,7 +41,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {D Sl : Type} [Nonempty D] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type}
 
-/-- flock-verify accepts the live audit's transcript at the verifier's public inputs `own`. -/
+/-- verity-verify-proof accepts the live audit's transcript at the verifier's public inputs `own`. -/
 def LiveAcceptsP (I : Inputs) (own : Option ByteArray) (o : Reg × Finset (Fin n) × Transcript) : Prop :=
   AcceptsP I own o.2.2
 
@@ -56,7 +56,7 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts at `own`, at the sampling design's samples** (`DecodesOn` at
+/-- **The decoder is right on the sessions verity-verify-proof accepts at `own`, at the sampling design's samples** (`DecodesOn` at
 `AcceptsP I own`). -/
 def DecodesOnP (L : Law n) : Prop :=
   ∀ ω R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
@@ -75,7 +75,7 @@ noncomputable def simAuditOnP (hdec : DecodesOnP H E Lf T I own wr opn dec one f
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **The execution refinement for one-table sessions at `own`** (`execRefines_on`): flock-verify's acceptance at `own`
+/-- **The execution refinement for one-table sessions at `own`** (`execRefines_on`): verity-verify-proof's acceptance at `own`
 is no likelier than the salted audit's acceptance against `simAuditOnP … τ`, with no live event added. -/
 theorem execRefines_onP (hdec : DecodesOnP H E Lf T I own wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
@@ -106,7 +106,7 @@ theorem execRefines_onP (hdec : DecodesOnP H E Lf T I own wr opn dec one fin cap
 variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 
 /-- **The headline at the executable at the verifier's public inputs, for one-table sessions**
-(`Prog.flock_headline_live_onX` at `AcceptsP I own`): against any live prover `τ`, flock-verify accepts at `own` with
+(`Prog.flock_headline_live_onX` at `AcceptsP I own`): against any live prover `τ`, verity-verify-proof accepts at `own` with
 at least `K` incorrect proof blocks of the simulated prover's committed values with probability at most
 `miss(K) + ε_ks + δ_link`, under `Prog.flock_headline_live_onX`'s hypotheses with `hdec` at `own` (`DecodesOnP`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_onXP

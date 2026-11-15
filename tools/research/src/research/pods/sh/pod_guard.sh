@@ -20,7 +20,7 @@
 #                      /pods and /pods/{self} 403, GraphQL myself Unauthorized) and REST DELETE /pods/{self} is 403, but GraphQL
 #                      podTerminate of its own pod succeeds (guard_terminate_pod tries REST, then GraphQL, then runpodctl).  The account
 #                      key's /root/dm/runpod.py path is only a fallback for pods an old launcher copied it to; `research run --on` never does.
-# The pod's lease (sh/lease.sh, armed by `research pods create`) and the budgets guard on the control pod (`research pods guard`: caps,
+# The pod's lease (sh/lease.sh, armed by `research pods create`) and the budgets guard on the control pod (`research pods guard`: limits,
 # the balance floor, each line's max pod age) are the outer layers.
 #
 # `research pods create` (research.pods.lease.arm) and `research run --on` (the machine side, research.remote.ensure_guard) run this

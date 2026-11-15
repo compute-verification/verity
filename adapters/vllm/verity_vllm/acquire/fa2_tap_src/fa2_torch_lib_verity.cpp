@@ -54,7 +54,7 @@ int64_t g_verity_tap_skipped = 0;
 
 // mode: 0 = off, 1 = P1 accumulator, 2 = P0 diagnostic (+P1).
 // acc:  uint32 buffer for the P1 per-(b,h,m_block,warp) words (may be None).
-// diag: float32 flat buffer for P0 (may be None).  H/M/N/NB are the P0 caps.
+// diag: float32 flat buffer for P0 (may be None).  H/M/N/NB are the P0 bounds.
 void verity_set_tap(int64_t mode, std::optional<Tensor> acc, std::optional<Tensor> diag,
                     int64_t H, int64_t M, int64_t N, int64_t NB) {
     Verity_tap t = {};
@@ -128,7 +128,7 @@ void verity_set_tap_tag(int64_t tag) { g_verity_tap.tag = static_cast<int>(tag);
 #endif
 int64_t verity_tap_mode() { return VERITY_TAP; }
 int64_t verity_tap_src() { return VERITY_TAP == 3 ? VERITY_MAT_SRC : (VERITY_TAP == 4 ? VERITY_SHA_SRC : VERITY_P1_SRC); }
-// v7: point the tap at another buffer without touching the caps (per-launch base pointer for the M1 stream).
+// v7: point the tap at another buffer without touching the bounds (per-launch base pointer for the M1 stream).
 void verity_set_tap_buffers(std::optional<Tensor> acc, std::optional<Tensor> diag) {
     g_verity_tap.acc_ptr = acc.has_value() ? acc.value().data_ptr() : nullptr;
     g_verity_tap.acc_cap_words = acc.has_value() ? acc.value().numel() : 0;

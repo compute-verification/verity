@@ -51,7 +51,7 @@ verifier's `Spot.Select` ports, held to them by its difftest on fixed coins.
 **A two-stage sampling design** (`TwoStage(grain, replay, k)`, `Stream(replay=)`). The registration is the boundary
 commitment: its population is the replay blocks, the instances of the replay block's Definition under the replay grain's
 query, and its roots are the boundary values (phase `serve`). The first stage (`select`) samples replay blocks by the
-`replay` law, a rate law: the replay sample. The prover then replays each sampled replay block and commits its
+`replay` sampling design, a rate sampling design: the replay sample. The prover then replays each sampled replay block and commits its
 interior (phase `interior`) in the interior registration (`register_interiors`), over the Q·n_rho proof blocks of the Q
 sampled replay blocks, registered after the registration (`previous`) and before the second stage's coins. A replay
 block holds n_t instances of each template t of the check (`replay_cells`, the check naming them in the order of their
@@ -71,11 +71,13 @@ flat Flock circuit file of one instance of it (`verity_flock.class_statement.Uni
 and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
 (`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
 reads, which round 2 takes as given and holds each statement's header and registered reads to but for the run's fields
-(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
+(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and, for a template that reads a table, the record that the
+template check accepted the file as that read (``read``, `template_reads`: ``flock-read-tmpl check V H`` on the file,
+run where the params are made), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
 scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
-`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate law samples, so
+`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate sampling design samples, so
 the names are each run's and are handed to `outcome`.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
@@ -172,9 +174,17 @@ from verity.circuits.partition import Level
 from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
-from . import second_stage as SS
-from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
+from . import second_stage as SS, window_place as WP
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit as A,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+    verifier as V,
+)
 from .one_stage.verdict import Verdict, _Collect
+from verity.protocols.proofs.spot.device.challenger import ChallengerKey
 from verity.protocols.proofs.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -331,7 +341,8 @@ def _grain(g: Any) -> bool:
 
 
 def _replay_law(text: Any) -> bool:
-    """`Select.replayLaw?`: a rate law, a uniform sample of replay blocks at the rate however many the prover registers."""
+    """`Select.replayLaw?`: a rate sampling design, a uniform sample of replay blocks at the rate however many the prover
+    registers."""
     return D.parse_rate(text) is not None
 
 
@@ -339,7 +350,7 @@ def _replay_law(text: Any) -> bool:
 class TwoStage:
     """A two-stage sampling design (the module docstring). `grain`: the replay grain, the replay partition's query,
     `Q_template_instance` over the replay block's Definition (`partition.template_instance_query`), whose instances in the
-    registration's program are its replay blocks. `replay`: the first stage's law over them, a rate law.
+    registration's program are its replay blocks. `replay`: the first stage's sampling design over them, a rate sampling design.
     `k`: the proof blocks the second stage samples in each cell (a sampled replay block's instances of one template), on
     fresh coins after the interior registration: one count for every template, or `{template's descriptor id: k_t}`
     naming each of the check's templates once. A cell of fewer proof blocks than its count is proved whole
@@ -871,31 +882,88 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
     <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
     "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
     registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
-    order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a circuit that
-    isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, and a
-    list that doesn't name each of the check's templates once, in its order. The Lean verifier's `Run.templateCircuits`
-    is this."""
+    order (`replay_cells`). An entry may also record its template as a table read, ``"read": {"V": <rows>, "H":
+    <words a row>}`` (`template_reads`), and the params may add ``"tables": {<parameter>: <entry>, ...}``, the
+    registered tables the auditor pinned before any coin, each the entry the tables' registration names for it
+    (`_table_entry`, `pinned_tables`). None names no file and gives none. Raises `ValueError` for any other form, a
+    circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor
+    null, a read that isn't two positive counts, a pinned table that isn't such an entry, and a list that doesn't name
+    each of the check's templates once, in its order. The Lean verifier's `Run.templateCircuits` is this."""
     if proofs is None:
         return ()
     ids = _check_ids(query)
     if ids is None:
         raise ValueError("a two-stage design's check is a template query")
     form = ('the params\' proofs are {"templates": [{"template": <descriptor id>, "circuit": <SHA-512>, '
-            '"header": <object>, "registered": <object or null>}, ...]}')
-    if not isinstance(proofs, Mapping) or set(proofs) != {"templates"} or not isinstance(proofs["templates"], (list, tuple)):
+            '"header": <object>, "registered": <object or null>}, ...]}, an entry\'s "read" {"V": <rows>, "H": <words>}, '
+            'and "tables" {<parameter>: <the tables\' registration\'s entry>}')
+    if not (isinstance(proofs, Mapping) and set(proofs) in ({"templates"}, {"tables", "templates"})
+            and isinstance(proofs["templates"], (list, tuple))):
         raise ValueError(form)
+    if "tables" in proofs:
+        if not isinstance(proofs["tables"], Mapping):
+            raise ValueError(form)
+        for p, e in sorted(proofs["tables"].items()):
+            if not _table_entry(p, e):
+                raise ValueError(f"{form}: a pinned table's entry is exactly value (its parameter), root, leaves, words "
+                                 "and domain, and word_bits where its words are not 16-bit, root and domain SHA-512s in "
+                                 f"lowercase hex and the counts positive integers: {p} {e!r}")
     named = []
     for e in proofs["templates"]:
-        if not (isinstance(e, Mapping) and set(e) == {"template", "circuit", "header", "registered"}
+        if not (isinstance(e, Mapping) and set(e) - {"read"} == {"template", "circuit", "header", "registered"}
                 and isinstance(e["template"], str) and isinstance(e["circuit"], str) and _DIGEST.fullmatch(e["circuit"])
-                and isinstance(e["header"], dict) and (e["registered"] is None or isinstance(e["registered"], dict))):
-            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object and each "
-                             f"registered an object or null: {e!r}")
+                and isinstance(e["header"], dict) and (e["registered"] is None or isinstance(e["registered"], dict))
+                and ("read" not in e or _read_of(e["read"]) is not None)):
+            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each "
+                             f"registered an object or null and each read two positive counts: {e!r}")
         named.append((e["template"], e["circuit"], e["header"], e["registered"]))
     if [t for t, *_ in named] != ids:
         raise ValueError(f"the params name the circuits of {[t for t, *_ in named]}, not the check's templates {ids}, "
                          "each once, in its order")
     return tuple(named)
+
+
+def _read_of(j: Any) -> tuple[int, int] | None:
+    """A params entry's ``read``, ``{"V": <rows>, "H": <words a row>}`` of two positive integers, as ``(V, H)``; None
+    for anything else."""
+    if not (isinstance(j, Mapping) and set(j) == {"V", "H"}
+            and all(isinstance(j[k], int) and not isinstance(j[k], bool) and j[k] > 0 for k in ("V", "H"))):
+        return None
+    return int(j["V"]), int(j["H"])
+
+
+def _table_entry(p: str, e: Any) -> bool:
+    """A pinned table's entry under parameter `p`, the entry the tables' registration names for it: exactly `value`,
+    `root`, `leaves`, `words` and `domain`, and `word_bits` where its words are not 16-bit; `value` is `p`, `root` and
+    `domain` 128 lowercase hex digits, and `leaves`, `words` and `word_bits` positive integers. The Lean verifier's
+    `Run.tableEntry?` is this."""
+    pos = lambda x: type(x) is int and x > 0  # noqa: E731
+    hexed = lambda x: isinstance(x, str) and _DIGEST.fullmatch(x) is not None  # noqa: E731
+    return (isinstance(e, Mapping) and set(e) - {"word_bits"} == {"value", "root", "leaves", "words", "domain"}
+            and ("word_bits" not in e or pos(e["word_bits"])) and e["value"] == p and hexed(e["root"])
+            and hexed(e["domain"]) and pos(e["leaves"]) and pos(e["words"]))
+
+
+def pinned_tables(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, Any], ...]:
+    """The registered tables the auditor's params ``proofs`` pin, ``(parameter, entry)`` each, in the parameters' order,
+    for params `template_circuits` accepted: the entries the tables' registration names, which the auditor pinned
+    before any coin and round 2 takes a read's table from beside round 1's record (`second_stage.Own.tables`,
+    `second_stage._one_table`). The Lean verifier's `Run.pinnedTables` is this."""
+    ts = (proofs or {}).get("tables")
+    return tuple(sorted(ts.items())) if isinstance(ts, Mapping) else ()
+
+
+def template_reads(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, int], ...]:
+    """The templates the auditor's params ``proofs`` record as table reads, each with its table's rows, ``(template,
+    V)``, for params `template_circuits` accepted: an entry's ``"read": {"V", "H"}`` is the auditor's record that the
+    template check (``flock-read-tmpl check V H CIRCUIT``, `Flock.ReadNet.check`) accepted the circuit file whose
+    SHA-512 the entry names as the read of a table of V rows of H 16-bit words. The check ran where the params were
+    made; the verifier runs none, and takes a template with no such record as no read. The Lean verifier's
+    `Run.templateReads` is this."""
+    if proofs is None:
+        return ()
+    return tuple((e["template"], r[0]) for e in proofs["templates"]
+                 if "read" in e and (r := _read_of(e["read"])) is not None)
 
 
 def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
@@ -912,6 +980,13 @@ def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[i
 def _offsets(q: int, ns: Sequence[int]) -> list[int]:
     """Each template's first interior proof block, over a replay sample of `q`: Q·Σ_{t'<t} n_t'."""
     return [q * sum(ns[:t]) for t in range(len(ns))]
+
+
+def cell_parts(q: int, ids: Sequence[str], ns: Sequence[int]) -> tuple[SS.Part, ...]:
+    """The parts a replay block's cells give a sample of `q` replay blocks: the check's templates `ids`, in that order,
+    template t the q·n_t slots from q·Σ_{t'<t} n_t'. An interior registration's strata are these parts, each one range
+    (`interior-parts`). The Lean verifier's `Run.cellParts` is this."""
+    return tuple(SS.Part(t, q * sum(ns[:i]), ns[i] if i < len(ns) else 0) for i, t in enumerate(ids))
 
 
 def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> dict[str, Any]:
@@ -968,10 +1043,12 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R8 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs), its window's seed salt and its history tables
+    #: supplied, pinned, schemas, window_root, held, outputs), its window's seed salt, its history tables and its
+    #: certified entries
     copies: tuple[Any, ...] = ()
     seed_salt: str | None = None
     history: Mapping[str, Any] | None = None
+    certified: Mapping[str, Mapping[str, Any]] | None = None
     read: bytes | None = None
     #: the challenger's family the sample's coins were read from (`coins.ChallengerCoins.label`), None when it read none
     family: str | None = None
@@ -1019,6 +1096,15 @@ def _token(x: Any, k: str) -> str:
 
 def _order(r: WindowCommitmentRecord) -> int | None:
     return r.order if _nat(r.order) else None
+
+
+def _names_place(window: Any) -> bool:
+    """Whether a record's window names a place in its window's session (`window_place.of`)."""
+    try:
+        WP.of(window)
+    except ValueError:
+        return False
+    return True
 
 
 def _registration_token(r: WindowCommitmentRecord) -> str:
@@ -1497,9 +1583,13 @@ class Stream:
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
     coins' evidence (`outcome`'s `coins`), refusing a sample without it, and holds it to the family the stream read the
     sample from (`family`: the coins' `label` at the sample; a family's coins follow one registration, so each
-    registration's sample, and a second stage's, reads a family of its own). A stream that reads no coins (`All`, or one a
+    registration's sample, and a second stage's, reads a family of its own). `key` is the challenger's key and `main`
+    the verifier's copy of main's first-parent history, which the stream is made with and holds every outcome's evidence
+    to: the evidence names no key, and the copy of main's history it carries must be the stream's
+    (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's under the key the stream
+    holds, and a stream made without a key rejects every sample that read coins (failing `run`). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
-    their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
+    their own. `sampler`, when given, samples instead of the coins (`verity-verify-proof draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
     other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
@@ -1551,7 +1641,8 @@ class Stream:
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
-                 coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
+                 coins: ChallengerCoins | None = None, key: ChallengerKey | None = None, main: Sequence[str] = (),
+                 clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
                  values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
                  replay: SpecializedDefinition | None = None, program: Program | None = None,
@@ -1622,6 +1713,7 @@ class Stream:
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
         self.rounds, self.values, self.span_values, self.program = rounds, values, span_values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
+        self.key, self.main = key, tuple(main)
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
@@ -1864,7 +1956,8 @@ class Stream:
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None,
                  outputs: Mapping[str, Mapping[str, str]] | None = None,
-                 history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
+                 history: Mapping[str, Any] | None = None,
+                 certified: Mapping[str, Mapping[str, Any]] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1873,7 +1966,8 @@ class Stream:
         the check's query, the selection rule's sampling
         design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them). Then the receipt. Under
+        `schemas`, `window_root`, `held`, `outputs`, `history` and `certified`, as `registration.check` takes them), which
+        the stream's run of record reads again at the outcome. Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1921,7 +2015,7 @@ class Stream:
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
-                            history=history)
+                            history=history, certified=certified)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1952,7 +2046,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs), seed_salt, history))
+                                     window_root, held, outputs), seed_salt, history, certified))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2046,8 +2140,10 @@ class Stream:
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
-        query, its population (`interior-population`: Q·n_rho), its window (`interior-window`: `window_root` is the
-        boundary registration's, or the root the verifier computes from the boundary registration's digest and the
+        query, its population (`interior-population`: Q·n_rho), its strata (`interior-parts`: those of the interior
+        program under the check's query are the parts the cells give, `cell_parts`, the check's templates in its order
+        and each one range; `ValueError` where the query doesn't apply to it), its window (`interior-window`:
+        `window_root` is the boundary registration's, or the root the verifier computes from its digest and the
         replay sample, `second_stage.interior_root`, so the second stage is sampled on one session with the first or
         on the session on that one root), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
@@ -2064,17 +2160,26 @@ class Stream:
         seed_salt = self._seed_salt_of(window_root)
 
         def checks() -> list[str] | None:
-            m = len(first.units) * self.n_rho
+            q, query = len(first.units), self.spec.check.query
+            m = q * self.n_rho
             v = self._public(record, interior=True)
             if v.ok and not (type(n := record.get("population")) is int and n == m):
-                v = _refuse("interior-population", {"population": n, "replay_sample": len(first.units),
-                                                    "n_rho": self.n_rho}).verdict
+                v = _refuse("interior-population", {"population": n, "replay_sample": q, "n_rho": self.n_rho}).verdict
+            program = self.interior_program(q) if v.ok else None
+            if program is not None:
+                try:
+                    strata = P.strata(program, query)
+                except (P.QueryRefused, ValueError) as e:
+                    raise ValueError(f"the check's query doesn't apply to the interior program: {e}") from None
+                cells = cell_parts(q, _check_ids(query) or (), self.cells)
+                if SS.parts(q, strata) != cells:
+                    v = _refuse("interior-parts", {"strata": [[t, [list(r) for r in rs]] for t, rs in strata],
+                                                   "cells": [[p.template, p.lo, p.n] for p in cells]}).verdict
             boundary = self._entries[first.registration.order].copies[8]
             if v.ok and window_root != boundary and (window_root is None or window_root != SS.interior_root(
                     first.registration.digest, D.proved(first.draw))):
                 v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
-            if v.ok:
-                program, query = self.interior_program(len(first.units)), self.spec.check.query
+            if v.ok and program is not None:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
@@ -2129,8 +2234,10 @@ class Stream:
         work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
         statement doesn't cover. The sample of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
         bytes of the coins this sample read), unless a `sampler` samples. Raises `Refused` for a registration sampled before
-        (nothing resamples), a closure map (before any coin is read), the two verifiers sampling differently
-        (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`).
+        (nothing resamples), a closure map (before any coin is read), the challenger's coins of another family than the
+        place the record's window names (`place`, before any coin is read: `_placed`), the two verifiers sampling
+        differently (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by
+        `verifier.check_draw`).
 
         Under a two-stage design, `select` of a registration is the first stage, and of its interior registration
         (`register_interiors`) the second (`select_second`, by `verifier.select_second`): `k` proof blocks in each
@@ -2156,6 +2263,7 @@ class Stream:
                 if closure is not None:
                     raise _refuse("closure", "a closure map widens a work sample, which the sampled audit's soundness "
                                              "statement doesn't cover")
+                self._placed(registration)
                 obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
                                   sampler=self._sampler)
                 if self._sampler is None:
@@ -2179,8 +2287,19 @@ class Stream:
         e.family = self._family(e.read)
         return e.draw
 
+    def _placed(self, registration: WindowCommitmentRecord) -> None:
+        """`Refused` (`place`) where the sample's coins are of another family of the challenger's than the one of the
+        place the record's window names (`window_place.family`): the sample's family is its record's, never its coin
+        source's to choose. A window that names no place is held to none."""
+        window = registration.record.get("window")
+        if not isinstance(self._coins, ChallengerCoins) or not _names_place(window):
+            return
+        mine = WP.family(window)
+        if self._coins.label != mine:
+            raise _refuse("place", {"family": self._coins.label, "place": mine})
+
     def _family(self, read: bytes | None) -> str | None:
-        """The challenger's family a sample that read `read` took its coins from: the stream's own coin source's at the
+        """The challenger's family a sample that read `read` took its coins from: the stream's own live-coin part's at the
         sample (`coins.ChallengerCoins.label`), which the verifier's run holds the coins' evidence to, so the evidence
         names no family of its own; None for a sample that read none."""
         return self._coins.label if read and isinstance(self._coins, ChallengerCoins) else None
@@ -2289,9 +2408,10 @@ class Stream:
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
         no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence
-        (`coins.coins_reason`'s `{key, ledger, main, pins, segment, session}`) and the bytes it read are exactly the
+        (`coins.coins_reason`'s `{ledger, main, pins, segment, session}`) and the bytes it read are exactly the
         coins of the family the stream read them from (`family`) that the session the ledger opens for the
-        registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
+        registration's window (`register`'s `window_root`) under the stream's key (`Stream(key=)`), from main's code
+        (`challenger.pinned_session`, on the stream's copy of main's history, `Stream(main=)`), released
         after the registration's digest, each checked against its
         commitment and every one read, the family's log showing no other root; missing evidence, or a registration
         without its window root, is a reject failing `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
@@ -2302,7 +2422,8 @@ class Stream:
         `proved_units`, `instances` and `served` are its, `session_roots` is held port by port to the registration
         whose port it names (the boundary values the sessions opened to the registration's audit record, when they
         opened any, and the rest to the interior registration's), `coins` is the first stage's evidence and
-        `interior_coins` the second stage's. `statements` are the second-stage sessions' (`second_stage`), which round 2
+        `interior_coins` the second stage's, held to the stream's key and history too: both stages' sessions are one
+        challenger's. `statements` are the second-stage sessions' (`second_stage`), which round 2
         holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
         and sample a verdict names), the interior registration and the second stage's cells as the interior
         registration's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
@@ -2310,8 +2431,8 @@ class Stream:
         circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
         without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
         its interior params. The outcome accepts
-        when the registration's audit record (over the replay sample) and the interior registration's (over the sample)
-        both do, and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and
+        when the run of record (`Run.run`) accepts, which the registration's audit record (over the replay sample) and
+        the interior registration's (over the sample) are held to; no Python joins them into a verdict (`_audit_two`). Raises `Refused` for `statements` on a one-stage outcome, and
         (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
         decided."""
         if statements is not None and self.n_rho is None:
@@ -2341,10 +2462,10 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             if self.n_rho is not None:
-                got.update(zip(("audit", "public", "replay"), self._audit_two(e, verdicts, statement, proved_units,
-                                                                              instances, served, session_roots, coins,
-                                                                              interior_coins, statements, proofs)))
-                op["accepted"] = got["audit"]["accepted"] and got["replay"]["accepted"]
+                got.update(zip(("audit", "public", "replay", "accepted"),
+                               self._audit_two(e, verdicts, statement, proved_units, instances, served, session_roots,
+                                               coins, interior_coins, statements, proofs)))
+                op["accepted"] = got["accepted"]
                 return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
                                                             session_roots, coins)))
@@ -2375,7 +2496,7 @@ class Stream:
                session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None = None
                ) -> tuple[dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit record, once the verdicts hold (failing `run` where the whole run isn't the verifier's),
-        and the public outputs."""
+        each value the registration's certified entries name held to have a reported read, and the public outputs."""
         assert e.sessions is not None
         outputs = self.spec.check.public_outputs
         of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
@@ -2384,7 +2505,8 @@ class Stream:
         proved = list(proved_units) if proved_units is not None else D.proved(draw.draw)
         instances = len(proved) if instances is None else instances
         rec = V.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved, instances,
-                             statement, verdicts, self.delta, e.sessions, served, session_roots)
+                             statement, verdicts, self.delta, e.sessions, served, session_roots,
+                             certified=sorted(e.certified or ()))
         accepted = rec["accepted"]
         if e.read is not None and rec["verifiers"]["agree"]:
             reg = draw.registration
@@ -2402,7 +2524,8 @@ class Stream:
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
                       value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
-                      history=e.history, family=e.family)
+                      history=e.history, family=e.family, key=self.key and self.key.to_json(), main=self.main,
+                      certified=e.certified)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2412,17 +2535,24 @@ class Stream:
                    session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
                    interior_coins: Mapping[str, Any] | None, statements: Sequence[Mapping[str, Any]] | None,
                    proofs: Mapping[str, Any] | None = None
-                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
-        the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
+        the second stage's sample, with round 2's check of `statements` (`second_stage.check_twin`, over the parts the
         interior program's strata make, the design's links and wires and their rows, which it derives from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
-        reads the verdicts report, what they
-        name of each session they accepted
-        (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
-        template, `template_circuits`), and the registration's
-        over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
-        failing `run` where the whole run isn't the verifier's; and the public outputs."""
+        reads the verdicts report, what they name of each session they accepted (`second_stage.verified_of`), the
+        reference header and registered reads the params `proofs` give each template, `template_circuits`, and its
+        own copies of the interior registration's values it holds without the prover: those it fills, with their
+        sources as the registration's check read them (`registration.resolved`: a history table's root and domain
+        id as bytes), and those it pinned or holds to an earlier record, the templates the params record as table
+        reads, `template_reads`, and the registered tables they pin, `pinned_tables`), and the registration's over the
+        replay sample,
+        each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run`
+        where the whole run isn't the verifier's, the registration's holding each value its certified entries name to
+        have a reported read; the public outputs; and whether the outcome accepts, which is `Run.run`'s symbol alone
+        (`verifier.run`, held whole to the records above, their join the Python side it is compared with). A run whose
+        stages read no coin bytes gives `Run.run` nothing to read, so it raises (`verifier.not_written`): no Python
+        decides a two-stage outcome."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2437,7 +2567,7 @@ class Stream:
         replayed = D.proved(first.draw)
         rec = V.audit_record(ireg.record, ireg.receipt, second.draw, second.law, proved,
                              len(proved) if instances is None else instances, statement, verdicts, self.delta,
-                             e.sessions, served, session_roots, own_reads=True)
+                             e.sessions, served, session_roots)
         named = template_circuits(proofs, self.spec.check.query)
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
@@ -2446,17 +2576,24 @@ class Stream:
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
                      rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
-                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record))
-        rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
+                     widths=SS.replay_widths(e.program, descriptor_id(self.replay)),
+                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
+                     supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
+                     fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
+                     reads=template_reads(proofs), tables=pinned_tables(proofs))
+        rec = SS.attach(rec, SS.check_twin(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
-                                  verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
-        accepted = rec["accepted"] and boundary["accepted"]
-        if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \
-                boundary["verifiers"]["agree"]:
+                                  verdicts, self.delta, e.sessions, None, replay_session_roots,
+                                  certified=sorted(e.certified or ()))
+        joined = rec["accepted"] and boundary["accepted"]
+        if e.read is None or e.second_read is None:
+            V.not_written("_audit_two", "Spot.Run.run")
+        accepted = False
+        if rec["verifiers"]["agree"] and boundary["verifiers"]["agree"]:
             ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held, given = e.copies
             within = {k: x for k, x in rec.items() if k != "verifiers"}
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(first.draw), "read": len(e.read),
-                       "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
+                       "symbol": ACCEPT if joined else REJECT, "public": public if joined else {},
                        "audit": {k: x for k, x in boundary.items() if k != "verifiers"},
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
@@ -2469,7 +2606,8 @@ class Stream:
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
-                      tied=self.spec.check.tied or None, family=e.family,
+                      tied=self.spec.check.tied or None, family=e.family, key=self.key and self.key.to_json(),
+                      main=self.main, certified=e.certified,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,
@@ -2482,7 +2620,8 @@ class Stream:
                                 "proofs": proofs})
             if not v.ok:
                 rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
-        return rec, public, boundary
+            accepted = v.ok and v.verifiers["lean"].get("symbol") == ACCEPT
+        return rec, public, boundary, accepted
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any], *,
                 halt: Mapping[str, Any] | None = None, replay_audit: Mapping[str, Any] | None = None) -> Outcome:

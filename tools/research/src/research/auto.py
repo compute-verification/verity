@@ -36,7 +36,9 @@ read comes last there, never first. The placement's reason names the Lean pool t
 A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
-the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
+the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long. While it waits there on
+memory, the asker its launch left, if it left one, asks again where it would start now (`elsewhere`) and moves it there as
+its late twin, as long as the launching VM is up (research.asker).
 
 The launch is told when the job should start where `choose` sent it (`expect`, from the documents `read` already has): now, in
 about so many minutes behind the line it joins, or that nothing read gives an estimate. A job expected to wait past
@@ -64,6 +66,7 @@ import math
 import re
 import shlex
 import subprocess
+import sys
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -90,8 +93,8 @@ NO_SSH = "its ssh doesn't answer"
 HOLD_FILE = "/etc/vy/auto-hold"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
-#: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
-DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a large suite (tools/research's) holds some 250k pytest temp files at once: the floor is two of those
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 500_000, 50
 #: what a launch needs of a machine whatever the job, which the probe tries (its `no_start`): the null device, which the
 #: runner's start opens to read and write and git opens before it does anything, and git, which ships a tree as a checkout
 NULL_DEVICE, GIT = "/dev/null", "git"
@@ -114,7 +117,12 @@ REFUSE = False
 #: a machine's Lean pools (lean_slot.py's file, which the probe's copy of LEAN_SLOT_PY reads): a run that takes a Lean slot of a
 #: pool goes only where that pool has one, since lean_changed.py refuses it at once elsewhere, or builds cold in its checkout
 LEAN_SLOTS = "/workspace/research/locks/lean-slots"
+#: the machines a machine reaches, one a line with its ssh options (slot.py's PEERS): a twin claims its pair on its home
+#: through it, so a late twin goes only where the first's machine is named (`elsewhere`)
+PEERS_FILE = "/etc/vy/peers"
 LEAN_SLOT_PY = Path("tools/verity/check/lean_slot.py")
+#: the files of a source tree `read` reads: all a caller that has a commit and no checkout of it need hand it (research.asker)
+READS = (DESCRIPTION, SLOT_PY, LEAN_SLOT_PY)
 
 
 def lean_pool(command: list[str], env: list[str] = ()) -> str | None:
@@ -269,7 +277,17 @@ def no_start():
     return None
 
 
+def peers():
+    try:
+        lines = Path(PEERS).read_text().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return sorted({f[0] for f in (ln.split("#")[0].split() for ln in lines) if len(f) >= 2})
+
+
 out = {}
+if PEERS:
+    out["peers"] = peers()
 dead = no_start()
 if SHARE is not None:
     out["share"] = {"no_start": dead} if dead else doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
@@ -319,15 +337,19 @@ def share_cpus(source: Path) -> str | None:
     """The CPUs of AUTO_PROJECT's share on AUTO_NODE in the source tree's cluster description, None when it says none."""
     try:
         desc = tomllib.loads((Path(source) / DESCRIPTION).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research run: {Path(source) / DESCRIPTION} unread, so {AUTO_PROJECT} has no share on {AUTO_NODE} "
+              f"({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return next((s["cpus"] for s in desc.get("shares", []) if s.get("project") == AUTO_PROJECT and s.get("node") == AUTO_NODE
                  and isinstance(s.get("cpus"), str)), None)
 
 
-def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: float | None = None, lean: bool = False) -> bytes:
+def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: float | None = None, lean: bool = False,
+            peers: bool = False) -> bytes:
     """The probe a machine runs as `python3 -`; `now` (an epoch) stands in for the machine's clock when HOLD_FILE is read. With
-    `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py and the slot.py beside it."""
+    `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py and the slot.py beside it; with `peers`,
+    the machines PEERS_FILE names there, under "peers" (None where it has no such file)."""
     from . import cores, remote
     from .pods.nebius import slot_only
 
@@ -337,7 +359,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: f
             "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
             "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START,
-            "NODE_SLOT": slot_only.NODE_SLOT}
+            "NODE_SLOT": slot_only.NODE_SLOT, "PEERS": PEERS_FILE if peers else None}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -393,12 +415,12 @@ def passed_over(machine: str, why: str) -> dict:
 
 
 def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,
-         now: float | None = None, node_only: bool = False, lean: bool = False) -> dict[str, dict | str]:
+         now: float | None = None, node_only: bool = False, lean: bool = False, peers: bool = False) -> dict[str, dict | str]:
     """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be. Node
     2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). A machine that can start no run (the
     probe's `no_start`) says why in place of each: node 2's share is `{"no_start": why}`, a pool's document an error in
     NO_START's words. With `node_only`, node 2 alone is asked; with `lean`, each machine's Lean slots too, under "lean"
-    (lean_slot.py's status document)."""
+    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them)."""
     reach, run = reach or _reach, run or _ssh
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
@@ -408,7 +430,7 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     def one(item: tuple[str, list[str]]) -> dict | str:
         name, pools = item
         try:
-            r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools, now, lean))
+            r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools, now, lean, peers))
         except subprocess.TimeoutExpired:
             return f"no answer in {READ_TIMEOUT_S} s"
         except Exception as e:                                       # not listed, not this project's, no source: never chosen
@@ -542,7 +564,7 @@ def _ahead(fit: int, free: int, waiting: int) -> float:
 
 def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
     """The line a run joins for a slot of Lean ``pool`` on the machine whose `read` document is ``doc``, and how to say it:
-    0 with no ``pool`` to take, where the machine caps no Lean, or while a slot is free for every waiter and this run; else the
+    0 with no ``pool`` to take, where the machine limits no Lean, or while a slot is free for every waiter and this run; else the
     waiters ahead and this run, per slot of the pool; infinite when its Lean slots weren't read; None, with why, when they give
     the pool none, so the run would never get one there."""
     if not pool:
@@ -621,6 +643,29 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
     if starts:
         return None, "; ".join(notes) + f": no pool fits, and it starts on {AUTO_NODE} now"
     return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"
+
+
+def elsewhere(docs: dict[str, dict | str], home: str, cpus: int, mem_gb: float, lean_pool: str | None = None
+              ) -> tuple[tuple[str, str] | None, str]:
+    """Where a job that waits in ``home``'s pool would start now: the pool `choose` gives it among the other machines' pools
+    alone (node 2's queue takes no twin of a pool run) where `expect` gives it no wait, and why; None, and why, when no other
+    machine's pool starts it now. A machine whose probe read its peers and found ``home`` not among them is left out: a
+    twin there couldn't claim the pair on ``home`` and would leave its line unrun (slot.py's `twin_there`). One whose peers
+    weren't read stays, and its twin's own refusal decides."""
+    others: dict[str, dict | str] = {AUTO_NODE: "not asked: a late twin takes a pool's slot"}
+    for machine, doc in docs.items():
+        names = doc.get("peers") if isinstance(doc, dict) else None
+        if machine in (home, AUTO_NODE):
+            continue
+        others[machine] = f"it doesn't name {home} in {PEERS_FILE}, so a twin there couldn't claim on {home}" \
+            if isinstance(names, list) and home not in names else doc
+    try:
+        target, why = choose(others, cpus, mem_gb, lean_pool=lean_pool)
+    except Unplaceable as e:
+        target, why = None, str(e)
+    if target is None or expect(others, target, cpus, mem_gb, lean_pool=lean_pool).minutes != 0:
+        return None, f"no other machine's pool would start it now ({why})"
+    return target, why
 
 
 class Wait(NamedTuple):

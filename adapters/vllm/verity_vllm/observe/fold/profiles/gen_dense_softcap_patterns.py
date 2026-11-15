@@ -1,5 +1,5 @@
 """The FA2 scope of a model served with logit soft-capping
-(`attn_logit_softcapping > 0`: Gemma-2) -> the quarantined `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.program.quarantine.dense.softcap`,
+(`attn_logit_softcapping > 0`: Gemma-2) -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity.definitions.registry.dense`,
 exact `MufuTanh` over all 2^32 sm_89 words), or
 `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`.
 
@@ -21,8 +21,7 @@ selection: `Attention_v3{T,NH,KVH,D,BN}` -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,C
 attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
-The Definition stays in `quarantine/dense`; G4 admits it through the run's
-`quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
+G4 admits the Definition through the run's `quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
 """
 from __future__ import annotations
 

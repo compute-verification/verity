@@ -3,7 +3,7 @@
 The memory challenger is the auditor-trusted device that runs PoUS's timed rounds and the streamed-label wipe's timed
 reads, and signs what it saw. It is the auditor's hardware, on a machine the developer doesn't control at the developer's site
 and reached in-region, never a process on the developer's node. Trust in it and its host is the named assumption
-`trusted-host`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
+`trusted-device`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
 server's memory with labels it derives itself and flips its coins once the fill is complete. It reads each answer's
 receipt time on its own clock and signs the run's records once, under LMS over SHA-512. The verifier checks a signed run
 against the commitment released with it and publishes the verdict, and for a wipe the survivor bound it certifies.
@@ -34,14 +34,22 @@ the challenger's host: the two sides and their frames, the request and its ids (
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`
 and `lean_verdict`, and the clocks, counters and parameters a harness reads beside them.
 
+What leaves the challenger's host goes into the node that started its party. `challenger_party` answers on two
+channels only: its stdout, which goes to the node that started it (the salt's source, `{"listening": PORT}`, the report
+with the release, or a refusal), and the one connection its prover makes (the indices and the end frame). A refusal
+names the field and the rule the request breaks and quotes none of the request's bytes (`Refusal`, `setup_of`). Nothing
+else of a party leaves its host: its key, session log, salt log and kept setups stay in `DIR`; the auditor host's gate
+keeps each party's log for root on the host and serves it to no ssh caller; and it starts a party only for a caller
+whose address is a registered node's (`verity/protocols/accounting/poub/device/live_verifier/README.md`).
+
 Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
 challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in
 Python, which is the reference. `verity/protocols/accounting/pous/verifier/check/timed_audit.py` is the Python beside PoUS's Lean
 check: its `lean_verdict` gives the same verdict by the Lean executable `pous-timed-audit`, and its two commands hold
 the Lean to the reference, `--generated` on records it builds and `--replay RUN_DIR` on a run's. This directory's
 `lean_verdict` calls that one and loads its file by path (`pous_check`), the one load of a file by path in the device's
-modules. An import by name cannot reach it: the Lean check is a tree with an import root of its own (`SEPARATE` in
-`tests/test_boundaries.py`) that reads `verity_difftest`, and `verity` imports no other distribution. The check's other
+modules. An import by name cannot reach it: the Lean check is a tree with an import root of its own (`distribution` in
+`tests/import_order.toml`) that reads `verity_difftest`, and `verity` imports no other distribution. The check's other
 Python is `verity/protocols/accounting/pous/verifier/check/interop.py --all`, which holds the Lean to the P2 wire's Python
 reference on every vector, and `verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py`, which writes the
 difftest's instances with the Python's answers on them and which the Lean check runs.
@@ -51,7 +59,7 @@ entry point of `verity/protocols/accounting/pous/verifier/README.md`.
 
 ## Top statements
 
-- `TrustedHost` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which
+- `TrustedDevice` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which
   changes none of what it emits or when, and gives it a monotonic clock.
 - `MemoryChallenger.Properties.VerdictAccepts` (`security/Properties/Pous/MemoryChallenger.lean`): an accepted timed-rounds
   verdict's run is signed under a trusted key and an accepted scheme, its header is the commitment, each round's

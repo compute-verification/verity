@@ -104,7 +104,7 @@ def test_the_word_rules_prefetch_budgets_its_share_of_that_headroom(host, monkey
     monkeypatch.setattr(M, "_pool_lock", lock)
     monkeypatch.setattr(global_program, "component_spec_histogram", lambda d: {} if d == "bare" else {"Gemm_v1{K=4,N=4}": 1})
 
-    def prefetch(specs, X, W, extras, *, max_gates, jobs, budget):
+    def prefetch(specs, X, W, extras, *, max_gates, jobs, budget, specialize):
         budgets.append(budget)
         return 0
 
