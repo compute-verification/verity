@@ -1176,7 +1176,10 @@ def _listing(text: str | None = None) -> Listing:
 
 def _row(path: str, steps: dict[str, int]) -> str:
     """The row entry ``path`` belongs to: itself where the order lists it, else the deepest listed directory above it,
-    ``.`` for the rest."""
+    ``.`` for the rest.  A file at ``tests/X/REST``, where the tests of ``X`` are, is in ``X/REST``'s row unless that is
+    ``.``."""
+    if path.startswith("tests/") and (mirrored := _row(path.removeprefix("tests/"), steps)) != ".":
+        return mirrored
     d = path if path in steps else posixpath.dirname(path)
     while d and d not in steps:
         d = posixpath.dirname(d)
@@ -1187,6 +1190,8 @@ def _below(path: str, steps: dict[str, int]) -> str:
     """Where a file in no place is, as a place's lists name it: the directory one level below its row that holds it, or
     its row for a file directly in it."""
     row = _row(path, steps)
+    if row != "." and not path.startswith(f"{row}/"):
+        path = path.removeprefix("tests/")
     below = posixpath.dirname(path)[0 if row == "." else len(row) + 1:].split("/")[0]
     return row if not below else below if row == "." else f"{row}/{below}"
 
@@ -1538,7 +1543,7 @@ def _hold_places(loads: Iterable[Load], files: Set[str], listing: Listing) -> No
     stale = [f"{d}: {kind} {at}" for d, lists in sorted(listing.places.items())
              for kind, now in zip(LISTS, found.get(d, ({}, {}, {}))) for at in sorted(lists[kind] - set(now))]
     stale += [f"{d}: no Python is at {p}" for d, lists in sorted(listing.places.items()) for p in lists["paths"]
-              if not any(f.endswith(".py") and (f == p or f.startswith(p + "/")) for f in files)]
+              if not any(f.endswith(".py") and (f == p or f.startswith((p + "/", f"tests/{p}/"))) for f in files)]
     assert not stale, (f"lines of `place` (tests/import_order.toml) the tree no longer has; delete them ({REGENERATE} "
                        f"does): {stale}")
 
