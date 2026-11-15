@@ -18,7 +18,8 @@ them, so a rename git found and a criss-cross's virtual base are git's own), as 
 tree with the move commit as base. A move that only renamed against the PR's edit leaves no conflict there, and T is
 written and added; F's old path is put back as OTHER has it (a link, a shim, or nothing). Where that merge still conflicts,
 the conflict is real content (the PR's edit against another change on OTHER's side): T is written with diff3 markers,
-left unadded, and each hunk's first line is printed for the owner. A modify/delete the maps don't explain is the owner's.
+left unadded, and each hunk's first line is printed for the owner. A modify/delete the maps don't explain is the owner's,
+and so is a binary file (a NUL byte on any side) or one `git merge-file` fails on: it is left as git's merge left it.
 """
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ def new_path(maps, p: str) -> str:
     return p
 
 
-def merge3(ours: str, base: str, theirs: str) -> tuple[str, int, list[str]]:
+def merge3(ours: str, base: str, theirs: str) -> tuple[str, int, list[str], str]:
     with tempfile.TemporaryDirectory() as t:
         names = []
         for k, v in (("ours", ours), ("base", base), ("theirs", theirs)):
@@ -64,7 +65,7 @@ def merge3(ours: str, base: str, theirs: str) -> tuple[str, int, list[str]]:
     for i, line in enumerate(lines):
         if line.startswith("<<<<<<< "):
             left.append(next((x for x in lines[i + 1:] if not x.startswith("|||||||")), "")[:100])
-    return p.stdout, p.returncode, left
+    return p.stdout, p.returncode, left, p.stderr.strip()
 
 
 def main() -> int:
@@ -108,7 +109,13 @@ def main() -> int:
             continue
         base = (git(d, "cat-file", "blob", stage["1"]) if "1" in stage
                 else git(d, "show", f"{mb}:{f}", ok=(0, 128))).stdout
-        text, rc, left = merge3(rewrite(maps, ours.stdout, to), rewrite(maps, base, to), theirs.stdout)
+        if "\0" in ours.stdout or "\0" in base or "\0" in theirs.stdout:
+            report.append((f, "the owner's: a binary file, which no map rewrites and git can't merge", []))
+            continue
+        text, rc, left, err = merge3(rewrite(maps, ours.stdout, to), rewrite(maps, base, to), theirs.stdout)
+        if not 0 <= rc <= 127:
+            report.append((f, f"the owner's: git merge-file failed: {err.splitlines()[-1] if err else f'exit {rc}'}", []))
+            continue
         with open(os.path.join(d, to), "w", encoding="utf-8", errors="surrogateescape") as h:
             h.write(text)
         if to != f:

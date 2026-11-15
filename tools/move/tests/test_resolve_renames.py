@@ -54,6 +54,26 @@ def repo_with(tmp_path: Path, main_unit: str, pr_unit: str) -> Path:
     return r
 
 
+def binary_conflict(tmp_path: Path) -> Path:
+    """Both sides change a binary file (a NUL byte in it) after the word move; the merge stops on it."""
+    r = tmp_path / "repo"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    (r / "app").mkdir()
+    (r / "app/blob.bin").write_bytes(b"drawn\0old\n")
+    commit(r, "old", {"app/unit.py": UNIT})
+    git(r, "branch", "pr")
+    commit(r, "rename: drawn to sampled\n\nMove: tools/move/sample_words_map.toml",
+           {"tools/move/sample_words_map.toml": MAP, "app/unit.py": UNIT.replace("drawn", "sampled")})
+    (r / "app/blob.bin").write_bytes(b"drawn\0main\n")
+    commit(r, "main's blob", {})
+    git(r, "checkout", "-q", "pr")
+    (r / "app/blob.bin").write_bytes(b"drawn\0pr\n")
+    commit(r, "the PR's blob", {})
+    assert git(r, "merge", "-q", "--no-edit", "main", check=False).returncode == 1
+    return r
+
+
 def resolve(repo: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(TOOL), ".", "main"], cwd=repo, capture_output=True, text=True)
 
@@ -77,3 +97,13 @@ def test_a_conflict_with_another_change_on_main_is_left_for_the_owner(tmp_path):
     text = (r / "app/unit.py").read_text()
     assert "<<<<<<< ours (the PR, renamed)" in text and "return sampled * 4" in text and "drawn" not in text
     assert git(r, "ls-files", "-u", "--", "app/unit.py").stdout != ""
+
+
+def test_a_binary_file_both_sides_changed_is_left_unmerged_as_git_left_it(tmp_path):
+    r = binary_conflict(tmp_path)
+    left = (r / "app/blob.bin").read_bytes()
+    p = resolve(r)
+    assert p.returncode == 1
+    assert p.stdout.splitlines() == ["app/blob.bin: the owner's: a binary file, which no map rewrites and git can't merge"]
+    assert (r / "app/blob.bin").read_bytes() == left and left
+    assert git(r, "ls-files", "-u", "--", "app/blob.bin").stdout != ""
