@@ -489,9 +489,20 @@ def _strings(text: str) -> list[tuple[int, int]]:
 
 
 def _names(text: str) -> dict[str, tuple[int, list[str]]]:
-    """Each module constant bound to an anchor: {name: (the levels above the file it starts from, its literal joins)}."""
-    return {m.group("name"): (_levels(m.group("up")), _segments(m.group("joins"))) for m in NAMED.finditer(text)
-            if bool(m.group("open")) == bool(m.group("close"))}
+    """Each module constant bound to an anchor, or to another such name joined (`LIVE = REPO / "x"`): {name: (the levels
+    above the file it starts from, its literal joins, `..` for a name's `.parent`)}."""
+    names = {m.group("name"): (_levels(m.group("up")), _segments(m.group("joins"))) for m in NAMED.finditer(text)
+             if bool(m.group("open")) == bool(m.group("close"))}
+    while names:
+        derived = re.compile(r"^(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*(?P<open>\(?)(?P<base>" + "|".join(map(re.escape, names))
+                             + r")\b(?P<up>\.parents\[\d+\](?:\.parent\b)*|(?:\.parent\b)*)" + JOINS + r"(?P<close>\)?)\s*$", re.M)
+        more = {m.group("name"): (names[m.group("base")][0],
+                                  names[m.group("base")][1] + [".."] * _levels(m.group("up")) + _segments(m.group("joins")))
+                for m in derived.finditer(text) if m.group("name") not in names and bool(m.group("open")) == bool(m.group("close"))}
+        if not more:
+            break
+        names.update(more)
+    return names
 
 
 def _anchors(text: str) -> list[tuple[int, int, str | None, int, list[str]]]:
@@ -552,9 +563,10 @@ def _start(path: str, name: str | None, names: dict[str, tuple[int, list[str]]])
     return posixpath.normpath(posixpath.join(_ancestor(path, levels), *segs))
 
 
-def _target(path: str, name: str | None, names: dict[str, tuple[int, list[str]]], levels: int, segs: list[str]) -> str:
-    """What an anchor of file `path` names: `levels` above the file (its directory is 1), or above `name`'s directory."""
-    return posixpath.normpath(posixpath.join(_ancestor(_start(path, name, names), levels - (name is None)), *segs))
+def _target(start: str, name: str | None, levels: int, segs: list[str]) -> str:
+    """What an anchor names from `start`, `_start`'s: `levels` above the file (its directory is 1), or above `name`'s
+    directory, then `segs`."""
+    return posixpath.normpath(posixpath.join(_ancestor(start, levels - (name is None)), *segs))
 
 
 def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
@@ -578,6 +590,8 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
             for x in _anchors(text):
                 pairs[line_of(text, x[0])][k].append(x)
         names_old, names_new = _names(before), _names(after)
+        # a use of a name counts from what the name will name once its own anchor is rewritten: what it named at `base`
+        meant = {n: _mapped(_start(old, n, names_old), rows) for n in names_new if n in names_old}
         edits = []
         for line, (ax, ay) in sorted(pairs.items()):
             if len(ax) != len(ay):
@@ -585,11 +599,11 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
             for (_, _, n0, l0, g0), (s1, e1, n1, l1, g1) in zip(ax, ay):
                 if n0 != n1:
                     continue
-                want = _mapped(_target(old, n0, names_old, l0, g0), rows)
-                have = _target(new, n1, names_new, l1, g1)
+                start = meant.get(n1) or _start(new, n1, names_new) if n1 else posixpath.dirname(new)
+                want = _mapped(_target(_start(old, n0, names_old), n0, l0, g0), rows)
+                have = _target(start, n1, l1, g1)
                 if want == have:
                     continue
-                start = _start(new, n1, names_new)
                 common = posixpath.commonpath([start, want]) if start and want and not want.startswith("..") else ""
                 up = (start.count("/") + 1 if start else 0) - (common.count("/") + 1 if common else 0)
                 rel = posixpath.relpath(want or ".", common or ".")
