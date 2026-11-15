@@ -94,6 +94,22 @@ def log(msg: str) -> None:
     print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
+def wlog(a, msg: str) -> None:
+    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, or printed when
+    there is no witness side (a run by hand, which releases nothing)."""
+    if a.witness is None:
+        return log(msg)
+    a.witness.parent.mkdir(parents=True, exist_ok=True)
+    with open(a.witness.with_name("n2.log"), "a") as f:
+        f.write(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}\n")
+
+
+def plog(a, msg: str) -> None:
+    """A line of public values that says something per execution phase: public, but on the witness side when the
+    signer refused any phase, as the public summary then holds nothing per window."""
+    (wlog if getattr(a, "refused_any", False) else lambda _a, m: log(m))(a, msg)
+
+
 def _no_coins(n: int) -> bytes:
     raise AssertionError("Selection All draws every execution phase and reads no coins")
 
@@ -381,11 +397,11 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
-        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
-            f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        plog(a, f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
+             f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
         if forge is not None:
             drawn = {**drawn, "units": forge(drawn)}
-            log(f"{name}: the prover proves windows {drawn['units']} instead")
+            plog(a, f"{name}: the prover proves windows {drawn['units']} instead")
         (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
         windows = [rd.windows[u] for u in drawn["units"]]
     previous, rows = None, []
@@ -444,17 +460,17 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
                               and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
-        log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
-            f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
-            f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
-            f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
-            f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
+        plog(a, f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
+             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
+             f"{proof['opened_word']}; {'as expected' if row['as_expected'] else 'UNEXPECTED'}")
+        wlog(a, f"{name} window {x.window}: prove {row['prove']['session_s']} s (prove_total "
+             f"{row['prove']['prove_total_s']} s, {row['prove']['proof_bytes']} B), verify {verify_s} s")
     network = lw.network_verdict(stream, rd.plan["windows"], drawn)
     if drawn is not None:
         sel = network["selection"]
-        log(f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
-            f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
-                                                   "the windows proved are the draw of record's"))
+        plog(a, f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+             f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
+                                                    "the windows proved are the draw of record's"))
     return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
             **({} if segment is None else {"segment": segment})}
 
@@ -549,14 +565,16 @@ def prove(a) -> int:
                        "windows": {k: len(v.windows) for k, v in members.items()},
                        "planned_windows": {k: v.plan["windows"] for k, v in members.items()}}
     summary["instances_s"] = round(time.time() - t, 1)
+    a.refused_any = any(rd.issuer_refused for rd in members.values())
     for name, rd in members.items():
         if rd.lw.partition != lw0.partition or rd.lw.program != lw0.program:
             raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
             "certifier_refused": bool(rd.issuer_refused), "issuer_refused": rd.issuer_refused}
-        log(f"{name}: {len(rd.windows)} execution phases, words {[x.word for x in rd.windows]}, expected verdicts "
-            f"{[x.expect for x in rd.windows]}, failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
+        plog(a, f"{name}: {len(rd.windows)} execution phases, words {[x.word for x in rd.windows]}, expected "
+             f"verdicts {[x.expect for x in rd.windows]}")
+        wlog(a, f"{name}: failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
         if not expected(name, rd):
             raise SystemExit(f"{name}: the references are not the {name} round's")
     if not summary["link"]["pinned"]:
@@ -573,10 +591,11 @@ def prove(a) -> int:
     summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {lw0.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
-        f"pin {sg.st.pin[:16]}")
+    log(f"stager: {lw0.proof_block.id}, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, pin {sg.st.pin[:16]}")
+    wlog(a, f"stager: lowered in {sg.lower_s} s")
     summary["staging"] = stage(M, sg, members, os.urandom(32), out)
-    log(f"staged: {summary['staging']}")
+    log(f"staged: {summary['staging']['statements']} statements")
+    wlog(a, f"staged: {summary['staging']}")
     write(summary)
 
     def go(k: int, name: str) -> tuple[str, dict]:
@@ -605,15 +624,17 @@ def prove(a) -> int:
                 "audit": {"accepted": net["accepted"], "wrong_units": wu},
                 "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
                 else None}
-            log(f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of {sel['population']}: "
-                f"at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta {wu['delta']:.3g}"
-                + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
-        log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
-            f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
-            f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
-            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the public "
-            f"circuit holds left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
-            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            plog(a, f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of "
+                 f"{sel['population']}: at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta "
+                 f"{wu['delta']:.3g}" + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
+        plog(a, f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
+             f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}")
+        plog(a, f"member {name}: the verifier received {rec['files']} files, scanned for {rec['blobs']} witness "
+             f"pieces: leaked {rec['leaked'] or 'none'}, control holds all {rec['control']['holds_all']}; "
+             f"{'as expected' if good else 'UNEXPECTED'}")
+        wlog(a, f"member {name}: verifier received {rec['verifier_bytes']} bytes, witness pieces found there: "
+             f"{rec['verifier_found'] or 'none'} ({len(rec['public_pieces'])} pieces the public circuit holds left "
+             f"out), structured {rec['structured'] or 'none'}, control {rec['control']['blobs_found']}")
     summary["ok"] = ok
     write(summary)
     log("done: " + ("ok" if ok else "FAILED"))
