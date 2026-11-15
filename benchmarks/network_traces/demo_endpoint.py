@@ -1,6 +1,6 @@
 """demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop), for
-the network certifier's rehearsal (`certifier_serve.py rehearse --upstream URL --traffic varied`), writing the records a
-`verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding and I/O tie read it unchanged.
+a network certifier's rehearsal, writing the records a `verity-vllm serve-openai` endpoint writes, so network-e2e's
+endpoint binding reads it unchanged.
 
     python demo_endpoint.py --out DIR [--engine hash|seeded:SHAPE|MODULE:FACTORY] [--seed 0] [--host 127.0.0.1]
         [--port 0] [--eos 0] [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--window-steps 16]
@@ -11,8 +11,8 @@ Commit window and writes ``summary.json``.
 * **HTTP** (one request a connection): ``GET /v1/models`` lists the engine's model; ``POST /tokenize`` makes one token a
   UTF-8 byte (the demo's byte vocabulary, no BOS); ``POST /v1/completions``, streamed (``transfer-encoding: chunked``,
   one ``data:`` event a token, then ``data: [DONE]``), each chunk carrying its ``token_ids`` and the first its
-  ``prompt_token_ids``, as vLLM's server does under ``return_token_ids``. A request is the certifier's varied body
-  (`certifier_serve.varied_body`): its prompt as token ids, ``max_tokens``, greedy (temperature 0, top_p 1), no stop
+  ``prompt_token_ids``, as vLLM's server does under ``return_token_ids``. A request is a varied body of
+  token ids: its prompt as token ids, ``max_tokens``, greedy (temperature 0, top_p 1), no stop
   strings, its ``user`` the id the certified I/O names it by. Its prompt and ``max_tokens`` must fit the engine's
   context, as vLLM refuses a request past ``max_model_len``. Any other body is answered 400.
 * **The scheduler** (`Scheduler`) is vLLM V1's synchronous one as the derived rules model it
@@ -23,7 +23,7 @@ Commit window and writes ``summary.json``.
   finishes at its first EOS id (``--eos``) or at ``max_tokens``. Each step's rows are written in the runner's batch
   order, the scheduling order sorted stably by scheduled tokens (Model Runner V2's).
 * **The engine** (`Engine`: each sampling row's known tokens to its next token) is ``hash`` (a token from a SHA-512 of
-  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `benchmarks.torch_gpu.p2_stage.served_weights`'s
+  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `verity.protocols.accounting.pous.prover.served_weights`'s
   SHAPE, ``tiny`` or ``phase1``, through this module's own W8A8 forward on CPU, not the H200 loop's kernels), or
   ``MODULE:FACTORY``, a factory the serving loop provides, called with ``seed`` and returning an `Engine`.
 * **The records**, in serve-openai's formats under ``--out``: ``serve.json`` (the engine, its context as
@@ -92,14 +92,14 @@ def _bf16(words: np.ndarray) -> np.ndarray:
 
 
 class SeededDecoder:
-    """The seeded weights (`benchmarks.torch_gpu.p2_stage.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
+    """The seeded weights (`verity.protocols.accounting.pous.prover.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
     numpy: embeddings and positions added, per layer RMSNorm, the query, key and value projections (``kv_heads`` KV heads),
     causal softmax attention, the output projection and the residual, RMSNorm, the ReLU MLP and the residual, then the
     final norm and the head, greedy. A W8A8 linear quantizes its input row to s8 codes at max|x|/127 and scales the s8 dot by
     that and its output channel's scale. The whole sequence is recomputed each step (the context is at most 32)."""
 
     def __init__(self, shape: str, seed: int = 0) -> None:
-        from benchmarks.torch_gpu.p2_stage import served_weights as W
+        from verity.protocols.accounting.pous.prover import served_weights as W
 
         self.shape = s = W.ALIASES.get(shape) or W.SHAPES[shape]
         self.vocab, self.context, self.name = s.vocab, s.context, f"demo-endpoint/seeded-{s.name}"

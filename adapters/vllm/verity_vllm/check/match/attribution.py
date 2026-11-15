@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+from typing import cast
 
 from verity_vllm.check.match import input_layout as IL
 from verity_vllm.check.match import occurrence as OCC
@@ -27,8 +28,6 @@ class Attribution:
 def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     """Attribute every fold instance to its request: the fold's meta channel, else the rows of its engine step."""
     B, steps = run.fold, run.steps
-    if B.oracle_rows is None:
-        raise ValueError(f"{run.oracle_dir}: the view passed as the fold has no instances.jsonl rows")
     n_in = B.n_input_nodes
     # the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
     # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  The request-owned inputs are the prompts
@@ -41,7 +40,7 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
                                                          len(getattr(B, "witness_index", {}))))
     except ValueError as e:
         weights_nodes, weights_nodes_error = frozenset(), str(e)   # G5 fails by name below; every weight read is then a cross-request read
-    meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
+    meta_of = {o["node"] + n_in: o for o in cast("list[dict]", B.oracle_rows)}   # a fold's loader sets its rows
     per_req: dict[str, list[int]] = collections.OrderedDict()
     unattributed = []
     # weight-only instances (every node operand a shared weight or an earlier weight-only instance: gemma2's RMSNorm

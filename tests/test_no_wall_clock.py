@@ -46,8 +46,6 @@ ALLOWED: dict[str, str] = {
         "a GPU probe script (not collected) that measures the int8 LM head's share of decode time; no test reads it",
     "adapters/vllm/tests/engine/int8_attention_tpot_gpu.py::generate":
         "a GPU timing script (not collected) that measures int8_exact decode TPOT, batched against the reference; no test reads it",
-    "adapters/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
-    "adapters/vllm/tests/program/crosscheck.py::main": "the cross-check script's summary line reports its wall time; no test runs main",
     "adapters/vllm/tests/protocols/h1_zy_gpu.py::wall":
         "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
     "adapters/vllm/tests/protocols/local_gate.py::_now":
@@ -172,7 +170,7 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order.
     Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
     that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
-    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "verity" / "check" / "check.py")
+    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(check)
     names = {}
@@ -187,7 +185,7 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
                  for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
     assert not offenders, "tests that skip on what check's Lean steps build, outside the suites it runs after them:\n" + "\n".join(offenders)
     flock = names["verity-flock"][1]["tool"]["verity"]["tests"]
-    assert "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
+    assert "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof" in flock.get("artifacts", []), "verity-flock runs the verifier"
 
 
 def test_the_lean_gate_scan_sees_each_form() -> None:

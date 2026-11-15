@@ -29,7 +29,7 @@ _TREE = "[[[[[[0,[1,2]],3],5],6],4],7]"
 TYPES = [
     "mla-split-part", 'mla-split-part:T=64', "gq:K=6144", "gq:K=2048", "gq:K=1536", "gq:K=256", "fi:K=256", "fi:K=1536",
     "fi:K=2048", "fi:K=6144", "fi-quant", "fi-quant:K=2048", "router-row", "router-slots", "dsa-q-row", "rmsnorm-v8",
-    "fp8-coord:K=6144", "fp8-coord:K=6144+public-weights", "fp8-coord:K=6144+packed-weights", "s8-linear:K=2048,N=2",
+    "fp8-coord:K=6144", "fp8-coord:K=6144+public-weights", "fp8-coord:K=6144+packed-weights", "s8-coord:K=2048",
     *(f"census:SparseMlaHeadBlock_{v}{{DR=64,DV=512,NVIS={nv},FIRST={f},BN=64,{_MLA.replace('_v1', '_' + v)}}}"
       for v in ("v1", "v2") for nv, f in ((64, "false"), (63, "false"), (48, "false"), (32, "false"), (1, "true"))),
     'census:SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}',
@@ -81,6 +81,21 @@ def test_names_agree(monkeypatch):
     assert len({w.name(u, n) for u, n in pairs if u in TYPES}) == len(TYPES) * len(NS), "two statements share a directory"
 
 
+def test_arms():
+    """prove_time.sh's stage() hands stage.py each arm's flags and the type without the arm's suffix; a `+` inside a type's
+    statics is no arm."""
+    arm = re.search(r"^  local u=\$\{1%\+\*\} flag= [^\n]*\n  case \$1 in .*? esac\n", PT, re.M | re.S)
+    assert arm, "prove_time.sh's stage() does not read its arms where this test reads them"
+    script = "name() { :; }\narm() {\n" + arm[0] + '  echo "$u|$flag"\n}\nwhile IFS= read -r u; do arm "$u" 2; done\n'
+    plus = 'census:Scaled_v1{S={"f64":"0x1.0000000000000p+4"}}'
+    want = {"gq:K=6144": "gq:K=6144|", "fp8-coord:K=6144+public-weights": "fp8-coord:K=6144|--public-weights",
+            "fp8-coord:K=6144+packed-weights": "fp8-coord:K=6144|--public-weights --packed",
+            plus: f"{plus}|", f"{plus}+public-weights": f"{plus}|--public-weights"}
+    got = subprocess.run(["bash", "-c", script], input="".join(f"{u}\n" for u in want), capture_output=True, text=True,
+                         check=True).stdout.splitlines()
+    assert got == list(want.values())
+
+
 def test_statement_dir():
     """prove_time.sh stages and proves a statement in $FW/data/NAME-KEY, which window.py reads as data/{name}-{key}."""
     assert PT.count("local d=$FW/data/$nm-$KEY") == 2
@@ -95,9 +110,9 @@ def tree(root: Path, files: dict[str, str]) -> None:
 
 #: the stand-in tree: files under each of the key's paths, and outside them
 FILES = {"benchmarks/served_units/stage.py": "s", "benchmarks/served_units/window.py": "w",
-         "verity/circuits/a.py": "a", "verity/definitions/sub/b.py": "b", "verity/commitments/c.txt": "c",
+         "verity/circuits/a.py": "a", "verity/circuits/sub/b.py": "b", "verity/commitments/c.txt": "c",
          "verity/protocols/p.py": "p",
-         "adapters/vllm/verity_vllm/d.py": "d", "adapters/vllm/tests/e.py": "e",
+         "adapters/vllm/verity_vllm/d.py": "d", "adapters/vllm/tests/e.py": "e", "adapters/torch/verity_torch/h.py": "h",
          "tools/verity/circuit_check/src/circuit_check/f.py": "f", "verity/core/g.py": "g"}
 
 
@@ -138,13 +153,13 @@ def test_key_agrees(monkeypatch, repo):
         (repo / f).write_text("changed")
         assert both() == k0, f"{f} is outside the staging tree's key"
     keys = {k0}
-    for f in ("benchmarks/served_units/stage.py", "verity/definitions/sub/b.py", "adapters/vllm/verity_vllm/d.py",
-              "tools/verity/circuit_check/src/circuit_check/f.py"):
+    for f in ("benchmarks/served_units/stage.py", "verity/circuits/sub/b.py", "adapters/vllm/verity_vllm/d.py",
+              "adapters/torch/verity_torch/h.py", "tools/verity/circuit_check/src/circuit_check/f.py"):
         (repo / f).write_text("changed")
         keys.add(both())
     tree(repo, {"verity/protocols/new.py": ""})
     keys.add(both())
-    assert len(keys) == 6, "a change to a staged source left the key as it was"
+    assert len(keys) == 7, "a change to a staged source left the key as it was"
 
 
 def test_key_paths_in_tree(monkeypatch):

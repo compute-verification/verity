@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.Localization
 public import Proofs.Accounting.Defs.Localization
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Mathlib.Tactic.FinCases
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Rat.Cast.Order

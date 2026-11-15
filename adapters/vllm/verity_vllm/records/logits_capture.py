@@ -1,6 +1,6 @@
 """What a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`, ``capture.json``): for each
 sampled request, the file of the logits rows its tokens were selected from (bf16 bits, row j its j-th token's), their
-sha256, the ids selected, the engine steps, and what fixes its Program. `pipeline.interior_rows.write_capture` writes it and
+sha256, the ids selected, the engine steps, and what fixes its Program. `engine.sampler_capture.write` writes it and
 `pipeline.interior_rows.captured` reads a span of it as a token select's units."""
 from __future__ import annotations
 

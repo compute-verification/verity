@@ -13,12 +13,12 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import cublas_gemm_rows as C
-from verity.definitions.numerics import rows
-from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.registry import b1, hopper
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.numerics import cublas_gemm_rows as C
+from verity_vllm.definitions.numerics import rows
+from verity_vllm.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
@@ -37,7 +37,7 @@ def _words(rng, *shape, scale=1.0) -> np.ndarray:
 def test_the_families_are_registered_with_their_evaluator_and_provenance():
     assert set(C.ROWS) == {d.id for d in BC.ROUTE_DEFINITIONS}
     for f in C.ROWS:
-        assert f in rows.ROWS and rows.EVALUATORS[f].startswith(f"verity.definitions.numerics.cublas_gemm_rows.{C.ROWS[f].__name__}")
+        assert f in rows.ROWS and rows.EVALUATORS[f].startswith(f"verity_vllm.definitions.numerics.cublas_gemm_rows.{C.ROWS[f].__name__}")
         assert rows.EVALUATOR_PROVENANCE[f] is C.PROVENANCE
 
 

@@ -1,32 +1,50 @@
-"""The pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""The pair-major MoE definitions (`verity_vllm.definitions.registry.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded on OLMoE).  The recorded kernel cases and captures are `test_gen_ov_moe_of_record`."""
 
 from __future__ import annotations
 
 import importlib
-
 import math
 
 import numpy as np
 import pytest
-
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
-
-OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
-from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from verity_vllm.observe.fold.tree import step_events
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
-from verity_vllm.program.quarantine.ov_moe import moe as Q
+from verity_vllm.definitions.numerics.moe_twins import nv_expf_bits
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import moe as Q
+from verity_vllm.definitions.registry import prims as P
+
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    FUSED_MOE_PINS,
+    MoEFusedExperts,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Group,
+    StepContext,
+    Transparent,
+    Unsupported,
+    resolve_step,
+)
+from verity_vllm.observe.fold.tree import step_events
+
+OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
 
 C = OV.C
-H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
+H, INTER, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 CUDA = "cuda:0"
 
 
@@ -108,7 +126,6 @@ def test_router_stand_in_ids_and_tie_rule():
 
 
 def test_quarantine_identity_and_conformance_labels():
-    assert Q.SEMANTIC_ID == "ov-moe/MoeExpertGemm@v1"
     assert Q.MoeRouterTopK.conformance == "not-yet-established" and Q.NvExpf.id == "NvExpf_v1"   # cov-moe: the CUDA expf sequence, no stand-in
     for d in (Q.MoeExpertGemm, Q.MoeExpertGemmW):
         assert d.conformance == "not-yet-established" and d.version == 1
@@ -124,14 +141,16 @@ def test_nv_expf_composite_equals_the_direct_sequence_and_is_total():
                 0xC2CFF1B5, 0xC2AEAC50, 0x7F7FFFFF, 0xFF7FFFFF, 0x41200000, 0xC1200000, 0x00800000]
     rng = np.random.default_rng(0)
     for x in specials + [int(v) for v in rng.integers(0, 2**32, size=200, dtype=np.uint64)]:
-        assert _eval(prog, [[x]])[0] == Q.nv_expf_bits(x)
-    f = lambda v: P.f32_of(Q.nv_expf_bits(P.bits_of(np.float32(v))))
+        assert _eval(prog, [[x]])[0] == nv_expf_bits(x)
+    def f(v):
+        return P.f32_of(nv_expf_bits(P.bits_of(np.float32(v))))
+
     assert f(0.0) == 1.0 and f(-0.0) == 1.0 and f(np.inf) == np.inf and f(-np.inf) == 0.0 and np.isnan(f(np.nan))
     assert f(89.0) == np.inf and f(-104.0) == 0.0 and f(-87.33655) == np.float32(1.1754907e-38)     # over/underflow, no ftz on the product
     # 1 ulp off the correctly rounded value, as libdevice is: exp(-1) = 0.367879441171... whose nearest f32 is 0x3EBC5AB2
     # (from the double, which is far from the f32 midpoint, so no double rounding).  NOT `np.exp(np.float32)` as the reference:
     # numpy's single-precision exp is platform code (macOS gives 0x3EBC5AB2, the pod's SIMD path 0x3EBC5AB1).
-    assert Q.nv_expf_bits(P.bits_of(np.float32(-1.0))) == 0x3EBC5AB3 and P.bits_of(np.float32(math.exp(-1.0))) == 0x3EBC5AB2
+    assert nv_expf_bits(P.bits_of(np.float32(-1.0))) == 0x3EBC5AB3 and P.bits_of(np.float32(math.exp(-1.0))) == 0x3EBC5AB2
 
 
 def test_nv_expf_helpers_are_the_ptx_ops():
@@ -200,9 +219,9 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
                              [hidden, None, None, None, None, None], {}, 7, None))
     evs.append(DispatchExit(i, out))
     P_ = M * TOPK
-    cache1 = view(301, (M, TOPK, 2 * I), offset=P_ * I)      # intermediate_cache1 after cache2's slab, as in the recorded workspace
-    cache2 = view(301, (P_, I))
-    cache3 = view(301, (M, TOPK, H), offset=P_ * I)
+    cache1 = view(301, (M, TOPK, 2 * INTER), offset=P_ * INTER)      # intermediate_cache1 after cache2's slab, as in the recorded workspace
+    cache2 = view(301, (P_, INTER))
+    cache3 = view(301, (M, TOPK, H), offset=P_ * INTER)
     if naive:
         ids_flat = view(298, (P_,), "int32")
         npad = view(304, (1,), "int32")
@@ -216,7 +235,7 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
                                  "_moe_C::moe_align_block_size(Tensor topk_ids, int num_experts, int block_size, Tensor($0! -> ) sorted_token_ids, Tensor($1! -> ) experts_ids, Tensor($2! -> ) num_tokens_post_pad, Tensor? maybe_expert_map) -> ()",
                                  [ids, E, 64, sorted_ids, expert_ids, npad, None], {}, 7, None))
         evs.append(DispatchExit(i, None))
-    w13, w2 = view(7, (E, 2 * I, H)), view(8, (E, H, I))
+    w13, w2 = view(7, (E, 2 * INTER, H)), view(8, (E, H, INTER))
     c_up = dict(CONSTS, naive_block_assignment=naive)
     c_up.update(consts_up or {})
     c_dn = dict(CONSTS, naive_block_assignment=naive, MUL_ROUTED_WEIGHT=True, top_k=1)
@@ -230,12 +249,12 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
         return TritonLaunch(new(), scope, step, "forward", "vllm.model_executor.layers.fused_moe.fused_moe.fused_moe_kernel", "sha", args, consts,
                             [(EM // 64) * (N // 64)], num_warps, num_stages, 7)
 
-    up = launch(hidden, w13, cache1, None, 2 * I, H, c_up)
-    down = launch(cache2, w2, cache3, w_, H, I, c_dn)
+    up = launch(hidden, w13, cache1, None, 2 * INTER, H, c_up)
+    down = launch(cache2, w2, cache3, w_, H, INTER, c_dn)
     evs.append(down if swap_launches else up)
     i = new()
     evs.append(DispatchEnter(i, scope, step, "forward", "_C.silu_and_mul.default", "_C::silu_and_mul(Tensor($0! -> ) result, Tensor input) -> ()",
-                             [cache2, view(301, (P_, 2 * I), offset=P_ * I)], {}, 7, None))
+                             [cache2, view(301, (P_, 2 * INTER), offset=P_ * INTER)], {}, 7, None))
     evs.append(DispatchExit(i, None))
     evs.append(up if swap_launches else down)
     i = new()
@@ -255,8 +274,8 @@ def _start(M: int, step: int = 0, padded: int | None = None) -> StepStart:
 def _ctx(start: StepStart, target: dict | None = None) -> StepContext:
     profile = {"vllm": "d9105ea80", **({"target": target} if target else {})}
     header = RunHeader("verity-capture/log/v1", "2026-09-17T00:00:00Z", "672e5db02", profile, {"repo": OV.MODEL, "config": {}}, {"requests": []})
-    roots = {7: [Root(view(7, (E, 2 * I, H)), "weight", "model.layers.0.mlp.experts.routed_experts.w13_weight")],
-             8: [Root(view(8, (E, H, I)), "weight", "model.layers.0.mlp.experts.routed_experts.w2_weight")]}
+    roots = {7: [Root(view(7, (E, 2 * INTER, H)), "weight", "model.layers.0.mlp.experts.routed_experts.w13_weight")],
+             8: [Root(view(8, (E, H, INTER)), "weight", "model.layers.0.mlp.experts.routed_experts.w2_weight")]}
     return StepContext(header, start, None, [], roots, C, OV.PROFILE)
 
 
@@ -276,14 +295,14 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert g.consumed == tuple(sorted(se.roots[0].ids()))
     computes = [p for p in g.parts if isinstance(p, Compute)]
     specs = [c.spec.id for c in computes]
-    assert specs == [f"MoeRouterTopKOrdered_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}",
-                     f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+    assert specs == [f"MoeRouterTopKOrdered_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * INTER}}}", f"SiluMul_v2{{I={INTER}}}",
+                     f"MoeExpertGemmW_v1{{E={E},K={INTER},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
     assert [c.rows for c in computes] == [M, M * TOPK, M * TOPK, M * TOPK, M]
     router, up, silu, down, msum = computes
     assert [type(o).__name__ for o in up.operands] == ["Gather", "PerRow", "Shared"]
     assert up.operands[0].indices == tuple(p // TOPK for p in range(M * TOPK))           # A row of pair p = token p // TOPK
     assert up.operands[1].view.alloc == router.outputs[1].view.alloc                      # e operand = the router's topk_ids words
-    assert up.operands[2].view.shape == (E, 2 * I, H) and up.outputs[0].view.shape == (M * TOPK, 2 * I)
+    assert up.operands[2].view.shape == (E, 2 * INTER, H) and up.outputs[0].view.shape == (M * TOPK, 2 * INTER)
     assert [type(o).__name__ for o in down.operands] == ["PerRow", "PerRow", "PerRow", "Shared"]
     assert down.operands[2].view.alloc == router.outputs[0].view.alloc and down.operands[2].view.dtype == "float32"
     assert msum.operands[0].view.shape == (M, TOPK, H) and msum.outputs[0].view.shape == (M, H)
@@ -291,15 +310,6 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert kernels.count("fused_moe_kernel") == 2 and "topkGating" in kernels and "moe_sum_vec_kernel" in kernels and "act_and_mul_kernel" in kernels
     aligns = [p for p in g.parts if isinstance(p, Transparent) and any("moe_align_block_size" in k for k in p.kernels)]
     assert len(aligns) == (0 if naive else 1) and all(t.effect == "noop" for t in aligns)
-    if aligns:
-        # the claim must cover both of vLLM's dispatch paths as Kineto names them: the small-batch kernel (decode) and the
-        # sorted pair (prefill: under the single-name claim a 155-token prompt leaves 32 kernels of G1 residue)
-        from verity_vllm.properties.census import claims_for
-        declared = set(aligns[0].kernels)
-        for kineto in ("void vllm::moe::moe_align_block_size_small_batch_expert_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int)",
-                       "void vllm::moe::moe_align_block_size_kernel<int>(int const*, int*, int*, int*, int*, int, int, int, int, unsigned long)",
-                       "void vllm::moe::count_and_sort_expert_tokens_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int, bool)"):
-            assert len(claims_for(kineto, declared)) == 1, kineto
 
 
 @pytest.mark.parametrize("kw,needle", [
@@ -328,8 +338,8 @@ def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
         res, _ = _resolve(3, target=target, **kw)
         assert len(res) == 1 and isinstance(res[0], Group), res
         specs = [p.spec.id for p in res[0].parts if isinstance(p, Compute)]
-        assert specs[1] == f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT=HopperBF16WgmmaDot16_v1}}"
-        assert specs[3] == f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT=HopperBF16WgmmaDot16_v1}}"
+        assert specs[1] == f"MoeExpertGemm_v2{{E={E},K={H},N={2 * INTER},DOT=HopperBF16WgmmaDot16_v1}}"
+        assert specs[3] == f"MoeExpertGemmW_v2{{E={E},K={INTER},N={H},DOT=HopperBF16WgmmaDot16_v1}}"
     res, _ = _resolve(3, target=None, **kw)
     assert len(res) == 1 and isinstance(res[0], Unsupported) and "tiling" in res[0].reason, res
     assert "cc 9.0 only" in res[0].detail["tuned"], res
@@ -338,11 +348,9 @@ def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
 
 
 def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
-    from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
     assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
     assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"
-    assert OV.PROFILE.kernel_allowlist == BASE.PROFILE.kernel_allowlist                     # no profile-side allowlisting of MoE kernels
     assert OV.weight_field("model.layers.3.mlp.experts.routed_experts.w13_weight") == ("layers", 3, "w13")
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts)
 

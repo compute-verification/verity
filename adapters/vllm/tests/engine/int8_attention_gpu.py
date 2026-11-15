@@ -29,7 +29,7 @@ from typing import Any
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.registry import int8_exact as X
+from verity_vllm.definitions.registry import int8_exact as X
 
 from tests.engine import fattn_oracle as O
 from verity_vllm.engine import int8_attention as A

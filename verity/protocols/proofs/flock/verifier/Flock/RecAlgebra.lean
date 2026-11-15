@@ -34,30 +34,30 @@ open Flock
 
 /-! ## Coins -/
 
-/-- Where the verifier's coins come from (`rec_algebra.CoinSource`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
-when the verifier samples `n` of them, `drawnAll k` that every recorded round is sampled once `k` are. -/
-structure CoinSource where
+/-- Where the verifier's coins come from (`rec_algebra.RoundCoins`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
+when the verifier samples `n` of them, `sampledAll k` that every recorded round is sampled once `k` are. -/
+structure RoundCoins where
   round : Nat → Nat → Except String (Array F128)
-  drawnAll : Nat → Bool
+  sampledAll : Nat → Bool
 
-/-- A session record's coins by round (`CoinSource(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
-sample (`Flock.Transcript`), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements
+/-- A session record's coins by round (`RoundCoins(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
+sample (`Flock.Transcript`), so it is skipped (`RoundCoins.__init__`): z_partial's round in a holo session absorbs elements
 and samples none. -/
-def CoinSource.ofRounds (recorded : Array (Array F128)) : CoinSource :=
+def RoundCoins.ofRounds (recorded : Array (Array F128)) : RoundCoins :=
   let rounds := recorded.filter (·.size ≠ 0)
   { round := fun k n => match rounds[k]? with
       | some r => if r.size = n then .ok r else .error s!"round {k}: {n} coins drawn, the record has {r.size}"
       | none => .error s!"round {k}: {n} coins drawn, the record has no round"
-    drawnAll := fun k => k == rounds.size }
+    sampledAll := fun k => k == rounds.size }
 
 /-- Coins in whatever rounds the verifier samples, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
 random: the structure depends on the rounds, not on the coins). -/
-def CoinSource.zeros : CoinSource := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
+def RoundCoins.zeros : RoundCoins := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
 
 /-- The coins flipped so far, read from a source. -/
-abbrev CM := StateT Nat (ReaderT CoinSource (Except String))
+abbrev CM := StateT Nat (ReaderT RoundCoins (Except String))
 
-/-- `CoinSource.vec` (rec_algebra.py:235–242): a sample of `n` coins is one round of `n`; none is no round
+/-- `RoundCoins.vec` (rec_algebra.py:235–242): a sample of `n` coins is one round of `n`; none is no round
 (`Flock.Transcript`). -/
 def coinVec (n : Nat) : CM (Array F128) := do
   if n = 0 then return #[]
@@ -72,10 +72,10 @@ def liftE {A : Type} : Except String A → CM A
   | .ok a => pure a
   | .error e => throw e
 
-/-- `CoinSource.one` (rec_algebra.py:244–245). -/
+/-- `RoundCoins.one` (rec_algebra.py:244–245). -/
 def coinOne : CM F128 := do return (← coinVec 1)[0]!
 
-/-- `CoinSource.k2` (rec_algebra.py:247–249): two coins as a K element. -/
+/-- `RoundCoins.k2` (rec_algebra.py:247–249): two coins as a K element. -/
 def coinK2 : CM F256 := do
   let v ← coinVec 2
   return ⟨v[0]!, v[1]!⟩
@@ -521,7 +521,7 @@ own), the final check's two residuals (K's `c0`, `c1`), and its points. -/
 def ligerito (sch : Schedule) (M : Messages α) (tIn : α) (sws : Array Switched) : CM (Array α × LgPts) := do
   let ((initCh, levels, ext), st) ←
     (ligeritoRun sch M).run { s := kofF tIn, q := ((zero, zero), (zero, zero), (zero, zero)) }
-  if !(← read).drawnAll (← get) then throw "recorded rounds were never drawn"
+  if !(← read).sampledAll (← get) then throw "recorded rounds were never drawn"
   if st.msg ≠ M.msgs.size ∨ st.ood ≠ M.ood.size then throw "ligerito: leftover messages"
   let res ← liftE (finalWeights sch ext initCh levels st.oods st.conss sws)
   if M.yr.size ≠ 2 <<< ext then throw "ligerito: |yr|"
@@ -830,8 +830,8 @@ def build (sh : Shape) (lins : Array Lin) : Except String Built := do
   let vNames := st.vNames ++ (Array.range 64).map .comb
   return ⟨⟨(wNames sh).size, vNames.size, st.ops, res⟩, vNames, st.vVals, st.kappa⟩
 
-/-- The symbolic residuals at a coin source (`_residual_lins`, rec_algebra.py:825–827). -/
-def residualLins (sh : Shape) (coins : CoinSource) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
+/-- The symbolic residuals at a `RoundCoins` (`_residual_lins`, rec_algebra.py:825–827). -/
+def residualLins (sh : Shape) (coins : RoundCoins) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
   ((run sh (symbolic sh) extras).run' 0).run coins
 
 /-- Extra claims of the statement's number, all zero (`_extras_like`, rec_algebra.py:904–909, whose are random). -/
@@ -840,14 +840,14 @@ def extrasLike (sh : Shape) : Array Claim :=
 
 /-- `GfResiduals_v1{S}`'s S, a function of the shape alone (`rec_algebra.structure`, rec_algebra.py:915–921). -/
 def structureOf (sh : Shape) : Except String GfS := do
-  let (lins, _) ← residualLins sh CoinSource.zeros (extrasLike sh)
+  let (lins, _) ← residualLins sh RoundCoins.zeros (extrasLike sh)
   return (← build sh lins).S
 
 /-- `GfResiduals`' v port at the rep's coins (the comb last), the coin-derived points and `kappa`
 (`rec_algebra.verifier_rows`, rec_algebra.py:931–940); refused when the structure moved with the coins. -/
 def verifierRows (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128) :
     Except String (Array F128 × Info Lin × Array (Array (Array F128))) := do
-  let (lins, info) ← residualLins sh (CoinSource.ofRounds rounds) extras
+  let (lins, info) ← residualLins sh (RoundCoins.ofRounds rounds) extras
   let b ← build sh lins
   if some b.S ≠ (structureOf sh).toOption then throw "the structure moved with the coins"
   return (b.vVals ++ comb, info, b.kappa)

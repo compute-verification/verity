@@ -6,8 +6,8 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-import lean_headline as H
 import loads
+from verity_machine_model import lean_headline as H
 from verity_machine_model.model import census, model, vector
 
 PROGRAMS = Path(__file__).resolve().parent / "fixtures" / "census_programs.json"
@@ -45,7 +45,7 @@ def beaten(name: str) -> list[tuple[float, str, str, str]]:
 
 
 def test_the_committed_instances_are_the_exporters():
-    """security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
+    """security/Definitions/Pouw/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
     the data, π* included."""
     assert H.main(["--check"]) == 0
 

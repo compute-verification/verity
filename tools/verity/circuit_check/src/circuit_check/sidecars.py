@@ -1,16 +1,19 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
-    fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
+    widget.py                 a Definition module (``verity.circuits.ops.widget``)
+    widget.circuit-check.py   its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
                               a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`);
                               a root function whose bindings may fail one by one, ``_X_bindings`` beside it: each as (label,
                               the bound Definition, or the error), so one that doesn't bind is named (`targets._root_function`)
-    fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
+    widget.circuit-check.json its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
                               served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
                               family's struct budget, ``struct_max_gates``: {family: gates}, `checks.struct_budget`)
+    widget.circuit-check.unkeyed.json
+                              what the scheduler, the task list's guard and the report read of its targets, and no
+                              check: their peaks, its held blocks and its families' counts (`UNKEYED`), in no key
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
@@ -22,14 +25,15 @@ with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is a
 distribution it reads the same way, from a sidecar that distribution owns, and never by importing it: the frontend vocabularies'
 kinds (``_vocabulary_roots``, the word Call families) and the reader of a served workload's request Program
 (``request_program(path)``, `targets.request_program`).  `targets.py` keeps what no one module
-owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body) or no module defines, one file
-per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
+owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body, and of no family its maker's
+binding file holds, `BODY_FAMILIES`) or no module defines, one file per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
 """
 from __future__ import annotations
 
 import ast
 import importlib.util
 import json
+import os
 import re
 import sys
 from functools import cache
@@ -72,17 +76,12 @@ def _roots() -> list[Path]:
     return out
 
 
-@cache
-def discover() -> dict[str, dict[str, Path]]:
-    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `_roots`, by module name: the name
-    it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
-    tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
-    the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
-    directory owns (``verity.protocols.proofs.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+def _beside(kinds: tuple[str, ...]) -> dict[str, dict[str, Path]]:
+    """{module: {kind: its file ``<module>.circuit-check.<kind>``}} under `_roots`, by module name (`discover`)."""
     out: dict[str, dict[str, Path]] = {}
     imported: dict[Path, bool] = {}
     with CC.internal():
-        for kind in ("py", "json"):
+        for kind in kinds:
             for p in sorted({p for root in _roots() for p in root.rglob(f"*{SUFFIX}.{kind}")}):
                 top = p.parent
                 if "__pycache__" in p.parts or not (top / "__init__.py").is_file():
@@ -100,6 +99,63 @@ def discover() -> dict[str, dict[str, Path]]:
                     raise FileNotFoundError(f"{p}: a circuit-check sidecar of {mod}, which has no module")
                 out.setdefault(mod, {})[kind] = p
     return dict(sorted(out.items()))
+
+
+@cache
+def discover() -> dict[str, dict[str, Path]]:
+    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `_roots`, by module name: the name
+    it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
+    tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
+    the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
+    directory owns (``verity.protocols.proofs.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+    return _beside(("py", "json"))
+
+
+#: the kind of a module's unkeyed file, ``<module>.circuit-check.unkeyed.json``: what circuit-check's scheduler, its task
+#: list's guard and its report read of the module's targets, and no check, so no key holds it (`cache.version` reads no
+#: file outside the checker, and no recording holds one read under `cache.internal`) and the registries import no module
+#: for having one.  Its sections (`UNKEYED_SECTIONS`): ``peaks``, the GiB a target grows past the task list it is forked
+#: with, by target label (`cli.heavy`); ``binding_peaks``, the GiB a catalog binding's build grows, by the binding's name
+#: with each ``<module>.circuit-check#`` of this module left out (`units.built_apart`); ``held``, the Definitions past
+#: Flock's proved range that the report holds, by why (`block_held`); ``tasks``, how many targets of each family the
+#: task list held when it last passed (`cli.task_list_guard`)
+UNKEYED = "unkeyed.json"
+UNKEYED_SECTIONS = ("peaks", "binding_peaks", "held", "tasks")
+
+
+@cache
+def unkeyed() -> dict[str, dict[str, dict]]:
+    """{module: its unkeyed file's sections} for every unkeyed file under `_roots`, read under `cache.internal`; a section
+    `UNKEYED_SECTIONS` doesn't name is an error."""
+    out: dict[str, dict[str, dict]] = {}
+    for mod, files in _beside((UNKEYED,)).items():
+        d = _read(files[UNKEYED])
+        if stray := sorted(set(d) - set(UNKEYED_SECTIONS)):
+            raise ValueError(f"{files[UNKEYED]}: an unkeyed file's sections are {', '.join(UNKEYED_SECTIONS)}, not "
+                             f"{', '.join(stray)}")
+        out[mod] = d
+    return out
+
+
+def unkeyed_file(module: str) -> Path | None:
+    """Where ``module``'s unkeyed file is or would be (`path_of`)."""
+    return path_of(module, UNKEYED)
+
+
+def write_unkeyed(module: str, section: str, values: dict) -> Path:
+    """Set ``section`` of ``module``'s unkeyed file to ``values``, keys sorted; an empty section is dropped, and a file
+    left with none is removed."""
+    p = unkeyed_file(module)
+    if p is None:
+        raise LookupError(f"{module}: no module of the packages circuit-check finds sidecars in, so no unkeyed file")
+    d = {**_read(p), section: dict(sorted(values.items()))}
+    d = {k: v for k, v in sorted(d.items()) if v}
+    if d:
+        p.write_text(json.dumps(d, indent=1, sort_keys=True) + "\n")
+    else:
+        p.unlink(missing_ok=True)
+    unkeyed.cache_clear()
+    return p
 
 
 def packages() -> set[str]:
@@ -132,15 +188,36 @@ def binding_modules() -> list[tuple[str, ModuleType]]:
     """(module, its loaded binding file) for every sidecar that has one, by module name; each loaded once per process, after the
     registries (`targets.load_registries`)."""
     for mod, files in discover().items():
-        if "py" in files and mod not in _LOADED:
-            name = f"{mod}{SUFFIX}"
-            spec = importlib.util.spec_from_file_location(name, files["py"])
-            m = importlib.util.module_from_spec(spec)
-            sys.modules[name] = m
-            spec.loader.exec_module(m)
-            _LOADED[mod] = m
+        if "py" in files:
+            _load(mod, files["py"])
     CC.unit_files(str(files["py"]) for files in discover().values() if "py" in files)
     return [(mod, _LOADED[mod]) for mod in discover() if mod in _LOADED]
+
+
+def _load(mod: str, path: Path) -> ModuleType:
+    """``mod``'s binding file, loaded once per process by its path under the name ``<module>.circuit-check``."""
+    if mod not in _LOADED:
+        name = f"{mod}{SUFFIX}"
+        spec = importlib.util.spec_from_file_location(name, path)
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[name] = m
+        spec.loader.exec_module(m)
+        _LOADED[mod] = m
+    return _LOADED[mod]
+
+
+@cache
+def _defines(path: Path) -> frozenset[str]:
+    with CC.internal():
+        return frozenset(_top_level_names(str(path)))
+
+
+def handing(name: str) -> list[tuple[str, ModuleType]]:
+    """(module, its loaded binding file) for each sidecar whose top level defines ``name``: found by reading each binding file
+    (`_top_level_names`) and loaded alone, so what a sidecar hands circuit-check is read before any module with a sidecar is
+    imported (`targets.load_registries`), and before any other binding file is loaded."""
+    return [(mod, _load(mod, files["py"])) for mod, files in discover().items()
+            if "py" in files and name in _defines(files["py"])]
 
 
 # --- pins ---------------------------------------------------------------------------------------------------------------------
@@ -230,8 +307,9 @@ def write_pins(updates: dict[tuple[str, str], Any]) -> None:
 
 def pin_owner(kind: str, key: str) -> str | None:
     """The module that owns a pin: a template's subcircuit's, the module that defines the template (``units``); a Definition's
-    or a piece's, the module that defines the Definition its key names (`named`, `owner`).  None when the key alone names none,
-    whatever this process has built: then the pin is in ``pins/`` (`shared_pin`)."""
+    or a piece's, the module that defines the Definition its key names (`named`, `owner`), else the module whose binding file
+    holds its family (`body_family`).  None when the key alone names none, whatever this process has built: then the pin is
+    in ``pins/`` (`shared_pin`)."""
     if kind == "units":
         from verity_flock import subcircuit_templates as TM
 
@@ -240,33 +318,58 @@ def pin_owner(kind: str, key: str) -> str | None:
     if (have := HANDED.get(fid)) is not None:
         return have
     d = named(fid)
-    return owner(d) if d is not None else None
+    return owner(d) if d is not None else body_family(fid)
+
+
+#: a binding file's tuple of the families, as regular expressions over a Definition's id without statics, of the Definitions
+#: its module makes only inside another's body, which no id names alone (`named`): their pins are its (`body_family`)
+BODY_FAMILIES = "BODY_FAMILIES"
+
+
+@cache
+def _literal(path: Path, name: str) -> Any:
+    """The literal a binding file binds ``name`` to at its top level, read from its source, the file not loaded."""
+    with CC.internal():
+        tree = ast.parse(path.read_text())
+    for n in tree.body:
+        if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in n.targets):
+            return ast.literal_eval(n.value)
+    raise ValueError(f"{rel(path)}: `{name}` is bound to no literal at its top level")
+
+
+def body_family(fid: str) -> str | None:
+    """The module whose binding file's `BODY_FAMILIES` holds a family of ``fid``; one held by two is an error."""
+    hits = [mod for mod, f in discover().items() if "py" in f and BODY_FAMILIES in _defines(f["py"])
+            and any(re.fullmatch(rx, fid) for rx in _literal(f["py"], BODY_FAMILIES))]
+    if len(hits) > 1:
+        raise ValueError(f"{fid} is of a family in the {BODY_FAMILIES} of {' and '.join(hits)}: keep the module that makes it")
+    return hits[0] if hits else None
 
 
 _NAMED: dict[str, Any] = {}
 
 
 def composite_lift(fid: str) -> Any | None:
-    """`lifted.lift_composite` of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
-    makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
-    ``Lifted[...]`` families lift primitives only."""
+    """The lift (`targets.HOOKS`' ``lift_composite``) of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the
+    lift a body calling it makes, or its hand lift), whatever version the id writes; None when the id wraps no registered
+    composite.  The on-demand ``Lifted[...]`` families lift primitives only."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition
 
     m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
     inner = REGISTRY.defs.get(m[1]) if m else None
     if not isinstance(inner, CompositeDefinition):
         return None
-    from verity.definitions.registry import lifted as L
+    from . import targets as TG
 
-    return L.lift_composite(inner)
+    return TG._handed("lift_composite")(inner)
 
 
 def named(fid: str) -> Any | None:
     """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
     registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
     (`verity.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
-    None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
-    or not."""
+    None for one made only inside another Definition's body (a multiplexer tree's levels, `body_family`) or by nothing, built in
+    this process or not."""
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import DefinitionTable
 
@@ -284,11 +387,10 @@ def named(fid: str) -> Any | None:
 
 
 def _top_level_names(path: str) -> set[str]:
-    """The names a module's top level binds other than by import."""
-    try:
-        tree = ast.parse(Path(path).read_text())
-    except (OSError, SyntaxError, ValueError):
+    """The names a module's top level binds other than by import (none for a source since deleted)."""
+    if not os.path.isfile(path):
         return set()
+    tree = ast.parse(Path(path).read_text())
     out: set[str] = set()
 
     def targets(t: ast.AST) -> None:
@@ -356,5 +458,6 @@ def owner(d: Any) -> str | None:
     return e[1] if e is not None and e[0] is d else CC._function_module(d)
 
 
-__all__ = ["HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "TREES", "binding_modules", "discover", "load_pins", "named",
-           "owner", "packages", "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "shared_pin", "write_pins"]
+__all__ = ["BODY_FAMILIES", "HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "TREES", "UNKEYED", "UNKEYED_SECTIONS", "binding_modules",
+           "body_family", "discover", "load_pins", "named", "owner", "packages", "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel",
+           "shared_pin", "unkeyed", "unkeyed_file", "write_pins", "write_unkeyed"]

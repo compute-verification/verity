@@ -46,7 +46,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 The old theorems' extraction step (`Extract.joint_acc_le`) is stated over a game; a verifier's runs at one tape are one
 (`runGame`: one coin node, the round coins), so it applies at the deployed verifier itself, with no simulation:
 
-* **The run's law** (`expect_runGame`, `expectN_runGame`): `k` independent runs at one tape are `expectN` of `runGame`;
+* **The run's distribution** (`expect_runGame`, `expectN_runGame`): `k` independent runs at one tape are `expectN` of `runGame`;
   so `accPr` and `accFail` are its `expect` and `expectN` (`accPr_eq`, `accFail_eq`), and one wait's left side,
   `ε · Q/ε^k`, is the product form's `ε · expectAcc(¬G)` (`oneWait_lhs_eq`).
 * **The table** (`opθ`, `firstTable_opθ`): at the `N x` positions of a word, an accepted run's opening is its first
@@ -92,7 +92,7 @@ section RunGame
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin]
 
-/-- **A run's law as a game**: one coin node, the `n` round coins. -/
+/-- **A run's distribution as a game**: one coin node, the `n` round coins. -/
 def runGame (n : ℕ) : Game (Fin n → Coin) := .coin (Fin n → Coin) .ret
 
 /-- The game's one strategy. -/
@@ -124,7 +124,7 @@ theorem prod_map_ind {α : Type} (p : α → Prop) :
 
 end RunGame
 
-section Laws
+section SamplingDesigns
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
@@ -143,7 +143,7 @@ theorem accPr_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover �
   rw [expect_runGame]
   exact Claims.Bridge.Pr_eq_Ex _
 
-/-- **`k` accepted runs that fail `G`**, on the run's law. -/
+/-- **`k` accepted runs that fail `G`**, on the run's distribution. -/
 theorem accFail_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (k : ℕ)
     (G : List Seen → Prop) :
     accFail H V P x ω k G = expectN (runGame (V.k x)) (runS _) k fun bs =>
@@ -165,7 +165,7 @@ theorem accFail_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover
   by_cases h1 : ∀ i, (run H P V x ω (σ i)).out = .acc <;>
     by_cases h2 : G ((List.finRange k).map fun i => (run H P V x ω (σ i)).seen) <;> simp [Acc, h1, h2]
 
-/-- **One wait's left side is the product form's**: `ε · Q/ε^k = ε · expectAcc(¬G)` on the run's law. -/
+/-- **One wait's left side is the product form's**: `ε · Q/ε^k = ε · expectAcc(¬G)` on the run's distribution. -/
 theorem oneWait_lhs_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (k : ℕ)
     (G : List Seen → Prop) :
     accPr H V P x ω * (accFail H V P x ω k G / accPr H V P x ω ^ k) =
@@ -175,7 +175,7 @@ theorem oneWait_lhs_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Pr
   rw [accFail_eq, accPr_eq]
   rfl
 
-end Laws
+end SamplingDesigns
 
 /-! ## The table the accepted reruns fill -/
 
@@ -538,14 +538,14 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The word's length**: table 0's level-0 codeword length `2^d`; `0` where the statement does not set up. -/
 def wordLen (zk : Bool) (x : Claims.Msg) : ℕ :=
   match (tables zk x).head? with
-  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
 /-- **The zero column**: table 0's level-0 witness lanes, each `0`. -/
 noncomputable def zeroCol (zk : Bool) (x : Claims.Msg) : List 𝔽 :=
   match (tables zk x).head? with
   | some (_, st) =>
-    List.replicate (2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes) 0
+    List.replicate (2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes) 0
   | none => []
 
 theorem wordLen_le_N₀ (zk : Bool) (x : Claims.Msg) : (wordLen zk x : ℝ) ≤ N₀ zk x := by

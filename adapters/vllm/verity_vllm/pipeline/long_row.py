@@ -15,10 +15,10 @@ and reads the merge's slots one I32 each, which is no whole output of any unit. 
 call whose every operand is one whole parameter row or one whole output of one unit, wired as `dsa_topk_mask_cut.plan` and
 `dsa_topk_reads.cut` wire them:
 
-* the mask's cut: per round k < 4 a `DsaTopKDigitCount_v1` a block and a `DsaTopKDigitPick_v1`, then a `DsaTopKMaskBlock_v1` a
+* the mask's cut: per round k < 4 a `DsaTopKDigitCount_v1` a block and a `DsaTopKDigitPick_v2`, then a `DsaTopKMaskBlock_v2` a
   block, each reading its block of the scores and n, the Call's operands, and the outputs of the units before it;
-* the index: a `DsaMaskPositions_v1` a block, of that block's mask unit's output, and the merge of their lists and counts;
-  then a `DsaPositionsChunk_v1` a chunk of
+* the index: a `DsaMaskPositions_v2` a block, of that block's mask unit's output, and the merge of their lists and counts
+  (`DsaPositionsMerge_v2`), the units `dsa_topk_reads.cut` names past `WHOLE_MAX`; then a `DsaPositionsChunk_v1` a chunk of
   `dsa_topk_reads.CHUNK` slots, chunk k of the merge's slots at index row ``c[k]``, and a `DsaPositionsSlot_v1` a slot, slot j
   of chunk j // CHUNK at index row ``i[j mod CHUNK]``;
 * TOPK reads of the table, READ's, each a call: read j at slot unit j's position with the Call's opening (root, domain, row[j],
@@ -52,15 +52,16 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import dsa_topk_mask_cut as X
-from verity.definitions.registry import dsa_topk_reads as R
+from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
+from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR
+
+__all__ = ["SERVED", "DsaTopKReadRowsCut", "layout", "served"]
 
 #: the long row's served statics: a class of 2^17 keys, GLM-5.3's INDEX_TOPK, `dsa_topk_reads.BLOCK` keys a block
 SERVED = {"N": 1 << 17, "TOPK": 2048, "BLOCK": R.BLOCK}
@@ -106,9 +107,9 @@ def read_calls(B: Any, S: Any, scores: Coll, n: Coll, root: Coll, domain: Coll, 
     out: dict[tuple, Coll] = {}
     for u in X.plan(S.N, S.TOPK, S.BLOCK):
         out[u.key] = B.call(u.defn, *_args(u.defn, u.keys, u.wires, out, scores, n))
-    lists = [B.call(bind(R.DsaMaskPositions, N=hi - lo, AT=lo, K=S.TOPK), out[("mask", b)])
+    lists = [B.call(bind(R.DsaMaskPositionsV2, N=hi - lo, AT=lo, K=S.TOPK), out[("mask", b)])
              for b, (lo, hi) in enumerate(X.blocks(S.N, S.TOPK, S.BLOCK))]
-    merged = B.call(bind(R.DsaPositionsMerge, M=len(lists), K=S.TOPK), *(o[0] for o in lists), *(o[1] for o in lists))
+    merged = B.call(bind(R.DsaPositionsMergeV2, M=len(lists), K=S.TOPK), *(o[0] for o in lists), *(o[1] for o in lists))
     chunk, slot = _index_units(S.N, S.TOPK)
     chunks = [B.call(chunk, merged, c[k]) for k in range(c.type.n)]
     slots = [B.call(slot, chunks[j // R.CHUNK], i[j % R.CHUNK]) for j in range(S.TOPK)]
@@ -147,8 +148,8 @@ def units(t: SpecializedDefinition) -> tuple[tuple[tuple, SpecializedDefinition]
     bl = X.blocks(N, TOPK, block)
     chunk, slot = _index_units(N, TOPK)
     return (*((u.key, u.defn) for u in X.plan(N, TOPK, block)),
-            *((("positions", b), bind(R.DsaMaskPositions, N=hi - lo, AT=lo, K=TOPK)) for b, (lo, hi) in enumerate(bl)),
-            (("merge",), bind(R.DsaPositionsMerge, M=len(bl), K=TOPK)),
+            *((("positions", b), bind(R.DsaMaskPositionsV2, N=hi - lo, AT=lo, K=TOPK)) for b, (lo, hi) in enumerate(bl)),
+            (("merge",), bind(R.DsaPositionsMergeV2, M=len(bl), K=TOPK)),
             *((("chunk", k), chunk) for k in range(-(-TOPK // R.CHUNK))), *((("slot", j), slot) for j in range(TOPK)),
             *((("read", j), READ) for j in range(TOPK)))
 
@@ -172,7 +173,9 @@ def window(check: SpecializedDefinition, n_rho: int) -> tuple[tuple[Any, ...], t
     `interior_rows.interior_window` takes it: the templates ``check``'s body calls, in the order of their first call
     (`boundary_rows.Layout.templates`), each its unit member on bit rows named after its parameters (`chunk_rows.unit_member`,
     `interior_rows.named`), and each one's units a block, its calls an instance times ``n_rho``."""
-    from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline import interior_rows as IR
+    from verity_vllm.pipeline import serving_rows as SRW
 
     calls = Counter(descriptor_id(d) for _, d in units(check))
     cells = tuple(n * n_rho for n in calls.values())
@@ -200,7 +203,8 @@ def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tup
       and ``path``, a row a read (`Operand`).
 
     ValueError where the row's blocks are not all `BLOCK` keys: a block's scores are one row of the parameter."""
-    from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline import interior_links as IL
 
     N, TOPK, block, READ = (check.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ"))
     bl = X.blocks(N, TOPK, block)
@@ -312,7 +316,9 @@ def spans(check: SpecializedDefinition, rid: str, rows: Sequence[tuple[Sequence[
     unit's rows and outputs in u16 words. ``rows``: each instance's (scores, n), the row's N index scores as f32 words and
     its n, as the replay gives them; ``table``: the history table the span's reads open (`interior_links.kept_table`, the
     one round 1 served); ``rid`` and ``program``: the request and the digest of the Program it was replayed from."""
-    from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline import interior_rows as IR
+    from verity_vllm.pipeline import serving_rows as SRW
 
     ids = [descriptor_id(d) for _, d in units(check)]
     per: dict[str, list[tuple[list, list]]] = {t: [] for t in ids}

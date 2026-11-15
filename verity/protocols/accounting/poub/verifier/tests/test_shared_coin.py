@@ -10,11 +10,17 @@ import dataclasses
 from fractions import Fraction
 
 import pytest
-from test_ledger import node
-from test_remote_bandwidth import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
+from test_poub import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, ledger, timing
+from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    ledger,
+    timing,
+)
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, SessionError
 
 SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
@@ -27,14 +33,14 @@ def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.S
     return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), appends=APPENDS, per_coin=g)
 
 
-def finish_draws(s: AuditRun, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
+def finish_samples(s: AuditRun, prover: audit_prover.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
     """`finish` a sample at a time: past the last deadline, each sample closed at its last window, then each of its
     windows verified on its own share of it, in order, up to the first rejection; a window whose share is none keeps
     the verdict its close gave it."""
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
-        group = s.params.draw_of(t)
+        group = s.params.sample_of(t)
         if t != group[-1]:
             continue
         sampled = s.close(t)
@@ -54,14 +60,14 @@ def outcomes(verdicts: list[audit.Verdict]) -> list[tuple[int, bool, str | None]
     return [(v.window, v.accepted, v.failure) for v in verdicts]
 
 
-def test_a_coin_a_window_is_the_default_and_draws_each_window_alone(store) -> None:
+def test_a_coin_a_window_is_the_default_and_samples_each_window_alone(store) -> None:
     p = params()
     assert p.groups_per_coin == 1 and p.coins == 2 * p.windows
-    assert [list(p.draw_of(t)) for t in range(p.windows)] == [[0], [1], [2]]
+    assert [list(p.sample_of(t)) for t in range(p.windows)] == [[0], [1], [2]]
     assert coins.families(3, APPENDS) == coins.families(3, APPENDS, 1) == (
         (coins.CHALLENGE, 3), (coins.OPENINGS, 3), (coins.APPEND, APPENDS))
     s, prover, passes, clock = drive(store, p, SCHEDULE)
-    assert all(v.accepted for v in finish_draws(s, prover, passes, clock))
+    assert all(v.accepted for v in finish_samples(s, prover, passes, clock))
     assert s.coins.afters(coins.OPENINGS) == tuple(w.roots[-1] for w in s.windows)
     r = s.record()
     assert r.groups_per_coin == 1 and "groups_per_coin" not in r.public()
@@ -76,15 +82,15 @@ def test_groups_per_coin_is_a_positive_integer_and_the_coins_are_the_sessions() 
             coins.openings_coins(3, bad)
     assert [coins.openings_coins(w, g) for w, g in ((8, 4), (8, 3), (3, 2), (3, 8), (1, 1))] == [2, 3, 2, 1, 1]
     p = params(windows=5, groups_per_coin=2)
-    assert p.coins == 5 + 3 and [list(p.draw_of(t)) for t in (0, 1, 2, 4)] == [[0, 1], [0, 1], [2, 3], [4]]
+    assert p.coins == 5 + 3 and [list(p.sample_of(t)) for t in (0, 1, 2, 4)] == [[0, 1], [0, 1], [2, 3], [4]]
 
 
-def test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin(store) -> None:
+def test_a_session_refuses_coins_flipped_for_another_number_of_windows_a_coin(store) -> None:
     p, c = shared(store, 4)
-    with pytest.raises(ValueError, match="4 a draw"):
+    with pytest.raises(ValueError, match="4 a sample"):
         AuditRun(p, store.registration, None, coins.local(store.registration.digest, 0, 8, Entropy(b"coins"),
                                                          appends=APPENDS), not_before_ns=0, clock=lambda: 0)
-    with pytest.raises(ValueError, match="1 a draw"):
+    with pytest.raises(ValueError, match="1 a sample"):
         AuditRun(params(windows=8), store.registration, None, c, not_before_ns=0, clock=lambda: 0)
     assert coins.layout_reason(c.commitment, 0, 8, 4) is None
     assert "openings 8" in coins.layout_reason(c.commitment, 0, 8)
@@ -92,7 +98,7 @@ def test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin(store) -
         coins.SessionCoins(c.challenger, store.registration.digest, 0, 8, per_coin=3)
 
 
-def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
+def test_an_honest_session_sampled_four_windows_a_coin_is_accepted(store) -> None:
     """Eight windows, two samples: windows 0 … 2 close with window 3, the sample's `samples` receipts uniform over its
     windows' receipts together, each window verified on its share; the openings coins leave after windows 3's and 7's
     last roots; the record names g, and the pooled bound reads each sample as one window."""
@@ -101,11 +107,11 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
     clock.now = s.deadline(7) + 1
     for t in (0, 1, 2):
-        with pytest.raises(SessionError, match="drawn with its draw's last window, 3"):
+        with pytest.raises(SessionError, match="sampled with its sample's last window, 3"):
             s.close(t)
     with pytest.raises(SessionError, match="no draws awaiting"):
         s.verify(0, [])
-    verdicts = finish_draws(s, prover, passes, clock)
+    verdicts = finish_samples(s, prover, passes, clock)
     assert outcomes(verdicts) == [(t, True, None) for t in range(8)] and s.outcome == "accepted"
     assert s.coins.afters(coins.OPENINGS) == (s.windows[3].roots[-1], s.windows[7].roots[-1])
     assert [sum(len(w.draws) for w in s.windows[a:a + 4]) for a in (0, 4)] == [p.samples, p.samples]
@@ -121,7 +127,7 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
         assert Fraction(floors[t]) >= min(Fraction(1), fs[t // 4] * pooled / u) > fs[t // 4]
 
 
-def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(store) -> None:
+def test_a_window_the_sample_misses_is_accepted_at_its_close_and_refused_a_verify(store) -> None:
     """Three receipts sampled over four windows leave at least one window of each sample with none: its close accepts
     it, a verify of it is refused, and its record counts none sampled, the reading of its own share."""
     p, c = shared(store, 4, samples=3)
@@ -143,25 +149,24 @@ def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(
     assert audit.pooled_windows(r)[0] == [(sum(w.receipts for w in r.windows[a:a + 4]), 3) for a in (0, 4)]
 
 
-def test_the_last_draw_may_hold_fewer_windows(store) -> None:
+def test_the_last_sample_may_hold_fewer_windows(store) -> None:
     """Three windows two a coin: windows 0 and 1 are one sample, window 2 the other alone.  The record's `samples` is
     each sample's request, so the memory line's δ charges the sample's rejection at two samples' `samples`, not three,
     and the receipts' binding term at two samples of at most twice a window's receipts each, not three windows."""
     p, c = shared(store, 2, windows=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
-    assert all(v.accepted for v in finish_draws(s, prover, passes, clock))
+    assert all(v.accepted for v in finish_samples(s, prover, passes, clock))
     assert s.coins.afters(coins.OPENINGS) == (s.windows[1].roots[-1], s.windows[2].roots[-1])
     assert len(s.windows[0].draws) + len(s.windows[1].draws) == len(s.windows[2].draws) == p.samples
     r = s.record()
     assert audit.pooled_windows(r)[0] == [(7 * N, p.samples), (3 * N, p.samples)]
     assert r.samples == p.samples and ledger.rejection(r) == 2 * p.samples * 2.0 ** -ledger.REJECTION_LOG2
-    n = node(squarings=1e9)
     L = ledger.window_receipts(r.pace, r.blocks, r.append_coins, r.codec.max_blocks)
-    q = n.sketch_outside * ledger.compressions(r, n)
+    q = 2 ** audit.QUERIES_LOG2
     assert r.append_coins > 0 and (audit.STEP_LIMIT - 1) * r.codec.max_blocks == L
     per_sample, per_window = ledger.binding_over(2, 2 * L, p.samples, q), ledger.binding_over(3, L, p.samples, q)
-    assert ledger.binding(r, n) == per_sample != per_window
-    with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
+    assert ledger.binding(r) == per_sample != per_window
+    with pytest.raises(ValueError, match=r"the sample of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
         dataclasses.replace(r, samples=p.samples - 1)
 
 
@@ -173,35 +178,35 @@ def skipping(window: int):
             return prover.run(challenges[t], i, previous, plan)
         held = copy.copy(prover.store)
         held.blocks = [bytes(codec.BLOCK_BYTES)] * N
-        return audit.Prover(held, None, entropy=prover.entropy).run(challenges[t], i, previous, plan)
+        return audit_prover.Prover(held, None, entropy=prover.entropy).run(challenges[t], i, previous, plan)
     return run
 
 
-def test_a_prover_that_skips_one_window_of_a_draw_is_refused_there(store) -> None:
+def test_a_prover_that_skips_one_window_of_a_sample_is_refused_there(store) -> None:
     """Under one coin over four windows a prover may gamble that the sample misses the window it skipped, here window 2
     of sample 0's 260 receipts, 60 of them; at 33 receipts the sample reaches it, and its first wrong one rejects."""
     p, c = shared(store, 4, samples=33)
     s, prover, passes, clock = drive(store, p, SCHEDULE8, run=skipping(2), coins_=c)
-    verdicts = finish_draws(s, prover, passes, clock)
+    verdicts = finish_samples(s, prover, passes, clock)
     assert s.windows[2].draws
     assert outcomes(verdicts) == [(0, True, None), (1, True, None), (2, False, "receipt")]
     with pytest.raises(SessionError):
         s.record()
 
 
-def test_a_window_of_too_few_passes_fails_in_its_draw(store) -> None:
+def test_a_window_of_too_few_passes_fails_in_its_sample(store) -> None:
     """At four passes a window, windows 1 … 3 hold three: sample 0's close fails `few` at window 1, the first."""
     p, c = shared(store, 4, min_passes=4)
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
-    assert outcomes(finish_draws(s, prover, passes, clock)) == [(1, False, "few")]
+    assert outcomes(finish_samples(s, prover, passes, clock)) == [(1, False, "few")]
 
 
-def test_a_session_drawn_two_windows_a_coin_through_a_challenger_service_holds_to_what_it_signed(
+def test_a_session_sampled_two_windows_a_coin_through_a_challenger_service_holds_to_what_it_signed(
         store, tmp_path, sign) -> None:
     p = params(groups_per_coin=2)
     service = Service(tmp_path / "s-0", sign, "s-0", 0, p.windows, b"service", per_coin=2)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=service.coins(store, 0, p.windows, per_coin=2))
-    assert all(v.accepted for v in finish_draws(s, prover, passes, clock)) and service.close() is None
+    assert all(v.accepted for v in finish_samples(s, prover, passes, clock)) and service.close() is None
     signed, received = service.signed()
     assert signed == s.commitment and s.released_reason(signed, received) is None
     assert [f for f in signed.families if f[0] != coins.APPEND] == [(coins.CHALLENGE, 3), (coins.OPENINGS, 2)]

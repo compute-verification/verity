@@ -151,7 +151,8 @@ def test_pods_extend_runs_lease_sh_in_the_machines_own_lease_dir(tmp_path):
     env = lease_env(tmp_path, LEASE_NOW=str(NOW))
     Path(env["LEASE_DIR"]).mkdir()
     (Path(env["LEASE_DIR"]) / "lease.sh").write_bytes(L.LEASE_SH.read_bytes())
-    over_ssh = lambda argv: subprocess.run(["sh", "-c", " ".join(shlex.quote(a) for a in argv)], env=env, capture_output=True, text=True)
+    def over_ssh(argv):
+        return subprocess.run(["sh", "-c", " ".join(shlex.quote(a) for a in argv)], env=env, capture_output=True, text=True)
     assert over_ssh(L.remote_argv("extend", "3600", "lane")).stdout.split()[::2] == [str(NOW + 3600), "lane"]
     assert over_ssh(L.remote_argv("show")).stdout.startswith(f"{NOW + 3600} ")
     del env["LEASE_DIR"]
@@ -172,14 +173,14 @@ def test_a_deadline_clamps_every_extension_and_ends_the_machine_without_grace(tm
     env = lease_env(tmp_path, LEASE_NOW=str(NOW), LEASE_ONCE="1")
     deadline = NOW + 10_000
     (tmp_path / "deadline").write_text(f"{deadline} 2026-10-07T15:00:00Z launch\n")
-    cap = deadline - 300
+    limit = deadline - 300
     out = lease_sh(env, "extend", "86400", "run-r1").stdout.split()
-    assert out[0] == str(cap) and out[2] == "run-r1(clamped-to-deadline)"
+    assert out[0] == str(limit) and out[2] == "run-r1(clamped-to-deadline)"
     (tmp_path / "lease" / "lease").write_text(f"{deadline + 99_999} x hand-edited\n")
-    assert lease_sh(env, "extend", "60", "run-r2").stdout.split()[0] == str(cap), "an expiry past the cap is pulled back to it"
+    assert lease_sh(env, "extend", "60", "run-r2").stdout.split()[0] == str(limit), "an expiry past the limit is pulled back to it"
     (tmp_path / "lease" / "lease").write_text(f"{deadline + 99_999} x hand-edited\n")
-    assert lease_sh({**env, "LEASE_NOW": str(cap - 1)}).returncode == 1 and not (tmp_path / "terminated").exists()
-    assert lease_sh({**env, "LEASE_NOW": str(cap)}).returncode == 0, "the cap ends it with no grace, whatever the lease file says"
+    assert lease_sh({**env, "LEASE_NOW": str(limit - 1)}).returncode == 1 and not (tmp_path / "terminated").exists()
+    assert lease_sh({**env, "LEASE_NOW": str(limit)}).returncode == 0, "the limit ends it with no grace, whatever the lease file says"
     (tmp_path / "deadline").write_text("garbage\n")
     assert lease_sh(env).returncode == 0, "a deadline that does not parse is a deadline of 0"
 

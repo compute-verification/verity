@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
-# Remote's and onsite's Lean verdicts on a served run's cases, `served_verdicts.sh`'s step after its record, with the tree
-# as cwd (a clone: it builds Lean in it):
+# Remote's and onsite's Lean verdicts on a served run's cases, with the tree as cwd (a clone: it builds Lean in it):
+# off the served node `served_verdicts.sh`'s step before its final record, which takes its product's answer from
+# OUT/composite as the record's verdict (`served_verdicts.py record --composite`); on the served node its step after it:
 #
 #   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
 #
 # OUT is the run's public $OUT, and OUT/pieces its subprotocols' public pieces. First, under PRODUCT=onsite, onsite's own
 # cases (PoUS's and the wipe's, each under SERVE_DIR/private beside its Lean's answer, as its piece wrote it), named by
 # `onsite_cases` in the file ONSITE_PIECES names (`served_verdicts.sh`'s, which exports it). Then, where the tree has
-# `served_cases.py`, the cases on the window's registration record R (its docstring), each under SERVE_DIR/private:
-# sampled proofs' one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
-# sampled proofs case (a5's v2 case, which only a `--zk` audit of one sampled member on a window of one member writes,
-# so a window of several members has none and each composite names sampled proofs missing, in the form `one-stage`)
+# `served_cases.py`, the cases on the window's docket R (its docstring), each under SERVE_DIR/private:
+# SPOT's one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
+# SPOT case (a5's v2 case, which only a `--zk` audit of one sampled member on a window of one member writes,
+# so a window of several members has none and each composite names SPOT missing, in the form `one-stage`)
 # and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
+# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
+# or, on a serve with no H1 log, the serve's own records walked back from R's previous to its first (on a
+# serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
@@ -32,7 +35,10 @@
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
-# each case not written or left out by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
+# each case not written or left out by its protocol, each case whose check was not started (`served_cases.py`'s
+# NOT_STARTED: no check runs outside a memory scope of its own, CHECK_MEM_GB, or on blob files that sum past
+# CHECK_BLOBS_GB, and the per-member sampled case is not asked) with why, its blob files' sum and the limit, each
+# product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from
 # the served node's compose hand-off, COMPOSE_HANDOFF set, or a deferral's follow-on copied the serve dir's audit inputs
 # to), headed COMPOSITE, and nothing else. Without composite.py in the tree, or under PRODUCT=onsite without
@@ -47,8 +53,9 @@
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
-# --development). The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's
-# copies) are no product's.
+# --development). COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its reason: a deferral's
+# follow-on sets it, since it composes on a prover node. The cases under the serve dir's private/compose and
+# private/deferred (a hand-off's or a deferral's copies) are no product's.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -59,7 +66,10 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 dev=()
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
+  dev=(--development "$COMPOSE_DEVELOPMENT")
+  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
+elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
   if [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
@@ -110,12 +120,17 @@ if [ -f benchmarks/one_stage/served_cases.py ]; then
     || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
   "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
-  grep -hE '^(CASE|NOT_WRITTEN) \{' "$P/served_cases.log" | "$PY" -c '
+  grep -hE '^(CASE|NOT_WRITTEN|NOT_STARTED) \{' "$P/served_cases.log" | "$PY" -c '
 import json, sys
 for line in sys.stdin:
     head, _, body = line.partition(" ")
     c = json.loads(body)
-    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []))' \
+    if head == "NOT_STARTED":
+        print("COMPOSITE NOT_STARTED {protocol}: its check was not started; the case names {blobs} blob files that sum "
+              "to {blob_bytes} bytes, and the limit a check is started on is {limit_bytes} bytes; {reason}".format(**c))
+        continue
+    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []),
+          *(["(its check ran under " + c["memory"] + ")"] if "memory" in c else []))' \
     | tee -a "$OUT/verdicts.txt"
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi

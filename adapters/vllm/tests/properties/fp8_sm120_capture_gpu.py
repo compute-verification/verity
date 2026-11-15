@@ -4,7 +4,7 @@ rtxpro6000 row, the evidence the sm_120 block-FP8 Definitions will cite.
 vLLM runs as that row's engine does with the dense linears pinned to CUTLASS: `VLLM_USE_DEEP_GEMM=0` (TargetProfile `fp8_block_gemm=
 "cutlass"`, target_profile.py `env()`; DeepGEMM off also turns E8M0 off, so every scale is an f32 word), `VLLM_BATCH_INVARIANT=1`,
 custom ops on.  One GPU process writes one JSON verdict line per case (stdout, prefixed `VERDICT `, and `<out>/verdicts.jsonl`), the
-property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `properties.record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
+property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `records.property_record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
 device that is not cc 12.0 it writes one `skip` verdict and exits 3; a NO-GO exits 1.
 
   selection  `init_fp8_linear_kernel` at the row's two FP8 linears selects CutlassFp8BlockScaledMMKernel, and TritonFp8BlockScaledMMKernel
@@ -59,20 +59,20 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.derived_rows import (
+from verity.circuits.ops import fp32, prims
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics.derived_rows import (
     add_rn,
     f2fp_bf16,
     fma_rn,
     mul_rn,
 )
-from verity.circuits.ops import fp32, prims
-from verity.definitions.registry import fp8 as F
+from verity_vllm.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as H
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/blackwell-fp8-capture/v1"
 RECORD = "blackwell_fp8_capture.json"
@@ -121,7 +121,7 @@ def _step(dot: str):
 
         return lambda acc, a, b: np.asarray(K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32)
     if dot == "hopper":
-        from verity.definitions.numerics.derived_rows import tc_dot32_e4m3
+        from verity_vllm.definitions.numerics.derived_rows import tc_dot32_e4m3
 
         return lambda acc, a, b: tc_dot32_e4m3(acc, a, b)[0]
     raise ValueError(f"unknown k32 step {dot!r}")

@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+/-!
 `ProvedScope.wiresAcyclic` on small circuits shaped like the tails' (RMSNorm's: each unit returns its aggregate to a
 stage, which returns the row scalar to every unit; GEMM's: the units chained through their accumulators): the wires pass
 where some order fills every slot's input ports from the leaves, port by port, and are refused at a cycle through a
@@ -6,11 +12,6 @@ slot's rows, at an input port no wire or leaf cut fills, and at a row or output 
 With hidden outputs those circuits are in scope (`scopeOkI`), with public outputs not (`scopeOk`). `proved_scope.rs`'s
 `wires_are_lean_acyclic` and `hidden_outputs_take_the_general_instance_form` run the same circuits.
 -/
-module
-
-public import Flock.HmRow
-public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 

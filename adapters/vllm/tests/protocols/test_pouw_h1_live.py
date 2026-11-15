@@ -13,11 +13,11 @@ from verity.protocols.accounting.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import live as LV
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
-from verity_vllm.protocols.pouw.h1.static import graph_pad
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import live as LV
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1.static import graph_pad
 
 torch = pytest.importorskip("torch")
 
@@ -83,7 +83,7 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
 def test_round_0s_request_table_is_cores_commit_of_its_headers():
     """``requests@0``, hashed with NumPy (`pouw_h1_registered.commit`), is core's `Registered.commit` of round 0's
     headers under the run key's salts at its nonce: its entry, strings, levels, salts and rows."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
     run = _window()
     served = run.served
     req, words = served.live[LV.value(served, LV.REQUESTS)], LV.request_words(run.admitted.get(0, []), ROWS)

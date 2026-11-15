@@ -967,7 +967,7 @@ theorem sessionCut_eq (spec : SessionSpec) (tabs : Array Setup) (words : Array (
     (hic : ∀ N i r, padsTreeCut (Hashes.ofSha512 Sha512.hash : Hashes PS) N ((src i).rep r) =
       padsTreeCut (Hashes.ofSha512 Sha512.hash) N ((src' i).rep r))
     (G : ℕ → ℕ) (hG0 : G 0 = 1)
-    (hR : ∀ schs, (tabs.mapM fun st => (monadLift (Zk.schedule st.m) : V (Schedule × ℕ))) = .ok schs →
+    (hR : ∀ schs, (tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : V (Schedule × ℕ))) = .ok schs →
       ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
         tabs[i]!.extra (ptsOf coin spec) = .ok extras →
         SchOk tabs[i]! schs[i]!.1 ∧ G (k + 1) = G k + repSends tabs[i]! schs[i]!.1 extras ∧
@@ -976,8 +976,8 @@ theorem sessionCut_eq (spec : SessionSpec) (tabs : Array Setup) (words : Array (
       (sessionCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) spec tabs words src').go #[] := by
   unfold sessionCut
   simp only [hcm, hic]
-  have hq1 : quietS.R (tabs.mapM fun st => (monadLift (Zk.schedule st.m) : V (Schedule × ℕ)))
-      (tabs.mapM fun st => (monadLift (Zk.schedule st.m) : PS (Schedule × ℕ))) := by
+  have hq1 : quietS.R (tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : V (Schedule × ℕ)))
+      (tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : PS (Schedule × ℕ))) := by
     sim_walk
   refine eq_quiet_bind hq1 fun schs hschs => ?_
   have hq2 : quietS.R ((Array.range tabs.size).mapM fun i =>

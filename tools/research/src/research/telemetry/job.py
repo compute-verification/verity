@@ -21,7 +21,9 @@ from . import COLLECTOR_VERSION, CLASSIFIER_VERSION, JOB_SCHEMA, SCHEMA, STATES,
 from .cgroup import Cgroup
 from .events import stream_id, utc_now_ms
 
-SECRET_KEY = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|[-_]KEY\b|APIKEY|API[-_]KEY)", re.I)
+#: a key whose value a record holds as `<redacted>`: a secret's, or a machine's address (`<NAME>_HOST`, `FLEET_JUMP`), since the
+#: records name machines and never their addresses
+SECRET_KEY = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|[-_]KEY\b|APIKEY|API[-_]KEY|_HOST$|^FLEET_JUMP$)", re.I)
 SECRET_VALUE = re.compile(r"^(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$")
 
 

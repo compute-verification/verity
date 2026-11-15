@@ -13,13 +13,17 @@ bytes it read (`one_stage.verifier.select`).  A sample from the auditor's challe
 (`ChallengerCoins`): one family's coins opened after the prover's commitment, concatenated in order, each checked against
 the challenger's commitment, and extended with the family's next coins, never stretched.  A family's coins follow one
 commitment: the verifier refuses a family whose log shows any other root (`FAMILY_ROOT`), so a second commitment's
-coins are another family's, and a prover that reads a sample and commits again has a sample no verifier takes.  vLLM's legacy replay
+coins are another family's, and a prover that reads a sample and commits again has a sample no verifier takes.  That holds
+of a verifier that names the family and the window's root itself, which nothing here can check: a verifier that read either
+from a file the prover wrote would give the prover its pick among the families it reserved.  So a caller that builds its
+stream again from a prover's hand-off names both from the docket's record and layout and refuses a hand-off that
+names another, as the two-stage commands do (`two_stage.resume`, `stop_audit.resume`).  vLLM's legacy replay
 challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain
 `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
 A window's seed salt is a family of its own (`SEED_SALT_FAMILY`), which no sample reads: one coin, released after the
 window's open root, before the window serves (`draw_seed_salt`), and read back by the verifier from the challenger's log
-(`seed_salt_of`).  Every registration of the window names it as a certified input (`one_stage.registration`'s R6), which
+(`seed_salt_of`).  Every docket of the window names it as a certified input (`one_stage.docket`'s R6), which
 the window's circuits may read: a value they would otherwise take as the server's choice.
 """
 
@@ -38,7 +42,7 @@ from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MA
 from verity.protocols.proofs.spot.verifier.one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
-_LAW_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
+_SAMPLING_DESIGN_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
              "work": {"law", "k", "strata"}}
 _HEX = re.compile(r"[0-9a-f]+")
 
@@ -54,26 +58,26 @@ def _ratio(p: Any) -> tuple[int, int] | None:
     return None
 
 
-def law_problem(law: Mapping[str, Any], population: int) -> str | None:
-    """Why `law` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockLaw`): exactly its keys,
+def sampling_design_problem(sampling_design: Mapping[str, Any], population: int) -> str | None:
+    """Why `sampling_design` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockSamplingDesign`): exactly its keys,
     a subset's k a natural number from one to the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified
     or work design's strata well formed (`strata_problem`)."""
-    kind = law.get("law")
-    if not isinstance(kind, str) or kind not in _LAW_KEYS:
+    kind = sampling_design.get("law")
+    if not isinstance(kind, str) or kind not in _SAMPLING_DESIGN_KEYS:
         return "a one-stage law is subset, bernoulli, stratified or work"
-    if set(law) != _LAW_KEYS[kind]:
-        return f"a {kind} law is exactly {sorted(_LAW_KEYS[kind])}"
+    if set(sampling_design) != _SAMPLING_DESIGN_KEYS[kind]:
+        return f"a {kind} law is exactly {sorted(_SAMPLING_DESIGN_KEYS[kind])}"
     if kind == "bernoulli":
-        return None if _ratio(law["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
-    if not _int(law["k"]) or law["k"] < 0:
+        return None if _ratio(sampling_design["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
+    if not _int(sampling_design["k"]) or sampling_design["k"] < 0:
         return f"a {kind} law's k is a natural number"
     if kind == "subset":
-        if law["k"] < 1:
+        if sampling_design["k"] < 1:
             return "a subset law draws at least one unit"
-        return f"a subset draw of {law['k']} exceeds the population of {population}" if law["k"] > population else None
-    if not isinstance(law["strata"], list):
+        return f"a subset draw of {sampling_design['k']} exceeds the population of {population}" if sampling_design["k"] > population else None
+    if not isinstance(sampling_design["strata"], list):
         return f"a {kind} law is expanded: its strata are a list (one_stage.draw.derive)"
-    return strata_problem(law, population)
+    return strata_problem(sampling_design, population)
 
 
 #: Lean `Draw.RAN_OUT`: the refusal of a sample whose source runs out before it ends.
@@ -172,7 +176,7 @@ class ChallengerCoins:
     `remote.RemoteChallenger`): the stream is the concatenation of the coins opened after the prover's commitment, in
     order, with no hash and no derivation, so it passes as `service.Stream`'s `coins`.
 
-    `commit(after)` takes the prover's commitment (its registration's digest, or its run's root, 64 bytes) and fixes the
+    `commit(after)` takes the prover's commitment (its docket's digest, or its run's root, 64 bytes) and fixes the
     family (`label`) before any coin of the stream opens: the first commitment's is `record`, each later one's the next
     of `more`, and a family with a coin open already takes none, since a family's coins follow one commitment
     (`challenger_stream`'s `FAMILY_ROOT`). A read takes the next bytes of the stream, opening
@@ -291,7 +295,7 @@ def challenger_stream(commitment: LiveCommitment, segment: Any, after: bytes,
                       roots: Sequence[bytes] | None = None) -> bytes:
     """The verifier's replay of a sample's coins from the record (`Segment.to_json`): the concatenation of the openings'
     coins, each checked against the challenger's commitment as the family's coin `start + i`, opened after `after`, the
-    prover's commitment the verifier holds (its registration's digest). With `roots`, the family's roots in order as the
+    prover's commitment the verifier holds (its docket's digest). With `roots`, the family's roots in order as the
     challenger's signed release log shows it received them (`remote.trusted_session`), every root is `after`
     (`FAMILY_ROOT`: a family's coins follow one commitment, so a prover that read a sample and committed again in the
     family is refused) and the openings are exactly the coins the family released, from its first, so the prover picked
@@ -328,44 +332,16 @@ def read_reason(commitment: LiveCommitment, segment: Any, after: bytes, read: by
         stream = challenger_stream(commitment, segment, after, roots)
     except CoinError as e:
         return str(e)
+    return start_reason(stream, read)
+
+
+def start_reason(stream: bytes, read: bytes) -> str | None:
+    """Why `read` is not the start of the coins `stream` using every one of them; None when it is."""
     if stream[:len(read)] != bytes(read):
         return "the bytes the draw read are not its coins'"
     if -(-len(read) // COIN_BYTES) != len(stream) // COIN_BYTES:
         return f"the draw read {len(read)} bytes of {len(stream) // COIN_BYTES} coins: a coin opened and not read"
     return None
-
-
-COINS_FORM = ("a draw's coin evidence is {key, ledger, main, pins, segment, session}: the verifier's challenger key, the "
-              "auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's "
-              "coins (Segment.to_json) and the challenger session's files")
-
-
-def coins_reason(coins: Any, window: str, label: str, after: bytes, read: bytes, verify: Verify) -> str | None:
-    """`read_reason` on the evidence of a sample's coins, `{key, ledger, main, pins, segment, session}`: the commitment
-    and the family's roots are those of the one session the auditor's ledger opens under the verifier's challenger key
-    for the window whose open root is `window`, run from a commit the host's pins log `pins` records on the verifier's
-    copy of main's first-parent line `main` (`trusted_session_of`, through `pinned_session`). `window` is the root the
-    verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
-    `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
-    released after the same commitment are refused, and a prover with sessions in several windows gets one sample, not
-    the best of them. `label` is the verifier's family, as `draw_coins`'s, never the segment's: a segment of another
-    family is refused, so a prover that reserved several families picks none of them after reading. The session must be
-    a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome`
-    hands the evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
-    (`Run.run`'s `select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`)."""
-    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
-        return COINS_FORM
-    try:
-        commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, ChallengerKey.from_json(coins["key"]),
-                                               coins["pins"], coins["main"], coins["session"], verify)
-    except CoinError as e:
-        return str(e)
-    if not withheld_on(coins["ledger"], window):
-        return WITHHELD
-    segment = coins["segment"]
-    if not (isinstance(segment, Mapping) and segment.get("label") == label):
-        return f"the draw's coins are not the challenger's {label} family's"
-    return read_reason(commitment, segment, after, read, roots.get(label, ()))
 
 
 DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: the auditor's ledger, the verifier's copy "
@@ -374,12 +350,12 @@ DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: 
 
 
 def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
-    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    """Lean `Challenger.sampleCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
-    Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
-    prover can't sign a ledger of its own. The session must be a withheld one (`withheld_on`): its challenger released
-    no root, salt or path before it closed. One-stage's check reads its sample's coins through it (`OneStage.coinsOf`).
-    Raises `CoinError`."""
+    The key, the window and the family are the verifier's, so a prover can't sign a ledger of its own; the copy of
+    main's history is the evidence's, which `coins_reason` holds to its caller's. The session must be a withheld one
+    (`withheld_on`): its challenger released no root, salt or path before it closed. One-stage's check reads its
+    sample's coins through it (`OneStage.coinsOf`). Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
         raise CoinError(DRAW_FORM)
     commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
@@ -390,6 +366,53 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     if not (isinstance(segment, Mapping) and segment.get("label") == label):
         raise CoinError(f"the draw's coins are not the challenger's {label} family's")
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
+
+
+COINS_MAIN = ("the copy of main's first-parent history a draw's coin evidence carries is not the verifier's own, commit "
+              "for commit, or the verifier holds none: the evidence's `main` is the verifier's `git rev-list "
+              "--first-parent origin/main`")
+
+
+def _main_lines(main: Any) -> list[str] | None:
+    return main if type(main) is list and all(type(c) is str for c in main) else None
+
+
+def same_main(mine: Any, theirs: Any) -> bool:
+    """Whether the copy `theirs` of main's first-parent history is the verifier's own `mine`: each a list of strings,
+    the same ones in the same order (Lean `Challenger.sameMain`)."""
+    a = _main_lines(mine)
+    return a is not None and a == _main_lines(theirs)
+
+
+def coins_reason(key: ChallengerKey, main: Any, coins: Any, window: str, label: str, after: bytes, read: bytes,
+                 verify: Verify) -> str | None:
+    """Why the evidence `coins` of a sample's coins does not show `read`, the bytes the sample read, to be the start of
+    the coins `draw_coins` reads from it, every one of them read (`start_reason`); None when it does. The evidence is
+    `draw_coins`'s `{ledger, main, pins, segment, session}`, one object for both readers: the stream is that of the one
+    session the auditor's ledger opens under the verifier's challenger key `key` for the window whose open root is
+    `window`, run from a commit the host's pins log `pins` records on main's first-parent line
+    (`trusted_session_of`, through `pinned_session`). `key` and `main` are the caller's own: the evidence names no key
+    (evidence that carries one is refused in form), so whoever wrote it, the session is one signed under the key the
+    verifier holds; and the copy of main's history it carries must be the caller's `main`, a list of the same commits
+    (`same_main`), so the pin is held to the verifier's copy, here and where `draw_coins` reads the same evidence.
+    `window` is the root the verifier reads from the challenger's signed open of the docket's window
+    (`registration.check`'s `window_root`), never the record's or the evidence's. So a prover picks no window: coins
+    another window's session released after the same commitment are refused, and a prover with sessions in several
+    windows gets one sample, not the best of them. `label` is the verifier's family, never the segment's: a segment of
+    another family is refused, so a prover that reserved several families picks none of them after reading. Both are
+    the caller's to keep: this function holds the evidence to the `window` and `label` it is given and cannot tell a
+    verifier's own from a prover's, so a caller that builds its stream again from a prover's hand-off names them from
+    the docket's record and layout and refuses a hand-off that names another (`two_stage.resume`,
+    `stop_audit.resume`). The session must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the
+    evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
+    (`Run.run`'s `select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`)."""
+    try:
+        stream = draw_coins(key, window, label, after, coins, verify)
+    except CoinError as e:
+        return str(e)
+    if not same_main(main, coins["main"]):
+        return COINS_MAIN
+    return start_reason(stream, read)
 
 
 #: the challenger's family of a window's seed salt, which no sample reads
@@ -408,7 +431,7 @@ def draw_seed_salt(coins: ChallengerCoins, window: str) -> bytes:
     `SEED_SALT_FAMILY` (`coins`, over that family of the window's session), opened after the window's open root `window`
     (lowercase hex, from the challenger's signed open) and read whole (`OwnRandomness`), with no derivation. The open
     root is the only root a window has before it serves, so the salt is fixed before the window serves, and no
-    sample reads its family: a sample's coins stay their own family's, released after the registration's commitment.
+    sample reads its family: a sample's coins stay their own family's, released after the docket's commitment.
     Raises `CoinError` for coins of another family, a window root in another form, or a family with a coin open already
     (a window's salt is sampled once, and nothing resamples it)."""
     record = coins.record if isinstance(coins, ChallengerCoins) else None
@@ -480,35 +503,35 @@ def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> li
     return sorted({c for u in units for c in closure.get(u, ()) if c not in drawn})
 
 
-def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: int,
+def draw_first(randomness: OwnRandomness, sampling_design: Mapping[str, Any], population: int,
                closure: Mapping[int, Sequence[int]] | None = None) -> dict[str, Any]:
     """A sample under a one-stage sampling design: the one-stage sample object over the positions [0, population) (`one_stage.draw`;
-    `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
+    `check_draw` holds it to the docket and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
     the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the sampling design's NUM/DEN as written), `stratified`
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
-    verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the sample carries its `closure`
+    verifier's closure map (a work sampling design only, as `verity-verify-proof draw --closure`), the sample carries its `closure`
     (`closure_of`) when that is not empty."""
-    problem = law_problem(law, population)
+    problem = sampling_design_problem(sampling_design, population)
     if problem:
         raise ValueError(problem)
-    kind = law["law"]
+    kind = sampling_design["law"]
     if closure is not None and kind != "work":
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
-        k = law["k"]
+        k = sampling_design["k"]
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))
     elif kind == "bernoulli":
-        num, den = _ratio(law["p"])
+        num, den = _ratio(sampling_design["p"])
         units = randomness.stream(2 * population * _width(den) + 64, lambda read: _bernoulli(num, den, population, read))
     else:
         units = []
-        for s in law["strata"]:
+        for s in sampling_design["strata"]:
             ranges, k_s = s["units"], s["k"]
             n_s = sum(hi - lo for lo, hi in ranges)
             local = randomness.stream(2 * k_s * _width(n_s) + 64, lambda read: _subset(k_s, n_s, read))
             units += [_nth(ranges, j) for j in local]
         units.sort()
-    out = {**dict(law), "population": population, "units": units}
+    out = {**dict(sampling_design), "population": population, "units": units}
     if closure is not None:
         extra = closure_of(closure, units)
         if extra:
@@ -516,8 +539,8 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     return out
 
 
-def ran_out(law: Mapping[str, Any], population: int, src: bytes) -> bool:
-    """Whether `draw_first` under `law` over `population` runs out of `src`, read in order, before it ends (Lean
+def ran_out(sampling_design: Mapping[str, Any], population: int, src: bytes) -> bool:
+    """Whether `draw_first` under `sampling_design` over `population` runs out of `src`, read in order, before it ends (Lean
     `Draw.ranOutOf`, the difftest's `ran_out` piece); ValueError where it refuses otherwise."""
     at = 0
 
@@ -526,7 +549,7 @@ def ran_out(law: Mapping[str, Any], population: int, src: bytes) -> bool:
         at += k
         return src[at - k:at]
     try:
-        draw_first(OwnRandomness(source), law, population)
+        draw_first(OwnRandomness(source), sampling_design, population)
     except ValueError as e:
         if str(e) == RAN_OUT:
             return True
@@ -542,7 +565,7 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
+__all__ = ["COINS_MAIN", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
            "MAX_PINS", "OwnRandomness", "RAN_OUT", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM",
            "Segment", "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first",
            "draw_seed_salt", "ran_out", "read_reason", "seed_salt_of"]

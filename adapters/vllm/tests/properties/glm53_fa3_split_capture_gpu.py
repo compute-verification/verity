@@ -3,7 +3,7 @@ default `FLASH_ATTN_MLA_SPARSE` decode (`forward_mqa` passes no `num_splits`, so
 heuristic and `FlashAttnFwdCombine` merges the splits), and for `MufuLg2Ftz_v1` on sm_90, at GLM-5.3's TP8 statics (8 heads,
 rope 64, latent 512, top-k 2048, the scale 1/16).
 
-One GPU process writes `<out>/glm53_fa3_split_capture.json`, the property record `glm53_fa3_split_capture` (`properties.record`),
+One GPU process writes `<out>/glm53_fa3_split_capture.json`, the property record `glm53_fa3_split_capture` (`records.property_record`),
 and prints one line per launch, then `GLM53-FA3-SPLIT GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first
 and nothing else runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the
 others.
@@ -57,7 +57,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fa3-split-capture/v2"
 RECORD = "glm53_fa3_split_capture.json"
@@ -130,7 +130,7 @@ def _sha(a: np.ndarray) -> str:
 
 
 def _mla() -> dict[str, Any]:
-    from verity.definitions.registry import sparse_mla as M
+    from verity_vllm.definitions.registry import sparse_mla as M
 
     return {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
 
@@ -163,7 +163,7 @@ def lg2_jobs(work: Path, case: str, y: np.ndarray, *, e: int | None = None, x: n
 def attn_jobs(work: Path, name: str, s: dict[str, np.ndarray], out: np.ndarray, num_sm: int, pool: dict[str, str],
               checks: dict[str, bool]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """One launch's record (its split counts at ``num_sm`` SMs) and its comparison jobs, one per compared token."""
-    from verity.definitions.registry import sparse_mla_split as W
+    from verity_vllm.definitions.registry import sparse_mla_split as W
 
     set_name, arg = LAUNCHES[name]
     valid = [int(t) for t in s["valid"]]
@@ -181,8 +181,8 @@ def attn_jobs(work: Path, name: str, s: dict[str, np.ndarray], out: np.ndarray, 
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def matching_ns(qn: np.ndarray, qr: np.ndarray, kv: np.ndarray, T: int, got: np.ndarray) -> list[int]:
     """The split counts at which the twin gives every head's words: the least NS of each distinct `split_blocks` partition."""
-    from verity.definitions.numerics import sparse_mla_split_twins as TW
-    from verity.definitions.registry import sparse_mla_split as W
+    from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+    from verity_vllm.definitions.registry import sparse_mla_split as W
 
     seen, out = set(), []
     for ns in range(1, W.LANES + 1):
@@ -199,8 +199,8 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's NH heads against the twin of `SparseMlaHeadSplit_v1{T, NS}`; head 0 against the reference on REFERENCE."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import sparse_mla_split_twins as TW
-    from verity.definitions.registry import sparse_mla_split as W
+    from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+    from verity_vllm.definitions.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
     i, T, NS = job["token"], job["T"], job["NS"]
@@ -227,8 +227,8 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_lg2(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Words [lo, hi) of an lg2 launch against `MufuLg2Ftz_v1`'s twin, the open words skipped; the reference on the first two."""
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import sparse_mla_split_twins as TW
-    from verity.definitions.registry import sparse_mla_split as W
+    from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+    from verity_vllm.definitions.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
     lo, hi = job["range"]
@@ -251,7 +251,7 @@ def compare_lg2(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_mufu(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """ex2.approx.ftz / rcp.approx.ftz on the sweep against core's tables (`derived_rows.mufu_ex2_ftz`, `mufu_rcp_ftz`)."""
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     a = _load(job["paths"])
     x, y = np.asarray(a["x"], dtype=np.uint32), np.asarray(a["y"], dtype=np.uint32)
@@ -276,17 +276,32 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------ the GPU
+_MUFU_SRC = {"ex2_ftz": "ex2.approx.ftz.f32 $0, $1;", "rcp_ftz": "rcp.approx.ftz.f32 $0, $1;",
+             "lg2_ftz": "lg2.approx.ftz.f32 $0, $1;", "ex2": "ex2.approx.f32 $0, $1;", "lg2": "lg2.approx.f32 $0, $1;"}
+
+
 def _mufu(op: str, x: np.ndarray) -> np.ndarray:
+    """One PTX instruction of `_MUFU_SRC` on every word of `x` (Triton inline asm on the GPU)."""
     import torch
+    import triton
+    import triton.language as tl
 
-    from verity_vllm.program import mla_capture as MC
+    @triton.jit
+    def k(X, Y, n, BLOCK: tl.constexpr, ASM: tl.constexpr):
+        i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        v = tl.load(X + i, mask=i < n)
+        y = tl.inline_asm_elementwise(ASM, "=r,r", [v], dtype=tl.float32, is_pure=True, pack=1)
+        tl.store(Y + i, y, mask=i < n)
 
-    return MC._mufu(op, torch.from_numpy(x.view(np.float32).copy()).to("cuda")).cpu().numpy().view(np.uint32)
+    t = torch.from_numpy(x.view(np.float32).copy()).to("cuda")
+    y = torch.empty_like(t)
+    k[(triton.cdiv(t.numel(), 1024),)](t, y, t.numel(), BLOCK=1024, ASM=_MUFU_SRC[op])
+    return y.cpu().numpy().view(np.uint32)
 
 
 def sweep_words() -> np.ndarray:
-    """The sm_120 measurement's sweep (`mla_capture.mufu_probe`)."""
-    from verity_vllm.program import mla_capture as MC
+    """The sm_120 measurement's sweep: 2^20 splitmix64 words (`mla_inputs._splitmix`)."""
+    from tests.program import mla_inputs as MC
 
     return MC._splitmix(np.arange(1 << 20, dtype=np.uint64) + (np.uint64(0xABC) << np.uint64(40))).astype(np.uint32)
 
@@ -294,8 +309,8 @@ def sweep_words() -> np.ndarray:
 def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """lg2 on the exponent bands, the sweep and the powers of two below 1; ex2 and rcp on core's table domains and the sweep."""
     from verity.circuits.ops import mufu as MU
-    from verity.definitions.numerics import sparse_mla_split_twins as TW
-    from verity.definitions.registry import sparse_mla_split as W
+    from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+    from verity_vllm.definitions.registry import sparse_mla_split as W
 
     jobs: list[dict[str, Any]] = []
     m: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
@@ -376,8 +391,8 @@ def phase_attn(work: Path, names, num_sm: int) -> tuple[list[dict[str, Any]], li
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sparse_mla as M
-    from verity.definitions.registry import sparse_mla_split as W
+    from verity_vllm.definitions.registry import sparse_mla as M
+    from verity_vllm.definitions.registry import sparse_mla_split as W
 
     mla = _mla()
     targets: dict[str, Any]

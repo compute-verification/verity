@@ -4,7 +4,7 @@ serving loop, and the fixture a decode kernel's sketch is held to.
     serve.py [--steps 12] [--per-window 3] [--prompt 1]   # serve the toy, print its tokens and each window's verdict
     serve.py fixture [--out receipts.json]                 # write the kernel fixture (stdout by default)
 
-**The step.** Each engine step is one pass of the audit (`remote_bandwidth.p2`). It decodes the store layer by layer
+**The step.** Each engine step is one pass of the audit (`poub.p2`). It decodes the store layer by layer
 (`store.decode_block`: block `i`'s 2,056 bytes of `C*` to its 2,054 of `W`), runs the layer's matmuls on the staging
 buffer, and, as it decodes block `i`, sketches the same 2,056 bytes under the pass's seed (`p2.Sketcher.block`, π).
 At the step's end it sums each unit's four partials (σ), hashes them to the receipts (y), commits them in the pass's
@@ -37,17 +37,19 @@ import numpy as np
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from p2_v1 import store as S
-else:
-    from . import store as S
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+
+from p2_store import store as S
 
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
-FIXTURE_SHA512 = ("3f7f42d0121114b5f974c818fda2aabe00ab5694ed29e4f2b60f96381d27f24d"
-                  "21a670c89a9c109e3d2bf5f8727372a369a3b7a4ee83c4445a7bef3bb50d3cc3")
+FIXTURE_SHA512 = ("4108408908b13f0b4b7912ce55ecc92c70f37ec71afc8f0b65e9b421831b08f6"
+                  "6b824180d631d850c0190801432c68cdf324f942640f7799a561eff22d1b3840")
 NODE = b"p2-toy-node"
 EMBED = b"verity-pous/p2-serve/toy/embedding/v0\0"
 FIXTURE_CHALLENGE = hashlib.sha512(b"verity-pous/p2-serve/fixture/challenge/v0").digest()[:receipts.CHALLENGE_BYTES]
@@ -192,13 +194,13 @@ class Served:
     outcome: str | None = None
 
 
-Open = Callable[[audit.Pass, int], p2.Opening]
+Open = Callable[[audit_prover.Pass, int], p2.Opening]
 Step = Callable[[Engine, int, p2.Sketcher], tuple[int, dict[int, bytes]]]
 
 
-def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_window: int, step_ns: int = 1000,
+def serve(engine: Engine, store: p2_prover.Store, *, prompt: int, windows: int, per_window: int, step_ns: int = 1000,
           samples: int | None = None, entropy: Callable[[int], bytes] | None = None, step: Step | None = None,
-          open_: Callable[[p2.Prover], Open] | None = None) -> Served:
+          open_: Callable[[p2_prover.Prover], Open] | None = None) -> Served:
     """Serve `windows · per_window` steps from `prompt` under one audit session over `store` (the prover's `C*`, the
     engine's), one pass a step, each window `per_window` steps on the session's clock, `samples` openings a window
     (every receipt by default). `step` and `open_` replace the honest step and opening, to fault them."""
@@ -210,7 +212,7 @@ def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_win
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
     session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0,
                              clock=clock)
-    prover = p2.Prover(store, entropy=entropy)
+    prover = p2_prover.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)
     out, token, previous = Served(), prompt, reg.digest
     challenge, t, i, closed, passes = session.start(), 0, 0, 0, {}
@@ -319,7 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--steps is a whole number of windows of --per-window steps")
     store, doc, c_star = toy()
     reg = registration(store, doc, c_star)
-    served = serve(Engine(store, c_star, bytes.fromhex(doc["salt"])), p2.Store(reg, blocks_of(store, c_star)),
+    served = serve(Engine(store, c_star, bytes.fromhex(doc["salt"])), p2_prover.Store(reg, blocks_of(store, c_star)),
                    prompt=a.prompt, windows=a.steps // a.per_window, per_window=a.per_window)
     print(json.dumps({"tokens": served.tokens, "passes": served.passes, "outcome": served.outcome,
                       "verdicts": [{"window": v.window, "accepted": v.accepted, "failure": v.failure,

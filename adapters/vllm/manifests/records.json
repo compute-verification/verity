@@ -1,9 +1,9 @@
 {
  "schema": "verity-vllm/records-index/v1",
- "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
+ "about": "Per row of record: `record`, its config record's art: id, and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `record` is null, or a PASS record whose Programs are the pins: `verity-vllm records publish` writes the two together, and a row whose pins move names no record until it is published again.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`, which clears its `record`).  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
  "rows": {
   "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090",
+   "record": null,
    "tier": "heavy",
    "pinned_from": {
     "build": "art:74ceaf98a4ac4151cd17456f458deb4ccf02f6fe5e06334e4965c2c4e8cd6f5b",
@@ -75,7 +75,7 @@
    }
   },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:74c6c3ccd452e00ba6d2215c4282d9ae75a44b7da6d6d96861bdef5b1d661d69",
+   "record": null,
    "tier": "heavy",
    "pinned_from": {
     "build": "art:dd003620a71721950fd7c02c115fbf2ef9cacf76efaafc756f05300934bcf827",
@@ -723,7 +723,7 @@
    }
   },
   "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
-   "record": "art:686315c20aaa5e1c7479f34c0308a74c0b5974bfc59ba694f30cdcd086b7ffe2",
+   "record": null,
    "tier": "fast",
    "pinned_from": {
     "build": "/workspace/research/runs/r20261108-103407-e804/out/n/llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",

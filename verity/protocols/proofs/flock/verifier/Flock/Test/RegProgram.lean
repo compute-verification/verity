@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.Test.RegComplete
+meta import Flock.Test.RegComplete
+
+/-!
 `Registered.checkProgram`: a verifier whose own program has a `RegisteredInput<w>_v1` node refuses a statement without its own
 registered reads (`--registered`), whatever the public file's header names; with them, `Registered.check` opens the
 verifier's ports and refuses a statement whose header was stripped. The programs are `TMin(x, r) = x + r`
 (`test_format_spec`'s primitives), with `r` bound per run or at registration.
 -/
-module
-
-public import Flock.Test.RegComplete
-meta import Flock.Test.RegComplete
 
 @[expose] public section
 
@@ -26,7 +27,7 @@ def reg : ByteArray := "{\"callees\":[\"TAdd32_v1\",\"Input32_v1\",\"RegisteredI
 def stripped : Public :=
   { pub with header := Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson [0, 1])])] }
 
-/-- `flock-verify verify`'s registered reads in its setup's order: `Registered.checkProgram` on the verifier's own program,
+/-- `verity-verify-proof verify`'s registered reads in its setup's order: `Registered.checkProgram` on the verifier's own program,
 then `Registered.check` on the statement (its units derived); setup's `checkComplete`, which follows, is
 `Flock.Test.RegComplete`'s. -/
 def run (program : Option ByteArray) (f : Option Json) (p : Public) : Except String Unit := do

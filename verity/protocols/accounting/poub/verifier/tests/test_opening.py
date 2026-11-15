@@ -1,5 +1,5 @@
-"""`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
-accepted; the same window over a store that lost its first sampled block is rejected on codec at that draw; an uncertified
+"""PoUB's `opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is accepted;
+the same window over a store that lost its first sampled block is rejected on codec at that sample; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
 system's (pinned from Flock's commit strings), and an appended block's payload in the witness is its block decoded. The
 opening unit's compression is pinned as the commitments' own."""
@@ -13,10 +13,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from poub_fakes import Clock, Entropy
 
-from remote_bandwidth_fakes import Clock, Entropy
 from verity.commitments import gates
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as O, receipts
+from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.prover import opening_prover
+from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
+from verity.protocols.accounting.poub.verifier import opening as O
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 
 N, L = 32, 16
@@ -35,23 +38,23 @@ def payload(j: int) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     payloads = [payload(j) for j in range(N)]
     salt = Entropy(b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(N)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return audit_prover.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-def window(store: audit.Store) -> SimpleNamespace:
+def window(store: audit_prover.Store) -> SimpleNamespace:
     """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call,
-    so the same draws over any store of the same registration."""
+    so the same samples over any store of the same registration."""
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)
     clock = Clock()
     s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1),
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, passes = s.start(), reg.digest, {}
     for i in range(N // L):
         runs = ((L * i, L),)
@@ -80,25 +83,25 @@ def test_a_plan_rows_commitment_is_the_proof_systems() -> None:
 def test_an_honest_window_is_accepted(store) -> None:
     w = window(store)
     assert len(w.session.drawn(0)) == 4
-    assert O.reference(w.session, store, w.passes, w.c3) == [audit.Verdict(0, True)]
+    assert opening_prover.reference(w.session, store, w.passes, w.c3) == [audit.Verdict(0, True)]
 
 
-def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
-    """The store's block at the first draw replaced by other bytes before the passes: the prover receipts what it holds,
-    the coins draw the same positions, and the unit's verdict on that draw is codec."""
+def test_a_lost_block_fails_on_codec_at_its_sample(store) -> None:
+    """The store's block at the first sample replaced by other bytes before the passes: the prover receipts what it holds,
+    the coins sample the same positions, and the unit's verdict on that sample is codec."""
     d0 = window(store).session.drawn(0)[0]
     lost = copy.copy(store)
     lost.blocks = list(store.blocks)
     lost.blocks[d0.block] = hashlib.shake_256(b"a lost block").digest(codec.BLOCK_BYTES)
     w = window(lost)
     assert w.session.drawn(0)[0].block == d0.block
-    assert O.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
+    assert opening_prover.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
 
 
 def test_an_appended_blocks_payload_is_its_block_decoded(store) -> None:
-    """The witness's payload of an appended block (`audit.Store.payload`) is its append's while it awaits its coin, then
+    """The witness's payload of an appended block (`audit_prover.Store.payload`) is its append's while it awaits its coin, then
     its block decoded under its digest and that coin: the store keeps no second copy."""
-    st = audit.Store(store.registration, store.payloads, store.salts)
+    st = audit_prover.Store(store.registration, store.payloads, store.salts)
     m = [payload(N + u) for u in range(2)]
     a = st.append(m, [Entropy(b"append salts")(receipts.SALT_BYTES) for _ in m])
     assert [st.payload(a.first + u) for u in range(2)] == m
@@ -109,8 +112,8 @@ def test_an_appended_blocks_payload_is_its_block_decoded(store) -> None:
         st.payload(a.first)
 
 
-def test_a_window_with_no_draws_is_malformed(store) -> None:
-    """A window whose draws are empty (none a session makes) is `malformed` at `decide`, as at `verify`."""
+def test_a_window_with_no_samples_is_malformed(store) -> None:
+    """A window with no samples (none a session makes) is `malformed` at `decide`, as at `verify`."""
     w = window(store)
     w.session.windows[0].draws = ()
     assert w.session.decide(0, []) == audit.Verdict(0, False, "malformed")
@@ -120,7 +123,7 @@ def test_the_plan_link_and_the_public_rows(store) -> None:
     w = window(store)
     d = w.session.drawn(0)[0]
     S = O.statics(P512, d.leaf_size, L, w.c3.DR, w.c3.DP, w.c3.DV)
-    a = O.witness(d, w.passes[d.window, d.index], store, w.c3.plan_rows[d.step], S, w.c3.values)
+    a = opening_prover.witness(d, w.passes[d.window, d.index], store, w.c3.plan_rows[d.step], S, w.c3.values)
     seed = store.registration.codec_seed
     salt, bc = w.c3.plan_salts[d.step], w.c3.plan_bcs[d.step]
     assert O.check(d, a, seed, S, w.c3.values, salt, bc) is None

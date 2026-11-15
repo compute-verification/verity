@@ -1,6 +1,6 @@
 # The live challenger
 
-The proof system's challenger, as it runs on the auditor's host: it measures nothing. `serve.py` serves one session's coins
+The proof system's challenger, as it runs on the auditor's device: it measures nothing. `serve.py` serves one session's coins
 to one prover client (`verity.protocols.proofs.spot.device.remote`), with its record signed by the host's LMS key and written
 before the first coin, and its release log signed when the session ends. The coins are the operating system's, as the Lean
 verifier reads them.
@@ -15,13 +15,13 @@ verifier reads them.
   pod runs it on a loop.
 - `run.sh` is a development session: `serve.py` as a `research run` on another machine, which tunnels its port to the
   developer's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
-  `research run ... -- bash verity/protocols/compose/device/live_challenger/run.sh` (its header has the full command), not bare
-  `verity bench live_challenger`.
+  `research run ... -- bash verity/protocols/compose/device/live_challenger/run.sh` (its header has the full command).
+  `verity bench` has no name for it: that command runs only a directory of `benchmarks/`.
 
 A session reads the source tree, the challenger's key directory (`~/.local/state/live-challenger/key`, never under `out/`) and
 `/etc/vy/peers`. It writes `record.json`, `key.json`, `releases.jsonl`, `hellos.jsonl` and the signed close (`challenger.json`)
 to its `out/`; a verifier reads them from there, never from the prover.
 
-Status: in service on the auditor's host. The suite (`tests/`) runs `serve.py` as a process over loopback with a test key and the
+Status: in service on the auditor's device. The suite (`tests/`) runs `serve.py` as a process over loopback with a test key and the
 Lean verifier's coins stubbed (`tests/stub_serve.py`), and covers the gate, its periods, declared days, models, load and
 rehearsals, and the coin link.

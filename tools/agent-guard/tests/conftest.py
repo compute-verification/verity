@@ -1,3 +1,4 @@
+import json
 import subprocess
 
 import pytest
@@ -20,6 +21,20 @@ def scratch_event_log(tmp_path_factory):
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("AGENT_GUARD_EVENT_LOG", str(path))
         mp.setattr(subprocess.Popen, "__init__", start_with_the_log_named)
+        yield path
+
+
+@pytest.fixture(autouse=True, scope="session")
+def scratch_registry(tmp_path_factory):
+    """No hook or command a test starts reads who holds a handle from the checkout's Slack registry or from `origin/main`'s
+    (`task_hook.holders`, `worktree_guard.coordinators`): who holds one today is no input of a test, and the suite's read
+    guard can't see a read through `git show`. The session's environment names this registry, which holds no handle, from
+    before the first module's fixture is built, so every copy of the environment holds the name. A test about a holder
+    names a registry of its own; the test of `origin/main`'s route takes the name out, and builds the repository it reads."""
+    path = tmp_path_factory.mktemp("registry") / "registry.json"
+    path.write_text(json.dumps({"handles": []}))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("AGENT_GUARD_REGISTRY", str(path))
         yield path
 
 

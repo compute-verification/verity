@@ -7,7 +7,7 @@ Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `
 honest and under one edit of the run, of its session or of its JSON, each as the protocol's case with its setup's own
 commitment and evidence, those under one edit of the case's framing, and those under one edit of the setup's evidence
 (another setup's, a bit of its commitment, salt or `C*` off, `C*` cut short, the setup missing). Under the deployed
-protocol (S1's LMS alone) they are a small period of `pous.period.run` (the small point, `point_for(size, W, C0)`),
+protocol (S1's LMS alone) they are a small period of `pous.period_prover.run` (the small point, `point_for(size, W, C0)`),
 signed by a key at S1's deployed parameters (`mc_cases.deployed_signer`), honest and under a prover that answers every
 other round with zeros; each protocol refuses the other's signer; and the same two at the certified point
 (`period.point_for`'s default) on a store set up there, where the honest one certifies its store (slow: a 256-block
@@ -26,16 +26,29 @@ import os
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import verity_difftest as D
-from test_run import INVALID, LEAN, WIDTHS, M, Run, _decode_session, _decode_setup, _point_of, _Port, documents, runs
+from hypothesis import strategies as st
+from test_run import (
+    INVALID,
+    LEAN,
+    WIDTHS,
+    M,
+    Run,
+    _decode_session,
+    _decode_setup,
+    _point_of,
+    _Port,
+    documents,
+    runs,
+)
 from test_setup_difftest import _commitment as _setup_commitment
 from test_setup_difftest import _evidence as _setup_evidence
 from test_setup_difftest import _evidence_bytes, honest, setup_port, setup_protocol
 from verity_difftest import protocol as P
+
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import setup as pous_setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 
@@ -215,8 +228,8 @@ def periods(signer, store: bytes = STORE) -> dict[str, period.Run]:
     kw = dict(signer=signer, schemes=mc.SCHEMES if signer.scheme == mc.LMS else M.ts.SCHEMES,
               protocol=period.PROTOCOL if signer.scheme == mc.LMS else TEST_ID,
               point=period.point_for(len(store), period.W, period.C0))
-    return {"honest": period.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9), **kw),
-            "zeros": period.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9),
+    return {"honest": period_prover.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9), **kw),
+            "zeros": period_prover.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9),
                                 prover=_zeros_on_odd_rounds, **kw)}
 
 
@@ -242,8 +255,8 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
         got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "zeros": "reject"}, got
     assert got["honest"]["public"] == {"certified": False, "eps": "0", "s_bits": 0}, got
-    assert got["honest"]["profile"]["gaps"] == [f"P2 has no certificate at (w, c0, blocks) = "
-                                                f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})"]
+    assert got["honest"]["profile"]["gaps"] == [("P2 has no certificate at (w, c0, blocks) = "
+                                                 f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})")]
     for name, p in test.items():
         assert _part(TEST.reference(p.case)) == _part(p.answer), name
         assert json.loads(D.replay(TEST, p.case, test_server)[1])["verdict"] == {"honest": "accept", "zeros": "reject"}[name]
@@ -252,12 +265,12 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
 
 
 @pytest.fixture(scope="module")
-def certified_store() -> period.EncodedStore:
+def certified_store() -> period_prover.EncodedStore:
     """`STORE` set up at the certified point (`period.point_for`'s default, 256 labels), its `C*` encoded in up to
     `period.SETUP_WORKERS` processes: about 16 core-minutes, since no `C*` that setup accepts there is cheaper than
     encoding one (a random label decodes to a payload with probability 2^-16)."""
     workers = min(period.SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    return period.setup_store(STORE, COINS, period.point_for(len(STORE)), workers=workers)
+    return period_prover.setup_store(STORE, COINS, period.point_for(len(STORE)), workers=workers)
 
 
 @pytest.mark.slow
@@ -270,8 +283,8 @@ def test_a_certified_periods_answers_agree(deployed_server, certified_store) -> 
     held = certified_store
     kw = dict(signer=M.deployed_signer(), schemes=mc.SCHEMES, protocol=period.PROTOCOL, clock=M.Clock(10 ** 9))
     got = {}
-    for name, prover in (("honest", period.honest), ("zeros", _zeros_on_odd_rounds)):
-        p = period.audit("n0", held, COINS, log=M.ts.session_log(), prover=prover, **kw)
+    for name, prover in (("honest", period_prover.honest), ("zeros", _zeros_on_odd_rounds)):
+        p = period_prover.audit("n0", held, COINS, log=M.ts.session_log(), prover=prover, **kw)
         assert _part(DEPLOYED.reference(p.case)) == _part(p.answer), name
         got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
         assert _part(got[name]) == _part(p.answer), name
@@ -317,7 +330,7 @@ def test_a_run_committed_to_another_setup_is_refused(deployed_server) -> None:
 
 
 @pytest.mark.slow
-def test_drawn_runs_agree(test_server) -> None:
+def test_sampled_runs_agree(test_server) -> None:
     """`test_run`'s sampled runs over honest setups (`SETUPS`) as cases under `--test`, and under one edit of the case's
     framing or of its setup's commitment and evidence."""
     rs = runs(stores=SETUPS)
@@ -360,7 +373,7 @@ def test_320_reads_certify_alike(certify_server) -> None:
         assert got["profile"]["certificate"]["delta"] == "1/100"
 
 
-def test_drawn_points_certify_alike(certify_server) -> None:
+def test_sampled_points_certify_alike(certify_server) -> None:
     """`CERTIFY_POINTS`, about every certificate's edges: the Lean's `certify` and profile are the Python's on each, and
     on a point `P2Params` refuses both refuse."""
     stats = D.run(CERTIFY, examples=300, server=certify_server)

@@ -1,5 +1,5 @@
 """(a) The manifest of record reproduces: rebuild `manifest.json` from the row's request Programs x declared workload with the CURRENT
-code, by the exact path `row_pod.sh` uses (`verity-vllm manifest build-global --fixture WL --programs-root ROW --workload-digest WD`
+code, by the exact path a row's Build uses (`pipeline.row_build`: `verity-vllm manifest build-global --fixture WL --programs-root ROW --workload-digest WD`
 at B>=2; `verity-vllm manifest build --program ROW/build_request --workload WL` at B=1) and compare:
 
     manifest_digest     SHA-512 over the sorted (family + IDENTITY_KEY) rows    -- `manifest_format.manifest_digest`
@@ -12,7 +12,7 @@ Expected is lifted from `commit/manifest_verify.json` (used_digest / used_progra
 rebuild said `ok`) and, when the recorded manifest.json is reachable, from the file itself.  STRONG: a single identity row moved,
 dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under build/rank*/) are not built by this path -> not applicable.
 The builder is the integration's (the query path `verity-vllm manifest`, Q_module_body_v1 -- the same build / build-global flags
-row_pod.sh uses).
+a row's Build uses).
 
 `actual` also states what the built manifest PROMOTED (interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
@@ -132,7 +132,7 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as row_pod.sh)
+BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as a row's Build)
 POLICIES_OFF = ["--no-norm-scales", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
 
 

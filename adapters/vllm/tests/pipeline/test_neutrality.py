@@ -1,7 +1,7 @@
 """`verity-vllm neutrality`: a rebuilt row is compared rank by rank, Program by Program, with its pins; any moved, missing or unpinned
-Program fails by name, the manifest is reported and never compared, and `--update` re-pins from what was built and keeps the row's
-record (and a switched row's `aot` where its pins held).  The rebuild traces.  The pins are the circuit database's index,
-`manifests/records.json`."""
+Program fails by name, the manifest is reported and never compared, and `--update` re-pins from what was built: a row whose pins
+held keeps its record and its `aot`, and one whose pins moved keeps neither.  The rebuild traces.  The pins are the circuit
+database's index, `manifests/records.json`."""
 from __future__ import annotations
 
 import json
@@ -79,9 +79,30 @@ def test_update_re_pins_the_row_from_its_build(tmp_path: Path, monkeypatch) -> N
     monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
     assert cli(["neutrality", ROW, "--compare", "--update", "--out", str(out), "--pins", str(pins)]) == 0
     row = json.loads(pins.read_text())["rows"][ROW]
-    assert (row["record"], row["tier"], row["manifest_digest"], row["programs"]) == (REC, "fast", "m2", _programs(tag="n"))
+    assert (row["tier"], row["manifest_digest"], row["programs"]) == ("fast", "m2", _programs(tag="n"))
     assert row["pinned_from"] == {"build": str((out / ROW).resolve()), "run": "r1"}
     assert cli(["neutrality", ROW, "--compare", "--out", str(out), "--pins", str(pins)]) == 0
+
+
+def test_update_clears_the_record_of_a_row_whose_pins_moved_and_of_no_other(tmp_path: Path, capsys) -> None:
+    """A row names a record only while its pins are that record's Programs: a re-pin on a Build that reproduced them keeps the
+    record, one on a Build that moved a Program clears it, and a row the re-pin did not select keeps its own."""
+    pins, out, other = _pins(tmp_path, _programs()), tmp_path / "out", ROW.replace("__tp2__", "__tp4__")
+    doc = json.loads(pins.read_text())
+    doc["rows"][other] = dict(doc["rows"][ROW])
+    pins.write_text(json.dumps(doc))
+    _build(out / ROW, _programs(), manifest="m1")
+    assert cli(["neutrality", ROW, "--compare", "--update", "--out", str(out), "--pins", str(pins)]) == 0
+    held = json.loads(pins.read_text())["rows"]
+    assert (held[ROW]["record"], held[ROW]["manifest_digest"], held[ROW]["programs"]) == (REC, "m1", _programs())
+    assert "names no record" not in capsys.readouterr().out
+    moved = _programs()
+    moved["1"]["requests"][REQ] = "q1n"
+    _build(tmp_path / "out2" / ROW, moved)
+    assert cli(["neutrality", ROW, "--compare", "--update", "--out", str(tmp_path / "out2"), "--pins", str(pins)]) == 0
+    rows = json.loads(pins.read_text())["rows"]
+    assert (rows[ROW]["record"], rows[ROW]["programs"]) == (None, moved) and rows[other] == doc["rows"][other]
+    assert f"{ROW}: names no record (its pins moved, and {REC} is of other Programs)" in capsys.readouterr().out
 
 
 def test_update_keeps_the_pins_of_a_row_whose_build_failed(tmp_path: Path, capsys) -> None:
@@ -115,10 +136,11 @@ def test_a_rebuild_is_the_rows_own_build_stage_into_out_with_no_device_visible(t
     def run(cmd, cwd):
         calls.append((cmd, os.environ["CUDA_VISIBLE_DEVICES"]))
         return subprocess.CompletedProcess(cmd, 0)
+    # resolved before the stand-in is in place: a tree without the row's stored workload fetches it, by `subprocess.run` too
+    role, repo, rev, world = epoch.resolve(ROW)
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
     monkeypatch.setattr(subprocess, "run", run)
     assert N.rebuild(ROW, tmp_path, ["--build-jobs=2"]) == 0
-    role, repo, rev, world = epoch.resolve(ROW)
     ((cmd, visible),) = calls
     assert visible == "", "the pins' Builds saw no device; vLLM keeps Triton without a driver only so"
     assert cmd[1:] == ["-m", "verity_vllm.pipeline.cli", "row", "run", ROW, role, repo, rev, "--stages", "build", "--build-construction", "trace",

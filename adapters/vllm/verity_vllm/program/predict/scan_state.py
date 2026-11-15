@@ -6,10 +6,10 @@ j's ``j.<field>``. A slot's Program reads its ``occ`` (a 0/1 word: 1 when the sl
 at b), its prompt's length ``fields``, its ``max_tokens`` and its ``ids`` (prompt position p at `io_shell.position`'s
 index), through `boolean_io_shell.ScanSlots_v2` (`bridge`), which also gives each lane its first position's token and the
 slot it carries on. The window's registered `SCAN_STATE` is the rows
-`ingress_scan.window_state` gives for its link-window: for the window of ``buckets`` buckets from scan bucket t0, the
+`ingress_scan.window_state` gives for its window: for the window of ``buckets`` buckets from scan bucket t0, the
 scan's rows t0 − 1 … t0 + buckets − 2, its row a S_{t0 + a − 1}, the one the Programs anchored at the window's bucket a
-read, and window 0's row 0 the empty state's, a constant rather than a scan unit's. The scan's prompt cap ``KI`` changes
-no field: a slot's ``ids`` are its C cells' whatever the cap. `scan_state` gives a window those rows off the scan of the
+read, and window 0's row 0 the empty state's, a constant rather than a scan unit's. The scan's prompt bound ``KI`` changes
+no field: a slot's ``ids`` are its C cells' whatever the bound. `scan_state` gives a window those rows off the scan of the
 network certifier's ingress rows, with the request each slot's Program starts.
 """
 from __future__ import annotations
@@ -18,14 +18,15 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import boolean_io_shell as BIO
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import blocks as BK
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = BK.SCAN_STATE
-#: the network certifier's cells at the class of record (w63, `benchmarks/network_traces/scan_zk.W63`): B-byte cells, r a
-#: connection a bucket, C cells a request, ids of IDB bits, a request's ingress within WITHIN buckets
+#: the network certifier's cells at the class of record (w63,
+#: `verity.protocols.accounting.certifier.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
+#: request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 
 
@@ -78,7 +79,7 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
     (`window_rows.state_value`'s ``rows``, `ingress_scan.window_state`'s) and the request each class Program starts,
     slot k's the ordinal q of the request whose Program starts at its anchor in its lane (``occ``'s bit 0 set in the row
     there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the network certifier's
-    registered ingress rows ``ingress`` (a row a bucket, `warden_rows.window_rows`) from the empty state at bucket 0 to
+    registered ingress rows ``ingress`` (a row a bucket, `network_certifier_rows.window_rows`) from the empty state at bucket 0 to
     the window's last row, each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses
     the rows."""
     scan, n = cls.scan, t0 + cls.buckets - 1

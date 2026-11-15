@@ -1,8 +1,10 @@
 """`c2_replay.run`, the replay and linkage of one instrumented run, on a stubbed evaluation: what it records when the replay
-cannot run, when this host cannot hold it and when an earlier pair's record is reused, and what `free_programs` and `record`
-put on the run's row, with the lines each logs.  CPU only; the replay itself is `tests/check/test_sampled_replay.py`."""
+cannot run, when this host cannot hold it and when an earlier pair's record is reused (and the seed in the cache's key), and
+what `free_programs` and `record` put on the run's row, with the lines each logs; and the live weights' reader and check.  CPU
+only; the replay itself is `tests/check/test_sampled_replay.py`."""
 from __future__ import annotations
 
+import ctypes
 import json
 import logging
 import struct
@@ -15,6 +17,7 @@ import pytest
 
 import verity_vllm.pipeline.c2_replay as C2
 from verity_vllm.check.replay.driver import PoolDoesNotFit
+from verity_vllm.commit import challenge as CH
 
 SAMPLED_REPLAY, BOUNDARY_LINKAGE = "verity-sweep/sampled-replay/v1", "verity-sweep/boundary-linkage/v1"
 CACHED: dict[str, Any] = {"replay_cache": True, "replay_seed": 7, "replay_per_stratum": 1, "replay_max": 0, "replay_k": None}
@@ -166,6 +169,63 @@ def test_a_replay_with_no_result_is_not_kept_for_reuse(tmp_path: Path, monkeypat
     assert pairs == [0, 1] and cache == {}
 
 
+def test_with_no_replay_seed_the_key_takes_the_challenge_s_seed_else_the_run_root_s(tmp_path: Path) -> None:
+    """The seed in the cache's key is the one the replay samples with: a challenge's, bound to the run root, else the root's own."""
+    root = bytes(range(64))
+
+    def seed(**args: Any) -> int:
+        s = sources(tmp_path, **CACHED | {"replay_seed": None} | args)
+        s.rc.run_root = root
+        key = C2.cache_key(s)
+        assert key is not None
+        return int(json.loads(key)["seed"])
+
+    assert seed() == 0x0001020304050607, "the run root's first 8 bytes, big-endian"
+    assert seed(replay_challenge="a") == CH.challenge_seed("a", root) != seed(replay_challenge="b")
+    assert seed(replay_challenge="a") != seed() and seed(replay_seed=7, replay_challenge="a") == 7
+
+
+class Committer:
+    """The committer whose weights `live_weights_check` re-registers: a registration replaces its ``weights``."""
+
+    def __init__(self, weights: Record | None) -> None:
+        self.weights = weights
+
+    def registers(self, root: str) -> Callable[[], Record]:
+        def register() -> Record:
+            self.weights = {"root": root}
+            return {"root": root, "tensors": 2, "wall_s": 0.5, "hash": "sha512"}
+        return register
+
+
+@pytest.mark.parametrize("registration, saved, live, equal, ref, why", [
+    ({"root": "ab"}, None, "ab", True, "ab", None),
+    ({"root": "ab"}, None, "cd", False, "ab", "root differs"),
+    (None, {"root": "ab"}, "ab", True, "ab", None),
+    (None, {"root": "ab"}, "cd", False, "ab", "root differs"),
+    ({}, {"root": "ab"}, "ab", None, None, "no committed weights root on the run"),
+    (None, None, "ab", None, None, "no committed weights root on the run"),
+])
+def test_the_live_weights_are_equal_only_to_the_root_the_run_committed(
+        registration: Record | None, saved: Record | None, live: str, equal: bool | None, ref: str | None, why: str | None) -> None:
+    """The root of record is the run's registration's when it has one, else the committer's weights from before the check; a
+    registration that holds no root names none.  The committer keeps the weights it had."""
+    com = Committer(saved)
+    got = C2.live_weights_check(com.registers(live), com, SimpleNamespace(weight_registration=registration))
+    assert got == {"equal": equal, "committed_root": ref, "replay_root": live, "tensors": 2, "wall_s": 0.5, "hash": "sha512",
+                   "method": "live parameters re-registered at replay (register_weights) == the run's committed weights root",
+                   "why": why}
+    assert com.weights == (saved if saved is not None else {"root": live})
+
+
+def test_a_registration_that_raises_leaves_the_weights_unverified_and_says_why() -> None:
+    def register() -> Record:
+        raise RuntimeError("x" * 300)
+
+    got = C2.live_weights_check(register, Committer(None), SimpleNamespace(weight_registration={"root": "ab"}))
+    assert got == {"equal": None, "note": ("by reference, unverified at replay: RuntimeError('" + "x" * 300)[:200]}
+
+
 @pytest.mark.parametrize("entries, live", [(["pouw:ncp-v2"], "pouw:ncp-v2"), (["pous:any", "pouw:ncp-v2-shift24"], "pouw:ncp-v2-shift24"),
                                            (["pouw:another-scheme"], None), (["pous:ncp-v2"], None), ([], None), (None, None)])
 def test_a_run_is_live_only_when_a_protocol_entry_s_replay_reads_the_live_run(tmp_path: Path, entries: list[str] | None,
@@ -181,25 +241,40 @@ def readings(monkeypatch: pytest.MonkeyPatch, *kb: int | None) -> None:
     monkeypatch.setattr(C2, "rss_kb", lambda: (left.pop(0), None))
 
 
-def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("released", [1, 0, OSError("libc.so.6: cannot open shared object file: " + "x" * 80)])
+def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(monkeypatch: pytest.MonkeyPatch,
+                                                                                released: int | OSError) -> None:
+    """Between the second reading and the third, glibc is asked to give its free pages back; what it says (1 if it gave any) is
+    on the record, and a host whose C library is not glibc names why in 80 characters."""
     readings(monkeypatch, 4096, 2048, 1024)
+    asked: list[str | int] = []
+
+    def cdll(name: str) -> SimpleNamespace:
+        asked.append(name)
+        if isinstance(released, OSError):
+            raise released
+
+        def malloc_trim(pad: int) -> int:
+            asked.append(pad)
+            return released
+
+        return SimpleNamespace(malloc_trim=malloc_trim)
+
+    monkeypatch.setattr(ctypes, "CDLL", cdll)
     sr, held = Record(), {"programs": object()}
     C2.free_programs(sr, held, 0)
-    trim = sr["programs_freed"].pop("malloc_trim")
-    assert held == {} and isinstance(trim, (int, str))
+    assert held == {} and asked == ["libc.so.6", *([] if isinstance(released, OSError) else [0])]
     assert sr["programs_freed"] == {"rss_before_kb": 4096, "rss_after_gc_kb": 2048, "rss_after_kb": 1024, "freed_mib": 3, "freed_by_gc_mib": 2,
-                                    "freed_by_malloc_trim_mib": 1,
+                                    "freed_by_malloc_trim_mib": 1, "malloc_trim": released if isinstance(released, int) else repr(released)[:80],
                                     "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
 
 
-def test_the_programs_are_freed_where_the_resident_set_cannot_be_read(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_host_that_gives_no_reading_of_the_resident_set_raises_after_the_programs_are_freed(monkeypatch: pytest.MonkeyPatch) -> None:
     readings(monkeypatch, None, None, None)
     sr, held = Record(), {"programs": object()}
-    C2.free_programs(sr, held, 0)
-    assert held == {}
-    assert {k: v for k, v in sr["programs_freed"].items() if k not in ("malloc_trim", "when")} == {
-        "rss_before_kb": None, "rss_after_gc_kb": None, "rss_after_kb": None, "freed_mib": None, "freed_by_gc_mib": None,
-        "freed_by_malloc_trim_mib": None}
+    with pytest.raises(TypeError):
+        C2.free_programs(sr, held, 0)
+    assert held == {} and sr == {}
 
 
 @pytest.mark.parametrize("replay, linkage, before, after", [
@@ -224,6 +299,45 @@ def test_the_value_correspondence_passes_only_when_the_replay_the_linkage_and_wh
         f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair 0): {linked} 2/2 (step, request) boundaries linked",
         ("[delta] C2 MOE PLANE ALIAS CHECK (pair 0): ALIAS up != down bytes on 3/4 (request, step, layer) triples, 1 layers, plane words None"
          " -- one triple aliases")]
+
+
+@pytest.mark.parametrize("block", [None, {}])
+def test_a_record_whose_blocks_are_null_or_empty_reads_as_one_that_leaves_them_out(tmp_path: Path, logged: Lines, block: Any) -> None:
+    """`record` reads a replay record's `sample`, `population`, `strata` and `moe_planes` as blocks the record may leave out: a
+    replay that did not run holds none of them, and one that holds them null or empty puts the same on the run's row."""
+    absent, held = sources(tmp_path), sources(tmp_path)
+    sr, lk = {"schema": SAMPLED_REPLAY, "result": None, "grade": "not-evaluated"}, {"schema": BOUNDARY_LINKAGE, "result": None}
+    blocks = dict.fromkeys(("sample", "population", "strata", "moe_planes"), block)
+    C2.record(absent, dict(sr), dict(lk), tmp_path / "sampled_replay_p0.json")
+    lines = logged()
+    C2.record(held, sr | blocks, dict(lk), tmp_path / "sampled_replay_p0.json")
+    assert held.components == absent.components and logged()[len(lines):] == lines and len(lines) == 2
+    assert held.components["sampled_replay"]["population"] == {"n": None, "source": None, "by_family": None, "not_evaluable_by_family": None}
+    assert (held.components["sampled_replay"]["n"], held.components["sampled_replay"]["strata_n"]) == (None, 0)
+    assert held.row["commit"]["sampled_replay"] == absent.row["commit"]["sampled_replay"] | {k: block for k in blocks if k != "strata"}
+    assert held.row["commit"]["sampled_replay"]["strata_n"] == 0
+
+
+@pytest.mark.parametrize("check, layers", [({}, 0), ({"per_layer": None}, 0), ({"per_layer": {}}, 0), ({"per_layer": {"0": {}, "1": {}}}, 2)])
+def test_the_alias_check_s_line_counts_the_layers_the_check_names(tmp_path: Path, logged: Lines, check: Record, layers: int) -> None:
+    sr, lk = evaluated()
+    sr["moe_planes"] = {"alias_check": {"compared": 2, "identical_n": 0, "result": True, "plane_words": 8} | check}
+    C2.record(sources(tmp_path), sr, lk, tmp_path / "sampled_replay_p0.json")
+    assert logged()[-1] == (f"[delta] C2 MOE PLANE ALIAS CHECK (pair 0): OK up != down bytes on 2/2 (request, step, layer) triples, {layers} layers, "
+                            "plane words 8")
+
+
+@pytest.mark.parametrize("sample", [None, {}])
+def test_a_replay_whose_sample_is_null_or_empty_is_kept_with_no_seed_and_counts_no_evaluation(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample: Any) -> None:
+    sr, lk = evaluated()
+    evaluates(monkeypatch, (sr | {"sample": sample}, lk))
+    readings(monkeypatch, 4096, 2048, 1024)
+    s, cache = sources(tmp_path, **CACHED), Cache()
+    C2.run(s, cache)
+    (kept,) = cache.values()
+    assert kept["seed"] is None and kept["sr"]["sample"] == sample
+    assert s.tl.calls[-1] == ("end", "validate.sampled_replay", {"pair": 0, "ok": True, "n": None, "linkage": True, "reused": False})
 
 
 def test_the_live_replay_reads_a_registered_weight_from_the_engine_s_model() -> None:

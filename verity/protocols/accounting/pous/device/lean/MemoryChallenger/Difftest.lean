@@ -4,15 +4,19 @@ public import Difftest
 public import Lms.Sign
 public import Attest.Period
 public import MemoryChallenger.WipeJudge
+public import MemoryChallenger.WipeCount
+public import MemoryChallenger.SetupRecord
 
 /-!
 # The difftest's Lean half
 
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
-`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
-signed message and egress count, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
-`range-u64` domain id, the period tree's root, the verifier's acceptance of a period and the liveness check).
+`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the setup record's
+bytes, message and check (`SetupRecord`), the streamed wipe's signed message, its start and end messages, an egress
+count's unit and what a composition's tie reads off a wipe's case (`MemoryChallenger.WipeCount`), and a device's HSS
+role digests and checks (`Lms.Hss`, `Attest.Period`: the `range-u64` domain id, the period tree's root, the verifier's
+acceptance of a period and the liveness check).
 `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
 run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/
@@ -51,17 +55,17 @@ def coinTreeFn (j : Json) : V Json := do
     ("openings", .arr ((Array.range t.k).map fun i => (t.opening i).toJson))])
 
 def verifyCoinFn (j : Json) : V Json := do
-  pure (.bool (verifyCoin (← SessionCommitment.ofJson (← J.get j "commitment" "input"))
+  pure (.bool (verifyCoin (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input"))
     (← CoinOpening.ofJson (← J.get j "opening" "input"))))
 
-def recordsRootFn (j : Json) : V Json := do pure (hexJ (← recordsRoot (← hex j "session") (← rounds j)))
+def recordsDigestFn (j : Json) : V Json := do pure (hexJ (← recordsDigest (← rounds j)))
 
 def headerFn (j : Json) : V Json := do
-  pure (.str (header (← SessionCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input")
+  pure (.str (header (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input")
     (← J.nat j "rounds" "input")))
 
 def messageFn (j : Json) : V Json := do
-  pure (hexJ (← message (← SessionCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input") (← rounds j)))
+  pure (hexJ (← message (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input") (← rounds j)))
 
 def blockDigestFn (j : Json) : V Json := do pure (hexJ (blockDigest (← hex j "block")))
 
@@ -88,17 +92,59 @@ def lmsVerifyFn (j : Json) : V Json := do
   let some p := (SCHEMES ++ TEST_SCHEMES).lookup scheme | throw s!"no scheme {scheme}"
   pure (.bool (← lmsVerify p (← hex j "public_key") (← hex j "session") (← hex j "record") (← hex j "signature")))
 
-/-- `streamed_wipe.message(commitment, ended, fill_start_ns, fill_end_ns, batches, egress_bits)`. -/
+private def setupRecordOf (j : Json) : V SetupRecord := do
+  pure { blocks := ← J.nat j "blocks" "input", commitment := ← hex j "commitment", salt := ← hex j "salt",
+         root := ← hex j "root" }
+
+/-- `SetupRecord(blocks, commitment, salt, root).value()`. -/
+def setupRecordFn (j : Json) : V Json := do pure (hexJ (← (← setupRecordOf j).value))
+
+/-- `setup_record_message(I, session, record)`. -/
+def setupRecordMessageFn (j : Json) : V Json := do
+  pure (hexJ (← SetupRecord.message (← hex j "I") (← hex j "session") (← setupRecordOf (← J.get j "record" "input"))))
+
+/-- `setup_record_ok(SignedSetupRecord.from_json(setup), scheme=…, public_key=…, session=…)` over `SCHEMES` and
+`pous_test_signer.SCHEMES`. -/
+def setupRecordOkFn (j : Json) : V Json := do
+  let s ← decodeSignedSetupRecord (← J.get j "setup" "input")
+  pure (.bool (setupRecordOk (SCHEMES ++ TEST_SCHEMES) (← J.str j "scheme" "input") (← hex j "public_key")
+    (← hex j "session") s))
+
+/-- `streamed_wipe.message(commitment, ended, start_mark, fill_start_ns, fill_end_ns, batches)`. -/
 def wipeMessageFn (j : Json) : V Json := do
   let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
   let batches ← (← J.arr j "batches" "input").mapM StreamedWipe.Batch.ofJson
   let intAt := fun (k : String) => do J.asInt (← J.get j k "input") k
-  pure (hexJ (← StreamedWipe.message c (← J.str j "ended" "input") (← intAt "fill_start_ns") (← intAt "fill_end_ns")
-    batches (← intAt "egress_bits")))
+  pure (hexJ (← StreamedWipe.message c (← J.str j "ended" "input") (← hex j "start_mark") (← intAt "fill_start_ns")
+    (← intAt "fill_end_ns") batches))
+
+/-- `streamed_wipe.start_message(commitment)`. -/
+def wipeStartMessageFn (j : Json) : V Json := do
+  pure (hexJ (StreamedWipe.startMessage (← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input"))))
+
+/-- `streamed_wipe.end_message(signed)`. -/
+def wipeEndMessageFn (j : Json) : V Json := do
+  pure (hexJ (← StreamedWipe.endMessage (← StreamedWipe.Signed.ofJson (← J.get j "signed" "input"))))
 
 /-- `streamed_wipe.egress_units(egress_bits)`. -/
 def wipeEgressUnitsFn (j : Json) : V Json := do
   pure (Lean.toJson (StreamedWipe.egressUnits (← J.asInt (← J.get j "egress_bits" "input") "egress_bits")))
+
+/-- `wipe_period.named(commitment, signed, egress_mib)`: what a composition's tie reads off a wipe's case, `null` for
+none, refused where the session's message is. -/
+def wipeNamedFn (j : Json) : V Json := do
+  let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
+  let signed ← match ← J.get j "signed" "input" with
+    | .null => pure none
+    | s => pure (some (← StreamedWipe.Signed.ofJson s))
+  let egress ← match ← J.get j "egress_mib" "input" with
+    | .null => pure none
+    | n => pure (some (← J.asInt n "egress_mib"))
+  let named ← WipeProtocol.named c ⟨signed, egress⟩
+  pure (match named with
+    | none => .null
+    | some n => Json.mkObj [("egress_mib", Lean.toJson n.egressMib), ("end_message", hexJ n.endMessage),
+        ("start_mark", hexJ n.startMark), ("start_message", hexJ n.startMessage)])
 
 /-- `lms.party_key_message(I, deployment, party, lower)`. -/
 def partyKeyMessageFn (j : Json) : V Json := do
@@ -160,9 +206,11 @@ def attestLivenessFn (j : Json) : V Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
-  ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
+  ("records_digest", recordsDigestFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
-  ("wipe_egress_units", wipeEgressUnitsFn), ("party_key_message", partyKeyMessageFn),
+  ("setup_record", setupRecordFn), ("setup_record_message", setupRecordMessageFn), ("setup_record_ok", setupRecordOkFn),
+  ("wipe_start_message", wipeStartMessageFn), ("wipe_end_message", wipeEndMessageFn),
+  ("wipe_egress_units", wipeEgressUnitsFn), ("wipe_named", wipeNamedFn), ("party_key_message", partyKeyMessageFn),
   ("period_root_message", periodRootMessageFn), ("liveness_message", livenessMessageFn), ("hss_verify", hssVerifyFn),
   ("domain_u64", domainU64Fn), ("attest_root", attestRootFn), ("attest_check", attestCheckFn),
   ("attest_liveness", attestLivenessFn)]

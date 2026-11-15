@@ -31,11 +31,12 @@ printed and posted to #agent-alerts, so a spec change never lands unseen.
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+from . import settings
 
 RECORD = "lean-audit.json"
 #: characters of one DM; past it the message ends with the compare link, which holds the rest
@@ -155,10 +156,10 @@ def _trust(doc: dict) -> tuple[list[str], dict[str, str], dict[str, dict[str, st
     t = doc.get("trust") if isinstance(doc.get("trust"), dict) else {}
     base = t.get("base") if isinstance(t.get("base"), dict) else {}
     extra = t.get("extra") if isinstance(t.get("extra"), dict) else {}
-    gap = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
+    trust_gaps = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
     return ([x for x in doc.get("deployed") or [] if isinstance(x, str)], {p: str(w) for p, w in base.items()},
             {g: {p: str(w) for p, w in ps.items()} for g, ps in extra.items() if isinstance(ps, dict)},
-            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in gap.items() if isinstance(ps, list)})
+            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in trust_gaps.items() if isinstance(ps, list)})
 
 
 def _renames(olds: dict[str, dict], news: dict[str, dict], guarantees: dict[str, str]) -> dict[str, str]:
@@ -535,7 +536,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
         who = human_entry(reg, "daniel")
         if not who:
             raise SlackError("the Slack registry names no Daniel with a slack_user")
-        api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
+        api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
         api.call("chat.postMessage", channel=who["slack_user"], text=text, username="research merge", unfurl_links=False)
         log(f"research merge: the spec change went to Daniel as a DM ({len(text)} characters)")
         return True
@@ -544,7 +545,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
                + (str(e) if isinstance(e, SlackError) else f"{type(e).__name__}: {e}"))
         print(why, file=sys.stderr)
         try:
-            api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
+            api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
             api.call("chat.postMessage", channel=((reg or {}).get("channels") or {})["agent-alerts"]["id"],
                      text=why + "\n\n" + text[:LIMIT // 2], username="research merge", unfurl_links=False)
         except Exception as e2:

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.commit.hidden_stream import StreamLayout
 from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
     guarded_max_policy,
@@ -14,7 +15,6 @@ from verity_vllm.acquire.sources.hidden_source import (
     tap_ms,
     tap_row3,
 )
-from verity_vllm.commit.hidden_stream import StreamLayout
 
 
 def test_the_policy_is_read_off_the_query_header():

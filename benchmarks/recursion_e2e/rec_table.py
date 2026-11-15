@@ -35,15 +35,12 @@ def markdown(doc: dict[str, Any]) -> str:
                 + f", {q.get('REPEAT')} repeats per CPU step")
     runs = doc.get("run_params")
     h = doc.get("headline") or {}
-    verdict = ("one whole recursive run, accepted" if h.get("ok") else
-               "one whole recursive run, **not accepted** (see ok and the steps' exits)" if h.get("complete") else
-               "**not a whole recursive run**: some of " + ", ".join(RP.E2E_STEPS) + " did not run")
     st = doc.get("staged")
     shape = (f"{st['subcircuit']} x {st['n']} (m = {st['m']}, {'served window' if st.get('window') else 'generated values'})"
              if st else f"K = {p.get('K')}, N = {p.get('N')}")
     lines = [f"Recursion bench: {shape}, oprove modes {p.get('modes', '?')}, "
              + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))
-             + f". Seconds: median [min–max] (n). Verdict: {verdict}"
+             + f". Seconds: median [min–max] (n). Verdict: {verdict(h, p.get('modes', '?'))}"
              + (" (merged runs)" if h.get("merged") else "") + ".", "",
              "| stage | step | what | time s | run e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |"
              + (" run |" if doc.get("runs") else ""),
@@ -96,6 +93,25 @@ def markdown(doc: dict[str, Any]) -> str:
         if rel.get("stops"):
             lines.append("Stops: " + "; ".join(f"{e.get('part')}: {e.get('why', e.get('event'))}" for e in rel["stops"]) + ".")
     return "\n".join(lines) + "\n"
+
+
+def verdict(h: dict[str, Any], modes: Any) -> str:
+    """The table's verdict from a result's headline. "accepted" only for a whole run whose parts passed and whose recursive
+    statement Lean composed and accepted. A run that passed on its parts without that is said to be so, with its oprove
+    modes and the reason; so is a headline from before ``composed``, which records no composition. A run whose
+    composition Lean refused is not accepted, with Lean's reason: a forced retry's names the retry."""
+    if h.get("ok") and h.get("composed") is True:
+        return "one whole recursive run, accepted"
+    if h.get("parts_ok", h.get("ok")) and h.get("composed") is not True:
+        how = "**not composed**" if h.get("composed") is False else "**not recorded as composed**"
+        why = str(h.get("not_composed") or "").removeprefix("not composed: ")
+        return (f"one whole run, its outer proofs accepted and its recursive statement {how}, so not an accepted recursive "
+                f"run (oprove modes {modes}" + (f": {why}" if why else "") + ")")
+    if h.get("complete"):
+        refused = h.get("refused")
+        return "one whole recursive run, **not accepted**" + (
+            f": Lean refused its recursive statement ({refused})" if refused else " (see ok and the steps' exits)")
+    return "**not a whole recursive run**: some of " + ", ".join(RP.E2E_STEPS) + " did not run"
 
 
 def _yn(v: Any) -> str:

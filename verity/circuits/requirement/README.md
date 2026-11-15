@@ -36,7 +36,7 @@ What code outside this directory may use. Everything else here is internal.
 ~~~sh
 cd verity/circuits/requirement && lake build                 # .lake/build/bin/requirement-difftest
 python tools/verity/lean/check.py verity/circuits/requirement   # the Lean check, from the repository root
-uv run tools/verity/check/suites.py verity/circuits/requirement # the difftest against the Python
+uv run tools/check/suites.py verity/circuits/requirement # the difftest against the Python
 ~~~
 
 `tests/test_requirement_difftest.py` holds it to `verity.circuits.requirement` through `verity_difftest`, output for
@@ -51,8 +51,8 @@ vLLM tests' tiny configuration and `b1.RMSNormFusedCudaV1` at N = 64.
 
 `tests/test_census_and_memory_map.py` holds two more producers to the same Lean through the same instance format:
 `requirement.from_census` on those Programs' censuses (a census value per value, a value of 0 bits per scheduled root
-Call), and memory-map/v1 as the vLLM integration's builder (`verity_vllm.protocols.remote_bandwidth.memory_map.Lines`) records it, a
-session's KV rows in the blocks it wrote under the free convention of 21:52Z (step s's record takes effect after step s's reads). The audit
+Call), and memory-map/v1 as the vLLM integration's builder for PoUB (its `memory_map.Lines`) records it, a session's KV
+rows in the blocks it wrote under the free convention (step s's record takes effect after step s's reads). The audit
 credits the live rows in complete blocks, and those it doesn't, a page's first rows until its last is born, lie in one
 block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last
 structural reader, a gather that may select one included, and the link holds at every step. With r0's last step
