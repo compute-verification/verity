@@ -265,8 +265,6 @@ def split(t: Tree, d: str) -> dict[str, str]:
         head.append("[dependency-groups]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in groups.items()) + "\n")
     head.append("# Not an installable package: a workspace member so that its tests run in the workspace environment.\n"
                 "[tool.uv]\npackage = false\n\n")
-    if norm(name) not in {norm(s) for s in t.sources}:
-        head.append(f"[tool.uv.sources]\n{name} = {{ workspace = true }}\n\n")
     body = "".join(moved)
     member = "".join(head) + _strip_suite_relative(body, "tests/").rstrip("\n") + "\n"
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
@@ -277,7 +275,13 @@ def split(t: Tree, d: str) -> dict[str, str]:
     if f"{d}/tests" not in t.members:
         m = re.search(r"^members\s*=\s*\[[^\]]*\]", rootp, re.M)
         listed = m.group(0).replace(f'"{d}"', f'"{d}", "{d}/tests"', 1)
-        out["pyproject.toml"] = rootp[:m.start()] + listed + rootp[m.end():]
+        rootp = rootp[:m.start()] + listed + rootp[m.end():]
+    if norm(name) not in {norm(s) for s in t.sources}:
+        # a member's own `workspace = true` source for a member whose directory holds it is refused by uv: the root names it
+        m = re.search(r"^\[tool\.uv\.sources\]\n(?:[^\[\n].*\n)*", rootp, re.M)
+        rootp = rootp[:m.end()] + f"{name} = {{ workspace = true }}\n" + rootp[m.end():]
+    if rootp != t.read("pyproject.toml"):
+        out["pyproject.toml"] = rootp
     if f"{d}/conftest.py" in t.tracked:
         out[f"{d}/conftest.py"] = None
         inner = t.read(f"{d}/tests/conftest.py")
