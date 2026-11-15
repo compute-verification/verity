@@ -1,0 +1,1265 @@
+# The older names left in the Lean, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/lean_names_map.toml` renames, one move for every lead's rows. Lean only: Python, benchmarks, adapters and
+# tools keep their names. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames
+# that `check.py --update --moved` takes. A word that names other declarations too goes by file ([[words_in]]), each
+# entry listing a module that declares the name it renames, since `move_check.py` keeps a scoped word only there.
+#
+# By hand, each in a commit of its own after the map's: `Accounting.Rate.DeployedSession` becomes `DeployedRun`, a
+# name the module `Proofs.Accounting.RateAudit.DeployedRun` already spells; `exWindow` becomes `exExecutionPhase`;
+# `Flock.Guarantees.WindowRec` becomes `SamplingBlockRec`; the certifier's four charge-chain `session`s become
+# `chargesFrom`; `Core.Account.Example.session` and `MemoryChallenger.Properties.InProofs.sessionOf` become
+# `challengePhase` and `challengePhaseOf`; and the homonyms the words couldn't place.
+# The map's rename stands beyond its words where a file already spells the new name, which move_check reads as a
+# merge of two names: the six one-file entries below that say so, and `instBEqSessionCommitment`, the instance
+# Lean derives.
+# Left out: the two network certifier `Instance.session`s, each punned with the issuer's field `session`;
+# `Pouw.Window.flockKnowledgeSound_analysisZC`, whose word is only its namespace's; `Accounting.Window`, its
+# `ticks`, `steps` and `card_ticks`, a refactor.
+[words]
+# proofs
+"card_wrongBlocks_lt_subsetInputs" = "card_incorrectBlocks_lt_subsetInputs"
+"member_accepted_sampledWrong_le" = "member_accepted_sampledIncorrect_le"
+"accepted_sampledWrong_le_at" = "accepted_sampledIncorrect_le_at"
+"wrongRegZ_subset_wrongRegZc" = "incorrectRegZ_subset_incorrectRegZc"
+"JointStratifiedHorizonMT" = "JointStratifiedPooledMT"
+"accepted_sampledWrong_le" = "accepted_sampledIncorrect_le"
+"faulty_card_le_wrongRegZ" = "faulty_card_le_incorrectRegZ"
+"monitoringPeriod_horizon" = "monitoringPeriod_monitoringPeriod"
+"wrongAtBoundaryAt_subset" = "incorrectAtBoundaryAt_subset"
+"wrongOf_mem_admissibleAt" = "incorrectOf_mem_admissibleAt"
+"IntegrityHorizonCarried" = "IntegrityPooledCarried"
+"wrongIn_eq_inter_faulty" = "incorrectIn_eq_inter_faulty"
+"IntegrityHorizonBlocks" = "IntegrityPooledBlocks"
+"JointStratifiedHorizon" = "JointStratifiedPooled"
+"accepted_drawnWrong_le" = "accepted_drawnIncorrect_le"
+"wrongAtBoundary_subset" = "incorrectAtBoundary_subset"
+"wrongOf_mem_admissible" = "incorrectOf_mem_admissible"
+"wrong_subset_wrongRegZ" = "incorrect_subset_incorrectRegZ"
+"card_wrong_lt_of_relS" = "card_incorrect_lt_of_relS"
+"card_wrong_partsOf_lt" = "card_incorrect_partsOf_lt"
+"exists_wrongBlocks_eq" = "exists_incorrectBlocks_eq"
+"inter_cell_wrongAllAt" = "inter_cell_incorrectAllAt"
+"toy_wrongAtBoundaryAt" = "toy_incorrectAtBoundaryAt"
+"wrongInAt_subset_cell" = "incorrectInAt_subset_cell"
+"WindowSamplingDesign" = "ExecutionPhaseSamplingDesign"
+"card_wrong_le_faulty" = "card_incorrect_le_faulty"
+"inter_cell_wrongOfAt" = "inter_cell_incorrectOfAt"
+"card_wrongBlocks_lt" = "card_incorrectBlocks_lt"
+"inter_cell_wrongAll" = "inter_cell_incorrectAll"
+"length_le_of_window" = "length_le_of_executionPhase"
+"wrongIn_subset_cell" = "incorrectIn_subset_cell"
+"wrong_subset_faulty" = "incorrect_subset_faulty"
+"zeroTwo_wrongBlocks" = "zeroTwo_incorrectBlocks"
+"inter_cell_wrongOf" = "inter_cell_incorrectOf"
+"wrongAtBoundary_le" = "incorrectAtBoundary_le"
+"accepted_wrong_le" = "accepted_incorrect_le"
+"wrongAllAt_subset" = "incorrectAllAt_subset"
+"IntegrityHorizon" = "IntegrityPooled"
+"counts_wrongOfAt" = "counts_incorrectOfAt"
+"interiorWindowOk" = "interiorRunOk"
+"rsZHJI_wrongRegZ" = "rsZHJI_incorrectRegZ"
+"rsZHJS_wrongRegZ" = "rsZHJS_incorrectRegZ"
+"sum_filter_wrong" = "sum_filter_incorrect"
+"wrongSet_eq_join" = "incorrectSet_eq_join"
+"cmp_wrong_units" = "cmp_incorrect_units"
+"rsZHJ_wrongRegZ" = "rsZHJ_incorrectRegZ"
+"windowsApart_ok" = "executionPhasesApart_ok"
+"wrongAll_subset" = "incorrectAll_subset"
+"wrongAtBoundary" = "incorrectAtBoundary"
+"wrongRegZ_congr" = "incorrectRegZ_congr"
+"wrong_ofAdapted" = "incorrect_ofAdapted"
+"JointHorizonV5" = "JointPooledV5"
+"WindowEvidence" = "RunEvidence"
+"counts_wrongOf" = "counts_incorrectOf"
+"mem_wrongRegZc" = "mem_incorrectRegZc"
+"rsZJ_wrongRegZ" = "rsZJ_incorrectRegZ"
+"wrongBlocks_le" = "incorrectBlocks_le"
+"mem_wrongRegZ" = "mem_incorrectRegZ"
+"part_wrongSet" = "part_incorrectSet"
+"partsOf_wrong" = "partsOf_incorrect"
+"plain_window0" = "plain_executionPhase0"
+"plain_windowB" = "plain_executionPhaseB"
+"stratumEscape" = "stratumMissProb"
+"toy_wrongInAt" = "toy_incorrectInAt"
+"window0_model" = "executionPhase0_model"
+"windowB_model" = "executionPhaseB_model"
+"windowVectors" = "executionPhaseVectors"
+"wrong_ofAudit" = "incorrect_ofAudit"
+"BlockEscapes" = "BlockMissProb"
+"faulty_wrong" = "faulty_incorrect"
+"mem_wrongSet" = "mem_incorrectSet"
+"windowsApart" = "executionPhasesApart"
+"windowsPiece" = "runsPiece"
+"memberWrong" = "memberIncorrect"
+"toy_wrongIn" = "toy_incorrectIn"
+"window0_asc" = "executionPhase0_asc"
+"window0_obj" = "executionPhase0_obj"
+"windowB_asc" = "executionPhaseB_asc"
+"windowB_obj" = "executionPhaseB_obj"
+"wrongSet_eq" = "incorrectSet_eq"
+"blockWrong" = "blockIncorrect"
+"escapeTest" = "missProbTest"
+"wrongAllAt" = "incorrectAllAt"
+"wrongRegZc" = "incorrectRegZc"
+"windowsIn" = "runsIn"
+"wrongRegZ" = "incorrectRegZ"
+"wrong_sub" = "incorrect_sub"
+"wrongAll" = "incorrectAll"
+"wrongSet" = "incorrectSet"
+"WrongAt" = "IncorrectAt"
+"window0" = "executionPhase0"
+"windowB" = "executionPhaseB"
+"wrongIn" = "incorrectIn"
+"wrongOf" = "incorrectOf"
+"wrong0" = "incorrect0"
+# compute-accounting
+"transcript_indep_of_q_zero" = "trace_indep_of_q_zero"
+"checkedSet_zeroTranscript" = "checkedSet_zeroTrace"
+"pricedHonest_transcript" = "pricedHonest_trace"
+"WindowCommitmentRecord" = "ExecutionPhaseCommitmentRecord"
+"splitTranscript_rowIdx" = "splitTrace_rowIdx"
+"wrongCopyClosed_copies" = "incorrectCopyClosed_copies"
+"freeHonest_transcript" = "freeHonest_trace"
+"WindowBoundOfService" = "ExecutionPhaseBoundOfService"
+"drawSession_withheld" = "drawChallengePhase_withheld"
+"creditBound_window" = "creditBound_executionPhase"
+"drawSession_honest" = "drawChallengePhase_honest"
+"strataBound_window" = "strataBound_executionPhase"
+"guess_transcript" = "guess_trace"
+"saltSession_spec" = "saltChallengePhase_spec"
+"sum_windows_le_T" = "sum_periods_le_T"
+"windowLayoutWith" = "executionPhaseLayoutWith"
+"windowSaltReason" = "executionPhaseSaltReason"
+"window_served_le" = "executionPhase_served_le"
+"Int32Transcript" = "Int32Trace"
+"WrongCopyClosed" = "IncorrectCopyClosed"
+"int32Transcript" = "int32Trace"
+"splitTranscript" = "splitTrace"
+"windowLayout_eq" = "executionPhaseLayout_eq"
+"windowSaltCheck" = "executionPhaseSaltCheck"
+"EndToEndWindow" = "EndToEndExecutionPhase"
+"ServiceEscapes" = "ServiceMissProb"
+"copyTranscript" = "copyTrace"
+"saltSession_ok" = "saltChallengePhase_ok"
+"sessionEntries" = "challengePhaseEntries"
+"sum_windows_le" = "sum_periods_le"
+"windowOpenRoot" = "executionPhaseOpenRoot"
+"zeroTranscript" = "zeroTrace"
+"CreditWindows" = "CreditExecutionPhases"
+"EscapesWithin" = "MissProbWithin"
+"WindowAccepts" = "ExecutionPhaseAccepts"
+"windowAnchors" = "executionPhaseAnchors"
+"windowDrawnOf" = "executionPhaseDrawnOf"
+"windowProblem" = "executionPhaseProblem"
+"windowSession" = "executionPhaseSession"
+"window_le_exp" = "executionPhase_le_exp"
+"windowLayout" = "executionPhaseLayout"
+"WindowBound" = "ExecutionPhaseBound"
+"WindowDelta" = "ExecutionPhaseDelta"
+"saltSession" = "saltChallengePhase"
+"windowDrawn" = "executionPhaseDrawn"
+"wrongWeight" = "incorrectWeight"
+"rootWindow" = "rootExecutionPhase"
+"windowForm" = "executionPhaseForm"
+"windowKeys" = "executionPhaseKeys"
+"windowRec" = "executionPhaseRec"
+# network-accounting
+"rowsWindows_ok" = "rowsExecutionPhases_ok"
+"rowsWindows" = "rowsExecutionPhases"
+# top
+"DecodableConstantRatePerWindow_honest" = "DecodableConstantRatePerExecutionPhase_honest"
+"encardProgramRunsLeWindows_nontrivial" = "encardProgramRunsLeExecutionPhases_nontrivial"
+"encardProgramRunsLeWindows_honest" = "encardProgramRunsLeExecutionPhases_honest"
+"windowCouplingTarget_of_sample_at" = "executionPhaseCouplingTarget_of_sample_at"
+"windowCouplingTarget_of_logged" = "executionPhaseCouplingTarget_of_logged"
+"windowCouplingTarget_of_noMiss" = "executionPhaseCouplingTarget_of_noMiss"
+"windowCouplingTarget_of_close" = "executionPhaseCouplingTarget_of_close"
+"ConstantRatePerWindow_honest" = "ConstantRatePerExecutionPhase_honest"
+"sessionPicks_windowReadingAt" = "sessionPicks_executionPhaseReadingAt"
+"EncardProgramRunsLeWindows" = "EncardProgramRunsLeExecutionPhases"
+"encardProgramRunsLeWindows" = "encardProgramRunsLeExecutionPhases"
+"windowSampleMap_couples_at" = "executionPhaseSampleMap_couples_at"
+"windowSpotSound_of_members" = "executionPhaseSpotSound_of_members"
+"avg_windowSampleMap_start" = "avg_executionPhaseSampleMap_start"
+"picksOnce_windowReadingAt" = "picksOnce_executionPhaseReadingAt"
+"windowErr_sampleMap_le_at" = "executionPhaseErr_sampleMap_le_at"
+"windowFirstStop_sampleMap" = "executionPhaseFirstStop_sampleMap"
+"windowNoMiss_le_of_logged" = "executionPhaseNoMiss_le_of_logged"
+"windowSpotSound_assembled" = "executionPhaseSpotSound_assembled"
+"windowSpotSound_of_logged" = "executionPhaseSpotSound_of_logged"
+"windowSpotSound_of_sample" = "executionPhaseSpotSound_of_sample"
+"windowDecodes_of_members" = "executionPhaseDecodes_of_members"
+"windowOpenMap_roundClose" = "executionPhaseOpenMap_roundClose"
+"windowRecordFinder_calls" = "executionPhaseRecordFinder_calls"
+"windowSampleMap_start_eq" = "executionPhaseSampleMap_start_eq"
+"windowSessions_firstStop" = "executionPhaseSessions_firstStop"
+"windowSpotSound_sessions" = "executionPhaseSpotSound_sessions"
+"MonitoringPeriodEscapes" = "MonitoringPeriodMissProb"
+"oneWindow_not_pouwSound" = "oneExecutionPhase_not_pouwSound"
+"oneWindow_withinCompute" = "oneExecutionPhase_withinCompute"
+"remote_soundness_window" = "remote_soundness_executionPhase"
+"windowCouples_of_within" = "executionPhaseCouples_of_within"
+"windowOpenMap_linkClose" = "executionPhaseOpenMap_linkClose"
+"windowSessions_of_reach" = "executionPhaseSessions_of_reach"
+"not_rTwo_of_wrongInner" = "not_rTwo_of_incorrectInner"
+"prob_le_windowMessages" = "prob_le_executionPhaseMessages"
+"windowBindFinder_calls" = "executionPhaseBindFinder_calls"
+"windowCouples_of_close" = "executionPhaseCouples_of_close"
+"windowErr_le_of_charge" = "executionPhaseErr_le_of_charge"
+"windowReadingAt_served" = "executionPhaseReadingAt_served"
+"windowReadingAt_unique" = "executionPhaseReadingAt_unique"
+"windowMsgFinder_calls" = "executionPhaseMsgFinder_calls"
+"windowReadingAt_picks" = "executionPhaseReadingAt_picks"
+"windowSampleMap_fresh" = "executionPhaseSampleMap_fresh"
+"windowSampleMap_start" = "executionPhaseSampleMap_start"
+"WindowCouplingTarget" = "ExecutionPhaseCouplingTarget"
+"WindowFirstStopFresh" = "ExecutionPhaseFirstStopFresh"
+"windowPasses_members" = "executionPhasePasses_members"
+"windowReadFinder_out" = "executionPhaseReadFinder_out"
+"window_quadratic_any" = "executionPhase_quadratic_any"
+"WindowConstructions" = "ExecutionPhaseConstructions"
+"WindowCouplesWithin" = "ExecutionPhaseCouplesWithin"
+"firstSamples_window" = "firstSamples_executionPhase"
+"oneWindow_pouwSound" = "oneExecutionPhase_pouwSound"
+"spotSound_of_window" = "spotSound_of_executionPhase"
+"windowReadFinder_of" = "executionPhaseReadFinder_of"
+"windowReads_members" = "executionPhaseReads_members"
+"not_windowsHold_T0" = "not_executionPhasesHold_T0"
+"printsLog_onWindow" = "printsLog_onExecutionPhase"
+"windowCap_of_rates" = "executionPhaseCap_of_rates"
+"windowFirstStop_eq" = "executionPhaseFirstStop_eq"
+"windowRead_members" = "executionPhaseRead_members"
+"windowRecordFinder" = "executionPhaseRecordFinder"
+"wrongInner_card_le" = "incorrectInner_card_le"
+"wrongReplay_subset" = "incorrectReplay_subset"
+"WindowStartWithin" = "ExecutionPhaseStartWithin"
+"not_rTwo_of_wrong" = "not_rTwo_of_incorrect"
+"sampled_of_window" = "sampled_of_executionPhase"
+"windowOff_le_prob" = "executionPhaseOff_le_prob"
+"window_linear_any" = "executionPhase_linear_any"
+"window_of_sampled" = "executionPhase_of_sampled"
+"wrongAtBoundaryAt" = "incorrectAtBoundaryAt"
+"SampledPerWindow" = "SampledPerExecutionPhase"
+"WindowRegistered" = "ExecutionPhaseRegistered"
+"opensOn_onWindow" = "opensOn_onExecutionPhase"
+"windowBindFinder" = "executionPhaseBindFinder"
+"windowReadFinder" = "executionPhaseReadFinder"
+"windowSampleMaps" = "executionPhaseSampleMaps"
+"windowStop_modes" = "executionPhaseStop_modes"
+"window_quadratic" = "executionPhase_quadratic"
+"SlowdownWindows" = "SlowdownExecutionPhases"
+"WindowRoundHold" = "ExecutionPhaseRoundHold"
+"oneWindow_false" = "oneExecutionPhase_false"
+"windowFirstStop" = "executionPhaseFirstStop"
+"windowMsgFinder" = "executionPhaseMsgFinder"
+"windowReadingAt" = "executionPhaseReadingAt"
+"windowSampleMap" = "executionPhaseSampleMap"
+"WindowDecoders" = "ExecutionPhaseDecoders"
+"WindowDeployed" = "ExecutionPhaseDeployed"
+"WindowFinderCR" = "ExecutionPhaseFinderCR"
+"WindowInstance" = "ExecutionPhaseInstance"
+"WindowLinkHold" = "ExecutionPhaseLinkHold"
+"WindowReadings" = "ExecutionPhaseReadings"
+"WindowSessions" = "ExecutionPhaseSessions"
+"expected_wrong" = "expected_incorrect"
+"memberWrong_eq" = "memberIncorrect_eq"
+"oneWindow_true" = "oneExecutionPhase_true"
+"session_family" = "challengePhase_family"
+"windowsHold_T1" = "executionPhasesHold_T1"
+"windowsIn_spec" = "executionPhasesIn_spec"
+"windowsOf_some" = "executionPhasesOf_some"
+"PouwPerWindow" = "PouwPerExecutionPhase"
+"WindowCoinMap" = "ExecutionPhaseCoinMap"
+"WindowCouples" = "ExecutionPhaseCouples"
+"WindowDecodes" = "ExecutionPhaseDecodes"
+"WindowReaches" = "ExecutionPhaseReaches"
+"WindowsPlaced" = "ExecutionPhasesPlaced"
+"code_wsession" = "code_wrun"
+"source_window" = "source_executionPhase"
+"windowOpenMap" = "executionPhaseOpenMap"
+"window_covers" = "executionPhase_covers"
+"window_linear" = "executionPhase_linear"
+"wrongCapacity" = "incorrectCapacity"
+"UnboundWrong" = "UnboundIncorrect"
+"WindowCovers" = "ExecutionPhaseCovers"
+"WindowLength" = "ExecutionPhaseLength"
+"WindowPasses" = "ExecutionPhasePasses"
+"code_wwindow" = "code_wexecutionPhase"
+"mem_onWindow" = "mem_onExecutionPhase"
+"prob_windowP" = "prob_executionPhaseP"
+"unboundWrong" = "unboundIncorrect"
+"windowLogged" = "executionPhaseLogged"
+"window_close" = "executionPhase_close"
+"windowsCount" = "executionPhasesCount"
+"windowsIn_ok" = "executionPhasesIn_ok"
+"windowsOf_eq" = "executionPhasesOf_eq"
+"windowsOf_ne" = "executionPhasesOf_ne"
+"windows_some" = "executionPhases_some"
+"wrong_beside" = "incorrect_beside"
+"wrong_honest" = "incorrect_honest"
+"FaultyWrong" = "FaultyIncorrect"
+"WindowFiles" = "ExecutionPhaseFiles"
+"WindowReads" = "ExecutionPhaseReads"
+"WindowsHold" = "ExecutionPhasesHold"
+"faultyWrong" = "faultyIncorrect"
+"find_window" = "find_executionPhase"
+"session_run" = "challengePhase_run"
+"windowStray" = "executionPhaseStray"
+"window_ineq" = "executionPhase_ineq"
+"windows_cap" = "executionPhases_cap"
+"wrongBlocks" = "incorrectBlocks"
+"wrongReplay" = "incorrectReplay"
+"WindowRead" = "ExecutionPhaseRead"
+"windowJson" = "executionPhaseJson"
+"wrongInner" = "incorrectInner"
+"WindowCap" = "ExecutionPhaseCap"
+"WindowsIn" = "ExecutionPhasesIn"
+"oneWindow" = "oneExecutionPhase"
+"runWindow" = "runExecutionPhase"
+"windowErr" = "executionPhaseErr"
+"windowOff" = "executionPhaseOff"
+"windowOut" = "executionPhaseOut"
+"windowReg" = "executionPhaseReg"
+"wrongInAt" = "incorrectInAt"
+"NoEscape" = "NoMissProb"
+"WindowAt" = "ExecutionPhaseAt"
+"WindowOn" = "ExecutionPhaseOn"
+"onWindow" = "onExecutionPhase"
+"windowGS" = "executionPhaseGS"
+"windowG" = "executionPhaseG"
+"windowP" = "executionPhaseP"
+# lean
+"sessionLayout_coinRun" = "runLayout_coinRun"
+"sessionLayout" = "runLayout"
+
+# Qualified names, ahead of the bare words of the files they share.
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
+    "security/Proofs/Properties/Pous/WipeSigned.lean",
+]
+words = { "Device.session_mem" = "Device.challengePhase_mem" }
+
+[[words_in]]
+files = [
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean",
+]
+words = { "Credit.window" = "Credit.executionPhase" }
+
+[[words_in]]
+files = [
+    "security/Properties/Pouw/MonitoringPeriodJ10R.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+]
+words = { "Credit.window" = "Credit.executionPhase" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Slowdown/FitWitness.lean",
+    "security/Proofs/Properties/Remote.lean",
+    "verity/protocols/compose/verifier/remote/CoreRemote.lean",
+]
+words = { "FitWitness.windows" = "FitWitness.serverBlocks", "Remote.windows" = "Remote.executionPhases" }
+
+[[words_in]]
+files = [
+    "security/Definitions/WeightSecurity/ToyTied.lean",
+    "security/Proofs/WeightSecurity/Tied.lean",
+]
+words = { "ToyTied.window" = "ToyTied.run" }
+
+# proofs
+[[words_in]]
+files = ["security/Proofs/Flock/Soundness/Audit/Pooled.lean"]
+words = { "Escapes" = "MissProb" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Challenger/Lines.lean",
+    "security/Proofs/Properties/Challenger/Steps.lean",
+    "security/Proofs/Properties/Challenger/Window.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerSession.lean",
+]
+words = { "MonitoringPeriod" = "PeriodRecord" }
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean"]
+words = { "Window" = "Run" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Spot/MonitoringPeriod.lean",
+    "security/Properties/Spot/MonitoringPeriod.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriodAudit.lean",
+]
+words = { "Windows" = "Runs" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+]
+words = { "card_wrong_le" = "card_incorrect_le" }
+
+# proofs, top, lean
+[[words_in]]
+files = [
+    "security/Definitions/Core/Draw.lean",
+    "security/Definitions/Flock/Audit/Harm.lean",
+    "security/Definitions/Flock/Audit/Partitioning.lean",
+    "security/Definitions/Pouw/Guarantees/Window.lean",
+    "security/Definitions/Pouw/Window.lean",
+    "security/Proofs/Core/Challenger.lean",
+    "security/Proofs/Flock/Bridge/Draw.lean",
+    "security/Proofs/Flock/Bridge/RightRegZc.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Claims/Sampling/Draws.lean",
+    "security/Proofs/Flock/Claims/Sampling/EndToEndSample.lean",
+    "security/Proofs/Flock/Claims/Sampling/ExecBernoulli.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Bounds.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Drawn.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Drawn.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Layout.lean",
+    "security/Proofs/Flock/EndToEnd/Period.lean",
+    "security/Proofs/Flock/RecGeneric/Sampled.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/SampledGeneric/Flock.lean",
+    "security/Proofs/Flock/SampledGeneric/Statements.lean",
+    "security/Proofs/Flock/Soundness/Audit/Closure.lean",
+    "security/Proofs/Flock/Soundness/Audit/Delivered.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBound.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudget.lean",
+    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Bernoulli.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Witnesses.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/FreeCompute.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/TwoStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Bounds.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/SamplingDesigns.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Witness.lean",
+    "security/Proofs/Flock/Soundness/Audit/Pooled.lean",
+    "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
+    "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
+    "security/Proofs/Flock/Soundness/Audit/StratifiedProj.lean",
+    "security/Proofs/Flock/Soundness/Audit/Window.lean",
+    "security/Proofs/Flock/Soundness/Audit/Work.lean",
+    "security/Proofs/Flock/Soundness/ExecSample.lean",
+    "security/Proofs/Flock/Soundness/ExecSampleOS.lean",
+    "security/Proofs/Flock/Soundness/ExecStratified.lean",
+    "security/Proofs/Flock/Soundness/KeyedSample.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Properties/Spot/PlanCheck.lean",
+    "security/Proofs/WeightSecurity/TwoProd.lean",
+    "security/Proofs/WeightSecurity/TwoProdMonitoringPeriod.lean",
+    "security/Proofs/WeightSecurity/TwoProdWitnesses.lean",
+    "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/PyJson.lean",
+]
+words = { "escape" = "missProb" }
+
+[[words_in]]
+files = ["security/Proofs/Flock/Soundness/Audit/Circuit.lean"]
+words = { "exists_wrong_fine" = "exists_incorrect_fine" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Bridge/Assembly.lean",
+    "security/Proofs/Flock/Bridge/RightRegZc.lean",
+    "security/Proofs/Flock/Bridge/V5/Assembly.lean",
+    "security/Proofs/Flock/Claims/Bridge/WrongSet.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Layout.lean",
+    "security/Proofs/Flock/EndToEndRegisteredRows/Reduce.lean",
+    "security/Proofs/Flock/Recursive/Transfer.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
+    "security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/RowsSound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "security/Proofs/Flock/Soundness/Types/Units.lean",
+    "security/Proofs/Flock/VBridge/Keyed.lean",
+    "security/Proofs/Properties/Verity/Sampled/Window/UnboundLaid.lean",
+    "security/Proofs/Properties/Verity/Sampled/Window/UnboundMember.lean",
+]
+words = { "mem_wrong" = "mem_incorrect" }
+
+# proofs: move_check drops it here: the file spells `mem_incorrect` already (line 137)
+[[words_in]]
+files = ["security/Proofs/Flock/Bridge/CircuitOf.lean"]
+words = { "mem_wrong" = "mem_incorrect" }
+
+# proofs: move_check drops it here: the file spells `mem_incorrect` already (line 134)
+[[words_in]]
+files = ["security/Proofs/Flock/SampledGeneric/Flock.lean"]
+words = { "mem_wrong" = "mem_incorrect" }
+
+# proofs: move_check drops it here: the file spells `mem_incorrect` already (line 53)
+[[words_in]]
+files = ["security/Proofs/Properties/Verity/Sampled/UnboundBridge.lean"]
+words = { "mem_wrong" = "mem_incorrect" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "security/Proofs/Properties/Verity/Sampled.lean",
+    "security/Proofs/Properties/Verity/Sampled/Target.lean",
+    "security/Proofs/Properties/Verity/Sampled/Unbound.lean",
+    "security/Proofs/Properties/Verity/Sampled/Window/Unbound.lean",
+]
+words = { "transcriptOf" = "traceOf" }
+
+# proofs: `runFailures` is the file's other check (ranks-run's), so ranks-window's, which reads the served pairs,
+# takes `servedFailures`
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/lean/Spot/Ranks.lean"]
+words = { "windowFailures" = "servedFailures" }
+
+# proofs, compute-accounting, top
+[[words_in]]
+files = [
+    "security/Proofs/Certifier/JointBridge/HonestH200.lean",
+    "security/Proofs/Pouw/TS/PeriodSound.lean",
+    "security/Proofs/Slowdown/FitSlotsWitness.lean",
+    "security/Proofs/Slowdown/FitWitness.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Honest.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10R/Honest.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10RStrata/Honest.lean",
+    "security/Proofs/Pouw/ServedFreed/Honest.lean",
+    "security/Proofs/Pouw/ServedValues/Honest.lean",
+    "security/Proofs/Pouw/ServedWork/Honest.lean",
+    "verity/protocols/compose/verifier/onsite/CoreOnsite.lean",
+    "verity/protocols/compose/verifier/remote/CoreRemote.lean",
+    "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean",
+]
+words = { "windows" = "executionPhases" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Spot/MonitoringPeriod.lean",
+    "security/Properties/Spot/MonitoringPeriod.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean",
+]
+words = { "windowsOf" = "runsOf" }
+
+# proofs, compute-accounting, memory-accounting, top, lean
+[[words_in]]
+files = [
+    "security/Definitions/Compose/JointPeriod.lean",
+    "security/Definitions/Core/Guarantees/Circuit.lean",
+    "security/Definitions/Core/Partition.lean",
+    "security/Definitions/Flock/Circuit.lean",
+    "security/Definitions/Slowdown/Guarantees/Remote.lean",
+    "security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean",
+    "security/Definitions/Slowdown/Guarantees/Witnesses.lean",
+    "security/Definitions/Slowdown/Witness.lean",
+    "security/Definitions/Pouw/Guarantees/Window.lean",
+    "security/Definitions/Pouw/Window.lean",
+    "security/Proofs/Certifier/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Certifier/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+    "security/Proofs/Certifier/JointBridge/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Certifier/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+    "security/Proofs/Core/Circuit.lean",
+    "security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "security/Proofs/Flock/Bridge/RatePeriod.lean",
+    "security/Proofs/Flock/Bridge/RightRegZc.lean",
+    "security/Proofs/Flock/EndToEnd/Blocks.lean",
+    "security/Proofs/Flock/EndToEnd/Blocks/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Carry.lean",
+    "security/Proofs/Flock/EndToEnd/Carry/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Period.lean",
+    "security/Proofs/Flock/EndToEnd/Period/Statement.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/Recursive/Transfer.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/Vals.lean",
+    "security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+    "security/Proofs/Flock/Soundness/Audit/Closure.lean",
+    "security/Proofs/Flock/Soundness/Audit/Extraction.lean",
+    "security/Proofs/Flock/Soundness/Audit/Flock.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockLinked.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockPublic.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
+    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Pooled.lean",
+    "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
+    "security/Proofs/Flock/Soundness/Audit/Window.lean",
+    "security/Proofs/Flock/Soundness/Audit/Work.lean",
+    "security/Proofs/Flock/Soundness/Binding/E2E.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2E.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2EMore.lean",
+    "security/Proofs/Flock/Soundness/CROnly/Registered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Custody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/BindingE2EL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/E2EL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockLinkedL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockPublicL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/HeadlineL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Live.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LiveOn.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Design.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Exec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/General.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/PlainRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Hidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HdecCor/Headlines.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/LiveOnP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/At.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/BindX.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Coin.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Compiled.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/BindInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundBind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/View.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Link.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/RowsSound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Bind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/BindH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "security/Proofs/Flock/Soundness/E2E.lean",
+    "security/Proofs/Flock/Soundness/ExecStratified.lean",
+    "security/Proofs/Flock/Soundness/Headline.lean",
+    "security/Proofs/Flock/Soundness/KeyedSample.lean",
+    "security/Proofs/Flock/Soundness/Registered/E2E.lean",
+    "security/Proofs/Flock/Soundness/Types/ProgramE2E.lean",
+    "security/Proofs/Flock/VBridge/Keyed.lean",
+    "security/Proofs/Slowdown/Remote.lean",
+    "security/Proofs/Slowdown/RemoteMonitoringPeriod.lean",
+    "security/Proofs/Slowdown/Witnesses.lean",
+    "security/Proofs/Pouw/EndToEnd*/Statement.lean",
+    "security/Proofs/Pouw/PearlC/RowCircuit.lean",
+    "security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
+    "security/Proofs/Pouw/PearlC/TileCircuit.lean",
+    "security/Proofs/Pouw/Window/Copies.lean",
+    "security/Proofs/Pouw/Window/Flock.lean",
+    "security/Proofs/Pouw/Window/Served.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Verity/Sampled/UnboundBridge.lean",
+    "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Credit.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+]
+words = { "wrong" = "incorrect" }
+
+# proofs, compute-accounting, memory-accounting, top, lean: move_check drops it here: the file spells `incorrect` already (line 18)
+[[words_in]]
+files = ["security/Proofs/Flock/SampledGeneric/Compose.lean"]
+words = { "wrong" = "incorrect" }
+
+# proofs, compute-accounting, memory-accounting, top, lean: move_check drops it here: the file spells `incorrect` already (line 109)
+[[words_in]]
+files = ["security/Proofs/Spot/Instance.lean"]
+words = { "wrong" = "incorrect" }
+
+# compute-accounting
+[[words_in]]
+files = [
+    "security/Definitions/Pouw/CostModel.lean",
+    "security/Definitions/Pouw/Guarantees/Bridges.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean",
+    "security/Definitions/Pouw/Game/Deadline.lean",
+    "security/Definitions/Pouw/Game/Defs.lean",
+    "security/Definitions/Pouw/NCP/Witness.lean",
+    "security/Definitions/Pouw/PearlC/Deadline.lean",
+    "security/Definitions/Pouw/PearlC/FlockTile/Audit.lean",
+    "security/Definitions/Pouw/PearlC/Game.lean",
+    "security/Definitions/Pouw/PearlC/Hidden.lean",
+    "security/Definitions/Pouw/PearlC/HiddenTileGame.lean",
+    "security/Definitions/Pouw/PearlC/Tile.lean",
+    "security/Definitions/Pouw/PearlC/TileSample.lean",
+    "security/Definitions/Pouw/PearlC/W1.lean",
+    "security/Definitions/Pouw/Witness/Honest.lean",
+    "security/Definitions/Pouw/Witness/Model.lean",
+    "security/Proofs/Accounting/Actual/Bridges.lean",
+    "security/Proofs/Pouw/PerRunPriced.lean",
+    "security/Proofs/Pouw/PouwWitness.lean",
+    "security/Proofs/Pouw/Barrier/Proofs.lean",
+    "security/Proofs/Pouw/BudgetAbort.lean",
+    "security/Proofs/Pouw/EndToEnd*/Statement.lean",
+    "security/Proofs/Pouw/NCP/GameProofs.lean",
+    "security/Proofs/Pouw/NCP/RouteUProofs.lean",
+    "security/Proofs/Pouw/PearlC/DeviceInertBoundGap.lean",
+    "security/Proofs/Pouw/PearlC/DeviceInertBoundRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/DeviceChainInertBoundGap.lean",
+    "security/Proofs/Pouw/PearlC/DeviceRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/FlockTile/Audit.lean",
+    "security/Proofs/Pouw/PearlC/HiddenTileGame.lean",
+    "security/Proofs/Pouw/PearlC/RowInertBoundAtGap.lean",
+    "security/Proofs/Pouw/PearlC/RowSeedGap.lean",
+    "security/Proofs/Pouw/PearlC/TileInertBoundRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/TileSampleGap.lean",
+    "security/Proofs/Pouw/PearlC/TileGap.lean",
+    "security/Proofs/Pouw/PearlC/TileGapTol.lean",
+    "security/Proofs/Pouw/PearlC/UOnlyGap.lean",
+    "security/Proofs/Pouw/PearlC/W1BudgetAbort.lean",
+    "security/Proofs/Pouw/PearlPlus/Sample.lean",
+    "security/Proofs/Pouw/Reduction.lean",
+    "security/Proofs/Pouw/Sanity.lean",
+    "security/Proofs/Pouw/Theorem1.lean",
+]
+words = { "Transcript" = "Trace" }
+
+# compute-accounting: move_check drops it here: the file spells `Trace` already (line 24)
+[[words_in]]
+files = ["security/Definitions/Pouw/PearlC/TileCheck.lean"]
+words = { "Transcript" = "Trace" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Pouw/Credit/Withheld.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean",
+]
+words = { "drawSession" = "drawChallengePhase" }
+
+[[words_in]]
+files = [
+    "security/Definitions/Pouw/Assumptions/GameStatements.lean",
+    "security/Definitions/Pouw/Game/Defs.lean",
+    "security/Definitions/Pouw/PearlC/Completeness.lean",
+    "security/Definitions/Pouw/PearlC/Game.lean",
+    "security/Definitions/Pouw/PearlC/Tile.lean",
+    "security/Proofs/Pouw/Barrier/Proofs.lean",
+    "security/Proofs/Pouw/NCP/GameProofs.lean",
+    "security/Proofs/Pouw/NCP/RouteUProofs.lean",
+    "security/Proofs/Pouw/PearlC/Completeness.lean",
+    "security/Proofs/Pouw/PearlC/Gap.lean",
+    "security/Proofs/Pouw/PearlC/TileGap.lean",
+    "security/Proofs/Pouw/Sanity.lean",
+    "security/Proofs/Pouw/Witness.lean",
+]
+words = { "honestTranscript" = "honestTrace" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean"]
+words = { "idx_session" = "idx_challengePhase" }
+
+# compute-accounting, lean
+[[words_in]]
+files = [
+    "security/Definitions/Poub/Guarantees/BoundReceipt.lean",
+    "security/Definitions/Pouw/Guarantees/Bridges.lean",
+    "security/Definitions/Pouw/Guarantees/PerRun.lean",
+    "security/Definitions/Pouw/PerRun.lean",
+    "security/Definitions/Pouw/Pouw.lean",
+    "security/Definitions/Assumptions/Pouw.lean",
+    "security/Definitions/Pouw/Advantage.lean",
+    "security/Definitions/Pouw/Assumptions/Deadline.lean",
+    "security/Definitions/Pouw/Assumptions/Game.lean",
+    "security/Definitions/Pouw/Assumptions/GameStatements.lean",
+    "security/Definitions/Pouw/Assumptions/NCP/Assumptions.lean",
+    "security/Definitions/Pouw/Assumptions/NCP/GamePinned.lean",
+    "security/Definitions/Pouw/Assumptions/NCP/RouteUAssumptions.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOut.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOutS8.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean",
+    "security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean",
+    "security/Definitions/Pouw/Barrier/Defs.lean",
+    "security/Definitions/Pouw/Barrier/Pinned.lean",
+    "security/Definitions/Pouw/Game/Deadline.lean",
+    "security/Definitions/Pouw/Game/Defs.lean",
+    "security/Definitions/Pouw/Guarantees/Deadline.lean",
+    "security/Definitions/Pouw/Guarantees/Game.lean",
+    "security/Definitions/Pouw/PearlC/Deadline.lean",
+    "security/Definitions/Pouw/PearlC/Game.lean",
+    "security/Definitions/Pouw/PearlC/Hidden.lean",
+    "security/Definitions/Pouw/PearlC/Tile.lean",
+    "security/Definitions/Pouw/PearlC/TileSample.lean",
+    "security/Proofs/Poub/BoundReceipt/Tile.lean",
+    "security/Proofs/Pouw/PerRunNecessity.lean",
+    "security/Proofs/Pouw/PerRunPouw.lean",
+    "security/Proofs/Pouw/PerRunPriced.lean",
+    "security/Proofs/Poub/Stacking.lean",
+    "security/Proofs/Pouw/Advantage.lean",
+    "security/Proofs/Pouw/Barrier/Proofs.lean",
+    "security/Proofs/Pouw/Deadline.lean",
+    "security/Proofs/Pouw/DeadlineWitness.lean",
+    "security/Proofs/Pouw/EndToEnd*/Statement.lean",
+    "security/Proofs/Pouw/Lemmas/Deadline.lean",
+    "security/Proofs/Pouw/Lemmas/Game.lean",
+    "security/Proofs/Pouw/NCP/GameProofs.lean",
+    "security/Proofs/Pouw/PearlC/Gap.lean",
+    "security/Proofs/Pouw/PearlC/HiddenGap.lean",
+    "security/Proofs/Pouw/PearlC/Rev1Witness.lean",
+    "security/Proofs/Pouw/PearlC/RowInertBoundAtGap.lean",
+    "security/Proofs/Pouw/PearlC/RowSeedCode.lean",
+    "security/Proofs/Pouw/PearlC/RowSeedGap.lean",
+    "security/Proofs/Pouw/PearlC/TTOutW1Item1.lean",
+    "security/Proofs/Pouw/PearlC/TileInertBoundRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/TileSampleGap.lean",
+    "security/Proofs/Pouw/PearlC/TileGap.lean",
+    "security/Proofs/Pouw/PearlC/TileGapTol.lean",
+    "security/Proofs/Pouw/PearlC/UOnlyGap.lean",
+    "security/Proofs/Pouw/PearlC/W1Best.lean",
+    "security/Proofs/Pouw/PearlC/W1Priced.lean",
+    "security/Proofs/Pouw/PearlC/W1Tabulate.lean",
+    "security/Proofs/Pouw/Sanity.lean",
+    "security/Proofs/Pouw/Theorem1.lean",
+    "security/Proofs/Pouw/Witness.lean",
+]
+words = { "transcript" = "trace" }
+
+# compute-accounting, network-accounting, top
+[[words_in]]
+files = [
+    "security/Definitions/Certifier/AdviceV1.lean",
+    "security/Definitions/Certifier/WindowCharge.lean",
+    "security/Proofs/Certifier/Code.lean",
+    "verity/circuits/requirement/CircuitRequirement/Difftest.lean",
+    "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/AdviceV1.lean",
+    "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/ChargeDifftest.lean",
+    "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean",
+    "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/WindowDifftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/compose/verifier/remote/CoreRemote.lean",
+]
+words = { "window" = "executionPhase" }
+
+[[words_in]]
+files = [
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Opening.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean",
+]
+words = { "windowOf" = "executionPhaseOf" }
+
+[[words_in]]
+files = ["security/Proofs/Pouw/RelativeSecurity.lean"]
+words = { "window_le" = "executionPhase_le" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pouw/PearlPlus/Tie.lean",
+    "security/Properties/Pouw/PearlPlusTie.lean",
+]
+words = { "wrongShare" = "incorrectShare" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pouw/PearlPlus/Tie.lean"]
+words = { "wrong_eq" = "incorrect_eq" }
+
+# memory-accounting
+[[words_in]]
+files = [
+    "security/Proofs/Pous/Period.lean",
+    "security/Proofs/Properties/Pous/Component.lean",
+    "security/Proofs/Properties/Pous/InProofs.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Header.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Inputs.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Session.lean",
+    "security/Proofs/Properties/Pous/Run.lean",
+    "security/Proofs/Properties/Pous/RunAccepts.lean",
+    "security/Proofs/Properties/Pous/RunAt.lean",
+    "security/Properties/Pous/EndToEnd.lean",
+    "security/Properties/Pous/EndToEndAt.lean",
+    "security/Properties/Pous/InProofs.lean",
+    "security/Properties/Pous/MemoryChallenger.lean",
+    "security/Properties/Pous/MemoryChallenger/Session.lean",
+    "verity/protocols/accounting/poub/verifier/lean/Poub/P2Close.lean",
+    "verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Difftest.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/InProofs.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Judge.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Protocol.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/SetupRecord.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Verdict.lean",
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Run.lean",
+]
+words = { "SessionCommitment" = "ChallengePhaseCommitment", "instBEqSessionCommitment" = "instBEqChallengePhaseCommitment" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "SessionGives" = "RunGives" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "SessionGivesHonest" = "RunGivesHonest" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "SessionGivesNontrivial" = "RunGivesNontrivial" }
+
+[[words_in]]
+files = ["security/Properties/Pous/InProofs.lean"]
+words = { "SessionInProofsDeployed" = "RunInProofsDeployed" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/pous/device/lean/MemoryChallenger/InProofs.lean"]
+words = { "SessionProofs" = "RunProofs" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/Component.lean",
+    "security/Proofs/Properties/Pous/InProofs.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
+    "security/Properties/Pous/EndToEnd.lean",
+    "security/Properties/Pous/InProofs.lean",
+    "security/Properties/Pous/MemoryChallenger.lean",
+    "security/Properties/Pous/MemoryChallenger/Session.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Judge.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Protocol.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Verdict.lean",
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Run.lean",
+]
+words = { "SignedSession" = "SignedChallengePhase" }
+
+[[words_in]]
+files = ["security/Proofs/Pous.lean"]
+words = { "chain_eq_pinned" = "chain_eq_guarantee" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/pous/verifier/check/PousCheck/Run.lean"]
+words = { "decodeSession" = "decodeRecord" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/Poub/Difftest.lean"]
+words = { "drawnSession" = "drawnRun" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/Component.lean",
+    "security/Proofs/Properties/Pous/InProofs.lean",
+]
+words = { "honestSession" = "honestWipe" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/WipeCount.lean",
+    "security/Proofs/Properties/Pous/WipeSigned.lean",
+    "security/Properties/Pous/WipeSigned.lean",
+]
+words = { "measuredSession" = "measuredWipe" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "noSession" = "noRun" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean"]
+words = { "otherSession" = "otherRun" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/MemoryChallenger/Device.lean"]
+words = { "same_session" = "same_challengePhase" }
+
+[[words_in]]
+files = ["security/Proofs/Pous.lean"]
+words = { "seqState_eq_pinned" = "seqState_eq_guarantee" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/pous/verifier/check/PousCheck/Difftest.lean"]
+words = { "session" = "challengePhase" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "sessionGives" = "runGives" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "sessionGives_honest" = "runGives_honest" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/InProofs.lean"]
+words = { "sessionGives_nontrivial" = "runGives_nontrivial" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/pous/device/lean/MemoryChallenger/InProofs.lean"]
+words = { "sessionInProofs" = "runInProofs" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Pous/PeriodWitnesses.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
+    "security/Properties/Pous/EndToEnd.lean",
+    "security/Properties/Pous/MemoryChallenger.lean",
+]
+words = { "sessionMessage" = "challengePhaseMessage" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
+    "security/Proofs/Properties/Pous/WipeSigned.lean",
+    "security/Properties/Pous/MemoryChallenger.lean",
+    "security/Properties/Pous/WipeSigned.lean",
+]
+words = { "sessionStrings" = "challengePhaseStrings" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/MemoryChallenger/Device.lean"]
+words = { "session_mem" = "challengePhase_mem" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/WipeSigned.lean"]
+words = { "session_mem" = "signedWipe_mem" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
+    "security/Proofs/Properties/Pous/MemoryChallenger/Inputs.lean",
+]
+words = { "session_split" = "challengePhase_split" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/WipeSigned.lean",
+    "security/Proofs/Properties/Pous/WipeSigned/Inputs.lean",
+]
+words = { "session_split" = "signedWipe_split" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/Component.lean",
+    "verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean",
+]
+words = { "toySession" = "toyRecord" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Pous/Component.lean"]
+words = { "toySessionCommitment" = "toyPhaseCommitment" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pous/WipeSigned.lean",
+    "security/Properties/Pous/WipeSigned.lean",
+]
+words = { "wipeSessionStrings" = "signedWipeStrings" }
+
+# top
+[[words_in]]
+files = [
+    "security/Proofs/WeightSecurity/TwoProd.lean",
+    "security/Proofs/WeightSecurity/TwoProdMonitoringPeriod.lean",
+    "security/Proofs/WeightSecurity/TwoProdWitnesses.lean",
+]
+words = { "leadEscape" = "leadMissProb" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Verity/Sampled/Target.lean"]
+words = { "transcriptAt" = "traceAt" }
+
+[[words_in]]
+files = ["security/Definitions/WeightSecurity/ToyTied.lean"]
+words = { "window" = "run" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Verity/Sampled/Window/Instance.lean"]
+words = { "windows_of" = "executionPhases_of" }
+
+# lean
+[[words_in]]
+files = [
+    "security/Definitions/Pous/Accounting/Guarantees/Responder.lean",
+    "security/Definitions/Pous/Accounting/Responder.lean",
+    "security/Proofs/Pous/Accounting/Responder.lean",
+]
+words = { "window" = "period" }
+
+[rewrite]
+# Never rewritten: records of what was, files a digest pins, locks, and what isn't Lean or its prose.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.py", "benchmarks/**", "adapters/**", "tools/**", "tests/lint/allowlists/**"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes; record keys and tag strings that keep the word until a format
+# version; the evidence's own `windows` key in the remote check.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+', '"(?:window|windows|session|sessions|period|periods|wrong|transcript|escape|horizon)"',
+            '(?<=let \.arr ws := )e\.windows']
+# Lean string literals whose text Python compares (messages, labels, JSON keys): their text keeps its words,
+# each segment with the quote or brace that bounds it.
+strings = [
+    "\"JSON whose registered values are a list of objects: the served Commit runs in the window's engine, and its \"",
+    "\"\\\",\\\"window\\\":{\\\"dropped\\\":[],\\\"record\\\":\"",
+    "\"a window has N slots\"",
+    "\"a window has N, H, O and L slots\"",
+    "\"are not the ones the served Commit commits (ROOTS1). The Commit registers the window's own table as its \"",
+    "\"binds under the window's open root, so its rows are not the requests admitted before the salt: register round \"",
+    "\"build the live Program under the window Program's PREFIX\"",
+    "\"codes or its s_w, is not the one registered before the window's salt. Register each K's B rows once, before the \"",
+    "\"descriptor), binding no window (registered.domain)\"",
+    "\"except with probability delta, an accepted transcript has at most `bound` wrong units\"",
+    "\"first window's salt. Open every window of a period on its registered B rows\"",
+    "\"one the window registered for {",
+    "\"open every window within the floor of its period's open pin\"",
+    "\"program is not the SHA-512 of the descriptor whose layout the window was drawn over): verify every drawn \"",
+    "\"record is bound under the window's calls_root before the draw coin\"",
+    "\"registration's, another window's or another circuit's\"",
+    "\"round 0's request root (requests, the one the window's open root binds) is not requests_root of its request \"",
+    "\"round's) of the window, so nothing ties the A rows it proved to the ones the round roots committed: verify each drawn unit's \"",
+    "\"salt: commit round 0's input-ids table inside round 0's request table, under the window's open root\"",
+    "\"session with the window's A value registered\"",
+    "\"slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof system commits T \"",
+    "\"table of the window\"",
+    "\"the B rows it proved to the ones its period registered: verify each drawn unit's session with the window's \"",
+    "\"the book's tables are at the bins a window reaches\"",
+    "\"the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its draw root\"",
+    "\"the draw session of window\"",
+    "\"the period registers each K's B rows before its first window's salt and opens with their root\"",
+    "\"the period's windows are not a list of each window's evidence {\"",
+    "\"the round roots: register the window's A values\"",
+    "\"the window is in no period of the auditor's ledger, so no period-open signed the weights' \"",
+    "\"the window is not {root}, its open root a SHA-512 digest (128 lowercase hex)\"",
+    "\"the window registers K = {",
+    "\"the window registers input-ids table {",
+    "\"the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to \"",
+    "\"the window registers no weights {",
+    "\"the window registers no {",
+    "\"the window registers request table {",
+    "\"the window registers weights {",
+    "\"the window registers {",
+    "\"the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in canonical \"",
+    "\"the window's K = {",
+    "\"the window's Program is one manifest row, in order\"",
+    "\"the window's Program salt is not a SHA-512 digest (128 lowercase hex)\"",
+    "\"the window's TILES are at K = {",
+    "\"the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…,\"",
+    "\"the window's circuit is not its descriptor's SHA-512 (128 lowercase hex) and its PREFIX (a string of printable \"",
+    "\"the window's circuit's units are not its record's tiles: its root's nodes other than its inputs are not, in \"",
+    "\"the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, \"",
+    "\"the window's descriptor is not the bytes of the circuit its proofs were verified against in lowercase hex (its \"",
+    "\"the window's draw is not an object whose receipts are a SHA-512 digest\"",
+    "\"the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its last \"",
+    "\"the window's layout is not {calls, linears, m, tile}, h1window.program's arguments: its calls \"",
+    "\"the window's live Program has {",
+    "\"the window's live Program is at T = {",
+    "\"the window's live Program's PREFIX is not its circuit's, so the tables its units read are not the window's: \"",
+    "\"the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…,\"",
+    "\"the window's live circuit's units are not its rounds: its root's nodes other than its inputs are not S calls of \"",
+    "\"the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON with its callees, \"",
+    "\"the window's live evidence is not {descriptor, proofs}: its live Program's descriptor in lowercase hex \"",
+    "\"the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier\"",
+    "\"the window's manifest is not a list of call rows\"",
+    "\"the window's registered entries are not a list of objects\"",
+    "\"the window's registered weights are not the ones its open root binds: weights_root of each K's …/b/<K> root, its \"",
+    "\"the window's registered weights' root {",
+    "\"the window's request table's root is not round 0's request_table, the one round 0's request root (requests) \"",
+    "\"the window's round-0 request table's root is not a SHA-512 digest (128 lowercase hex)\"",
+    "\"the window's session is not the id of the session the auditor's ledger opened for it (1 to 64 of \"",
+    "\"the window's template at K = {",
+    "\"the window's tile at K = {",
+    "\"the window's {",
+    "\"unit is never sampled), so a window with one missing is refused\"",
+    "\"unit's session against the window's committed circuit\"",
+    "\"value other than the weights' …/b/<K> and round 0's …/ids@0 and …/requests@0, the window's open root, the \"",
+    "\"window difftest: {",
+    "\"window is refused (no partial credit, and no retry)\"",
+    "\"window opens, and open them at that root\"",
+    "\"window registers each round's A table of each K and its input-ids table\"",
+    "\"window with one missing is refused whole (no partial credit). Prove and verify every drawn unit\"",
+    "\"window {",
+    "\"window's entry is not the root its sessions opened\"",
+    "\"window's {",
+    "\"window's\"",
+    "\"window.devices\"",
+    "\"window.marked\"",
+    "\"window: verity/inference-only/v0 committed \"",
+    "\"window: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values\"",
+    "\"would not be K's: the proof system commits a K at most every window's units ({",
+    "\"{\\\"pins\\\":[],\\\"windows\\\":[\"",
+    "} and the window's circuit (the SHA-512 of its \"",
+    "} closed incomplete: its window {",
+    "} closed with no window, so it earns nothing\"",
+    "} has a proof outcome and the window has {",
+    "} is named twice: a window names each of its weights once\"",
+    "} is never called: every linear of the window is called\"",
+    "} of the window, so nothing ties \"",
+    "} proof was verified against another circuit than the window's live \"",
+    "} requests are more than the window's {",
+    "} rounds, not the window's {",
+    "} rounds, so the window can't serve it to its public cap\"",
+    "} rows are not the window's {",
+    "} rows, not the window's M = {",
+    "} the window's layout gives it \"",
+    "} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a \"",
+    "}'s A table, and the window has {",
+    "}'s domain is not the one the window's registration gives it (the registered domain of \"",
+    "}'s proof was rejected: a failed drawn unit refuses the whole window, not \"",
+    "}'s proof was verified against another circuit than the window's (its \"",
+    "}'s, and the window has {",
+    "}'s, and the window's {",
+    "}, which is no linear of the window: every call is of one of its linears\"",
+    "}, which the window registers \"",
+    "}: a window's slot \"",
+    "}: the rows are the window's calls in order, index 0, 1, …\"",
+]

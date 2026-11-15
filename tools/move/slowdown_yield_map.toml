@@ -1,0 +1,38 @@
+# The slowdown calculator's yield: the per-block cap `Cap` is the inference-block yield `q(c, k)` (GLOSSARY.md's older
+# names: "per-block cap" and `benchmarks/slowdown`'s `Cap` are the server-block yield and the inference-block yield), so
+# the type `Cap` is `Yield`, a value of it `block_yield` (`yield` is Python's keyword) and several of them `yields`.
+# Every reader is in the calculator; the files are those whose `cap` and `caps` are the yield and nothing else (the
+# calculator's other caps clip a value or bound a block's size: `families._cap`, `min_cut.capped`,
+# `classes.output_cap`, `analysis.py`'s interval).
+# The calculator's other names that carry a retired word, each read only inside it:
+# - its regime and scenario of unregistered hardware alone, "unmonitored" (`Unmonitored`, `kind = "unmonitored"`,
+#   `unmonitored-h200-kimi`), are "unregistered" (`nci_unregistered_map.toml` left them for this map);
+# - an incorrect ingress block's bits, `faulty_unit_bits` (a property and the record's key), are `incorrect_block_bits`.
+# - the ceilings on the rates an algorithm of `benchmarks/nci`'s library pays, `nci.state_bits_cap`, `nci.rate_cap` and
+#   `nci.boundary_bits_cap` (registry ids, `Nci`'s fields), are `*_ceiling`, and Proposition 6b's threshold
+#   `output_cap` is `output_threshold`.
+# What stays: a test's guard that the record holds no retired key ("unmonitored"), and the Lean's names
+# (`UnmonitoredAtMost`, `faultyIngressBits`), which no word here matches whole.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/slowdown/slowdown/theorem.py", "benchmarks/slowdown/slowdown/scenario.py",
+         "benchmarks/slowdown/slowdown/classes.py", "benchmarks/slowdown/slowdown/figures.py",
+         "benchmarks/slowdown/tests/test_theorem.py", "benchmarks/slowdown/tests/test_figures.py"]
+words = { "Cap" = "Yield", "cap" = "block_yield", "caps" = "yields" }
+
+[[words_in]]
+files = ["benchmarks/slowdown/**"]
+[words_in.words]
+"unmonitored" = "unregistered"
+"Unmonitored" = "Unregistered"
+"faulty_unit_bits" = "incorrect_block_bits"
+"state_bits_cap" = "state_bits_ceiling"
+"rate_cap" = "rate_ceiling"
+"boundary_bits_cap" = "boundary_bits_ceiling"
+"output_cap" = "output_threshold"
+
+[keep]
+patterns = []
+strings = ['{"unmonitored", "vacuous", "multiple"}']

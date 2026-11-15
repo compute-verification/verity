@@ -1,0 +1,4 @@
+order = 40
+path = "`opcode_probe/`"
+runs_on = "RTX PRO 6000"
+what = "One instruction class's rate a probe, gated by `gpu_kit/sass_gate.py` before it is timed, written as a census line in the machine model's schema (`run.sh`; how a probe is written is its README)"

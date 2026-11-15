@@ -1,0 +1,786 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "031df22714148573623524c706ee0bebe30c674a38e5d1b6788de0c610419079",
+  "public_values": "031df22714148573623524c706ee0bebe30c674a38e5d1b6788de0c610419079e7180a4974dfa2d4c96f5f7e6e23246c6d6eab4e09987ab183530759b4e3fd5501",
+  "statement_digest": "e7180a4974dfa2d4c96f5f7e6e23246c6d6eab4e09987ab183530759b4e3fd55"
+ },
+ "canonical": "{\"family\":{\"digest\":\"cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307\",\"id\":\"veritor.tc-ampere-bf16@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"acc/finite\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":5,\"position\":5,\"root\":\"acc\"},{\"id\":\"acc/neg-qnan\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":1,\"position\":1,\"root\":\"acc\"},{\"id\":\"acc/neg-snan-all\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":3,\"position\":3,\"root\":\"acc\"},{\"id\":\"acc/qnan\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":0,\"position\":0,\"root\":\"acc\"},{\"id\":\"acc/snan\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":2,\"position\":2,\"root\":\"acc\"},{\"id\":\"acc/snan-tie\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":4,\"position\":4,\"root\":\"acc\"},{\"id\":\"y/finite\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":5,\"position\":5,\"root\":\"ru0\"},{\"id\":\"y/neg-qnan\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":1,\"position\":1,\"root\":\"ru0\"},{\"id\":\"y/neg-snan-all\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":3,\"position\":3,\"root\":\"ru0\"},{\"id\":\"y/qnan\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":0,\"position\":0,\"root\":\"ru0\"},{\"id\":\"y/snan\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":2,\"position\":2,\"root\":\"ru0\"},{\"id\":\"y/snan-tie\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":4,\"position\":4,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"acc/qnan\"],\"out\":[\"y/qnan\"]},\"roots\":[\"acc\",\"ru0\"],\"subcircuit\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"target\":{\"encoding\":\"region\",\"id\":\"region=0\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":1},\"boundary\":{\"in\":[\"acc/neg-qnan\"],\"out\":[\"y/neg-qnan\"]},\"roots\":[\"acc\",\"ru0\"],\"subcircuit\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"target\":{\"encoding\":\"region\",\"id\":\"region=1\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":2},\"boundary\":{\"in\":[\"acc/snan\"],\"out\":[\"y/snan\"]},\"roots\":[\"acc\",\"ru0\"],\"subcircuit\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"target\":{\"encoding\":\"region\",\"id\":\"region=2\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":3},\"boundary\":{\"in\":[\"acc/neg-snan-all\"],\"out\":[\"y/neg-snan-all\"]},\"roots\":[\"acc\",\"ru0\"],\"subcircuit\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"target\":{\"encoding\":\"region\",\"id\":\"region=3\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":4},\"boundary\":{\"in\":[\"acc/snan-tie\"],\"out\":[\"y/snan-tie\"]},\"roots\":[\"acc\",\"ru0\"],\"subcircuit\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"target\":{\"encoding\":\"region\",\"id\":\"region=4\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":5},\"boundary\":{\"in\":[\"acc/finite\"],\"out\":[\"y/finite\"]},\"roots\":[\"acc\",\"ru0\"],\"subcircuit\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"target\":{\"encoding\":\"region\",\"id\":\"region=5\"}}],\"references\":[{\"leaf\":\"acc/finite\",\"offset\":[],\"ref\":\"acc/finite\"},{\"leaf\":\"acc/neg-qnan\",\"offset\":[],\"ref\":\"acc/neg-qnan\"},{\"leaf\":\"acc/neg-snan-all\",\"offset\":[],\"ref\":\"acc/neg-snan-all\"},{\"leaf\":\"acc/qnan\",\"offset\":[],\"ref\":\"acc/qnan\"},{\"leaf\":\"acc/snan\",\"offset\":[],\"ref\":\"acc/snan\"},{\"leaf\":\"acc/snan-tie\",\"offset\":[],\"ref\":\"acc/snan-tie\"},{\"leaf\":\"y/finite\",\"offset\":[],\"ref\":\"y/finite\"},{\"leaf\":\"y/neg-qnan\",\"offset\":[],\"ref\":\"y/neg-qnan\"},{\"leaf\":\"y/neg-snan-all\",\"offset\":[],\"ref\":\"y/neg-snan-all\"},{\"leaf\":\"y/qnan\",\"offset\":[],\"ref\":\"y/qnan\"},{\"leaf\":\"y/snan\",\"offset\":[],\"ref\":\"y/snan\"},{\"leaf\":\"y/snan-tie\",\"offset\":[],\"ref\":\"y/snan-tie\"}],\"roots\":[{\"count\":6,\"domain\":\"b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dd\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"acc\",\"owner\":-1,\"root\":\"a783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a18202\"},{\"count\":6,\"domain\":\"84cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae620\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"71a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475\"}],\"subcircuits\":[{\"definition\":{\"name\":\"tc/store-cast\"},\"digest\":\"bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e\",\"gates\":[{\"args\":[[\"in\",0]],\"op\":\"f32_to_bf16\"}],\"in\":[32],\"out\":[0]}],\"types\":{\"bf16\":{\"named\":[\"bf16\",{\"value\":16}]},\"fp32\":{\"named\":[\"fp32\",{\"value\":32}]}}}",
+ "description": "veritor.tc-ampere-bf16@1: f32_to_bf16 on the measured NaN classes (+qNaN canonical, -qNaN, +sNaN minimal payload, -NaN all payload bits, sNaN with the tie bit set) stores the software canonical word 0x7FC0 for every one; the finite word rounds up as in @2. Six one-gate obligations; witness accepted.",
+ "digest": "031df22714148573623524c706ee0bebe30c674a38e5d1b6788de0c610419079",
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "acc/qnan",
+      "schema": "u32"
+     },
+     {
+      "ref": "y/qnan",
+      "schema": "u16"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "acc/neg-qnan",
+      "schema": "u32"
+     },
+     {
+      "ref": "y/neg-qnan",
+      "schema": "u16"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "acc/snan",
+      "schema": "u32"
+     },
+     {
+      "ref": "y/snan",
+      "schema": "u16"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "acc/neg-snan-all",
+      "schema": "u32"
+     },
+     {
+      "ref": "y/neg-snan-all",
+      "schema": "u16"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "acc/snan-tie",
+      "schema": "u32"
+     },
+     {
+      "ref": "y/snan-tie",
+      "schema": "u16"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   },
+   {
+    "entries": [
+     {
+      "ref": "acc/finite",
+      "schema": "u32"
+     },
+     {
+      "ref": "y/finite",
+      "schema": "u16"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "ranges": 0,
+    "slots": 2
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "f32_to_bf16"
+     }
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 32
+     }
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "acc/qnan",
+     "y/qnan"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "acc/neg-qnan",
+     "y/neg-qnan"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "acc/snan",
+     "y/snan"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "acc/neg-snan-all",
+     "y/neg-snan-all"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "acc/snan-tie",
+     "y/snan-tie"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     1
+    ],
+    "positions": [
+     "acc/finite",
+     "y/finite"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "f32_to_bf16"
+     }
+    ],
+    "kind": "1b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 32
+     }
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e"
+   }
+  ]
+ },
+ "name": "accept/tc-store-cast-nan-sw",
+ "object": {
+  "family": {
+   "digest": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307",
+   "id": "veritor.tc-ampere-bf16@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "acc/finite",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 5,
+    "position": 5,
+    "root": "acc"
+   },
+   {
+    "id": "acc/neg-qnan",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "acc"
+   },
+   {
+    "id": "acc/neg-snan-all",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "acc"
+   },
+   {
+    "id": "acc/qnan",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "acc"
+   },
+   {
+    "id": "acc/snan",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "acc"
+   },
+   {
+    "id": "acc/snan-tie",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "acc"
+   },
+   {
+    "id": "y/finite",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 5,
+    "position": 5,
+    "root": "ru0"
+   },
+   {
+    "id": "y/neg-qnan",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru0"
+   },
+   {
+    "id": "y/neg-snan-all",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "ru0"
+   },
+   {
+    "id": "y/qnan",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   },
+   {
+    "id": "y/snan",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "ru0"
+   },
+   {
+    "id": "y/snan-tie",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "acc/qnan"
+     ],
+     "out": [
+      "y/qnan"
+     ]
+    },
+    "roots": [
+     "acc",
+     "ru0"
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "target": {
+     "encoding": "region",
+     "id": "region=0"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 1
+    },
+    "boundary": {
+     "in": [
+      "acc/neg-qnan"
+     ],
+     "out": [
+      "y/neg-qnan"
+     ]
+    },
+    "roots": [
+     "acc",
+     "ru0"
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "target": {
+     "encoding": "region",
+     "id": "region=1"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 2
+    },
+    "boundary": {
+     "in": [
+      "acc/snan"
+     ],
+     "out": [
+      "y/snan"
+     ]
+    },
+    "roots": [
+     "acc",
+     "ru0"
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "target": {
+     "encoding": "region",
+     "id": "region=2"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 3
+    },
+    "boundary": {
+     "in": [
+      "acc/neg-snan-all"
+     ],
+     "out": [
+      "y/neg-snan-all"
+     ]
+    },
+    "roots": [
+     "acc",
+     "ru0"
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "target": {
+     "encoding": "region",
+     "id": "region=3"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 4
+    },
+    "boundary": {
+     "in": [
+      "acc/snan-tie"
+     ],
+     "out": [
+      "y/snan-tie"
+     ]
+    },
+    "roots": [
+     "acc",
+     "ru0"
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "target": {
+     "encoding": "region",
+     "id": "region=4"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 5
+    },
+    "boundary": {
+     "in": [
+      "acc/finite"
+     ],
+     "out": [
+      "y/finite"
+     ]
+    },
+    "roots": [
+     "acc",
+     "ru0"
+    ],
+    "subcircuit": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "target": {
+     "encoding": "region",
+     "id": "region=5"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "acc/finite",
+    "offset": [],
+    "ref": "acc/finite"
+   },
+   {
+    "leaf": "acc/neg-qnan",
+    "offset": [],
+    "ref": "acc/neg-qnan"
+   },
+   {
+    "leaf": "acc/neg-snan-all",
+    "offset": [],
+    "ref": "acc/neg-snan-all"
+   },
+   {
+    "leaf": "acc/qnan",
+    "offset": [],
+    "ref": "acc/qnan"
+   },
+   {
+    "leaf": "acc/snan",
+    "offset": [],
+    "ref": "acc/snan"
+   },
+   {
+    "leaf": "acc/snan-tie",
+    "offset": [],
+    "ref": "acc/snan-tie"
+   },
+   {
+    "leaf": "y/finite",
+    "offset": [],
+    "ref": "y/finite"
+   },
+   {
+    "leaf": "y/neg-qnan",
+    "offset": [],
+    "ref": "y/neg-qnan"
+   },
+   {
+    "leaf": "y/neg-snan-all",
+    "offset": [],
+    "ref": "y/neg-snan-all"
+   },
+   {
+    "leaf": "y/qnan",
+    "offset": [],
+    "ref": "y/qnan"
+   },
+   {
+    "leaf": "y/snan",
+    "offset": [],
+    "ref": "y/snan"
+   },
+   {
+    "leaf": "y/snan-tie",
+    "offset": [],
+    "ref": "y/snan-tie"
+   }
+  ],
+  "roots": [
+   {
+    "count": 6,
+    "domain": "b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dd",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "acc",
+    "owner": -1,
+    "root": "a783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a18202"
+   },
+   {
+    "count": 6,
+    "domain": "84cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae620",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "71a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "tc/store-cast"
+    },
+    "digest": "bd3471dea40c909801bcab42a0ffd432485857a5c9ebb9e8b3ebfa884072ad7e",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ]
+      ],
+      "op": "f32_to_bf16"
+     }
+    ],
+    "in": [
+     32
+    ],
+    "out": [
+     0
+    ]
+   }
+  ],
+  "types": {
+   "bf16": {
+    "named": [
+     "bf16",
+     {
+      "value": 16
+     }
+    ]
+   },
+   "fp32": {
+    "named": [
+     "fp32",
+     {
+      "value": 32
+     }
+    ]
+   }
+  }
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001876657269746f722e74632d616d706572652d626631364031cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d30700000020000000011b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000010000000100000000000000010000000b6633325f746f5f6266313600000001000000000000000001000000000000000611111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000000000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a232447500000000000000060000000200000000000000000000000000000000000000000000000375333200000000010000000000000000000000000000000000000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000100000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a232447500000000000000060000000200000000000000000000000100000000000000010000000375333200000000010000000000000001000000000000000100000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000200000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a232447500000000000000060000000200000000000000000000000200000000000000020000000375333200000000010000000000000002000000000000000200000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000300000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a232447500000000000000060000000200000000000000000000000300000000000000030000000375333200000000010000000000000003000000000000000300000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000400000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a232447500000000000000060000000200000000000000000000000400000000000000040000000375333200000000010000000000000004000000000000000400000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000500000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475000000000000000600000002000000000000000000000005000000000000000500000003753332000000000100000000000000050000000000000005000000037531360000000001000000000000000100000001",
+ "statement_digest": "e7180a4974dfa2d4c96f5f7e6e23246c6d6eab4e09987ab183530759b4e3fd55",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001876657269746f722e74632d616d706572652d626631364031cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d30700000020000000011b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000010000000100000000000000010000000b6633325f746f5f6266313600000001000000000000000001000000000000000611111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000000000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475000000000000000600000002000000000000000000000000000000000000000000000000037533320000000000010000000000000000000000000000000000000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000100000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475000000000000000600000002000000000000000000000000010000000000000001000000037533320000000000010000000000000001000000000000000100000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000200000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475000000000000000600000002000000000000000000000000020000000000000002000000037533320000000000010000000000000002000000000000000200000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000300000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475000000000000000600000002000000000000000000000000030000000000000003000000037533320000000000010000000000000003000000000000000300000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000400000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a2324475000000000000000600000002000000000000000000000000040000000000000004000000037533320000000000010000000000000004000000000000000400000003753136000000000100000000000000010000000111111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222000000000000000500000000000000001b5d8a454bec1c5c80d1ad8e3e477594abb935f0990831b01018f40ce1d300ee000000020000000000000001b056142ddadafbc754c9ff04c71715abe42bc8fd9a3ba477cadf041862be30dda783131fd91de8d940c87126a6a8f07b242697bff055dba0b71412e344a182020000000000000006000000000000000284cdff54277ef92014a51b3676ce5d7b4dce2f58e5c68c9f76711515709ae62071a18702a1d410fc7c107383b67cab2d71a660e2248c1021300fdb66a23244750000000000000006000000020000000000000000000000000500000000000000050000000375333200000000000100000000000000050000000000000005000000037531360000000001000000000000000100000001",
+ "statement_v3_digest": "3a0320dd7d32e76bab31d52212690e201a0d2f7e34288fc29f3d9c2de94c3579",
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "stage-1",
+  "tc",
+  "l8-nan"
+ ],
+ "values": [
+  [
+   2143289344,
+   32704
+  ],
+  [
+   4290772992,
+   32704
+  ],
+  [
+   2139095041,
+   32704
+  ],
+  [
+   4294967295,
+   32704
+  ],
+  [
+   2139127808,
+   32704
+  ],
+  [
+   1065385985,
+   16257
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f7632000000000600000002000000047fc000000000000372be3f463f2b16cd84e7751eebffb6a9b17113a989c5ce22a00dcc13e26c2d1654f4e6f5df948109e7b521f5be2bb4855f472bfd413bfa38a86bc31a1cf078f3241eaba888df6eefb8622f1836382cdccc0c9214682dee963f36648d9377f045000000027fc00000000351d0477f406cd4c08631607125ce4585630a9644e512017a23402bd397a25dce798dd969219558e062d3f0cba86eb182013bc77d5c331a2c5eab7aae291d7b62f608763ae6117030d33213463b07f427021c65dec3593600c921a153cd76fe6f0000000200000004ffc00000000000033dc4eeb24850e658ae8e0805b5cf18edd13ff603f1b6de98b9ecfff7136dd97954f4e6f5df948109e7b521f5be2bb4855f472bfd413bfa38a86bc31a1cf078f3241eaba888df6eefb8622f1836382cdccc0c9214682dee963f36648d9377f045000000027fc0000000031c0ffe93dc5c16c75877c78fee91dacebdf65fae1088c154971df647f8a01f32798dd969219558e062d3f0cba86eb182013bc77d5c331a2c5eab7aae291d7b62f608763ae6117030d33213463b07f427021c65dec3593600c921a153cd76fe6f00000002000000047f80000100000003bff78600a3f7b0b65e165a9bb38384bb5e3611777e210cade48c6fe89caab7366d252b735b3d9cd852bf4a67c3e2fbd1942af0bbe20e120ef19a2d2db7975e80241eaba888df6eefb8622f1836382cdccc0c9214682dee963f36648d9377f045000000027fc00000000322ca58484b733bb77c0f79c1d36a11c2689a0faff54b1139e808ebd2b2c3db4f87f88a8af57ba8c54be6fe0a76bf915397f0c4988b4f9859fea7c01f48b2f629f608763ae6117030d33213463b07f427021c65dec3593600c921a153cd76fe6f0000000200000004ffffffff00000003154ae3ad09de550203ebc6e2da7a23fe603a7cc64f2ee92d671c92d06e8caecd6d252b735b3d9cd852bf4a67c3e2fbd1942af0bbe20e120ef19a2d2db7975e80241eaba888df6eefb8622f1836382cdccc0c9214682dee963f36648d9377f045000000027fc000000003fdc990de4a6eadc414d817ee2df4071bca1074116e26558a30f6f6c1517f37de87f88a8af57ba8c54be6fe0a76bf915397f0c4988b4f9859fea7c01f48b2f629f608763ae6117030d33213463b07f427021c65dec3593600c921a153cd76fe6f00000002000000047f808000000000032caaaeaf2c067c4933d2e040e3cc41229c2c924477e90909213eaed140503070276dfb557b1ad80b2902d86a2213deb2a6c47ece281955f3590e88ea80c5f5d9451b2405c81473f2fbc182f75e8e1411e268986332e313815820c840dd44079b000000027fc000000003985839c51a7b81729d5b369472a50660ae94f8b972c9e4e170cc801eac1cde1713f4a695ac96aece21ac32883d85b81f5baf14f98eeca30f62bb0ee902bf71a68746285b7da23a4b885263b4bb098cf3610b3b1b0b5fa3670b23f46a6d96d52400000002000000043f80800100000003ab65136ff237a5255c8155f704855da587dc0fca0af1036403a9cac76b3036d4276dfb557b1ad80b2902d86a2213deb2a6c47ece281955f3590e88ea80c5f5d9451b2405c81473f2fbc182f75e8e1411e268986332e313815820c840dd44079b000000023f8100000003841f15d76331638ffc77b347cb2a4ce445567f090f93b173464c003ced6956f313f4a695ac96aece21ac32883d85b81f5baf14f98eeca30f62bb0ee902bf71a68746285b7da23a4b885263b4bb098cf3610b3b1b0b5fa3670b23f46a6d96d524",
+ "witness_verdict": "accept"
+}

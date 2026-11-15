@@ -1,0 +1,9 @@
+# Built by `python -m verity_numerical.bench.instances build`; sha256-pinned in manifest.json, not committed (25 MB).
+vu-k1536.x.u16
+vu-k1536.w.u16
+vu-k1536.acc.u32
+tu-k16.a.u16
+tu-k16.b.u16
+tu-k16.c.u32
+.cache/
+*.tmp

@@ -1,0 +1,24 @@
+{
+  "rule": "P14 (one way to build and reach the vLLM engine, to refuse, to encode canonical JSON and to draw ChaCha20)",
+  "entries": [
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "vllm-internals", "symbol": "_LLMShim.__init__", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "vllm-internals", "symbol": "run_workload", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "vllm-internals", "symbol": "main", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "vllm-internals", "symbol": "run", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "_shut_down", "detail": "engine_core"},
+    {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "_shut_down", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/serve_openai.py", "kind": "vllm-internals", "symbol": "main", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "vllm-LLM", "symbol": "main", "detail": "vllm.LLM"},
+    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "vllm-internals", "symbol": "main", "detail": "engine_core", "count": 2},
+    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "vllm-internals", "symbol": "main", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "vllm-internals", "symbol": "main", "detail": "model_executor"},
+    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "vllm-LLM", "symbol": "main", "detail": "vllm.LLM"},
+    {"file": "verity_vllm/pipeline/tp/match.py", "kind": "vllm-LLM", "symbol": "_engine_main", "detail": "vllm.LLM"},
+    {"file": "verity_vllm/program/frontend/relabel.py", "kind": "refusal-class", "symbol": "<module>", "detail": "RelabelRefused"},
+    {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "canonical-json", "symbol": "canonical_bytes", "detail": "verity.circuits.codec.canonical_json"},
+    {"file": "verity_vllm/commit/committer/acquired.py", "kind": "refusal-class", "symbol": "<module>", "detail": "SkipRefused"},
+    {"file": "verity_vllm/compiler/advice_check.py", "kind": "refusal-class", "symbol": "<module>", "detail": "_Refused"},
+    {"file": "verity_vllm/compiler/cache_step_v3.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
+    {"file": "verity_vllm/compiler/compile_slice_v4.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"}
+  ]
+}

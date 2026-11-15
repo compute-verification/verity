@@ -1,0 +1,30 @@
+description = "FP8-int5 (the integers −16..16, exact in E4M3) on both operands of every matmul, dithered (the level below or above by a fresh bit): the linears after SmoothQuant 0.5 and the rotation, attention rotated with centered keys and no key blocks"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "grid"
+grid = "int5"
+act = "dither"
+weight = "dither"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "grid"
+grid = "int5"
+q = "dither"
+k = "dither"
+p = "dither"
+v = "dither"
+p_sink = false

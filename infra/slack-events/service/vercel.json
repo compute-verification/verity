@@ -1,0 +1,37 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "fluid": true,
+  "buildCommand": "python3 build.py && mkdir -p public && echo slack-events > public/index.txt",
+  "ignoreCommand": "python3 ignore.py",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60,
+      "includeFiles": "{_vendor,slack_events}/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/slack/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/cron/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/drain",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/watchdog",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

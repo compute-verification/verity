@@ -1,0 +1,43 @@
+# The served class under the value tie: the inference-only policy of Llama 3.2 1B with every tied value right. Nothing
+# serves it, and this tree builds no circuit of it. The served class leaves the layers' linears outside the circuit, so
+# a block reads their outputs as fresh input (`served.toml`'s k). Under the tie each of those outputs is bound to the
+# linear's operands by PoUW, so a block reads as fresh input only its scan state row and the execution phase's salt.
+# The tie is stated, not built: `run.py` prints this policy's figures only beside a share of a block's work that no
+# PoUW check credits, and that share is the command line's (`--uncredited-share`), never this file's.
+source = "the served class with every tied value right: the served policy's c, n and work, and k the scan state row and the execution phase's salt"
+
+model = "unsloth/Llama-3.2-1B"
+# the class: slots, prompt ids, outputs. A block is one slot's session, prompt + outputs - 1 positions.
+class = [4, 32, 4]
+# c and n: the served policy's (`served.toml`). k: fresh input bits a block, the class's scan state row and [fresh].
+c = 13818131814643
+k = 146080
+n = 25165824
+
+# One block's work in MACs by kind, the served policy's.
+[work]
+linears = 34057748480
+attention = 41287680
+lm_head = 1050673152
+total = 36241670144
+
+# What a block reads as fresh input beside its scan state row, each key what it is and its value the bits. The salt is
+# one SHA-512 output.
+[fresh]
+"the execution phase's salt" = 512
+
+# What the tie leaves: the untied words, outputs of the linears that PoUW's sample accepted without tying. A premise of
+# every figure, which no Lean statement gives.
+[untied]
+# A node's bound on the untied words of its accepted execution phases, however long the period, for a phase of
+# `blocks` blocks: the share ln(1/δ) / t of one phase's ticket weight, at δ = 1/100 and a sample of t = 459 tickets,
+# in words of the least weight. It is a share of a phase's weight, so a node that serves more blocks a phase takes it
+# scaled by its blocks.
+words = 671369
+blocks = 4
+# an execution phase's seconds
+phase_seconds = 600
+# the MACs that feed one untied word, at most: the most a unit of ticket weight buys, for a word of the least weight
+macs_a_word = 2048
+# an untied word's fresh bits in the one block that reads it, at most
+word_bits = 32
