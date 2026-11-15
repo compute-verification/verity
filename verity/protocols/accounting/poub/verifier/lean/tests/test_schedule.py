@@ -96,10 +96,9 @@ def inputs(take) -> dict:
         sc = schedule.Schedule(sc.registered + take(st.sampled_from([((0, 1, 0),), ((0, blocks + 1, 0),),
                                                                        ((blocks - 1, 1, 2 ** 64),)])),
                                sc.appends, sc.steps)
-    try:
-        bits = sc.bits
-    except ValueError:  # a chunk freed before its write has no encoding; the check refuses it before reading the cap
-        bits = 0
+    # a number below 0 (a chunk freed before its write, a step below the last) has no encoding; the check refuses its
+    # schedule before reading the cap
+    bits = sc.bits if min(sc.numbers()) >= 0 else 0
     cap = bits
     if fault is None and take(st.sampled_from([False] * 5 + [True])):
         fault, cap = "cap", take(st.integers(0, bits - 1))

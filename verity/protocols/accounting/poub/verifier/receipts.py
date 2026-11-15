@@ -182,6 +182,12 @@ class Plan:
         raise AttributeError("a Plan is immutable")
 
     @classmethod
+    def _of_rows(cls, runs, blocks: int) -> Plan:
+        """`Plan` of `runs.tolist()`'s rows as tuples: `from_array` of anything it doesn't read as a buffer."""
+        rows = runs.tolist()
+        return cls(tuple(tuple(r) if type(r) is list else r for r in rows) if type(rows) is list else rows, blocks)
+
+    @classmethod
     def from_array(cls, runs, blocks: int) -> Plan:
         """`Plan` of the rows of `runs`, an (R, 2) array, as `(first, count)` tuples: the same plan with the same
         digest, or the same refusal.  An array that exports C-ordered native integers (a numpy array of int8 … uint64)
@@ -195,12 +201,10 @@ class Plan:
         store_blocks(blocks)
         try:
             view = memoryview(runs)
-        except (TypeError, ValueError):
-            view = None
-        if (view is None or view.ndim != 2 or view.shape[1] != 2 or view.format not in _NATIVE_INTS
-                or not view.c_contiguous):
-            rows = runs.tolist()
-            return cls(tuple(tuple(r) if type(r) is list else r for r in rows) if type(rows) is list else rows, blocks)
+        except (TypeError, ValueError):  # no buffer, or one numpy can't export (datetime64): the rows' path
+            return cls._of_rows(runs, blocks)
+        if view.ndim != 2 or view.shape[1] != 2 or view.format not in _NATIVE_INTS or not view.c_contiguous:
+            return cls._of_rows(runs, blocks)
         if not 1 <= len(view) < 1 << 32:
             raise ValueError(_RUNS)
         raw = view.cast("B")

@@ -40,36 +40,41 @@ def encode_openings(openings) -> bytes:
 
 
 def decode_openings(body: bytes) -> list[audit.Opening] | None:
-    try:
-        (n,), at, out = struct.unpack_from(">I", body), 4, []
-        for _ in range(n):
-            i, p = _OPEN_HEAD.unpack_from(body, at)
-            at += _OPEN_HEAD.size
-            block = body[at:at + BLOCK]
-            at += BLOCK
-            (nl,) = struct.unpack_from(">H", body, at)
-            at += 2
-            leaf = body[at:at + nl]
-            at += nl
-            leaf_salt, payload_salt = body[at:at + SALT], body[at + SALT:at + 2 * SALT]
-            at += 2 * SALT
-            paths = []
-            for _ in range(2):
-                d = body[at]
-                at += 1
-                paths.append(tuple(body[at + DIGEST * k:at + DIGEST * (k + 1)] for k in range(d)))
-                at += DIGEST * d
-            bound = body[at]
-            if bound > 1:
-                return None
-            digest = body[at + 1:at + 1 + DIGEST * bound]
-            at += 1 + DIGEST * bound
-            if at > len(body):
-                return None
-            out.append(audit.Opening(i, p, block, leaf, leaf_salt, paths[0], payload_salt, paths[1], b"", digest))
-        return out if at == len(body) else None
-    except (struct.error, IndexError):
+    if len(body) < 4:
         return None
+    (n,), at, out = struct.unpack_from(">I", body), 4, []
+    for _ in range(n):
+        if at + _OPEN_HEAD.size + BLOCK + 2 > len(body):
+            return None
+        i, p = _OPEN_HEAD.unpack_from(body, at)
+        at += _OPEN_HEAD.size
+        block = body[at:at + BLOCK]
+        at += BLOCK
+        (nl,) = struct.unpack_from(">H", body, at)
+        at += 2
+        leaf = body[at:at + nl]
+        at += nl
+        leaf_salt, payload_salt = body[at:at + SALT], body[at + SALT:at + 2 * SALT]
+        at += 2 * SALT
+        paths = []
+        for _ in range(2):
+            if at >= len(body):
+                return None
+            d = body[at]
+            at += 1
+            paths.append(tuple(body[at + DIGEST * k:at + DIGEST * (k + 1)] for k in range(d)))
+            at += DIGEST * d
+        if at >= len(body):
+            return None
+        bound = body[at]
+        if bound > 1:
+            return None
+        digest = body[at + 1:at + 1 + DIGEST * bound]
+        at += 1 + DIGEST * bound
+        if at > len(body):
+            return None
+        out.append(audit.Opening(i, p, block, leaf, leaf_salt, paths[0], payload_salt, paths[1], b"", digest))
+    return out if at == len(body) else None
 
 
 def openings_of(frames: Iterable[bytes]) -> list[audit.Opening]:

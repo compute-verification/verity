@@ -515,7 +515,11 @@ def store(world: World) -> audit_prover.Store:
     return out
 
 
-REFUSED = "refused"
+@dataclasses.dataclass(frozen=True)
+class Refused:
+    """A call the session refused, with the `SessionError` it raised."""
+
+    error: SessionError
 
 
 def _runs_json(runs) -> list | None:
@@ -554,8 +558,8 @@ class Run:
         self.events.append(event)
         try:
             return fn()
-        except SessionError:
-            return REFUSED
+        except SessionError as e:
+            return Refused(e)
 
     def tick(self, at: int | None = None) -> int:
         self.clock.now = self.clock.now + 1 if at is None else at
@@ -563,7 +567,7 @@ class Run:
 
     def start(self, at: int | None = None) -> Any:
         out = self._call({"kind": "start", "now": self.tick(at)}, self.s.start)
-        if out is not REFUSED:
+        if not isinstance(out, Refused):
             self.challenges[0] = out
         return out
 
@@ -573,9 +577,9 @@ class Run:
         if at is None and t is not None:
             at = max(self.clock.now + 1, self.s.windows[t].released_ns + self.params.window_ns)
         out = self._call({"kind": "boundary", "now": self.tick(at)}, self.s.boundary)
-        if out is not REFUSED and out is not None:
+        if not isinstance(out, Refused) and out is not None:
             self.challenges[out.index] = out
-        if out is not REFUSED:
+        if not isinstance(out, Refused):
             self.t, self.i = self.t + 1, 0
         return out
 
