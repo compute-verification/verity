@@ -186,3 +186,50 @@ Least sure: whether the rowsStartCharged entry also clears its `guarantees` inli
 Not looked at: a full check.py audit (no build or facts on this VM).
 TIMER: none
 
+[2026-11-15T07:04Z] 385180b235b6
+DEVICEGONE to network-accounting (lead): second commit f67ef44f48a8 on cursor/na-lock-hand-lines-b51f (parent 03c409f0121f), pushed only there. Only ruling 1 is in it. Rulings 2 and 3 don't fit the lock's form as worded; the reasons are below, each a one-line decision for you.
+
+1. Written. security/lean-audit.json, `domain` (a SORTED section, so the entry sits between Verity.Site.HostsWhole and Verity.Sound). The added lines, exactly:
+  "Verity.Site.RatedOn": {
+   "owner": "@network-accounting",
+   "why": "A scope: the links the limit sums are those the registered site gives a rate; across a link with none, no limit is stated."
+  },
+- There is no digest. That is the form our other three new domain entries have before their first records run: Accounting.AtLinkEnds, Accounting.RecordsWithin and Verity.Site.HostsWhole are each {owner, why} [read].
+- Only the security lock needs it. The guarantees there that take RatedOn are Accounting.SecurityProofs.EgressRegistered and LeakPartsRegistered [read Definitions/Accounting/Guarantees/RegisteredSite.lean]. Accounting.Guarantees.B4Via takes it too, but no lock lists a guarantee of it.
+
+2. Not written: `witnesses_assumed` cannot hold it [read check.py assumed_failures, lines 2366-2389].
+- The form is {named assumption: why}: it lists the premises a witness takes as given, and each must be a premise listed under `assumptions` or `open`.
+- Keyed by the guarantee, LeakPartsRegistered fails `witnesses.assumed-stale`, because no guarantee takes it as a premise.
+- Keyed by RatedOn, the entry fails `witnesses.assumed-unlisted`, because under ruling 1 RatedOn is `domain`, which an honest witness must conclude, not take.
+- The other hand-kept place, `unwitnessed`, needs the statement's type hash from a build, and --update never adds an entry. tests/test_lean_packages.py caps security's `unwitnessed` at 217, and it only shrinks.
+- So no hand-kept line expresses "assumed until NET-450" for a domain premise. Your options:
+  (a) Lean tonight: add the RatedOn conjunct to LeakPartsRegistered_honest at the example log's Site, with a β that rates the filtered boundary. I haven't checked that the example log rates those links.
+  (b) LeakPartsRegistered leaves the lock by name until NET-450.
+  (c) Leave witnesses.missing failing.
+- Same gap elsewhere [read the statements]: none.
+  - LeakParts takes no RatedOn: B4's model, no Site.
+  - PooledLeakRegistered takes none: no RatedOn anywhere under NetTiming, and its record lists none.
+  - EgressRegistered takes RatedOn, but the witness rule doesn't hold it to witnesses: the dress run had no witnesses.missing line for it.
+
+3. Not frozen. What the Lean says [read Definitions/Accounting/Actual.lean:48-58 and Guarantees/RegisteredSite.lean]:
+- `A : Placed S.Place` is no account. It is the prover's run as the model places it: an actual circuit, each gate at a leaf `x g`, a tick `t g` and a cell `cell g`.
+- `cell_inj : Function.Injective fun g => (x g, cell g, t g)` is a Prop field of the structure Placed ("a cell takes at most one gate a tick"). EgressRegistered quantifies over A, so the check counts that field as a hypothesis ("a Prop field of a structure an input ranges over"). It is not a separate hypothesis on the prover's data.
+- It restricts no adversary and no honest run. `cell` is a coordinate the model chooses: Placed.onto sets `cell g := g.val` and proves cell_inj for any circuit at any leaves and ticks. The docstring of `onto` says wires, widths, ticks, `egress` and `Links` read no cell. The honest placement (Requirement/Placed.lean) also uses cell g = g, "so cell_inj holds whatever the ticks".
+- So it is the model object's well-formedness, true by construction. But it is the prover's placed run, not "the registered account", so your text would state something false.
+- Your text would also fail check.py's `shape.frozen-category`: every frozen reason starts with one of restatable, frozen, falsified or unstated (check.py:3658).
+- If you approve, a corrected line:
+  "Accounting.SecurityProofs.EgressRegistered": "restatable: it takes A.cell_inj, a field of the placed run it ranges over that restricts no run, since egress and Links read no cell and every circuit at its leaves and ticks has cells meeting it (cell g = g, as Placed.onto gives); stated without the field, NET-450, Wed 18 Nov"
+  On your word I add it as a third commit, in a few minutes. Otherwise, as you said, EgressRegistered leaves the lock by name.
+
+Rechecks after f67ef44f48a8 [ran]:
+- The three locks parse, and check.py's load() takes them.
+- merge.merge has 0 conflicts in all three locks against each branch, with our entries kept:
+  - LOCKPASS cursor/ci-dress-151cc6a348e at 5cf7ba575ea3 (base 12b62561867c);
+  - AREAS cursor/lean-arch-lock-layers-fc8d at e757340e3084 (base a03cb37a2957);
+  - TERMGB2 cursor/na-orphan-roots-b51f at f930518dcd8d (base a03cb37a2957).
+- tests/test_lean_packages.py and tests/test_repository.py: 51 passed, warnings only.
+
+Least sure: whether a digest-less domain entry is accepted before the records run. Our three precedents say yes, but I didn't run --update.
+Not looked at: whether the example log rates the links option (a) would need.
+TIMER: none
+
