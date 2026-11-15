@@ -1,0 +1,50 @@
+# The record's leak guard out of `benchmarks/network_traces/` into the certifier's `prover/`, beside
+# `released_keys.py`, its check by key: what `tools/move/layout.py --map tools/move/leak_guard_prover_map.toml` moves and
+# rewrites. The guard is what a served run's records are released through (`certifier_piece.py`, `served_session.py`,
+# `chain_record.sh`, `wipe_gate.sh`), so it is the certifier's developer-side code, which no benchmark may hold. Its
+# declared witness names and allowlist go with it, and so do its test and the test helper that builds a gate run's files
+# (`gate_runs.py`). No root moves ([roots] old == new). No file is split or deleted. The format is `layout_map.toml`'s.
+#
+# What no map writes, and so follows the move by hand: the guard's tests of other files' record forms, which read the
+# attester's and the verifier's modules and stay in `benchmarks/` (`test_guard_forms.py`, split out before the move);
+# and the prose that says where the guard is.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_torch = "adapters/torch/verity_torch" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_torch = "adapters/torch/verity_torch" }
+
+[paths]
+"benchmarks/network_traces/leak_guard.py" = "verity/protocols/resource_accounting/network/prover/leak_guard.py"
+"benchmarks/network_traces/leak_guard.json" = "verity/protocols/resource_accounting/network/prover/leak_guard.json"
+"benchmarks/network_traces/tests/test_leak_guard.py" = "verity/protocols/resource_accounting/network/prover/tests/test_leak_guard.py"
+"benchmarks/network_traces/tests/gate_runs.py" = "verity/protocols/resource_accounting/network/prover/tests/gate_runs.py"
+
+[retired]
+# the paths this map empties
+paths = [
+    "benchmarks/network_traces/leak_guard.py",
+    "benchmarks/network_traces/leak_guard.json",
+    "benchmarks/network_traces/tests/test_leak_guard.py",
+    "benchmarks/network_traces/tests/gate_runs.py",
+]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file and every kernel source.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json", "adapters/vllm/manifests/README.md"]
+root_prefixes = ["/opt/vy-challenger/current/", "/opt/vy-verifier/current/"]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`)
+"benchmarks.network_traces.leak_guard" = "verity.protocols.resource_accounting.network.prover.leak_guard"
+"benchmarks.network_traces.tests.gate_runs" = "verity.protocols.resource_accounting.network.prover.tests.gate_runs"
+"benchmarks.network_traces.tests.test_leak_guard" = "verity.protocols.resource_accounting.network.prover.tests.test_leak_guard"
