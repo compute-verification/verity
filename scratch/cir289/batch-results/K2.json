@@ -1,0 +1,5741 @@
+{
+ "batch": "K2",
+ "run": "r20261115-011834-28e1",
+ "kinds": 191,
+ "accepted": 191,
+ "stopped": [],
+ "hours": 5.43,
+ "peak_gb": 3.08,
+ "records": [
+  {
+   "tag": "k2-000",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55581367,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.04,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-001",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55581367,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.04,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-002",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55581367,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.04,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-003",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=2,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=2,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55611062,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.42
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-004",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=2,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=2,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55611062,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.42
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-005",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=2,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=2,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55611062,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.42
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-006",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=3,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=3,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55649013,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-007",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=3,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=3,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55649013,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-008",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=3,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=3,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55649013,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-009",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=4,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=4,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55670581,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-010",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=4,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=4,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55670581,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-011",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=4,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=4,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55670581,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-012",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=5,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=5,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55730042,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-013",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=5,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=5,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55730042,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-014",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=5,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=5,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55730042,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-015",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=6,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=6,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55752634,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-016",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=6,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=6,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55752634,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-017",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=6,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=6,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55752634,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-018",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=7,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=7,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55775227,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-019",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=7,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=7,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55775227,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-020",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=7,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=7,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55775227,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-021",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=10,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=10,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55909265,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-022",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=10,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=10,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55909265,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-023",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=10,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=10,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55909265,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-024",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=11,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=11,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55934929,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-025",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=11,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=11,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55934929,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-026",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=11,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=11,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55934929,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-027",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=12,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=12,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55960593,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-028",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=12,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=12,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55960593,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-029",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=12,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=12,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55960593,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-030",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=13,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=13,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55986257,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-031",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=13,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=13,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55986257,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-032",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=13,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=13,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55986257,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-033",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=14,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=14,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56011923,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-034",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=14,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=14,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56011923,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-035",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=14,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=14,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56011923,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-036",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=15,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=15,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56037587,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.84,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-037",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=15,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=15,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56037587,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-038",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=15,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=15,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56037587,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-039",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=16,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=16,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56063308,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-040",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=16,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=16,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56063308,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.84,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-041",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=16,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=16,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56063308,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-042",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=17,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=17,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56220176,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-043",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=17,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=17,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56220176,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-044",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=17,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=17,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56220176,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-045",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=18,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=18,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56245972,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-046",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=18,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=18,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56245972,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-047",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=18,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=18,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56245972,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-048",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=19,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=19,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56271768,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-049",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=19,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=19,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56271768,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-050",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=19,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=19,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 56271768,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-051",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=8,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=8,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55797818,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-052",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=8,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=8,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55797818,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-053",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=8,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=8,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55797818,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-054",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=9,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=9,W=64,C=2}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55885948,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-055",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=9,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=9,W=64,C=5}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55885948,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-056",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=9,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=9,W=64,C=8}",
+   "ands": 0,
+   "k_log": 22,
+   "circuit_bytes": 55885948,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 0.83,
+    "serve": 0.56,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-057",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=20,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=20,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56297564,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-058",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=20,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=20,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56297564,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-059",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=20,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=20,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56297564,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-060",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=21,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=21,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56323360,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-061",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=21,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=21,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56323360,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-062",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=21,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=21,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56323360,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-063",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=22,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=22,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56349156,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-064",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=22,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=22,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56349156,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-065",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=22,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=22,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56349156,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-066",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=23,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=23,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56374952,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-067",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=23,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=23,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56374952,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-068",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=23,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=23,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56374952,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-069",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=24,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=24,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56400748,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-070",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=24,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=24,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56400748,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-071",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=24,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=24,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56400748,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-072",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=25,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=25,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56426544,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-073",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=25,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=25,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56426544,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-074",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=25,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=25,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56426544,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-075",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=26,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=26,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56452340,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-076",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=26,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=26,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56452340,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-077",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=26,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=26,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56452340,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-078",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=27,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=27,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56478136,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-079",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=27,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=27,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56478136,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-080",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=27,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=27,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56478136,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-081",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=28,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=28,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56503932,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-082",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=28,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=28,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56503932,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.05,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-083",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=28,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=28,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56503932,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.58,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-084",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=29,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=29,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56529728,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-085",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=29,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=29,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56529728,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-086",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=29,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=29,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56529728,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-087",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=30,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=30,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56555523,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-088",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=30,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=30,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56555523,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-089",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=30,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=30,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56555523,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-090",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=31,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=31,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56581319,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-091",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=31,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=31,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56581319,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-092",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=31,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=31,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56581319,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.97,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-093",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=32,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=32,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56607115,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-094",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=32,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=32,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56607115,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-095",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=32,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=32,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56607115,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.06,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-096",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=33,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=33,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56928852,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-097",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=33,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=33,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56928852,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-098",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=33,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=33,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56928852,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-099",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=34,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=34,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56955672,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-100",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=34,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=34,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56955672,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-101",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=34,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=34,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56955672,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-102",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=35,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=35,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56982492,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-103",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=35,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=35,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56982492,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-104",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=35,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=35,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 56982492,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-105",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=36,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=36,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57009312,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-106",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=36,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=36,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57009312,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-107",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=36,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=36,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57009312,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-108",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=37,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=37,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57036132,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-109",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=37,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=37,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57036132,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-110",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=37,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=37,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57036132,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-111",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=38,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=38,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57062952,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-112",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=38,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=38,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57062952,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-113",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=38,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=38,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57062952,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-114",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=39,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=39,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57089772,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-115",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=39,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=39,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57089772,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-116",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=39,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=39,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57089772,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-117",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=40,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=40,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57116592,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-118",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=40,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=40,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57116592,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-119",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=40,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=40,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57116592,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-120",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=41,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=41,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57143412,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-121",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=41,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=41,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57143412,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-122",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=41,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=41,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57143412,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-123",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=42,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=42,W=64,C=2}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57170232,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-124",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=42,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=42,W=64,C=5}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57170232,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.59,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-125",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=42,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=42,W=64,C=8}",
+   "ands": 0,
+   "k_log": 23,
+   "circuit_bytes": 57170232,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 1.6,
+    "serve": 0.98,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-126",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=43,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=43,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57197052,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-127",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=43,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=43,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57197052,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-128",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=43,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=43,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57197052,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-129",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=44,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=44,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57223872,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-130",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=44,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=44,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57223872,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-131",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=44,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=44,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57223872,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-132",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=45,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=45,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57250692,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-133",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=45,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=45,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57250692,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-134",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=45,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=45,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57250692,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-135",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=46,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=46,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57277512,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.08,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-136",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=46,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=46,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57277512,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-137",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=46,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=46,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57277512,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-138",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=47,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=47,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57304332,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-139",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=47,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=47,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57304332,
+   "seconds": 121,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-140",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=47,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=47,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57304332,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-141",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=48,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=48,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57331152,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-142",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=48,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=48,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57331152,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-143",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=48,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=48,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57331152,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-144",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=49,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=49,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57357972,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.08,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-145",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=49,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=49,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57357972,
+   "seconds": 110,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-146",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=49,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=49,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57357972,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-147",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=50,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=50,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57384792,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-148",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=50,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=50,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57384792,
+   "seconds": 131,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.08,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-149",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=50,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=50,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57384792,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-150",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=51,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=51,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57411612,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-151",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=51,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=51,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57411612,
+   "seconds": 130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.08,
+    "serve": 1.79,
+    "lean": 0.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-152",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=51,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=51,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57411612,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-153",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=52,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=52,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57438432,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-154",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=52,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=52,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57438432,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.08,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-155",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=52,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=52,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57438432,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-156",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=53,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=53,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57465252,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-157",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=53,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=53,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57465252,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-158",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=53,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=53,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57465252,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-159",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=54,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=54,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57492072,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-160",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=54,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=54,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57492072,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-161",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=54,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=54,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57492072,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-162",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=55,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=55,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57518892,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-163",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=55,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=55,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57518892,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-164",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=55,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=55,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57518892,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-165",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=56,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=56,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57545712,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-166",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=56,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=56,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57545712,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-167",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=56,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=56,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57545712,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-168",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=57,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=57,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57572532,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-169",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=57,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=57,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57572532,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-170",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=57,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=57,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57572532,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-171",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=58,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=58,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57599352,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-172",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=58,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=58,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57599352,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-173",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=58,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=58,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57599352,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-174",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=59,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=59,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57626172,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-175",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=59,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=59,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57626172,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-176",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=59,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=59,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57626172,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-177",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=60,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=60,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57652992,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-178",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=60,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=60,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57652992,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-179",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=60,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=60,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57652992,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.44
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-180",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=61,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=61,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57679812,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-181",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=61,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=61,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57679812,
+   "seconds": 101,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-182",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=61,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=61,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57679812,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-183",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=62,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=62,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57706632,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-184",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=62,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=62,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57706632,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.08,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-185",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=62,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=62,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57706632,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-186",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=63,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=63,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57733452,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-187",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=63,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=63,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57733452,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.08,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-188",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=63,W=64,C=8}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=63,W=64,C=8}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57733452,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-189",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=64,W=64,C=2}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=64,W=64,C=2}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57760272,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.8,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "k2-190",
+   "kind": "SparseMlaHeadKeysWire_v1{NVIS=64,W=64,C=5}",
+   "staged": "SparseMlaHeadKeysWire_v1{NVIS=64,W=64,C=5}",
+   "ands": 0,
+   "k_log": 24,
+   "circuit_bytes": 57760272,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 3.07,
+    "serve": 1.79,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  }
+ ]
+}
