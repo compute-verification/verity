@@ -1011,13 +1011,13 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
-#: the toy registration record R of the window the record tests' SPOT audit sampled against
+#: the toy docket R of the window the record tests' SPOT audit sampled against
 WINDOW_RECORD = {"format": "toy-registration", "window": 1}
 WINDOW_DIGEST = REG.digest(WINDOW_RECORD)
 
 
 def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
-    """SPOT's audit ``audit``'s v1 case, committing to the registration record ``rec``."""
+    """SPOT's audit ``audit``'s v1 case, committing to the docket ``rec``."""
     from verity.circuits import codec
 
     (audit / "window").mkdir(parents=True, exist_ok=True)
@@ -1059,7 +1059,7 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
 
 
 def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
-    """`window_digest` is the digest of the registration record R the audit's v1 case commits to, and None, saying
+    """`window_digest` is the digest of the docket R the audit's v1 case commits to, and None, saying
     why, for an audit with no case."""
     assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
     digest, why = S.window_digest(tmp_path / "none")
