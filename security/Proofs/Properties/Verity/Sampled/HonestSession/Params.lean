@@ -8,6 +8,7 @@ public import Proofs.Properties.Verity.Sampled.Accepts
 public import Proofs.Flock.Recursive.FirewallObj
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
+import Proofs.Pouw.Period.Sort
 import Base.Bytes
 import Flock.Scan
 import Flock.Canon
@@ -331,6 +332,21 @@ private theorem digest?_hexOf {b : ByteArray} (h : b.size = 64) : Spot.OneStageZ
   rw [hlen, hemp, hall]
   decide
 
+/-- `sortStrings` leaves an already-ascending array unchanged: its `qsort` is the sorted permutation, which a
+duplicate-free ascending array already is. The walk rewrites by this (the side condition `Pairwise (· < ·)` is decided on
+the concrete key array), so every `exactly`/`keys?` check reduces without the kernel running `qsort`. -/
+private theorem sortStrings_of_sorted {as : Array String} (h : as.toList.Pairwise (· < ·)) :
+    Spot.sortStrings as = as := by
+  show as.qsort (· < ·) = as
+  calc as.qsort (· < ·) = (as.qsort (· < ·)).toList.toArray := rfl
+    _ = as.toList.toArray := by rw [Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted h]
+    _ = as := rfl
+
+/-- `keys?` of an object, as its definitional equation, so the walk can expose the `sortStrings` inside it (which `keys?`
+being a plain `def` otherwise hides from the rewriter). -/
+private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
+    Spot.keys? (.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
+
 /-! ## v2's parameters, with every field named -/
 
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
@@ -386,7 +402,8 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgc] at hdc
     rw [hgp] at hdp
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_obj, sortStrings_of_sorted]
+      block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
     case f3 => kernel_rfl'            -- own.circuit
