@@ -733,7 +733,7 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
     assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "machine", "gamma_decided_by",
-                         "host_run", "no_bound", "session", "verdict", "error", "rate_bytes_per_s", "store_bytes",
+                         "numbers_decided_by", "host_run", "no_bound", "session", "verdict", "error", "rate_bytes_per_s", "store_bytes",
                          "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
     got = written(held)
     assert list(got) == WRITTEN
@@ -1266,6 +1266,22 @@ def test_where_the_lean_leaves_gamma_undecided_the_one_machine_ways_print_the_py
     assert text[1] == f"  {M.LOOPBACK if way == '--loopback' else M.LOCAL}"
     assert text[2] == f"  {M.PYTHON_LEDGER_WORDS}" and "has not decided" in text[2]
     assert (doc["value"], doc["error"], doc["gamma_decided_by"]) == (0.199, 2.0 ** -40, M.PYTHON_LEDGER)
+    assert doc["numbers_decided_by"] == M.NUMBERS_PYTHON
+
+
+@pytest.mark.parametrize("way", ["--loopback", "--local"])
+def test_where_the_lean_decided_gamma_the_one_machine_ways_print_it_with_no_python_ledger_line(
+        store, capsys, work, monkeypatch, way):
+    """A session whose γ the Lean verifier decided prints its share with no Python ledger line, and the JSON's
+    `gamma_decided_by` is `lean`; `numbers_decided_by` says the share and the windows' δ are the Lean's and the
+    sketch's and the sample's terms in its error the Python ledger's."""
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
+    machine = Machine(record=a_record(a_session(gamma=0.125)))
+    assert bench(store, way, run=machine) == 0
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith("memory: 0.125 of the node's memory read rate")
+    assert not any("python ledger" in t.lower() for t in text)
+    assert (doc["value"], doc["gamma_decided_by"], doc["numbers_decided_by"]) == (0.125, "lean", M.NUMBERS_LEAN)
 
 
 def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
@@ -1286,7 +1302,7 @@ def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
     store.add(FIRE, {"out/verifier.json": a_record(a_session(gamma=0.125))})
     assert bench(store, "--from", FIRE) == 0
     _, doc, _ = printed(capsys)
-    assert doc["gamma_decided_by"] == "lean"
+    assert (doc["gamma_decided_by"], doc["numbers_decided_by"]) == ("lean", M.NUMBERS_LEAN)
 
 
 def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, tmp_path, work):

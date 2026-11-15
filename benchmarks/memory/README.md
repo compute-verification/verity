@@ -28,11 +28,13 @@ what the session ran with, from the verifier's record (the JSON's `ran_with`): i
 its parameters, which are development ones, since the session registers 16 sketch rows and the deployed registration
 64; its detail names the rows, the openings and δ a window, the windows, the lateness allowed, the prover the error is
 priced against and the sheet the share is of. **Because the verifier and its coins run on the machine being measured,
-this is a measurement to improve on, not an audit:** the line under it says so, and the JSON's `audit` is false. Until
-PoUB's Lean verifier gives its answer for the share's terms (`gamma_answer` in `verifier/session/verifier.py`), an
-accepted session's share is undecided: this command and `--loopback` print the Python ledger's share and error, which
-the verifier records beside it, and say so in a line of their own and in the JSON's `gamma_decided_by`
-(`python-ledger`); a recorded run's (`--from`, `PERIOD`) prints no number.
+this is a measurement to improve on, not an audit:** the line under it says so, and the JSON's `audit` is false. An
+accepted session's share is PoUB's Lean verifier's (`gamma_answer` in `verifier/session/verifier.py`; the JSON's
+`gamma_decided_by` is `lean`), and so is the windows' δ in its error; the sketch's and the sample's terms in the error
+are still the Python ledger's, which the JSON's `numbers_decided_by` says by key. Where a reading is undecided, this
+command and `--loopback` print the Python ledger's share and error, which the verifier records beside it, and say so in
+a line of their own and in `gamma_decided_by` (`python-ledger`); a recorded run's (`--from`, `PERIOD`) prints no
+number.
 
 The error is priced against one prover: one that makes at most 2^80 SHA-512 compressions over the session on any
 hardware it reaches (`audit.QUERIES_LOG2`), never the node's own hash rate. At the 16 sketch rows a session registers
