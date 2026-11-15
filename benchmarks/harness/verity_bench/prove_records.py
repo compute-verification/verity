@@ -132,9 +132,9 @@ OWN_VERDICT = "its own steady-state verdict"
 #: a row's field for the NUMA node of the card its provers ran on, as the harness's timed step reads it inside the
 #: lease (null where the node doesn't say), held to the row's `cores.numa_nodes`
 CARD_NUMA = "card_numa_node"
-#: a scan of the runs' own host records, for rows that don't record `CARD_NUMA`: the runs it read (`covered`: every
-#: run from `first` to `last` save those `unread` lists), those of them whose card was on another NUMA node than
-#: their CPUs (`runs`, each with both nodes), and in `source` what was read (`OffNodeScan`)
+#: a scan of the runs' own host records, for rows that don't record `CARD_NUMA`: the record whose runs it read
+#: (`record`), the runs it read (`read`), those of them whose card was on another NUMA node than their CPUs (`off`,
+#: each with both nodes), and in `source` what was read (`OffNodeScan`)
 OFF_NODE = Path(__file__).resolve().parent / "data" / "off_node.json"
 #: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
 #: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
@@ -349,49 +349,57 @@ _RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
 @dataclass(frozen=True)
 class OffNodeScan:
-    """A scan of runs' own host records (`OFF_NODE`): it read every run from `first` to `last`, by run id (an id
-    orders runs by their start), save those in `unread`, and found the card on another NUMA node than its CPUs in
-    those in `off`."""
+    """A scan of runs' own host records (`OFF_NODE`): the record whose runs it read, the runs it read (`read`), and
+    those of them whose card was on another NUMA node than their CPUs (`off`)."""
 
-    first: str
-    last: str
-    unread: frozenset[str]
+    record: str
+    read: frozenset[str]
     off: frozenset[str]
 
     def of(self, run: str) -> bool | None:
         """Whether `run`'s card was off its CPUs' node by the scan, None where the scan didn't read `run`."""
 
-        if run in self.off:
-            return True
-        return False if self.first <= run <= self.last and run not in self.unread else None
+        return (run in self.off) if run in self.read else None
+
+
+def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    if dup := sorted({k for k, _ in pairs if sum(k == j for j, _ in pairs) > 1}):
+        raise ValueError(f"lists {', '.join(dup)} more than once")
+    return dict(pairs)
 
 
 @cache
 def off_node_scan(path: Path = OFF_NODE) -> OffNodeScan:
-    """`OFF_NODE`'s scan, refused unless its range is two run ids in order, every run it lists unread is inside that
-    range, and every run it lists off is inside it, read, with a card's node and CPUs' nodes that aren't that one."""
+    """`OFF_NODE`'s scan, refused unless it names a workload's steady-state record, lists each run it read once and
+    by its id, and lists each off-node run once, among those it read, with a card's node and CPUs' nodes that aren't
+    that one node alone."""
 
-    doc = json.loads(path.read_text())
-    covered, runs = doc["covered"], doc["runs"]
-    first, last, unread = covered["first"], covered["last"], frozenset(covered["unread"])
-    if not (_RUN_ID.fullmatch(first) and _RUN_ID.fullmatch(last) and first <= last):
-        raise ValueError(f"{path}: `covered` isn't two run ids in order: {first!r} to {last!r}")
-    if outside := sorted(r for r in unread if not (_RUN_ID.fullmatch(r) and first <= r <= last)):
-        raise ValueError(f"{path}: `covered.unread` lists runs outside {first} to {last}: {', '.join(outside)}")
-    for run, x in runs.items():
-        if not (_RUN_ID.fullmatch(run) and first <= run <= last and run not in unread):
-            raise ValueError(f"{path}: run {run} is no run the scan read ({first} to {last}, save `unread`)")
+    try:
+        doc = json.loads(path.read_text(), object_pairs_hook=_no_duplicate_keys)
+    except ValueError as e:
+        raise ValueError(f"{path}: {e}") from e
+    record, read, off = doc["record"], doc["read"], doc["off"]
+    if record not in {w.record(STEADY) for w in WORKLOADS.values()}:
+        raise ValueError(f"{path}: `record` ({record!r}) is no workload's steady-state record")
+    if bad := sorted(r for r in read if not (isinstance(r, str) and _RUN_ID.fullmatch(r))):
+        raise ValueError(f"{path}: `read` lists what isn't a run id: {', '.join(map(str, bad))}")
+    if len(set(read)) != len(read):
+        raise ValueError(f"{path}: `read` lists {', '.join(sorted({r for r in read if read.count(r) > 1}))} more than once")
+    for run, x in off.items():
+        if run not in read:
+            raise ValueError(f"{path}: off-node run {run} isn't among the runs the scan read")
         card, cpus = x.get("card_numa_node"), x.get("cpu_numa_nodes")
         if not (_node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus) and cpus != [card]):
             raise ValueError(f"{path}: run {run} lists no card's NUMA node and CPUs' NUMA nodes other than it alone")
-    return OffNodeScan(first, last, unread, frozenset(runs))
+    return OffNodeScan(record, frozenset(read), frozenset(off))
 
 
 def off_node(row: Mapping[str, Any], run: str, scan: OffNodeScan | None = None) -> bool | None:
     """Whether a row's card was on another NUMA node than its CPUs, None where that isn't recorded. A row that records
     its card's node (`CARD_NUMA`) and its CPUs' (`cores.numa_nodes`) is off when they aren't that one node and on
     otherwise. A row that doesn't (or records null) is as its run is by the scan (`off_node_scan`): off where it lists
-    the run, on where it read it and doesn't, and not recorded where it didn't read it."""
+    the run off-node, on where it read the run and doesn't, and not recorded where it didn't read the run, whatever
+    the run's id."""
 
     card, cpus = row.get(CARD_NUMA), _field(row, "cores.numa_nodes")
     if _node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus):
