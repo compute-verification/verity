@@ -18,5 +18,6 @@ inputs = [
     "tools/config/verity_config/verity_settings.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/kit_report.py",
     "benchmarks/harness/verity_bench/settings.py",
 ]
