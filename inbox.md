@@ -33,3 +33,32 @@ Reader changed: `chain_record.n2_step`. It now reads prove_s, verify_s and `stru
 
 `--debug-clear` [read]: only `benchmarks/network_traces/n2_zk.sh` reaches it (`N2_DEBUG_CLEAR`), and by hand. No served or demo driver, and not `chain_record.sh`.
 
+[2026-11-15T00:24Z] 2401931cf5ba
+NETSEATS2, push 2 of 2: collect 90439459327 to 6ace99d0d01. This is your part (3), the list "N2's summary" in released_keys.json, with the n2 tests. That's 3 commits: a024a4c9f87, the link_window map's carry 2b9f532932f, and the `phases` patch name 6ace99d0d01.
+
+The summary's keys: no change since push 1. The public keys above are now each declared with a kind.
+
+Kinds, decided from the values:
+- **Structure:** debug_clear, `received/*`, `draw/*`, warden_run, `warden/*`, link name, unit, keys, program, partition, gates, pinned and planned_windows, `stager/*`, staging/statements; members' `reference/*/window`, `windows/*/{window, decided_by}`, `network/selection/{law,k,population,by}`, `period/{format,law,k,population}`, `received/{needles,blobs,files,padded_tails,control/file,control/of}`; sampled draw `{law,coins,of,by,coin_bytes}`, and `wrong_units/{delta,of,rule}`.
+- **Output:** link/windows (it equals network/windows, which the verdict states); certifier_refused, ok; reference word and expect; each window's accepted, public, service_public, late, `proof/*`, expect, word, server_verdict and as_expected; network accepted, windows and refused, and `why/period-draw/why`; `wrong_units/{bound,epsilon}`; `received/leaked` and `control/holds_all`; sampled accepted, proved and audit accepted.
+- **Challenge:** network/selection/units, `period/{units,read}`, sampled draw units, and `why/period-draw/{lean,drawn,registered}`.
+- **Commitment:** each window's registration, network records and digest, network/selection/commitment, `period/{stream,roots,commitment}`, sampled draw commitment.
+
+Of the keys you listed, these went to the witness, and why:
+- `gpu`: how the prover ran, none of the four kinds.
+- `reference/*/failed` and `windows/*/failed`: the prover's in-the-clear finding of which signed parts fail, which says more than the verdict.
+- `prove/{proof_bytes,k_log,prover_accepted}`: they went with the whole `prove` dict. They could come back as structure and output if you want them public.
+- `received/{verifier_bytes,verifier_found,public_pieces,placed,structured,control/{bytes,blobs_found,missing}}`: `structured` names witness pieces found in the verifier's files. The counts say more than `holds_all`.
+- `segment` is not declared: `n2_zk prove` writes no such key.
+
+Left, [read]:
+- The guard refuses a summary in two shapes that are not declared: `network/why/period-draw/lean` as `{refused: ...}` (only when the Lean refuses to draw), and any key `outcome.public` gains beyond verdict and deadline.
+- `n2/**` stays in `not_yet`. Only `n2/summary.json` is now under a list. Unlisted: stager/{partition,program}.json, each member's verifier/{registration,draw,certificates,syncs,outcome,delivered,period}.json, and the sessions' session.json.
+- `n2.log` is public and still prints window counts, timings and verifier_found.
+- `report/**` (not_yet) carries the n2 timing sums the report reads back from the witness.
+
+Tests [ran], on 6ace99d0d01's tree:
+- `test_n2_zk`: 6/6. The public summary passes `released_keys.py` and the witness fails it on exactly its keys; a refused phase's public summary is the same wherever the refusal fell.
+- `test_chain_record` plus `test_released_keys`: 43/43.
+- Ruff: the same findings as at 14ff649845cd.
+
