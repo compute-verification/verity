@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+/-!
 `RecVStar.checkMsgNames` on a part (`.inner`) and a part of R's opening (`.opening`), each with row ports `m0` and `acc0`:
 a circuit whose ports are the statement's passes, and one with a port `m1` the statement has not is refused by name, at
 both forms; a port not named as a message round's (`acc1`, `v`) is never refused, nor is any port of another statement.
@@ -9,10 +14,6 @@ included), at `m27-k24-c8` 80, whose part 1 the honest prover names through `m79
 (`holo`) the rep has one round more, h's (`holoRepRounds`), as V*'s holo spec has one port more: `m46` passes at
 `m22-k6-c4`, `m47` does not.
 -/
-module
-
-public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

@@ -1,9 +1,9 @@
-"""Lean's check of the planner's one-stage designs: `Spot.PlanCheck` (the `sampled-proofs-plancheck` executable)
+"""Lean's check of the planner's one-stage designs: `Spot.PlanCheck` (the `spot-plancheck` executable)
 reads a design exactly, in rationals, and answers what it certifies, and `Properties.Spot` proves each answer
 from the proved guarantees (`LeakCheckSound`, `LeakCountSound`, `WorkCheckSound`).
 
 A leak design is `units` proof blocks each exporting at most `width` bits, each sampled independently at `rate`
-(`Law.bernoulli`), planned so that more than `count` incorrect ones escape with probability below `delta`.  Lean answers
+(`SamplingDesign.bernoulli`), planned so that more than `count` incorrect ones escape with probability below `delta`.  Lean answers
 the bits it certifies (`CertifiesLeak`), or None when it can't certify the count: at least the planner's
 `b K + loc_bits(n, K)` in exact arithmetic, which the planner's float can exceed by its rounding.  A work design is strata of proof blocks, each a block's `work` and its rate `num / den`, planned so that incorrect
 blocks of total work at least `target` escape with probability at most `delta` (`MeetsTarget`, however many blocks each
@@ -26,7 +26,7 @@ from typing import Iterable, Mapping, Sequence
 from verity.protocols.proofs.spot.verifier.one_stage.verifier import LeanError, executable
 from .optimize import Cell, Grain, leak_count
 
-EXE = "sampled-proofs-plancheck"
+EXE = "spot-plancheck"
 #: the share by which a design's float rate is rounded up before Lean checks it
 SLACK = Fraction(1, 2**20)
 #: the precision a two-stage point's bits are certified at
@@ -106,13 +106,13 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     `RequestsCover` reads each request as serving exactly `S`, so that point is a window's whose groups each hold
     `fanout` replay blocks, and it is written only for a caller that says they do (`whole_groups`; `ValueError`
     without it): a group of fewer serves less, which Lean covers only once it reads the request as serving at most
-    `S`.  A registration publishes the most a group holds, not that every group holds it, so the caller's word is the
+    `S`.  A docket publishes the most a group holds, not that every group holds it, so the caller's word is the
     premise, and nothing here checks it.
 
-    With `served`, `fanout` is the registered Program's, as its registration verdict publishes it
+    With `served`, `fanout` is the registered Program's, as its docket verdict publishes it
     (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has no default (`ValueError` without
     it); the sets' form reads none.  So is `returned`, the bits one replay block of the registered Program returns, as
-    its registration publishes them (`WindowCommitmentRecord.returned`, `second_stage.returned_bits`): they are what
+    its docket publishes them (`WindowCommitmentRecord.returned`, `second_stage.returned_bits`): they are what
     its request is served, so a cap below them is refused, and so is the patterns' form at any other `served`, since
     it reads each replay block as returning exactly `served` bits rounded up (`ValueError`, ``served-cover``:
     `Properties.Spot.ServedCover`, `RequestsCover`).  Lean searches θ from `theta` unless `search` is None."""

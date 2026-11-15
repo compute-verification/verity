@@ -552,17 +552,17 @@ def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
         rows = range(64) if rs == 0 else range(64, 80)
         assert [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]] == [("row_a", (i,)) for i in rows]
         assert lay.b_rows[t.index] == (cs,)
-    for refused in (lambda: plan.WorkLaw().sizes(lay.strata), lambda: plan.work_table(lay), lambda: plan.draw(key, lay, plan.WorkLaw())):
+    for refused in (lambda: plan.WorkSamplingDesign().sizes(lay.strata), lambda: plan.work_table(lay), lambda: plan.draw(key, lay, plan.WorkSamplingDesign())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
-    p = plan.draw(key, lay, plan.CountLaw(4))
+    p = plan.draw(key, lay, plan.CountSamplingDesign(4))
     assert set(p.proved) == set(p.drawn) | {i for t in p.drawn if us[t].role == "tile" for i in lay.closure[t]}
     with pytest.raises(DomainError):
         plan.tile_layout(SHORT, 2)
     decode = plan.tile_layout(pc8.Shape(32, K, 2, tile=(64, 1), hidden=True), 64)
     tile = next(s for s in decode.strata if s.role == "tile")
     assert [(s.role, s.work) for s in decode.strata] == [("row_a", 0), ("tile", 2 * 32)]
-    p = plan.draw(key, decode, plan.WorkLaw(2))
+    p = plan.draw(key, decode, plan.WorkSamplingDesign(2))
     assert set(p.proved) == set(range(34)) and p.proved_b == (0, 1)
     assert 32 <= plan.unsound_work_bound(decode, {tile.name: 1}, 0.25) < 64
 

@@ -1,0 +1,51 @@
+# The Lean verifier's executable: what `tools/move/rename.py --map tools/move/verify_proof_map.toml` renames,
+# `flock-verify` to `verity-verify-proof`, the name `verity verify proof` runs (GLOSSARY.md, Older names). One word: the
+# Lake target in `verity/protocols/proofs/flock/verifier/lakefile.toml`, so `lake build` writes
+# `.lake/build/bin/verity-verify-proof`, and every place that builds, finds, runs or names that program (the scripts'
+# paths to it, the suites' declared artifacts, its usage and refusal messages and the tests that read them, the task
+# graph's output name, comments and docs).
+#
+# It moves no path and renames no Lean declaration or module (`rename.py --moves` prints `{}`): the executable's root
+# module `FlockVerify`, the theorems and definitions spelled `flock_verify_*` and `FlockVerify*`, and the environment
+# variables spelled `FLOCK_VERIFY*` keep their names, which no word here spells.
+#
+# What keeps the older name until a format version, held by [keep]:
+# - the statement formats `flock-verify-statement/v1`, `flock-verify-recursion/v4` and `flock-verify-rec-statement/v3`
+#   and `/v4`, which a statement's digest hashes;
+# - the record's verdict keys `flock-verify/<session>`, which the record's readers compare.
+#
+# Two Lean files keep their text, since a file records the digest of their bytes and only its command rewrites it:
+# `verity/commitments/lean/Commitments/Draw.lean` (the pin in the randomness vectors, `tests/lean/generate.sh`'s) and
+# `security/Proofs/Flock/Claims/Recursion/IrDepSession.lean` (its `compile_time` entry in the proofs' lock). Each names
+# the program only in a comment.
+#
+# `live/src/session_verify.rs` keeps its one site, the name of the Rust prover's own thread pool (upstream's), which is
+# not this program.
+#
+# The Lean locks keep their text too: none spells the word in a record the Lean check writes, and the reasons that do
+# (a trust-base premise's, the frozen shapes', the upstream watches') say what a guarantee rests on, which their owners
+# reword.
+
+[words]
+"flock-verify" = "verity-verify-proof"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
+# of older names, the retired-terms lint's own examples, the frozen backends, upstream's patches (their `flock-verify`
+# is upstream's thread name), files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself),
+# move_check's own tests, and the Lean tools' fixtures, locks as they were on a past tree.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+# Format ids (the statement formats among them), the record's verdict keys, notes, art ids, branches and lanes.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'flock-verify/(?=[{<\w])', 'note:[\w./-]+', 'art:[0-9a-f]+',
+            'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]
+"verity/commitments/lean/Commitments/Draw.lean" = ["flock-verify"]
+"security/Proofs/Flock/Claims/Recursion/IrDepSession.lean" = ["flock-verify"]
+"verity/protocols/proofs/flock/prover/live/src/session_verify.rs" = ["flock-verify"]
+"**/lean-audit.json" = ["flock-verify"]

@@ -10,7 +10,8 @@ suite reads the JSON and never runs this; it runs by hand, against a tree that h
 scaled. ``m1-week.json``: one phase whose run covers a week, so the week's node cell is proved. ``m1-key-open.json``:
 m1 without the auditor's record of its network certifier's key, so certifier-key is open, the network certifier's
 verdict is not established and every cell is conditional on it, as on a run whose composite of record states no
-certifier case.
+certifier case. The committed m1 was cut at a lock that lists `Properties.NetworkPeriodLeak.periodLeakRegistered`; at
+one that doesn't, this tree's among them, certifier-key is open in m1 too and it is m1-key-open.
 """
 from __future__ import annotations
 

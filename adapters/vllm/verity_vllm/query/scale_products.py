@@ -1,7 +1,7 @@
-"""The blockwise FP8 GEMM's scale products as a required value: the committed interior words `Q_word_v1{16,32}` derives for
-`ScaledMmFp8BlockSharedScale_v1{K,N,G}` (`TargetProfile.fp8_scale_construction = "shared-per-block"`, the default).  Each weight block's
-K/G products `F32Mul_v1(x_s[kb], w_s[nb][kb])` are read by the block's G coordinates (a partial last block's by its N % G), so the
-partition commits them: cdiv(N, G) * K/G f32 words per Call, weight block nb major, k block kb minor (`slots` reads them off the
+"""The scale-group FP8 GEMM's scale products as a required value: the committed interior words `Q_word_v1{16,32}` derives for
+`ScaledMmFp8BlockSharedScale_v1{K,N,G}` (`TargetProfile.fp8_scale_construction = "shared-per-block"`, the default).  Each weight scale
+group's K/G products `F32Mul_v1(x_s[kb], w_s[nb][kb])` are read by the group's G coordinates (a partial last group's by its N % G), so
+the partition commits them: cdiv(N, G) * K/G f32 words per Call, weight group nb major, k group kb minor (`slots` reads them off the
 partition and refuses any other set).
 
 They are interior to the Call: `kernel_rows` adds one `scale_products` identity per (step, linear module), ranging over the module's
@@ -17,10 +17,10 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
-from verity.circuits.defs import bind
 from verity.circuits import word as W
-from verity.definitions.registry import fp8, fp8_vocab
-from verity.definitions.registry import prims as P
+from verity.circuits.defs import bind
+from verity_vllm.definitions.registry import fp8, fp8_vocab
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.query.manifest.format import identity_rows, query_id_digest
 
@@ -31,7 +31,7 @@ SHARED = frozenset(d.id for d in fp8_vocab.SHARED_SCALE.values())
 
 
 def blocks(st: Mapping[str, Any]) -> tuple[int, int]:
-    """(cdiv(N, G), K/G) of a shared-scale Call's statics: a partial last weight block (N % G rows) has its K/G products too."""
+    """(cdiv(N, G), K/G) of a shared-scale Call's statics: a partial last weight scale group (N % G rows) has its K/G products too."""
     return fp8.weight_blocks(int(st["N"]), int(st["G"])), int(st["K"]) // int(st["G"])
 
 

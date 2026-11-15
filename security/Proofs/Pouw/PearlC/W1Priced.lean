@@ -12,7 +12,7 @@ W1 itself at the same `g` and `δ`, with no new assumption:
 
 - `gGap_of_cost_le`: a model that charges at least another's, with the same runs and at most its calls, inherits its
   gap property. An adversary within budget `T` under the dearer model is within it under the cheaper one, and commits
-  the same transcript.
+  the same trace.
 - `w1_cost_le_priced`: W1's refund only waives fetches, so W1 charges at most the priced sum when `fetch ≥ 0`.
 - `gGap_w1Priced`: hence `GGap (w1 dv P salt) → GGap (w1Priced dv salt)`.
 - `w1Priced_cost`: the priced cost is compute plus `fetch` times `w1Read`, the two accounts' shares.
@@ -44,7 +44,7 @@ theorem gGap_of_cost_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM�
   let A₁ : Adversary CM₁ := ⟨A.pre, f A.online, A.act⟩
   have hA₁ : A₁.Bounded U T q := fun H s =>
     ⟨(hcost _ _ _ _ _ _).trans (hA H s).1, (Nat.add_le_add_left (hcalls _ _ _ _ _ _) _).trans (hA H s).2⟩
-  have e : ∀ x : (Q → R) × S, A₁.transcript U x.1 x.2 = A.transcript U x.1 x.2 := fun x =>
+  have e : ∀ x : (Q → R) × S, A₁.trace U x.1 x.2 = A.trace U x.1 x.2 := fun x =>
     hrun A.online x.1 U A.act (A.pre.eval x.1) x.2
   have := h U hU T hT q hq A₁ hA₁
   simpa only [e] using this

@@ -35,28 +35,29 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   (`verity_vllm.pipeline.cut_plugin`, `VERITY_CUT`), every so many steps or seconds. `corpus.py compare` against
   `honest` says whether a cut moved any request's output ids, and each edge's record (`raw/cut.PID.jsonl`) its hold,
   its cut set and its time.
-- `corpus.WARDEN`'s traces serve heavy's and small KV's loads through the network certifier as a relay
-  (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
+- `corpus.NETWORK_CERTIFIER`'s traces serve heavy's and small KV's loads through the network certifier as a relay
+  (`verity/protocols/accounting/certifier/device/network_certifier_serve.py serve`, a process beside the server, not on the auditor device). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
   twice more for the scheduler replay (`benchmarks/network_e2e/encodings/replay.py`'s `read_corpus_trace`): with the
-  relay's admission order and with its release order as the certified ingress (`summary.warden_views`). The relay,
+  relay's admission order and with its release order as the certified ingress (`summary.network_certifier_views`). The relay,
   the client and the server run on cores of their own (`corpus.cpu_plan`), and three probes say where a late tick or a
-  late cell read came from: `warden_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
-  host's load every 100 ms) and the client's own event loop record (`corpus.drive_warden`); the summary lays each late
+  late cell read came from: `network_certifier_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
+  host's load every 100 ms) and the client's own event loop record (`corpus.drive_network_certifier`); the summary lays each late
   tick against them (`summary.late_ticks`).
-- `corpus.py run --admit tick` serves under the certified tick (`verity_vllm.pipeline.serve_admit`, which vLLM's
-  server loads through `verity_vllm.pipeline.tick_plugin`): the engine adds the requests whose release bucket closed by
-  its logical clock, in release order, so that batch composition is a function of the certified releases and the advice
-  v1 sends no timing. In a warden trace the network certifier in front of the server sends the release headers and
-  streams the watermark (`warden_serve.py serve --watermark`), and the summary takes each request's release from what
-  the server got, where the certifier's log agrees (`summary.feed_releases`); a run behind it shows the network
-  certifier's code in front of the server on the serving host, not on a host the prover doesn't control. With no
-  network certifier in front of the server, the client stands in for it (`corpus.StandIn`): it numbers each request and
-  puts it in the bucket of its send, in the release headers, and streams the watermark. The hostile schedulers' traces
-  don't take the tick. τ_sat and τ_free are calibrated on a trace of the same server on the
-  same host (`--tick-from`; `corpus.py tick TRACE_DIR` prints them) or given (`--tick-ms`). The hook also records the
-  scheduler's KV pool (`engine.json`), which the replay reads. `tick.sh`: GLM-5.3's load point under the tick on a whole
-  H200 node, beside the same load admitted on arrival, then the advice v1 over both (its header has its command).
+- `corpus.py run --admit tick` serves under the certified tick (`verity_vllm.pipeline.serve_admit`, which vLLM's server
+  loads through `verity_vllm.pipeline.tick_plugin`): the engine adds the requests whose release bucket closed by its
+  logical clock, in release order, so that batch composition is a function of the certified releases and the advice v1
+  sends no timing. In a network certifier trace the network certifier in front of the server sends the release headers
+  and streams the watermark (`network_certifier_serve.py serve --watermark`, in
+  `verity/protocols/accounting/certifier/device/`), and the summary takes each request's release from what the server
+  got, where the certifier's log agrees (`summary.feed_releases`); a run behind it shows the network certifier's code in
+  front of the server on the serving host, not on a host the prover doesn't control. With no network certifier in front
+  of the server, the client stands in for it (`corpus.StandIn`): it numbers each request and puts it in the bucket of
+  its send, in the release headers, and streams the watermark. The hostile schedulers' traces don't take the tick. τ_sat
+  and τ_free are calibrated on a trace of the same server on the same host (`--tick-from`; `corpus.py tick TRACE_DIR`
+  prints them) or given (`--tick-ms`). The hook also records the scheduler's KV pool (`engine.json`), which the replay
+  reads. `tick.sh`: GLM-5.3's load point under the tick on a whole H200 node, beside the same load admitted on arrival,
+  then the advice v1 over both (its header has its command).
 - `ids.sh`: the id front (`verity-vllm ids-front`) before a server that is up under the tick, for a network certifier
   whose egress is the id form: vLLM's own server answers in HTTP, and the front sends the certifier only the output ids,
   one id event each, then the trailer. With a command it runs the certifier's side through the front on the same host

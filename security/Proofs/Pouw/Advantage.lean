@@ -63,33 +63,33 @@ theorem theorem1Eps (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → 
     (εs δs : ℝ) (hεs : εs < 1)
     (hδ : pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
         εs * totalWref P U.layout <
-          ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ))
+          ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1), (P.Wref U.layout u : ℝ))
       ≤ δs) :
     pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ (1 + εa) / (1 - εs) * T < totalWref P U.layout ∧
         ¬ A.Breaks U x.1 x.2.1)
       ≤ δs + δ q U.layout.N := by
   let E1 := fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
     εs * totalWref P U.layout <
-      ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ)
+      ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1), (P.Wref U.layout u : ℝ)
   let E2 := fun y : (Q → R) × S =>
-    (1 + εa) * T < ∑ u ∈ correctSet P U y.1 y.2 (A.transcript U y.1 y.2), (P.Wref U.layout u : ℝ) ∧
+    (1 + εa) * T < ∑ u ∈ correctSet P U y.1 y.2 (A.trace U y.1 y.2), (P.Wref U.layout u : ℝ) ∧
       ¬ A.Breaks U y.1 y.2
   have h1s : 0 < 1 - εs := by linarith
   calc _ ≤ pr (fun x : (Q → R) × S × C => E1 x ∨ E2 (x.1, x.2.1)) := pr_mono fun x hx => by
         by_cases h1 : E1 x
         · exact Or.inl h1
         · refine Or.inr ⟨?_, hx.2.2⟩
-          have hbad : ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1),
+          have hbad : ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1),
               (P.Wref U.layout u : ℝ) ≤ εs * totalWref P U.layout := by
             by_contra h2
             exact h1 ⟨hx.1, lt_of_not_ge h2⟩
           have hsplit := Finset.sum_sdiff (f := fun u => (P.Wref U.layout u : ℝ))
-            (correctSet_subset_range P U x.1 x.2.1 (A.transcript U x.1 x.2.1))
+            (correctSet_subset_range P U x.1 x.2.1 (A.trace U x.1 x.2.1))
           have hW : (1 + εa) * T < (1 - εs) * totalWref P U.layout := by
             have h := hx.2.1
             rw [div_mul_eq_mul_div, div_lt_iff₀ h1s] at h
             linarith
-          show (1 + εa) * T < ∑ u ∈ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ)
+          show (1 + εa) * T < ∑ u ∈ correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1), (P.Wref U.layout u : ℝ)
           unfold totalWref at hbad hW
           linarith
     _ ≤ pr E1 + pr (fun x : (Q → R) × S × C => E2 (x.1, x.2.1)) := pr_or_le _ _
@@ -127,15 +127,15 @@ theorem EndToEndEps : Pouw.Guarantees.EndToEndEps := by
     (Pouw.Proofs.gapFromTT Q R S CM P D g₀ Ωmax δ hg₀ hΩ hW hTT)
   rw [Pouw.Proofs.reductionGap_div hg₀ hΩ] at hG
   refine Pouw.Proofs.theorem1Eps CM P D _ δ hG U hU T hT q hq A hA (Fin t → Ticket (P.Wref U.layout) U.layout.N)
-    (fun H s c => AuditAccepts (correctSet P U H s (A.transcript U H s)) c) εs ((1 - εs) ^ t) hεs ?_
+    (fun H s c => AuditAccepts (correctSet P U H s (A.trace U H s)) c) εs ((1 - εs) ^ t) hεs ?_
   let G := fun y : ((Q → R) × S) × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-    AuditAccepts (correctSet P U y.1.1 y.1.2 (A.transcript U y.1.1 y.1.2)) y.2 ∧
+    AuditAccepts (correctSet P U y.1.1 y.1.2 (A.trace U y.1.1 y.1.2)) y.2 ∧
       εs * ∑ u ∈ Finset.range U.layout.N, (P.Wref U.layout u : ℝ) <
-        ∑ u ∈ Finset.range U.layout.N \ correctSet P U y.1.1 y.1.2 (A.transcript U y.1.1 y.1.2),
+        ∑ u ∈ Finset.range U.layout.N \ correctSet P U y.1.1 y.1.2 (A.trace U y.1.1 y.1.2),
           (P.Wref U.layout u : ℝ)
   calc _ = Pouw.pr G := Pouw.pr_equiv (Equiv.prodAssoc _ _ _).symm G
     _ ≤ _ := Pouw.Proofs.workWeightedSampling ((Q → R) × S) (P.Wref U.layout) U.layout.N t
-        (fun y => correctSet P U y.1 y.2 (A.transcript U y.1 y.2)) εs hεs.le
+        (fun y => correctSet P U y.1 y.2 (A.trace U y.1 y.2)) εs hεs.le
 
 end Pouw.SecurityProofs
 
@@ -155,10 +155,10 @@ end Pouw.SecurityProofs.NCP
 namespace Pouw.SecurityProofs.PearlC
 
 /-- **Pearl-C's design point at 8192³ on the RTX PRO 6000, in ε form** (not the served point, which is Llama 3.2 1B's
-linears under the H100 record): `GapSm120v1LoopCast8p72Rev1Cap1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
+linears under the H100 record): `GapSm120v1LoopCast8p72Rev1InertShare1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
 `ε = g/(1 − g) = 1648180439/444424569561`. -/
-theorem EpsSm120v1LoopCast8p72Rev1Cap1000_8192 :
-    Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192 := by
+theorem EpsSm120v1LoopCast8p72Rev1InertShare1000_8192 :
+    Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1InertShare1000_8192 := by
   intro Q R S _ _ _ _ sha fetch salt sem hTT
   have e : ((1648180439 / 444424569561 : ℚ) : ℝ) =
       ((1648180439 / 446072750000 : ℚ) : ℝ) / (1 - ((1648180439 / 446072750000 : ℚ) : ℝ)) := by
@@ -166,7 +166,7 @@ theorem EpsSm120v1LoopCast8p72Rev1Cap1000_8192 :
     norm_num
   rw [e]
   exact (Pouw.PearlC.gGap_iff_gε _ _ _ (by push_cast; norm_num) _).1
-    (GapSm120v1LoopCast8p72Rev1Cap1000_8192 sha fetch salt sem hTT)
+    (GapSm120v1LoopCast8p72Rev1InertShare1000_8192 sha fetch salt sem hTT)
 
 /-- **Pearl-C4's headline at 8192³ in ε form**: `GapFp4Sm120_8192` and `Pouw.PearlC.gGap_iff_gε`, at
 `ε = g/(1 − g) = 9875013901/1366788186099`. -/

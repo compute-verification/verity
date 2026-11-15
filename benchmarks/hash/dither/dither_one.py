@@ -22,7 +22,7 @@ trees and the admit tables on streams of their own beside the rest), then the ro
 salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
-the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
+the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor device's round
 trip is in record_host_ms, else in
 this process, labelled ``in-process (not certified)`` in `stats`.
 

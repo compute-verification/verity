@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 
 The live games (`FlockSoundness.Game`) flip a coin of their own type at each `coin` node; `Claims.run` gives the
 verifier one coin `r_j : Coin` per round, answering the prover's message `a_j`. This file plays a game on the round
-coins and proves that the result has the game's law.
+coins and proves that the result has the game's distribution.
 
 * `Iface Coin g`: how the game's moves and coins sit in `Claims`' messages: at each `send` node a total decoder of the
   prover's bytes (`dec`), at each `coin` node a uniform projection of the round coin onto the game's coin (`CoinIf`),
@@ -297,7 +297,7 @@ theorem ex_expectP_some [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Ifac
     rw [I.1.unif (fun c => expect f (k c) (toStrat _ _ (s c)))]
     rfl
 
-/-- **The coin distribution**: the game played on uniform round coins has the game's law, `expect` against the decoded
+/-- **The coin distribution**: the game played on uniform round coins has the game's distribution, `expect` against the decoded
 strategy, whenever it ends within the rounds. -/
 theorem ex_playOn [Nonempty Coin] (f : β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I)
     (p : Option Coin) (n : ℕ), RoundsLe g I s p.isSome n →
@@ -354,7 +354,7 @@ theorem ex_fork_zero [Nonempty Coin] (F : β → β → ℝ) (g : Game β) (I : 
     funext fun r => ex_playOn (F (playOn g I s p (coinSeq r))) g I s p n hR]
   exact ex_playOn (fun b => expectP (F b) g I s p) g I s p n hR
 
-/-- **The fork law**: two plays sharing their first `j` round coins, the rest independent, have the sampling design `forkX`: one
+/-- **The fork sampling design**: two plays sharing their first `j` round coins, the rest independent, have the sampling design `forkX`: one
 play to round `j`, then two independent continuations. -/
 theorem ex_fork [Nonempty Coin] (F : β → β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I)
     (p : Option Coin) (n j : ℕ) (hj : j < n), RoundsLe g I s p.isSome n →

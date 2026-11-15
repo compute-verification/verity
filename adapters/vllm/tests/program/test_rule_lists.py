@@ -1,11 +1,15 @@
-"""`verity_vllm.program.frontend.rules`' two named lists: every rule of `TORCH_RULES` targets ATen ops only, every rule of
-`VLLM_RULES` targets an op that is not ATen's, and the default rule set holds exactly their members, in the sequence of its
-four lists (views, reference, profile, padding)."""
+"""`verity_vllm.program.frontend.rules`' lists: every rule of `VLLM_RULES` targets an op that is not ATen's, the package's
+`TORCH_RULES` is the PyTorch adapter's, the default rule set holds exactly the two lists' members, in the sequence of
+its four lists (views, reference, profile, padding), and a training rule set holds none of `VLLM_RULES`."""
 from __future__ import annotations
 
+import pytest
+from verity_torch.frontend import rules as T
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend import rules as R
 from verity_vllm.program.frontend.rules import padding, profile
-from verity_vllm.program.frontend.rules.base import ANY
+from verity_torch.frontend.rules.base import ANY
+from verity_torch.frontend.rules.training import training_rules
 
 
 def _namespaces(rule) -> set[str]:
@@ -18,9 +22,8 @@ def _ids(rules) -> list[str]:
     return [r.info.rule_id for r in rules]
 
 
-def test_every_torch_rule_targets_aten_ops_only():
-    assert R.TORCH_RULES
-    assert {r.info.rule_id: _namespaces(r) for r in R.TORCH_RULES if _namespaces(r) != {"aten"}} == {}
+def test_torch_rules_are_the_pytorch_adapters():
+    assert R.TORCH_RULES is T.TORCH_RULES
 
 
 def test_every_vllm_rule_targets_an_op_that_is_not_atens():
@@ -43,3 +46,11 @@ def test_the_default_keeps_the_sequence_of_its_four_lists():
     assert ids == _ids(R.VIEW_RULES) + _ids(R.REFERENCE_RULES) + _ids(R.PROFILE_RULES) + _ids(R.PADDING_RULES)
     assert profile.PROFILE_RULES == profile.PROFILE_TORCH_RULES + profile.PROFILE_VLLM_RULES
     assert padding.PADDING_RULES == padding.PADDING_TORCH_RULES + padding.PADDING_VLLM_RULES
+
+
+@pytest.mark.parametrize("kw", [{}, {"cc": CB.TRAIN_CC}, {"cc": CB.TRAIN_CC, "tf32": True},
+                                {"cc": CB.TRAIN_CC, "deterministic": True}, {"cc": CB.TRAIN_CC, "structure": True}],
+                         ids=["cpu", "cc", "cc-tf32", "cc-deterministic", "cc-structure"])
+def test_a_training_rule_set_holds_no_vllm_rule(kw: dict) -> None:
+    """A training step's rule set (`training_rules`) names no op of vLLM's."""
+    assert not {r.rule_id for r in training_rules(**kw).rules} & {r.rule_id for r in R.VLLM_RULES}

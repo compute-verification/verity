@@ -269,7 +269,7 @@ theorem zk_ligerito_accepts (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128
     intro s q
     rw [hini]
     exact foldRoundsZK_val P p sch.k0 0 1 s q _ hFl hFs
-  have hρ := drawKs_two _ _ hc₀ hc₁
+  have hρ := sampleKs_two _ _ hc₀ hc₁
   obtain ⟨ρ, hρdef⟩ : ∃ ρ : Fin 2 → 𝕂, ρ =
       Fin.cons (execArith.ofLimbs (fOf (t₉.rounds[t₉.k + sch.k0]!).coins[0]!)
         (fOf (t₉.rounds[t₉.k + sch.k0]!).coins[1]!))

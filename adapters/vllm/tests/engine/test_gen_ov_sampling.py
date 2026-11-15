@@ -11,6 +11,7 @@ import pytest
 
 from tests import fake_vllm
 from tests.observe.test_gen_sampling import _adapter_fn
+from verity_vllm.config import workload_file
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 B1 = ["temp07", "topk50", "topp09", "topk50_topp09", "n2", "2req_seeds", "noseed", "combo", "mixed"]
@@ -18,10 +19,10 @@ B1 = ["temp07", "topk50", "topp09", "topk50_topp09", "n2", "2req_seeds", "noseed
 
 @pytest.mark.parametrize("name", B1)
 def test_b1_sampling_workloads_schema(name):
-    doc = json.loads((PROFILES / f"workload_b1_sampling_{name}.json").read_text())
+    doc = json.loads(workload_file(PROFILES / f"workload_b1_sampling_{name}.json").read_text())
     assert doc["case"] == "B1" and doc["model"] == "Qwen/Qwen2.5-1.5B"
     assert doc["sampling"]["variant"] in doc["variants"] and doc["variants"]["greedy"]["temperature"] == 0.0
-    base = json.loads((PROFILES / "workload_qwen15_32x16_1req.json").read_text())["requests"][0]["prompt_token_ids"]
+    base = json.loads(workload_file(PROFILES / "workload_qwen15_32x16_1req.json").read_text())["requests"][0]["prompt_token_ids"]
     for r in doc["requests"]:
         assert r["prompt_token_ids"] == base and r["max_tokens"] == 16 and "accepted_token_ids" not in r
         if "variant" in r:
@@ -72,7 +73,7 @@ def test_mixed_batch_per_request_variant():
 
 def test_mixed_batch_rejects_unknown_request_variant(tmp_path):
     load = _adapter_fn("load_workload")
-    doc = json.loads((PROFILES / "workload_b1_sampling_mixed.json").read_text())
+    doc = json.loads(workload_file(PROFILES / "workload_b1_sampling_mixed.json").read_text())
     doc["requests"][0]["variant"] = "nope"
     p = tmp_path / "w.json"
     p.write_text(json.dumps(doc))
@@ -111,7 +112,7 @@ def _program_output_gate(P):
 def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
     from verity.circuits import Program, bind
     from verity.circuits.evaluation.reference import evaluate_region
-    from verity.definitions.registry.sampling import GumbelArgmaxBf16
+    from verity_vllm.definitions.registry.sampling import GumbelArgmaxBf16
     P = Program(bind(GumbelArgmaxBf16, V=V, SEED=seed, POS=pos))
     C = P.circuit
     gates = [g for _, _, g in P.input_coll(0).refs]
@@ -285,8 +286,8 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     import numpy as np
     from verity.circuits import Program, bind
     from verity.circuits.evaluation.reference import evaluate_region
-    from verity.definitions.registry import prims as P
-    from verity.definitions.registry.sampling import GumbelArgmaxTempBf16
+    from verity_vllm.definitions.registry import prims as P
+    from verity_vllm.definitions.registry.sampling import GumbelArgmaxTempBf16
 
     from tests.engine.gumbel_oracle import gumbel_noise_exact
     V, seed, pos = 80, 11, 5

@@ -64,7 +64,7 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Opening waitAccC forkOn flatMapRP checkRevealed assemble ownLog ownLog_bind accList
   OwnColl flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair mem_checkRevealed
-  agree_of_passes val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
+  agree_of_passes val_assemble ιOf ιOf_eq faulty_incorrect acc_of_accList accList_length_eq)
 open Claims.Recursion (serve viewing)
 
 namespace Compiled
@@ -83,7 +83,7 @@ noncomputable def innerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
 noncomputable def outerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x)
     (jo : Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen)) :
     RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
-  (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) []).bind
+  (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.secondStage x) jo.2.1 (c.2.1 jo.1 l)) []).bind
     fun inner => flatMapRP (L.innerBody x s c jo.1) ((List.finRange (L.kIn x)).zip inner)
 
 /-- The outer wait's kept runs, indexed. -/
@@ -214,25 +214,25 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (c : L.ECoins x)
     {Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
     (hj : (j, (r, (run' r).seen)) ∈ Z) {l : Fin (L.kIn x)} {d : Fin (L.V.k x) → Coin}
-    (hl : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+    (hl : (accList (fun d => (run' (forkOn (L.secondStage x) r d)).out = .acc) (L.kIn x)
       ((List.finRange (L.capIn x)).map (c.2.1 j)))[l.val]? = some d)
-    {i : Fin (L.nPU x)} {v : ℕ} (hv : (L.checked x (forkOn (L.stage2 x) r d))[i.val]? = some v) (hvlt : v < L.nPU x)
-    (hfirst : (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val)
+    {i : Fin (L.nPU x)} {v : ℕ} (hv : (L.checked x (forkOn (L.secondStage x) r d))[i.val]? = some v) (hvlt : v < L.nPU x)
+    (hfirst : (L.sessSlots x (L.checked x (forkOn (L.secondStage x) r d)) i).head? = some i.val)
     {q : List Msg × Opening Bool}
-    (hq : q ∈ ((L.sessExt x s (L.sessBlocks x (L.checked x (forkOn (L.stage2 x) r d)) i) v (forkOn (L.stage2 x) r d)
-      (run' (forkOn (L.stage2 x) r d)).seen (c.2.2 (j, l, i) ⟨v, hvlt⟩)).eval H run').1) :
+    (hq : q ∈ ((L.sessExt x s (L.sessBlocks x (L.checked x (forkOn (L.secondStage x) r d)) i) v (forkOn (L.secondStage x) r d)
+      (run' (forkOn (L.secondStage x) r d)).seen (c.2.2 (j, l, i) ⟨v, hvlt⟩)).eval H run').1) :
     q ∈ L.found H x s run' c Z := by
   unfold found
   rw [flatMapRP_eval]
   refine List.mem_flatMap.2 ⟨(j, (r, (run' r).seen)), hj, ?_⟩
   unfold outerBody
   rw [(RP.eval_bind _ _ _ _).1, flatMapRP_eval, waitAccC_eval_nil]
-  have hm : ((List.finRange (L.capIn x)).map fun l => forkOn (L.stage2 x) r (c.2.1 j l)) =
-      ((List.finRange (L.capIn x)).map (c.2.1 j)).map (forkOn (L.stage2 x) r) := by
+  have hm : ((List.finRange (L.capIn x)).map fun l => forkOn (L.secondStage x) r (c.2.1 j l)) =
+      ((List.finRange (L.capIn x)).map (c.2.1 j)).map (forkOn (L.secondStage x) r) := by
     rw [List.map_map]; rfl
   dsimp only
   rw [hm, accList_map, List.map_map]
-  refine List.mem_flatMap.2 ⟨(l, (forkOn (L.stage2 x) r d, (run' (forkOn (L.stage2 x) r d)).seen)),
+  refine List.mem_flatMap.2 ⟨(l, (forkOn (L.secondStage x) r d, (run' (forkOn (L.secondStage x) r d)).seen)),
     mem_zip_finRange ?_, ?_⟩
   · rw [List.getElem?_map, hl]; rfl
   · exact L.mem_runExt H x run' s _ _ (fun p => c.2.2 (j, l, p)) hv hvlt hfirst hq
@@ -248,21 +248,21 @@ theorem good_found (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
       L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen)
     {Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
     (hj : (j, (r, (run H P L.V x ω r).seen)) ∈ Z) {l : Fin (L.kIn x)} {d : Fin (L.V.k x) → Coin}
-    (hl : (accList (fun d => (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+    (hl : (accList (fun d => (run H P L.V x ω (forkOn (L.secondStage x) r d)).out = .acc) (L.kIn x)
       ((List.finRange (L.capIn x)).map (c.2.1 j)))[l.val]? = some d) {v : ℕ}
-    (hgood : L.GoodAt x (L.Found H x (run H P L.V x ω)) (forkOn (L.stage2 x) r d) v fun p => c.2.2 (j, l, p)) :
-    v ∈ L.checked x (forkOn (L.stage2 x) r d) ∧ ∃ xS vS w,
-      L.session x v (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen = some (xS, vS) ∧ A.R xS w ∧
-      ∀ q ∈ L.reveal s v (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen w, L.commit.Opens H q.1 q.2 = true →
+    (hgood : L.GoodAt x (L.Found H x (run H P L.V x ω)) (forkOn (L.secondStage x) r d) v fun p => c.2.2 (j, l, p)) :
+    v ∈ L.checked x (forkOn (L.secondStage x) r d) ∧ ∃ xS vS w,
+      L.session x v (run H P L.V x ω (forkOn (L.secondStage x) r d)).seen = some (xS, vS) ∧ A.R xS w ∧
+      ∀ q ∈ L.reveal s v (run H P L.V x ω (forkOn (L.secondStage x) r d)).seen w, L.commit.Opens H q.1 q.2 = true →
         q ∈ L.found H x s (run H P L.V x ω) c Z := by
   obtain ⟨i, hvlt, hvi, i₀, u₀, hlead, hu₀, xS, vS, hsess, hsh, w, hw, hR⟩ := hgood
-  have hacc : (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc := by
+  have hacc : (run H P L.V x ω (forkOn (L.secondStage x) r d)).out = .acc := by
     have h := acc_of_accList hl
     exact h
   obtain ⟨hk, hc, hfirst⟩ := of_leadOf hlead
   have hsv := hshared _ _ _ _ _ hacc hu₀ hvi hk
   refine ⟨List.mem_of_getElem? hvi, xS, vS, w, by rw [← hsv]; exact hsess, hR, fun q hq hok => ?_⟩
-  have hvb : v ∈ L.sessBlocks x (L.checked x (forkOn (L.stage2 x) r d)) i₀ := by
+  have hvb : v ∈ L.sessBlocks x (L.checked x (forkOn (L.secondStage x) r d)) i₀ := by
     rw [sessBlocks, hc]
     exact List.mem_filterMap.2 ⟨i, self_mem_sessSlots hvi hvlt, hvi⟩
   exact L.mem_found H x s _ c hj hl hu₀ u₀.isLt hfirst
@@ -273,7 +273,7 @@ theorem good_found (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
 /-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
 collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's incorrect set, refused
 at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior roots give, the proof
-block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is good would make it correct
+block at each `v ∈ B` is wrong (`faulty_incorrect`); a kept inner run at which `v` is good would make it correct
 (`Sessions.opens`, its revealed openings kept by `good_found`, the interior roots `r`'s by `Sessions.interior`), so `r`
 is bad for `B`. -/
 theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
@@ -308,17 +308,17 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
   · exact Or.inl hshort
   refine Or.inr ⟨_, hB, accList_length_eq hshort, fun j r hj => ?_⟩
   have hjZ := L.mem_outerList H x run' c hj
-  by_cases hshort2 : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+  by_cases hshort2 : (accList (fun d => (run' (forkOn (L.secondStage x) r d)).out = .acc) (L.kIn x)
     ((List.finRange (L.capIn x)).map (c.2.1 j))).length < L.kIn x
   · exact Or.inl hshort2
   refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
-  obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (L.iroots x (run' r).seen v))
+  obtain ⟨b, hb, hnc⟩ := faulty_incorrect hv (ιOf fd (L.iroots x (run' r).seen v))
   obtain ⟨hvc, xS, vS, wS, hsess, hRw, hkept⟩ := L.good_found H P ω x s c (hS.shared x Ω P ω) hjZ hl hgood
-  have hacc' : (run' (forkOn (L.stage2 x) r d)).out = .acc := by
+  have hacc' : (run' (forkOn (L.secondStage x) r d)).out = .acc := by
     have h := acc_of_accList hl
     exact h
   obtain ⟨b', hb', hcor⟩ :=
-    hS.opens x s Pt Ω P ω (forkOn (L.stage2 x) r d) v xS vS wS hs hPt hin hacc' hvc hsess hRw
+    hS.opens x s Pt Ω P ω (forkOn (L.secondStage x) r d) v xS vS wS hs hPt hin hacc' hvc hsess hRw
   have hcorr := hcor (w.val H L.commit s) (ιOf fd (L.iroots x (run' r).seen v)) fun q hq hok => by
     have hqf : q ∈ fd := hkept q hq hok
     refine ⟨fun hr => ?_, fun hi => ?_⟩

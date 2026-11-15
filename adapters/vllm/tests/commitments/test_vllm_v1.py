@@ -1,6 +1,6 @@
 """``vllm-v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
 vector openings and rejects the rejection vectors.  That vLLM's own code produces the same bytes is checked in
-``adapters/vllm/tests/commit/test_production_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
+``adapters/vllm/tests/commit/test_serving_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
 openings verify only under their own hash, and a configuration never mixes hashes."""
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from verity.commitments import domains
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.scheme import CommitmentScheme
 from verity.errors import InvalidArtifact
@@ -276,3 +277,7 @@ def test_sha512_domain_digests_are_sha512() -> None:
     assert ref.domain_digest(s512) == identity_digest_sha512(ref.DOMAIN_DIGEST_TAG, doc)
     assert len(ref.domain_digest(s512)) == 64 and len(ref.domain_digest(ref.StepDomain(d, d, d, d, 3))) == 32
     assert all(len(_b(c["domain_digest"])) == 64 for c in VECTORS_SHA512["openings"])
+
+
+def test_the_domain_digest_tag_is_the_tables_and_its_bytes_dont_move():
+    assert ref.DOMAIN_DIGEST_TAG is domains.VLLM_V1_DOMAIN and ref.DOMAIN_DIGEST_TAG == "verity/vllm-v1/domain/v1"

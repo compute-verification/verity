@@ -4,14 +4,14 @@ public import Proofs.Flock.Soundness.Audit.Extraction
 import Mathlib.Algebra.BigOperators.GroupWithZero.Finset
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
-# The stratified draw law
+# The stratified draw samplingDesign
 
 The strata are the units a map `σ : Fin n → Fin m` assigns to each `s`, for example one stratum per template. The
-stratified law draws an independent uniform `k s`-subset inside each stratum (`Law.stratified`,
+stratified samplingDesign draws an independent uniform `k s`-subset inside each stratum (`SamplingDesign.stratified`,
 `docs/sampling-strategies.md` §1, §4).
 
 * `stratified_escape`: a set `B` with `m_s` units in stratum `s` escapes with the product of hypergeometrics
@@ -19,10 +19,10 @@ stratified law draws an independent uniform `k s`-subset inside each stratum (`L
   it. The uniform `k`-subset is the case of one stratum.
 * `stratified_escape_floor`: **a floor catches its whole stratum**. With `1 ≤ k s`, a set containing stratum `s` never
   escapes.
-* `stratified_draw_full`, `stratified_full_miss`: **the full draw**. With every `k s` its stratum's size, the draw is every
-  unit and `miss K = 0` for `K ≥ 1` (`Law.miss_eq_zero_of_draw_univ`).
-* The one-stage profile theorems hold for every law, so they instantiate here. `audit_whole_stratum` (oracle layer) and
-  `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is wrong with
+* `stratified_sample_full`, `stratified_full_miss`: **the full draw**. With every `k s` its stratum's size, the draw is every
+  unit and `miss K = 0` for `K ≥ 1` (`SamplingDesign.miss_eq_zero_of_sample_univ`).
+* The one-stage profile theorems hold for every samplingDesign, so they instantiate here. `audit_whole_stratum` (oracle layer) and
+  `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is incorrect with
   probability at most the per-unit terms.
 -/
 
@@ -33,7 +33,7 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n m : ℕ}
 
@@ -44,7 +44,7 @@ theorem mem_stratum {σ : Fin n → Fin m} {s : Fin m} {u : Fin n} : u ∈ strat
   simp [stratum]
 
 /-- **Independent uniform subsets inside the strata of `σ`**, `k s` of stratum `s`. -/
-def stratified (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) : Law n where
+def stratified (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) : SamplingDesign n where
   Ω := (s : Fin m) → ((stratum σ s).powersetCard (k s))
   nonempty := ⟨fun s => ⟨_, (Finset.powersetCard_nonempty.2 (hk s)).choose_spec⟩⟩
   draw ω := univ.biUnion fun s => (ω s).1
@@ -77,15 +77,15 @@ theorem filter_eq_inter_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (
   ext u
   simp [stratum]
 
-/-- **The stratified escape**: the product over strata of the hypergeometric escape of the stratum's count,
+/-- **The stratified missProb**: the product over strata of the hypergeometric missProb of the stratum's count,
 `∏ s C(n_s − m_s, k_s) / C(n_s, k_s)` with `n_s = |stratum s|` and `m_s = |B ∩ stratum s|`. -/
 theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
-    (stratified σ k hk).escape B =
+    (stratified σ k hk).missProb B =
       ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
         ((stratum σ s).card.choose (k s) : ℝ≥0∞) := by
   classical
-  unfold Verity.Law.escape
+  unfold Verity.SamplingDesign.missProb
   have hd : (fun ω : (stratified σ k hk).Ω => Disjoint ((stratified σ k hk).draw ω) B) =
       fun ω => ∀ s ∈ (univ : Finset (Fin m)), Disjoint (ω s).1 B := by
     funext ω
@@ -103,7 +103,7 @@ theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s
 /-- **A floor catches its whole stratum**: with `1 ≤ k s`, a set containing stratum `s` never escapes. -/
 theorem stratified_escape_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (s : Fin m) (h : 1 ≤ k s) {B : Finset (Fin n)} (hB : stratum σ s ⊆ B) :
-    (stratified σ k hk).escape B = 0 := by
+    (stratified σ k hk).missProb B = 0 := by
   rw [stratified_escape]
   refine Finset.prod_eq_zero (mem_univ s) ?_
   have hc : (B.filter (σ · = s)).card = (stratum σ s).card := by
@@ -113,7 +113,7 @@ theorem stratified_escape_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk :
 
 /-- **The full stratified draw is every unit**: where each `k s` is its stratum's size, stratum `s`'s one `k s`-subset is
 the stratum itself, and the strata cover the units. -/
-theorem stratified_draw_full (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_sample_full (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (hfull : ∀ s, k s = (stratum σ s).card) (ω : (stratified σ k hk).Ω) : (stratified σ k hk).draw ω = univ := by
   have hs : ∀ s, (ω s).1 = stratum σ s := fun s => by
     obtain ⟨hsub, hcard⟩ := Finset.mem_powersetCard.1 (ω s).2
@@ -122,44 +122,44 @@ theorem stratified_draw_full (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
   exact Finset.mem_biUnion.2 ⟨σ u, mem_univ _, by rw [hs]; exact mem_stratum.2 rfl⟩
 
 /-- **The full stratified draw has no sampling term**: `miss K = 0` for `K ≥ 1`, so the count curve
-`δ(K) = miss K + ε` of a headline at this law is its `ε` alone. -/
+`δ(K) = miss K + ε` of a headline at this samplingDesign is its `ε` alone. -/
 theorem stratified_full_miss (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (hfull : ∀ s, k s = (stratum σ s).card) {K : ℕ} (hK : 1 ≤ K) : (stratified σ k hk).miss K = 0 :=
-  miss_eq_zero_of_draw_univ _ (stratified_draw_full σ k hk hfull) hK
+  miss_eq_zero_of_sample_univ _ (stratified_sample_full σ k hk hfull) hK
 
-end Law
+end SamplingDesign
 
 section Audits
 
-variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s ≤ (Law.stratum σ s).card}
+variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s ≤ (SamplingDesign.stratum σ s).card}
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- **A wholly wrong floored stratum is caught** (oracle layer): the audit accepts while every unit of stratum `s`
-is wrong with probability at most `ε_ks + δ_link`. -/
-theorem audit_whole_stratum (A : Analysis (Law.stratified σ k hk) Reg session) {εks δlink : ℝ≥0∞}
+/-- **A wholly incorrect floored stratum is caught** (oracle layer): the audit accepts while every unit of stratum `s`
+is incorrect with probability at most `ε_ks + δ_link`. -/
+theorem audit_whole_stratum (A : Analysis (SamplingDesign.stratified σ k hk) Reg session) {εks δlink : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (h : 1 ≤ k s)
-    (σ' : Strategy (audit (Law.stratified σ k hk) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
-        (audit (Law.stratified σ k hk) Reg session) σ' ≤ εks + δlink := by
-  refine (audit_profile A hks hlink (fun B => Law.stratum σ s ⊆ B) σ').trans ?_
-  have h0 : (⨆ (B : Finset (Fin n)) (_ : Law.stratum σ s ⊆ B), (Law.stratified σ k hk).escape B) = 0 :=
-    le_antisymm (iSup₂_le fun B hB => (Law.stratified_escape_floor σ k hk s h hB).le) (zero_le)
+    (σ' : Strategy (audit (SamplingDesign.stratified σ k hk) Reg session)) :
+    prob (fun o => o.1 = true ∧ SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ'))
+        (audit (SamplingDesign.stratified σ k hk) Reg session) σ' ≤ εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => SamplingDesign.stratum σ s ⊆ B) σ').trans ?_
+  have h0 : (⨆ (B : Finset (Fin n)) (_ : SamplingDesign.stratum σ s ⊆ B), (SamplingDesign.stratified σ k hk).missProb B) = 0 :=
+    le_antisymm (iSup₂_le fun B hB => (SamplingDesign.stratified_escape_floor σ k hk s h hB).le) (zero_le)
   rw [h0, zero_add]
 
-/-- **A wholly wrong floored stratum is caught** (compiled layer, randomized extractor): at most
+/-- **A wholly incorrect floored stratum is caught** (compiled layer, randomized extractor): at most
 `ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_whole_stratum (A : ExtractionAnalysis (Law.stratified σ k hk) Reg session)
-    {εks δlink : (R : Reg) → Cont (Law.stratified σ k hk) Reg session R → ℝ≥0∞}
+theorem extraction_audit_whole_stratum (A : ExtractionAnalysis (SamplingDesign.stratified σ k hk) Reg session)
+    {εks δlink : (R : Reg) → Cont (SamplingDesign.stratified σ k hk) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (h : 1 ≤ k s)
-    (σ' : Strategy (audit (Law.stratified σ k hk) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
-        (audit (Law.stratified σ k hk) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
-  refine (extraction_audit_le A hks hlink (fun X _ => Law.stratum σ s ⊆ A.wrong X) σ').trans ?_
-  have h0 : prCoin (fun ω => Law.stratum σ s ⊆ A.wrong (A.committedOf σ') ∧
-      Disjoint ((Law.stratified σ k hk).draw ω) (A.wrong (A.committedOf σ'))) = 0 := by
-    by_cases hB : Law.stratum σ s ⊆ A.wrong (A.committedOf σ')
+    (σ' : Strategy (audit (SamplingDesign.stratified σ k hk) Reg session)) :
+    prob (fun o => o.1 = true ∧ SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ'))
+        (audit (SamplingDesign.stratified σ k hk) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+  refine (extraction_audit_le A hks hlink (fun X _ => SamplingDesign.stratum σ s ⊆ A.incorrect X) σ').trans ?_
+  have h0 : prCoin (fun ω => SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ') ∧
+      Disjoint ((SamplingDesign.stratified σ k hk).draw ω) (A.incorrect (A.committedOf σ'))) = 0 := by
+    by_cases hB : SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ')
     · exact le_antisymm ((prCoin_mono fun ω h => h.2).trans
-        (Law.stratified_escape_floor σ k hk s h hB).le) (zero_le)
+        (SamplingDesign.stratified_escape_floor σ k hk s h hB).le) (zero_le)
     · exact le_antisymm ((prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans prCoin_false.le) (zero_le)
   rw [h0, zero_add]
 

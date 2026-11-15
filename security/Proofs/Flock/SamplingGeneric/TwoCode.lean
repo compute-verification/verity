@@ -31,13 +31,13 @@ the layout's population slot `ρ` is unit `ρ`, and that replay block's cell of 
 `[0, n_t)`; an input slot's cells are always checked. So the deployed second stage, one uniform `k_t`-subset per cell
 of a sampled replay block, is the contract's sample of each cell.
 
-* `replayDraws_code`: `Code.ReplayDraws` from `RegMatchesTwo` and uniform first-stage bytes (`BytesUniform`), by
-  `drawMisses`.
-* `secondDraws_code`: `Code.SecondDraws` from `RegMatchesTwo`, first-stage bytes the second stage's coins don't move
+* `replaySamples_code`: `Code.ReplaySamples` from `RegMatchesTwo` and uniform first-stage bytes (`BytesUniform`), by
+  `sampleMisses`.
+* `secondSamples_code`: `Code.SecondSamples` from `RegMatchesTwo`, first-stage bytes the second stage's coins don't move
   (`FirstFixed`) and second-stage bytes uniform on them (`SecondUniform`), by `secondMisses`: a replay block whose
   cells meet no proof block of `B`, or a sample entry outside the replay sample, only drops escapes at most `1`
   (`prod_second_le`).
-* `drawFixed_codeTwo`: `Code.DrawFixed` from `BytesFixedTwo` (the sessions' rounds are second-stage, and neither stage's
+* `sampleFixed_codeTwo`: `Code.SampleFixed` from `BytesFixedTwo` (the sessions' rounds are second-stage, and neither stage's
   bytes read them).
 * `ksTwo_code`: `CompiledTwo.KS` at Flock's masked record and SHA-512 (`ksTwo_masked`) with those three facts
   proved. It takes the code's refusals, replay cap and interior roots, and its sessions' runs, scope and openings at a
@@ -276,7 +276,7 @@ theorem prod_second_le {T N : ℕ} {cellF : ℕ → ℕ → Finset ℕ} {kOf : �
 /-! ## The stages' miss probabilities -/
 
 /-- **The first stage misses `T` with probability at most `P_a(T)`**: the sample of record's checked slots on uniform
-bytes (`drawMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
+bytes (`sampleMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
 theorem replay_le (g : Reg) (l : Spot.Slots.SlotOrder) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
     (hl : Spot.Slots.layout g.program g.query = .ok l)
     (hds : slotDesign g.rule g.program g.query g.table = .ok Dd) (hwf : Dd.WellFormed (slotPartition l))
@@ -290,10 +290,10 @@ theorem replay_le (g : Reg) (l : Spot.Slots.SlotOrder) (Dd : Claims.Sampling.Des
   have hlen : (slotPartition l).blocks.length = l.blocks.size := by
     rw [slotPartition_blocks, List.length_map, Array.length_toList]
   have hlay : g.layout = l := by simp only [Reg.layout, hl]
-  have hb := drawMisses g.rule g.program g.query g.table g.closure L T
+  have hb := sampleMisses g.rule g.program g.query g.table g.closure L T
   simp only [missBound, hl, hds] at hb
   refine le_trans (Pr_mono fun src hm => ?_) hb
-  unfold Reg.checked drawChecked at hm
+  unfold Reg.checked sampleChecked at hm
   split at hm
   · rename_i l' c' hs
     refine ⟨by rw [hs]; rfl, ?_⟩
@@ -309,7 +309,7 @@ theorem replay_le (g : Reg) (l : Spot.Slots.SlotOrder) (Dd : Claims.Sampling.Des
 `src₁` and uniform second-stage bytes: where `B` meets no cell of the replay sample `rl`, the bound is `1`; where an
 always-checked proof block is in `B`, the miss probability is `0`; otherwise `secondMisses`'s product over the sample's
 cells, each entry one replay block of `rl` (`prod_second_le`). -/
-theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design.Two)
+theorem secondSamples_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design.Two)
     (l : Spot.Slots.SlotOrder) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
     (hlen : d.part.blocks.length = l.blocks.size)
     (hrl : ∀ draw proved read, Spot.Select.select g.first.rule g.first.program g.first.query g.first.table
@@ -363,7 +363,7 @@ theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims
   · rw [Pr_congr fun src₂ => iff_false_intro fun h => hex ⟨src₂, h⟩, Pr_false] at hmono
     exact hmono.trans hR0
   obtain ⟨src0, hok0, -⟩ := hex
-  obtain ⟨⟨draw0, read0⟩, h0⟩ : ∃ p, Spot.Select.selectSecond sample g.ns g.ks (bytesOf src0) = .ok p := by
+  obtain ⟨⟨sample0, read0⟩, h0⟩ : ∃ p, Spot.Select.selectSecond sample g.ns g.ks (bytesOf src0) = .ok p := by
     cases h : Spot.Select.selectSecond sample g.ns g.ks (bytesOf src0) with
     | error e => rw [h] at hok0; exact absurd hok0 (by simp [Except.isOk, Except.toBool])
     | ok p => exact ⟨p, rfl⟩
@@ -419,20 +419,20 @@ def RegMatchesTwo : Prop :=
 
 /-- **The second stage's coins don't move the first stage's bytes.** -/
 def FirstFixed : Prop :=
-  ∀ x r e, bytes₁ x (forkOn (c.stage2 x) r e) = bytes₁ x r
+  ∀ x r e, bytes₁ x (forkOn (c.secondStage x) r e) = bytes₁ x r
 
 /-- **The second stage's bytes are uniform on its coins**: at any coins, fresh second-stage coins make them uniform. -/
 def SecondUniform : Prop :=
   ∀ x (r : Fin (c.V.k x) → FlockDeploy.Coin) (E : (Fin (L₂ x) → Fin 256) → Prop),
-    Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => E (bytes₂ x (forkOn (c.stage2 x) r e))) = Pr E
+    Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => E (bytes₂ x (forkOn (c.secondStage x) r e))) = Pr E
 
 /-- **The sessions' rounds are second-stage and neither stage's bytes read them.** -/
 def BytesFixedTwo : Prop :=
-  ∀ x u, c.rounds x u ⊆ c.stage2 x ∧
+  ∀ x u, c.rounds x u ⊆ c.secondStage x ∧
     ∀ r d, bytes₁ x (forkOn (c.rounds x u) r d) = bytes₁ x r ∧ bytes₂ x (forkOn (c.rounds x u) r d) = bytes₂ x r
 
-theorem replayDraws_code (hreg : RegMatchesTwo c reg two) (hunif : BytesUniform c L₁ bytes₁) :
-    (codeTwo c reg L₁ L₂ bytes₁ bytes₂).ReplayDraws two (replayTwo c reg L₁ bytes₁) := by
+theorem replaySamples_code (hreg : RegMatchesTwo c reg two) (hunif : BytesUniform c L₁ bytes₁) :
+    (codeTwo c reg L₁ L₂ bytes₁ bytes₂).ReplaySamples two (replayTwo c reg L₁ bytes₁) := by
   intro x s Pt d hx hP h2 hin T hT
   obtain ⟨g, l, hg, hl, hpart, hds, -⟩ := hreg x s Pt d hx hP h2 hin
   have hrs : ∀ r, replayTwo c reg L₁ bytes₁ x r = g.first.checked (bytesOf (bytes₁ x r)) := fun r => by
@@ -446,36 +446,36 @@ theorem replayDraws_code (hreg : RegMatchesTwo c reg two) (hunif : BytesUniform 
   exact (hunif x fun src => ∀ ρ ∈ g.first.checked (bytesOf src), ρ ∉ T).trans_le
     (replay_le g.first l d.replay (L₁ x) T hl hds hwf hT)
 
-theorem secondDraws_code (hreg : RegMatchesTwo c reg two) (hfirst : FirstFixed c L₁ bytes₁)
+theorem secondSamples_code (hreg : RegMatchesTwo c reg two) (hfirst : FirstFixed c L₁ bytes₁)
     (hsec : SecondUniform c L₂ bytes₂) :
-    (codeTwo c reg L₁ L₂ bytes₁ bytes₂).SecondDraws two (replayTwo c reg L₁ bytes₁) := by
+    (codeTwo c reg L₁ L₂ bytes₁ bytes₂).SecondSamples two (replayTwo c reg L₁ bytes₁) := by
   intro x s Pt d hx hP h2 hin r B
   obtain ⟨g, l, hg, hl, hpart, -, hT, hk, hblocks⟩ := hreg x s Pt d hx hP h2 hin
   have hx' : c.parse x = some s := hx
   have hP' : c.partition s = some Pt := hP
   have hN : units c x = Pt.blocks.length := by simp [units, hx', hP']
   have hchk : ∀ e : Fin (c.V.k x) → FlockDeploy.Coin,
-      (((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x (forkOn (c.stage2 x) r e)))
-        (bytesOf (bytes₂ x (forkOn (c.stage2 x) r e)))).getD []).take (units c x) =
-      g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x (forkOn (c.stage2 x) r e))) := by
+      (((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x (forkOn (c.secondStage x) r e)))
+        (bytesOf (bytes₂ x (forkOn (c.secondStage x) r e)))).getD []).take (units c x) =
+      g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x (forkOn (c.secondStage x) r e))) := by
     intro e
     rw [hg, Option.map_some, Option.getD_some, hfirst x r e, hN]
     exact List.take_of_length_le (g.checked_length_le _ _ _)
   have hrs : replayTwo c reg L₁ bytes₁ x r = g.first.checked (bytesOf (bytes₁ x r)) := by
     simp only [replayTwo, hg, Option.map_some, Option.getD_some]
   show Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => ∀ u ∈ (((reg x).map fun g => g.checked (units c x)
-      (bytesOf (bytes₁ x (forkOn (c.stage2 x) r e))) (bytesOf (bytes₂ x (forkOn (c.stage2 x) r e)))).getD []).take
+      (bytesOf (bytes₁ x (forkOn (c.secondStage x) r e))) (bytesOf (bytes₂ x (forkOn (c.secondStage x) r e)))).getD []).take
       (units c x), u ∉ B) ≤ _
   simp only [hchk]
   refine (hsec x r fun src₂ => ∀ u ∈ g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf src₂), u ∉ B).trans_le
-    (secondDraws_le g Pt d l (bytesOf (bytes₁ x r)) _ B (L₂ x) ?_ ?_ hT hk hblocks)
+    (secondSamples_le g Pt d l (bytesOf (bytes₁ x r)) _ B (L₂ x) ?_ ?_ hT hk hblocks)
   · rw [Partition.length_blocks_shape hpart, slotPartition_blocks, List.length_map, Array.length_toList]
   · intro draw proved read hs
     rw [hrs]
-    unfold Reg.checked drawChecked
+    unfold Reg.checked sampleChecked
     simp only [slots_select_of _ _ _ _ _ _ hl hs]
 
-theorem drawFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : (codeTwo c reg L₁ L₂ bytes₁ bytes₂).DrawFixed := by
+theorem sampleFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : (codeTwo c reg L₁ L₂ bytes₁ bytes₂).SampleFixed := by
   intro x r u _
   refine ⟨(h x u).1, fun d => ?_⟩
   show ((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x (forkOn (c.rounds x u) r d)))
@@ -484,8 +484,8 @@ theorem drawFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : (c
   rw [((h x u).2 r d).1, ((h x u).2 r d).2]
 
 /-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512** with its
-Lean samples: `ksTwo_masked` at `codeTwo`, with its replay and second-stage samples (`replayDraws_code`,
-`secondDraws_code`) and its sample's fixedness (`drawFixed_codeTwo`) proved from the registration's match and its bytes'
+Lean samples: `ksTwo_masked` at `codeTwo`, with its replay and second-stage samples (`replaySamples_code`,
+`secondSamples_code`) and its sample's fixedness (`sampleFixed_codeTwo`) proved from the registration's match and its bytes'
 facts. It takes the code's refusals, replay cap and interior roots, and its sessions' runs, scope and openings at a
 replay block. -/
 theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hreg : RegMatchesTwo c reg two)
@@ -500,9 +500,9 @@ theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → �
       (deploy _root_.Flock.Readable.relation (codeTwo c reg L₁ L₂ bytes₁ bytes₂)) two iroots) :
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwo c reg L₁ L₂ bytes₁ bytes₂) iroots two
       (replayTwo c reg L₁ bytes₁) cap).KS FlockDeploy.sha512 :=
-  ksTwo_masked _ iroots two _ cap (replayDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
-    (secondDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
-    (drawFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns hnum hopens
+  ksTwo_masked _ iroots two _ cap (replaySamples_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
+    (secondSamples_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
+    (sampleFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns hnum hopens
 
 /-- **The two-stage contract at `codeTwo`**, at Flock's masked record and SHA-512: `sessionsTwo_compiled` with the
 three facts `ksTwo_code` proves and the inner numbers at each unit's `N₀` by `innerNumbersAt_deploy`. -/
@@ -519,8 +519,8 @@ theorem sessionsTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwo c reg L₁ L₂ bytes₁ bytes₂) iroots two
       (replayTwo c reg L₁ bytes₁) cap).Sessions FlockDeploy.sha512 :=
   sessionsTwo_compiled _ _ iroots two _ cap FlockDeploy.sha512
-    (replayDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
-    (secondDraws_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
-    (drawFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns (innerNumbersAt_deploy _ _ hnum) hopens
+    (replaySamples_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hunif)
+    (secondSamples_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
+    (sampleFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns (innerNumbersAt_deploy _ _ hnum) hopens
 
 end SamplingDeploy

@@ -47,7 +47,7 @@ def ts(s: str) -> float:
 def prom_range(query: str, start: float, end: float) -> list[dict]:
     out: list[dict] = []
     t = start
-    while t < end:  # Prometheus caps a range at 11,000 points
+    while t < end:  # Prometheus limits a range to 11,000 points
         e = min(end, t + 10000 * STEP)
         qs = urllib.parse.urlencode({"query": query, "start": int(t), "end": int(e), "step": STEP})
         doc = json.loads(ssh("n1", f"sudo k3s kubectl get --raw '{PROM}?{qs}'"))

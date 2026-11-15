@@ -13,12 +13,14 @@ from pathlib import Path
 
 import pytest
 
+import verity
 from verity.protocols.accounting.pouw.verifier.receipts import receipt_conform as C
 from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as F
 
 HERE = Path(__file__).resolve().parent
-#: the repository's root, the one path entry a reader in the workspace has
-REPO = HERE.parents[6]
+#: the repository's root, the one path entry a reader in the workspace has: found by the `verity` package, not by this
+#: directory's depth, which a move changes
+REPO = Path(verity.__file__).resolve().parents[1]
 
 #: the sha256 of the r9 folds' reference twin, receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
@@ -41,8 +43,8 @@ def test_each_module_binds_what_it_lists_and_the_checks_read_only_listed_names()
     (HERE.parent, "import receipt_conform as C, receipt_folds as F"),
 ], ids=["the package's name, the repository on the path", "the bare name, the directory on the path"])
 def test_the_checks_import_under_each_name_and_check_that_names_reference(path, code):
-    """A reader in the workspace imports `verity.protocols.accounting.pouw.verifier.receipts.receipt_conform` with the repository alone on
-    the path; a file started by path imports `receipt_conform` from the directory. Under each name the checks hold the
+    """A reader in the workspace imports `receipt_conform` by the package's name with the repository alone on the
+    path; a file started by path imports `receipt_conform` from the directory. Under each name the checks hold the
     `receipt_folds` of that name, not a second copy, and the other name is not loaded."""
     code += ("; import sys; assert C.F is F, 'receipt_conform holds another copy of receipt_folds'; "
              "loaded = [m for m in sys.modules if m.rpartition('.')[2] in ('receipt_conform', 'receipt_folds')]; "
