@@ -94,8 +94,12 @@ def toml(way: str) -> str:
            "", "[roots]", f"old = {inline}", f"new = {inline}", "", "[paths]"]
     out += [f"{q(k)} = {q(v)}" for k, v in paths.items()]
     retired = [f"{P}/accounting/", f"{P}/policy/"]
+    groups = [f"{P}/resource_accounting/compute", f"{P}/resource_accounting/memory",
+              f"{P}/workload_classification/training_detection"] + ([f"{P}/resource_accounting/network"] if way == "A" else [])
     out += ["", "[retired]", "# the directories this map empties", f"paths = {q(retired)}", "",
-            "[rewrite]",
+            "[create]", "# the new groups' packages, empty as every group's is"]
+    out += [f"{q(g + '/__init__.py')} = \"\"" for g in groups]
+    out += ["", "[rewrite]",
             "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded",
             "# moves), files whose bytes a digest pins, every Lean file and every kernel source.",
             "exclude = [" + ",\n           ".join(q(e) for e in EXCLUDE) + "]",

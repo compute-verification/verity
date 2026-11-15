@@ -35,6 +35,12 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 # the directories this map empties
 paths = ["verity/protocols/accounting/", "verity/protocols/policy/"]
 
+[create]
+# the new groups' packages, empty as every group's is
+"verity/protocols/resource_accounting/compute/__init__.py" = ""
+"verity/protocols/resource_accounting/memory/__init__.py" = ""
+"verity/protocols/workload_classification/training_detection/__init__.py" = ""
+
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded
 # moves), files whose bytes a digest pins, every Lean file and every kernel source.
