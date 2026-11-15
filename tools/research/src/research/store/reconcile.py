@@ -44,7 +44,7 @@ def _named(doc: dict) -> set[str]:
 
 def _last_modified(r: Any, key: str) -> str | None:
     try:
-        with r._request("HEAD", key) as resp:  # noqa: SLF001  (S3Remote only; an fs remote has no such header)
+        with r._request("HEAD", key) as resp:  # S3Remote only; an fs remote has no such header
             return resp.headers.get("Last-Modified")
     except Exception:  # noqa: BLE001
         return None
@@ -53,7 +53,7 @@ def _last_modified(r: Any, key: str) -> str | None:
 def diverged(st: LocalStore, run_ids: list[str] | None = None, *, jobs: int = 32) -> list[dict]:
     """One entry per local attempt whose remote copy exists and differs: run, both sha256s, differing / local-only / remote-only
     fields (dotted), artifacts only the local copy names, the remote's Last-Modified."""
-    r = st._require_remote()  # noqa: SLF001
+    r = st._require_remote()
     todo = run_ids if run_ids else st.attempt_ids()
     tmpdir = st.root / "scratch"
     tmpdir.mkdir(parents=True, exist_ok=True)
@@ -107,7 +107,7 @@ def apply(st: LocalStore, found: list[dict]) -> list[dict]:
             p.unlink()
         write_once(p, f["_remote"])
         st.index.index_attempt(json.loads(f["_remote"]))
-        entry = {"utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "host": socket.gethostname(),
+        entry = {"utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "host": socket.gethostname(),
                  "user": getpass.getuser(), "action": "superseded-by-remote", "reason": REASON,
                  **{k: v for k, v in f.items() if not k.startswith("_")}, "superseded_path": str(aside.relative_to(st.root))}
         with log.open("a") as fh:

@@ -11,7 +11,8 @@ registered circuit is inference, not training).
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
-premise until proved at remote.
+premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), on the Program its check judges,
+and the composed statement still takes it.
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Dampener*` means
@@ -410,12 +411,13 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Vocab.SpotSound`, `Vocab.PouwSound` and `Vocab.InferenceOnlySound` aren't proved at remote.
+  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote. `Vocab.InferenceOnlySound` is, on the Program its
+    check judges; `Vocab.Holds` lists what that leaves unsaid of the committed files.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `Nci.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
-  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself; v1, which takes the verdicts as
+  the proof check (`verity verify proof verify --zk`) itself; v1, which takes the verdicts as
   evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused. Where v2 accepts, its session
   is in V3's and V5's events (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it
   (`Verity.Sampled.CouplingTarget`).

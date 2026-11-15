@@ -15,8 +15,9 @@ import concurrent.futures
 import json
 import re
 import statistics
+import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -35,7 +36,7 @@ def ts(s: str) -> datetime:
 
 
 def rid_time(rid: str) -> datetime:
-    return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=UTC)
 
 
 @dataclass
@@ -75,21 +76,27 @@ def parse(log: str) -> tuple[list[Launch], list[Landing]]:
 
 
 def slot_took(run_dir: Path) -> datetime | None:
+    if not (run_dir / "slot.json").exists():
+        return None
     try:
         took = json.loads((run_dir / "slot.json").read_text()).get("took")
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"queue stats: {run_dir / 'slot.json'} unread, so no slot time ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return ts(took) if took else None
 
 
 def verdict_at(run_dir: Path, landed: datetime) -> datetime | None:
     ends = []
+    if not (run_dir / "steps.jsonl").exists():
+        return None
     try:
         for line in (run_dir / "steps.jsonl").read_text().splitlines():
             rec = json.loads(line)
             if rec.get("ended_utc") and (end := ts(rec["ended_utc"])) <= landed:
                 ends.append(end)
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"queue stats: {run_dir / 'steps.jsonl'} unread, so no step end ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return max(ends, default=None)
 
@@ -170,7 +177,7 @@ def render(s: dict, start: datetime, end: datetime) -> str:
 
 def main(log: Path, hours: float, until: str | None, marked: Callable[[int], datetime | None], run_dir: Callable[[str], Path],
          as_json: bool) -> int:
-    end = ts(until) if until else datetime.now(timezone.utc)
+    end = ts(until) if until else datetime.now(UTC)
     start = end - timedelta(hours=hours)
     launches, landings = parse(log.read_text(errors="replace"))
     rs = rows(launches, landings, start, end, marked, run_dir)

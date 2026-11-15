@@ -301,20 +301,23 @@ message (`verity/protocols/proofs/flock/prover/live/src/coin_tree.rs`), and the 
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the
 malicious-verifier claim rests on beyond the theorems.
-- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed sample takes as `hA4`;
+- A4 (`Assumptions.KeyedUniform`), which the PoUW window's keyed sample takes at its keyed streams as `hA4`
+  (`KeyedStreamsUniform`), stated at the streamed wipe's labels too (`WipeLabelsUniform`);
 - A5 (`Assumptions.UniformSecret`), which the same sample takes as `hsec`;
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
   (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
 
-**A4. `verity.commitments.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
-(`prf/sha-512`), for the PoUW window's keyed sample.
+**A4. A keyed SHA-512 function's outputs at distinct inputs pass a test as independent uniform bytes do, up to `η`**
+(`prf/sha-512`), for `verity.commitments.randomness`'s keyed streams (the PoUW window's keyed sample) and the streamed
+wipe's labels `SHA-512(LABEL_TAG ‖ K ‖ u64 i)` (`Assumptions.Keyed`).
 
 - **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.commitments.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
   `verity/commitments/randomness/tests/vectors.json`, and Python matches its vectors
-  (`verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py`).
+  (`verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py`). For the wipe's labels under that key, at
+  distinct u64 indices, each a whole 64-byte digest, the labels pass `E` as independent uniform 64-byte strings do, plus `η`.
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedExecutionPhase_escape_le` takes A4 for one test per set `B` (`executionPhaseTest`: the window sample
   misses `B`), and `η` enters its bound.
@@ -323,7 +326,8 @@ malicious-verifier claim rests on beyond the theorems.
   - Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk 1996).
     The inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length extension doesn't apply.
   - Keyed by the secret bytes in its first message block, it is a dual PRF, as the HMAC analyses use. The secret follows
-    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header.
+    a fixed public tag: 28 bytes for `stream`, 37 for `derive` with the source's frame header, and 35 for the wipe's
+    label tag, whose 75-byte input is one block for every index.
   - The secret's uniformity is not A4's but A5's.
 - **η, stated.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
   - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests: generic key search over `min(256, 8S)` bits,

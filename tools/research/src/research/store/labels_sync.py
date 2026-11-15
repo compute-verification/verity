@@ -143,7 +143,7 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
     """Push every local assertion of `targets` the remote lacks, under its content key.  Never raises for one assertion: the report
     carries `failed` (`"<key>: <error>"`) per target and overall; `pushed` lists content hashes, `already` counts those the remote had.
         {"targets": {t: {"local", "pushed", "already", "failed"}}, "pushed": [...], "already": n, "failed": [...], "local": n}"""
-    r = store._require_remote()  # noqa: SLF001
+    r = store._require_remote()
     warn = log or (lambda s: None)
     rep: dict = {"targets": {}, "pushed": [], "already": 0, "failed": [], "local": 0}
     scratch = store.root / "scratch"
@@ -202,7 +202,7 @@ def pull_targets(store: LocalStore, targets: list[str], *, jobs: int = 1) -> dic
     at once), the reverse of `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left
     alone and reported in `bad`.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...]}"""
-    r = store._require_remote()  # noqa: SLF001
+    r = store._require_remote()
     todo = list(dict.fromkeys(targets))
     if jobs > 1 and len(todo) > 1:
         with ThreadPoolExecutor(max_workers=min(jobs, len(todo))) as ex:
@@ -219,7 +219,7 @@ def pull_prefixes(store: LocalStore, prefixes: list[str], *, jobs: int = 1) -> d
     """`pull_targets` for every target whose id starts with one of `prefixes` and has assertions on the remote, from one listing of
     each prefix's common key prefix (`pr:12@`: each head of pull request 12), and the GETs, `jobs` at once.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...], "targets": [target, ...]}"""
-    r = store._require_remote()  # noqa: SLF001
+    r = store._require_remote()
 
     def listed(prefix: str) -> dict[str, dict[str, str]]:
         d, out = ids.target_dirname(prefix), {}
@@ -284,13 +284,13 @@ def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], No
     r = store.remote
     if r is None:
         if strict:
-            store._require_remote()  # noqa: SLF001  (raises why there is no remote here)
+            store._require_remote()  # raises why there is no remote here
         if why := getattr(store, "remote_error", None):
             warn(f"labels of {', '.join(targets)}: the remote is unusable here ({why}); answering from the local labels")
         return None
     try:
         rep = pull_targets(store, targets)
-    except Exception as e:  # noqa: BLE001  (an unreachable remote: the local labels still answer)
+    except Exception as e:  # an unreachable remote: the local labels still answer
         if strict:
             raise StoreError(f"pulling from {r.describe()} failed ({type(e).__name__}: {e})") from e
         warn(f"labels of {', '.join(targets)}: pulling from {r.describe()} failed ({type(e).__name__}: {e}); answering from the local labels")
@@ -305,7 +305,7 @@ def verify_targets(store: LocalStore, targets: list[str]) -> dict:
     its canonical size.  Nothing is uploaded.  Assertions that exist only on the remote count as `remote_only` (not a failure: another
     machine asserted them).
         {"durable": bool, "targets": {t: {"local", "remote", "missing": [key...], "remote_only": n, "errors": [...]}}, "missing": n}"""
-    r = store._require_remote()  # noqa: SLF001
+    r = store._require_remote()
     rep: dict = {"durable": True, "targets": {}, "missing": 0}
     for t in dict.fromkeys(targets):
         mine = local_labels_for(store, t)
@@ -339,7 +339,7 @@ def verify_targets(store: LocalStore, targets: list[str]) -> dict:
 def compare(store: LocalStore, target: str) -> list[dict]:
     """Every assertion about `target` on either side, oldest first: `{"where": "both"|"local"|"remote", "hash", "label": doc}`.  Remote-only
     assertions are downloaded to be shown (and refused when their content does not hash to their name); nothing is written locally."""
-    r = store._require_remote()  # noqa: SLF001
+    r = store._require_remote()
     mine = local_labels_for(store, target)
     theirs = remote_labels_for(r, target)
     rows: list[dict] = []
@@ -489,7 +489,7 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
     list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
     `PACK_MIN_MISSING` takes it first, `pull_pack`) and `bad` lists the remote keys whose content did not hash to their name or
     did not validate (left alone, never written locally)."""
-    r = store._require_remote()  # noqa: SLF001
+    r = store._require_remote()
     warn = log or (lambda s: None)
     mine = local_labels(store, warn)
     theirs = remote_labels(r) if theirs is None else theirs
