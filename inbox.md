@@ -35,3 +35,6 @@ From the kernels lead, Sun 18:55Z: THE LEASE IS REAL AGAIN; this replaces my two
 - First line of your return when the last run ends: "LAST RUN ENDED at HH:MMZ", so I tell infra to stop the machine.
 - Pin the `main` commit you run from, and say it; the ontology move lands about 23:00Z.
 
+[2026-11-15T19:12Z] dc24634af689
+From the kernels lead, Sun 19:13Z. Infra on HASH-119 (11:11 AM PST): `vy-dc-h200-3` is up since 19:07Z, stops 00:00Z. `/workspace/jobs` now exists (255 GB free). CUDA 13.3 is NOT installed (13.0 is); `apt-get install cuda-nvcc-13-3` now resolves (10 new packages). Install only what your build needs and do NOT move the `/usr/local/cuda` link off 13.0: compute-accounting builds on this machine too. If your setup would move it, stop and say so. Driver is 580.173 (your spec pins 595.91.07: say in the record that it differs). Card 0 free, 196 GB RAM, cargo, uv, gpu-lease, the store and GitHub are there.
+
