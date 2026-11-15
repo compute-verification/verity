@@ -78,7 +78,7 @@ t0=$(date +%s); (cd "$L" && lake build "$exe" "$rt") > "$O/build.log" 2>&1 || { 
 EXE=$L/.lake/build/bin/$exe; sha256sum "$EXE" > "$O/verifier.sha256"; log "verifier $exe and $rt built in $(( $(date +%s) - t0 )) s, sha256 $(cut -c1-16 "$O/verifier.sha256")"
 export PATH=$L/.lake/build/bin:$PATH
 PY=$S/py/bin/python; uv venv -q --python 3.12 "$S/py" && uv pip install -q --python "$PY" numpy blake3 || exit 3
-SP=$REPO:$F/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
+SP=$REPO:$F/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm:$REPO/adapters/torch
 
 nm() { "$PY" -c 'import importlib.util as u, sys; s = u.spec_from_file_location("w", "benchmarks/served_units/window.py"); m = u.module_from_spec(s); sys.modules["w"] = m; s.loader.exec_module(m); print(m.name(sys.argv[1], sys.argv[2]))' "$1" "$2"; }
 restage() {   # restage UNIT N NAME: $S/st/NAME holds the statement and its program-word.json, held to kept/NAME; 0 or why not
