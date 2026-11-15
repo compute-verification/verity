@@ -3,7 +3,7 @@ name: process-design
 description: >
   How to propose, change or retire a process in Verity, and how to assess its effect on research velocity first. A process
   is anything that runs on other people's work: a rule in AGENTS.md or the lane contract (LANE-CONTRACT.md), a check or gate
-  in `check` or `research merge`, a required review, approval or sign-off, a file or document every PR must keep current, a
+  in `check` or the verified queue, a required review, approval or sign-off, a file or document every PR must keep current, a
   convention every lane follows. Covers the scarce resources to price (the human's attention, the merge path, shared files
   and queues, always-read rules, pods), ten tests of a good process, a walkthrough on the last weeks' real changes from git
   and gh, a default budget, a proposal template, and a retirement pass that deletes rules or moves them into code. Use when
@@ -14,7 +14,7 @@ description: >
 # Process design
 
 A **process** is anything that runs on work other than the change that introduces it: a rule agents read, a check in
-`check`, a gate in `research merge`, a required reviewer, a file every PR must update, a convention every lane follows (a
+`check`, a gate in the verified queue, a required reviewer, a file every PR must update, a convention every lane follows (a
 test guarding your own package's code is not one). It costs something on every change it touches and pays only on the
 few where it catches an error, so assess it before proposing it, and retire it once it no longer pays.
 
