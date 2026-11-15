@@ -834,8 +834,9 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
     declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
-    its tests read of them, which the guard holds it to."""
-    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
+    its tests read of them, which the guard holds it to. A path under `verity/` holds its tests too, mirrored under `tests/`."""
+    ins = {suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs}
+    return sorted(ins | {f"tests/{p}" for p in ins if p.split("/")[0] == "verity" and (ROOT / "tests" / p).exists()})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
