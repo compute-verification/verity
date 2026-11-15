@@ -27,9 +27,9 @@ each decode step's (`greedy_stages.GreedyCombine_v3`) and `class_check` the leng
   whole words) and reads the bit's bit 0 and the count's low log2(O) + 1 bits, no other.
 
 A select's rule is `stop_rule.StopRule_v1`'s, step by step: at L = count + 1 ids it ends where ``max_tokens`` is at least 1
-and the token is a stop id (none where ``ignore_eos`` is not 0) or L reaches the length cap (``max_tokens`` or the model's
-length less ``lp``, at least 1: `stop_rule.length_cap`). The check runs the rule over the served ids, so a chain that
-stopped where the rule does not is refused, never accepted. Refused by the check's bit until proofs rules on them: a request
+and the token is a stop id (none where ``ignore_eos`` is not 0) or L reaches the length limit (``max_tokens`` or the model's
+length less ``lp``, at least 1: `stop_rule.length_limit`). The check runs the rule over the served ids, so a chain that
+stopped where the rule does not is refused, never accepted. Refused by the check's bit until proofs rule on them: a request
 the rule does not end within O, a ``min_tokens`` other than 0, and a prompt of other than P ids.
 """
 from __future__ import annotations

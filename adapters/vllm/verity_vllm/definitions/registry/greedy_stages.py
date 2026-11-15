@@ -282,7 +282,7 @@ def class_step(B, S, logits, results, request, count=None, live=None):
     ``results``, the limits ``request``, and the step's ``count`` and ``live``, or, both None, the first step's, count 0 and
     live 1, constants that fold.  The rule is `stop_rule.StopRule_v1`'s at the length L = count + 1 the token makes: it ends
     there where ``max_tokens`` is at least 1 and the token is a stop id (none under ``ignore_eos``) or L reaches the length
-    cap (`stop_rule.length_cap`)."""
+    limit (`stop_rule.length_limit`)."""
     from verity_vllm.definitions.registry import stop_rule as X
 
     o, k, first = X.word_ops(B), count_bits(S.O), live is None
@@ -290,7 +290,7 @@ def class_step(B, S, logits, results, request, count=None, live=None):
     lp, max_tokens, ignore_eos = request[0], request[1], request[3]
     c = None if first else count_word(o, count, k)
     L = o.word(1) if first else o.iadd(c, o.word(1))
-    reached = o.ile(X.length_cap(o, max_tokens, lp, o.word(S.MAX_MODEL_LEN)), L)
+    reached = o.ile(X.length_limit(o, max_tokens, lp, o.word(S.MAX_MODEL_LEN)), L)
     hit = is_stop(B, o, token, S.STOP, ignore_eos)
     ends = o.band(o.ile(o.word(1), max_tokens), reached if hit is None else o.bor(hit, reached))
     zero = B.call(const(16, 0))
@@ -348,9 +348,9 @@ def class_reference(token: int, request: Sequence[int], O: int, STOP: Sequence[i
 
     lp, max_tokens, _min_tokens, ignore_eos = (int(x) & X.M32 for x in request)
     mt, room = X._signed(max_tokens), X._signed(int(MAX_MODEL_LEN) - lp)
-    cap = max(1, min(mt, room))
+    most = max(1, min(mt, room))
     L = count + 1
-    ends = mt >= 1 and ((ignore_eos == 0 and token in set(STOP)) or L >= cap)
+    ends = mt >= 1 and ((ignore_eos == 0 and token in set(STOP)) or L >= most)
     step = bool(live) and count < O
     nxt = int(step and not ends and L < O)
     return (token if live else 0), nxt, (L if step else count), (token if nxt else 0)
