@@ -60,6 +60,7 @@ FILES_MAP, SUITES_MAP = "tools/move/tests_root_map.toml", "tools/move/tests_root
 #: a module of a `tests/` package imports its siblings as `tests.X`: the package keeps its name (`KEPT`)
 IMPORTS_TESTS = re.compile(r"^\s*(?:from|import)\s+tests(?:\.|\s|$)", re.M)
 #: why a test's reference to a directory only whose tests move means the rest of it (`split_rows`)
+REQUIREMENT = re.compile(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 SPLIT_WHY = "the code beside the tests, which stays"
 #: never rewritten: records of what was, files whose bytes a digest pins, and every Lean input; as the earlier maps'
 EXCLUDE = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
@@ -260,7 +261,9 @@ def split(t: Tree, d: str) -> dict[str, str]:
         else:
             keep.append(body)
     keep_text = "".join(keep).rstrip("\n") + "\n"
-    extras = sorted(project.get("optional-dependencies", {}))
+    # the extras that name a workspace package, which the suite's key reads; another (torch) would change the environment
+    extras = sorted(e for e, reqs in project.get("optional-dependencies", {}).items()
+                    if any((m := REQUIREMENT.match(r)) and norm(m.group(1)) in t.names for r in reqs))
     dep = name + (f"[{','.join(extras)}]" if extras else "")
     head = [f"# The suite of the distribution `{name}`: a virtual member that depends on it, so the suite keys on what the\n"
             "# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.\n",
