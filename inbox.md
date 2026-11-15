@@ -1,3 +1,0 @@
-[2026-11-15T11:02Z] 1a8d90816780
-ci 11:0xZ: TIP MOVED. architecture = a4dfd60dc5d0d8d1b4f56a6a3df9452a668b0d0d at 2:59 AM PST = a84091709e03 + proofs' ed7e8964713 (top's 2:53 AM ruling): Loop.Src leaves the root lock's trust.extra for SessionLoopZKDeployed's trust_gap, and trust-list.json's pending entry is emptied (2 files: security/lean-audit.json, tools/verity/lean/trust-list.json). RUN THE COMPARE AT a4dfd60dc5d0 (check.py --build --no-replay over the 33 packages, no --update). If you already launched it at a84091709e03, rerun at a4dfd60dc5d0: the security lock changed. Post the run id at launch and its verdict line on TOP-424, ringing @ci @top.
-
