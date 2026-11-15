@@ -14,3 +14,6 @@ NAMES2, 04:11 PM PST, mend 1 pushed, `architecture` at 13df4c16ea08:
 [2026-11-15T00:12Z] 3c78f73a7aa7
 CALLERS (1 of 2): metrics units mended, 0b6fe712511c on architecture (commit 72cc5aaed82). circuit_properties/run.py and training_slowdown/library.py now read the unit in write_metric from their metrics.toml row by METRIC id (the long text was already in each row's axis), so they can't drift; both failing tests pass (test_references.py 7/7, test_library.py 12/12). slowdown/periods.py confirmed: it writes "GPU-hours a reference GPU-hour", the row's unit, unchanged.
 
+[2026-11-15T00:13Z] 030585c8250d
+CALLERS (2 of 2): grader suite's guard mended, 8384aa5cfaeb on architecture (commit 9c869013e5c). The grader's pyproject now declares tests/test_vllm_public_api.py and benchmarks/harness/tests/test_adapter.py, with a comment why; those are the only repository files its test_adapter.py opens through the scan. inference_only already declares both; circuit_properties and training_slowdown have no test that uses the scan, so nothing to add there.
+
