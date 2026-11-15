@@ -195,9 +195,9 @@ theorem prCoin_prod {C D : Type} [Fintype C] [Fintype D] (p : C × D → Prop) :
   unfold prCoin
   exact avg_prod_eq _
 
-/-- **The nested sampling design's missProb, in `ℝ≥0∞`.** Each replay unit `i` contributes its Bernoulli factor (`SamplingDesign.bernFactor`)
+/-- **The nested sampling design's missProb, in `ℝ≥0∞`.** Each replay block `i` contributes its Bernoulli factor (`SamplingDesign.bernFactor`)
 at the missProb, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
-other replay units'. -/
+other replay blocks'. -/
 theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
     (nested R N k a b hk).missProb B =
       ∏ i, SamplingDesign.bernFactor a b

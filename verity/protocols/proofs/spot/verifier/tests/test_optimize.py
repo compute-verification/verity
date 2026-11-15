@@ -1178,7 +1178,7 @@ def test_miss_holds_its_digits_at_any_population():
                 assert Decimal(_miss(n, m, k)) == pytest.approx(exact.exp(), rel=Decimal("1e-9") + loose)
 
 
-def test_shared_statements_hold_only_the_sampled_units():
+def test_shared_statements_hold_only_the_sampled_proof_blocks():
     """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
     sparse sample of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
