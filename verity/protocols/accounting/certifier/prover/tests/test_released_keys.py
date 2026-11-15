@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.device import released_keys as RK
+from verity.protocols.accounting.certifier.prover import released_keys as RK
 
 ROOT = Path(__file__).resolve().parents[6]
 

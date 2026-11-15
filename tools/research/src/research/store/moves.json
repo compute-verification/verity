@@ -4605,6 +4605,13 @@
         "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py": "benchmarks/network_traces/tests/test_leak_guard.py",
         "verity/protocols/accounting/certifier/device/tests/gate_runs.py": "benchmarks/network_traces/tests/gate_runs.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/device/released_keys.py": "verity/protocols/accounting/certifier/prover/released_keys.py",
+        "verity/protocols/accounting/certifier/device/released_keys.json": "verity/protocols/accounting/certifier/prover/released_keys.json",
+        "verity/protocols/accounting/certifier/device/tests/test_released_keys.py": "verity/protocols/accounting/certifier/prover/tests/test_released_keys.py"
+      }
     }
   ]
 }

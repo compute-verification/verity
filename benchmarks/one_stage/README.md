@@ -281,7 +281,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
-- `served_composite.sh`: `served_verdicts.sh`'s composite: in the compose follow-on, on an auditor host off the served
+- `served_composite.sh`: `served_verdicts.sh`'s composite: in the compose follow-on, on an auditor device off the served
   node, the step before the final record, whose verdict is its product's compiled Lean answer there when the
   composite names the record's window (`served_verdicts.py record --composite`); in a deferral's follow-on, on a
   prover node, and on the served node, a development check that leaves the record pending (`COMPOSE_DEVELOPMENT`). It
