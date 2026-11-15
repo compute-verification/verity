@@ -1,5 +1,5 @@
 # The demos' minutes from the first command to the verdict (`minutes.py`, the remote demo's reader, and
-# `onsite_minutes.py`, which runs it with the onsite verdict), and the share of a served run's drawn units the Lean
+# `onsite_minutes.py`, which runs it with the onsite verdict), and the share of a served run's sampled proof blocks the Lean
 # verifier accepted on the auditor's machine (`sampled_accepted.py`). Not a package: its tests run in the workspace environment.
 [tool.pytest.ini_options]
 testpaths = ["tests"]

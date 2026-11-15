@@ -587,7 +587,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
         layer.main(args)
 
 
-def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw() -> None:
+def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_sample() -> None:
     import check
 
     lay = L.store_layout(layout_doc(model(64, 2, 1, 256), per_segment=11), PREFIX)
