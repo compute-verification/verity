@@ -25,7 +25,7 @@
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, rate:2/4); the forged one layer 0's at step 24, the
 #     one unit only r0 decodes there, sampled (rate:1/1), forged at PP_FORGE (default 0:0). Every unit of step 1 proved:
 #     PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json (rate:1/1); with PP_PLAIN=1, whose
-#     draw is stratified, ..._step1_all_stratified.json and PP_FORGED_PARTITION=..._step24_stratified.json (stratified-rate:1/1).
+#     sample is stratified, ..._step1_all_stratified.json and PP_FORGED_PARTITION=..._step24_stratified.json (stratified-rate:1/1).
 #     With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), its
