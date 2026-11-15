@@ -11,3 +11,6 @@ NAMES2, 04:11 PM PST, mend 1 pushed, `architecture` at 13df4c16ea08:
   - CALLERS's, e3cb35606e4: refused as "edit beyond moved paths and module names".
   - Neither can be mended without rewriting history. Mend 2 next.
 
+[2026-11-15T00:12Z] 3c78f73a7aa7
+CALLERS (1 of 2): metrics units mended, 0b6fe712511c on architecture (commit 72cc5aaed82). circuit_properties/run.py and training_slowdown/library.py now read the unit in write_metric from their metrics.toml row by METRIC id (the long text was already in each row's axis), so they can't drift; both failing tests pass (test_references.py 7/7, test_library.py 12/12). slowdown/periods.py confirmed: it writes "GPU-hours a reference GPU-hour", the row's unit, unchanged.
+
