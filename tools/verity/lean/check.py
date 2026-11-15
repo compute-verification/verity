@@ -1676,6 +1676,14 @@ def moves_refused(pkgs: list[Path], moved: dict[str, str], bases: dict[Path, lis
     return out
 
 
+def write_staged(reports: list[dict]) -> None:
+    """Write the lock each of ``reports`` staged (`_finish`'s ``defer``) as its package's: the end of a `--moved` run in
+    which no move was refused."""
+    for r in reports:
+        shutil.copyfile(r["staged"], Path(r["package"]) / POLICY)
+        print(f"audit: {r['package']}/{POLICY}: written", flush=True)
+
+
 def base_revs(repo: Path) -> list[str] | str:
     """The commits a `--moved` run compares with when no `--base` names them: HEAD and its merge-base with main
     (`MAIN`), the commit the change stands on, since HEAD may already hold the change's own hand edits to the lock; or
@@ -7419,9 +7427,7 @@ def main(argv: list[str]) -> int:
         if refused := [r["package"] for r in reports if any((c or "").startswith("moved.") for c in r["failure_codes"])]:
             print(f"audit: no lock written: the moves are refused in {', '.join(refused)}", flush=True)
         else:
-            for r in staged:
-                shutil.copyfile(r["staged"], Path(r["package"]) / POLICY)
-                print(f"audit: {r['package']}/{POLICY}: written", flush=True)
+            write_staged(staged)
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")
