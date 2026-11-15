@@ -52,7 +52,7 @@ absolute); with no `record` there, or no file, it reads none.
   (`protocols.work.verdict`) credits work, the tie between that verdict and the record the check read, `tied.toml`,
   and the fleets and periods.
 - **How a cheat is refused.** A record with a weight left unregistered is refused by the count rule, and by the rate
-  rule, and its number is 1. A prover who gives up credit raises the uncredited share `s`, which caps the number at
+  rule, and its number is 1. A prover who gives up credit raises the uncredited share `s`, which limits the number to
   `1 / (s + 1/slowdown)`; one who gives up all of it, or whose PoUW row is a development accept or no accept, has
   `s = 1` and gets 1. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting
   other MACs than the class's linears, is refused; so are a verdict tied to another record than the check's, a record
