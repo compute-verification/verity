@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-REPO = pathlib.(Path(__file__).resolve().parents[5] / "adapters" / "vllm")
+REPO = (pathlib.Path(__file__).resolve().parents[5] / "adapters" / "vllm")
 CB_A = tuple(REPO / f for f in ("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/frontend/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
 FRONTEND = REPO / "verity_vllm" / "program" / "frontend"
 #: frontend modules that are not its rules: the registered target records and the GEMM targets name every GPU's arch (tables,
