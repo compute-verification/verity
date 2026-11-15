@@ -82,8 +82,14 @@ The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
 repository. `pre_push.py` reads the commits such a push adds as well, whatever made them: it refuses one that adds a
-commit whose author or committer is not the checkout's configured identity (`git config user.name` and `git config
-user.email` where the push runs), names the commits, and says how to make them again on a new branch. A push adds what
+commit whose committer is not the checkout's configured identity (`git config user.name` and `git config user.email`
+where the push runs), or whose author is neither that identity nor one that already authors a commit on the remote's
+`main` as the checkout last fetched it (`refs/remotes/REMOTE/main`, read only once an author differs). So a commit
+carried from a real author the remote has (a cherry-pick, a rebase) passes, while a name nobody has seen on `main`, and
+any address under `invalid` however many commits `main` holds under it, is refused. The refusal names the commits; for
+another author's commits it says to carry them by a merge (`git merge <their-branch-or-commit>`), the first push of an
+author's own commits being theirs, and for made-up names taken from git's environment or a tool it gives the
+`filter-branch` that writes those names again under the checkout's identity and leaves every real author's. A push adds what
 the remote lacks as the checkout knows it, the commits reachable from what it pushes and from no remote-tracking ref of
 that remote, so a merge of the remote's `main` adds the merge alone and `git fetch` comes first where a ref is stale; a
 push that adds commits from a checkout with no configured identity, or whose commits git can't list, is refused too.
