@@ -11,6 +11,7 @@ public import Proofs.InferenceOnly.Cover
 public import Proofs.InferenceOnly.PartitionCovers
 public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.InferenceOnly.Lemmas
+public import Proofs.Properties.InferenceOnly.DigestReadsPin
 
 /-!
 # Proofs of the inference-only policy's guarantees

@@ -11,7 +11,6 @@ public import Proofs.Properties.InferenceOnly.DigestRefs
 public import Proofs.Properties.InferenceOnly.DigestParts
 public import Proofs.Properties.InferenceOnly.DigestPins
 public import Proofs.Properties.InferenceOnly.DigestReads
-public import Proofs.Properties.InferenceOnly.DigestReadsPin
 public import Proofs.Properties.InferenceOnly.DecodeEmpty
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
@@ -31,7 +30,8 @@ the canonical entry's flat parts (`Proofs.Properties.InferenceOnly.DigestRefs`),
 (`Proofs.Properties.InferenceOnly.DigestParts`), and `DigestPins` from the statement that equivalent entries pin the decoded
 Definition (`Proofs.Properties.InferenceOnly.DigestPins`), and that statement by induction from what the decoder reads
 of each entry (`Proofs.Properties.InferenceOnly.DigestReads`), one half of which, `ReadsPin`, is proved
-(`Proofs.Properties.InferenceOnly.DigestReadsPin`); no statement here reads them.
+(`Proofs.Properties.InferenceOnly.DigestReadsPin`, built from `Proofs.InferenceOnly`, since it reads `BodiesOk`, which
+imports this module); no statement here reads them.
 -/
 
 @[expose] public section
