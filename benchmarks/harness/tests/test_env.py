@@ -9,20 +9,29 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[3]
-BASE_PATH = "/usr/bin:/bin"
+BASH = shutil.which("bash")
 
 
-def _sourced(tmp_path: Path, *names: str, path: str = BASE_PATH) -> dict[str, str]:
+def _tools(tmp_path: Path) -> str:
+    """A PATH of only the programs env.sh runs, so no `lake` installed on this machine is on it."""
+    tools = tmp_path / "tools"
+    if not tools.is_dir():
+        tools.mkdir()
+        for name in ("awk", "tr"):
+            (tools / name).symlink_to(shutil.which(name))
+    return str(tools)
+
+
+def _sourced(tmp_path: Path, *names: str, path: str | None = None) -> dict[str, str]:
+    path = path or _tools(tmp_path)
     venv = tmp_path / "venv"
     (venv / "bin").mkdir(parents=True, exist_ok=True)
     (venv / "bin" / "python").write_text("#!/bin/sh\n")
     (venv / "bin" / "python").chmod(0o755)
     env = {"PATH": path, "HOME": str(tmp_path), "VERITY_BENCH_VENV": str(venv), "CUDA_HOME": str(tmp_path)}
     printed = " ".join(f'"${n}"' for n in names)
-    ran = subprocess.run(["bash", "-c", f". benchmarks/harness/env.sh && printf '%s\\n' {printed}"], cwd=ROOT, env=env,
+    ran = subprocess.run([BASH, "-c", f". benchmarks/harness/env.sh && printf '%s\\n' {printed}"], cwd=ROOT, env=env,
                          capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     return dict(zip(names, ran.stdout.splitlines()))
@@ -72,11 +81,10 @@ def test_every_first_party_package_the_harness_and_the_adapter_import_is_reachab
     assert not unreachable, f"verity_vllm and verity_bench import {unreachable}, which env.sh's PYTHONPATH doesn't reach"
 
 
-@pytest.mark.skipif(shutil.which("lake", path=BASE_PATH) is not None, reason="lake is installed system-wide")
 def test_lake_is_on_the_path_from_elan_when_nothing_else_puts_it_there(tmp_path):
     elan = tmp_path / ".elan" / "bin"
     lake = elan / "lake"
-    assert _sourced(tmp_path, "PATH")["PATH"].split(":")[-2:] == BASE_PATH.split(":")
+    assert _sourced(tmp_path, "PATH")["PATH"].split(":")[-1] == _tools(tmp_path)
     assert str(elan) not in _sourced(tmp_path, "PATH")["PATH"].split(":"), "no elan, so nothing added"
     elan.mkdir(parents=True)
     lake.write_text("#!/bin/sh\n")
@@ -86,4 +94,4 @@ def test_lake_is_on_the_path_from_elan_when_nothing_else_puts_it_there(tmp_path)
     other.mkdir()
     (other / "lake").write_text("#!/bin/sh\n")
     (other / "lake").chmod(0o755)
-    assert str(elan) not in _sourced(tmp_path, "PATH", path=f"{other}:{BASE_PATH}")["PATH"].split(":")
+    assert str(elan) not in _sourced(tmp_path, "PATH", path=f"{other}:{_tools(tmp_path)}")["PATH"].split(":")
