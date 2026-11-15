@@ -704,7 +704,8 @@ theorem executionPhaseGoodChecked_placed :
   · refine ⟨copyStmt, notPart, rfl, rfl, fun op o hreg hcov hlen hjit =>
       ⟨hlen, hjit, ∅, ?_, ⟨fun _ => false, ⟨fun g hg => absurd hg (by simp), fun _ _ => rfl⟩, fun _ => none,
         fun g b h => absurd h (by simp), ⟨trivial, trivial⟩, ?_⟩⟩⟩
-    · refine Finset.mem_filter.2 ⟨Finset.empty_mem_powerset _, ?_, Finset.disjoint_empty_left _⟩
+    · simp only [incorrectSets, Finset.mem_filter]
+      refine ⟨Finset.empty_mem_powerset _, ?_, Finset.disjoint_empty_left _⟩
       show (0 : ℝ) < copyStmt.design.Pa notPart ∅
       rw [copy_Pa]
       exact one_pos
@@ -785,7 +786,9 @@ theorem MonitoringPeriodLeakChecked_honest :
         (fun _ => ∅) (fun _ _ => True ∧ True) 1 Claims.Witness.SamplingGeneric.copyStmt (fun _ => false)
         (fun _ => certOps) [] ⟨[]⟩ ((recordingCode frameFormat ⟨0, 0, Empty.elim, Empty.elim⟩ fun c => c.elim).2 0) :=
   ⟨ks_placed, binds_deployOf _ _ _,
-    ⟨fun _ => rfl, fun _ _ hF => Finset.sum_le_sum_of_subset (Finset.mem_powerset.1 (Finset.mem_filter.1 hF).1)⟩,
+    ⟨fun _ => rfl, fun _ _ hF => by
+      simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
+      exact Finset.sum_le_sum_of_subset hF.1⟩,
     fun _ => copy_checkedUnique, fun _ _ _ _ _ => funext fun c => c.elim,
     ⟨fun _ _ => ⟨trivial, (), Set.mem_univ _, trivial⟩, fun _ _ => rfl⟩,
     fun _ P ω r c => ⟨placed_acc _ P ω r, placed_extract _ P ω r c⟩, executionPhaseGoodChecked_placed⟩
