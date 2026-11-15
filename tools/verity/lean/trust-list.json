@@ -17,7 +17,5 @@
   "FlockSoundness.Assumptions.KeyedStreamsUniform": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for the streamed wipe's labels and PoUS only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]},
   "Hash.Assumptions.Sha512Prf": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for PoUS's index streams and the streamed wipe's labels only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]}
  },
- "pending": {
-  "Flock.SecurityProofs.SessionLoopZKDeployed": {"Claims.ZKServer.Loop.Src": "the prover-side ZK server's randomness (flock-zk-server-os-src), in the lock's trust.extra for this guarantee as on main; the trust list's ruling on it pending"}
- }
+ "pending": {}
 }
