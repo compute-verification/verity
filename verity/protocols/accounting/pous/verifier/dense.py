@@ -197,7 +197,7 @@ def _check(params: DenseParams, salt: bytes, s: int) -> int:
     if params.m % 8:
         raise ValueError("the byte API needs whole-byte blocks; use the *_prog functions for other widths")
     if type(salt) is not bytes or len(salt) != SALT_BITS // 8:
-        raise ValueError(f"the salt is {SALT_BITS // 8} bytes, drawn by the verifier after W is committed")
+        raise ValueError(f"the salt is {SALT_BITS // 8} bytes, sampled by the verifier after W is committed")
     if not 0 <= s < params.segments:
         raise ValueError(f"segment {s} is outside 0..{params.segments - 1}")
     return tag(salt_value(salt), s)

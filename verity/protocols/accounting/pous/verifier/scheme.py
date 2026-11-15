@@ -92,7 +92,7 @@ def decode_prog(params: Params, h: KeyDerivation, salt: int, blocks: Sequence[in
 
 def _check_salt(salt: bytes) -> int:
     if type(salt) is not bytes or len(salt) != SALT_BITS // 8:
-        raise ValueError(f"the salt is {SALT_BITS // 8} bytes, drawn by the verifier after W is committed")
+        raise ValueError(f"the salt is {SALT_BITS // 8} bytes, sampled by the verifier after W is committed")
     return salt_value(salt)
 
 

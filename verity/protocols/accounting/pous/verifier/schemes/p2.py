@@ -335,7 +335,7 @@ def chacha_block(key: bytes, counter: int, nonce: int, rounds: int = 8) -> bytes
 
 def _salt(salt: bytes) -> bytes:
     if type(salt) is not bytes or len(salt) != SALT_BITS // 8:
-        raise ValueError(f"the salt is {SALT_BITS // 8} bytes, drawn by the verifier after W is committed")
+        raise ValueError(f"the salt is {SALT_BITS // 8} bytes, sampled by the verifier after W is committed")
     return salt
 
 
