@@ -122,14 +122,14 @@ CPU_KINDS = frozenset({"agent-test", "lean-audit"})
 WORD = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
-def _number(read: Callable[[str], float], low: float, cap: float, unit: str = "") -> Callable[[str], str | None]:
-    """A value `research run` reads with ``read``, above ``low`` and at most ``cap``: NaN and an unreadable value are refused."""
+def _number(read: Callable[[str], float], low: float, most: float, unit: str = "") -> Callable[[str], str | None]:
+    """A value `research run` reads with ``read``, above ``low`` and at most ``most``: NaN and an unreadable value are refused."""
     def why(value: str) -> str | None:
         try:
             n = read(value)
         except ValueError:
             return "which `research run` can't read"
-        return None if low < n <= cap else f"which isn't above {low:g} and at most {cap:g}{unit}"
+        return None if low < n <= most else f"which isn't above {low:g} and at most {most:g}{unit}"
     return why
 
 
@@ -779,7 +779,7 @@ def classify(kind: str, s: dict) -> Observation:
 
 
 def stdout_tail(run_dir: Path) -> bytes:
-    """The last TAIL_BYTES of the run's stdout.log on its machine; nothing when it can't be read."""
+    """The last TAIL_BYTES of the run's stdout.log on its machine; nothing while it has none, and why when it can't be read."""
     from .. import remote
 
     rec = remote._read_json(run_dir / "remote.json") or {}
@@ -788,8 +788,8 @@ def stdout_tail(run_dir: Path) -> bytes:
     try:
         r = remote.ssh_run(remote.ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"),
                            ["tail", "-c", str(TAIL_BYTES), f"{rec['remote_run_dir']}/stdout.log"], timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return b""
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"(stdout.log unread: {type(e).__name__}: {e})".encode()
     return r.stdout[-TAIL_BYTES:] if r.returncode == 0 else b""
 
 
