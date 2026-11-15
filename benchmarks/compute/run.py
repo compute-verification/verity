@@ -1,7 +1,7 @@
 """`verity bench compute`: the share of a served model's multiply-accumulates (MACs) that Pearl+ credits, over the tokens
 one served run served: the MACs the Pearl+ verifier credits over the MACs the model computes on those tokens, as text
 and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target (`TARGET`). An answer that isn't an
-accept prints no number and exits 1.
+accept, or that the record holds no Lean verdict of, prints no number and exits 1.
 
     verity bench compute --record DIR                                a run's record in a directory on disk
     verity bench compute --from RUN                                  a recorded run in our evidence store
@@ -49,8 +49,8 @@ Either way it reads the verifier's side of the record, and nothing the developer
   probability at most δ_s. They are sampling's alone, not the ε and δ the credit holds at: the assumption's gap ε_a
   and its own δ_a, and the binding of the passes' commitments, are not in them;
 - `out/pieces/pouw/pearlplus-lean.json` and `pearlplus-lean-check.json`, the Lean verifier's verdict and the record's
-  comparison of it with the answer: where the record holds them they must be the answer's, and where it holds no Lean
-  verdict the text says so;
+  comparison of it with the answer: the record must hold both and they must be the answer's, or no number is printed
+  (exit 1, naming the file the record lacks);
 - `out/inference-only-policy.json`, the registered policy: the class and the model's name. Where it also counts its
   class's MACs a slot, that count must be this command's;
 - `out/record/verdicts.json`, the run's composed record: PoUW's row. A row that isn't an accept (a development run's
@@ -93,8 +93,9 @@ the passes is the cause ``lm_head_outside``, as the linears' is ``outside``. The
 sample: the verifier takes it off the records whose cells hold the most MACs a ticket, so the calls it lands on carry it
 for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
 
-It exits 0 with the number printed, 1 with none (the answer isn't an accept, the Lean verifier's verdict isn't the
-answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read. A record
+It exits 0 with the number printed, 1 with none (the answer isn't an accept, the record holds no Lean verdict or one
+that isn't the answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read,
+or the policy's load is not the benchmark's. A record
 withdrawn whole, or in a part that holds a file read here, is refused before any of it is fetched; a withdrawal of
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
 there the evidence store is read with the run's `--store-read` key.
@@ -286,18 +287,21 @@ def _held(tree: Path, path: str) -> Any:
 
 def credit(tree: Path) -> dict:
     """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is Pearl+'s accept with a
-    credit, and the Lean verifier's verdict and the record's comparison of the two, where it holds them, are the
-    answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its sample's."""
+    credit, and the record holds the Lean verifier's verdict and its comparison with the answer, both the answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its sample's."""
     try:
         answer, lean, check = (_held(tree, p) for p in (ANSWER, LEAN, LEAN_CHECK))
         if answer is None:
             raise NoNumber("the run left no Pearl+ answer")
+        for path, held in ((LEAN, lean), (LEAN_CHECK, check)):
+            if held is None:
+                raise NoNumber(f"the record holds no {path}, so no Lean verdict: the answer's credit is no number "
+                               "without it")
         protocol, verdict, public = answer["protocol"], answer["verdict"], answer.get("public") or {}
         work = public.get("work") or {}
         credited, passes = work.get("credited"), work.get("macs")
         mine = ("accept", answer.get("commitment"), credited)
-        theirs = None if lean is None else (lean["verdict"], lean.get("commitment"), (lean.get("work") or {}).get("credited"))
-        differ = None if check is None else check["differ"]
+        theirs = (lean["verdict"], lean.get("commitment"), (lean.get("work") or {}).get("credited"))
+        differ = check["differ"]
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
         raise NoNumber(f"the run's Pearl+ verdicts don't read as verdicts ({type(e).__name__}: {e})") from e
     if protocol != PROTOCOL:
@@ -306,13 +310,13 @@ def credit(tree: Path) -> dict:
         raise NoNumber(f"Pearl+'s answer is {verdict}, not accept ({answer.get('reason') or 'no reason recorded'})")
     if not _count(credited) or passes is not None and not _count(passes):
         raise NoNumber(f"Pearl+'s answer accepts and holds no credit in MACs (credited {credited!r}, macs {passes!r})")
-    for name, lean_s, answer_s in zip(("verdict", "run commitment", "credit"), theirs or mine, mine):
+    for name, lean_s, answer_s in zip(("verdict", "run commitment", "credit"), theirs, mine):
         if lean_s != answer_s:
             raise NoNumber(f"the Lean verifier's {name} is {str(lean_s)[:16]} and the answer's {str(answer_s)[:16]}")
     if differ:
         raise NoNumber(f"the record's comparison of the Lean verifier's verdict with the answer differs on {differ}")
     return {"credited": credited, "passes": passes, "scheme": public.get("scheme"), "epsilon_s": work.get("epsilon"),
-            "delta_s": (answer.get("profile") or {}).get("delta"), "lean": theirs is not None}
+            "delta_s": (answer.get("profile") or {}).get("delta"), "lean": True}
 
 
 def coins(tree: Path) -> dict:
@@ -667,8 +671,7 @@ def text(doc: dict) -> str:
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
                  + (f" at {at} ({SAMPLING_ALONE})" if at else "")
-                 + (", and the Lean verifier's verdict is the same" if doc["lean"] else ", and the record holds no Lean "
-                    "verdict"))
+                 + ", and the Lean verifier's verdict is the same")
     lines.append("  PoUW's row in the run's composed record " + ("accepts too" if record["verdict"] == "accept" else
                  (f"is `{record['verdict']}`, not an accept" if record["verdict"] else "is absent")
                  + ", so the credit is the Pearl+ piece's alone" + (f": {record['why']}" if record["why"] else "")))

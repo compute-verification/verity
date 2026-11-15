@@ -270,13 +270,25 @@ def test_an_answer_that_is_not_an_accept_the_lean_verifier_shares_prints_no_numb
     assert out == "" and f"compute: no number: {why}" in err
 
 
-def test_a_record_with_no_lean_verdict_prints_the_answers_number_and_says_so(store, tmp_path, capsys):
-    store.add(RUN, a_record(tmp_path, LEAN=None, LEAN_CHECK=None), dirty=True)
+@pytest.mark.parametrize("edits, missing", [({"LEAN": None}, C.LEAN), ({"LEAN_CHECK": None}, C.LEAN_CHECK),
+                                             ({"LEAN": None, "LEAN_CHECK": None}, C.LEAN)])
+def test_a_record_with_no_lean_verdict_prints_no_number_and_names_the_file(store, tmp_path, capsys, edits, missing):
+    """The answer's credit is no number without the Lean verifier's verdict and the record's comparison of the two."""
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert bench(store, *argv) == 1
+        out, err = capsys.readouterr()
+        assert out == "" and f"compute: no number: the record holds no {missing}, so no Lean verdict" in err
+
+
+def test_a_dirty_commit_is_printed_as_one(store, tmp_path, capsys):
+    store.add(RUN, a_record(tmp_path), dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[2] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, "
-                       f"δ_s 1/100 ({C.SAMPLING_ALONE}), and the record holds no Lean verdict")
-    assert doc["lean"] is False and doc["value"] == 0.75 and doc["commit"] == f"{COMMIT}-dirty"
+                       f"δ_s 1/100 ({C.SAMPLING_ALONE}), and the Lean verifier's verdict is the same")
+    assert doc["lean"] is True and doc["value"] == 0.75 and doc["commit"] == f"{COMMIT}-dirty"
 
 
 @pytest.mark.parametrize("edits", [{"ANSWER": None}, dict.fromkeys(("ANSWER", "LEAN", "LEAN_CHECK", "POLICY", "VERDICTS"))])
@@ -392,7 +404,8 @@ def test_the_command_line_names_a_run(store, capsys):
     ({"POLICY": lambda d: d["serve"].pop("revision")},
      "the record's policy registers unsloth/Llama-3.2-1B at revision None, class 4,32,4 and the benchmark's"),
     ({"VERDICTS": "[]"}, "the run's composed record doesn't read as one"),
-    ({"ANSWER": to("public", "work", "credited", value=MACS["linears"] + 1), "LEAN": None},
+    ({"ANSWER": to("public", "work", "credited", value=MACS["linears"] + 1),
+      "LEAN": to("work", "credited", value=MACS["linears"] + 1)},
      ("Pearl+'s answer holds 136,230,993,921 MACs, more than the 136,230,993,920 of the linears of the policy's class: "
       "its passes are not one load of the class")),
     ({"ANSWER": to("public", "work", "macs", value=2 * MACS["linears"])},

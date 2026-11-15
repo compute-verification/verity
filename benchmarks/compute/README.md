@@ -40,9 +40,8 @@ relative to it.
   in MACs, and the sample's ε_s at δ_s.
 - `out/inference-only-policy.json` (required): the registered policy. It names the served model and the class: its
   slots, prompt tokens and output tokens. The model's MACs are counted from it.
-- `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json` (optional): the Lean
-  verifier's verdict, and the record's comparison of it with the answer. Without them the text says the record holds
-  no Lean verdict.
+- `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json`: the Lean verifier's verdict,
+  and the record's comparison of it with the answer. Without either there is no number (exit 1, naming the file).
 - `out/record/verdicts.json` (optional): the run's composed record. PoUW's row is printed beside the number.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
@@ -57,7 +56,8 @@ A directory missing a required file is refused with exit 2, and the message name
 ## What it refuses
 
 It prints no number, and exits 1, unless the Pearl+ answer is an accept with a credit. It also prints none when the
-Lean verifier's verdict, where the record holds one, differs from the answer in verdict, run commitment or credit. It
+record holds no Lean verdict, or when the Lean verifier's verdict differs from the answer in verdict, run commitment or
+credit. It
 exits 2 when a file can't be read, when the policy's model or class can't give the model's MACs, or when the credit is
 more than one load of the class can hold. It reads only the verifier's side of the record, so the tokens and seconds
 the developer's node reports are never part of the number.
@@ -105,6 +105,7 @@ client's work; the command itself writes only the two files named below.
     each, with no value and why.
     `capacity()` in `run.py` gives them for a registered site and a span, at each data-sheet reading: a clock of a
     registered device's card file (`clock.tensor`, `clock.sm`).
-- **Exit code:** 0 with the number printed; 1 with none (the answer is not an accept, the Lean verifier's verdict is
-  not the answer's, or the run left no answer); 2 when the command line, the run, its record directory or its policy can't be read, or the
+- **Exit code:** 0 with the number printed; 1 with none (the answer is not an accept, the record holds no Lean
+  verdict or one that is not the answer's, or the run left no answer); 2 when the command line, the run, its record
+  directory or its policy can't be read, when the policy's load is not the benchmark's (`load.toml`), or when the
   split `--per-call` reads is not the answer's.
