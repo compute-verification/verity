@@ -84,7 +84,7 @@ Two kinds of committed run:
   witness, and a window passes when its registration passed every check before the sample, the outcome is a reject and
   the forged unit's member was stopped (`forged_row`): the ZK server released no proof of it, or under ``--plain``, where
   the proof leaves, Lean refused it. ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
-  law ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
+  sampling design ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
   --stratified K`, no ZK server), and the summary names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``; ``c``, the advice's bits where the window's leak count
   (`records_audit.leak_count`: ``other_inputs`` and ``bound``, beside it) is within the charge, else None; ``delta``,

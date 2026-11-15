@@ -45,7 +45,7 @@ SCRIPT=$ROOT/${SERVED_SCRIPT:-benchmarks/hash/dither/sbench.py}
 [ -f "$SCRIPT" ] || { echo "served.sh: no $SCRIPT (set SERVED_SCRIPT)" >&2; exit 2; }
 export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/kernels/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- "$PY" "$DITHER/numabind.py" "$OUT/env/numa.json" bash -c '
+gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/kernels/numabind/numabind.py" "$OUT/env/numa.json" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \

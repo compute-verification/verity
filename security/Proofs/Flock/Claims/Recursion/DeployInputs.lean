@@ -62,7 +62,7 @@ reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `
 `Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecLinkPart.check` (the link table's part against the table and
-the inner statement), `RecVStar.checkLabels` and the sample's law.
+the inner statement), `RecVStar.checkLabels` and the sample's sampling design.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
