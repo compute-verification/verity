@@ -1,0 +1,4 @@
+record art:75fe45105effc452bd0868f28bfda0d946056d81924d82fedca0fecd44cb956a (circuits/request-cover/v8; base art:feef4fcdfd6879bb21f320db9aa8405e779318851f6f9285e9965f5efea9873f)
+card benchmarks/sampling_plan/glm53_blocks.json at 44808b5c3a3efcb89c22f9d252714bd30d8cd53f (source art:ec785b64b89b0a20b5a2e5e2ba73534fe1bccb1c1d870ea95b3887f716e3806c, 1272 kinds)
+cover_count.py RECORD --card CARD --check: exit 0; 0 of 1272 block types have no statement the Lean verifier accepted (--form boolean)
+cover_count.py RECORD --card CARD --form listed: 51 of 1272 block types have no statement the Lean verifier accepted (--form listed): SparseMlaHeadScoresCols 46, FlashInferFp8Quant1x128 2, SparseMlaSplit 3
