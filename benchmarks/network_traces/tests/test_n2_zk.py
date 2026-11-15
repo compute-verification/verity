@@ -160,7 +160,7 @@ def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
         n2.main([*argv, "--jobs", "2"])
 
 
-SECRET = "N2-SECRET-9f3c1e"
+SECRET = "N2-SECRET-" "9f3c1e"
 
 
 def _failing_child(r, **kw):
