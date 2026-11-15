@@ -52,7 +52,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     The test class is the smallest, the run is one execution phase, and the sample is one more than the three strata:
     the sessions are stubbed, so a smaller sample saves nothing."""
     setup, k = sz.TEST, 4
-    h = sz.host(tmp_path / "warden", draw=k, setup=setup)
+    h = sz.host(tmp_path / "warden", sample=k, setup=setup)
     honest = h.rounds["honest-0"]
     at = honest.at
     M = sz.WZ._one_stage()

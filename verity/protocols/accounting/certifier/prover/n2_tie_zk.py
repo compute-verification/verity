@@ -94,7 +94,7 @@ MEMBERS = ("honest", "carried", "forged", "split")
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
 #: what the verifier receives per execution phase, by file (`member`)
 def _received(T: int) -> dict[str, str]:
-    return {"registration.json": "the registration record (the network certifier's salted root)", "draw.json": "the stream's draw",
+    return {"registration.json": "the registration record (the network certifier's salted root)", "draw.json": "the stream's sample",
             f"pub-{T}.bin": "the statement's public file",
             "registered.json": "the verifier's own registered reads, null where it has no lanes",
             "session-*": "the session's files",
@@ -467,9 +467,9 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.head.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the network certifier's")
-        draw = stream.select(reg)
-        if list(draw.units) != list(range(T)):
-            raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the window's "
+        sample = stream.select(reg)
+        if list(sample.units) != list(range(T)):
+            raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the window's "
                              f"{T} units")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": T, "pin": sg.st.pin}
@@ -477,9 +477,9 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = TS.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / f"pub-{T}.bin", sessions),
                                  x.statement.salts, x.statement.outputs)
-        late = stream.deliver(draw, delivered.sessions())
+        late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or tie.outcome(stream, draw, delivered, circuit_sha512=sg.circuit_sha512, advice=rd.advice,
+        outcome = late or tie.outcome(stream, sample, delivered, circuit_sha512=sg.circuit_sha512, advice=rd.advice,
                                       releases=rd.releases, head=x.head, opening=x.cells if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
@@ -490,7 +490,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
                  "refused": refused, "proved": refused is None and tie.proved(findings or [])
                  and all(list(f.units) == list(range(T)) for f in findings), "opened_words": opened}
-        files = {"registration.json": reg.record, "draw.json": dict(draw.draw), "outcome.json": body,
+        files = {"registration.json": reg.record, "draw.json": dict(sample.draw), "outcome.json": body,
                  "delivered.json": {"salts": {u: {r: s.hex() for r, s in v.items()}
                                               for u, v in x.statement.salts.items()},
                                     "outputs": x.statement.outputs}}

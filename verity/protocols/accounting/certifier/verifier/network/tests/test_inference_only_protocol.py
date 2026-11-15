@@ -10,7 +10,7 @@ with the run's own record, the commitment, appended, and that record's digest th
 then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
 budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
 commitments and evidence. Onsite's and remote's difftest (`verity/protocols/compose/verifier/lean/tests/`) samples the
-subprotocol's cases from `drawn` and answers them with `reference`."""
+subprotocol's cases from `sampled` and answers them with `reference`."""
 
 from __future__ import annotations
 
@@ -208,7 +208,7 @@ def case_of(seed: int, m: str, pick: int = 0) -> dict:
 
 
 @st.composite
-def drawn(draw, m: str) -> dict:
+def sampled(draw, m: str) -> dict:
     """A declaration's case with change `m` (`honest` for none), on an honest declaration (a refused one for
     `refused`)."""
     honest, refused = seeds()
@@ -223,7 +223,7 @@ SEEN: Counter = Counter()
 def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
     """A declaration's case with one change of `only` (`honest` for none), tagged with it for `counted`."""
     m = draw(st.sampled_from(only))
-    case = draw(drawn(m))
+    case = draw(sampled(m))
     TAGS[D.canonical(case)] = m
     return case
 
