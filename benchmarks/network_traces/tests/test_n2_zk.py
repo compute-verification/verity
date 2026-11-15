@@ -10,6 +10,7 @@ a node)."""
 from __future__ import annotations
 
 import json
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -160,13 +161,14 @@ def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
         n2.main([*argv, "--jobs", "2"])
 
 
-SECRET = "N2-SECRET-9f3c1e"
+#: built at run time: a literal of this shape reads as a credential (`test_no_secret_like_literals`)
+MARKER = "n2-marker-" + secrets.token_hex(8)
 
 
 def _failing_child(r, **kw):
-    subprocess.run([sys.executable, "-c", f"import sys; print('{SECRET} out'); print('{SECRET} err', file=sys.stderr)"])
-    print(f"{SECRET} stray", file=sys.stderr)
-    raise SystemExit(f"{SECRET}: the run is refused")
+    subprocess.run([sys.executable, "-c", f"import sys; print('{MARKER} out'); print('{MARKER} err', file=sys.stderr)"])
+    print(f"{MARKER} stray", file=sys.stderr)
+    raise SystemExit(f"{MARKER}: the run is refused")
 
 
 @pytest.mark.parametrize("witness", [True, False])
@@ -179,11 +181,11 @@ def test_a_failure_and_its_childrens_output_reach_only_the_witness_side(tmp_path
     rc = n2.main(["prove", "--warden-run", "r", "--out", str(tmp_path / "out"), "--dry",
                   *(["--witness", str(w)] if witness else [])])
     said = capfd.readouterr()
-    assert rc == 1 and SECRET not in said.out + said.err
+    assert rc == 1 and MARKER not in said.out + said.err
     assert _public_lines(said.out)[-1] == "failed: SystemExit" and not said.err
     if witness:
         held = w.with_name("n2.log").read_text()
-        assert all(f"{SECRET} {k}" in held for k in ("out", "err", "stray")) and f"{SECRET}: the run is refused" in held
+        assert all(f"{MARKER} {k}" in held for k in ("out", "err", "stray")) and f"{MARKER}: the run is refused" in held
     else:
         assert not (tmp_path / "witness").exists()
         assert _public_lines(said.out)[0].startswith("no --witness asked for")
