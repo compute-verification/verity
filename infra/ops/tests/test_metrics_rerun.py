@@ -136,6 +136,22 @@ def test_rows_sharing_a_command_are_one_launch_and_a_fresh_number_or_a_loops_is_
     assert not any("top/fresh" in ln or "infra/loop-number" in ln for ln in pod.lines)
 
 
+def test_a_number_whose_script_is_under_infra_but_not_a_control_loop_is_rerun(tmp_path):
+    """Only the control pod's loops send their own numbers: the dashboard's count, measured by infra/dashboard/run.py, is
+    launched like any other stale number."""
+    dashboard = row("console/top-goals-running",
+                    "research run --on auto --project verity --source . --cwd source -- uv run python infra/dashboard/run.py",
+                    every="1d")
+    loop = row("infra/loop-number", "sh infra/control/store_index.sh", every="5m")
+    cfg = setup(tmp_path, {"infra/dashboard": [dashboard], "infra/control": [loop]})
+    pod = Pod(ages={"console/top-goals-running": 2 * DAY_MS, "infra/loop-number": DAY_MS})
+    state, _ = run(cfg, pod)
+    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-12", "--pool", "research", "--project", "verity",
+                             "--source", ".", "--cwd", "source", "--", "uv", "run", "python", "infra/dashboard/run.py"]]
+    assert [e["metrics"] for e in state["launches"]] == [["console/top-goals-running"]]
+    assert not any("infra/loop-number" in ln for ln in pod.lines)
+
+
 def test_at_most_max_launches_a_pass_and_the_rest_are_said(tmp_path):
     files = {f"benchmarks/b{n}": [row(f"benchmarks/n{n}", f"research run --on auto -- bash benchmarks/b{n}/run.sh")] for n in range(3)}
     cfg = setup(tmp_path, files, max=2)
