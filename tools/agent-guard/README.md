@@ -86,10 +86,12 @@ commit whose committer is not the checkout's configured identity (`git config us
 where the push runs), or whose author is neither that identity nor one that already authors a commit on the remote's
 `main` as the checkout last fetched it (`refs/remotes/REMOTE/main`, read only once an author differs). So a commit
 carried from a real author the remote has (a cherry-pick, a rebase) passes, while a name nobody has seen on `main`, and
-any address under `invalid` however many commits `main` holds under it, is refused. The refusal names the commits; for
-another author's commits it says to carry them by a merge (`git merge <their-branch-or-commit>`), the first push of an
-author's own commits being theirs, and for made-up names taken from git's environment or a tool it gives the
-`filter-branch` that writes those names again under the checkout's identity and leaves every real author's. A push adds what
+a made-up address however many commits `main` holds under it (a domain with no dot, or one under `invalid` or `local`),
+is refused. The refusal names the commits; for another author's commits it says to carry them by a merge (`git merge
+<their-branch-or-commit>`), the first push of an author's own commits being theirs, and for made-up names taken from
+git's environment or a tool it gives the `filter-branch` that writes again, in only the commits it names by sha (at most
+`MENDED`, the next refusal naming the rest), each committer that is not the checkout's and each made-up author under the
+checkout's identity, and leaves every other commit and name as it was. A push adds what
 the remote lacks as the checkout knows it, the commits reachable from what it pushes and from no remote-tracking ref of
 that remote, so a merge of the remote's `main` adds the merge alone and `git fetch` comes first where a ref is stale; a
 push that adds commits from a checkout with no configured identity, or whose commits git can't list, is refused too.
