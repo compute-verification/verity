@@ -150,12 +150,12 @@ theorem keeps_residualsGo (S : GfS) (W V : List Lin) : ∀ rs : List Res, Keeps 
   | r :: rs => Keeps.bind' (keeps_residual S W V r) fun _ =>
       Keeps.bind' (keeps_residualsGo S W V rs) fun _ => Keeps.pure' _
 
-theorem keeps_shaBlock (st blk : List Lin) : Keeps (shaBlock st blk) :=
+theorem keeps_shaChunk (st blk : List Lin) : Keeps (shaChunk st blk) :=
   Keeps.bind' (keeps_compress _ _) fun _ => Keeps.pure' _
 
 theorem keeps_shaBlocks (msg : List Lin) : ∀ (n k : Nat) (st : List Lin), Keeps (shaBlocks msg n k st)
   | 0, _, _ => Keeps.pure' _
-  | n + 1, k, _ => Keeps.bind' (keeps_shaBlock _ _) fun st' => keeps_shaBlocks msg n (k + 1) st'
+  | n + 1, k, _ => Keeps.bind' (keeps_shaChunk _ _) fun st' => keeps_shaBlocks msg n (k + 1) st'
 
 theorem keeps_shaFrom (cv : List (BitVec 64)) (bits : List Lin) (pre : Nat) : Keeps (shaFrom cv bits pre) :=
   Keeps.bind' (keeps_shaBlocks _ _ _ _) fun _ => Keeps.pure' _
