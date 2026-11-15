@@ -22,6 +22,9 @@ REGISTRY = Registry(
     S("LOCAL_WORK", str, "~/.cache/verity/bench-memory", VALUE,
       "--local's working directory: the vLLM environment and the checkpoint the tree's bootstrap makes there, the "
       "lease's lock files where no `gpu-lease` is installed, and each run's records under runs/"),
+    S("LOCAL_NODE", str, None, VALUE,
+      "--local's node sheet (`hardware/nodes/`), in place of the one for this machine's card (`LOCAL_SHEETS`); the "
+      "verifier's node is one card of it"),
     S("LOCAL_ROW", str, None, VALUE,
       "--local's served row, in place of the Llama 3.2 1B row for this machine's card (`LOCAL_ROWS`)"),
     S("VLLM_PY", str, None, VALUE,

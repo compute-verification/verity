@@ -69,9 +69,12 @@ wasn't accepted writes none, as it prints no number.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -81,7 +84,10 @@ from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
+from verity.device import load_card, load_node
 from verity.protocol import no_bound
+from verity.protocols.accounting.poub.verifier import ledger as poub_ledger
+from verity.protocols.accounting.poub.verifier import timing
 from verity_bench import kit
 from verity_config.settings import of
 
@@ -114,6 +120,15 @@ LOCAL = ("local: the verifier and its coins ran on the machine being measured, s
 #: one GPU, one request at a time; a card of another capability needs a row of its own (LOCAL_ROW)
 LOCAL_ROWS = {"9.0": "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
               "12.0": "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"}
+#: the node sheet (`hardware/nodes/`) of a --local session's card, by a word of the name nvidia-smi gives it, taken at
+#: that one card: the share is of the one card's read rate (LOCAL_NODE names another sheet)
+LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
+#: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
+VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier"
+SHEETS = ROOT / "hardware"
+#: where a session's coins came from, by its verifier's `--challenger`
+COINS = {"local": "the verifier's own challenger, in its process", "serve": "a challenger process (serve.py) on the "
+         "verifier's machine", "gate": "the auditor device's challenger, through its gate"}
 #: the checkpoint those rows serve, which the bootstrap makes from its ungated BF16 pin (`unsloth/Llama-3.2-1B`)
 LOCAL_CASE = "LLAMA32_1B_INT8"
 BOOTSTRAP = ROOT / "adapters" / "vllm" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
@@ -272,21 +287,36 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
             "model": binding.get("name") if binding.get("bound") is True else None,
-            "bound": binding.get("bound") is True, "ledger": ledger}
+            "bound": binding.get("bound") is True, "parameters": parameters(v, vs), "ledger": ledger}
+
+
+def parameters(v: dict, vs: dict) -> dict:
+    """What session `vs` of the verifier's record `v` ran with, as its record states it: where its coins came from
+    (the verifier's `--challenger`), the store's rows, the openings a window, δ a window, and the windows, their
+    length and the lateness allowed. None where the record states none."""
+    def ns(x):
+        return x / 1e6 if isinstance(x, (int, float)) and not isinstance(x, bool) else None
+
+    return {"coins": (vs.get("challenger") or {}).get("challenger"), "rows": (v.get("registration") or {}).get("rows"),
+            "samples": vs.get("samples"), "delta": vs.get("delta"), "windows": vs.get("windows"),
+            "window_ms": ns(vs.get("window_ns")), "allowance_ms": ns(vs.get("allowance_ns"))}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
-             local: bool = False) -> dict:
+             local: bool = False, machine: dict | None = None) -> dict:
     """The printed document of session `s` (`session`), before its references: the number, its unit, the commit the
     session ran from and its run, then what it was measured on, its error among it. Where the error is 1 or more the
     number is None and `no_bound` says why (`protocol.no_bound`); else `no_bound` is None. `host_run` is the auditor's
     verifier host's run that held the verifier, None for a verifier that ran anywhere else. `local` is `LOCAL`'s words
-    for a `--local` session, whose verifier ran on the machine it measured, else None. It carries the session's
+    for a `--local` session, whose verifier ran on the machine it measured, else None, and `machine` that session's
+    card, the node sheet its share is of, and the SHA-256 of the tree's data sheets and of its verifier (`digest`),
+    which a result is held to `main`'s by. It carries the session's
     ledger as its verifier recorded it under `ledger`, which the command takes out before it prints (`amounts` reads
     it)."""
     why = None if s.get("error") is None else no_bound(s["error"])
     return {"value": None if why else s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback,
-            "local": LOCAL if local else None, "gamma_decided_by": s["gamma_decided_by"], "host_run": host_run,
+            "local": LOCAL if local else None, "machine": machine, "gamma_decided_by": s["gamma_decided_by"],
+            "host_run": host_run,
             "no_bound": why, **{k: v for k, v in s.items() if k not in ("value", "gamma_decided_by")}}
 
 
@@ -369,23 +399,65 @@ def loopback(run: Callable = subprocess.run) -> dict:
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
-def card_row(run: Callable = subprocess.run) -> str:
-    """The served row for this machine's card: LOCAL_ROW where it is set, else `LOCAL_ROWS`' row for the compute
-    capability nvidia-smi gives for GPU (the first card where it is unset)."""
-    if row := SETTINGS.LOCAL_ROW:
-        return row
+def gpu_of(run: Callable = subprocess.run) -> tuple[str, str]:
+    """The name and compute capability nvidia-smi gives for GPU (the first card where it is unset)."""
     asked = run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader",
                  *(["-i", SETTINGS.GPU] if SETTINGS.GPU else [])], capture_output=True, text=True)
     if asked.returncode or not asked.stdout.strip():
         raise NoNumber(f"--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc {asked.returncode}: "
                        f"{(asked.stderr or asked.stdout).strip()[-200:]})")
     name, _, cc = asked.stdout.strip().splitlines()[0].rpartition(",")
-    if (row := LOCAL_ROWS.get(cc.strip())) is None:
-        raise NoNumber(f"{name.strip()} is compute capability {cc.strip()}, and the tree has a Llama 3.2 1B row only "
+    return name.strip(), cc.strip()
+
+
+def card_row(name: str, cc: str) -> str:
+    """The served row for card `name` of compute capability `cc`: LOCAL_ROW where it is set, else `LOCAL_ROWS`'."""
+    if row := SETTINGS.LOCAL_ROW:
+        return row
+    if (row := LOCAL_ROWS.get(cc)) is None:
+        raise NoNumber(f"{name} is compute capability {cc}, and the tree has a Llama 3.2 1B row only "
                        f"for {' and '.join(LOCAL_ROWS)} ({', '.join(LOCAL_ROWS.values())}): make one for this card "
                        "(`verity-vllm workload --row-id ROW ...`, its target with \"async_scheduling\": false) and "
                        "name it with LOCAL_ROW")
     return row
+
+
+def sheet_of(name: str) -> str:
+    """The node sheet of card `name`: LOCAL_NODE where it is set, else `LOCAL_SHEETS`'."""
+    if kind := SETTINGS.LOCAL_NODE:
+        return kind
+    if (kind := next((k for word, k in LOCAL_SHEETS.items() if word in name), None)) is None:
+        raise NoNumber(f"the tree has no data sheet for {name} (hardware/nodes/ has {', '.join(LOCAL_SHEETS.values())} "
+                       "for its cards): add its card and a node of it there (hardware/README.md) and name the node "
+                       "with LOCAL_NODE")
+    return kind
+
+
+def one_card(kind: str) -> tuple[dict, int]:
+    """The verifier's node for a session on one card of node sheet `kind`: its capacities (`ledger.Node.to_json`,
+    which the verifier takes as `--node`) and its HBM (`--hbm-bytes`), from the tree's data sheets
+    (`timing.Figures.of_sheets`) at one card, so the share is of that card's read rate and its host's. A host card
+    that states no measured disk read is taken at its ceiling (`disk.read_max`); the figures no sheet states are
+    `timing`'s."""
+    node = load_node(kind)
+    node = {**node, "device": {**node["device"], "count": {**node["device"]["count"], "value": 1}}}
+    host = load_card(node["host"]["sku"])
+    if "read" not in host.get("disk", {}):
+        host = {**host, "disk": {**host["disk"], "read": host["disk"]["read_max"]}}
+    figures = timing.Figures.of_sheets(node, load_card(node["device"]["sku"]), host)
+    return poub_ledger.Node.stated(figures).to_json(), figures.hbm_bytes
+
+
+def digest(path: Path) -> str:
+    """SHA-256 over the files under `path` (a file or a directory), each by its path in the tree and its bytes'
+    SHA-256, in path order; a directory whose name starts with `.` or is `__pycache__` is left out."""
+    files = [path] if path.is_file() else sorted(
+        p for p in path.rglob("*") if p.is_file()
+        and not any(part.startswith(".") or part == "__pycache__" for part in p.relative_to(path).parts))
+    h = hashlib.sha256()
+    for p in files:
+        h.update(f"{p.relative_to(ROOT)}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n".encode())
+    return h.hexdigest()
 
 
 def local(run: Callable = subprocess.run) -> dict:
@@ -394,7 +466,9 @@ def local(run: Callable = subprocess.run) -> dict:
     set, the tree's bootstrap makes the vLLM environment and the row's checkpoint in LOCAL_WORK first (it skips what
     is already there); with no `gpu-lease` installed the tree's own lease keeps its locks there too. The run's records
     are kept, in the research run's directory under one and else in a directory of LOCAL_WORK/runs/."""
-    row, work = card_row(run), Path(SETTINGS.LOCAL_WORK).expanduser()
+    name, cc = gpu_of(run)
+    row, kind, work = card_row(name, cc), sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
+    node, hbm_bytes = one_card(kind)
     env = {**SETTINGS.environ(), "ROLE": "both", "SERVE": "row", "ROW": row, "PLAN": SETTINGS.PLAN or "serve"}
     if not SETTINGS.VLLM_PY:
         work.mkdir(parents=True, exist_ok=True)
@@ -413,13 +487,19 @@ def local(run: Callable = subprocess.run) -> dict:
         (work / "runs").mkdir(parents=True, exist_ok=True)
         held = tempfile.mkdtemp(prefix="run-", dir=work / "runs")
     env["RESEARCH_RUN_DIR"] = held
-    print(f"memory: --local serves {row}; its records go to {held}/out", file=sys.stderr)
+    Path(held).mkdir(parents=True, exist_ok=True)
+    (Path(held) / "node.json").write_text(json.dumps(node, sort_keys=True))
+    env["VERIFIER_ARGS"] = " ".join(filter(None, [env.get("VERIFIER_ARGS"), "--node", shlex.quote(f"{held}/node.json"),
+                                                  "--hbm-bytes", str(hbm_bytes)]))
+    print(f"memory: --local serves {row} on {name}, the verifier's node one card of {kind}; its records go to "
+          f"{held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
         raise NoNumber(f"the served session failed (run.sh exited {done.returncode}); its logs are above and in "
                        f"{held}/out")
     s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
-    return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True)
+    machine = {"card": name, "sheet": kind, "sheet_sha256": digest(SHEETS), "verifier_sha256": digest(VERIFIER)}
+    return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
 
 
 def session_form() -> dict[str, str]:
@@ -628,6 +708,11 @@ def text(doc: dict) -> str:
         lines.append(f"  {doc['local']}")
     if doc.get("gamma_decided_by") == PYTHON_LEDGER:
         lines.append(f"  {PYTHON_LEDGER_WORDS}")
+    if m := doc.get("machine"):
+        lines.append(f"  card: {m['card']}, the verifier's node one card of hardware/nodes/{m['sheet']}.toml; "
+                     f"data sheets sha256 {m['sheet_sha256'][:16]}, verifier sha256 {m['verifier_sha256'][:16]}")
+    if (doc["loopback"] or doc.get("local")) and doc.get("parameters"):
+        lines.append("  " + parameters_line(doc["parameters"]))
     if not doc["loopback"] and doc["value"] is not None and doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
     where = ("" if doc["loopback"] or doc.get("local") else f", on the auditor's verifier host (its run {doc['host_run']})"
@@ -648,6 +733,18 @@ def text(doc: dict) -> str:
                                                      else f"{r['no_bound']} ({where})" if r.get("no_bound")
                                                      else f"not read ({r['why']})"))
     return "\n".join(lines)
+
+
+def parameters_line(p: dict) -> str:
+    """The one line of what the session ran with (`parameters`)."""
+    def ms(x):
+        return "not stated" if x is None else f"{x:,.0f} ms"
+    delta = p.get("delta")
+    return (f"parameters: coins from {COINS.get(p.get('coins'), p.get('coins') or 'a challenger not stated')}; "
+            f"{p.get('rows') or 'no'} rows; {p.get('samples') or 'no'} openings a window; δ = "
+            + (f"2^{math.log2(delta):.1f}" if isinstance(delta, (int, float)) and delta > 0 else "not stated")
+            + f" a window; {p.get('windows') or 'no'} windows of {ms(p.get('window_ms'))}; lateness allowed "
+            f"{ms(p.get('allowance_ms'))}")
 
 
 def _no_store():

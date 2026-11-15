@@ -35,6 +35,8 @@ PACED = M.SETTINGS.setting("PACED").default
 #: gate_run.sh's variables for a host run of sessions with one coin a window
 WINDOWED = ("SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
 GIB = 1 << 30
+#: one card's HBM, as its card's sheet states it (`store.dram`)
+GPU_HBM = {"h200-sxm-141gb-x1": 151397597184, "rtx-pro-6000-server-x8": 103079215104}
 SESSION = HERE / "fixtures" / "session.json"
 UNDECIDED = ("undecided: the Lean's answer for the γ terms isn't written yet "
              "(memory-accounting/lean-decides-memory-verdicts)")
@@ -309,8 +311,9 @@ def test_a_recorded_loopback_is_printed_as_one(store, capsys):
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[1] == f"  {M.LOOPBACK}" and doc["loopback"] is True
-    assert text[2] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
-    assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
+    assert text[2].startswith("  parameters: ")
+    assert text[3] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[4] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
 
 
 @pytest.mark.parametrize("body", ["{", "[1]", "7"])
@@ -385,7 +388,7 @@ def test_a_store_that_cannot_be_opened_for_the_references_leaves_the_loopbacks_n
     assert M.main(["--loopback"], store_of=no_store, run=launch) == 0
     text, doc, _ = printed(capsys)
     assert doc["value"] == 4.5 and all(r["value"] is None for r in doc["beside"])
-    assert text[4] == "  beside it, PoUS state bound: not read (the evidence store's client isn't installed here)"
+    assert text[5] == "  beside it, PoUS state bound: not read (the evidence store's client isn't installed here)"
 
 
 def test_every_reference_of_the_tree_has_a_reader():
@@ -416,8 +419,9 @@ def test_the_loopback_runs_both_processes_through_run_sh_and_says_it_certifies_n
     text, doc, _ = printed(capsys)
     assert text[0].startswith("memory: 7.500 of the node's memory read rate")
     assert text[1] == f"  {M.LOOPBACK}" and "certifies nothing" in text[1]
-    assert text[2] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
-    assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint", "no node's memory beside a test store"
+    assert text[2] == "  " + M.parameters_line(doc["parameters"])
+    assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[4] == "  store: 262,144 bytes, a test store, bound to no checkpoint", "no node's memory beside a test store"
     assert (doc["loopback"], doc["value"], doc["commit"], doc["run"]) == (True, 7.5, COMMIT, None)
 
 
@@ -690,10 +694,9 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     doc = json.loads(line)
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
-    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "gamma_decided_by", "host_run",
-                         "no_bound", "session",
-                         "verdict",
-                         "error", "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "bound", "beside"]
+    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "machine", "gamma_decided_by",
+                         "host_run", "no_bound", "session", "verdict", "error", "rate_bytes_per_s", "store_bytes",
+                         "node_gpu_bytes", "model", "bound", "parameters", "beside"]
     got = written(held)
     assert list(got) == WRITTEN
     assert {n: m["value"] for n, m in got.items()} == {
@@ -992,7 +995,15 @@ def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_i
     text, doc, err = printed(capsys)
     assert text[0].startswith("memory: 0.199 of the node's memory read rate is left uncertified by this session")
     assert text[1] == f"  {M.LOCAL}" and "not an audit" in text[1] and doc["local"] == M.LOCAL
-    assert text[2] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of hardware/nodes/h200-sxm-141gb-x1.toml; "
+                       f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
+    assert text[3].startswith("  parameters: ")
+    assert text[4] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "sheet_sha256": M.digest(M.SHEETS),
+                              "verifier_sha256": M.digest(M.VERIFIER)}
+    node = json.loads((Path(env["RESEARCH_RUN_DIR"]) / "node.json").read_text())
+    assert env["VERIFIER_ARGS"] == f"--node {env['RESEARCH_RUN_DIR']}/node.json --hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}"
+    assert node == M.one_card("h200-sxm-141gb-x1")[0]
     assert (doc["loopback"], doc["value"], doc["commit"]) == (False, 0.199, COMMIT)
     assert [(r["value"], r["why"]) for r in doc["beside"]] == [(None, M.NO_STORE)] * 2 and store.asked == []
     assert M.LOCAL_ROWS["9.0"] in err
@@ -1014,7 +1025,7 @@ def test_a_local_session_under_a_research_run_writes_no_result(store, capsys, wo
     assert not (tmp_path / "rundir" / "result.json").exists()
 
 
-@pytest.mark.parametrize("card, row", [("NVIDIA H100 80GB HBM3, 9.0", M.LOCAL_ROWS["9.0"]),
+@pytest.mark.parametrize("card, row", [("NVIDIA H200, 9.0", M.LOCAL_ROWS["9.0"]),
                                        ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", M.LOCAL_ROWS["12.0"])])
 def test_local_takes_the_row_of_the_cards_compute_capability(store, capsys, work, card, row):
     machine = Machine(card=card)
@@ -1031,7 +1042,7 @@ def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, m
     monkeypatch.setattr(M.shutil, "which", lambda name: "/usr/local/bin/gpu-lease")
     machine = Machine()
     assert bench(store, "--local", run=machine) == 0
-    assert not [a for a, _ in machine.started if a[0] == "nvidia-smi" or a[1:2] == [str(M.BOOTSTRAP)]]
+    assert not [a for a, _ in machine.started if a[1:2] == [str(M.BOOTSTRAP)]]
     ((_, env),) = machine.runs()
     assert (env["ROW"], env["VLLM_PY"]) == ("my-row", str(tmp_path / "py")) and "GPU_LEASE_DIR" not in env
     monkeypatch.delenv("LOCAL_ROW")
@@ -1045,11 +1056,12 @@ def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, m
     (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)"),
     (Machine(card="NVIDIA L40S, 8.9"), "NVIDIA L40S is compute capability 8.9, and the tree has a Llama 3.2 1B row only "
                                        "for 9.0 and 12.0"),
+    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3"),
     (Machine(boot_rc=3), "the bootstrap failed (pod_bootstrap.sh exited 3"),
     (Machine(rc=6), "the served session failed (run.sh exited 6)"),
     (Machine(record=a_record(a_session(accepted=False, failure="window 2: a receipt doesn't open"))),
      "session 0 was not accepted (window 2: a receipt doesn't open)"),
-], ids=["no-gpu", "no-row", "bootstrap", "run-sh", "rejected"])
+], ids=["no-gpu", "no-row", "no-sheet", "bootstrap", "run-sh", "rejected"])
 def test_a_local_session_that_cannot_run_or_is_not_accepted_prints_no_number_and_exits_1(store, capsys, work, machine,
                                                                                        why):
     assert bench(store, "--local", run=machine) == 1
@@ -1110,3 +1122,30 @@ def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
     assert bench(store, "--from", FIRE) == 0
     _, doc, _ = printed(capsys)
     assert doc["gamma_decided_by"] == "lean"
+
+
+def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():
+    """`--local`'s share is of the card it ran on and its host: the verifier's node is one card of the node sheet,
+    read from the tree's data sheets, not the eight-card node `verifier_process.py` defaults to."""
+    from verity.protocols.accounting.poub.verifier import ledger, timing
+    eight = ledger.Node.stated(timing.RTX_PRO_6000_NODE)
+    rtx, rtx_hbm = M.one_card("rtx-pro-6000-server-x8")
+    assert rtx["spec_bytes_per_s"] == pytest.approx(eight.spec_bytes_per_s - 7 * timing.GPU_SPEC_BYTES_PER_S)
+    assert rtx_hbm == GPU_HBM["rtx-pro-6000-server-x8"]
+    h200, h200_hbm = M.one_card("h200-sxm-141gb-x1")
+    assert h200["spec_bytes_per_s"] == pytest.approx(4.916736e12 + 6.144e11), "the H200's and its host's, at the sheets"
+    assert h200_hbm == GPU_HBM["h200-sxm-141gb-x1"]
+
+
+def test_a_digest_changes_with_any_file_under_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "ROOT", tmp_path)
+    (tmp_path / "v" / "lean").mkdir(parents=True)
+    (tmp_path / "v" / "a.py").write_text("a")
+    first = M.digest(tmp_path / "v")
+    (tmp_path / "v" / "__pycache__").mkdir()
+    (tmp_path / "v" / "__pycache__" / "a.pyc").write_text("cache")
+    (tmp_path / "v" / "lean" / ".lake").mkdir()
+    (tmp_path / "v" / "lean" / ".lake" / "build").write_text("build")
+    assert M.digest(tmp_path / "v") == first, "caches and build trees are left out"
+    (tmp_path / "v" / "lean" / "B.lean").write_text("b")
+    assert M.digest(tmp_path / "v") != first
