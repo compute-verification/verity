@@ -1,4 +1,4 @@
-"""The suite's step: the lf model's tiny training step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path)
+"""The suite's step: the lf model's tiny training step (`adapters/torch/tests/frontend/train_step_lf.py`, loaded by its path)
 with its log-free loss, derived by the training-step frontend at the step's batch shape and at the structure's, and handed
 over as a lane hands it over (`grader.write_handover`); at a compute capability `cc`, the step's bf16 linears' GEMMs are lowered
 to the routes `ROUTES` stands in for that GPU's cuBLAS and its attention to that GPU's flash attention at the stand-in shape
@@ -17,12 +17,10 @@ import pytest
 import torch
 
 import grader as G
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
-from verity_vllm.program.frontend.train_step import AdamW, export_step, primitives, step_report
+import adapter as A
+from verity_torch.frontend.train_step import AdamW, export_step, primitives, step_report
 
-LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
+LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "frontend" / "train_step_lf.py"
 #: the step's batch and the structure Program's, as rows of tokens: the structure's attention at a T of 32 (its tokens less
 #: one), whole blocks of the 16 rows and keys its stand-in heads take at a cc (`training_attention.STAND_IN`)
 STEP, STRUCTURE = (2, 17), (3, 33)
@@ -30,8 +28,8 @@ STEP, STRUCTURE = (2, 17), (3, 33)
 #: step's linears' GEMMs at M = 2 x 16 tokens (its capture covers the workloads' shapes, not these): unsplit, but for a split-K
 #: over a bf16 workspace, a serial split-K and the three over grid.z (an f32 workspace and none, their slices' residue tiles
 #: padded, and a bf16 workspace, its slices whole tiles), one route of each kind the grader reads
-CC = CB.TRAIN_CC
-ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for role in CB.TRAIN_LINEAR_ROLES},
+CC = A.TRAIN_CC
+ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for role in A.TRAIN_LINEAR_ROLES},
           (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
           (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3},
           (32, 64, 64, "fwd"): {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
@@ -74,9 +72,9 @@ def _derive(dtype, rows: int, tokens: int, cc: tuple[int, int] | None = None, st
         ex = export_step(model, LF.square_loss, opt, batch, gpu=cc is not None)
         if step:
             for key, route in ROUTES.items():
-                mp.setitem(CB.TRAIN_ROUTES, key, route)
-            mp.setitem(FT.TRAIN_SDPA, SDPA, ("unsplit", 16))
-            mp.setitem(FTB.TRAIN_SDPA_BWD, SDPA, (16, 16))
+                mp.setitem(A.TRAIN_ROUTES, key, route)
+            mp.setitem(A.TRAIN_SDPA, SDPA, ("unsplit", 16))
+            mp.setitem(A.TRAIN_SDPA_BWD, SDPA, (16, 16))
         rep = step_report(model, LF.square_loss, opt, batch, exported=ex, cc=cc, structure=structure)
     assert rep.program is not None, rep.unsupported
     return rep.program, ex[0]
@@ -127,8 +125,8 @@ def k16_steps(handover) -> collections.Counter:
     for nd, c in zip(nodes[len(nodes) - len(calls):], calls):
         if getattr(nd.fn, "base_id", G.CELL) in set(G.ROWS) - {G.CELL}:
             b = nd.fn.bindings
-            k = (sum(hi - lo + CB.residue_first(lo, hi, b["TILE_K"])[1]
-                     for lo, hi in CB.aligned_bounds(b["K"], b["SPLIT_K"], b["ALIGN"])) if "ALIGN" in b else b["K"])
+            k = (sum(hi - lo + A.residue_first(lo, hi, b["TILE_K"])[1]
+                     for lo, hi in A.aligned_bounds(b["K"], b["SPLIT_K"], b["ALIGN"])) if "ALIGN" in b else b["K"])
             got[c["occ"]] += (nd.n if nd.form in ("batch", "scan") else 1) * b["N"] * k // 16
     return got
 

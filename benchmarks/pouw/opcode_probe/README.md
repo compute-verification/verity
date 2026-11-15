@@ -1,7 +1,7 @@
 # opcode_probe: an instruction's rate as a price row, gated first
 
 A probe times one instruction class in one loop on sm_120 and writes its price row in the ACCEL model's census schema
-(`../../machine_model/`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
+(`../../machine_model/`). Every probe's SASS passes `../../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/sass_gate.py`
 before anything is timed, and a probe that doesn't pass writes no row. A probe declared known-invalid must be refused,
 by the check it names, or nothing is timed at all.
 
@@ -134,7 +134,7 @@ The directory is no Python package, so a caller loads a module by its path.
 - `probe.cuh` is what a probe source includes, here and in `../dc/probes/`, `../facet_break/` and `../sass_census/`.
 - `probe.py` is the launcher their scripts start (`../dc/`'s, `../facet_break/run.sh`, `../sass_census/rates.sh`). A GPU
   machine's own `python3` runs it, so it and `rows.py` read nothing outside the standard library, this directory and
-  `../gpu_kit/`'s gate.
+  `../../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/`'s gate.
 - `rows.py` is the census line, and `eps1.py` gives the frontier's points and facets to `sm89/census.py`,
   `../dc/census.py` and `../facet_break/loads.py`. Each module's `__all__` lists what a caller may read.
 

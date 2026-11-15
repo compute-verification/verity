@@ -31,7 +31,7 @@ if [ -n "${LEGACY:-}" ]; then
   $F/target/release/flock-live bench --n ${LEGACY_N:-393216} --runs 3 2>&1 | tee $O/bench-legacy.txt | grep BENCH | cut -c1-600
 fi
 if [ -n "${F2:-}" ]; then
-  $F/target/release/flock-live selftest-f2 --netlist $N/net-hopper_bf16.txt --netlist-other $N/net-hopper_e4m3.txt \
+  $F/target/release/flock-live selftest-f2 --circuit-description $N/net-hopper_bf16.txt --circuit-description-other $N/net-hopper_e4m3.txt \
     --n ${F2_N:-4096} --units ${F2_UNITS:-4096} --nbl ${F2_NBL:-14} 2>&1 | tee $O/selftest-f2.txt | grep -E '^(NEG|SELFTEST)' | cut -c1-300
 fi
 lscpu | grep -E 'Model name' | tee $O/host.txt; echo "threads $TH" | tee -a $O/host.txt; free -g | tee -a $O/host.txt

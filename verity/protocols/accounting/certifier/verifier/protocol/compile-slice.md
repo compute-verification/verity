@@ -63,7 +63,7 @@ and its carry are witness until the slice binds them):
   and ``cout`` by their b‖c to the session's carry chain (`charge_chain.check_chain`), beside the advice, served-row and
   certified-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the window),
   and the chain refuses it: ``CH-first`` on a session's first window, ``CH-carry`` after it.
-- The slice-level cases are `verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_phase14.py`.
+- The slice-level cases are `adapters/vllm/tests/compiler/test_network_certifier_compile_slice_phase14.py`.
 
 **Every advised window is proved, never sampled.** The chain binds only proved proof blocks: an unproved window's
 carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile slice (the load
@@ -90,7 +90,7 @@ held to its request's slot through ``map``.
 - **The sync class** is the same sizes under a sync scheduler (AS = 0): w212's 20 steps and 34 idle ones
   (`compile_slice_w212_class.json`), 857,866 ANDs, and at w212's own statics, which would show its counts, 117,164.
   The circuit is its reference on the honest window and every negative at both
-  (`verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_w212.py`), and the padding changes no
+  (`adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w212.py`), and the padding changes no
   verdict and no charge. At AS = 1 the class's circuit is its reference on w1
   (`test_network_certifier_compile_slice_w1.py`), and on w212.
 - The honest window charges 27 bits from the session's carry into it, ((58, 50), (58, 0), (392, 48)) at run 0. It
@@ -112,7 +112,7 @@ block, a `CompileSlice_v7` unit, is proved by Flock `prove --zk` behind the Lean
 the proof blocks' b‖c. What the verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's
 salt, and the ``cin`` and ``cout`` rows whole. With ``--plain`` the same statement is proved on Flock's plain path
 (``FC_COINS=tree``, Lean `verify --coins tree`), whose guarantee is soundness alone.
-- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `benchmarks/network_traces/leak_scan.py`). It
+- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `verity/protocols/accounting/certifier/prover/leak_scan.py`). It
   replaces the phase-18 attack's rule.
   - A find of a witness piece or carry row counts only if it lies inside one field: one read Flock's proof format
     makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
-public import Flock
+public import Flock.HmRow
 import all Init.Data.String.TakeDrop
 import all Init.Data.String.Slice
 import all Init.Data.String.Pattern.Basic
@@ -18,7 +18,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement

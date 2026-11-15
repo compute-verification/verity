@@ -47,7 +47,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # `Deploy.V`'s custody checks, as the old theorems' `RecordsLiveZKJ`
 
-The old `--zk` theorems bound flock-verify `--zk`'s acceptance of the transcript a writer `wr` makes of the live
+The old `--zk` theorems bound verity-verify-proof `--zk`'s acceptance of the transcript a writer `wr` makes of the live
 session's outcome, under `RecordsLiveZKJ I dj Jf wr` (`DefsJ.lean`, the record half of the `live-verifier` assumption
 `RecordCustodyZKJ`): the record `verify --zk` accepts carries the sample, the outcome's proof files, link points, roots
 and rounds. `Deploy.V` takes the record in its last message (`Final`) and checks its custody (`checks`, `custody`):
@@ -56,9 +56,9 @@ the record's roots, link points and rounds are the run's link message, first coi
 * `liveOf_ok`, `decode_ok`, `decode_live`: what `liveOf` and `Record.decode` read of the record, field by field, and
   that the decoded session's roots, points and each rep stream's rounds are `liveOf`'s, with a retained round's recorded
   digest that of its bytes (S12).
-* `checks_ok`, `custody_ok`, `checks_draw`: what the checks establish, the record's sample the statement's whatever its
-  key order among it (`drawEq`, `JsonEquiv`).
-* `recordDraw_of_checks`, `recordDraw_of_decide`: and so the record's sample is the statement's as a value, since the
+* `checks_ok`, `custody_ok`, `checks_sample`: what the checks establish, the record's sample the statement's whatever its
+  key order among it (`sampleEq`, `JsonEquiv`).
+* `recordSample_of_checks`, `recordSample_of_decide`: and so the record's sample is the statement's as a value, since the
   verifier rebuilds both (`Flock.norm`, `JsonNorm`): the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`.
 * `viewOf`: the run's live outcome (`LiveOutJ`), its rounds the record's (`viewOf_rounds`: the round messages with
   their coins, in `spec.repStreams` order). Each round's coin count and each stream's share of the rounds are the
@@ -75,7 +75,7 @@ the record's roots, link points and rounds are the run's link message, first coi
   writes for the run's outcome (`AcceptsZK`), the event the old theorems bound.
 * `decodesOnZKJ_wrD`, `decodesOnZKJ_wrD_file`: at `wrD` the deployed `--zk` decoders are right (`DecodesOnZKJ`,
   `LiveZk.Pr_acc_zk_le`'s `hdec`) on untyped inputs under `TagsOkZJ` where every sample sets each table up at `mPts`
-  link points (`DrawOkZKJ`), as the sample file half of `RecordCustodyZKJ` gives.
+  link points (`SampleOkZKJ`), as the sample file half of `RecordCustodyZKJ` gives.
 -/
 
 @[expose] public section
@@ -427,7 +427,7 @@ theorem decode_live {spec : SessionSpec} {text : String} {sess : RunRecord} {lv 
 /-! ## The custody checks -/
 
 /-- **What `checks` establishes**: the last message's statement is `x`, the record's live session reads (`liveOf`),
-and its custody passes; the record's sample is the statement's up to key order (`checks_draw`). -/
+and its custody passes; the record's sample is the statement's up to key order (`checks_sample`). -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : checks zk s spec x link c₁ mids f = .ok ()) :
     f.stmt = x ∧ ∃ lv, liveOf spec f.record = .ok lv ∧ custody spec lv link c₁ mids = .ok () := by
@@ -452,19 +452,19 @@ theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.
   obtain ⟨_, -, h⟩ := ebind_ok h
   exact h
 
-/-- **The checks pin the record's sample to the statement's, whatever its key order**: `drawEq` passes exactly on
-equivalent values (`drawEq_iff`). -/
-theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+/-- **The checks pin the record's sample to the statement's, whatever its key order**: `sampleEq` passes exactly on
+equivalent values (`sampleEq_iff`). -/
+theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) :
     Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw := by
   unfold checks at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, h2, -⟩ := ebind_ok h
-  exact (drawEq_iff _ _).1 (check_ok_iff.1 h2)
+  exact (sampleEq_iff _ _).1 (check_ok_iff.1 h2)
 
 /-- **A record's sample is rebuilt** (`Flock.norm`, as `Main.recordDraw` keeps it). -/
-theorem recordDraw_norm {record : String} {d : Json} (h : Exec.recordDraw record = some d) : Flock.norm d = d := by
+theorem recordSample_norm {record : String} {d : Json} (h : Exec.recordDraw record = some d) : Flock.norm d = d := by
   unfold Exec.recordDraw at h
   split at h
   · split at h
@@ -475,21 +475,21 @@ theorem recordDraw_norm {record : String} {d : Json} (h : Exec.recordDraw record
   · cases h
 
 /-- **The record's sample is the statement's, as a value**, wherever the checks pass on a statement the verifier read
-(`insOf`): both samples are rebuilt (`recordDraw_norm`, `insOf_draw_norm`), and two rebuilt values the sample check passes
+(`insOf`): both samples are rebuilt (`recordSample_norm`, `insOf_sample_norm`), and two rebuilt values the sample check passes
 on are equal (`eq_of_rel_norm`). This is the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`, with no premise
 on the JSON parser. -/
-theorem recordDraw_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x' : Claims.Msg}
+theorem recordSample_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x' : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (hs : insOf zk' x' = some s) (h : checks zk s spec x link c₁ mids f = .ok ()) :
     Exec.recordDraw f.record = s.read.draw :=
-  eq_of_rel_norm (checks_draw h) (fun _ hd => recordDraw_norm hd) (fun _ hd => (insOf_draw_norm hs hd).1)
+  eq_of_rel_norm (checks_sample h) (fun _ hd => recordSample_norm hd) (fun _ hd => (insOf_sample_norm hs hd).1)
 
-/-- **An accepting decision's record carries the statement's sample, as a value** (`recordDraw_of_checks`). -/
-theorem recordDraw_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+/-- **An accepting decision's record carries the statement's sample, as a value** (`recordSample_of_checks`). -/
+theorem recordSample_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act zk x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next zk x as cs).eval sha512).1 = .acc) : Exec.recordDraw f.record = s.read.draw :=
-  recordDraw_of_checks (setupOf_some (act_decide ha)).1 ((next_decide_sha512 ha).1 hacc).2
+  recordSample_of_checks (setupOf_some (act_decide ha)).1 ((next_decide_sha512 ha).1 hacc).2
 
 /-- **What the custody check establishes**: the record's `root_B` and public words are the link message's, its link
 points the first coin's, and its rounds, flattened in `spec.repStreams` order, the round messages with their coins: each
@@ -611,7 +611,7 @@ theorem setupOf_zkInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array S
 /-- **`Deploy.V`'s setup is the shipped verifier's**: `verifyCmd` sets a record up at the record's own sample
 (`Exec.setupOf`, at `zkInputs` under `--zk`), and where the checks pass and that sample is the statement's as a value
 (`hdraw`), that is the session and tables `Deploy.V` set up at the statement's. The checks give the sample only up to key
-order (`checks_draw`), and the setup keeps the sample itself: `Stmt.setupTables` makes it the session's `unitDraw`, and
+order (`checks_sample`), and the setup keeps the sample itself: `Stmt.setupTables` makes it the session's `unitSample`, and
 `HmRow.drawn` writes it into the public header (`setObjVal!`), whose `canon` the public digest hashes. -/
 theorem setupOf_record {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -777,23 +777,23 @@ theorem recordsLiveZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
     exact (Classical.choose_spec h).2
   · exact fun h => absurd h (not_acceptsZK_nil _ _)
 
-/-- **`RecordCustodyZKJ` at `wrD`** is its sample file half (`DrawFileZK`) alone. -/
+/-- **`RecordCustodyZKJ` at `wrD`** is its sample file half (`SampleFileZK`) alone. -/
 theorem recordCustodyZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
-    (Jf : Finset (Fin n) → Reg → ℕ) (kd : ℕ) (hdf : ZkLink.DrawFileZK dj (.subset kd) n) :
+    (Jf : Finset (Fin n) → Reg → ℕ) (kd : ℕ) (hdf : ZkLink.SampleFileZK dj (.subset kd) n) :
     Assumptions.Zk.RecordCustodyZKJ (mPts := mPts) I dj Jf (wrD I dj Jf) kd :=
   ⟨recordsLiveZKJ_wrD I dj Jf, hdf⟩
 
 /-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` on a record of its live
 outcome**: on a statement of sample `d`, the last message's record and proof files are accepted by `verify --zk`
 (`AcceptsZK`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAt`): the record's
-sample is the statement's as a value (`recordDraw_of_decide`). -/
+sample is the statement's as a value (`recordSample_of_decide`). -/
 theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I ⟨f.record, f.proofs⟩ ∧
       RecordsLiveAt s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
-  have hdraw := recordDraw_of_decide ha hacc
+  have hdraw := recordSample_of_decide ha hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 ha).1 hacc
   simp only [ite_true] at hv
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)
@@ -822,11 +822,11 @@ theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json)
 
 /-- **The deployed `--zk` decoders are right at `wrD`** (`DecodesOnZKJ`: at each sample and registration, `LiveZk`'s
 `hdec`): `wrD` records the live session (`recordsLiveZKJ_wrD`), so the old discharge (`runsZCJ_live`) needs only the
-inputs' tags (`TagsOkZJ`, untyped) and every sample setting each table up at `mPts` link points (`DrawOkZKJ`). -/
+inputs' tags (`TagsOkZJ`, untyped) and every sample setting each table up at `mPts` link points (`SampleOkZKJ`). -/
 theorem decodesOnZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
-    (y₀ : Composed.DrawSetupZJ (Composed.inputsJ I 0) mPts S₀ d₀) (L : Audit.Law n) (hT : Composed.TagsOkZJ I)
-    (hDraw : ∀ ω, Composed.DrawOkZKJ I dj mPts (L.draw ω)) :
+    (y₀ : Composed.SampleSetupZJ (Composed.inputsJ I 0) mPts S₀ d₀) (L : Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I)
+    (hDraw : ∀ ω, Composed.SampleOkZKJ I dj mPts (L.draw ω)) :
     Composed.DecodesOnZKJ execArith ZkExec.hs512 (Composed.planZJ (Reg := Reg) dj y₀) I
       (wrD I dj fun S R => (Composed.planZJ (Reg := Reg) dj y₀ S R).length)
       (Composed.opnAtZJ (Composed.planZJ dj y₀) I dj) (Composed.decAtZJ (Composed.planZJ dj y₀))
@@ -835,17 +835,17 @@ theorem decodesOnZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.t
     (Composed.runsZCJ_live I ht dj y₀ _ L hT (recordsLiveZKJ_wrD I dj _) hDraw)
 
 /-- **`decodesOnZKJ_wrD` from the sample file half**: where the circuit parses and the sample file is the challenger's live-coin part's
-subset sample of `kd` units (`DrawFileZK`, the half of `RecordCustodyZKJ` that `wrD` leaves, `recordCustodyZKJ_wrD`),
-every sample sets each table up at `mPtsOf c.g (kd / nTab I)` link points (`drawOkZKJ_of_file`). -/
+subset sample of `kd` units (`SampleFileZK`, the half of `RecordCustodyZKJ` that `wrD` leaves, `recordCustodyZKJ_wrD`),
+every sample sets each table up at `mPtsOf c.g (kd / nTab I)` link points (`sampleOkZKJ_of_file`). -/
 theorem decodesOnZKJ_wrD_file {n : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false) {c : _root_.Flock.Circuit}
     (hc : HmRow.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % Composed.nTab I = 0)
-    (dj : Finset (Fin n) → Json) (hdf : ZkLink.DrawFileZK dj (.subset kd) n) {S₀ : Finset (Fin n)} {d₀ : Json}
-    (y₀ : Composed.DrawSetupZJ (Composed.inputsJ I 0) (Exec.mPtsOf c.g (kd / Composed.nTab I)) S₀ d₀)
-    (L : Audit.Law n) (hT : Composed.TagsOkZJ I) :
+    (dj : Finset (Fin n) → Json) (hdf : ZkLink.SampleFileZK dj (.subset kd) n) {S₀ : Finset (Fin n)} {d₀ : Json}
+    (y₀ : Composed.SampleSetupZJ (Composed.inputsJ I 0) (Exec.mPtsOf c.g (kd / Composed.nTab I)) S₀ d₀)
+    (L : Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I) :
     Composed.DecodesOnZKJ execArith ZkExec.hs512 (Composed.planZJ (Reg := Reg) dj y₀) I
       (wrD I dj fun S R => (Composed.planZJ (Reg := Reg) dj y₀ S R).length)
       (Composed.opnAtZJ (Composed.planZJ dj y₀) I dj) (Composed.decAtZJ (Composed.planZJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => Exec.capOfRoot rs[j.val]!) L :=
-  decodesOnZKJ_wrD I ht dj y₀ L hT fun _ => Composed.drawOkZKJ_of_file I ht hc kd n hdiv dj hdf _
+  decodesOnZKJ_wrD I ht dj y₀ L hT fun _ => Composed.sampleOkZKJ_of_file I ht hc kd n hdiv dj hdf _
 
 end Claims.Bridge.Custody

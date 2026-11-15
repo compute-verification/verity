@@ -7,7 +7,7 @@ public import Evaluate.Prims
 
 `evaluate bytes inputs` decodes a descriptor v1 Program (`Flock.Program.decode`, PROTOCOL.md §1–§5), binds `inputs` to its
 Input gates (run and registered alike), evaluates every other gate in canonical order (§6) and returns the words of the
-root's `ret`. It is `verity.ml.circuits.evaluation.reference.evaluate_region` over the root's nodes that are not input
+root's `ret`. It is `verity.circuits.evaluation.reference.evaluate_region` over the root's nodes that are not input
 nodes, which `reference.evaluate` runs on a target's one-call Program:
 
 - `inputs` holds one argument per parameter of the program function: its words in leaf order, or a registered table by name

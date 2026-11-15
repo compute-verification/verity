@@ -2,7 +2,7 @@
 # (`benchmarks/pouw/pearl_c_vllm/verify_run.py`, protocol `verity/pouw/pearl-plus/v1`): the retained passes' records and give-up
 # (V-EX), their epoch, the run's commitment and the verifier's coin record (`after-coin`), the work-weighted draw over every
 # pass's tickets and the exclusion tiles, and each drawn tile's openings and -h3 words (Pearl-C v1 on the H100's record), with
-# the served y's openings and unscale (`PearlCUnscale_v1`), and an accepted run's credit at Pearl's assumption; and the
+# the served y's openings and unscale (`PearlCUnscale_v1`), and an accepted run's credit at its scheme's named assumption; and the
 # verdict as a core protocol on the caller's blobs (`PouwCheck.PearlPlus.Protocol`, remote's work component). It is code,
 # so it requires nothing of `security/`: PoUW's commitments (`pouw_commit`), the evaluator's FP32, FP8 and tensor-core
 # steps (`verity_evaluate`), the core interface (`core_protocol`), and a live session's coins as PoUW's window reads them

@@ -678,13 +678,13 @@ def _get(d: Any, *keys: str) -> Any:
 def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool:
     """Whether the run's record on the remote holds its dirty source: job.json names a capture (`store.dirty_capture`, cli.py) of the
     digest its conditions record, and the run's valid `.custody` (store.custody) lists that file at the capture's size and sha256."""
-    cap = _get(job, "store", "dirty_capture")
+    capture = _get(job, "store", "dirty_capture")
     digest = src.get("dirty_digest")
-    if not isinstance(cap, dict) or not digest or digest == "too-large" or cap.get("dirty_digest") != digest:
+    if not isinstance(capture, dict) or not digest or digest == "too-large" or capture.get("dirty_digest") != digest:
         return False
     marker = _doc(_text(rd / ".custody"))
     files = marker.get("files") if isinstance(marker, dict) and marker.get("preserved") is True else None
-    return isinstance(files, dict) and files.get(cap.get("path")) == [cap.get("bytes"), cap.get("sha256")]
+    return isinstance(files, dict) and files.get(capture.get("path")) == [capture.get("bytes"), capture.get("sha256")]
 
 
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
@@ -743,7 +743,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
 
 
 def slot_uses(pattern: re.Pattern[str], locks: Path, proc: Path = Path("/proc")) -> dict[str, set[str]]:
-    """{sha: reasons} from the check and Lean slots (`tools/verity/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
+    """{sha: reasons} from the check and Lean slots (`tools/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
     ticket in `<locks>/*line*/`, each `{"pid", "run", "tree", "by"}`, while its pid lives (a pid reused since only keeps more)."""
     files = [locks / n for n in _entries(locks) if n.endswith(".who")]
     files += [locks / d / n for d in _entries(locks) if "line" in d and (locks / d).is_dir() for n in _entries(locks / d)]
@@ -774,7 +774,7 @@ def _newest(tree: Path) -> float:
 def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[set[str], float]:
     """What the tree itself says, and its `_newest` mtime: its READY.json must name its commit (condition 3), it must not have
     changed within `keep_s`, and a `research keep` record leaves it to `research retention`."""
-    from .. import retention as RT  # noqa: PLC0415
+    from .. import retention as RT
 
     tree, why = src_root / sha, set()
     try:
@@ -1024,7 +1024,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     tree kept with its reasons, each prefixed by what it is: `1:`/`2:`/`3:` (root's conditions), `recent:`, `record:`, `budget:`;
     `error` says what could not be established, and then nothing more was deleted.  `<root>` is `src_root`'s parent: its
     `git/verity.git` (also `origin`, condition 1's repository), `runs/` and `runs-aside/`, `requests/` and `locks/` unless given."""
-    from .. import retention as RT  # noqa: PLC0415
+    from .. import retention as RT
 
     say = log or (lambda s: None)
     src_root = Path(src_root)

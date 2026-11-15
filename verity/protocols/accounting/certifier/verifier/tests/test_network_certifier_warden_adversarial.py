@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import asyncio
 
-from verity.protocols.accounting.certifier.verifier.active import PAD, VirtualClock
+from verity.protocols.accounting.certifier.verifier.link_frame import PAD
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.warden import DATA, FAIL, Warden, audit, cells
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import (
     B, D, EOF, P, PARAMS, R, TAU, Client, Server, ServerConn, expected_egress, reasons, records, request, run)

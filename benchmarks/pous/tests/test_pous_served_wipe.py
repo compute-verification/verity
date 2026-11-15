@@ -1,18 +1,21 @@
 """`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a
 CPU: its demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against
 `wipe_side.py`, the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
-DIR/answer.json is the leg's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
+DIR/answer.json is the subprotocol's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
 `piece_row` reads through `pouw.core_check.answer_of`), the answer `wipe.case.json` decides, with served.json and the
-summary beside it; the wipe runs on the serve's leased card, or under a lease of its own. A card that isn't idle and a
+summary beside it; the wipe runs on the serve's leased card, or under a lease of its own, by the node's `gpu-lease`
+or, where none is installed, the tree's own. A card that isn't idle and a
 gate key that isn't on the node are refused before demo.sh runs, and nothing is killed. The verifier trusts the one
-challenger key WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's: a session signed under another is
-rejected, and with none pinned the piece refuses before it asks for a card."""
+challenger key WIPE_KEY_SHA512 pins, by default the one the run's configuration pins for the memory challenger's wipe
+(VERITY_PINS): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
+card."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import runpy
 import shlex
 import shutil
@@ -24,6 +27,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
@@ -33,13 +37,18 @@ DEMO = WRAPPER.parent / "demo.sh"
 FAKE_DEMO = Path(__file__).resolve().parent / "served_wipe_demo.py"
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
-#: who decided, as the summary and the headline name it: the stand-in demo.sh's Python, on this host
-DECIDED = {"program": "python", "host": socket.gethostname()}
+#: who decided, as the summary and the headline name it: the stand-in demo.sh's judge, on this host
+DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
-#: the SHA-512 of the public key of vy-auditor-2's wipe party: the pin of a run that sets none of its own
-AUDITOR_PIN = WP.AUDITOR_KEYS["vy-auditor-2"]
+#: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
+AUDITOR_PIN = hashlib.sha512(b"the configuration's pin of the memory challenger's wipe key").hexdigest()
+PINS = [{"key-sha512": hashlib.sha512(b"its PoUS key").hexdigest(), "party": "memory-challenger", "protocol": "pous",
+         "scheme": "lms-sha512/n64-w1-h20/v0"},
+        {"key-sha512": AUDITOR_PIN, "party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"}]
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
+#: the tree's own lease script, which the wrapper takes where the node has no `gpu-lease`
+TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 ROOT = Path(__file__).resolve().parents[3]
 #: the Lean judge's package, `wipe-protocol`'s
 JUDGE = "verity/protocols/accounting/pous/device/lean"
@@ -83,6 +92,11 @@ def _exe(path: Path, text: str) -> Path:
     return path
 
 
+def _judge(tmp_path: Path) -> str:
+    """A Lean judge built already (WIPE_PROTOCOL_EXE), so the wrapper builds none; the stand-in demo.sh never runs it."""
+    return str(_exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n"))
+
+
 @pytest.fixture
 def node(tmp_path) -> dict[str, str]:
     """The environment of a node with a stand-in card, gpu-lease and demo.sh, WIPE_COMMAND's gate key, and the
@@ -95,7 +109,7 @@ def node(tmp_path) -> dict[str, str]:
                                                        demo=shlex.quote(str(FAKE_DEMO))))
     key = tmp_path / "vy-auditor2-wipe"
     key.write_text("not a key\n")
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE_", "WIPE_", "CUDA_VISIBLE"))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE_", "WIPE_", "CUDA_VISIBLE", "VERITY_"))}
     return env | {"FAKE_BIN": str(bin_), "WIPE_DEMO": str(shim), "WIPE_READS": str(W.READS), "WIPE_NODE": "vy-dc-h200",
                   "WIPE_COMMAND": f"ssh -i {key} -o BatchMode=yes research@10.96.0.36", "WIPE_KEY_SHA512": PINNED,
                   "FAKE_SMI_LOG": str(tmp_path / "smi.log"), "FAKE_SMI_APPS": "", "FAKE_SMI_USED": "0",
@@ -107,6 +121,13 @@ def _wipe(env: dict[str, str], d: Path, *args: str) -> subprocess.CompletedProce
     d.parent.mkdir(parents=True, exist_ok=True)
     return subprocess.run(["bash", "-c", LAUNCH, "_", str(WRAPPER), str(d.parent / "serve-run"), "3", str(d), *args],
                           env=env, capture_output=True, text=True, cwd=d.parent)
+
+
+def _stamps(d: Path) -> list[str]:
+    """The events of the piece's timeline, ``d``'s ``stamps.txt``, in order: each line a UTC second, then the event."""
+    lines = (d / "stamps.txt").read_text().splitlines()
+    assert all(re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ", line) for line in lines), lines
+    return [line.split(" ", 1)[1] for line in lines]
 
 
 def _is_core_answer(a: dict) -> None:
@@ -133,12 +154,13 @@ def _decided(case: dict) -> dict:
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:
     """In the serve's lease, before its engine loads: the card checked idle, the wipe of it, and DIR/answer.json the
     accepted core answer of verity/wipe/v0 that the case decides, the challenger the one WIPE_COMMAND starts on
-    vy-auditor-2 (its stand-in's key pinned by the run, not the tree's, so trusted-host's premise reads a rehearsal's
+    vy-auditor-2 (its stand-in's key pinned by the run, not the tree's, so trusted-device's premise reads a rehearsal's
     whatever the host is named), the window's serve dir and the card in served.json, and the
     piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
     composite's piece beside it (served_case.py's `CASE` line before the headline), and DIR keeps none of it."""
     d = tmp_path / "pieces" / "wipe"
-    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d, "--no-lean")
+    judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
+    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
     assert r.returncode == 0, r.stdout + r.stderr
     answer = json.loads((d / "answer.json").read_text())
     _is_core_answer(answer)
@@ -148,7 +170,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-host"] == (f"{WP.REHEARSAL}; the memory challenger ran on vy-auditor-2, not the developer's "
+    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran on vy-auditor-2, not the developer's "
                                          "vy-dc-h200")
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
@@ -170,10 +192,10 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     key, = case["params"]["trusted"]
     assert summary["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest() == PINNED and summary["key_pinned"]
     demo = json.loads((d / "demo-argv.json").read_text())
-    assert demo["lease"] == f"{CARD},GPU-other" and "--wipe-protocol" not in demo["argv"]
+    assert demo["lease"] == f"{CARD},GPU-other"
     assert demo["argv"] == ["--node", "vy-dc-h200", "--challenger", "vy-auditor-2", "--challenger-address",
                             "10.96.0.36:47611", "--challenger-command", node["WIPE_COMMAND"], "--trusted-sha512", PINNED,
-                            "--reads", str(W.READS), "--no-lean"]
+                            "--reads", str(W.READS), "--wipe-protocol", str(judge)]
     *_, built, last = r.stdout.strip().splitlines()
     assert json.loads(built.removeprefix("CASE ")) == {"piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept"}
     assert last.startswith("WIPE {")
@@ -183,6 +205,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
         "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0}
     assert all(f"-i {CARD}" in line for line in (tmp_path / "smi.log").read_text().splitlines())
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
+    assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]
 
 
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
@@ -201,6 +224,36 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     demo = json.loads((d / "demo-argv.json").read_text())
     assert demo["lease"] == "GPU-own0" and demo["argv"][-2:] == ["--wipe-protocol", str(judge)]
     assert not (d / "lake-build.log").exists()
+    assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
+
+
+def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
+    """Where no `gpu-lease` is installed the wipe takes its card by the tree's own lease script, with the same request
+    as memory-accounting, and wipes the card that hands out: it no longer refuses. The wrapper is a copy in a tree
+    whose lease script is a stand-in; the tree's own is where the wrapper looks for it. Its demo.sh here only records
+    the card it was given."""
+    tree, d = tmp_path / "tree", tmp_path / "wipe"
+    wrapper = tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh"
+    wrapper.parent.mkdir(parents=True)
+    wrapper.write_text(WRAPPER.read_text())
+    (tree / TREE_LEASE).parent.mkdir(parents=True)
+    (tree / TREE_LEASE).write_text(LEASE.replace("GPU-own0", "GPU-tree0"))
+    assert (ROOT / TREE_LEASE).is_file()
+    bin_ = tmp_path / "bin-no-lease"
+    bin_.mkdir()
+    _exe(bin_ / "nvidia-smi", SMI)
+    demo = _exe(tmp_path / "demo-card.sh", '#!/usr/bin/env bash\necho "$GPU_LEASE_UUID" > "$OUT/card.txt"\n')
+    path = ":".join(p for p in node["PATH"].split(":") if not (Path(p) / "gpu-lease").exists())
+    assert shutil.which("gpu-lease", path=f"{bin_}:{path}") is None
+    env = node | {"PATH": path, "FAKE_BIN": str(bin_), "WIPE_DEMO": str(demo), "WIPE_PROTOCOL_EXE": _judge(tmp_path)}
+    r = subprocess.run(["bash", "-c", LAUNCH, "_", str(wrapper), str(tmp_path / "serve-run"), "3", str(d)],
+                       env=env, capture_output=True, text=True, cwd=tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    lease = (tmp_path / "lease.log").read_text().splitlines()
+    assert len(lease) == 1 and lease[0].startswith(f"memory-accounting 1 --wait --max-min 30 -- bash {wrapper} ")
+    assert (d / "card.txt").read_text() == "GPU-tree0\n" and not (d / "refused.txt").exists()
+    assert json.loads((d / "served.json").read_text())["card"] == "GPU-tree0"
+    assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
 
 
 def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
@@ -225,6 +278,38 @@ def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(
         assert ROOT / "verity" in (ROOT / JUDGE / p["dir"]).resolve().parents, (p["name"], p["dir"])
 
 
+def test_a_piece_that_builds_its_judge_stamps_the_build(node, tmp_path) -> None:
+    """The build of `wipe-protocol` is on the piece's timeline: after its start, before it asks for the card."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _stamps(d) == ["start", "built wipe-protocol", "asked for the card", "leased the card", "the wipe exit 0",
+                          "exit 0"]
+
+
+@pytest.mark.parametrize("create", [1, 2])
+def test_a_file_that_changes_as_the_copy_reads_it_still_builds_the_judge(node, tmp_path, create) -> None:
+    """tar's exit 1 on the copy, a file that changed as it read it (another suite's import writing ``__pycache__``
+    beside the tree's Python), still builds `wipe-protocol` and runs the piece; 2, a copy that failed, stops it (exit
+    7, saying so) before the judge's build or any card. The stand-in `tar` copies as tar does, then exits so."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    _exe(Path(node["FAKE_BIN"]) / "tar", f'#!/usr/bin/env bash\n{shlex.quote(shutil.which("tar"))} "$@" || exit\n'
+                                         f'[ "$3" != -c ] || exit {create}\n')
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    if create == 1:
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (tmp_path / "lake.log").read_text().split(" ", 1)[1] == "build wipe-protocol\n"
+        assert _stamps(d)[:3] == ["start", "built wipe-protocol", "asked for the card"]
+    else:
+        assert r.returncode == 7 and "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build" in r.stdout
+        assert not (tmp_path / "lake.log").exists() and not (tmp_path / "lease.log").exists()
+        assert _stamps(d) == ["start"]
+
+
 @pytest.mark.parametrize("apps, used", [("4242, 70212 MiB", "70300"), ("", "2048")])
 def test_a_card_that_isnt_idle_is_refused(node, tmp_path, apps, used) -> None:
     """A process on the card, or more of its memory in use than WIPE_IDLE_MIB: refused before demo.sh runs (exit 3, the
@@ -232,12 +317,13 @@ def test_a_card_that_isnt_idle_is_refused(node, tmp_path, apps, used) -> None:
     d = tmp_path / "wipe"
     d.mkdir()
     (d / "answer.json").write_text("{}")
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "FAKE_SMI_APPS": apps, "FAKE_SMI_USED": used}, d, "--no-lean")
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "FAKE_SMI_APPS": apps, "FAKE_SMI_USED": used,
+                      "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
     assert r.returncode == 3, r.stdout + r.stderr
     refused = (d / "refused.txt").read_text()
     assert refused.startswith(f"WIPE REFUSED: the card {CARD} isn't idle: ") and "kills nothing" in refused
     assert ("pid 4242, 70212 MiB on it" if apps else "2048 MiB of its memory in use, past WIPE_IDLE_MIB 1024") in refused
-    assert r.stdout.strip().splitlines()[-1] == refused.strip()
+    assert r.stdout.strip().splitlines()[-1] == refused.strip() and _stamps(d) == ["start", "refused"]
     assert not any((d / f).exists() for f in ("answer.json", "demo-argv.json", "served.json"))
 
 
@@ -259,7 +345,7 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node
     carries the key the session came with and that it isn't the pinned one."""
     d = tmp_path / "pieces" / "wipe"
     other = hashlib.sha512(b"another key").hexdigest()
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "WIPE_KEY_SHA512": other}, d, "--no-lean")
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "WIPE_KEY_SHA512": other, "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
     assert r.returncode == 1, r.stdout + r.stderr
     _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
     assert (answer["verdict"], answer["reason"]) == ("reject", UNTRUSTED)
@@ -272,13 +358,14 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node
     assert (headline["verdict"], headline["reason"], headline["exit"]) == ("reject", UNTRUSTED, 1)
 
 
-def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(node, tmp_path) -> None:
-    """With WIPE_KEY_SHA512 unset the wipe is judged under the tree's default pin, the digest of the key of
-    vy-auditor-2's wipe party: demo.sh gets it as `--trusted-sha512`, and the stand-in challenger's session, signed
-    under another key, is rejected as any other key's is, by a case that trusts no key."""
+def test_a_run_that_pins_no_key_trusts_the_configurations_wipe_pin_and_no_other(node, tmp_path) -> None:
+    """With WIPE_KEY_SHA512 unset the wipe is judged under the key the run's configuration pins for the memory
+    challenger's wipe (VERITY_PINS), not its PoUS pin: demo.sh gets it as `--trusted-sha512`, and the stand-in
+    challenger's session, signed under another key, is rejected as any other key's is, by a case that trusts no key."""
     d = tmp_path / "pieces" / "wipe"
-    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | {"GPU_LEASE_UUID": CARD}
-    r = _wipe(env, d, "--no-lean")
+    env = ({k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"}
+           | {"GPU_LEASE_UUID": CARD, "VERITY_PINS": json.dumps(PINS), "WIPE_PROTOCOL_EXE": _judge(tmp_path)})
+    r = _wipe(env, d)
     assert r.returncode == 1, r.stdout + r.stderr
     argv = json.loads((d / "demo-argv.json").read_text())["argv"]
     assert argv[argv.index("--trusted-sha512") + 1] == AUDITOR_PIN != PINNED
@@ -291,11 +378,12 @@ def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(nod
     assert (summary["verdict"], summary["key_pinned"], summary["key_sha512"]) == ("reject", False, PINNED)
 
 
-def test_the_wrappers_default_pin_is_the_trees_auditor_key() -> None:
-    """served_wipe.sh's default WIPE_KEY_SHA512 is the key `wipe_party.AUDITOR_KEYS` pins for vy-auditor-2, the one
-    under which the record says trusted-host holds."""
-    line, = [x for x in WRAPPER.read_text().splitlines() if x.startswith("TRUSTED_SHA512=")]
-    assert line.removeprefix("TRUSTED_SHA512=") == AUDITOR_PIN
+def test_with_no_pin_in_the_configuration_the_wipe_is_refused(node, tmp_path) -> None:
+    """WIPE_KEY_SHA512 unset and no configuration pin for the wipe (VERITY_PINS unset): no key is pinned, and the piece
+    refuses before it asks for a card; the wrapper holds no key of its own."""
+    d = tmp_path / "wipe"
+    r = _wipe({k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"}, d)
+    assert r.returncode == 3 and "no challenger key is pinned" in (d / "refused.txt").read_text()
 
 
 @pytest.mark.parametrize("pin, why", [
@@ -315,14 +403,17 @@ def test_with_no_key_pinned_the_wipe_is_refused(node, tmp_path, pin, why) -> Non
     assert not any((d / f).exists() for f in ("answer.json", "demo-argv.json", "served.json", "lake-build.log"))
 
 
-def test_demo_sh_takes_the_wrappers_options(tmp_path) -> None:
+@pytest.mark.parametrize("unknown", ["--bogus", "--no-lean"])
+def test_demo_sh_takes_the_wrappers_options(tmp_path, unknown) -> None:
     """The wrapper's default demo.sh is beside it and knows every option the wrapper gives it: an unknown one after them
-    is the first it refuses, before it writes or builds anything."""
+    is the first it refuses, before it writes or builds anything. `--no-lean` is unknown: no period of demo.sh's runs
+    without the Lean judge."""
     r = subprocess.run(["bash", str(DEMO), "--node", "n", "--challenger", "c", "--challenger-address", "h:1",
                         "--challenger-command", "x", "--trusted-sha512", PINNED, "--reads", "5500", "--wipe-protocol", "e",
-                        "--no-lean", "--bogus"],
+                        unknown],
                        env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
-    assert r.returncode == 2 and r.stdout.strip() == "demo.sh: unknown option --bogus (see the header)", r.stdout + r.stderr
+    assert r.returncode == 2 and r.stdout.strip() == f"demo.sh: unknown option {unknown} (see the header)", (
+        r.stdout + r.stderr)
 
 
 @pytest.mark.parametrize("pin, said", [
@@ -344,7 +435,7 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
     bin_.mkdir()
     for tool in ("dirname", "basename", "mkdir", "hostname"):
         (bin_ / tool).symlink_to(shutil.which(tool))
-    r = subprocess.run(["/bin/bash", str(DEMO), "--no-lean"], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
+    r = subprocess.run(["/bin/bash", str(DEMO)], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
                        capture_output=True, text=True)
     assert r.returncode == 3 and r.stdout == "", r.stdout + r.stderr
     assert r.stderr.strip() == ("demo.sh: this host has no `ip` (iproute2), which names the node's links: apt-get "
@@ -354,8 +445,8 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
 
 def test_the_start_file_demo_sh_runs_starts() -> None:
     """`wipe_on_node.py`, which demo.sh runs on the card and no CPU test runs whole, imports what it starts and answers
-    `--help` with `wipe_period.main`'s options."""
-    start = WRAPPER.parent / "wipe_on_node.py"
+    `--help` with `wipe_run.main`'s options."""
+    start = ROOT / "benchmarks/pous/streamed_wipe/wipe_on_node.py"
     assert f"python {start.relative_to(ROOT)} --period" in DEMO.read_text()
     r = subprocess.run([sys.executable, str(start), "--help"], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr

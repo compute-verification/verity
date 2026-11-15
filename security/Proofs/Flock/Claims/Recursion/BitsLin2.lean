@@ -50,7 +50,7 @@ accepting (`SessionAccepts`, a fact of the record's reader; `RecDeploy.sessionAc
 `recBound` builds with `deployRec`); `bitsLin2On_of_ksLin2On` is the same at the statements a predicate `G` admits. The
 proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
 
-* one sample (the compiled run and `E_O`) costs at most `t·c_Be/2` SHA-512 calls in expectation (`Ex_drawCost_le`): the
+* one sample (the compiled run and `E_O`) costs at most `t·c_Be/2` SHA-512 calls in expectation (`Ex_sampleCost_le`): the
   run at most `t`, and `E_O`, which makes no call of its own (`noHash_EO`), at most `t` per rerun
   (`Claims.Sampling.calls_le_of_noHash`) over at most `1 + Σ_s m′_s·k_s` reruns (`EO_runs_exp`);
 * `B_I` costs two samples (`Ex_Binner_cost_le`), `FCI` and `Fdev` at most two in expectation (`Ex_FCI_cost_le`, Wald's
@@ -196,19 +196,19 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- **One sample costs at most `t·c_Be/2` in expectation**: the run at most `t`, and `E_O` at most `t` per rerun over at
 most `1 + Σ_s m′_s·k_s` reruns in expectation. -/
-theorem Ex_drawCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
+theorem Ex_sampleCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
     (ht : ∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) (ω : Ω) :
-    Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x ω d : ℝ)) ≤
+    Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω d : ℝ)) ≤
       t * cBe D x / 2 := by
-  have hpt : ∀ d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x, (drawCost H D I DO decO P x ω d : ℝ) ≤
+  have hpt : ∀ d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x, (sampleCost H D I DO decO P x ω d : ℝ) ≤
       t + t * (((EO D I DO decO).eval H P x ω d.1 d.2).2.2 : ℝ) := by
     intro d
     have h1 := ht ω d.1
     have h2 := EO_calls_le H D I DO decO x P t ht ω d.1 d.2
-    have : drawCost H D I DO decO P x ω d ≤ t + t * ((EO D I DO decO).eval H P x ω d.1 d.2).2.2 := by
-      unfold drawCost
+    have : sampleCost H D I DO decO P x ω d ≤ t + t * ((EO D I DO decO).eval H P x ω d.1 d.2).2.2 := by
+      unfold sampleCost
       omega
     exact_mod_cast this
   have hr : Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
@@ -218,7 +218,7 @@ theorem Ex_drawCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
   have hc : (cBe D x : ℝ) = 4 + 2 * ∑ s : Fin (D.nS x), (((D.nums x s).waits * (D.nums x s).k : ℕ) : ℝ) := by
     simp only [cBe, Nat.cast_add, Nat.cast_mul, Nat.cast_sum, Nat.cast_ofNat]
   have ht0 : (0 : ℝ) ≤ t := Nat.cast_nonneg _
-  calc Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x ω d : ℝ))
+  calc Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω d : ℝ))
       ≤ Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
           (t : ℝ) + t * (((EO D I DO decO).eval H P x ω d.1 d.2).2.2 : ℝ)) := Ex_mono hpt
     _ = t + t * Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
@@ -229,11 +229,11 @@ theorem Ex_drawCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
     _ = t * cBe D x / 2 := by rw [hc]; ring
 
 /-- A sample at a uniform tape costs at most what it costs at every tape. -/
-theorem Ex_draws_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+theorem Ex_samples_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x ω d : ℝ)) ≤ e) :
-    Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x t.1 t.2 : ℝ)) ≤
+      (sampleCost H D I DO decO P x ω d : ℝ)) ≤ e) :
+    Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) ≤
       e :=
   (Ex_prod _).trans_le ((Ex_mono hd).trans_eq (Ex_const _))
 
@@ -242,7 +242,7 @@ theorem Ex_Binner_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (hk : 0 < I.V.k (xI D x)) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x ω d : ℝ)) ≤ e) :
+      (sampleCost H D I DO decO P x ω d : ℝ)) ≤ e) :
     Ex (fun s : (Binner H D I DO decO P x hk).S => ((Binner H D I DO decO P x hk).cost s : ℝ)) ≤ 2 * e := by
   have : Nonempty (Fin (I.V.k (xI D x))) := ⟨⟨0, hk⟩⟩
   have hpt : ∀ (j : Fin (I.V.k (xI D x))) (ω : Ω),
@@ -250,24 +250,24 @@ theorem Ex_Binner_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
         ((Binner H D I DO decO P x hk).cost (j, ω, q) : ℝ)) ≤ 2 * e := by
     intro j ω
     have hn : ∀ q : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x,
-        (Binner H D I DO decO P x hk).cost (j, ω, q) = drawCost H D I DO decO P x ω (q.1, q.2.2.1) +
-          drawCost H D I DO decO P x ω (fork (j : ℕ) q.1 q.2.1, q.2.2.2) := fun q => by
-      simp only [Binner, drawCost]
+        (Binner H D I DO decO P x hk).cost (j, ω, q) = sampleCost H D I DO decO P x ω (q.1, q.2.2.1) +
+          sampleCost H D I DO decO P x ω (fork (j : ℕ) q.1 q.2.1, q.2.2.2) := fun q => by
+      simp only [Binner, sampleCost]
       omega
     have h1 : Ex (fun q : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x ×
-        (EO D I DO decO).C x => (drawCost H D I DO decO P x ω (q.1, q.2.2.1) : ℝ)) =
-        Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x ω d : ℝ)) :=
+        (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω (q.1, q.2.2.1) : ℝ)) =
+        Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω d : ℝ)) :=
       ((UnifMap.self (A := Fin (D.V.k x) → Coin)).prod
         ((UnifMap.snd (A := Fin (D.V.k x) → Coin) (B := (EO D I DO decO).C x × (EO D I DO decO).C x)).comp
           (UnifMap.fst (A := (EO D I DO decO).C x) (B := (EO D I DO decO).C x))))
-        (fun d => (drawCost H D I DO decO P x ω d : ℝ))
+        (fun d => (sampleCost H D I DO decO P x ω d : ℝ))
     have h2 : Ex (fun q : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x ×
-        (EO D I DO decO).C x => (drawCost H D I DO decO P x ω (fork (j : ℕ) q.1 q.2.1, q.2.2.2) : ℝ)) =
-        Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x ω d : ℝ)) :=
+        (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω (fork (j : ℕ) q.1 q.2.1, q.2.2.2) : ℝ)) =
+        Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω d : ℝ)) :=
       ((unifMap_forkPair (A := (EO D I DO decO).C x × (EO D I DO decO).C x) (n := D.V.k x) (j : ℕ)).comp
         ((UnifMap.self (A := Fin (D.V.k x) → Coin)).prod
           (UnifMap.snd (A := (EO D I DO decO).C x) (B := (EO D I DO decO).C x))))
-        (fun d => (drawCost H D I DO decO P x ω d : ℝ))
+        (fun d => (sampleCost H D I DO decO P x ω d : ℝ))
     simp only [hn, Nat.cast_add]
     rw [Ex_add, h1, h2]
     linarith [hd ω]
@@ -288,7 +288,7 @@ theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
     (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) (hW : 0 < Cp.width (xI D x)) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x ω d : ℝ)) ≤ e) :
+      (sampleCost H D I DO decO P x ω d : ℝ)) ≤ e) :
     Ex (fun s : (FCI H D I DO decO Cp P x M hW).S => ((FCI H D I DO decO Cp P x M hW).cost s : ℝ)) ≤ 2 * e := by
   have : Nonempty (Fin (Cp.width (xI D x))) := ⟨⟨0, hW⟩⟩
   have hpt : ∀ (q : Fin (Cp.width (xI D x))) (ω : Ω),
@@ -298,12 +298,12 @@ theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
     intro q ω
     have hc : ∀ p : ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
         (Fin M → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x),
-        ((FCI H D I DO decO Cp P x M hW).cost (q, ω, p) : ℝ) = (drawCost H D I DO decO P x ω p.1 : ℝ) +
+        ((FCI H D I DO decO Cp P x M hW).cost (q, ω, p) : ℝ) = (sampleCost H D I DO decO P x ω p.1 : ℝ) +
           if opensAtI H D I DO decO Cp P x q ω p.1 then
             (loopCost
               (fun v => opensAtI H D I DO decO Cp P x q ω
                 (fork (min (Cp.round (xI D x) q) (I.V.k (xI D x))) p.1.1 v.1, v.2))
-              (fun v => drawCost H D I DO decO P x ω
+              (fun v => sampleCost H D I DO decO P x ω
                 (fork (min (Cp.round (xI D x) q) (I.V.k (xI D x))) p.1.1 v.1, v.2)) M p.2 : ℝ)
           else 0 := by
       intro p
@@ -312,9 +312,9 @@ theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
     rw [Ex_add]
     have h1 := (UnifMap.fst (A := (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
       (B := Fin M → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
-      (fun d => (drawCost H D I DO decO P x ω d : ℝ)))
+      (fun d => (sampleCost H D I DO decO P x ω d : ℝ)))
     have h2 := Ex_gate_loop_fork_le (min (Cp.round (xI D x) q) (I.V.k (xI D x)))
-      (opensAtI H D I DO decO Cp P x q ω) (drawCost H D I DO decO P x ω) M
+      (opensAtI H D I DO decO Cp P x q ω) (sampleCost H D I DO decO P x ω) M
     have h3 := hd ω
     rw [h1]
     linarith
@@ -336,7 +336,7 @@ theorem Ex_F0I_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (R : ℕ) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x ω d : ℝ)) ≤ e) :
+      (sampleCost H D I DO decO P x ω d : ℝ)) ≤ e) :
     Ex (fun s : (F0I H D I DO decO P x R).S => ((F0I H D I DO decO P x R).cost s : ℝ)) ≤
       ((I.k (xI D x) : ℝ) + 1) * e := by
   have hpt : ∀ ω : Ω,
@@ -346,23 +346,23 @@ theorem Ex_F0I_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
     intro ω
     have hc : ∀ p : ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
         (Fin (I.k (xI D x)) → Fin R → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x),
-        ((F0I H D I DO decO P x R).cost (ω, p) : ℝ) = (drawCost H D I DO decO P x ω p.1 : ℝ) +
+        ((F0I H D I DO decO P x R).cost (ω, p) : ℝ) = (sampleCost H D I DO decO P x ω p.1 : ℝ) +
           ∑ i, if accAtI H D I DO decO P x ω p.1 then
-            (loopCost (accAtI H D I DO decO P x ω) (drawCost H D I DO decO P x ω) R (p.2 i) : ℝ) else 0 := by
+            (loopCost (accAtI H D I DO decO P x ω) (sampleCost H D I DO decO P x ω) R (p.2 i) : ℝ) else 0 := by
       intro p
       by_cases h : accAtI H D I DO decO P x ω p.1 <;> simp [F0I, h]
     have hi : ∀ i : Fin (I.k (xI D x)),
         Ex (fun p : ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
             (Fin (I.k (xI D x)) → Fin R → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) =>
           if accAtI H D I DO decO P x ω p.1 then
-            (loopCost (accAtI H D I DO decO P x ω) (drawCost H D I DO decO P x ω) R (p.2 i) : ℝ) else 0) ≤ e :=
+            (loopCost (accAtI H D I DO decO P x ω) (sampleCost H D I DO decO P x ω) R (p.2 i) : ℝ) else 0) ≤ e :=
       fun i => (Ex_pair_coord (C := fun _ : Fin (I.k (xI D x)) => Fin R → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
         i (fun d us => if accAtI H D I DO decO P x ω d then
-          (loopCost (accAtI H D I DO decO P x ω) (drawCost H D I DO decO P x ω) R us : ℝ) else 0)).trans_le
-        ((Ex_gate_loopCost_le (accAtI H D I DO decO P x ω) (drawCost H D I DO decO P x ω) R).trans (hd ω))
+          (loopCost (accAtI H D I DO decO P x ω) (sampleCost H D I DO decO P x ω) R us : ℝ) else 0)).trans_le
+        ((Ex_gate_loopCost_le (accAtI H D I DO decO P x ω) (sampleCost H D I DO decO P x ω) R).trans (hd ω))
     have h1 := (UnifMap.fst (A := (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
       (B := Fin (I.k (xI D x)) → Fin R → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
-      (fun d => (drawCost H D I DO decO P x ω d : ℝ)))
+      (fun d => (sampleCost H D I DO decO P x ω d : ℝ)))
     simp only [hc]
     rw [Ex_add, Ex_sum, h1]
     have hs := Finset.sum_le_sum fun (i : Fin (I.k (xI D x))) (_ : i ∈ Finset.univ) => hi i
@@ -454,7 +454,7 @@ theorem Ex_BinnerV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (hk : 0 < I.V.k (xI D x)) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x ω d : ℝ)) ≤ e) :
+      (sampleCost H D I DO decO P x ω d : ℝ)) ≤ e) :
     Ex (fun s : (BinnerV H D I DO decO P x hk).S => ((BinnerV H D I DO decO P x hk).cost s : ℝ)) ≤ 2 * e :=
   Ex_Binner_cost_le H D I DO decO x P hk hd
 
@@ -464,7 +464,7 @@ theorem Ex_FdevV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (
     (P : Prover Ω) (M : ℕ) (hk : 0 < I.V.k (xI D x)) :
     Ex (fun s : (FdevV H D I DO decO P x M hk).S => ((FdevV H D I DO decO P x M hk).cost s : ℝ)) ≤
       2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (drawCost H D I DO decO P x t.1 t.2 : ℝ)) :=
+        (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) :=
   Ex_Fdev_cost_le H D I DO decO x P M hk
 
 /-- **Route 2C's per-call error** `ε`: `lamLin2`'s five terms after `κ`'s, each as `2^{-T}`, summed. `KSLin2`'s
@@ -526,8 +526,8 @@ theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
   have hc0 : (0 : ℝ) ≤ cBe D x + setupLen D x + 2 * n := by linarith
   have htn : (setupLen D x : ℝ) + 2 * n ≤ t * (setupLen D x + 2 * n) := le_mul_of_one_le_left hn0 ht1'
   have hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x ω d : ℝ)) ≤ t * cBe D x / 2 :=
-    Ex_drawCost_le H D I DO decO hS x P t hrun
+      (sampleCost H D I DO decO P x ω d : ℝ)) ≤ t * cBe D x / 2 :=
+    Ex_sampleCost_le H D I DO decO hS x P t hrun
   have hp256 : (0 : ℝ) < 2 ^ (256 : ℝ) := by positivity
   have h256 : (2 : ℝ) ^ (256 : ℝ) = 2 * 2 ^ (255 : ℝ) := by
     rw [show (256 : ℝ) = 1 + 255 by norm_num, Real.rpow_add (by norm_num), Real.rpow_one]
@@ -627,7 +627,7 @@ theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
         t * (cBe D x + setupLen D x + 2 * n) / 2 ^ (256 : ℝ) := by
       unfold PrFdevV
       split_ifs with hk
-      · have := Ex_draws_le H D I DO decO x P hd
+      · have := Ex_samples_le H D I DO decO x P hd
         refine ecr_charge_le (hFdev (2 ^ 256) hk) ?_
         have := Ex_FdevV_cost_le H D I DO decO x P (2 ^ 256) hk
         linarith [show ((setupLen D x + 2 * n : ℕ) : ℝ) = setupLen D x + 2 * n by

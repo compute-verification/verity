@@ -8,7 +8,7 @@
    its 1,300 one-row units' roots (frame leaves, pads, 11 levels), and the step's tree over the slots' roots. Seconds a step,
    GB/s of committed bytes, SHA-512 compressions a second (a leaf's 5; its 3 ChaCha20 chunks aren't counted) and the split.
 
-The layout is commit_slots' ``h200_layout`` (benchmarks/torch_gpu/commit_slots/slots.py), derived again here from
+The layout is commit_slots' ``h200_layout`` (verity/commitments/cuda/commit_slots/slots.py), derived again here from
 the frozen shape: every op's per-token output, one-row units of at most 32 KiB. Times are CUDA events; clocks are read, never
 set.
 """
@@ -17,47 +17,28 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import torch
+import torch_engine as T
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import engine as E
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.sha512_rows import check as C
+from verity.commitments.cuda.sha512_rows import engine as E
 from verity.commitments.identity import identity_digest_sha512
 
-UNIT_BYTES = 32768
 LAYERS = 52
 KEY = bytes(range(64, 96))
 
 
-def _cut(src: int, n: int) -> list[list[tuple[int, int, int]]]:
-    return [[(src, off, min(UNIT_BYTES, n - off))] for off in range(0, n, UNIT_BYTES)]
-
-
-def h200_rows(d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: int = 1, mlp: int = 65536,
-              ctx_rows: int = 16) -> tuple[list[int], list[list[tuple[int, int, int]]]]:
-    """One layer's tensors (bytes a slot's row) and rows (parts), commit_slots' h200_layout: attention RMSNorm, its s8
-    quantizer (codes, then the f32 scale), QKV, scores (f32 heads x ctx_rows), softmax, PV, o_proj's quantizer and output,
-    the residual, the MLP's RMSNorm and quantizer, up, ReLU, down's quantizer, down and the residual."""
-    qkv = 2 * (heads * head_dim + 2 * kv_heads * head_dim)
-    ops = [("bf16", 2 * d), ("quant", d), ("bf16", qkv), ("f32", 4 * heads * ctx_rows), ("bf16", 2 * heads * ctx_rows),
-           ("bf16", 2 * d), ("quant", d), ("bf16", 2 * d), ("bf16", 2 * d), ("bf16", 2 * d), ("quant", d), ("bf16", 2 * mlp),
-           ("bf16", 2 * mlp), ("quant", mlp), ("bf16", 2 * d), ("bf16", 2 * d)]
-    sources: list[int] = []
-    rows: list[list[tuple[int, int, int]]] = []
-    for kind, n in ops:
-        src = len(sources)
-        if kind == "quant":
-            sources += [n, 4]
-            rows += [[(src, 0, n), (src + 1, 0, 4)]] if n + 4 <= UNIT_BYTES else _cut(src, n) + [[(src + 1, 0, 4)]]
-        else:
-            sources.append(n)
-            rows += _cut(src, n)
-    return sources, rows
+def h200_rows(**shape: int) -> tuple[list[int], list[list[tuple[int, int, int]]]]:
+    """One layer of commit_slots' frozen H200 layout (``slots.h200_layout``, its shape keywords): its tensors (bytes a
+    slot's row) and rows (parts): attention RMSNorm, its s8 quantizer (codes, then the f32 scale), QKV, scores (f32
+    heads x ctx_rows), softmax, PV, o_proj's quantizer and output, the residual, the MLP's RMSNorm and quantizer, up,
+    ReLU, down's quantizer, down and the residual."""
+    return C.layout_rows(S.h200_layout(layers=1, **shape).groups[0])
 
 
 def blocks(nbytes: int) -> int:
@@ -212,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     if any(k < 1 or LAYERS % k for k in a.layers_per_call):
         ap.error(f"--layers-per-call divides {LAYERS}")
     a.out.mkdir(parents=True, exist_ok=True)
-    engine = E.Engine()
+    engine = T.Engine("cuda")
     exact = None
     if a.check is not None:
         c = json.loads(a.check.read_text()) if a.check.exists() else {}

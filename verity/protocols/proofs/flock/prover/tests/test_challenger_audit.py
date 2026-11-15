@@ -1,8 +1,8 @@
 """`pod/challenger.sh`'s audits of served sessions against their challenger's release log, run as the pods run them, on the
 plain-tree fixture's challenger and session (`test_lean_plain_tree.py`): `challenger_audit` through `challengers.end`, as the
 sweeps' servers and eight pod jobs run it, and `challenger_cases`, 93-zk-tree-from.sh's. Both hold each record at the tables
-its link's `root_b` keys, in Python (`challenger.sessions_tree_reason`) and in Lean (`sampled-proofs-difftest`'s
-`challenger_session_trees`), so either side called with (name, record) alone fails here. It builds `sampled-proofs-difftest`,
+its link's `root_b` keys, in Python (`challenger.sessions_tree_reason`) and in Lean (`spot-difftest`'s
+`challenger_session_trees`), so either side called with (name, record) alone fails here. It builds `spot-difftest`,
 which no other test of this suite runs."""
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def _session(d: Path, rec: dict) -> Path:
 def built():
     assert (FIXTURE / "challenger" / "releases.jsonl").is_file(), (
         f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree`")
-    D.build(SP, "sampled-proofs-difftest")
+    D.build(SP, "spot-difftest")
 
 
 @pytest.fixture

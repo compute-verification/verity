@@ -43,7 +43,7 @@ CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).
 ## Where the filler's tools live
 
 Each has one copy, in `filler/`; change it there. A new arm is a class in an arm module, and a new tile or fold is a flag
-of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools/verity/check/suites.py benchmarks/pouw/filler`.
+of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools/check/suites.py benchmarks/pouw/filler`.
 
 `contents.py filler` lists each tool with its files, one entry a file in `contents/filler/`.
 
@@ -55,6 +55,8 @@ directory's `*.sh` builds and runs it through `research run`, and each `*ref.py`
 `contents.py kernels` lists each kernel with its files and the files it includes, one entry a file in
 `contents/kernels/`.
 
+The noised GEMMs (`edited_gemm/`, `masked_gemm/`, `floored_gemm/`) and the timing kit `gpu_kit/` are PoUW's prover's,
+in `../../verity/protocols/accounting/pouw/prover/kernels/`; what only times them stays here and loads them from there.
 `edited_gemm/`'s references import `floored_gemm/derive.py`'s `tile_receipts` (the duo receipts of one 128 x 128 tile)
 beside `floored_gemm/ref.py`;
 `edited_gemm/receipt_folds_r9.py` is the r9 folds' reference as recorded, held by its sha256, so leave it

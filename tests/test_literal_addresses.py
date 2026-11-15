@@ -10,6 +10,8 @@ which leaves out ``uv.lock``, its dotted numbers being package versions, and thi
 """
 from __future__ import annotations
 
+import tomllib
+
 import test_repository
 from research import addresses
 from research.addresses import QUAD as _QUAD
@@ -31,7 +33,6 @@ ALLOWED: dict[str, int] = {
     "infra/control/cloud_watch.toml": 7,
     "infra/control/deadman/api/deadman.py": 2,
     "infra/control/vm_stop.toml": 1,
-    "infra/control/watchers_ssh_config": 4,
     "infra/cursor/launch_coordinator.py": 1,
     "infra/ops/tests/test_cloud_watch.py": 3,
     "infra/ops/tests/test_deadman.py": 1,
@@ -44,9 +45,6 @@ ALLOWED: dict[str, int] = {
     "tools/research/src/research/goals.py": 1,
     "tools/research/src/research/jobs/client.py": 1,
     "tools/research/src/research/notes_sync.py": 1,
-    "tools/research/src/research/pods/nebius/peers": 3,
-    "tools/research/src/research/pods/nebius/peers-challenger": 16,
-    "tools/research/src/research/pods/nebius/verifier/verifier.json": 1,
     "tools/research/src/research/slack.py": 4,
     "tools/research/src/research/store/fetchset.py": 1,
     "tools/research/tests/test_bucket_index.py": 2,
@@ -58,7 +56,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/tests/test_retention.py": 2,
     "tools/research/tests/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
-    "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 2,
+    "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 1,
     "benchmarks/numerical/tests/bench/data/flock-cells/6d1295ed.json": 3,
     "benchmarks/numerical/tests/bench/data/flock-cells/d1961ba4.json": 3,
     "benchmarks/numerical/tests/bench/data/flock-runs/r20260925-233818-a37e/job.json": 1,
@@ -70,10 +68,9 @@ ALLOWED: dict[str, int] = {
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-b71a-w30.json": 7,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r1-window10.json": 4,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json": 8,
-    "benchmarks/one_stage/interfaces/tests/test_report.py": 1,
     "verity/circuits/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
     # stand-ins that predate the documentation ranges
-    "tools/verity/check/tests/test_verdicts.py": 2,
+    "tools/check/tests/test_verdicts.py": 2,
     # version numbers the scan reads as addresses
     "benchmarks/pouw/dc/dc.cuh": 1,
     "benchmarks/pouw/harness/README.md": 1,
@@ -83,6 +80,13 @@ ALLOWED: dict[str, int] = {
     "benchmarks/census/adversary.json": 1,
     "tools/verity/lean/cache.py": 1,
 }
+
+#: The files of machines' addresses, which `research deploy` makes at install time from the register of machines: the manifest
+#: marks each `register`, and its tracked source is a template that names its machines and holds no address.
+MANIFEST = "tools/research/src/research/pods/nebius/deploy.toml"
+REGISTER_MADE = {"infra/control/watchers_ssh_config", "tools/research/src/research/pods/nebius/peers",
+                 "tools/research/src/research/pods/nebius/peers-challenger",
+                 "tools/research/src/research/pods/nebius/verifier/verifier.json"}
 
 FIX = ("Read the address or id at run time from the configuration or secret that holds it, never from a literal here; in a "
        "test, use a documentation address (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) or an id that says it is fake. "
@@ -94,6 +98,17 @@ def test_no_new_literal_addresses_or_service_ids():
     over = [f"  {f}:{line}: {kind}" for f, hits in sorted(found.items()) if len(hits) > ALLOWED.get(f, 0)
             for kind, line in hits]
     assert not over, "an address or a service id is written in the tree:\n" + "\n".join(over) + "\n" + FIX
+
+
+def test_a_file_made_from_the_register_holds_no_address():
+    """Any IPv4 address, a private one included: the file asks the register for it (`{{NAME:host}}`), so a line that writes
+    one would put a machine's address back in the tree and install it over the register's."""
+    made = {e.get("template") or e["src"] for e in tomllib.loads(_read(MANIFEST))["file"] if e.get("register")}
+    assert made >= REGISTER_MADE, f"{MANIFEST} no longer marks {sorted(REGISTER_MADE - made)} `register = true`"
+    written = [f"  {f}:{no}" for f in sorted(made) for no, line in enumerate(_read(f).splitlines(), 1) if _QUAD.search(line)]
+    assert not written, ("a file made from the register of machines writes an address:\n" + "\n".join(written) + "\nName the "
+                         "machine and ask the register for it: `{{NAME:host}}`, or `{{PATTERN:host}}` for a line a machine.")
+    assert not [f for f in made if "{{" not in _read(f)], "a file marked `register` that asks the register for nothing"
 
 
 def test_the_scan_reads_each_form():

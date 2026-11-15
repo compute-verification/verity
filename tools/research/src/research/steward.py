@@ -11,7 +11,7 @@ keeps its mtime, since only this machine has that write.  Report age, which repo
 ("new since last seen") and the anchor of a binding's `final` all read it.  A lane branch's last commit is origin's `lane/*` tip
 (`--fetch`, and every watch pass, fetch them first); the local worktree signal (uncommitted edits, `dirty`) is not read, since the
 push rule and the 20-minute checkpoint replace it.  `relaunch` bases the successor on origin's tip when the dead lane's worktree is
-not on this machine.  The stale reaper's run-custody leg fails closed here: the local run directories it reads only exist where the
+not on this machine.  The stale reaper's run-custody check fails closed here: the local run directories it reads only exist where the
 launcher ran; `watch --custody-r2` (step f) takes run custody from the store's remote and the pod guard instead, and the service
 definition sets it.
 
@@ -129,7 +129,7 @@ class S3LeaseBackend:
 
     def read(self) -> tuple[dict, str] | None:
         try:
-            with self.remote._request("GET", self.key) as r:  # noqa: SLF001
+            with self.remote._request("GET", self.key) as r:
                 body, etag = r.read(), r.headers.get("ETag")
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -145,7 +145,7 @@ class S3LeaseBackend:
     def write(self, doc: dict, etag: str | None) -> None:
         cond = {"if-none-match": "*"} if etag is None else {"if-match": etag}
         try:
-            with self.remote._request("PUT", self.key, body=_encode(doc), headers=cond):  # noqa: SLF001
+            with self.remote._request("PUT", self.key, body=_encode(doc), headers=cond):
                 pass
         except urllib.error.HTTPError as e:
             if e.code in (409, 412):
@@ -293,7 +293,7 @@ def holder(doc: dict | None, now: float | None = None) -> str:
     """`<owner> (host H, pid P) until HH:MMZ` for a lease document."""
     if not doc:
         return "nobody (no lease document)"
-    until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.timezone.utc)
+    until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.UTC)
     left = (float(doc.get("expires_at") or 0) - (now or time.time())) / 60
     return f"{doc.get('owner')} (host {doc.get('host')}, pid {doc.get('pid')}) until {until:%H:%MZ} ({left:.0f} min)"
 

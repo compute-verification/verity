@@ -29,7 +29,7 @@ After the fix, the audited circuit reads the window's A tables and input ids. It
 `row-table/<s>/k<K>` and `input-ids/<s>` as output values that reuse the entries of H1's window registration, which is in
 the one-stage log (`outputs`: `{"row-table/0/k2048": {"record": <its digest>, "value": "pouw/h1/a/2048@0"}, ...}`). R7
 then takes the earlier entry's domain and root in place of its own (`registration._check_registered`, Lean
-`Registration.applyOutput`), and that registration is the window's Commit record. Passing looks like: ROOTS1 on it prints
+`Docket.applyOutput`), and that registration is the window's Commit record. Passing looks like: ROOTS1 on it prints
 `None`; `registration.check` on it, with the audit's own verifier copies and those `outputs`, prints `[]`; and the
 policy's and one-stage's commitment digests equal its digest. Checks 1-3 keep printing what they print now, which is why
 `outputs` is the one way through that neither loosens the tie nor adds a verifier form.
@@ -41,7 +41,7 @@ import hashlib
 from verity.protocols.accounting.pouw.verifier import credit as C
 from verity.protocols.accounting.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 I2 = hashlib.sha512(b"V3c's I2 window circuit's population Program").hexdigest()

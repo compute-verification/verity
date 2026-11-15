@@ -35,8 +35,8 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 #: the prover-side tamperings `negatives` applies, each to be refused
 NEGATIVES = ("receipt-word", "receipt-word-after-round", "pub-other-root", "ok-zero")

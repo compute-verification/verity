@@ -14,7 +14,7 @@ the few below), --elan DIR (default ~research/.elan, read-only at /opt/elan), --
 --memory SIZE, --max-sec N, --user NAME (default lean-build; never root, research or a member of research, sudo, docker or
 adm). Every DEST must exist: systemd would make a missing one on the host's disk (`vy-lean-build-setup` makes /opt/elan).
 
-Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/verity/check/lean_slot.py`'s
+Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/check/lean_slot.py`'s
 format (`lean-build-I.lock` and `.who` beside the file, waiting in arrival order in `lean-line-build`), unless the caller holds
 one (`--held-slot`, which must be held). The lock directory is research's, so root opens nothing there through a link, takes
 only regular files with one name, and gives research only what it made itself; anything else there is refused. It holds the
@@ -164,9 +164,9 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
 
     def privileges():
         st = dict(ln.split(":", 1) for ln in status().splitlines() if ":" in ln)
-        caps = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
+        capabilities = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
         nnp = st.get("NoNewPrivs", "").strip() == "1"
-        return nnp and not any(caps.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in caps.items() if v)
+        return nnp and not any(capabilities.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in capabilities.items() if v)
 
     def sudo_():
         path = which("sudo", path="/usr/bin:/bin:/usr/sbin:/sbin")
@@ -282,7 +282,8 @@ def verdict(stdout: str) -> list[dict] | None:
         if ln.startswith(MARK):
             try:
                 return json.loads(ln[len(MARK):])
-            except ValueError:
+            except ValueError as e:
+                log(f"the probe unit's result line is not JSON, so it counts as not started ({e})")
                 return None
     return None
 
@@ -407,6 +408,7 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
     try:
         verity = sorted(os.path.join("/etc/verity", n) for n in listdir("/etc/verity"))
     except FileNotFoundError:
+        log("no /etc/verity on this host, so none of it is hidden")
         verity = []
     hidden = list(HIDDEN)
     leases = sorted(glob.glob("/run/gpu-lease*"))
@@ -415,8 +417,8 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
         try:
             st = host(d)
             private[d] = [st.st_dev, st.st_ino]
-        except OSError:
-            pass
+        except OSError as e:
+            log(f"{d} not found on the host, so the probes don't check it is private ({type(e).__name__}: {e})")
     ro_in = [dst for _, dst in (*ro, *deps)]
     unwritable = sorted({*UNWRITABLE, tree_in, str(Path(tree_in).parent), *ro_in})
     gids = sorted({groups[n].gr_gid for n in FORBIDDEN_GROUPS if n in groups})
@@ -651,8 +653,8 @@ def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: dateti
         while True:
             try:
                 n = pools(slots)[POOL]
-            except (OSError, Refused):
-                pass                                            # mid-rewrite: the last N it read
+            except (OSError, Refused) as e:
+                log(f"{slots} unread, so the build pool keeps the last size read, {n} ({type(e).__name__}: {e})")
             ahead = _ahead(line, ticket)
             got = None if ahead else next(((i, fd) for i in range(n) if (fd := _try(d, i)) is not None), None)
             if got:
