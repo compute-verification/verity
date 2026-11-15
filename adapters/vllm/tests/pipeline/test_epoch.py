@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from verity_vllm.config import UsageError, checkpoint_entries
 from verity_vllm.pipeline import epoch
 from verity_vllm.query.required import QUERY_OF_RECORD
 
@@ -42,6 +45,18 @@ def test_job_end_is_the_run_timeout_less_the_reserve_or_an_earlier_deadline(tmp_
     (run / "control" / "timeout_s").write_text(json.dumps({"timeout_s": 7200}))
     assert epoch.job(run, custody, 600, None)[:2] == (start + 7200, start + 6600)
     assert epoch.job(tmp_path / "none", tmp_path / "none", 600, None) == (None, None, None)
+
+
+def test_a_row_resolves_its_pin_from_a_sibling_manifest_and_an_unpinned_case_is_refused(tmp_path: Path, monkeypatch) -> None:
+    """An int8 row's pin is in `checkpoints-int8.json`, not `checkpoints.json`."""
+    (pin,) = [c for c in checkpoint_entries() if c.get("role") == "LLAMA32_1B_INT8"]
+    wl = tmp_path / "row.json"
+    monkeypatch.setattr(epoch, "row_file", lambda row: wl)
+    wl.write_text(json.dumps({"case": "LLAMA32_1B_INT8"}))
+    assert epoch.resolve("llama32-1b__int8__h200__tp1__b1") == ("LLAMA32_1B_INT8", pin["repo"], pin["revision"], 1)
+    wl.write_text(json.dumps({"case": "NO_SUCH_CASE"}))
+    with pytest.raises(UsageError, match="serves its case 'NO_SUCH_CASE'"):
+        epoch.resolve("r")
 
 
 def test_digests_and_row_state_read_the_row_dir(tmp_path: Path) -> None:

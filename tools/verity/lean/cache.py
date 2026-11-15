@@ -78,7 +78,6 @@ DEP = "dep."
 BUILD_LOG = "build.log"
 #: where the sandbox binds a package's fetched dependencies read-only; `build` works on its own copy at `.lake/packages`
 DEPS_RO = "deps"
-TOOL = "tools/verity/lean/"
 STATE_URL = "https://website-docs-sage.vercel.app/api/lean-cache/state"
 STATE_TTL_S = 300
 KEY_FILE = "/etc/verity/lean-cache.env"
@@ -368,9 +367,16 @@ def check_record(raw: bytes, ident: dict, rev: str) -> dict:
 # ---------------------------------------------------------------- the client
 
 def packages(root: Path) -> list[str]:
-    """The packages `check.py --all` audits: directories with a tracked `lean-audit.json`, the auditor's fixtures aside."""
+    """The packages `check.py --all` audits: directories with a tracked `lean-audit.json`, the auditor's fixtures aside
+    (`check.FIXTURES`, where `check.py` is beside this file; none where it isn't, in another repository's copy)."""
+    p, fixtures = Path(__file__).resolve().with_name("check.py"), ()
+    if p.is_file():
+        spec = importlib.util.spec_from_file_location("lean_check_for_cache", p)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        fixtures = (f"{m.FIXTURES.relative_to(m.ROOT).as_posix()}/",)
     r = subprocess.run(["git", "-C", str(root), "ls-files", "*lean-audit.json"], capture_output=True, text=True)
-    return sorted({f.rsplit("/", 1)[0] for f in r.stdout.split() if "/" in f and not f.startswith(TOOL)})
+    return sorted({f.rsplit("/", 1)[0] for f in r.stdout.split() if "/" in f and not f.startswith(fixtures)})
 
 
 def ancestors(root: Path, n: int = 2000) -> list[str]:

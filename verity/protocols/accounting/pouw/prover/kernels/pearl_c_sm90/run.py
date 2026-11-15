@@ -147,13 +147,15 @@ def uuid_str(raw: bytes) -> str:
 
 
 class Nvml:
-    """NVML on the device of one UUID; reads nothing (and says so) if NVML or the UUID isn't there."""
+    """NVML on the device of one UUID; reads nothing (and says so, and why) if NVML or the UUID isn't there."""
 
     def __init__(self, uuid: str):
         self.lib, self.h, self.driver, self.uuid = None, vp(), "", uuid
+        self.why = f"NVML did not start, or has no device of UUID {uuid}"
         try:
             lib = bind(C.CDLL(os.environ.get("PEARLC_LIBNVML", "libnvidia-ml.so.1")), NVML)
-        except (OSError, AttributeError):
+        except (OSError, AttributeError) as e:
+            self.why = f"NVML did not load ({type(e).__name__}: {e})"
             return
         if lib.nvmlInit_v2() == 0 and lib.nvmlDeviceGetHandleByUUID(uuid.encode(), C.byref(self.h)) == 0:
             self.lib = lib
@@ -163,7 +165,7 @@ class Nvml:
 
     def read(self) -> dict:
         if not self.lib:
-            return {"nvml": "unavailable"}
+            return {"nvml": "unavailable", "why": self.why}
         sm, mem, pw, t, thr = u(), u(), u(), u(), C.c_ulonglong()
         self.lib.nvmlDeviceGetClockInfo(self.h, 1, C.byref(sm))
         self.lib.nvmlDeviceGetClockInfo(self.h, 2, C.byref(mem))
