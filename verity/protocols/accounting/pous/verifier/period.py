@@ -57,8 +57,8 @@ PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
 SIGNED_PROTOCOL = "verity/pous/p2/v4/signed-run"
 """`PousCheck.SignedRun.ID`: the run on the memory challenger's signed setup (`answer_signed`)."""
-SIGNED_GAPS = ("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where "
-               "the run's check reads the store",
+SIGNED_GAPS = (("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup "
+                "where the run's check reads the store"),
                "setup's check is not yet a proof, and it ran on the developer's node")
 """`PousCheck.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
 SETUP_ACCEPTED = ("the store at the published root is the encoding of the registered weights under the published "

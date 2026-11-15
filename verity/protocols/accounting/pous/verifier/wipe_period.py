@@ -159,8 +159,8 @@ def writer_gap(egress_mib: int) -> list[str]:
     writer's, which no network certifier signs."""
     if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
         return []
-    return [f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no wipe "
-            "is certified on it until the check that composes the wipe with the network certifier"]
+    return [(f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no "
+             "wipe is certified on it until the check that composes the wipe with the network certifier")]
 
 
 def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:

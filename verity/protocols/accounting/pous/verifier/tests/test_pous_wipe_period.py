@@ -626,8 +626,8 @@ def test_what_a_joint_store_and_its_disks_leave_out() -> None:
     gaps = W.disk_gaps(joint)
     assert gaps == [
         "disk nvme0n1: its spare area and cache are undeclared (spare_bytes 0), so M doesn't count what they keep",
-        "disk vda: a virtual disk (virtio_blk), its backing store the hypervisor's: a snapshot or replica the cloud keeps "
-        "of it is outside the boundary, which Covered assumes away"]
+        ("disk vda: a virtual disk (virtio_blk), its backing store the hypervisor's: a snapshot or replica the cloud "
+         "keeps of it is outside the boundary, which Covered assumes away")]
     assert W.disk_gaps(disk | {"spare_bytes": 7, "direct": False}) == [gaps[1], (
         "disk: buffered I/O, not O_DIRECT: the page cache can answer a read the disk doesn't keep")]
     assert W.store_gaps(joint) == gaps and W.store_gaps(None) == []

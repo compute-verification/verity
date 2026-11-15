@@ -55,10 +55,10 @@ def TestSigner(secret: bytes, height: int = 3, directory: str | Path | None = No
 class _SparseTree:
     """A deployed key's tree for leaf 0 alone: its path's siblings arbitrary, its root the one they give."""
 
-    def __init__(self, I: bytes, seed: bytes) -> None:
+    def __init__(self, ident: bytes, seed: bytes) -> None:
         self.root = b""
-        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
-        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, ident, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, ident, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
@@ -72,8 +72,8 @@ class AtLeaf:
     scheme = mc.LMS
 
     def __init__(self, label: bytes) -> None:
-        I, seed = hashlib.sha512(label + b"/I").digest()[:16], hashlib.sha512(label + b"/seed").digest()
-        self.key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+        ident, seed = hashlib.sha512(label + b"/I").digest()[:16], hashlib.sha512(label + b"/seed").digest()
+        self.key = lms.PrivateKey(lms.DEPLOYED, ident, seed, _SparseTree(ident, seed))  # type: ignore[arg-type]
         self.public_key = lms.public_key(self.key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:
