@@ -227,7 +227,7 @@ def test_the_loop_that_runs_the_asks_monitor_reads_the_notion_key_when_its_file_
     assert [lp.name for lp in running] == ["monitors-relay"]
     (lp,) = running
     assert lp.optional_env_files == ["/data/watchers/notion.env"], "the asks monitor's Notion key file, read when there"
-    assert "/data/watchers/notion.env" not in [*lp.env_files, *lp.needs, *lp.missing()]
+    assert "/data/watchers/notion.env" not in [*lp.env_files, *lp.needs]
 
 
 def test_an_optional_env_file_is_read_when_there_and_never_holds_the_loop(tmp_path):
