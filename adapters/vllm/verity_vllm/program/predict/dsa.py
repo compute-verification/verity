@@ -263,7 +263,7 @@ class Net:
         [NL, C, KV_LORA], `prefix_scale` their f32 scales [NL, C, KV_LORA / 128] and `prefix_rope` the bf16 k_pe [NL, C, QK_ROPE]."""
         NI, KVL, R = len(self.indexers), int(self.C["KV_LORA"]), int(self.C["QK_ROPE"])
         if self.kv_layout is not None:
-            from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+            from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
             rows = [("prefix", _arr((self.NL, C, KVL), 8)), ("prefix_scale", _arr((self.NL, C, KVL // FLASHMLA_GLM53["QT"]), 32)),
                     ("prefix_rope", _arr((self.NL, C, R), 16))]
         else:

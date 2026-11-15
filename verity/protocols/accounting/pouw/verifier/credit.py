@@ -1398,7 +1398,7 @@ def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: 
 
 def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
           ) -> tuple[list[int] | None, tuple[str, str] | None]:
-    """The sampled units of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
+    """The sampled proof blocks of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
     ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
     got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,

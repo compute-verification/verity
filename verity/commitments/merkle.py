@@ -86,7 +86,7 @@ def range_u64_domain_message(binding: bytes, owner: int, start: int, count: int)
     if type(binding) is not bytes or len(binding) != 64:
         raise ProtocolError("a range-u64 domain's binding must be 64 bytes")
     if type(owner) is not int or owner < -2:
-        raise ProtocolError("owner must be -2 (weights), -1 (boundary) or a replay unit")
+        raise ProtocolError("owner must be -2 (weights), -1 (boundary) or a replay block")
     if type(start) is not int or type(count) is not int or start < 0 or count < 0 or start + count >= U64_BOUND:
         raise ProtocolError("a range-u64 domain needs nonnegative start and count with start + count < 2^64")
     return _message(RANGE_U64_TAG, binding, _u64(owner + 2, "owner + 2"), _u64(start, "start"), _u64(count, "count"))
@@ -170,7 +170,7 @@ class CommitmentDomain:
     tag for a per-model weight root.  It is 64 bytes (a SHA-512 identity digest),
     or 32 (a SHA-256 one, as recorded statements carry it), under every frame.
     ``owner`` is ``-2`` for the weights, ``-1`` for the boundary, else a replay
-    unit index.  Over a :class:`~verity.commitments.indexed.RangeU64Domain` it is the ``range-u64`` kind: SHA-512 only,
+    block index.  Over a :class:`~verity.commitments.indexed.RangeU64Domain` it is the ``range-u64`` kind: SHA-512 only,
     a 64-byte binding, and the domain id is the SHA-512 of :func:`range_u64_domain_message`.
     """
 
@@ -185,7 +185,7 @@ class CommitmentDomain:
             raise ProtocolError("binding must be 64 bytes (a SHA-512 identity) or 32 (a SHA-256 one)")
         if type(self.owner) is not int or self.owner < -2:
             raise ProtocolError(
-                "owner must be -2 (weights), -1 (boundary) or a replay unit"
+                "owner must be -2 (weights), -1 (boundary) or a replay block"
             )
         sha(self.hash)
         if isinstance(self.positions, RangeU64Domain):

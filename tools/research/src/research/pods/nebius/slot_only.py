@@ -35,11 +35,12 @@ MARKER = Path("/etc/vy/runs-via-slot")
 AUDITOR = Path("/etc/vy/auditor")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
-#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below the path slot.py has
-#: in the repository, which is how every reader of a run's command knows slot.py. A run that names a pool takes its slot by
-#: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
-#: tree each run ships
-NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/check/slot.py"
+#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below one of CHECK_DIRS'
+#: slot.py paths, which is how every reader of a run's command knows slot.py. It stays where every machine has it, below
+#: tools/verity/check/, whatever the tree's own path: a launch names it, so a move of it would name a file no machine has
+#: until each is installed. A run that names a pool takes its slot by this copy where the machine has one (`node_copy`), so
+#: the waiters of a pool's line are held to one copy's rules, whatever tree each run ships
+NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
 #: the check's directory in a shipped tree, either spelling, while trees of both are run: node_ops.py and run_records.py, which
 #: are installed or sent alone, hold copies (`check_file` is the match they spell out)
 CHECK_DIRS = ("tools/check/", "tools/verity/check/")

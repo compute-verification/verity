@@ -172,8 +172,8 @@ phase), over the run's period and pooled over each monitoring period's cell at i
 δ and the charged part, with the number of tied audits the period reads at δ_i (``tied_audits``, `TIED_READ`), a
 count over the period's windows too.
 
-**Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
-unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
+**Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled proof blocks needs, each wire a sampled
+proof block reads then proved inside its session: the committed values and their openings for every sampled proof block and the units
 that write what it reads, the docket, the draw, its receipt and the challenger's release of its coins, and the
 public files, each by where it is (the serve dir's by their paths there, naming no window) and what it holds, with whether
 the run wrote each of OUT's and how each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off
@@ -884,7 +884,7 @@ NO_MEASUREMENT = ("no test run's measurement given (--advice-charge: `advice_cha
                   "public inputs)")
 TEST_PHASES = ("the test run's own: T buckets of τ from its first Commit period's engine clock reading, not the network "
                "certifier's phase boundaries, so a Commit period near a boundary can count in the next phase")
-#: what a later re-proof of the run's sampled units needs, each wire a sampled unit reads then proved inside its session:
+#: what a later re-proof of the run's sampled proof blocks needs, each wire a sampled proof block reads then proved inside its session:
 #: each by name, where it is (the serve dir, the prover's on the served node, by its path there with w<K> the audited
 #: window, <class> V3c's class and <tie> -tie where H1_TIE ties the window, whose record V3c holds the commit to reads
 #: H1's tables (served_verdicts.sh's `v3c_record`), else nothing; or OUT, the run's public files) and what it holds

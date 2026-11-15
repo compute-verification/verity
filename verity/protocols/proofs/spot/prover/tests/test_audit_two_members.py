@@ -128,9 +128,10 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
 
 
 def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
-           more: dict[str, str] | None = None, design: str = DESIGN) -> tuple[int, dict, Path, str]:
+           more: dict[str, str] | None = None, design: str = RULE) -> tuple[int, dict, Path, str]:
     """``records_audit.py audit`` of ``window`` into ``tmp/audit`` as `v3c_audit` runs it, on a local challenger's coins,
-    under the sampling design ``design`` (``--sampling-design``), with ``more`` added to its environment -> (its exit code, its
+    under the rate ``design`` (``--sampling-design``, `RULE` unless given), which names the window's sampling
+    design over its proof blocks, with ``more`` added to its environment -> (its exit code, its
     summary, its out directory, the end of its output for a failure's message)."""
     out, main = tmp / "audit", tmp / "main.txt"
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,

@@ -37,6 +37,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 
+from tests.frontend import settings
 from verity_torch.frontend import derive_examples as ex
 from verity_torch.frontend.derive import derive_report
 
@@ -53,7 +54,7 @@ def _record(case, expected, observed, verdict, cause="", **extra):
 @pytest.fixture(scope="module", autouse=True)
 def _dump_results():
     yield
-    out = os.environ.get("HARDEN_OUT")
+    out = settings.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
         with open(os.path.join(out, "moe_results.json"), "w") as f:
