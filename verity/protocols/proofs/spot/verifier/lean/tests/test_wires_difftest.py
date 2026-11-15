@@ -542,7 +542,7 @@ def test_the_order(pieces, name, j, want):
         assert pieces.call(fn, j) == ("output", D.canonical(got)), fn
 
 
-def test_the_sampled_check_reads_only_sampled_units(pieces):
+def test_the_sampled_check_reads_only_sampled_proof_blocks(pieces):
     """The gather with unit 1 sampled: its three wired rows are checked; unit 0's row that is not its writer's is not."""
     j = _gather()
     del j["queries"]

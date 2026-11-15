@@ -45,7 +45,7 @@ READS_WHY = ("the joined record's registered declarations are not its ranks', ea
 REGISTERED_KEYS = ("formats", "openings", "params", "reads", "roots", "tables")
 WIRE_TREE_WHY = ("a sampled reader member reads one port through writer rows in more than one rank's window, or in none: its "
                  "session reads each wired port from one rank's committed tree")
-PARTS_WHY = "a sampled unit is in no rank member"
+PARTS_WHY = "a sampled proof block is in no rank member"
 NO_REGISTERED = {"openings": [], "params": {}, "reads": [], "roots": [], "tables": []}
 #: the `two-stage-form` refusal's detail (`Spot.SecondStage.FORM_WHY`)
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
@@ -599,7 +599,7 @@ def failures(allow: bool, g: Given, record: Mapping[str, Any], records: Sequence
              served: Sequence[tuple[str, str]], registrations: Sequence[Mapping[str, Any]], root: str,
              logged: Callable[[str], bool], sample: Sequence[tuple[str, int]],
              statements: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
-    """`Spot.SecondWindow.failures`: the ranks' failures, then ``ranks-members`` where a sampled unit is in no rank
+    """`Spot.SecondWindow.failures`: the ranks' failures, then ``ranks-members`` where a sampled proof block is in no rank
     member, else ``ranks-wire-tree`` and the per-session failures; ``two-stage-form`` last while nothing else fails and
     the form is off."""
     found = rank_failures(record, records, served, registrations, root, logged)

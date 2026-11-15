@@ -24,7 +24,7 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 * `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose incorrect proof blocks lie in
   `B`, and that agree on a committed separator of `B`, deliver the same values on `D`. So they deliver at most `2^|K|`
   values on `D` (`card_delivered_le`): in a Boolean circuit a gate is one bit, and `|K|` is the separator's width.
-* `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay unit, those are its exports.
+* `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay block, those are its exports.
   `Separates.mono` and `Separates.union` build separators for larger sets from smaller ones.
 * `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their incorrect proof blocks form a set
   whose missProb `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the samplingDesign and `δ`, never by
