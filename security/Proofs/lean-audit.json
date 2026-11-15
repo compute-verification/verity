@@ -97,6 +97,7 @@
   "Proofs.Properties.Verity.SampledCoins",
   "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Poub.Remote.SubprotocolWitnesses",
+  "Proofs.Properties.Poub.Remote.RecordAccepts",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
