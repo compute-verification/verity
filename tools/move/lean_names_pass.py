@@ -119,6 +119,11 @@ def compress(files: list[str], others: set[str]) -> list[str]:
     return sorted(out)
 
 
+def both(globs: list[str]) -> list[str]:
+    """Each glob with the area's directory `Accounting` spelled to match `ResourceAccounting` too."""
+    return [re.sub(rf"/{WORD}(?=[/.])", "/[AR]*ccounting", g) for g in globs]
+
+
 def ontology() -> list[str]:
     s = sites()
     pure = sorted(f for f, v in s.items() if all(r for *_, r in v))
@@ -135,8 +140,9 @@ def ontology() -> list[str]:
     lines += ["# The network attester (GLOSSARY.md: the Lean package `NetworkCertifier` and the names that follow it), with",
               "# the Python names that follow the Lean's (`NetworkCertifierParams`, `NetworkCertifierProfile`).",
               '"NetworkCertifier" = "NetworkAttester"', '"networkCertifier" = "networkAttester"', ""]
-    lines += [f"# The root namespace, in the {len(pure)} Lean files whose every `{WORD}` is it."]
-    lines += words_in(compress(pure, untouched), {WORD: NEW})
+    lines += [f"# The root namespace, in the {len(pure)} Lean files whose every `{WORD}` is it (a glob matches the",
+              "# area's directory under its old name and its new, so the map reruns as a no-op)."]
+    lines += words_in(both(compress(pure, untouched)), {WORD: NEW})
     own = collections.defaultdict(set)
     for f, v in mixed.items():
         for _, site, root in v:
@@ -144,8 +150,8 @@ def ontology() -> list[str]:
                 own[f].add(".".join(site.split(".")[:2]))
     for f, v in sorted(mixed.items()):
         if own[f]:
-            lines += [f"# {f} spells FlockSoundness's `{WORD}` too: only the root's names."]
-            lines += words_in([f], {o: NEW + o[len(WORD):] for o in sorted(own[f])})
+            lines += [f"# {f} spells another namespace's `{WORD}` too: only the root's names."]
+            lines += words_in(both([f]), {o: NEW + o[len(WORD):] for o in sorted(own[f])})
     lines += [f"# Outside the Lean, the root's names at the start of a dotted name."]
     lines += words_in(OTHER_FILES, {WORD + ".": NEW + "."})
     lines += ["# The network attester in the Lean's prose; a string literal keeps its bytes ([keep]): a verifier's message."]
@@ -176,7 +182,11 @@ HEADER = """# The Lean names pass: written by `python3 tools/move/lean_names_pas
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
 # `tools/verity/lean/check.py --update --moved` takes.
 """
-TAIL = """[keep]
+TAIL = """[keep_paths]
+# PoUS's own `Pous.Accounting` keeps its directories, though some of its files open the root namespace.
+"security/*/Pous/Accounting*" = ["Accounting"]
+
+[keep]
 patterns = [
     '[\\w.-]+(?:/[\\w.-]+)*/v\\d+(?:\\.\\d+)*\\b',
     '(?:Pous|Flock|Soundness|FlockSoundness)[./]Accounting\\b',
