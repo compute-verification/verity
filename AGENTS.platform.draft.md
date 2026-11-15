@@ -73,6 +73,10 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   asks each to answer on reading it, with what they know now, and sets no later deadline. An answer that lacks a figure
   says "not known" and the hour it will be known. Each answer is passed on as it arrives, not held for the rest.
 
+- On another machine, an env file's names: `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py` (from the
+  secrets rule). A slip made twice: watch for the signs in your own work and in what you read of others': a rule kept
+  by hand, a slip listed for a later review (from "A slip made twice becomes a tool").
+
 ### Where the team's writing lives (from verity `AGENTS.md`, Where writing goes)
 
 - **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
