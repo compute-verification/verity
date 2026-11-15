@@ -1,5 +1,6 @@
-"""A span's boundary rows as u16 words (`boundary_rows`): `b.ingress`'s fields and the sampling inputs they read, `b.egress`'s
-finish codes, and the rows of each a span commits."""
+"""A span of a served window (`boundary_rows`) and its boundary rows as u16 words: the request (`Span`) and its class
+(P, O), `b.ingress`'s fields and the sampling inputs they read, `b.egress`'s finish codes, and the rows of each a span
+commits."""
 from __future__ import annotations
 
 import struct
@@ -36,9 +37,9 @@ def class_size(v: Any) -> bool:
 
 @dataclass(frozen=True)
 class Span:
-    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`boundary_words.SAMPLING`),
-    the ids it was served, how it finished (a `boundary_words.FINISH` name, None while running) and, where the serve knows
-    it, its release: the network certifier's run and the request's index N in that run's release order."""
+    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`SAMPLING`), the ids it was
+    served, how it finished (a `FINISH` name, None while running) and, where the serve knows it, its release: the
+    network certifier's run and the request's index N in that run's release order."""
 
     engine_id: str
     prompt: tuple[int, ...]
@@ -127,4 +128,5 @@ def id_rows(span: Span, outputs: int) -> np.ndarray:
     return _words([*span.served] + [last] * (outputs - len(span.served))).reshape(outputs, 2)
 
 
-__all__ = ["FIELD_AT", "FIELDS", "FINISH", "HEAD_U32", "MIN_CAP", "SAMPLING", "Span", "cap", "class_size", "egress_row", "id_rows", "ingress_row", "sampling_of"]
+__all__ = ["FIELD_AT", "FIELDS", "FINISH", "HEAD_U32", "MIN_CAP", "SAMPLING", "Span", "cap", "class_size", "egress_row",
+           "id_rows", "ingress_row", "sampling_of"]
