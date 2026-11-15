@@ -71,15 +71,21 @@ def log(msg):
     print(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {'DRY ' if DRY else ''}{msg}", flush=True)
 
 
+#: what the bundle reads run as root, by the paths sudo grants: bundles_gb probes each before reading
+FIND, XARGS, DU = "/usr/bin/find", "/usr/bin/xargs", "/usr/bin/du"
+BUNDLES = (f"sudo -n {FIND} /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
+           f" | sudo -n {XARGS} -0r {DU} -sb 2>/dev/null | awk '{{t+=$1}} END {{print t+0}}'")
+WRITTEN = f"sudo -n {DU} -sbc {{}}/commit/replay_bundle_p* 2>/dev/null | tail -1"
+
+
 def bundles_gb():
-    """Raises where sudo refuses the reads (find and du, here and in written_gb) to this login, as after a lock-out
+    """Raises where sudo refuses a read (BUNDLES, and WRITTEN in written_gb) to this login, as after a lock-out
     (pods/nebius/lockout): their errors go to /dev/null, so a refusal would read as 0 GB and release Commits into a full disk."""
-    for tool in ("/usr/bin/find", "/usr/bin/du"):
+    for tool in (FIND, XARGS, DU):
         if subprocess.run(["sudo", "-n", "-l", tool], capture_output=True).returncode:
             raise SystemExit(f"release.py: sudo refuses {tool} to this login, so the bundles can't be measured; nothing released. "
                              "A locked node grants only `vy-sudo du-bundles` (pods/nebius/lockout): run the pacer as a root unit")
-    r = subprocess.run("sudo find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
-                       " | sudo xargs -0r du -sb 2>/dev/null | awk '{t+=$1} END {print t+0}'", shell=True, capture_output=True, text=True)
+    r = subprocess.run(BUNDLES, shell=True, capture_output=True, text=True)
     return int(r.stdout.strip() or 0) / 1e9
 
 
@@ -100,8 +106,7 @@ def written_gb(w):
     """What an unfinished Commit's bundle already holds on disk (it's counted in bundles_gb), so its estimate counts only the rest."""
     if not w.get("sweep") or not w.get("row"):
         return 0.0
-    r = subprocess.run(f"sudo du -sbc {w['sweep']}/{w['row']}/commit/replay_bundle_p* 2>/dev/null | tail -1", shell=True,
-                       capture_output=True, text=True)
+    r = subprocess.run(WRITTEN.format(f"{w['sweep']}/{w['row']}"), shell=True, capture_output=True, text=True)
     parts = r.stdout.split()
     return int(parts[0]) / 1e9 if parts and parts[0].isdigit() else 0.0
 
