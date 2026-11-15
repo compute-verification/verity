@@ -499,8 +499,13 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
       rw [← hgh]
       have hsz : programSha.size = 64 := by unfold programSha; exact Hex.size_hash _
       exact digest?_hexOf hsz
+    -- The challenger key's public part decodes to `keyPub`: `hexOf?` of its hex (`gk = hexOf keyPub`) is `some keyPub`
+    -- off the hex round trip, so the walk takes the `some pub` branch without evaluating the blocked `unhex`.
+    have hgk_pub : Spot.Challenger.hexOf? (.str gk) = some keyPub := by
+      show (Flock.unhex gk).toOption = some keyPub
+      rw [← hgk, Flock.Hex.unhex_hexOf]; rfl
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, poolValues_none, keys?_mkObj, keys?_obj,
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, poolValues_none, keys?_mkObj, keys?_obj,
       sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
