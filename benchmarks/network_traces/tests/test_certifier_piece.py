@@ -24,7 +24,7 @@ and moves out any file DIR doesn't declare, a period file among them; the certif
 a step that ends without its files released keeps no case. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
-tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
+tree's gate with the tick in its request and the minutes counted at it, and the network certifier runs the scan's schedule there;
 a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
 gate is asked."""
 from __future__ import annotations

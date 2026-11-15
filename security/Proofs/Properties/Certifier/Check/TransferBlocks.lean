@@ -56,7 +56,7 @@ Its two lemmas:
 
 * honest: `transferBlocksAcceptMeans_honest`, the converse, that an execution phase proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a warden
+  verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a network certifier
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
@@ -64,7 +64,7 @@ Its two lemmas:
   proof block's row commitments (`ExecutionPhaseOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
   here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
 * nontrivial: `transferBlocksAcceptMeans_nontrivial`, that a verifier accepting every execution phase doesn't have the property
-  (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a warden
+  (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a network certifier
   execution phase with no findings, which isn't proved.
 -/
 
@@ -355,7 +355,7 @@ theorem transferBlocksAcceptMeans_honest :
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
-/-- **An honest warden execution phase is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a warden link): one
+/-- **An honest network certifier execution phase is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a network certifier link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem transferBlocksAcceptMeans_honest_certifier :
@@ -377,7 +377,7 @@ theorem transferBlocksAcceptMeans_honest_certifier :
 
 theorem transferBlocksAcceptMeans_by : TransferBlocksAcceptMeans ↔ TransferBlocksAcceptMeansBy verdict := Iff.rfl
 
-/-- A warden execution phase with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
+/-- A network certifier execution phase with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
 def unproved (w : ByteArray) : Case where
   link := ""
   run := ""
@@ -407,7 +407,7 @@ def unproved (w : ByteArray) : Case where
   kind := .warden w
 
 /-- **No verifier that accepts every execution phase has `TransferBlocksAcceptMeans`' property** (its nontrivial lemma): such a
-verifier accepts a warden execution phase with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
+verifier accepts a network certifier execution phase with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
 theorem transferBlocksAcceptMeans_nontrivial : ∀ v, AcceptsAll v → ¬ TransferBlocksAcceptMeansBy v := by
   intro v hall h
   obtain ⟨-, fs, hf, -⟩ := (h (unproved .empty) (hall _)).1.1

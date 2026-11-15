@@ -1,7 +1,7 @@
-"""What admitting requests in the warden's release order would cost, estimated offline from trace-corpus traces.
+"""What admitting requests in the network certifier's release order would cost, estimated offline from trace-corpus traces.
 
-The design: serve-openai adds each request to the engine at the first bucket boundary after its release (the warden's
-release bucket a, so at origin + (a + 1) tau), in release order (a, then the warden's ordinal). The engine's arrival order
+The design: serve-openai adds each request to the engine at the first bucket boundary after its release (the network certifier's
+release bucket a, so at origin + (a + 1) tau), in release order (a, then the network certifier's ordinal). The engine's arrival order
 is then the certified release order, and the replay's order bits are 0.
 
 A request can't be added before the frontend has it ready (its recorded engine add), and in release order none goes
@@ -18,7 +18,7 @@ step in flight), and a step from an empty pipeline pays the trace's cold-start l
 (`base`, checked against the trace's own steps and first-token times) and once with the counterfactual adds (`hold`,
 `aligned`); the price is the difference between the two simulations, so the model's error mostly cancels.
 
-A trace without a warden takes the client's send bucket as its release and the send order as its ordinal, and the
+A trace without a network certifier takes the client's send bucket as its release and the send order as its ordinal, and the
 frontend's arrival stamp plus `--add-lag-ms` as its ready time (those corpora don't record the engine's add).
 
 Usage: python3 -P admit_release.py [--replay PATH] [--add-lag-ms NAME=MS ...] --out DIR NAME=TRACE_DIR[:ORDER_DIR] ...
@@ -262,7 +262,7 @@ class Release:
     ordinal: list[int]
     ready: list[float]                  # per request, when the frontend had it ready to add
     source: str
-    egress_first: list[float] | None = None     # behind a warden: when its first egress cell leaves (a + D)
+    egress_first: list[float] | None = None     # behind a network certifier: when its first egress cell leaves (a + D)
 
 
 def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
