@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Assumptions
 public import Definitions.Certifier.Checked
+public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
+public import Definitions.Certifier.SampledReg
 public import Definitions.Certifier.MonitoringPeriodConditions
 public import Definitions.Certifier.PooledReg
 public import Definitions.Certifier.Tap
@@ -145,5 +147,62 @@ def PooledLeakRegisteredChecked : Prop :=
         2 ^ ((univ.sup fun i => (range (Pw i).blocks.length).sup fun v => faultyBits (sw i).prog (Pw i) {v}) * Fmax) *
         ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card *
           Dj ^ k (sw i)) : ℕ) : ℕ∞)
+
+/-- **Candidate A: `MonitoringPeriodLeakChecked`'s good event, its windows' failures united over the period's live
+coins.** The period's setting as in `PooledLeakRegisteredChecked`, at one compiled verifier `D`, the network
+certifier's openings at phase `i` being its registered openings `ops z ω i` (so they read only the phases before `i`).
+For every secret, every phase is accepted, registered and with a complete record while some phase has no witness meeting
+`ExecutionPhaseGoodChecked` with probability at most `Σ_i e' i`, `e' i` at least `MonitoringPeriodLeakChecked`'s six
+terms plus the registered openings' binding term (`Breg`, for `RegisteredInputsHeld` at the extracted witness); and,
+where the network certifier registers every phase's record, the secrets whose every phase has such a witness number at
+most `#Θ · executionPhasesCount(reg ∪ chk)`. Every phase pays `κ δ`: nothing is pooled but the union. -/
+def PooledLeakCheckedPhases : Prop :=
+  ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} (H : Claims.Msg → Claims.Msg)
+    (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (Lk K S : ℕ)
+    (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
+    (reg chk : AuditStatement → Finset ℕ) (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop)
+    (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ) {m kV : ℕ} {Tp Sec : Type} [Fintype Tp] [Nonempty Tp]
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (β : Fin m → ℕ)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
+    (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
+      (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
+    (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool)
+    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Msg)
+    (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Prover Tp) (hk : PhaseRounds (fun _ => D) kV x)
+    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
+    (had : PhasesAdaptive x Pv ops)
+    (hw : ∀ z ω i, ScopeAcc D lay k (x z ω i) →
+      CheckedWitness H D (certifierRun H D.commit Lk K S lay k (ops z ω i)) valid₁ ε₁ (x z ω i) ∧
+        CheckedWitness H D (certifierRun H D.commit Lk K S lay k (ops z ω i)) valid₂ ε₂ (x z ω i))
+    (e' : Fin m → ℝ)
+    (he' : ∀ z ω i, D.κ δ (x z ω i) + ε₁ (x z ω i) + ε₂ (x z ω i) +
+        Real.sqrt (D.γ (x z ω i) * Claims.PrB H D.V (Pv z ω i) (x z ω i)) +
+        (Bext H D.V D.E Tp (Pv z ω i) (x z ω i)).Pr H +
+        (Btap H D.V D.E D.commit D.parse (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H +
+        (Breg H D.V D.E D.commit D.parse (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e' i)
+    (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
+    {Conn Cell Srv Dev Par : Type} (arr : Srv → Conn → Arrivals Cell)
+    (f : RecordFormat Conn Cell (Fin m → List (Obs Lk K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs Lk K S)))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
+    (rd : Par → (Fin m → List (Obs Lk K S)) → Conn → List (ℕ × CellView Cell))
+    (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows) (Θ : Set Par) (Zs : Set Sec)
+    (schedOf : Sec → (Fin m → Tp × (Fin kV → Coin)) → CertifierSchedule Conn)
+    (srvOf : Sec → (Fin m → Tp × (Fin kV → Coin)) → Srv)
+    (dec : (Fin m → Tp × (Fin kV → Coin)) → (Conn → List (ℕ × CellView Cell)) → Sec)
+    (hch : ∀ ω, MonitoringPeriodChannelReg f allows Θ Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (dec ω)
+      fun p => (run tap p).1),
+    (∀ z ∈ Zs, Pr (fun ω => (∀ i, phaseAcc H (fun _ => D) x Pv hk z i ω (ω i) ∧
+          PhaseRegistered (fun _ => D) lay k reg sw Pw ρ x ops z ω i ∧
+          RecordComplete k Dj sw (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) z ω i) ∧
+        ¬∀ i, ∃ w, ExecutionPhaseGoodChecked H D Lk K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+          (ρ i) (ops z ω i) (x z ω i) w ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ ∑ i, e' i) ∧
+    ∀ ω, (∀ z ∈ Zs, ∀ i s, D.parse (x z ω i) = some s → CertifierRegisters H D.commit (lay s) (k s)
+        (op i (runsBefore (run tap (schedOf z ω, srvOf z ω)).2 i)) s (ops z ω i s)
+        ((run tap (schedOf z ω, srvOf z ω)).2 i)) →
+      {z | z ∈ Zs ∧ ∀ i, ∃ w, ExecutionPhaseGoodChecked H D Lk K S lay k δ reg
+          (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ i) (ops z ω i) (x z ω i) w
+          ((run tap (schedOf z ω, srvOf z ω)).2 i)}.encard ≤
+        Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)
 
 end NetTiming.Guarantees
