@@ -153,11 +153,11 @@ example (h : Guarantees.PooledLeakRegisteredChecked) :
   obtain ⟨hA, hb, hS, -, had, hops, hrate, he, hchk, hck, hfit, htrust, hread, hch, hcert, hev⟩ :=
     PooledLeakRegisteredChecked_honest
   refine le_trans (Claims.Pr_mono fun ω hω => ?_)
-    ((h shaD D₂ hA (fun _ => hb) (fun _ => hS) (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) checkedValid₂ 1
-      (fun _ => twoStmt) (fun _ => twoPart) (fun _ _ => true) hchk (fun _ _ _ _ => [true]) x₂ P₂
+    ((h shaD D₂ hA (fun _ => hb) (fun _ => hS) (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1})
+      checkedValid₂ 1 (fun _ => twoStmt) (fun _ => twoPart) (fun _ _ => true) hchk (fun _ _ _ _ => [true]) x₂ P₂
       (fun _ _ _ => le_rfl) ops₂ had (fun _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl
-      (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he (fun _ => 0) hck (fun _ => hfit) checkedArr₂ checkedFormat₂ () checkedTrace₂
-      htrust checkedRead₂ (fun _ _ => True) hread Set.univ Set.univ checkedSched₂ (fun _ _ => ()) (fun _ _ => ()) hch
+      (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he (fun _ => 0) hck (fun _ => hfit) checkedArr₂ checkedFormat₂ ()
+      checkedTrace₂ htrust checkedRead₂ (fun _ _ => True) hread Set.univ Set.univ checkedSched₂ (fun _ _ => ()) (fun _ _ => ()) hch
       (fun _ _ _ s hs _ => hcert s hs) 1).1 () (Set.mem_univ _))
   exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
 
