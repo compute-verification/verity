@@ -22,8 +22,8 @@ from pathlib import Path
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive
 from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.prover import period_prover
+from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
 
 ROOT = Path(__file__).resolve().parents[2]

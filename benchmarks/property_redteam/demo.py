@@ -30,15 +30,15 @@ import sys
 import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
-from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry import catalog
-from verity_vllm.definitions.registry.ref_prims import gather_f32
 from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
 from verity.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP,
 )
 from verity.circuits.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
+from verity.circuits.types import Array, Value
 from verity.protocols.accounting.poub.verifier import codec as C
+from verity_vllm.definitions.registry import catalog
+from verity_vllm.definitions.registry.ref_prims import gather_f32
 
 M32 = (1 << 32) - 1
 

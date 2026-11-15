@@ -221,9 +221,9 @@ def _setup_encode(job: tuple[Any, bytes, bytes, int, int]) -> list[bytes]:
 def setup_check_cmd(a: argparse.Namespace) -> int:
     import multiprocessing as mp
 
+    from verity.commitments.identity import canonical_json_bytes
     from verity.protocols.accounting.pous.verifier import setup
     from verity.protocols.accounting.pous.verifier.schemes import p2 as S
-    from verity.commitments.identity import canonical_json_bytes
 
     out = Path(a.out)
     scratch = Path(a.scratch)
@@ -295,9 +295,9 @@ def _smi(query: str) -> list[str]:
 
 def gpu_cmd(a: argparse.Namespace) -> int:
     import torch
+    from p2_store.gpu import Kernels
 
     from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
-    from p2_store.gpu import Kernels
 
     out = Path(a.out)
     batches = [int(x) for x in a.batches.split(",") if x]
@@ -576,10 +576,9 @@ def audit_cmd(a: argparse.Namespace) -> int:
         dump(out, "audit.json", doc)
 
     import torch
-
     from band_gpu import harness as H
-    from p2_v1 import harness as P2H
 
+    from p2_v1 import harness as P2H
     from verity.protocols.accounting.pous.verifier.schemes import p2
 
     backend = P2H.gpu(a.p2_lib, a.build_dir)
@@ -646,7 +645,6 @@ def audit_cmd(a: argparse.Namespace) -> int:
 def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], out: Path, scratch: Path,
                script: Path, judge: list[str]) -> dict[str, Any]:
     import torch
-
     from band_gpu import harness as H
 
     # the decode passes' cached labels would otherwise count against vLLM: only the store and the responder stay

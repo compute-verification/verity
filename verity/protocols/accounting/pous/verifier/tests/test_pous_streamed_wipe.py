@@ -18,12 +18,11 @@ from pous_fakes import Clock
 
 from verity.commitments.randomness import derive
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
-from verity.commitments.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
 SESSION = hashlib.sha512(b"wipe session").digest()[:32]

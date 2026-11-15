@@ -24,8 +24,8 @@ from typing import Any
 import frontier as F
 import units as U
 
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits import stacking as P
+from verity.circuits.defs import REGISTRY, bind
 
 HERE = Path(__file__).resolve().parent
 

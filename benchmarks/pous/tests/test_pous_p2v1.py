@@ -43,6 +43,7 @@ def _p2():
     sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py").parents[1]))
     from p2_store import gpu
     from p2_v1 import harness
+
     from verity.protocols.accounting.pous.verifier.p2_v1 import reference
     return reference, harness, gpu
 
@@ -163,10 +164,10 @@ def test_params_refuse_a_modulus_below_the_payload():
 def test_the_tree_and_the_audit_derivation_are_the_specs():
     import hashlib
 
-    from verity.protocols.accounting.pous.verifier.verifier import MerkleTree
     from verity.commitments.identity import tagged_sha512
-    from verity.commitments.rowleaf import sha512_row_v2_digest
     from verity.commitments.randomness import frame
+    from verity.commitments.rowleaf import sha512_row_v2_digest
+    from verity.protocols.accounting.pous.verifier.verifier import MerkleTree
 
     R, _, _ = _p2()
     leaves = [bytes([i]) * 64 for i in range(3)]
@@ -464,8 +465,8 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
 
     sys.path.insert(0, str(BENCH))
     from band_gpu import harness as H
-    from verity.protocols.accounting.pous.device import timed_audit as live
 
+    from verity.protocols.accounting.pous.device import timed_audit as live
     from verity.protocols.accounting.pous.verifier import schemes
     from verity.protocols.accounting.pous.verifier.verifier import VerifierKey, leaf_hash
 

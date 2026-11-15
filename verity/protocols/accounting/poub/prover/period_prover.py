@@ -24,10 +24,10 @@ from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, receipts, wire
-from verity.protocols.accounting.pous.prover.period_prover import records
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.poub.verifier.verifier_party import _recv, _send
+from verity.protocols.accounting.pous.prover.period_prover import records
 
 
 class Local:

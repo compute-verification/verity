@@ -59,7 +59,7 @@ def test_the_checks_are_the_served_tables_seven():
     tree = ast.parse(table.read_text())
     (seven,) = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
                 and any(getattr(t, "id", None) == "ONSITE_COMPONENTS" for t in n.targets)]
-    assert M.CHECKS == seven
+    assert seven == M.CHECKS
 
 
 def test_an_accepting_verdict_of_the_seven_checks_from_research_runs_on_main_is_its_minutes(tmp_path, repo,

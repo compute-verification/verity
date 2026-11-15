@@ -47,8 +47,8 @@ from fractions import Fraction
 from typing import Any
 
 from verity.commitments.identity import canonical_json_bytes
-
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+
 from . import streamed_wipe as sw
 from . import wipe_party
 from .wipe_party import READS

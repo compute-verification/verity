@@ -58,10 +58,10 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
-from verity.commitments.randomness import derive
-from verity.protocol import Channel, Manifest, Role
-from verity.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 from verity.channel import Body, Int, Message, Schema
+from verity.commitments.randomness import derive
+from verity.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
+from verity.protocol import Channel, Manifest, Role
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 

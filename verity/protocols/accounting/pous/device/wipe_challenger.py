@@ -46,14 +46,14 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
-from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
+from verity.party import Finish, Identity, LogEntry, Received, Send, Timer
+from verity.protocol import ProtocolDef, Start
 from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.device import onsite
-from verity.protocols.accounting.pous.device import wipe_stream
+from verity.protocols.accounting.pous.device import onsite, wipe_stream
 from verity.protocols.accounting.pous.device.memory_challenger import CLOCK_RESOLUTION_NS, SessionLog, Signer
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier.streamed_wipe import (
     COMPLETE,
     LABEL_BYTES,
@@ -65,15 +65,14 @@ from verity.protocols.accounting.pous.verifier.streamed_wipe import (
     WipeParams,
     _sha512,
     batch_digest,
-    sample_indices,
     label,
     labels,
     message,
     raw_clock_ns,
+    sample_indices,
     start_message,
     wipe_key,
 )
-from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier.wipe_parties import (
     CHALLENGER,
     COMPONENT,

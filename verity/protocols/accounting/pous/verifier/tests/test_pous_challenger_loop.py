@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.party import Finish, Identity, LogEntry, Send, Timer
 from verity.channel import Message
+from verity.party import Finish, Identity, LogEntry, Send, Timer
 from verity.protocols.accounting.pous.device.challenger_session import run
 
 

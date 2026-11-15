@@ -49,20 +49,20 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
+from verity.channel import Refused
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
-from verity.protocols.accounting.pous.device import onsite
-from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
+from verity.protocols.accounting.registration.verifier import registration as RL
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
-from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
 
