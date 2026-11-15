@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import os
 import re
+import sys
 import tomllib
 
 from test_repository import ROOT, _testpaths, _tracked
@@ -173,13 +173,10 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(check)
-    names = {}
-    for p in _tracked():
-        if os.path.basename(p) == "pyproject.toml":
-            data = tomllib.loads((ROOT / p).read_text())
-            if "pytest" in data.get("tool", {}):
-                name = re.sub(r"[-_.]+", "-", data["project"]["name"]).lower() if "project" in data else os.path.dirname(p)
-                names[name] = (os.path.dirname(p), data)
+    spec = importlib.util.spec_from_file_location("repo_suites", ROOT / "tools" / "check" / "suites.py")
+    suites = sys.modules["repo_suites"] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(suites)
+    names = {s.name: (s.path, tomllib.loads((ROOT / s.path / "pyproject.toml").read_text())) for s in suites.discover()}
     after = [names[s][0] + "/" for s in check.AFTER_LEAN]
     offenders = [f"{path}:{line}" for path in _test_sources() if not path.startswith(tuple(after))
                  for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
