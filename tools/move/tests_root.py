@@ -3,7 +3,8 @@
 
     python3 tools/move/tests_root.py inventory          each tests/ directory, its suite, and what the rule can't move as stated
     python3 tools/move/tests_root.py split [NAME...]    each distribution's suite to a virtual member `NAME-tests` in its tests/
-    python3 tools/move/tests_root.py maps               write `tests_root_map.toml` and `tests_root_suites_map.toml`
+    python3 tools/move/tests_root.py maps               write `tests_root_map.toml`: every test under the root's tests/
+    python3 tools/move/tests_root.py suites-map         after it moved them, `tests_root_suites_map.toml`: each suite's pyproject
 
 The rule: a file at `X/tests/REST` goes to `tests/X/REST`, for each `X` under `AREAS`; the root suite's own files stay at the
 top of `tests/`. A suite's pyproject goes beside its tests (`tests/X/pyproject.toml`), so its directory is its tests' and
@@ -25,9 +26,10 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
   `strip_suite_relative`, `pythonpath_from`), with `X` added to its inputs where nothing else of its inputs covers it: its
   own directory did.
 
-`maps` reads the tree as it is, so it reruns on `main` after any later move: each run writes both maps whole. Its
-`[modules]` is what `layout.py --modules` derives, and its `[split]` rows are what a dry run of the files map finds: a
-test's reference to a directory whose tests alone move means what stays. `layout.py --map` then runs each map in turn (files first)."""
+Each map is written from the tree as it is, so the sequence reruns on `main` after any later move: `split`, `maps`,
+`layout.py --map tests_root_map.toml`, `suites-map`, `layout.py --map tests_root_suites_map.toml`. A map's `[modules]` is
+what `layout.py --modules` derives, and its `[split]` rows are what its dry run finds: a reference to a directory whose
+tests or suite's pyproject alone move means what stays (a pythonpath entry, which `pythonpath_from` writes again, too)."""
 from __future__ import annotations
 
 import argparse
@@ -422,21 +424,17 @@ def modules(path: str, root: Path = ROOT) -> str:
     return r.stdout
 
 
-def write_maps(t: Tree) -> list[str]:
-    """Both maps, each with the `[modules]` its rows imply; the files map with its `[split]` rows, which its dry run finds."""
-    out = []
-    for path, text in ((FILES_MAP, files_map(t)), (SUITES_MAP, suites_map(t))):
-        (t.root / path).parent.mkdir(parents=True, exist_ok=True)
+def write_map(t: Tree, path: str, text: str) -> str:
+    """The map at `path` with the `[modules]` its rows imply and the `[split]` rows its dry run finds."""
+    (t.root / path).parent.mkdir(parents=True, exist_ok=True)
+    (t.root / path).write_text(text)
+    if (derived := modules(path, t.root)).strip():
+        body = derived if derived.lstrip().startswith("[modules]") else "[modules]\n" + derived
+        text = text.rstrip("\n") + "\n\n\n# the rename [paths] implies (`layout.py --modules`)\n" + body
         (t.root / path).write_text(text)
-        derived = modules(path, t.root)
-        if derived.strip():
-            body = derived if derived.lstrip().startswith("[modules]") else "[modules]\n" + derived
-            text = text.rstrip("\n") + "\n\n\n# the rename [paths] implies (`layout.py --modules`)\n" + body
-            (t.root / path).write_text(text)
-        if path == FILES_MAP and (rows := split_rows(path, t.root)):
-            (t.root / path).write_text(text.rstrip("\n") + "\n\n[split]\n" + rows)
-        out.append(path)
-    return out
+    if rows := split_rows(path, t.root):
+        (t.root / path).write_text(text.rstrip("\n") + "\n\n[split]\n" + rows)
+    return path
 
 
 def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
@@ -446,7 +444,8 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     inv.add_argument("--json", type=Path, help="write the whole inventory here")
     sp = sub.add_parser("split", help="each distribution's suite to a virtual member in its tests/")
     sp.add_argument("names", nargs="*", help="only these distributions")
-    sub.add_parser("maps", help=f"write {FILES_MAP} and {SUITES_MAP}")
+    sub.add_parser("maps", help=f"write {FILES_MAP}")
+    sub.add_parser("suites-map", help=f"write {SUITES_MAP}, once {FILES_MAP} has moved the tests")
     a = ap.parse_args(argv)
     t = Tree(root)
     if a.cmd == "inventory":
@@ -464,8 +463,10 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         done = run_split(t, a.names)
         print(f"tests_root: split {len(done)} distribution(s)' suites: {', '.join(done) or 'none'}")
         return 0
-    for p in write_maps(t):
-        print(f"tests_root: wrote {p}")
+    if a.cmd == "maps":
+        print(f"tests_root: wrote {write_map(t, FILES_MAP, files_map(t))}")
+    else:
+        print(f"tests_root: wrote {write_map(t, SUITES_MAP, suites_map(t))}")
     return 0
 
 

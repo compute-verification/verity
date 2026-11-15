@@ -41,7 +41,7 @@ TREE = {
     "adapters/dist/tests/helpers.py": "H = 1\n",
     "adapters/dist/tests/test_d.py": "from tests.helpers import H\n\n\ndef test_d():\n    assert H\n",
     "tools/plain/pyproject.toml": '[project]\nname = "plain"\nversion = "0"\n\n[tool.uv]\npackage = false\n\n'
-                                  '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+                                  '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["../../verity/a"]\n',
     "tools/plain/tests/test_p.py": "def test_p():\n    pass\n",
     "tools/research/src/research/store/moves.json": '{"moves": []}\n',
 }
@@ -101,29 +101,35 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
 
 
 def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path):
-    """After `split`, `maps` and `layout.py` on each map: every test is under `tests/`, each suite's pyproject beside its
-    tests collects them from its own directory and puts the same directories on its path, and a suite whose own directory held more than its tests reads it still."""
+    """After `split`, `maps`, its move, `suites-map` and its move: every test is under `tests/`, each suite's pyproject beside
+    its tests collects them from its own directory and puts the same directories on its path, a suite whose own directory
+    held more than its tests reads it still, and a test's relative reference to its code still reaches it."""
     r = repo(tmp_path)
     TR.run_split(TR.Tree(r), [])
     git(r, "commit", "-q", "-m", "split")
-    assert TR.main(["maps"], root=r) == 0
-    files = tomllib.loads((r / TR.FILES_MAP).read_text())
-    assert files["paths"] == {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/plain/tests/": "tests/tools/plain/",
-                              "verity/a/tests/": "tests/verity/a/"}
-    assert files.get("split") == {"verity/a/tests/test_a.py: verity": {"to": "verity", "why": TR.SPLIT_WHY}}
-    suites = tomllib.loads((r / TR.SUITES_MAP).read_text())
-    assert suites["paths"] == {"tools/plain/pyproject.toml": "tests/tools/plain/pyproject.toml",
-                               "verity/a/pyproject.toml": "tests/verity/a/pyproject.toml"}
-    assert suites["pyproject"]["tests/verity/a/pyproject.toml"]["add_inputs"] == ["verity/a"]
-    assert "add_inputs" not in suites["pyproject"]["tests/tools/plain/pyproject.toml"]
-    git(r, "add", "-A")
-    git(r, "commit", "-q", "-m", "maps")
-    for m in (TR.FILES_MAP, TR.SUITES_MAP):
+
+    def move(m: str):
+        git(r, "add", "-A")
+        git(r, "commit", "-q", "-m", f"map {m}")
         p = subprocess.run([sys.executable, str(MOVE / "layout.py"), "--root", str(r), "--map", m, "--no-lock"], cwd=r,
                            env=ENV, capture_output=True, text=True)
         assert p.returncode == 0, p.stderr[-2000:]
         git(r, "add", "-A")
         git(r, "commit", "-q", "-m", m)
+
+    assert TR.main(["maps"], root=r) == 0
+    files = tomllib.loads((r / TR.FILES_MAP).read_text())
+    assert files["paths"] == {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/plain/tests/": "tests/tools/plain/",
+                              "verity/a/tests/": "tests/verity/a/"}
+    assert files.get("split") == {"verity/a/tests/test_a.py: verity": {"to": "verity", "why": TR.SPLIT_WHY}}
+    move(TR.FILES_MAP)
+    assert TR.main(["suites-map"], root=r) == 0
+    suites = tomllib.loads((r / TR.SUITES_MAP).read_text())
+    assert suites["paths"] == {"tools/plain/pyproject.toml": "tests/tools/plain/pyproject.toml",
+                               "verity/a/pyproject.toml": "tests/verity/a/pyproject.toml"}
+    assert suites["pyproject"]["tests/verity/a/pyproject.toml"]["add_inputs"] == ["verity/a"]
+    assert "add_inputs" not in suites["pyproject"]["tests/tools/plain/pyproject.toml"]
+    move(TR.SUITES_MAP)
     left = [f for f in git(r, "ls-files").split() if "/tests/" in f and not f.startswith(("tests/", "tools/move/"))]
     assert left == []
     assert '"../../../verity"' in (r / "tests/verity/a/test_a.py").read_text()
@@ -132,5 +138,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert a["tool"]["verity"]["tests"] == {"untraced": ["test_a.py"], "inputs": ["verity/a"]}
     dist = tomllib.loads((r / "tests/adapters/dist/tests/pyproject.toml").read_text())
     assert dist["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../../adapters/dist"]}
+    plain = tomllib.loads((r / "tests/tools/plain/pyproject.toml").read_text())
+    assert plain["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
     members = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]
     assert members == ["adapters/dist", "tests/adapters/dist/tests", "tests/tools/plain"]
