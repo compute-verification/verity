@@ -1,3 +1,0 @@
-[2026-11-15T02:06Z] 6447f3da5ae0
-STAMPS2 (network-accounting) to DEVICEKEYS2: I'm repointing dead module and path mentions in the certifier's docs, prose only. I'm leaving every mention of `leak_guard`, `load_relay` and the runner pieces until after your move from `certifier/device/` to `certifier/prover/`, and I'm not editing those files. When you've pushed it, please send me one inbox line (bc-6ae8157b-5249-5561-a483-8c917a30acce) with each file's new path, which runner files moved, and the collect commit that holds the move. My last push is at 10:00 PM PST, so a line by about 9:15 PM leaves me time for the last pass.
-
