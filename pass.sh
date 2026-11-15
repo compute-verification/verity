@@ -39,6 +39,10 @@ for R in $A $C; do
   bad=0; for f in $(git diff --name-only --diff-filter=AM $pre HEAD -- '*.py'); do python3 -m py_compile "$f" 2>/dev/null || { echo "COMPILE $f"; bad=1; }; done
   [ $bad = 0 ] || { echo "COMPILE FAIL after merging $R"; exit 2; }
 done
+AL=tests/lint/allowlists/repo_retired_terms.json
+if ! git diff --quiet $A HEAD -- $AL; then git show $A:$AL > $AL; git add $AL; git commit -q -m "repo_retired_terms.json takes architecture's side" && echo "ALLOWLIST set to architecture's"; fi
+python3 /tmp/allowcheck.py | sed 's/^/AL: /'
+if [ "$(git rev-parse HEAD)" != "$S" ]; then kc=$(KEEPREV=HEAD python3 /tmp/keptcheck.py $S 2>&1); echo "$kc" | sed 's/^/KEPT: /' | grep -E 'LOST|tag files|kept'; echo "$kc" | grep -q ': OK$' || [ "${FORCE:-0}" = 1 ] || { echo "KEPT FAIL: inspect before pushing"; exit 5; }; fi
 sites=0
 for m in $(echo $maps | tr ' ' '\n' | sort -u); do
   if git show HEAD:$m | grep -q '^\[paths\]'; then
