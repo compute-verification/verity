@@ -28,7 +28,7 @@ BOOKKEEPING = {
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
                                     "test_spot_s_older_name_only_falls",
-                                    "test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it",
+                                    "test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it",
                                     "test_the_certifier_scan_leaves_out_only_files_that_hold_the_name",
                                     "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),

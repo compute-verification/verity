@@ -26,9 +26,9 @@ import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most, build,
                          clog2, public, reference, verdict_of)
 from verity.protocols.resource_accounting.network.verifier import scan_ok
-from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
@@ -1582,8 +1582,8 @@ def test_the_check_refuses_entries_out_of_order_and_two_keys_with_one_identifier
     assert found((1, 1, 7, 0), (1, 1, 9, 2))[1].startswith("starts: 0 shown for 2")
 
 
-def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
-    """The rows form's honest registrations are `network_certifier_rows.registration`'s documents, which its own
+def test_the_mirror_reads_a_registration_as_the_network_attester_writes_it():
+    """The rows form's honest registrations are `network_attester_rows.registration`'s documents, which its own
     `check_registration` reads back under the entry its execution phase picks: that entry's key, its session, the
     session's number for the execution phase, and the period's schedule."""
     for m, n in ((m, n) for m in ("rows-honest", "rows-two-stretches") for n in range(4)):

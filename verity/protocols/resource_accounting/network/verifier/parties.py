@@ -38,7 +38,7 @@ The device's run hands out the rest, each a message of its kind on the same two 
 - ``certificate`` carries a line of the run's ``certified.jsonl``: an execution phase's record certified under the link's
   name and direction, or that execution phase refused. Public, as ``out-record`` is: what it signs is a hiding
   commitment.
-- ``registration`` carries a line of ``cells.jsonl``: the execution phase's rows' signed head (`network_certifier_rows.registration`),
+- ``registration`` carries a line of ``cells.jsonl``: the execution phase's rows' signed head (`network_attester_rows.registration`),
   or that execution phase refused, and its cost (the rows and a row's bytes). Public: its root is a hiding commitment.
   It carries no device timing, which varies with what was committed: the device keeps those with its witness.
 - ``deployment`` carries ``deployment.json`` as the check reads it: the device's public key and session, the schedule's
@@ -47,7 +47,7 @@ The device's run hands out the rest, each a message of its kind on the same two 
 - ``groups`` carries a ``--window-per-group`` run's ``groups.json``: each group's request indices and its execution
   phases, which the schedule and the requests' public counts fix. Protocol structure, so public.
 - ``records`` carries one of an execution phase's three records (``record``: ``requests``, ``responses`` or ``fails``), packed
-  as the device keeps it, and ``cells-salts`` the execution phase's rows' salts and the wiring's (`network_certifier_rows.read_witness`).
+  as the device keeps it, and ``cells-salts`` the execution phase's rows' salts and the wiring's (`network_attester_rows.read_witness`).
   Both are the prover's witness: private.
 
 A head's ``link`` is the link's name as the certificate signs it and its ``window`` the window's index, a u64
@@ -63,7 +63,7 @@ from verity.channel import Body, Int, Schema, Str
 from verity.protocols.proofs.spot.verifier import parties as SP
 
 from . import out_commit as O
-from . import network_certifier_rows as WR
+from . import network_attester_rows as WR
 
 ID = CERTIFIER_PROTOCOL
 VERSION = 1

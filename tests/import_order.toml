@@ -377,7 +377,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/resource_accounting/network/prover/tests/test_network_certifier_serve.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_serve.py",
     "verity/protocols/resource_accounting/network/prover/tests/test_scan_zk.py",
 ]
 
@@ -426,12 +426,12 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
-    "verity/protocols/resource_accounting/network/prover/network_certifier_zk.py",
+    "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
-    "verity/protocols/resource_accounting/network/prover/tests/test_network_certifier_serve.py",
+    "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_serve.py",
     "verity/protocols/resource_accounting/network/prover/tests/test_scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/tests/verdict_records.py",
     "verity/protocols/resource_accounting/network/prover/window_chain.py",
@@ -836,7 +836,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/egress_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
-    "verity/protocols/resource_accounting/network/prover/network_certifier_zk.py",
+    "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",

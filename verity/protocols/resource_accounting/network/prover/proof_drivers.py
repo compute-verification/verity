@@ -1,6 +1,6 @@
 """What the certifier's zero-knowledge drivers take from code `verity` does not load.
 
-The drivers (`scan_zk`, `egress_zk`, `network_certifier_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
+The drivers (`scan_zk`, `egress_zk`, `network_attester_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
 one-stage audit's benchmark drivers under `benchmarks/one_stage/`, Flock's own distribution and Flock's proof-format
 reader, and read a network attester's run through the chain's reader under `benchmarks/network_traces/`. `verity` loads
 none of them, so they come in as one `ProofDrivers`, installed by the command line that runs a driver
@@ -34,7 +34,7 @@ class ProofDrivers(Protocol):
     #: Flock's proof-format reader (``redigest``: ``layout``, and ``tc.R``, the reads it records)
     redigest: Any
     #: the chain's reader of a network attester's run: ``pairs``, ``link``
-    network_certifier_chain: Any
+    network_attester_chain: Any
 
 
 _installed: ProofDrivers | None = None
