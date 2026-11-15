@@ -61,5 +61,4 @@ The code is `benchmarks/training_slowdown/`, whose README has its commands. It d
 - It grades one submission at a time and makes no plot.
 
 The tree has one converter to a Program, from a PyTorch loop body
-(`adapters/vllm/verity_vllm/program/frontend/train_step.py`, in the vLLM adapter until there is a torch adapter). It
-takes one optimizer, AdamW.
+(`adapters/torch/verity_torch/frontend/train_step.py`, in the torch adapter). It takes one optimizer, AdamW.
