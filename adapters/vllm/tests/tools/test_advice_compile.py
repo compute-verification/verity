@@ -178,22 +178,87 @@ def test_a_launch_that_names_another_kv_cache_format_is_refused_by_its_setting(c
         assert AC.phi_of(_launched(**stated), {}, 0).engine == {"max_model_len": 2048}
 
 
-@pytest.mark.parametrize("setting", [{"speculative_config": {"method": "mtp", "num_speculative_tokens": 5}}, {"speculative_config": {}},
-                                     {"spec_method": "mtp"}, {"spec_model": "draft"}, {"spec_tokens": 5}])
-def test_a_launch_that_decodes_speculatively_is_refused_by_its_setting(setting):
-    """φ carries no speculative config, so such a launch would compile to Programs whose decode rows are one token, which it
-    did not run: the registration refuses it by the setting, in the config's form or vLLM's short ones. A launch that
-    leaves them out, or at None, compiles as before."""
-    (name, value), = setting.items()
-    why = (f"engine {name}={value!r}: a request Program models no draft tokens (speculative decoding), its decode row is one "
-           "token, so the compile of this launch would be Programs it did not run. Serve with speculative decoding off to compile it")
+MTP5 = {"method": "mtp", "num_speculative_tokens": 5}
+_AT = "method='mtp' and num_speculative_tokens=5"
+
+
+def _spec_refused(name: str, value: Any) -> str:
+    return (f"engine {name}={value!r}: a request Program states speculative decoding only at {_AT}, so the compile of this launch "
+            f"would be Programs it did not run. Serve at {_AT}, or with speculative decoding off, to compile it")
+
+
+@pytest.mark.parametrize("setting", [{"speculative_config": dict(MTP5)}, {"speculative_config": {**MTP5, "model": None}},
+                                     {"spec_method": "mtp", "spec_tokens": 5}, {"spec_method": "mtp", "spec_tokens": 5, "spec_model": None}])
+def test_a_launch_that_drafts_five_tokens_by_mtp_states_it_in_phi_in_either_form(setting):
+    """The model's own MTP module drafting 5 tokens a row, in the config's form or vLLM's short ones, is the one speculative
+    decoding φ states, as its engine's ``speculative``; its digest is not the undrafted launch's, which is as before."""
+    tp, engine = AC.engine_of(_launched(**setting), 0)
+    assert (tp, engine) == ({"world": 8, "rank": 0}, {"max_model_len": 2048, "speculative": MTP5})
+    drafted, plain = AC.phi_of(_launched(**setting), {}, 0), AC.phi_of(_launched(), {}, 0)
+    assert drafted.engine == engine and plain.engine == {"max_model_len": 2048} and drafted.digest() != plain.digest()
+    off = dict.fromkeys(("speculative_config", "spec_method", "spec_model", "spec_tokens"))
+    assert AC.phi_of(_launched(**off), {}, 0).digest() == plain.digest()
+
+
+@pytest.mark.parametrize("setting,why", [
+    ({"speculative_config": {"method": "ngram", "num_speculative_tokens": 5}}, _spec_refused("speculative_config.method", "ngram")),
+    ({"speculative_config": {"method": "eagle3", "num_speculative_tokens": 5}}, _spec_refused("speculative_config.method", "eagle3")),
+    ({"speculative_config": {"method": "mtp", "num_speculative_tokens": 3}},
+     _spec_refused("speculative_config.num_speculative_tokens", 3)),
+    ({"speculative_config": {"method": "mtp", "num_speculative_tokens": 5.0}},
+     _spec_refused("speculative_config.num_speculative_tokens", 5.0)),
+    ({"speculative_config": {**MTP5, "model": "a/draft"}}, _spec_refused("speculative_config.model", "a/draft")),
+    ({"speculative_config": {**MTP5, "draft_sample_method": "gumbel"}}, _spec_refused("speculative_config.draft_sample_method", "gumbel")),
+    ({"speculative_config": {**MTP5, "disable_padded_drafter_batch": True}},
+     _spec_refused("speculative_config.disable_padded_drafter_batch", True)),
+    ({"speculative_config": {**MTP5, "num_speculative_tokens_per_batch_size": [[1, 8, 3]]}},
+     _spec_refused("speculative_config.num_speculative_tokens_per_batch_size", [[1, 8, 3]])),
+    ({"spec_method": "ngram", "spec_tokens": 5}, _spec_refused("spec_method", "ngram")),
+    ({"spec_method": "mtp", "spec_tokens": 2}, _spec_refused("spec_tokens", 2)),
+    ({"spec_method": "mtp", "spec_tokens": 5, "spec_model": "draft"}, _spec_refused("spec_model", "draft")),
+    ({"spec_model": "draft"}, _spec_refused("spec_model", "draft")),
+    ({"speculative_config": {}}, f"engine speculative decoding {{}} leaves method unset: a request Program states it only at {_AT}. "
+                                 f"Serve at {_AT}, or with speculative decoding off, to compile it"),
+    ({"spec_method": "mtp"}, f"engine speculative decoding {{'method': 'mtp'}} leaves num_speculative_tokens unset: a request Program "
+                             f"states it only at {_AT}. Serve at {_AT}, or with speculative decoding off, to compile it"),
+    ({"spec_tokens": 5}, f"engine speculative decoding {{'num_speculative_tokens': 5}} leaves method unset: a request Program states "
+                         f"it only at {_AT}. Serve at {_AT}, or with speculative decoding off, to compile it"),
+    ({"speculative_config": dict(MTP5), "spec_tokens": 5}, f"engine speculative_config={MTP5!r} beside spec_tokens=5: the launch states "
+                                                           "its speculative decoding twice. Serve with one of the two to compile it"),
+    ({"speculative_config": '{"method": "mtp", "num_speculative_tokens": 5}'},
+     "engine speculative_config='{\"method\": \"mtp\", \"num_speculative_tokens\": 5}': φ reads a speculative config as a mapping of "
+     "SpeculativeConfig's fields. Serve with it as one to compile it"),
+])
+def test_every_other_speculative_setting_is_refused_by_its_name(setting, why):
+    """Another method, count or draft model, any other `SpeculativeConfig` field set, a setting that leaves the method or the
+    count out, one stated in both forms, or a config that is no mapping would compile to Programs of a launch it did not run:
+    the registration refuses each by the arg that names it."""
     with pytest.raises(ValueError, match=re.escape(why)):
         AC.engine_of(_launched(**setting), 0)
     with pytest.raises(ValueError, match=re.escape(why)):
         AC.phi_of(_launched(**setting), {}, 0)
-    off = dict.fromkeys(("speculative_config", "spec_method", "spec_model", "spec_tokens"))
-    assert AC.engine_of(_launched(**off), 0) == ({"world": 8, "rank": 0}, {"max_model_len": 2048})
-    assert AC.phi_of(_launched(**off), {}, 0).engine == {"max_model_len": 2048}
+
+
+def test_the_predictor_refuses_to_build_a_drafted_launchs_program_by_name():
+    """φ admits the drafted launch, but no Program the predictor builds has its drafted rows, accept or draft forward yet, so
+    its decoder (`domain.check_phi`, which every Program's build passes) refuses it by name, for a request and for a step: the
+    admission does not let a drafted serve through as an undrafted Program. The undrafted launch's decoder builds as before."""
+    from verity_vllm.program.predict import build
+    from verity_vllm.program.predict.build import Unexpressible
+
+    hf = json.loads(pinned_hf_config(*GLM53).read_text())
+    drafted = AC.phi_of(_glm53_launch(speculative_config=dict(MTP5)), hf, 3)
+    assert drafted.engine["speculative"] == MTP5
+    why = re.escape(f"speculative decoding {MTP5!r} (a Program decodes one token a row; none builds a drafted request's rows, accept "
+                    "and draft forward yet)")
+    with pytest.raises(Unexpressible, match=why) as refused:
+        build.decoder(drafted)
+    assert "not modelled" not in str(refused.value)
+    with pytest.raises(Unexpressible, match=why):
+        build.build_program(drafted, "request", LP=4, T=2)
+    with pytest.raises(Unexpressible, match=why):
+        build.build_program(drafted, "step", M=6)
+    assert build.decoder(AC.phi_of(_glm53_launch(), hf, 3)).kv_layout is None
 
 
 def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set():
