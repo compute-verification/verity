@@ -358,8 +358,8 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
     A gate without its key record states none."""
     from verity.commitments.crypto import lms
-    from verity.protocols.proofs.spot.device import challenger as Ch
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     dep = lms.DEPLOYED
     if challenger == "local":

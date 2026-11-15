@@ -1251,7 +1251,7 @@ def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
 def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_path, capsys):
     """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
     `lms.DEPLOYED`'s, and without the record no word is stated."""
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
     assert PP.ran_with("local") == ("ran with: coins local challenger; parameters development (the local challenger's LMS key "
                                     "at W=4, H=5, not the deployed W=1, H=20)")

@@ -34,9 +34,9 @@ A record is one of two kinds:
   its refusal replays on the registry as it stood before (the recorded one, less the refusal's count), where both
   must refuse the node again, by its live registration, and leave the recorded registry.
 
-    uv run python verity/protocols/accounting/poub/verifier/lean/replay.py transcript CASE.json ... \
+    uv run python verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py transcript CASE.json ... \
         [--record VERIFIER.json ...] [--out ROWS.json]
-    uv run python verity/protocols/accounting/poub/verifier/lean/replay.py record VERIFIER.json ... [--out ROWS.json]
+    uv run python verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py record VERIFIER.json ... [--out ROWS.json]
 
 One row a session (one for a record with none), printed and with `--out` written as JSON. Exit status 1 if the verifiers
 differ on any row, a verdict isn't the recorded one, or a recorded digest or registry isn't the verifiers'.
@@ -55,7 +55,7 @@ from pathlib import Path
 import ra_cases as M
 import verity_difftest as D
 
-from verity.protocols.accounting.poub.verifier import audit, coins, receipts
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE, of_record=M.OF_RECORD)
 REGISTRY = D.Port(M.EXE, "registry", M.registry, None, package=M.PACKAGE, of_record=M.OF_RECORD, rejects=M.REFUSALS)

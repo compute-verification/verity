@@ -60,14 +60,14 @@ Pearl+ is PoUW's run verdict over `pearl-c-h100-v1-h3`, Pearl's FP8 (E4M3) proof
 every pass's operand rows and every tile's checked values. The verifier samples tiles by their credit, with a coin
 drawn after the commitment, replays each sampled tile from its opened rows, and credits the run at the scheme's named
 assumption. The verifier of record is Lean, `PouwCheck.PearlPlus`'s `check`
-(`verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean`, executable `pouw-pearlplus`).
+(`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean`, executable `pouw-pearlplus`).
 The Python `benchmarks/pouw/pearl_c_vllm/verify_run.py` computes the same answer beside it, and `verity bench compute`
 prints no number when the two differ or the record holds no Lean verdict.
 
 **A number from your own machine is a measurement, not an audit.** With in-process coins the salt comes from an
 in-process challenger and the sample from the node's own draw, and you control both. Run of record, the Lean verifier
 refuses such a run as a development run (`ofRecordReason` in
-`verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Coins.lean`): of record needs the coins live
+`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Coins.lean`): of record needs the coins live
 from the auditor's challenger. Locally nothing stops you re-rolling either until a run passes. A run is one execution
 phase; an audit pools execution phases over a monitoring period, which a local run doesn't.
 
@@ -75,7 +75,7 @@ phase; an audit pools execution phases over a monitoring period, which a local r
 
 Anything the verifier doesn't read, as long as what you commit is what it replays:
 
-- **The kernel.** The served kernel is `verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/`
+- **The kernel.** The served kernel is `verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/`
   (`pearl_c_sm90.cu`, the inert-work counter `debit_sm90.cu`, `build.sh`), built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`. Any code may replace it that commits the same operand rows, checked
   words, leaves and served y bit for bit: `checkTile` replays them from the opened rows and never sees how they were
@@ -119,7 +119,7 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 resistance (`cr/sha-512` in the lock) and on Pearl's assumption at the H100 record, TT_OUT rev1 (`TTOutPearlCDevRev1`;
 per tile `TTOutTilePearlCH100Rev1`), which is conjectured. A bridge from acceptance to the game's audit is proved
 (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`), but no guarantee in the lock states a Pearl+
-run's credit yet, and `verity/protocols/accounting/pouw/verifier/README.md` records TT_OUT rev1 as refuted by a
+run's credit yet, and `verity/protocols/resource_accounting/compute/pouw/verifier/README.md` records TT_OUT rev1 as refuted by a
 red-team rating.
 
 **Computing fewer products, or wrong ones.** `checkTile` recomputes a sampled tile's checked words from its opened rows
@@ -138,7 +138,7 @@ is refused only in an audit, where a verdict of record refuses in-process coins 
 **Choosing the sample.** Tiles are sampled by a key of the coin's source and the run's commitment (`drawKey`). A coin
 record of another commitment is `after-coin`; a verdict of record refuses the node's sample (`of-record`). One sampling
 session a root, ever, is the challenger's own rule, in Python on the auditor's device (`open_refusal` in
-`verity/protocols/compose/device/live_challenger/auditor.py`), not in Lean. Locally nothing refuses a retried sample.
+`verity/protocols/compose/verifier/live_challenger/auditor.py`), not in Lean. Locally nothing refuses a retried sample.
 
 **Dropping passes after the sample.** The run's commitment covers the retained passes (`runCommitment`) and must be
 the coin record's (`after-coin`); given a class, the retained rounds must be exactly its rounds (`heldToLoad`).
@@ -167,7 +167,7 @@ rows, and `heldToLoad` the class's fixed load. These are Lean code with no prove
 crediting more MACs than the class's linears (and LM head), Python on the measuring side.
 
 **Serving with weights other than the model's: not refused today.** The registration log can carry a checkpoint's
-SHA-512 (`checkpoint` in `verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean`), but no check
+SHA-512 (`checkpoint` in `verity/protocols/registration/verifier/lean/RegistrationLog.lean`), but no check
 recomputes the committed B rows' root from the published checkpoint, so other weights of the same shapes can be
 credited.
 

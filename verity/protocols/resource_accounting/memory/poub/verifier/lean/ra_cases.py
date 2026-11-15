@@ -27,16 +27,16 @@ from typing import Any
 import verity_difftest as D
 from verity_difftest import protocol as P
 
-from verity.protocols.accounting.poub.prover import audit_prover
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, wire
-from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params, SessionError
-from verity.protocols.accounting.poub.verifier.receipts import Plan
-from verity.protocols.proofs.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES
-from verity.protocols.proofs.spot.device.challenger import HM96, LiveChallenger
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts, wire
+from verity.protocols.resource_accounting.memory.poub.verifier.audit import AuditRun, Params, SessionError
+from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan
+from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES as LIVE_COIN_BYTES
+from verity.protocols.proofs.spot.verifier.challenger.challenger import HM96, LiveChallenger
 
 PACKAGE = Path(__file__).resolve().parent
 EXE = "poub-difftest"
-#: The ports' side of record (`verity_difftest`): the Lean, the verifier `verity/protocols/accounting/poub/verifier/session/verifier.py` runs.
+#: The ports' side of record (`verity_difftest`): the Lean, the verifier `verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py` runs.
 OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.

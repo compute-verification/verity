@@ -497,7 +497,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 

@@ -40,12 +40,12 @@ read rate over the session was certified as spent reading the audited store. The
   which stderr names. The two reference numbers
   printed beside a node's number are runs in our evidence store, so `--local` prints them as not read, with that reason.
 - **What you may change, to do better:** the prover's side, which is all of what the audit treats as untrusted: how
-  the store is read in each pass and when (`verity/protocols/accounting/poub/prover/node_store/serving.py`, the store's
+  the store is read in each pass and when (`verity/protocols/resource_accounting/memory/poub/prover/node_store/serving.py`, the store's
   backend, its passes and their pacing against the verifier's windows), how the KV cache and the store are encoded
-  on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and what of the engine's memory is
+  on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and what of the engine's memory is
   registered as the store and how it is laid out (`adapters/vllm/verity_vllm/protocols/poub/binder.py`, and `run.sh`'s
   `KV_PAGES`, `WEIGHT_BLOCKS` and filler).
-- **What is fixed:** the verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`), the ledger
+- **What is fixed:** the verifier and its Lean (`verity/protocols/resource_accounting/memory/poub/verifier/`, its `lean/`), the ledger
   that turns a session into the share and its error (`verifier/session/verifier.py`), the error rule (an error of 1 or
   more prints no number), the session's windows and samples, and this command. A number from a changed verifier is
   not a result.

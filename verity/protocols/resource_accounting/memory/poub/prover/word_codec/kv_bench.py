@@ -305,8 +305,8 @@ def gate_coin(lib: Lib, torch, log) -> dict | None:
     PoUB's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
     `kv_encode_bound` at its own indices under b_j(c_a), equal the pinned words (their SHA-512 and first word), decode
     back, and don't decode under the form without the coin."""
-    from verity.protocols.accounting.poub.verifier import codec as RC
-    from verity.protocols.accounting.poub.verifier import vectors as RV
+    from verity.protocols.resource_accounting.memory.poub.verifier import codec as RC
+    from verity.protocols.resource_accounting.memory.poub.verifier import vectors as RV
 
     rc, f = RC.DEFAULT, lib.field
     if (f.name, lib.mask) != (rc.field.name, rc.masked) or rc.rounds > lib.kmax:

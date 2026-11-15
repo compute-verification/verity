@@ -39,10 +39,10 @@ from poub_fakes import Entropy
 
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.protocols.accounting.poub.prover import audit_prover
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
-from verity.protocols.accounting.poub.verifier.vectors import PATH, payload
-from verity.protocols.proofs.spot.device.challenger import live_domain, live_leaf
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
+from verity.protocols.resource_accounting.memory.poub.verifier.vectors import PATH, payload
+from verity.protocols.proofs.spot.verifier.challenger.challenger import live_domain, live_leaf
 
 SOURCE = b"verity remote bandwidth vector source"
 NODE = b"verity remote bandwidth vector node"
