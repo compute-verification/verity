@@ -11,9 +11,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.protocols.accounting.pouw.prover.serving import tensors as TS
-from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as TS
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
 
 torch = pytest.importorskip("torch")
 

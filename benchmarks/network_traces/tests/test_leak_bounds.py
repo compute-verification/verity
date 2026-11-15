@@ -1,5 +1,5 @@
 """leak_bounds, the one calculator of K, in its scaling by links. `per_link` and `at_link_rate` give chain_record.leak's
-rows on a network certifier run's files, and `datacenter` is links × `per_link` for identical links, each link at δ /
+rows on a network attester run's files, and `datacenter` is links × `per_link` for identical links, each link at δ /
 links.
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
@@ -33,14 +33,14 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import scan_answer as SA  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
 SLOWDOWN = HERE.parents[1] / "benchmarks" / "slowdown" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
-#: the network certifier's scan class, KO 64 (`scan_zk.CLASS`)
+#: the network attester's scan class, KO 64 (`scan_zk.CLASS`)
 W63 = replace(KO1, KO=64)
 #: 8 requests a sampling block of 32 buckets of 100 ms
 RATE = 2.5
@@ -63,7 +63,7 @@ def clog2(x: int) -> int:
 
 
 def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
-    from verity.protocols.accounting.certifier.prover import scan_zk as sz
+    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
     assert sz.CLASS == W63
     cr = _load("chain_record")
     run = tmp_path / "c1"

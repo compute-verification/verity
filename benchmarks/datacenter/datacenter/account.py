@@ -143,7 +143,7 @@ class Account:
 
     @property
     def export_charged(self) -> bool:
-        """Whether the export is charged: only once network certifiers cover every link, and not
+        """Whether the export is charged: only once network attesters cover every link, and not
         applicable while `uncovered` names any."""
         return not self.uncovered
 
@@ -156,7 +156,7 @@ class Account:
     def sound(self) -> bool:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
         (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
-        `TransferBlocks.network_verdict` (`verity/protocols/accounting/certifier/verifier/service.py`), the same AND over a link's outcomes
+        `TransferBlocks.network_verdict` (`verity/protocols/resource_accounting/network/verifier/service.py`), the same AND over a link's outcomes
         of record; this model builds no proof-system streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
 

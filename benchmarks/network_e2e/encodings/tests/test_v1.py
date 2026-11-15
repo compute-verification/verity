@@ -1,5 +1,5 @@
 """Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
-and a fitted one; the engine's arrival order is sent as its deviations from the network certifier's release order and recovered
+and a fitted one; the engine's arrival order is sent as its deviations from the network attester's release order and recovered
 from the advice's rows; every hit is the replay's block pool's, past the pool bound too, and none is sent; the KV pool is
 the registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
 the decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak
@@ -36,7 +36,7 @@ def _load(name: str):
 
 
 V, R, C, CV = _load("v1"), _load("replay"), _load("code"), _load("code_v1")
-from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import advice as I1  # noqa: E402
 from verity_vllm.compiler import replay_chain as RC  # noqa: E402
 from verity_vllm.pipeline.advice_code import kept as KP  # noqa: E402
 from verity_vllm.pipeline.advice_code import schedule_code as SC  # noqa: E402
@@ -188,7 +188,7 @@ def _ordinals(t, rec) -> list[int]:
 def test_the_order_is_sent_as_its_deviations_from_release_order():
     """Two requests released in one bucket that the engine took the other way round: the record's release order puts
     the later arrival first, so v1 sends one order entry, (its position, rank 1), and decodes back the advice, the
-    engine's arrival order and each I1 request's network certifier ordinal (`streams`, the I/O tie). Another rank decodes to
+    engine's arrival order and each I1 request's network attester ordinal (`streams`, the I/O tie). Another rank decodes to
     another advice or is refused, and a rank or position past the requests left is refused."""
     t = step_trace("async-light")
     c = t.certified(0.1)

@@ -1,5 +1,5 @@
 """The carried pool's row: vLLM d9105ea80's prefix-cache ``BlockPool`` at a window's edge as the pool row the network
-certifier's compile slice carries between windows (`verity.commitments.pool_row`), with vLLM keying its blocks by
+attester's compile slice carries between windows (`verity.commitments.pool_row`), with vLLM keying its blocks by
 BlockKey_v1 so that the row's keys are the ones vLLM hits on.
 
 **The snapshot** (`snapshot`) reads a live pool as plain data (`Pool`). It takes each block's reference count and key,

@@ -10,7 +10,7 @@ import weakref
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1_SCHEME,
     H1_TILE,
     H1_WEIGHT_KEY,

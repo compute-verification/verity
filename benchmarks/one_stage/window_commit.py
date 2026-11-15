@@ -1,4 +1,4 @@
-"""`prove_path.py` with what its window-commit takes of the network certifier for a served window: the reader of the
+"""`prove_path.py` with what its window-commit takes of the network attester for a served window: the reader of the
 certifier run the serve kept (`certifier_piece.kept_ingress`) and the name the certifier's scan reads the window's opened
 scan state under (`scan_zk.SCAN_STATE_FILE`). SPOT imports neither the certifier nor a benchmark, so the command takes
 them from here, where both may be imported (`served_verdicts.sh`'s V3c window-commit).
@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "network_traces"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "prove_path"))
 import certifier_piece
 
-from verity.protocols.accounting.certifier.prover.scan_zk import SCAN_STATE_FILE
+from verity.protocols.resource_accounting.network.prover.scan_zk import SCAN_STATE_FILE
 import prove_path
 
 if __name__ == "__main__":

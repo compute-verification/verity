@@ -59,7 +59,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
   W_reg (see "The fleet").
 - **k**: the number of a replica's execution phases in a period, about 1e8 to 1e9 a week.
 - **q**: the expected number of a replica's execution phases selected in a period. The service's sample sets it.
-- **Replica**: the devices serving one copy of the model, behind one network certifier boundary, whose runs the challenger
+- **Replica**: the devices serving one copy of the model, behind one network attester boundary, whose runs the challenger
   puts in one sequence. **G** is the number of replicas a claim registers.
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
 - **ε_skip**: Dither's ε, the share of W_reg a period may skip: the Notation's ε_W, PoUW's part of the fleet's ε_skip
@@ -388,7 +388,7 @@ fail.
 commits to its coins c before the monitoring period, and the commitment reaches the prover only after the prover has
 committed, so no soundness statement takes a hiding premise on it.
 - The public configuration names each replica's sampling challenger, its identity and LMS key, and never its coin root.
-- Before the monitoring period, the challenger sends its committed root to the network certifiers over their private
+- Before the monitoring period, the challenger sends its committed root to the network attesters over their private
   links (`WitnessPathPrivate`), never to the prover first.
 - A sample's c opens against the root, to the certifiers, only after the receipt the sample follows, and the sample's coins
   are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
@@ -411,7 +411,7 @@ is shared between replicas.
 
 ### The boundary
 
-The network certifier watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
+The network attester watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
 k_exfil. Dither needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-device`). No machine
@@ -422,7 +422,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
   messages (the devices' signed records and salts, the prover's witness, a server's coins) travel only on private
   links, and the certifier sits on the server's own uplink.
   - **The MVP: the certifier's device is the challenger.** The device that runs the
-    replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
+    replica's network attester produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
     lowest-numbered server, and its coins reach the other servers' certifiers only over the auditor's private links.
   - After the MVP, a challenger on a device of its own may reach the certifier only over a private link. A keyed path

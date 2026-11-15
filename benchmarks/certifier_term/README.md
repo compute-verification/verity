@@ -1,9 +1,9 @@
 # certifier_term
 
-`verity bench certifier_term` prints the network certifier's term for GLM-5.3: the bits its accepted transcripts can
+`verity bench certifier_term` prints the network attester's term for GLM-5.3: the bits its accepted transcripts can
 carry over a monitoring period, at the load of a node, the census's reference datacenter and the world, in bits and
 GB, beside a target and one copy of the weights. Each row counts all its scope serves by its check's own rule, as
-the monitoring-period check charges it (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`).
+the monitoring-period check charges it (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`).
 Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py` (`table`, `document`, `render`); this
 directory holds its runner, which with `--out` also writes the term of record's row as a result (The result, below).
 
@@ -23,9 +23,9 @@ It reads files and computes, so it needs no GPU and no run. Under `research run`
 commit: `--run "$RESEARCH_RUN_ID" --commit "$RESEARCH_SOURCE_SHA"`. Without `--commit` it names the checkout's HEAD.
 
 The document's `value` is the term of record: the scan's term over the world's year, charged at two release
-schedules (D_j = 2), in GB. The term at D_j = 1 is what a network certifier with a set-time card, a network card
+schedules (D_j = 2), in GB. The term at D_j = 1 is what a network attester with a set-time card, a network card
 that releases at a set time, would be charged. That card is simulated: none is deployed, and the network
-certifier's software pacer stands in for it. So a figure at D_j = 1 is never the term of record and is printed only
+attester's software pacer stands in for it. So a figure at D_j = 1 is never the term of record and is printed only
 under the label "with a simulated set-time card": the document's `with_set_time_card` holds the scan's term over
 the world's year at D_j = 1, its unit, that label and its mark, `simulated`. A row whose release times are taken
 once (`timing`, `all three`) has a jitter of 0 at either D_j, which rests on the same card, so every figure of it is
@@ -33,7 +33,7 @@ under the label: the row's own `with_set_time_card` is the label, where every ot
 print the row's name with the label.
 
 The card is an input of the document, `set_time_card`, the one input marked `simulated`. Its source is what a
-figure under the label rests on, a clause of `trusted-device`: the network certifier's card releases each bucket at
+figure under the label rests on, a clause of `trusted-device`: the network attester's card releases each bucket at
 the tick its record names, whatever the host and the server send it. The clause holds only of a calibrated hardware
 card; no such card is deployed, and the software pacer that stands in for it does not meet it.
 
@@ -59,9 +59,9 @@ say so; none is computed from a run's K.
   the period, the scope's machines × a registered uplink's `beta` × the period's seconds. `beta` is bits a second each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
   registration log, `--registration FILE`
-  (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the boundary link of its
-  one host that a network certifier splits. The log is read as given, and one that registers anything but the
-  model's machine, one host behind one network certifier, is refused. Every machine of the scope is taken as
+  (`verity.protocols.registration.verifier.registration`'s committed log): the boundary link of its
+  one host that a network attester splits. The log is read as given, and one that registers anything but the
+  model's machine, one host behind one network attester, is refused. Every machine of the scope is taken as
   registered like that one, which is the model's statement and no registration's. With no `--registration` the
   capacity has no value and its `inputs` say why: it is read from a registered link or not at all, never copied
   from a data sheet, a schedule or the datacenter model.
@@ -111,13 +111,13 @@ the command prints without `--out`, and the calculator's numbers, are held where
 
 ## The rows
 
-A scope is a node (one machine), the reference datacenter or the world, each machine behind one network certifier.
+A scope is a node (one machine), the reference datacenter or the world, each machine behind one network attester.
 Over a week, a month and a year it serves its GPU-seconds × the serving MFU × a GPU's peak FLOP/s / (a request's
 tokens × 2 × the served MACs a token) requests, each on one connection. Which request that is is the row's request
 count, which every row names (Where the scale comes from, below). Each scope and monitoring period has seven rows,
 and each row says where it stands:
 
-- `scan` (on main): the rows form, the scan on the network certifier's own run, as the check charges it today. A
+- `scan` (on main): the rows form, the scan on the network attester's own run, as the check charges it today. A
   connection is charged for its schedule and again for its fail cell, one connection a request, so these two terms
   are counted by request. The jitter is counted by link, for each of its execution phases. Its accept is run, not
   proved, whatever its bound and its δ: it rests on verdicts the scan's driver hands the compiled record check, and
@@ -136,7 +136,7 @@ and each row says where it stands:
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
   Its failed connections' charge, its jitter, its count and its entries are the design's.
-- `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
+- `design` (no run behind it): head checks, a lengths unit on the network attester's records, and a stop block
   sampled on a served audit. How its stop class is charged is read from a served run's verdict records and from
   nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
   holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
@@ -147,7 +147,7 @@ and each row says where it stands:
 ### The stop class's verdicts
 
 The rows that hold the lengths by a stop block, `lengths`, `all three` and `design`, are charged below their
-schedules only as the network certifier's own rule says (`verity.protocols.accounting.certifier.verifier.class_charge.charge`),
+schedules only as the network attester's own rule says (`verity.protocols.resource_accounting.network.verifier.class_charge.charge`),
 from the signed head of an execution phase and the verdict records on a class of it:
 
 - a class that holds a row owes four verdicts, the stop record, the response tie, the certified read of the request's
@@ -155,13 +155,13 @@ from the signed head of an execution phase and the verdict records on a class of
 - with one missing, refused, not complete or decided under another head, another serve's among them, the class is
   charged its whole schedule on every row; a verdict without `complete` reads as not complete;
 - so it is where the class's records on that head name two serves or two registrations: the head holds the network
-  certifier's rows to a serve, and these two names hold the values the verdicts judge to it;
+  attester's rows to a serve, and these two names hold the values the verdicts judge to it;
 - so it is where the rule is not handed the schedule the head names, or that schedule can't be tied (each P listed
   once, one O for every class and a response limit): with no schedule handed that word was not asked, and the
   line says the schedule was not handed;
 - a class with a count of 0 owes none.
 
-`verity/protocols/accounting/certifier/prover/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
+`verity/protocols/resource_accounting/network/prover/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
 The records are in the evidence store, in the run files of the runs that carry
 `run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
 
@@ -175,8 +175,8 @@ The records are in the evidence store, in the run files of the runs that carry
   below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read. Its one writer is the offline check of the network
-  certifier's run, `verity/protocols/accounting/certifier/device/network_certifier_serve.py check` with `--key-sha512 HEX --session HEX` and
-  `--registrations FILE`. The auditor hands that check the SHA-512 of the network certifier's public key and its
+  attester's run, `verity/protocols/resource_accounting/network/attester/network_attester_serve.py check` with `--key-sha512 HEX --session HEX` and
+  `--registrations FILE`. The auditor hands that check the SHA-512 of the network attester's public key and its
   session, and the check holds the run's deployment record to them: a run made under another key or session, a
   rehearsal's own, gets no file, and that problem is the first the check lists. The file's first line says what
   it was checked under: one object with a `format` of its own, the word
@@ -286,7 +286,7 @@ An execution phase is one serve's: a serve, a link and the phase's number. A reg
 no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's
 second line says so. Two heads given for one number of a link are two execution phases only where the records of
 each name a serve and none is named for both. Where one is named for both, where no record names a serve for one of
-them, or where a table of one name has one domain in both (a domain binds the network certifier's session, the
+them, or where a table of one name has one domain in both (a domain binds the network attester's session, the
 link, the number and the table's rows), they are one execution phase given two heads, which holds no execution
 phase at all. A head whose records name two serves is charged its whole schedule.
 
@@ -341,17 +341,17 @@ with none given it moves only as the least lanes that serve them do.
   0 with none (`--failure-rate`, the share that fail, which no run has measured).
 - **jitter**: ⌈log2 D_j^T⌉ bits for each execution phase of T buckets on each link. At D_j = 2, two release
   schedules, it is a bit a bucket, and that is the jitter of record. At D_j = 1 it is 0, which is what a network
-  certifier with a set-time card would be charged: it is printed as "with a simulated set-time card". Where
+  attester with a set-time card would be charged: it is printed as "with a simulated set-time card". Where
   the timing is taken once it is 0 at either D_j, and that 0 rests on the same card, so those rows carry the label
   in their name.
 - **count**: on the design's two rows, classes · log2(R + 1) bits for each execution phase on each link, whatever
-  it serves, and 0 on every other row. Under the design the network certifier signs a head over each execution
+  it serves, and 0 on every other row. Under the design the network attester signs a head over each execution
   phase's tables, and a content class's tables are the rows it holds and no other, so the head states how many of
   the execution phase's releases each class holds: one of R + 1 values a class.
   - R is the most connections the schedule releases in an execution phase of T buckets: lanes · ⌈(T + ingress
     buckets − 1) / (D + 1)⌉, D being the delay. It is a bound: at some schedules no load releases as many.
   - The classes, the delay and the ingress buckets are inputs (`--classes`, `--delay`, `--ingress-buckets`), by
-    default those of the lengths rows' cost runner (`verity/protocols/accounting/certifier/device/connection_rows_run.py cost`): six
+    default those of the lengths rows' cost runner (`verity/protocols/resource_accounting/network/attester/connection_rows_run.py cost`): six
     classes and a delay of 30 buckets, which its ingress buckets equal.
   - The lanes are the input the entries read (`--lanes`). With none given the schedule is not known, so the count
     is at the least lanes whose schedule releases what a link serves in an execution phase: any schedule that
@@ -364,7 +364,7 @@ with none given it moves only as the least lanes that serve them do.
   - The count's line is the count alone. The head's time is not held to a tick: nothing holds when the head of a
     link's execution phase leaves, so the line says so, and prints no charge for a head that leaves late, of 0 or
     of anything else.
-- **term**: the four summed, the network certifier's own term, at each D_j. The term of record is the one at
+- **term**: the four summed, the network attester's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.
 - **entries**: the slot entries, which are the compute side's and not part of the term. The scan's check charges
@@ -403,7 +403,7 @@ and the schedule R is of: its lanes, given or the least, and its classes, delay 
 runner's or as given; and the same rule at the cost runner's own schedule, 16 lanes and an execution phase of 600
 buckets, which is that runner's and not these rows'), and the target as bits a link's execution phase and a request
 over the world's year. Then they say
-what the design's term over the world's year is with the release times taken once by a network certifier whose
+what the design's term over the world's year is with the release times taken once by a network attester whose
 network card releases at a set time (simulated), the failed connections' charge and the count: the largest failure
 rate at which it meets the target, the document's `failure_rate_at_target`, or, where the count alone is over the
 target, that no failure rate meets it, and the document's rate is null. Last they give what the jitter alone is
@@ -430,7 +430,7 @@ Each row holds its own `count`, in bits and GB.
   - `given` (`--world-requests N`): N requests a world-year, of no stated request, in place of either. Every scope
     scales with it.
 - The weights are the workload card's parameters at FP4's 4 bits each.
-- A bucket is the network certifier's default.
+- A bucket is the network attester's default.
 
 The scaling by links (`leak_bounds.at_link_rate`, which `chain_record.py leak` reads on a run) is a different count:
 every link at the rate one run certified, whatever its scope serves.

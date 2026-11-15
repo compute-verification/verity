@@ -30,5 +30,5 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
           "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/torch/verity_torch", "verity/__init__.py",
-          "verity/protocols/__init__.py", "verity/protocols/policy/__init__.py",
-          "verity/protocols/policy/inference_only/__init__.py", "benchmarks/slowdown/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
+          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py", "benchmarks/slowdown/__init__.py"]

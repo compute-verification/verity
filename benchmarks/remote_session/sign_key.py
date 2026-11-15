@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.protocols.accounting.poub.verifier import receipts
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts
 
 SEED = bytes(64)
 ROW_BYTES = 512

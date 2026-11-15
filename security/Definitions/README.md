@@ -14,7 +14,7 @@ reads. [`security/README.md`](../README.md) has the argument, the lock and what 
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`, and on a `.lean` file
   that no root imports.
 - One pin's command (`tools/check/pins.py`) runs Lean in this package's Lake environment:
-  `verity/protocols/accounting/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
+  `verity/protocols/resource_accounting/compute/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
   `security/`, and the command runs it there and removes it.
 
 ## Areas
@@ -26,7 +26,7 @@ path: `research msg owners PATH`.
 |---|---|
 | `Accounting` | The device model every resource audit is about, and a joint audit's run on it |
 | `Assumptions` | The named assumptions: the few `Prop`s the guarantees take without proof |
-| `Certifier` | The network certifier's protocol: grids, the interaction, the Program |
+| `Certifier` | The network attester's protocol: grids, the interaction, the Program |
 | `Claims` | Flock's claim statements, over Core's interaction model |
 | `Core` | The model every area states its guarantees in: circuits, partitions, coins |
 | `Flock` | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |

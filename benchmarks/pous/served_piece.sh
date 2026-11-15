@@ -4,7 +4,7 @@
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
 #
-# Before the card: libp2v1.so built for it (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
+# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), built in a scratch copy of
@@ -50,8 +50,8 @@ LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
-           "it is allowed (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
-  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/accounting/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+           "it is allowed (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
+  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"
@@ -67,13 +67,13 @@ built() {  # the Lean executable $2 of the scratch copy's package $1, built ther
 }
 POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-}
 if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ]; then
-  CHECK=verity/protocols/accounting/pous/verifier/check
+  CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
   tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK" > "$DIR/lake-setup.log" 2>&1
   : > "$DIR/lake-build.log"
   [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
-  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/accounting/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
+  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/resource_accounting/memory/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
 fi
 # shellcheck disable=SC2206
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"

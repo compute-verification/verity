@@ -18,7 +18,7 @@ untraced = ["tests/test_ship_nvcc.py", "tests/test_ship_place.py"]
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
           "verity/device.py", "verity/channel.py", "hardware/cards/h200-sxm-141gb.toml",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "tools/config/verity_config",
-          "verity/protocols/accounting/pouw/prover/sass_gate.py", "benchmarks/kernels/ship_nvcc.sh",
+          "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "benchmarks/kernels/ship_nvcc.sh",
           "benchmarks/kernels/ship_probe.sh", "benchmarks/kernels/job_nvcc.sh", "benchmarks/kernels/ship.sh",
           "benchmarks/kernels/ship_clock.c", "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops",
           "verity/circuits/silicon"]

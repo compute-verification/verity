@@ -620,7 +620,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         check, stop = TS.template_fn(handoff["commit"]["check"]), TS._stop(a.stop)
         if stop is None:
             raise ValueError("a stop population is audited under the verifier's own stop rule: --stop")
-        from verity.protocols.proofs.spot.device import challenger_session as AC
+        from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
         # the verifier's half, from the hand-off and its own copies
         r = resume(handoff, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline,
                    key=AC.verifier_key(a.challenger_key, a.challenger_host), main=AC.lines(Path(a.main)))

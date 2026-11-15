@@ -7,20 +7,20 @@
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
 # Steps, each kept under $OUT and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)
-#   certs    the network certifier's own offline check on its witness, and the public certificates.jsonl held to the
+#   certs    the network attester's own offline check on its witness, and the public certificates.jsonl held to the
 #            certified lines (chain_record.py certs --warden-run)
-#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the certified I/O off the network certifier's cells
+#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the certified I/O off the network attester's cells
 #            (chain_record.py endpoint), or the served node's endpoint report
 #   n2       N2's units proved by Flock --zk and decided by its verifier, Lean included: n2_zk.py prove --warden-run,
 #            or CR_N2_CMD
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when scan_zk takes it)
-#   tie      the I/O tie on the network certifier's ingress, proved (n2_tie_zk.py prove --class warden)
+#   tie      the I/O tie on the network attester's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
-# The path is the network certifier path (CR_PATH=warden, the only one): every step reads the active network certifier's own run
+# The path is the network attester path (CR_PATH=warden, the only one): every step reads the active network attester's own run
 # (CR_WARDEN_RUN, or the one gate run holding a certified.jsonl) and nothing of a certifier rehearsal's, which in
 # CR_GATES is refused by name; the report requires every step (chain_record.NETWORK_CERTIFIER).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
@@ -30,10 +30,10 @@
 #      an art: id, or a directory; or the served node's endpoint report instead, a report.json beside no
 #      advice_trace.jsonl, which the endpoint step then reads rather than runs)
 #      CR_N2_CMD (replaces n2_zk.py prove; run with NETWORK_CERTIFIER, BIN, LEAN and N2OUT set, writing N2OUT/summary.json)
-#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
+#      CR_WARDEN_RUN (the network attester rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
 # scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
 #      CR_EOS_IDS (the endpoint step: the model's EOS token ids,
-# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
+# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network attester run records none)  CR_TIE_WINDOWS (the tie's
 # execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
 #      --draw K: N2's period sampled, K of the execution phases sampled on the verifier's coins; every one by default)
@@ -50,11 +50,11 @@
 # (n2_zk.ONE_SESSION), so no two of their provers' ZK server sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
-# state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
+# state, a gate run's witness/ (custody uploads all of $OUT; a network attester run's witness is its lane key's only)
 # nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows),
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
-# found of the traffic (which execution phases were certified or refused, and how many problems: network_certifier_chain's
+# found of the traffic (which execution phases were certified or refused, and how many problems: network_attester_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
 # which execution phases its members' signer refused, and its log of them with its stderr and its children's, n2.log),
 # nor a child's log in a step's output (a session's prove.log and serve.log). Those are witness,
@@ -153,9 +153,9 @@ mkdir -p "$OUT/gates"
   ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
-(cd verity/protocols/accounting/certifier/verifier/lean && lake build network-records) \
+(cd verity/protocols/resource_accounting/network/verifier/lean && lake build network-records) \
   > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
-export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-records
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-records
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 "$PY" "$CR" certs --warden-run "$NETWORK_CERTIFIER" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" \
   --witness "$Q/witness/certs/certs.json" 2>&1 \
@@ -220,7 +220,7 @@ scan() {
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
-  [ -n "$wr" ] && echo "$NETWORK_CERTIFIER" > "$W/scan.network_certifier"
+  [ -n "$wr" ] && echo "$NETWORK_CERTIFIER" > "$W/scan.network_attester"
 }
 tie() {
   local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
@@ -252,7 +252,7 @@ EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.network_certifier" ] && echo --warden-run "$(cat "$W/scan.network_certifier")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
+  $( [ -f "$W/scan.network_attester" ] && echo --warden-run "$(cat "$W/scan.network_attester")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   --tie "$OUT/tie/summary.json" \
   ${PA:+--period-answer "$PA"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}

@@ -1,7 +1,7 @@
 """The stop class's verdict records as the calculator's rows read them (`stop_verdicts`): a head is the
 registration's own, held to the digest its certificate names; a record is its verifier's, and which of the four
 verdicts it is is its verdict's format; the answer counts the execution phases held, those of a head read in which
-every class that holds a row has its four verdicts by the network certifier's rule, each on that head; every other
+every class that holds a row has its four verdicts by the network attester's rule, each on that head; every other
 execution phase is charged its whole schedule, so one left out of a run's files charges what it would refused;
 a registration that doesn't read, or no record at all, holds none, with a line that says why; an execution phase the
 rule charges below is held only where each verifier that accepted refused its negative control at the same commit
@@ -24,17 +24,17 @@ import pytest
 
 HERE = (Path(__file__).resolve().parents[1])
 sys.path.insert(0, str(HERE))
-from verity.protocols.accounting.certifier.device import connection_rows_run as CR  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.accounting.certifier.prover import stop_verdicts as SV  # noqa: E402
-from verity.protocols.accounting.certifier.prover.tests.verdict_records import (  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV  # noqa: E402
+from verity.protocols.resource_accounting.network.prover.tests.verdict_records import (  # noqa: E402
     TIE, FORMATS, UNDER, checked, names_under, SERVED, OTHERS, REGISTERED, COUNTS, streams, with_streams, four,
     the_controls, under, Store, jsonl, OTHER, ROWS)
-from verity.protocols.accounting.certifier.verifier import class_charge as CC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import connection_rows as C  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import content_rows as CT  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import class_charge as CC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import connection_rows as C  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import content_rows as CT  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, Direction  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 LINK = "responses"

@@ -1,5 +1,5 @@
 """GLM-5.3's stop class (`glm53.response_blocks`, `glm53.main --stop`) with the vLLM adapter's stop rule and the network
-certifier's response tie, which SPOT's cost takes from its caller: a stop class adds one stop block and one response tie a response, each a candidate
+attester's response tie, which SPOT's cost takes from its caller: a stop class adds one stop block and one response tie a response, each a candidate
 whose ANDs, rows and output bits are its Definition's; every block of a population sampled leaves no block incorrect, no
 ε and no bit charged at any δ, a smaller sample is charged its count bound's blocks' output bits, and the planner's
 certificate over the two populations agrees; and `main --stop` prints both populations with what proving every block
@@ -14,7 +14,7 @@ import pytest
 
 from verity.commitments.periods.interface import proof_block_k_log
 from verity.circuits.defs import bind
-from verity.protocols.accounting.certifier.prover import response_tie
+from verity.protocols.resource_accounting.network.prover import response_tie
 from verity.protocols.proofs.spot.prover.cost import glm53 as G
 from verity.protocols.proofs.spot.prover.optimize import Objective, certify
 from verity_vllm.definitions.registry import boolean_stop_rule

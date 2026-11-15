@@ -57,7 +57,7 @@ ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
-  `git rev-parse COMMIT:verity/protocols/accounting/poub/verifier` of the run's recorded commit (`--commit`), so it counts
+  `git rev-parse COMMIT:verity/protocols/resource_accounting/memory/poub/verifier` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
@@ -108,7 +108,7 @@ nothing: the line at that T holds no share and says "no bound at this period" wi
 `verity.protocol`'s rule for every row's error), and the sentence of who earned credit says so.
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
-from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
+from the network attesters' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
 check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
 the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
@@ -153,15 +153,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.accounting.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
 from verity.protocol import no_bound  # noqa: E402
-from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
-from verity.protocols.proofs.spot.device import remote  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
 
 import sheets  # noqa: E402
 
@@ -177,7 +177,7 @@ BURSTS = ("stated", "none")
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
-VERIFIER_TREE = "verity/protocols/accounting/poub/verifier"
+VERIFIER_TREE = "verity/protocols/resource_accounting/memory/poub/verifier"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned")
 """What a session's credit needs, each reported per session in this order."""

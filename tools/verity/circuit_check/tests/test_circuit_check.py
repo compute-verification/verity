@@ -1575,7 +1575,7 @@ def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
     from verity.circuits.codec import program_digest
     from verity.circuits.defs import bind
     from verity.circuits.program import Program
-    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket
+    from verity.protocols.resource_accounting.network.prover.ingress_scan import IngressScanBucket
 
     d = bind(IngressScanBucket, B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
     digest = program_digest(Program(d))

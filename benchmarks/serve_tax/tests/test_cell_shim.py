@@ -1,6 +1,6 @@
-"""The benchmark client's shim to the network certifier (`cell_shim`), against the certifier itself.
+"""The benchmark client's shim to the network attester (`cell_shim`), against the certifier itself.
 
-The network certifier runs tick by tick on a `VirtualClock`, in its id egress form with a limit on a
+The network attester runs tick by tick on a `VirtualClock`, in its id egress form with a limit on a
 response's ids, in front of an in-memory server that answers in the id form; the shim's HTTP clients and its connections to the
 certifier are in memory too. Nothing waits on the host's clock: the test moves the clock and waits for each side to
 have read what the other wrote."""
@@ -12,10 +12,10 @@ import json
 
 import cell_shim as C
 import pytest
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.id_form import id_request
-from verity.protocols.accounting.certifier.verifier.network_certifier import (NetworkCertifier as Certifier, NetworkCertifierParams as CertifierParams,
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
+from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+from verity.protocols.resource_accounting.network.verifier.network_attester import (NetworkCertifier as Certifier, NetworkCertifierParams as CertifierParams,
                                                                     audit)
 
 PARAMS = CertifierParams(cell_bytes=256, slots=1, bucket_ms=100, delay=4, lanes=2, queue=2, window=40, ingress_cells=8,

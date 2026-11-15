@@ -6,7 +6,7 @@ path, at the rate that bounds its disks together. A node whose file states its h
 gives a log accepted for `remote` against the auditor the card files give; a file without them gives no entry. Every
 entry holds a link for each way out, none of which a certifier splits. The storage path's link and that of an interface
 that reads no line rate say why (`Link.unmediated`), so neither node's site is mediated; an interface with a rate says
-nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network certifier standing in front of the
+nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network attester standing in front of the
 node or without one, and takes the H200 node once a challenger reaches its host. An auditor's device's time base card
 gives the host's clock drift, a premise or the auditor's figure by its mark, and a number marked `premise` never
 becomes `Auditor.drift`."""
@@ -69,7 +69,7 @@ def auditor(kind: str, **keys: str) -> Auditor:
 
 
 def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = None) -> Registration:
-    """The composite's log of one entry, the node's, with this network certifier standing in front of the node."""
+    """The composite's log of one entry, the node's, with this network attester standing in front of the node."""
     node = S.load_node(kind)
     log = Registration(composite)
     return log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=certifier,
@@ -184,7 +184,7 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
     """The H200 node's one interface reads no line rate, so its link states no capacity and says so, and the storage
     path's link says it is the storage path. Each says why no certifier splits it, so `onsite` refuses neither: it
     refuses the node by `challenger-reach` alone, and accepts it once a challenger reaches the host, with a site that
-    is not mediated. A network certifier named on the node is refused under either composite: its links would have
+    is not mediated. A network attester named on the node is refused under either composite: its links would have
     no rate."""
     assert [way.bw for way in S.ways_out(S.load_node(kind), HOST) if way.split] == [None]
     entry = log_of(kind, "onsite").entries[0]
@@ -204,7 +204,7 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
 def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, str] | None) -> None:
     """The node's interface is a boundary link that no certifier splits and that says no reason, so `onsite` refuses
     the node by `uncertified`, naming it and not the storage path, which says why, before and once a challenger
-    reaches the host, and with a network certifier standing in front of the node as without one: the certifier's
+    reaches the host, and with a network attester standing in front of the node as without one: the certifier's
     links are registered beside the node's own, which stay."""
     keys = {CHALLENGER: "dummy-key", **({} if certifier is None else {certifier[0]: certifier[1]})}
     entry = log_of(kind, "onsite", certifier).entries[0]

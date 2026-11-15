@@ -26,7 +26,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, TypeVar
 
-from verity.protocols.accounting.certifier.verifier import advice as I1
+from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
     advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
     charged as charged, check_record as check_record, Decision as Decision, decode as decode,
@@ -197,7 +197,7 @@ TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
     """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
-    or on a `.released` view the network certifier's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
+    or on a `.released` view the network attester's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
     decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
     to the trace's I1 v0; the residual's decisions and order entries; the length terms' bits, which every string holds
@@ -298,7 +298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                           "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
                     help="the certified order's stand-in: the client's send (client; on a .released view, the network certifier's "
-                         "release), or the engine's own arrival stamp (network_certifier: no deviations)")
+                         "release), or the engine's own arrival stamp (network_attester: no deviations)")
     ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
     ap.add_argument("--out", type=Path, required=True, help="the table's JSON")
     a = ap.parse_args(argv)

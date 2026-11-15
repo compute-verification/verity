@@ -35,7 +35,7 @@ from pathlib import Path
 import fold_root_sweep as sw
 from exact_kit.checks import Checks
 
-from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
+from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_folds as rf
 
 HERE = Path(__file__).resolve().parent
 THREADS = str(min(8, len(os.sched_getaffinity(0))))

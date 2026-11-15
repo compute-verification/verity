@@ -35,7 +35,7 @@ NAMED = SECURITY[1:]
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
 POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
-CERTIFIER = tuple(f"lean-suites:verity/protocols/accounting/certifier/verifier:{k}/3" for k in (1, 2, 3))
+CERTIFIER = tuple(f"lean-suites:verity/protocols/resource_accounting/network/verifier:{k}/3" for k in (1, 2, 3))
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
 FLOCK = tuple(f"lean-suites:verity-flock:{k}/6" for k in range(1, 7))
 ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
@@ -45,7 +45,7 @@ ONE_PROCESS = ("verity-pouw-check-difftest", "verity-lean-audit")
 THIRDS = tuple(tuple(f"lean-suites:{s}:{k}/3" for s in ONE_PROCESS) for k in (1, 2, 3))
 #: the suites in parts, each its parts
 SPLIT = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM, "verity-flock": FLOCK,
-         "verity/protocols/accounting/certifier/verifier": CERTIFIER,
+         "verity/protocols/resource_accounting/network/verifier": CERTIFIER,
          **{s: tuple(t[i] for t in THIRDS) for i, s in enumerate(ONE_PROCESS)}, "benchmarks/one_stage": ONE_STAGE}
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
 BESIDE_AUDIT = (VLLM[0], *FLOCK[:2], "lean-suites:verity-core-evaluate", "lean-suites:pous-check", CERTIFIER[2], *THIRDS[0],
@@ -56,7 +56,7 @@ WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], CERTIFIER[1], *THIRDS[2], "lean
 #: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
 PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
     "research", "adapters/vllm/verity_vllm/definitions", "verity/circuits/ops", "verity-graph",
-    "benchmarks/training_slowdown", "repository", "verity/protocols/accounting/pous/verifier"))
+    "benchmarks/training_slowdown", "repository", "verity/protocols/resource_accounting/memory/pous/verifier"))
 
 
 @pytest.fixture(autouse=True)

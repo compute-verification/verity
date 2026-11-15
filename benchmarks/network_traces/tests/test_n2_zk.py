@@ -1,4 +1,4 @@
-"""n2_zk's execution phases on an active network certifier's synthetic run (the chain tests' `gate_run`): every
+"""n2_zk's execution phases on an active network attester's synthetic run (the chain tests' `gate_run`): every
 honest execution phase's output word is verdict 1 and deadline 1, and window 0's egress head one count off, committed
 by the prover, fails on its signed digest alone. The verifier's own ``pub`` row, from public fields and the
 certificates alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
@@ -18,8 +18,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.accounting.certifier.prover import n2_zk as n2
-from benchmarks.network_traces.tests.test_network_certifier_chain import gate_run
+from verity.protocols.resource_accounting.network.prover import n2_zk as n2
+from benchmarks.network_traces.tests.test_network_attester_chain import gate_run
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()

@@ -16,7 +16,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (verity.commitments.periods.interface).
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot",
-          "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/window.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/window.py",
           "verity/protocol.py", "verity/channel.py", "verity/commitments/periods",
           "verity/circuits", "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "benchmarks/census/hardware.json",
@@ -27,10 +27,10 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "benchmarks/slowdown/data/hardware.toml",
           # glm53.py's stop class reads its two blocks' Definitions and their pins: the stop rule's Boolean lowering
           # (verity_vllm.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
-          # (verity.protocols.accounting.certifier.prover, which loads the certifier's verifier)
+          # (verity.protocols.resource_accounting.network.prover, which loads the certifier's verifier)
           "adapters/vllm/verity_vllm/definitions/registry", "adapters/vllm/verity_vllm/definitions/numerics",
           "adapters/vllm/verity_vllm/definitions/evidence.py", "adapters/vllm/verity_vllm/definitions/evidence.json",
-          "verity/protocols/accounting/certifier", "adapters/vllm/verity_vllm/__init__.py",
+          "verity/protocols/resource_accounting/network", "adapters/vllm/verity_vllm/__init__.py",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py",
-          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
+          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py"]

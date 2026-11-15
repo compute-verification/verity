@@ -10,7 +10,7 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.proofs.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
@@ -143,7 +143,7 @@ def test_a_capped_caption_says_what_it_rests_on():
 
 def test_every_caption_names_spots_roles_and_what_its_bounds_rest_on():
     """Each panel's caption says, after its deployment, that the proof server proves with no ZK server, that the
-    network certifier is a layer of its own, and that its bound is soundness alone on the trust list."""
+    network attester is a layer of its own, and that its bound is soundness alone on the trust list."""
     caps = f.captions(1.0)
     for panel in ("exfiltration", "exfiltration_appendix", "skipped_work"):
         deployment = f.DEPLOYMENT["skipped_work" if panel == "skipped_work" else "exfiltration"]

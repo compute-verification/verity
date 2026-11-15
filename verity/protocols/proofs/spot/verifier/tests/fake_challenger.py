@@ -21,7 +21,7 @@ import weakref
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.protocols.proofs.spot.device import challenger as C, coins as T, remote as R
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T, remote as R
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P
 from verity.circuits.codec import canonical_json, descriptor_id

@@ -31,7 +31,7 @@ from test_challenger_difftest import PACKAGE, PIECES, _key, _sign_ledger, lms_ve
 
 import verity_difftest as D
 from verity.commitments.crypto import lms
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

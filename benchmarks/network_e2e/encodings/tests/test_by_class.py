@@ -352,7 +352,7 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
 def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
     """The plan's run with one request the engine ended `abort`: the reader refuses the trace, so it has no table, and
     the report is the refusal and what the directory records: the engine's finishes, the released requests it never
-    freed, and the connections the network certifier failed, apart for those whose request it had released. The
+    freed, and the connections the network attester failed, apart for those whose request it had released. The
     aborted request is counted in the window its release falls in, and the report says that the run shows the advice
     of none of the record's windows."""
     e, (ios, times) = engine(False), plan()
@@ -389,7 +389,7 @@ def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
 
 
 def _name(d: Path, model: str, cards: int, where: str, engine: bool = True) -> None:
-    """Give a trace-corpus directory a serve's own facts: its model's name, its cards, where its network certifier ran
+    """Give a trace-corpus directory a serve's own facts: its model's name, its cards, where its network attester ran
     and the version its server's log prints: another program's version and the banner's, which are not read, then
     with `engine` the engine's own line, which is."""
     meta = json.loads((d / "meta.json").read_text())
@@ -408,7 +408,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     roomy serve's alone; beside it are each class it did not exercise, the events with none in it and some in the small
     serve with that serve's counts, the refused trace's aborted request, and the two serves' facts, those that are the
     same (the vLLM version, the tick, the codebook, ℓ, the draft) apart from those that differ (the model, the cards,
-    the pool, where the network certifier ran). A refused trace beside it doesn't fail the report."""
+    the pool, where the network attester ran). A refused trace beside it doesn't fail the report."""
     small, (ios, times) = engine(False), plan()
     roomy = dataclasses.replace(small, num_gpu_blocks=4096)
     here = write_corpus(tmp_path / "here", roomy, ios, times, serve(roomy, ios, times, seed=1), tick=True)

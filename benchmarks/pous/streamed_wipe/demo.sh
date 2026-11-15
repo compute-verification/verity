@@ -21,7 +21,7 @@
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.protocols.accounting.pous.device.wipe_challenger --device D --listen 0.0.0.0:P
+#                        there, e.g. 'python -m verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
@@ -35,7 +35,7 @@
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
-#   --egress-bits N      the network certifier's egress count over the session, in bits, which the verifier's check
+#   --egress-bits N      the network attester's egress count over the session, in bits, which the verifier's check
 #                        takes as evidence in whole MiB, wherever the challenger runs (default: none, the bound
 #                        vacuous); no challenger is given it and the session signs none
 #   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names
@@ -180,12 +180,12 @@ EOF
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
-  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/device/wipe_stream.c -o "$S/wipe_stream-check"
+  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c -o "$S/wipe_stream-check"
   if [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
   else
-    L=verity/protocols/accounting/pous/device/lean
+    L=verity/protocols/resource_accounting/memory/pous/attester/lean
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
     (cd "$L" && lake build wipe-protocol) > "$O/lake-build.log" 2>&1 \

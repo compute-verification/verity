@@ -1,5 +1,5 @@
 """The served window's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
-the file is the table's configuration byte for byte and names no host; the network certifier's and the inference-only
+the file is the table's configuration byte for byte and names no host; the network attester's and the inference-only
 policy's parties and channels are their manifests'; `verity run --dry-run` resolves every party, channel and piece with
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
 has no place for; the runner's variables and the bindings' keys are pinned, and no gate piece names a script, a hook or
@@ -22,11 +22,11 @@ from verity import config as K
 from verity.commitments.crypto import lms
 from verity.protocol import Channel, Start
 from verity.channel import Refused
-from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.pous.device import onsite
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.device import wipe_challenger as WC
-from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.memory.pous.attester import onsite
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
+from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
 

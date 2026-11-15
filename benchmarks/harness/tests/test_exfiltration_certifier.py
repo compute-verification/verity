@@ -1,4 +1,4 @@
-"""`verity bench exfiltration`'s network certifier's part: beside the figures at the requests its calculator counts;
+"""`verity bench exfiltration`'s network attester's part: beside the figures at the requests its calculator counts;
 its figures of record at two release schedules; what rests on the set-time card; the output count beside the sums that
 take it at 0; and every figure's error at the scans' delta the term states, on term documents with made-up errors."""
 
@@ -26,7 +26,7 @@ from verity_bench import exfiltration as E
 
 
 def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator_counts(tmp_path, monkeypatch):
-    """Both parts count the sampling plan's requests, which the network certifier's calculator counts by default and
+    """Both parts count the sampling plan's requests, which the network attester's calculator counts by default and
     which are fewer than the census's, over the same GPU-seconds. The command holds no count of its own: the count and
     what its request is are the calculator's inputs as it marks them, none of them given, and where the calculator
     counts other requests than the rows of record are priced over the command refuses. The certifier's rows are its own
@@ -72,7 +72,7 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
     dc = doc["periods"][2]
     assert dc["compute_audit"]["GB"] == pytest.approx(13707.9, abs=0.05) and dc["compute_audit"]["run"] == ROWS
     assert dc["requests"] == pytest.approx(year["requests"] * dc["gpu_seconds"] / year["gpu_seconds"], rel=1e-12)
-    # a scope no run of record holds has the network certifier's part alone
+    # a scope no run of record holds has the network attester's part alone
     week = doc["periods"][0]
     assert week["compute_audit"] is None and week["together"]["design"]["GB"] is None and week["together"]["design"]["certifier_GB"] > 0
     assert week["together"]["design"]["with_set_time_card"]["GB"] is None
@@ -96,7 +96,7 @@ def test_the_scan_rows_mark_is_this_commands_mark_of_that_name():
 
 
 def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
-    """The network certifier's figures of record are its document's at D_j = 2, held here to that document: the scan's
+    """The network attester's figures of record are its document's at D_j = 2, held here to that document: the scan's
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
     the command reads, and the design's is each class's own: with no run carrying the stop class's record its stop
     class is charged its whole schedule, so it is the jitter, the count and each connection's schedule, the figure of
@@ -161,7 +161,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
 
 
 def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_label(tmp_path, monkeypatch):
-    """A figure at D_j = 1, and every figure of a row whose changes include the timing's, is what a network certifier
+    """A figure at D_j = 1, and every figure of a row whose changes include the timing's, is what a network attester
     with a set-time card would be charged, and is printed only under the label the calculator's document gives it: in
     a line, a column or a row that carries the label. The label is the document's, read from the row's own field and
     from its top: the command's code doesn't spell it, and prints another where the document says another."""
@@ -213,11 +213,11 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
 
 def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, listed):
     """Until a served audit has sampled a stop block the server chooses a response's output count. The network
-    certifier's row for the design before its stop block charges it, as its schedules, and the command reads it from
+    attester's row for the design before its stop block charges it, as its schedules, and the command reads it from
     there, in every monitoring period. The sums that take it at 0 are named from the stop verdicts' reader's answer,
     never from a schedule that reads 0: with no run carrying the stop class's record no sum does, the rows that
     would hold it as their schedules, the inputs list no output count and the print says so. The reader's answer
-    holds no execution phase whatever a run's files hold, since the reader asks the network certifier's rule
+    holds no execution phase whatever a run's files hold, since the reader asks the network attester's rule
     without a schedule and the rule charges no class below a schedule it was not handed: with a class's four
     verdicts in the run of record, in the reader's own format and with its formats listed, no row is named, no sum
     takes the count at 0, and the print's lines say the schedule was not handed."""
@@ -386,10 +386,10 @@ def made_up(document, eps: Mapping[tuple[str, str], float], scan_delta: float | 
 
 def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_path, monkeypatch):
     """On a term document with made-up errors. A scope's monitoring period whose ε is under 1 prints the network
-    certifier's amounts with that ε; one whose ε is 1 or more prints "no bound at this period" with its ε and no
+    attester's amounts with that ε; one whose ε is 1 or more prints "no bound at this period" with its ε and no
     amount, in the document and in every line, column and row of the print, the output count among them. The two
     together carry the sum of both parts' errors, and print no amount where that is 1 or more though the network
-    certifier's own is under. The headline is the world's year's, and follows it. The compute audit's part keeps
+    attester's own is under. The headline is the world's year's, and follows it. The compute audit's part keeps
     its amounts. The δ printed is the one the document states, whatever the command gave the calculator."""
 
     lb = term()
@@ -405,18 +405,18 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     assert doc["value"] == pytest.approx(YEAR_GB) and year["compute_audit"]["GB"] == doc["value"]
 
     def amounts(p: dict) -> list:
-        """A scope's monitoring period's figures of the network certifier, then of the two together."""
+        """A scope's monitoring period's figures of the network attester, then of the two together."""
 
         both = [t for s in p["together"].values() for t in (s, s["with_set_time_card"])]
         count = p["output_count"]
         return [[t["certifier_GB"] for t in both] + [count["GB"], count["bits"], count["bits_a_request"]], [t["GB"] for t in both]]
 
-    # under 1: the network certifier's amounts, the calculator's; with no rows of record there is nothing to sum
+    # under 1: the network attester's amounts, the calculator's; with no rows of record there is nothing to sum
     for p in (week, dc):
         assert amounts(p)[0][:2] == [theirs[p["compute"], p["period"], "scan"]["term"][dj]["GB"] for dj in ("2", "1")]
         assert None not in amounts(p)[0] and set(amounts(p)[1]) == {None}
     assert dc["compute_audit"]["GB"] == pytest.approx(13707.9, abs=0.05)  # 0.995 + 0.01 is 1 or more: no sum
-    # 1 or more, 1 itself among them: no amount of the network certifier's, the output count's among them, and no sum
+    # 1 or more, 1 itself among them: no amount of the network attester's, the output count's among them, and no sum
     for p in (none, year):
         assert set(amounts(p)[0]) == set(amounts(p)[1]) == {None}
         assert p["output_count"]["at_zero_in"] == [] and p["gpu_seconds"] and p["requests"]
@@ -439,7 +439,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     assert " GB" not in "".join(line for line in head.splitlines()
                                 if line.startswith(("- **the network certifier's part", "- **together", "- the output count")))
     assert "with a set-time card" not in head and "its term of record" not in head
-    # none of the world year's amounts of the network certifier is printed, at either jitter bound or summed; the
+    # none of the world year's amounts of the network attester is printed, at either jitter bound or summed; the
     # design's are those of the design before its stop block, its stop class charged its whole schedule
     for figure in ("50,753,639", "26,392,406", "48,906,024", "24,453,012", "24,544,790", "50,767,879",
                    "26,406,646", "24,467,252", "59,645,644", "22.83 bits a request", "11 bits a request"):
@@ -466,7 +466,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     lines = [line for line in text.splitlines() if line.startswith("|") and E.NO_BOUND in line]
     assert len(lines) == 7 + 3 + 3 and all(any(f"| {e} |" in line for e in ("3.5", "1", "1.005")) for line in lines)
 
-    # the network certifier's part is bounded and the sum is not: its amounts are printed and the sum's are not
+    # the network attester's part is bounded and the sum is not: its amounts are printed and the sum's are not
     monkeypatch.setattr(lb, "document", made_up(document, {("world", "year"): 0.995}))
     text = E.render(E.build(store=recorded(tmp_path / "sum").fresh(), root=REPO))
     assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids" in text

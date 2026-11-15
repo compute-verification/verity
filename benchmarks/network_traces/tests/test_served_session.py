@@ -8,7 +8,7 @@ nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint
 node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
-seed or trace record); chain runs chain_record.sh's network certifier path on the kept fetch with the endpoint's art or a dry
+seed or trace record); chain runs chain_record.sh's network attester path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
 the coin link's peer, and the served node is refused. The gate's host is the challenger host's address, which the
 environment holds and site.json only names the variable of: a session, or a chain on the gate's coins, without it is
@@ -34,7 +34,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import served_session as SS  # noqa: E402
-from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
 #: the challenger host's address as the environment holds it, here a documentation address, and the gate `SS.GATE` is then
@@ -44,7 +44,7 @@ LIVE_GATE = f"research@{CHALLENGER_HOST}"
 SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
-#: the network certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: the network attester's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
@@ -87,7 +87,7 @@ else:
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
     assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
-    a.minutes = SS.A.network_certifier_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.network_attester_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     assert len(ps) == 64 and {len(p) for p in ps} == {SS.PROMPT_IDS} and all(0 <= t < SS.VOCAB for p in ps for t in p)
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
@@ -123,7 +123,7 @@ def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_
     plan's session run is the plan's request: its class, prompt ids, tokens and vocabulary."""
     a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "32", "--tokens", "4", "--prompts", "4",
                                 "--requests", "4", "--height", "10"])
-    a.minutes = SS.A.network_certifier_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.network_attester_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     doc = SS.plan(a, json.dumps(ps).encode())
     assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes {a.minutes} --requests 4 "
@@ -269,8 +269,8 @@ def test_sigterm_mid_session_releases_nothing(tmp_path):
     assert list(hold.iterdir()) == [] and (tmp_path / "keep" / RUN / "start.json").is_file()
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_certifier_records(tmp_path, monkeypatch):
-    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_attester_records(tmp_path, monkeypatch):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network attester's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
     holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
     (0600), so the session exits on the gate's verdict."""
@@ -343,7 +343,7 @@ def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
 
 
 def _certified(d: Path, ps: list[list[int]]) -> Path:
-    """io's file: the network certifier run's deployment.json and its certified I/O, each prompt answered with [1,
+    """io's file: the network attester run's deployment.json and its certified I/O, each prompt answered with [1,
     2]."""
     d.mkdir(parents=True, exist_ok=True)
     (d / SS.CERTIFIED).write_text(json.dumps({
@@ -470,7 +470,7 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
         (tmp_path / f).rename(src / f)
 
 
-def test_chain_runs_chain_records_network_certifier_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
+def test_chain_runs_chain_records_network_attester_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
     here = tmp_path / "here"
     here.mkdir()
     (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')

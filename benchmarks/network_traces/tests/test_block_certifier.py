@@ -17,7 +17,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
-from verity.protocols.accounting.certifier.prover import block_certifier as BC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import block_certifier as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 (ROWS_RUN,) = ANSWERS
