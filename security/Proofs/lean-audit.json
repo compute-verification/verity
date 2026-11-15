@@ -48,6 +48,7 @@
   "Proofs.Properties.Hash.Lms",
   "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records",
+  "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkPeriod.Fails",
@@ -97,6 +98,7 @@
   "Proofs.Properties.Verity.SampledCoins",
   "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Poub.Remote.SubprotocolWitnesses",
+  "Proofs.Properties.Poub.Remote.RecordAccepts",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
@@ -309,6 +311,23 @@
   "Proofs.Properties.Verity.SampledTwo.StageCut",
   "Proofs.Properties.Verity.SampledTwo.StageLog",
   "Proofs.Properties.Verity.SampledTwo.Within",
+  "Proofs.Properties.Verity.SampledTwo.Claim",
+  "Proofs.Properties.Verity.SampledTwo.DevAgrees",
+  "Proofs.Properties.Verity.SampledTwo.InputMap",
+  "Proofs.Properties.Verity.SampledTwo.Projection",
+  "Proofs.Properties.Verity.SampledTwo.Reading",
+  "Proofs.Properties.Verity.SampledTwo.SecondRead",
+  "Proofs.Properties.Verity.SampledTwo.Steps",
+  "Proofs.Properties.Verity.SampledTwo.Subprotocol",
+  "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps",
+  "Proofs.Properties.Verity.SampledTwo.ClaimInner",
+  "Proofs.Properties.Verity.SampledTwo.Deployed",
+  "Proofs.Properties.Verity.SampledTwo.FirstSample",
+  "Proofs.Properties.Verity.SampledTwo.Ordered",
+  "Proofs.Properties.Verity.SampledTwo.Refused",
+  "Proofs.Properties.Verity.SampledTwo.Shown",
+  "Proofs.Properties.Spot.KnowledgeSound",
+  "Proofs.Properties.Verity.Sampled.LedgerPinned",
   "Proofs.Flock.SpotFlock.HeldOf",
   "Proofs.Flock.SpotFlock.HeldOfCheck",
   "Proofs.Flock.SpotFlock.HeldOfFiles",
@@ -383,6 +402,7 @@
   "Proofs.Pouw.Credit.Withheld",
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.InferenceOnly",
+  "Proofs.Properties.Verity.OnsiteCaller",
   "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Flock.Nets",
   "Proofs.Core.QSortPerm",
@@ -478,7 +498,7 @@
   },
   "Proofs.Flock.Claims.Recursion.IrDepSession": {
    "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
-   "digest": "f76917ac323400e3df89cc78aad3d944c14f6865aa59d263ab16a4f125837553"
+   "digest": "bb788b4c8518343b1aec043b912bf61b5fd13298e6863aa5fbf71391f2ebcb11"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
@@ -509,14 +529,16 @@
    "digest": "9c4f23f64cf0313080637290463c0ca73562e221f45a1b38979550f0bb3f145a"
   },
   "Proofs.Flock.SpotFlock.InstanceStmt.Header": {
-   "why": "plain_lit, the tactic that shows a literal leaf or key of an instance statement's header plain, a macro that expands to one simp call over the module's plain, plainStr and literal definitions. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+   "why": "plain_lit, the tactic that shows a literal leaf or key of an instance statement's header plain, a macro that expands to one simp call over the module's plain, plainStr and literal definitions. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "7c729a3f979f7d33fa4c54d67625b9ad0d61f71c59c853c3a84da35476be6f91"
   },
   "Proofs.Flock.SpotFlock.InstanceStmt.Plain": {
-   "why": "plain_json, the tactic that shows an instance statement's JSON object plain, a macro that expands to one simp call over ZkServerObj.plain_mkObj and the module's plain, plainStr and hex lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+   "why": "plain_json, the tactic that shows an instance statement's JSON object plain, a macro that expands to one simp call over ZkServerObj.plain_mkObj and the module's plain, plainStr and hex lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "6ee96969c4d7db8245d07eebbb77428c73bf8cfe861e5a3c46ccb362e7af6689"
   },
   "Proofs.Properties.Verity.SampledTwo.JpWalk": {
    "why": "name_lets, jp_mono, jp_body, jp_close, jp_core, jp_disch, jp_ext and jp_walk, the tactics that walk a registration check's do block by its join points (SampledTwo/RecordNames.lean's proofs that a check with no code names its registration's names): elaborators and macros that rename the context's lets and expand to simp only, dsimp only, split, apply, exact, intro, obtain, extract_lets and assumption over the module's code-list lemmas. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "50acb057ec22daf497d407fd5de6647630daacc8a17dd6af7cf342b210665ce5"
+   "digest": "d2456f606930af39a04cd4a053710adce12fcb48a7181850de5e7b012a386a4c"
   }
  },
  "layers": {

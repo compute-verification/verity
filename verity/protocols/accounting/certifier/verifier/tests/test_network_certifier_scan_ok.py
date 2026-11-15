@@ -190,16 +190,20 @@ def test_the_ports_the_rule_reads_end_in_the_public_word():
 @pytest.mark.parametrize("T", [2, 3, 16, 32])
 def test_the_hashes_are_the_constants_alone(T, sha512_calls):
     """The cost: the constants hash a number of times that is the schedule's alone, the same on every call; reading
-    a registration against them hashes nothing, held or refused."""
+    a registration against them hashes nothing, held or refused. The count starts after one warm call: the frame's
+    domain heads (`merkle._head`) are hashed once per process, so the first call's count depends on the tests
+    before it."""
+    K.constants(T)
+    start = len(sha512_calls)
     cs = K.constants(T)
-    once = len(sha512_calls)
+    once = len(sha512_calls) - start
     assert once > 0
     K.constants(T)
-    assert len(sha512_calls) == 2 * once
+    assert len(sha512_calls) - start == 2 * once
     good = registration([entry(c) for c in cs])
     bad = registration([entry(c, root=cs[0].domain) for c in cs])
     assert K.held(cs, good) and not K.held(cs, bad) and not K.held(cs, {})
-    assert len(sha512_calls) == 2 * once
+    assert len(sha512_calls) - start == 2 * once
 
 
 def test_the_trees_are_511_hashes_at_32_ticks():

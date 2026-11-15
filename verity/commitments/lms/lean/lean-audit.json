@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["Lms"],
  "exempt": {
   "Lms.DifftestMain": "the difftest against verity/commitments/crypto/lms.py, under `runs`: compiled evaluation of Lms.Difftest.main, audited under Lms, a test and not a proof",

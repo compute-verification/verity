@@ -941,28 +941,30 @@ def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_st
             assert set(lock["guarantees"][g]["assumptions"]) <= set(r["takes"]) | set(OR.STANDING), g
 
 
-def test_at_the_trees_lock_certifier_key_closes_where_the_runs_check_of_the_auditors_record_holds_and_only_there(
-        monkeypatch):
-    """Once the tree's Properties lock holds PeriodLeakRegistered at the statement `RESTS_ON` pins, taking hA, hr and
-    hkey, the auditor's record, as auditor-record, certifier-key closes where the run's check of it holds, and stays
-    open, with why, where it doesn't or no run's inputs were checked. sampled-leg-bridge and reg-opens-at, which that
-    statement takes too, stay open on their own."""
+def test_at_the_trees_lock_certifier_key_stays_open_and_the_network_verdict_unestablished_until_it_is_stated(
+        monkeypatch, tmp_path):
+    """No Lean states PeriodLeakRegistered (`RESTATE_PERIOD`): the tree's locks hold no statement of it, and `RESTS_ON`
+    pins none. So at the tree's lock certifier-key stays open even where the run's check of the auditor's record (hA,
+    hr and hkey, as auditor-record) holds, and an accepted network certifier's verdict is not established (`KEY_OPEN`).
+    Where that check fails, or no run's inputs were checked, the record says why too. The day the statement is in Lean,
+    proved, held by the Properties lock and pinned here, this test fails: it is then to assert that certifier-key closes
+    where the run's check holds, and only there."""
     monkeypatch.undo()
     r = OR.RESTS_ON[OR.PERIOD_REGISTERED]
     assert {k for k, v in r["takes"].items() if v == OR.AUDITOR_RECORD} == {"hA", "hr", "hkey"}
-    ok = OR.premises(OR.LOCKS, checked={OR.AUDITOR_RECORD: {"holds": True}})
-    got = ok["rests_on"][OR.PERIOD_REGISTERED]
-    assert "statement" in got and r["statement"] is not None, (
-        "waits on PeriodLeakRegistered: stated in Lean, tying the accepted period's commitment and evidence to the leak "
-        "bound's quantities (onsite_record.RESTATE_PERIOD), proved, held by the tree's Properties lock, and pinned in "
-        f"RESTS_ON at that statement with what it takes; the lock gives {got}")
-    assert ok["unread"] == [] and ok["rests_on"][OR.PERIOD_REGISTERED]["statement"] == r["statement"]
-    assert not {"missing", "restated", "restate"} & set(ok["rests_on"][OR.PERIOD_REGISTERED])
-    assert OR.CERTIFIER_KEY not in ok["open"] and {"sampled-leg-bridge", "reg-opens-at"} <= set(ok["open"])
-    assert "unchecked" not in ok["premises"][OR.CERTIFIER_KEY]
-    for checked, why in (({OR.AUDITOR_RECORD: {"holds": False, "why": "toy"}}, "toy"), (None, OR.NOT_CHECKED)):
+    assert (r["statement"], r["restate"]) == (None, OR.RESTATE_PERIOD), (
+        "RESTS_ON pins PeriodLeakRegistered: assert instead that certifier-key closes at the tree's lock where the run's "
+        "check of the auditor's record holds, and only there")
+    for checked, why in (({OR.AUDITOR_RECORD: {"holds": True}}, None),
+                         ({OR.AUDITOR_RECORD: {"holds": False, "why": "toy"}}, "toy"), (None, OR.NOT_CHECKED)):
         got = OR.premises(OR.LOCKS, checked=checked)
-        assert OR.CERTIFIER_KEY in got["open"] and got["premises"][OR.CERTIFIER_KEY]["unchecked"] == why
+        assert got["unread"] == [] and {OR.CERTIFIER_KEY, OR.PERIOD_REGISTERED} <= set(got["open"])
+        assert got["rests_on"][OR.PERIOD_REGISTERED] == {"missing": "not in the lock", "takes": r["takes"],
+                                                         "restate": OR.RESTATE_PERIOD}
+        assert got["premises"][OR.CERTIFIER_KEY].get("unchecked") == why
+    v = record(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"])))["verdicts"]["the network certifier"]
+    assert (v["verdict"], v["answer"]) == (OR.NOT_ESTABLISHED, "accept") and OR.CERTIFIER_KEY in v["open"]
+    assert OR.KEY_OPEN in v["why"], v["why"]
 
 
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):

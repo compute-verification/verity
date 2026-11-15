@@ -31,6 +31,8 @@ inputs = ["tools/difftest", "verity/__init__.py",
           "verity/protocols/accounting/pouw/verifier", "verity/protocols/accounting/pouw/prover",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot",
           "benchmarks/pouw/h1_lanes/leaf.py", "verity/protocols/accounting/pouw/prover/lowering/h1unit.py",
+          # leaf.py's H1 form (`h1_prove/h1form.py`) and the settings it reads them from
+          "benchmarks/pouw/h1_prove/h1form.py", "benchmarks/pouw/settings.py", "tools/config/verity_config",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/protocols/proofs/flock/prover/python", "verity/commitments/periods",
           "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "verity/commitments/identity", "verity/commitments/randomness",
