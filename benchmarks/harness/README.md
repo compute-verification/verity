@@ -281,7 +281,11 @@ the harness does whatever its closure: `plan SPEC --again POINT` shows it as `ag
 launched, and the new run labels and supersedes nothing, so the passing run stays the record until a run is labelled
 on purpose. `--cores CPUS` (a booked slot's, `34-43`) runs the slot taker under `taskset -c CPUS`, so it takes that
 slot or waits for it, and `--card INDEX` (a booked card's, with `--cores`) asks the lease for that card alone, which
-the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. On a node whose launcher
+the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. The run waits for its slot,
+`jobs.DIRECT_WAIT_S` at most or until the spec's `max_minutes` and `jobs.SLOT_GRACE_S` (for `slot.py`'s 20 s poll)
+before `--end UTC` (a booked period's end), and then has `max_minutes`; its timeout is the two, so it ends before the
+end whichever `slot.py` the node runs, and `run` refuses a point whose `max_minutes` don't fit before `--end` at
+launch. On a node whose launcher
 takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch. The job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
@@ -304,19 +308,22 @@ the node's disk. A point whose row names its statement in the store is launched 
    `mem_gb`. A slot gives a run its CPUs and no card, so the lease is asked of the cards on the NUMA node of the run's
    CPUs (gpu-lease's `--on`) where the node says which those are, of the booked card alone where the run names one,
    and of any card where it doesn't; `out/point.json`
-   says which (`lease_on`). The lease declares no cores (gpu-lease's `--cores`): gpu-lease counts a lease that declares
-   none by the CPUs its processes may run on, which are the slot's, and the check `no_throttling` says whether the
-   machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
+   says which (`lease_on`). The lease declares the run's CPUs (gpu-lease's `--cores`), so gpu-lease refuses, or holds
+   until they fit, a lease whose CPUs and the live leases' pass the machine's CPU quota, and the check `no_throttling`
+   says whether the machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
    the toolkit's version from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version
-   that isn't, records what else is on the node before and after the provers run (`steady.card_file`), and times the
-   row. It keeps one accepted timed session's proof as its verifier filed it, for the Lean verifier
+   that isn't, reads the NUMA node the kernel says the leased card is on (each row's `card_numa_node`, null where it
+   says none, which `one_numa_node` holds to the row's CPUs' node), records what else is on the node before and after
+   the provers run (`steady.card_file`), and times the row. It keeps one accepted timed session's proof as its verifier filed it, for the Lean verifier
    (`out/rate/TYPE-kK/kept-session/`, `steady_node.keep_session`): the newest session whose proofs are the ones it
    recorded and that exactly one verifier's log line and one row of `sessions.jsonl` say was timed, accepted and of the
-   row's `pin`. `out/timed.json` names it with its label and its proofs' digests, or says why none was kept;
+   row's `pin`. `out/timed.json` names it with its label and its proofs' digests, or says why none was kept, and is
+   written however the step ends: a step that raised says what (`error`), and the point is refused with it;
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
    files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it. A passed
    point's rate is the result's one measurement, written with it once, as the kit's writer makes it (`kit.Writer`'s `entry`)
-   under the host stamp the timed step ran under.
+   under the host stamp the timed step ran under, with the point's id as its `member` and the spec and the point's
+   identity as its inputs.
 
 It exits 0 for a passed point, 3 for a point that was timed and didn't pass, 4 where nothing was timed, and 143 where
 TERM or INT ended it (a cancel, a timeout): it then ends the command it was waiting for first and removes its scratch,

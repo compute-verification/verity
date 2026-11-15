@@ -100,6 +100,7 @@ from typing import Any, TypeGuard
 
 from verity_bench import exfiltration as E
 from verity_bench import jobs, kit, overhead_records, settings, steady, steady_node
+from verity_bench.steady import CARD_NUMA
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
@@ -129,9 +130,6 @@ CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no
 STEADY_POINT_TOOL = "steady_point"
 #: what a refusal of a run by its own verdict opens with: the measurements name each such refusal among their inputs
 OWN_VERDICT = "its own steady-state verdict"
-#: a row's field for the NUMA node of the card its provers ran on, as the harness's timed step reads it inside the
-#: lease (null where the node doesn't say), held to the row's `cores.numa_nodes`
-CARD_NUMA = "card_numa_node"
 #: a scan of the runs' own host records, for rows that don't record `CARD_NUMA`: the record whose runs it read
 #: (`record`), the runs it read (`read`), those of them whose card was on another NUMA node than their CPUs (`off`,
 #: each with both nodes), and in `source` what was read (`OffNodeScan`)
