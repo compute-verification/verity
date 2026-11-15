@@ -23,7 +23,7 @@ from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
 
-RELEASED_KEYS = Path(n2.__file__).resolve().parents[1] / "device" / "released_keys.py"
+RELEASED_KEYS = Path(n2.__file__).resolve().parents[0] / "released_keys.py"
 
 
 @pytest.fixture(scope="module")

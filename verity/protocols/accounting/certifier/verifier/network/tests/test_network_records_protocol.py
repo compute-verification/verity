@@ -156,7 +156,7 @@ SEEN: Counter = Counter()
 EXAMPLES = 30
 
 
-def _as(kind: str, r: CertifiedRecord, d: V2.Drawn):
+def _as(kind: str, r: CertifiedRecord, d: V2.Sampled):
     raw, g = d.raws[(r.direction.value, r.link, r.window)]
     return r if kind == "certified" else raw if kind == "raw" else commit(raw, g)
 
