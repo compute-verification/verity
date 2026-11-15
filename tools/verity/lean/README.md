@@ -59,8 +59,9 @@ research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --c
   a full record, left at lean-audit/audit-TAG/lean-audit.json
 ~~~
 
-`check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
-`--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs' own.
+`check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--program-cache`, `--artifacts`,
+`--regenerate`, `--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs'
+own.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
