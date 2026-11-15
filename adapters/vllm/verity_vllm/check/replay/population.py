@@ -331,8 +331,8 @@ EXECUTED_PREFIX_RULE = ("a request that served a_r < cap tokens (its served toke
                         "the record's query_checks fail by name. " + NOT_EXECUTED_SCOPE)
 
 
-MECH_RECURRENCE = "recurrence(Continuation_v1): n_exec = |{t : r_t = 1}| over the served list (first EOS stops; A = LAG); min(a_r + LAG, max_tokens) is the CHECK"
-MECH_ARITH_NO_SERVED = ("arithmetic(a_r, LAG): n_exec = min(a_r + LAG, max_tokens) -- the served list was not supplied, the class is not derived from r_t "
+MECH_RECURRENCE = "recurrence(Continuation_v1): n_exec = |{t : r_t = 1}| over the served list (first EOS stops; A = LAG); min(a_r + LAG, cap) is the CHECK"
+MECH_ARITH_NO_SERVED = ("arithmetic(a_r, LAG): n_exec = min(a_r + LAG, cap) -- the served list was not supplied, the class is not derived from r_t "
                         "(pass served= / eos_ids= to derive it)")
 
 
