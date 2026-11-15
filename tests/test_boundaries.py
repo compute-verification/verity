@@ -1063,7 +1063,7 @@ def test_a_use_past_a_guard_is_found() -> None:
     src = ("from verity.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
-    assert _is_test("tests/verity/circuits/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
+    assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
 def test_only_its_own_package_names_a_prover_only_module() -> None:
@@ -1738,7 +1738,7 @@ ORDER_TREE = {
     "verity/circuits/at_load.py": "from verity.runtime import toy\n",
     "verity/circuits/in_function.py": "def f():\n    import verity.runtime.toy\n",
     "verity/circuits/in_string.py": "TOOL = 'verity.runtime.toy:run'\n",
-    "tests/verity/circuits/test_a.py": "import verity.runtime.toy\n",
+    "verity/circuits/tests/test_a.py": "import verity.runtime.toy\n",
     "verity/circuits/at_load.circuit-check.py": "import verity.runtime.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
@@ -1772,14 +1772,14 @@ ORDER_TREE = {
     "verity/protocols/resource_accounting/compute/pouw/verifier/check.py": ("from verity.circuits import at_load\nfrom verity.commitments.crypto import lms\n\n\n"
                                                 "def f():\n    from verity.protocols.resource_accounting.compute.pouw.prover import build\n"),
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/vectors.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_check.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_check.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
     "verity/protocols/resource_accounting/compute/pouw/verifier/check/interop.py": "import verity.protocols.proofs.flock.prover.stage\n",
     "verity/protocols/resource_accounting/compute/pouw/device/__init__.py": "",
     "verity/protocols/resource_accounting/compute/pouw/device/serve.py": "from verity.protocols.resource_accounting.compute.pouw.verifier import check\n",
     "verity/protocols/resource_accounting/compute/pouw/device/party.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
     "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py": "",
     "verity/protocols/resource_accounting/compute/pouw/prover/build.py": "from verity.protocols.resource_accounting.compute.pouw.verifier import check\n",
-    "tests/verity/protocols/resource_accounting/compute/pouw/prover/test_build.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
+    "verity/protocols/resource_accounting/compute/pouw/prover/tests/test_build.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
 }
 
 
@@ -1834,7 +1834,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/commitments/crypto", "verity/commitments", "verity", prover, "examples", "."]
     party = f"{device}/party.py"
     split = places | _places([{"paths": [party]}])
-    assert [_place(f, split) for f in ("tests/verity/circuits/test_a.py", f"{check}/interop.py", party, f"{device}/serve.py",
+    assert [_place(f, split) for f in ("verity/circuits/tests/test_a.py", f"{check}/interop.py", party, f"{device}/serve.py",
                                        "verity/commitments/merkle.py", "verity/errors.py", "tools/lazy.py")] == [
         "verity/circuits", verifier, party, device, None, None, None]
     assert [_distribution(f, listing) for f in ("verity/protocols/proofs/flock/prover/stage.py", "verity/protocols/proofs/flock/verifier/interface.py",
@@ -1866,7 +1866,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/runtime"], "trusted": True}])))
     assert [sorted(x) for x in marked["verity/runtime"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
-        "verity/circuits/in_string.py", "tests/verity/circuits/test_a.py"]], marked["verity/runtime"]
+        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/runtime"]
     parted = _place_loads(loads, listing._replace(places=split))
     assert list(parted) == sorted([*found, party]), list(parted)
     assert [sorted(x) for x in parted[device]] == [sorted(x) for x in found[device]], parted[device]
