@@ -628,16 +628,14 @@ def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
 def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_path, monkeypatch):
     """Window 0's release raises off the loop after its session closed: its outcome carries the error, recorded before
     window 1's, which opened, served and released as its own."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
-
     srv, closer = _Server(monkeypatch), Later()
-    finish = PHW.finish
+    finish = pouw.finish_window
 
     def failing(run: Any, client: Any) -> None:
         finish(run, client)
         if str(run.transcript_dir).endswith("w0"):
             raise RuntimeError("the draw's record was not written")
-    monkeypatch.setattr(PHW, "finish", failing)
+    monkeypatch.setattr(pouw, "finish_window", failing)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), closer=closer)
     pending = []
     for w, prompts in enumerate(PROMPTS):
