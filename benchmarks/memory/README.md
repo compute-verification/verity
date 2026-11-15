@@ -6,6 +6,55 @@ verifier's ledger at the specification's rate, read from the verifier's record a
 reaches it. `run.py` is the whole command; the sessions are `benchmarks/remote_session`'s, which it starts and reads
 and never copies.
 
+## On a machine of your own
+
+~~~text
+uv sync --all-packages --extra torch-cpu
+uv run verity bench memory --local
+~~~
+
+Both from the clone's root. One Linux machine with one NVIDIA GPU of compute capability 9.0 (H100, H200) or 12.0 (RTX
+PRO 6000), the CUDA toolkit
+(`nvcc`, under `/usr/local/cuda*` or `CUDA_HOME`), Lean's `elan` (`tools/verity/lean/setup.sh`; `lake` on the PATH or in
+`~/.elan/bin`) and about 20 GB of disk. vLLM serves Llama 3.2 1B (in int8) on the GPU while a memory audit runs
+against it, and the audit's verifier and the random challenges it sends (its coins) run as processes beside it. The
+command prints the share of the GPU's memory read rate that the session leaves uncertified, with its error, as text
+and as one line of JSON, and exits 0; a session the verifier refuses prints no number and exits 1. Until PoUB's Lean
+verifier gives its answer for the share's terms (`gamma_answer` in `verifier/session/verifier.py`), an accepted
+session's share is undecided, and every way in prints "no number: … undecided" and exits 1. **Because the
+verifier and its coins run on the machine being measured, this is a measurement to improve on, not an audit:** the
+second line of the text and the JSON's `local` say so. Lower is better: 0 would mean the whole of the GPU's memory
+read rate over the session was certified as spent reading the audited store. The target is 0.14 at an error of at most
+2^-100.
+
+- **What it needs from you:** nothing of ours. The first run makes a Python environment with the pinned vLLM and the
+  checkpoint in `LOCAL_WORK` (default `~/.cache/verity/bench-memory`), by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`:
+  the vLLM wheel from vLLM's index, torch from PyTorch's, and `unsloth/Llama-3.2-1B` at a pinned revision from
+  Hugging Face, which is not gated, so no account or token is needed; the int8 checkpoint is made from it on your
+  machine and checked against its pinned SHA-256s. A machine that can't reach Hugging Face stops there: the command
+  prints "no number: the bootstrap failed" and the bootstrap's log names the download. `VLLM_PY` names an environment
+  of your own instead, `LOCAL_ROW` another row (a card of another capability needs one: `verity-vllm workload`), `GPU`
+  the card. With no `gpu-lease` installed, the tree's own lease program keeps its locks in `LOCAL_WORK`.
+- **Where the result goes:** the text and the JSON on stdout, and with `OUT=DIR` the JSON in `DIR/memory.json`; the
+  session's records (the verifier's `verifier.json`, every process's log) in a new directory under `LOCAL_WORK/runs/`,
+  which stderr names. The two reference numbers
+  printed beside a node's number are runs in our evidence store, so `--local` prints them as not read, with that reason.
+- **What you may change, to do better:** the prover's side, which is all of what the audit treats as untrusted: how
+  the store is read in each pass and when (`verity/protocols/accounting/poub/prover/node_store/serving.py`, the store's
+  backend, its passes and their pacing against the verifier's windows), how the KV cache and the store are encoded
+  on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and what of the engine's memory is
+  registered as the store and how it is laid out (`adapters/vllm/verity_vllm/protocols/poub/binder.py`, and `run.sh`'s
+  `KV_PAGES`, `WEIGHT_BLOCKS` and filler).
+- **What is fixed:** the verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`), the ledger
+  that turns a session into the share and its error (`verifier/session/verifier.py`), the error rule (an error of 1 or
+  more prints no number), the session's windows and samples, and this command. A number from a changed verifier is
+  not a result.
+- **How a cheat is refused:** every pass answers challenges the verifier draws only after the pass's data is fixed,
+  and the verifier checks each answer against the store's committed contents and against time. A prover that skips
+  reading part of the store, or answers late, is refused: the session isn't accepted, and the command prints no number
+  and exits 1. `PLAN=skip:0.0625 uv run verity bench memory --loopback` shows it on the CPU: the prover skips a
+  sixteenth of the store, and the verifier refuses the session.
+
 **Status: active.** The lane's number for a node serving under the audit comes from here.
 
 **Run:**
@@ -14,6 +63,7 @@ and never copies.
 verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor devices
 verity bench memory --from RUN [--session K]  the number of a recorded run
 verity bench memory --loopback                both processes on this machine, on the CPU: a test of the command
+verity bench memory --local                   vLLM serving Llama 3.2 1B on this machine's GPU, audited beside it
 ~~~
 
 - **The node run** is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`
@@ -47,6 +97,9 @@ verity bench memory --loopback                both processes on this machine, on
 - **`--loopback`** runs `remote_session/run.sh` with `ROLE=both`, the prover the driver's CPU reference over a test
   store of 64 blocks. No node is audited, so it certifies nothing, and both its text and its JSON say so. It builds the
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.
+  `PLAN` is the prover's plan, `honest` unless set: a cheating one (`skip:0.0625`) is refused by the verifier.
+- **`--local`** is the section above: `remote_session/run.sh` with `ROLE=both SERVE=row`, the Llama 3.2 1B row for this
+  card (`LOCAL_ROWS` in `run.py`), after the bootstrap. It writes no result to the Metrics tab, since it is no audit.
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
 0. A session that wasn't accepted, or a run that left no verifier's record, prints no number and exits 1; a command
@@ -65,9 +118,12 @@ the share a wipe left foreign at most (the bound its run's label states). Each p
 the same rule. A reference that can't be read prints its reason in place of a number, and the session's number still
 prints.
 
-Under `research run`, an accepted session of a node run or of `--from` also writes the run's result,
-`$RESEARCH_RUN_DIR/result.json`, where `research` reads a run's result, through the harness kit's writer
-(`benchmarks/harness/verity_bench/kit.py`), in the five fields every resource's benchmark reports. Each is read from
+The command prints and writes through the harness kit's report (`kit.report`, `benchmarks/harness/README.md`), as
+`verity bench compute` does: under `research run` it writes the printed document to
+`$RESEARCH_RUN_DIR/out/memory.json`, outside one where `OUT` names a directory to `$OUT/memory.json`, and with
+neither nothing. Where it writes, an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json` (where `research` reads a run's result) or `$OUT/result.json`, through the kit's
+writer, in the five fields every resource's benchmark reports. Each is read from
 the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the
 printed number in its unit); `verified` (the bytes the verifier certified read over the session's span, its
 `certified_bytes`); `capacity at spec` and `capacity at measured` (for each reading the ledger holds, the data sheet's
@@ -96,13 +152,14 @@ and says so on stderr.
 
 - `run.py`: the command.
 - `references.json`: the two references' runs.
-- `tests/`: the printer, the three ways in and the references, against records built in the tests, a stand-in for the
-  store and one for the processes; no session runs in the suite (`uv run tools/check/suites.py
-  benchmarks/memory`).
+- `tests/`: the printer, the four ways in and the references, against records built in the tests, a stand-in for the
+  store and one for the processes; no session runs in the suite (from this directory, `uv run --project ../.. pytest
+  tests`; or `uv run tools/check/suites.py benchmarks/memory` from the clone's root).
 
 **Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs
 from the evidence store; under `research run` writes an accepted session's amounts to the run's result,
-`$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and `--loopback`
+`$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json` (outside one, with
+`OUT` set, `$OUT/result.json` and `$OUT/memory.json`), and `--loopback`
 leaves `run.sh`'s records beside the document. A run that ran `--loopback` keeps a loopback's document there whatever
 it prints afterwards: it is how `--from` knows that run's session for a loopback. **Backs:** no Lean guarantee or
 claim; the number is the ledger's γ of one session, which PoUB's own analysis bounds.

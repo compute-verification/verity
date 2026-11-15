@@ -33,7 +33,7 @@ import hashlib
 import json
 import shlex
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable
 
@@ -170,7 +170,7 @@ def _post(path: str) -> list[str]:
 
 
 def stamp(t: int) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime(policy.UNTIL_FORMAT)
+    return datetime.fromtimestamp(t, UTC).strftime(policy.UNTIL_FORMAT)
 
 
 def _gate(node: str, write: bool = False) -> str:

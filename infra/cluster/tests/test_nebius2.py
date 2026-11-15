@@ -219,7 +219,7 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
                 try:
                     os.killpg(p.pid, signal.SIGTERM)    # the waiter's bash alone would leave its `sleep 3600` orphaned
                 except ProcessLookupError:
-                    pass
+                    assert p.poll() is not None, "a group is gone only once its leader is reaped"
                 p.wait()
 
 

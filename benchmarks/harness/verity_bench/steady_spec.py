@@ -70,7 +70,14 @@ from typing import Any
 from verity_config import ConfigError, load, sha256
 
 from verity_bench import steady
-from verity_bench.vllm.presets import ENV_NAME, GPUS, RESERVED_ENV, SOURCE_ROOT, SPEC_ROOT, former_name
+from verity_bench.vllm.presets import (
+    ENV_NAME,
+    GPUS,
+    RESERVED_ENV,
+    SOURCE_ROOT,
+    SPEC_ROOT,
+    former_name,
+)
 
 SCHEMA = "verity-bench/steady-spec/v0"
 #: what a point's time depends on in the tree, beside its spec's setup: the prover (its sources, its patches of
