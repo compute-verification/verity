@@ -316,6 +316,8 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
         if not python_ledger or not isinstance(spec.get("python_ledger"), dict):
             raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
         spec, decided_by, under = spec["python_ledger"], PYTHON_LEDGER, ("python_ledger",)
+    if (why := spec.get("refused")) is not None:
+        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is refused: {why}")
     gamma = spec.get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
