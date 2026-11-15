@@ -15,7 +15,7 @@ import pytest
 from verity_vllm.compiler import replay_step as RS
 from verity.protocols.accounting.certifier.verifier.head_check import ands
 
-FIXTURE = Path(__file__).parent / "fixtures" / "replay_step_vectors.json"
+FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "replay_step_vectors.json"
 
 
 def _fixture():
