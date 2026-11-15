@@ -115,7 +115,9 @@ suites keyed in the base's tree as in its own (`Loop._suites_from`, `suites.py -
 only while the check of `main` passed both suite steps and the base's is judged on them under the policy of its own base
 (`vqueue_slim.lends_suites`).  It passes only once its base's check passed both suite steps (`vqueue_slim.borrowed`), so
 its pass of a suite it left out is that check's, and where its base landed on a check that didn't, it is started again on
-`main` and runs them (`Loop._unanswered`).  A failed step
+`main` and runs them (`Loop._unanswered`).  Under `verdict` too, a candidate that takes the whole check leaves suites to
+its base's whole check, never to a plain base's quick tier; where its base, started on the whole check, landed on the quick
+tier, it waits for `main`'s own check of that tip.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -3604,10 +3606,11 @@ class Loop:
 
     def _suites_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check answers for the suites of the check of ``line`` that are keyed there as here
-        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates and the base is a candidate in flight
-        (``below``, its record) whose check lends them (`vqueue_slim.lends_suites`, on the record of the check of ``main``,
-        ``lent``).  None else: the check runs every suite it has no pass of."""
-        if self.gate != CHECK_GATE or below is None or lent is None:
+        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates, or the land verdicts with the check for a
+        candidate that isn't plain, and the base is a candidate in flight (``below``, its record) whose check lends them
+        (`vqueue_slim.lends_suites`, on the record of the check of ``main``, ``lent``): never a plain base, whose record is
+        its quick tier's, which ran no suite whole.  None else: the check runs every suite it has no pass of."""
+        if self.gate not in CHECKS or below is None or lent is None:
             return None
         return line["base"] if self.slim.lends_suites(d, below, lent(main)[0]) else None
 
