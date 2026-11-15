@@ -59,7 +59,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
-from verity.protocols.resource_accounting.network.verifier.advice import (
+from verity.protocols.resource_accounting.network.prover.window_chain import (
     Advice, outputs, RequestAdvice, Row, Source, StepAdvice, WIDTH_BITS,
 )
 

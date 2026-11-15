@@ -84,10 +84,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
         "verity_vllm/pipeline/advice.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/pipeline/advice_code/codec.py": ("accounting.certifier.verifier.advice",),
-        "verity_vllm/pipeline/advice_code/derived.py": (
-            "accounting.certifier.verifier.advice.RequestAdvice", "accounting.certifier.verifier.advice.Row",
-            "accounting.certifier.verifier.advice.Source", "accounting.certifier.verifier.advice.StepAdvice",
-        ),
         "verity_vllm/pipeline/advice_code/lengths.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/pipeline/advice_code/window_code.py": ("accounting.certifier.verifier.arith_encode.CW",),
         "verity_vllm/pipeline/ids_front.py": ("accounting.certifier.verifier.release",),

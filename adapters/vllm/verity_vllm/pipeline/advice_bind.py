@@ -23,7 +23,6 @@ from typing import Any
 
 from verity.channel import Refused
 from verity.protocols.resource_accounting.network.prover import window_chain as WC
-from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm import messages as M
 from verity_vllm.log import write
 from verity_vllm.pipeline import window_advice as WA
@@ -36,7 +35,7 @@ COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
 ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
 
 
-def holdings(adv: I1.Advice, io: Sequence[Mapping[str, Any]]) -> tuple[D.Holdings | None, tuple[int, ...] | None, str | None]:
+def holdings(adv: WC.Advice, io: Sequence[Mapping[str, Any]]) -> tuple[D.Holdings | None, tuple[int, ...] | None, str | None]:
     """The certified I/O (its requests, in ingress order) as `derived.Holdings`, and each advice request's certified index;
     or None and why, when the advice's requests aren't the certified ones, each once."""
     users = [r["user"] for r in io]
@@ -48,15 +47,15 @@ def holdings(adv: I1.Advice, io: Sequence[Mapping[str, Any]]) -> tuple[D.Holding
     return held, tuple(users.index(i) for i in ids), None
 
 
-def bits(adv: I1.Advice, T: int, windows: int, config: dict[str, Any] | None,
+def bits(adv: WC.Advice, T: int, windows: int, config: dict[str, Any] | None,
          io: Sequence[Mapping[str, Any]] | None) -> dict[str, Any]:
     """The advice's bits per egress window of T buckets: v0's (I1's `bits_by_window`) and, with ``config`` (`derived.Config`'s
     fields) and an ``io`` it is bound to, the residual's (`derived.residual`), unshaped (release sent) and shaped (release
     derived), charged by I1's rule (`derived.charge`), with the forced fields' share; ``io``, the certified I/O, binds the
     advice to the run (every advice request a certified one, once), and its tokens are what the residual reads and
     `derived.rebuild` gives the whole advice back from."""
-    v0 = I1.bits_by_window(adv, T)
-    out: dict[str, Any] = {"T": T, "v0_total": I1.total_bits(adv), "config": config, "bound": None, "public_fields": None,
+    v0 = WC.bits_by_window(adv, T)
+    out: dict[str, Any] = {"T": T, "v0_total": WC.total_bits(adv), "config": config, "bound": None, "public_fields": None,
                            "rebuilt": None, "why": None}
     held = order = None
     if io is None:
@@ -219,7 +218,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: Mapping[str, Any], io: Se
 
         try:
             joined = WC.join([(w, a) for w, a, _ in chained], released, WA)
-        except I1.MalformedAdvice as err:
+        except WC.MalformedAdvice as err:
             problems.append(str(err))
             for w, a, row in chained:
                 place([{"window": b, "v0_bits": n} for b, n in WA.bits_by_window(a, 1).items()], row["bucket"])

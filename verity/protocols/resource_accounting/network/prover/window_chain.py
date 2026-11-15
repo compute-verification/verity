@@ -7,6 +7,9 @@ already holds. `join` takes that state from the earlier window, never from the l
 requests are window w's, the same request of the joined advice, and its rows continue them as the engine ran them, with
 each request's record and every step once. So the joined advice's bits charge a carried request once, whatever its
 windows' strings repeat.
+
+The advice's format is I1's, re-exported here (`__all__`) so the provers' side, the vLLM adapter among it, takes
+it from the network prover and not from the verifier.
 """
 from __future__ import annotations
 
@@ -15,6 +18,9 @@ from dataclasses import replace
 from typing import Any, Protocol
 
 from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity.protocols.resource_accounting.network.verifier.advice import (
+    Advice, bits_by_window, MalformedAdvice, outputs, RequestAdvice, Row, Source, StepAdvice, total_bits, WIDTH_BITS,
+)
 
 
 class WindowAdvice(Protocol):
@@ -80,3 +86,7 @@ def join(windows: Sequence[tuple[int, Any]], release: Callable[[int, str, int, i
         raise I1.MalformedAdvice(f"Commit window {last[0]} ends request {left[0]!r} with outputs still to keep, and "
                                  f"window {last[0] + 1} isn't among the windows")
     return I1.Advice(tuple(requests), tuple(steps), tuple(buckets))
+
+
+__all__ = ["Advice", "MalformedAdvice", "RequestAdvice", "Row", "Source", "StepAdvice", "WIDTH_BITS", "WindowAdvice",
+           "bits_by_window", "join", "must", "outputs", "total_bits"]
