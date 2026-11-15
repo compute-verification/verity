@@ -20,7 +20,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verifier" / "tests"))
 from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 

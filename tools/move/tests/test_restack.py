@@ -560,10 +560,10 @@ def on_base(monkeypatch):
 
     ran, real = Ran(), RS.run_script
 
-    def run_script(merged, base, python, cwd):
+    def run_script(merged, base, python, cwd, own=None):
         if merged == base:
             ran.append(base)
-        return real(merged, base, python, cwd)
+        return real(merged, base, python, cwd, own)
 
     monkeypatch.setattr(RS, "run_script", run_script)
     return ran
@@ -1187,10 +1187,10 @@ def test_a_crossing_that_skipped_a_move_and_stops_at_files_with_no_row_says_both
     repo, first, second = late["repo"], late["first"], late["second"]
     run, said = RS.run_script, "no row for 1 tracked file under a path the map retires: a row in the rows file\n  app/added.py"
 
-    def no_row(merged, base, python, cwd):
+    def no_row(merged, base, python, cwd, own=None):
         if merged != base:                                     # the branch's tree: the move's own check runs on its base
             raise RS.NoRow(said)
-        return run(merged, base, python, cwd)
+        return run(merged, base, python, cwd, own)
 
     monkeypatch.setattr(RS, "run_script", no_row)
     monkeypatch.chdir(repo)
@@ -1457,3 +1457,42 @@ def test_a_hand_change_to_a_line_the_branch_changed_is_conflicted_at_hand(repo, 
     on(repo, "pr", ("readme", {"README.md": "readme, the branch's\n"}))
     r = RS.restack("pr", move, cwd=str(repo))
     assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["README.md"])
+
+
+def own_map_move(repo: Path, keep_map: bool) -> str:
+    """A move commit on a base that has the script but not its map, made by running the script with the map committed beside
+    it; ``keep_map``: the move commit holds the map (it adds it), else the map is in neither commit."""
+    git(repo, "checkout", "-q", "-b", "no-map", "base")
+    base = commit(repo, "the map leaves the base", {"tools/move/layout_map.toml": None})
+    commit(repo, "the map, for the run", {"tools/move/layout_map.toml": MAP})
+    subprocess.run(["python3", "tools/move/layout.py"], cwd=repo, check=True)
+    if not keep_map:
+        (repo / "tools/move/layout_map.toml").unlink()
+    git(repo, "add", "-A")
+    tree = git(repo, "write-tree")
+    git(repo, "checkout", "-q", "main")
+    return git(repo, "commit-tree", tree, "-p", base, "-m", "layout, with the map it ran by" + LINE)
+
+
+def test_a_move_that_adds_the_map_it_ran_by_crosses_with_the_map_and_one_whose_map_is_nowhere_refuses(repo, monkeypatch):
+    """The base lacks the map the move line names: the script runs by the move's own copy of it, which is the move's own
+    change (as a `hand` path is, with no entry in the table) and reaches the branch beside the script's rewrite."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", ("--map", "tools/move/layout_map.toml"))
+    move = own_map_move(repo, keep_map=True)
+    assert RS.own_map(move, f"{move}^", RS.SCRIPT_ARGS, str(repo)) == "tools/move/layout_map.toml"
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}),
+       ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    r = RS.restack("pr", move, cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert [s["step"] for s in r["steps"]] == ["base", "script", "hand", "moved"]
+    assert r["steps"][2]["files"] == ["tools/move/layout_map.toml"]
+    assert show(repo, r["result"], "tools/move/layout_map.toml") == MAP
+    assert show(repo, r["result"], "app/core/util.py") == edit(UTIL, "return 5", "return 50")
+    assert show(repo, r["result"], "app/extra.py") == "from app.core.util import f3\n"
+    assert "tools/move/layout_map.toml" not in paths(repo, r["steps"][1]["commit"])
+    RS._GENERATED.clear()
+    git(repo, "branch", "-D", "no-map")
+    nowhere = own_map_move(repo, keep_map=False)
+    assert RS.own_map(nowhere, f"{nowhere}^", RS.SCRIPT_ARGS, str(repo)) is None
+    with pytest.raises(SystemExit, match="fails on the move's base"):
+        RS.restack("pr", nowhere, cwd=str(repo))
