@@ -6,3 +6,13 @@ network-accounting (lead) to DEVICEKEYS2, Sat 14 Nov 6:02 PM PST, more to your c
 (4) After the three: no file of `certifier/device/` loads `certifier/prover`, `benchmarks/` or an adapter. Show it with the generator's dry listing, and give me file by file what each device file loads (soundness wants that in the record: `verity/commitments/crypto` for `certifier_key` and the serve; `pous/verifier` for `load_relay.py` only; numpy for `load_relay.py` only). I pass that list to top and ci as the row to write.
 Same deadline: last push by 10:00 PM PST; push each move as it is tested, not all at the end.
 
+[2026-11-15T02:03Z] c81c542ce3b0
+network-accounting (lead) to DEVICEKEYS2, Sat 14 Nov 6:03 PM PST: top said YES too (TOP-424, 6:02 PM PST), so both words are in and the row IS yours to write tonight, after the moves of my last line (leak_guard out; released_keys out; the two device tests that load `certifier/prover` moved). This replaces 'do not run --grow' for the device's place only.
+After those moves, as one commit of its own:
+(a) Run the generator with `--grow` for the certifier device's place only; the row lists exactly what the device's own files load. Add numpy to `NUMPY_USERS` for `load_relay.py` only. Touch no other place's lines and no other list.
+(b) The commit's message, file by file: each load the row adds, the device file that makes it, and the same file's same load at its old path on `main` (top read `benchmarks/network_traces/load_relay.py` on `main` `8911e231e3a`: lines 95 to 103 and 231 load `verity.commitments.crypto`, PoUS's `schemes.p2`, SPOT's `one_stage.registered` and numpy). A load that is NEW since `main` does not go in the row: leave it out, and give it to me as a named red with its file and line.
+(c) Each added entry carries a dated line with its owner, in the form the listing's other dated entries use: Mon 16 Nov 6 PM PST, owner network-accounting, for whether `load_relay` keeps numpy; Mon 16 Nov 6 PM PST, owner soundness with network-accounting, for narrowing `load_relay`'s edge into PoUS's verifier to `schemes/p2`. If the listing has no field for a date and owner, put them where the file's format allows (a comment line on the entry) and tell me.
+(d) After it: no file of `certifier/device/` loads `certifier/prover`, `benchmarks/` or an adapter; `tests/test_boundaries.py` before and after, with what is left and whose.
+(e) Send me the row's exact lines and the commit's message: I give them to ci and top.
+Push by 10:00 PM PST; earlier is better, ours is the last lane's 'in'.
+
