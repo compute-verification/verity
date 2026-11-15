@@ -15,9 +15,9 @@ public import Definitions.Certifier.Assumptions
 # What holds at the instances the network certifier's count and period witnesses are stated at
 
 The instances are definitions of `Definitions.Certifier.Witness`, which the witnesses' statements read; this
-module proves what `CountWitnesses` and `PeriodWitnesses` conclude from. Each is built by hand, at a positive instance
-where the guarantee allows one: several steps, a non-empty incorrect set at a positive `δ`. `Witnesses` has the accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these
-extend.
+module proves what `CountWitnesses` and `MonitoringPeriodWitnesses` conclude from. Each is built by hand, at a positive
+instance where the guarantee allows one: several steps, a non-empty incorrect set at a positive `δ`. `Witnesses` has the
+accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these extend.
 
 * `acceptAll`, the verifier that accepts everything: `AccSeqsAt` at the Program's acceptance is `AccSeqs`
   (`accSeqs_eq_at`), and over any positive number of steps `AccSeqsAt acceptAll`'s sequences are infinitely many

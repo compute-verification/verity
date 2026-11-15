@@ -8,8 +8,8 @@ Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}
 The Lean audit runs `InferenceOnlyCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
 decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.DescFuzz`'s docstring) and fails if one fails;
 `verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_fuzz.py` checks that this script still writes it. The search itself,
-at millions of Programs, is the lane's (`verity/protocols/policy/inference_only/verifier/fuzz/`); this is a seeded sample of it at a size
-the audit runs on every change to the package.
+at millions of Programs, runs outside this tree; this is a seeded sample of it at a size the audit runs on every change to
+the package.
 
 `random` writes descriptor v1 JSON directly, not through `verity.circuits`' Builder, so that every reference form the
 decoder reads appears (affine, strided with negative and zero strides, explicit, concat, alias) and so that shapes the
@@ -25,8 +25,8 @@ refuses most of them, and the rest are what it lets through.
 `hand` writes the worked shapes: the Programs on which `Walk.OperandsResolve` fails as stated (a composite node's
 argument that its callee never reads names a scan of no iterations, at the root, in a callee, and as a scan's shared
 argument), each with the variant its callee reads, and gates reading the carry of a scan of 2^4 to 2^14 pass-through
-iterations. `seeds` and `shared` are the lane's shared-members family (`fuzz/gen/shared.py`, ported as it is): whole
-members of a batch returning leaves of arguments they share, each another root node's output, read by a gate.
+iterations. `seeds` and `shared` are the search's shared-members family, ported as it is: whole members of a batch
+returning leaves of arguments they share, each another root node's output, read by a gate.
 `desc_difftest_vectors.shared()`'s six declarations first (`shared-seed`, each with its two instances), which
 `InferenceOnlyCheck.Desc` once attributed to their first piece's node alone, then `decl` on parameters picked at random
 (`pick`): two or three shared arguments, each made by a root node of its own (a primitive on an input, a call of a
@@ -730,7 +730,7 @@ def hand() -> list[dict]:
     return out
 
 
-# --- batch members returning leaves of shared arguments (the lane's `fuzz/gen/shared.py`) -----------------------------
+# --- batch members returning leaves of shared arguments (the search's shared-members family) --------------------------
 
 ASSIGNMENTS = 12
 NAMES = ("a", "b", "c")
