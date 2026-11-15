@@ -3,8 +3,8 @@
 Verity is a system by which an AI developer can make verifiable claims to external auditors about how it is using its
 datacenters, without revealing its algorithms or data. It represents the computations exactly as Boolean circuits,
 proves claims about them, and derives resource accounting (compute, network, memory) and workload classification from
-those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose terms code, docs and output use. This file
-holds the rules in force and the map; a directory's `AGENTS.md` adds what holds only there. Your checkout and your
+those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose terms code, docs and output use. A
+directory's `AGENTS.md` adds what holds only there. Your checkout and your
 prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
@@ -236,9 +236,9 @@ is unchanged. Every commit of `main` is checked whole, before it lands or right 
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. The best measured version that passes the guard lands.
 - **A slip made twice becomes a tool.** When you make the same kind of mistake a second time, or see that two agents
-  have each made it, change the tool so that kind of mistake can't happen, or fails with the fix in its message (a
-  refusal in the shell hook, a default, a check), in a PR that names the slips it ends. Another owner's tool gets the PR
-  all the same, and its owner is told.
+  have each made it, a note to be more careful is no fix: that day, change the tool so that kind of mistake can't
+  happen, or fails with the fix in its message (a refusal in the shell hook, a default, a check), in a PR that names the
+  slips it ends. Another owner's tool gets the PR all the same, and its owner is told.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
@@ -254,7 +254,7 @@ is unchanged. Every commit of `main` is checked whole, before it lands or right 
 
 **The repository says what is true now and how to reproduce it. It is not a record.** A reader learns from it what each
 part is and does, its contract in the Glossary's terms, the rules, and how to run each measurement (a benchmark's runner
-and its parameters).
+and its parameters). What a run measured, what happened and who decided live outside it, and the tree doesn't cite them:
 
 - **In the tree:** code, tests, Lean, circuits and their pins, the parameters and configuration code reads (with their
   public sources: a data sheet, the census), small fixtures beside their generators, and maintained current-truth docs
@@ -266,7 +266,9 @@ and its parameters).
   (numbers, tables, plots, overheads), reports and drafts, and the process's ids and names: run, `art:` and `note:` ids,
   Notion pages, Linear issues, Slack threads, PR numbers, agent ids, lane and worker names, dates, and attributions such
   as "(name, date)". A rule or a constraint is stated as itself. Only the skills, which describe the team's process,
-  name its roles (a handle as an owner). Results live in the evidence store, why a line changed in git.
+  name its roles (a handle as an owner). Results are published from the store, never copied into the tree: a
+  reader who finds no overhead figure in the repository has found it working as intended, and runs the benchmark or reads
+  the published result. Results live in the evidence store, why a line changed in git.
 - **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
@@ -278,7 +280,6 @@ Read the file before the work it names. Skills are in `.agents/skills/`.
 | When you | Read |
 | --- | --- |
 | change code under `verity/`: a protocol, the circuits, the commitments, the runtime or an import | `verity/AGENTS.md` |
-| change the Lean check or a lock | `tools/verity/lean/README.md` |
 | write, move or run tests, or a suite fails its read guard | the testing skill |
 | prove or state anything in Lean (the edit loop, why two agents never share a writable `.lake`) | the lean-proofs skill |
 | write or tune a PoUW GPU kernel | the kernel-engineering skill |
