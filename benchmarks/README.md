@@ -72,7 +72,12 @@ points, each with an identity. `verity-bench run SPEC` records one run per point
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
 The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
-stamp, the paired ratio and the result's writer, which records measurements and refuses a verdict of record.
+stamp, the paired ratio, the result's writer, which records measurements and refuses a verdict of record, and the
+report, the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write
+their number. The report prints the text, then one line of JSON whose first keys are `value`, `unit`, `commit` and
+`run`. Under a research run it writes that line to `$RESEARCH_RUN_DIR/out/NAME.json` and the measurements to
+`$RESEARCH_RUN_DIR/result.json`; outside one, with `OUT` set, to `$OUT/NAME.json` and `$OUT/result.json`; with
+neither set, or set empty, it writes nothing. A command's `--out DIR` names the place in place of those.
 `benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
 
 ## What a benchmark may import and write
@@ -182,7 +187,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
-| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`) | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's drawn units whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |

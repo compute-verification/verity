@@ -2,7 +2,9 @@
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
 `verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
-`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+`prove_records.py` the store side and the table, its code in `prove_common.py` (the slots, the workloads, reading a
+record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_table.py` (the table and what a
+runner records) and `prove_render.py` (the text)); this directory holds its runner. It reads the store's labelled
 records, with no GPU and no node, on a machine that has the store's client (`research`, in `uv sync`'s dev group) and a
 read key for its remote (`R2_ENDPOINT`, `R2_BUCKET` and their key, or `RESEARCH_STORE_CONFIG`). Without them it refuses
 in one line naming what it needs, exit 2 (`verity_bench/cli.py`'s `_store_missing`, before anything is read);

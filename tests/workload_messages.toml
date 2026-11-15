@@ -119,7 +119,7 @@ readers = [
 type = "Run"
 today = "the closed run's line (`windows.jsonl`): its run id and run root, steps, requests, each protocol's outcome"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "open\\(self\\.out / \"windows\\.jsonl\", \"a\"\\)" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "M\\.append\\(self\\.out / \"windows\\.jsonl\"" },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "d / \"windows\\.jsonl\"" },
@@ -136,7 +136,7 @@ type = "Run"
 second = true
 today = "the run's seal (`seals.jsonl`): the sealed row dir and whether its seal passed"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "open\\(self\\.out / \"seals\\.jsonl\", \"a\"\\)" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "M\\.append\\(self\\.out / \"seals\\.jsonl\"" },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "serve_dir / \"seals\\.jsonl\"" },
@@ -149,7 +149,7 @@ readers = [
 type = "Request"
 today = "the requests (`requests.jsonl`): each request's user, prompt ids, served ids, rows and seed"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "open\\(self\\.out / \"requests\\.jsonl\", \"a\"\\)" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "open\\(self\\.out / \"requests\\.jsonl\", \"ab\"\\)" },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "Path\\(run\\) / \"requests\\.jsonl\"" },
@@ -252,7 +252,7 @@ readers = [
 type = "RequestProgram"
 today = "the run's request Programs (`windows/w<K>/build_request_*/` with `descriptor.json.gz`, `instances.json.gz`, `result.json`, and `manifest.json`, `compiled.json`), by `tools/advice_compile.py RUN --window K`"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "\\(out / \"manifest\\.json\"\\)\\.write_text|\\(out / \"compiled\\.json\"\\)\\.write_text\\(json\\.dumps\\(summary" },
+    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "M\\.write\\(out / \"(manifest|compiled)\\.json\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "tools/advice_compile\\.py \"\\$D\" --window \"\\$K\"" },
 ]
 readers = [
@@ -264,7 +264,7 @@ readers = [
 type = "Values"
 today = "the adapter calls `verity.commitments.periods` (`rows`, `interface`, `links`: the run's circuit record, its registration, `Window.record/close/write`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serving_rows.py", find = "verity\\.commitments\\.windows" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serving_rows.py", find = "verity\\.commitments\\.periods" },
 ]
 readers = [
     { lane = "vllm", file = "verity/commitments/periods/interface.py", find = "^CIRCUIT = " },
@@ -350,7 +350,7 @@ readers = [
 type = "H1Registration"
 today = "H1's tie: the run's registration W (`h1/w<k>/registration.json`) and the log of ties (`h1/log.jsonl`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "LOG = \"log\\.jsonl\"|W_FILE, R_FILE, COMMAND_LOG = \"registration\\.json\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "LOG = \"log\\.jsonl\"|W_FILE, R_FILE, COMMAND_LOG = \"registration\\.json\"|M\\.(write|append)\\((wf|self\\.log), \"H1Registration\"" },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--window-registration \"\\$3\"|\"\\$D/h1/log\\.jsonl\"" },
