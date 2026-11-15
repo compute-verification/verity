@@ -11,3 +11,5 @@ replayed against the real labels).  `protocol` is the generic protocol over any 
 The memory challenger, which signs its rounds, is the device's: `verity.protocols.accounting.pous.device.memory_challenger`.
 `PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
 """
+
+__all__: list[str] = []
