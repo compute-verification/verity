@@ -4,9 +4,9 @@ request of the class. Two templates are masked by the bit, the sparse attention'
 unit keeps its Definition. Past the stop the served ids are zeros and every other row is its Definition's on its wired
 inputs.
 
-**The class.** A span's class is (P, O) (`pipeline.boundary_rows.Span.shape`): P and O are the least powers of two, at
-least 2, that hold its prompt ids and its served ids, and a stop class is (P, T) for the serve's stop rule's T whatever
-n is (`pipeline.boundary_stop`). A request's own Program is built at its own (LP, T), with its length rule's statics
+**The class.** A request's class is (P, O): P its prompt's exact length, any integer of at least 1, and O a power of
+two, at least 2, that holds its served ids. A prompt shorter than P is not padded: it has no class at that P, only at
+its own length. A request's own Program is built at its own (LP, T), with its length rule's statics
 its own (`steps.request_program`, `frontend.stop_rule.definition`: `StopCheck_v1{T = n, ..., MAX_TOKENS, PROMPT_LEN,
 FINISH}`), so two requests of one class have two Programs. `class_request` builds the Program at (P, O) once for the
 class: O selects, the registered stop ids and the model's length as statics (`stop_rule.CLASS_KEYS`), and the request's
@@ -81,16 +81,14 @@ its body takes the token from `TokenSelect_v1`, the function of the chunks and t
 ANDs it with the bits its select gives, word for word the select's ``o0`` and ``o3``. Its ``o1`` and ``o2`` are the
 select's.
 
-**Refused until proofs rules on them:** a request the rule does not end within O, a ``min_tokens`` other than 0, a span
-with no stop, and a prompt shorter than P. The check refuses the first, second and fourth by its bit, 0 where the
-rule's finish is 0, where ``min_tokens`` is not 0 and where ``lp`` is not P (`class_check`); a span with no stop has no
-stop class (`pipeline.boundary_stop`), so no class Program is built for it.
+**Refused until proofs rules on them:** a request the rule does not end within O, a ``min_tokens`` other than 0 and a
+span with no stop. The check refuses the first two by its bit, 0 where the rule's finish is 0 and where ``min_tokens``
+is not 0, and a prompt of other than P ids the same way, 0 where ``lp`` is not P (`class_check`); a span with no stop
+has no stop class (`pipeline.boundary_stop`), so no class Program is built for it.
 
 **What is NOT decided here**, each named where it is met below:
 
-- the four cases above, proofs';
-- how a prompt shorter than P would be served, once proofs rules on it: which row the prefill samples, the decode
-  steps' positions and the keys past the prompt (`class_request`);
+- the three cases above, proofs';
 - an indexer past 2,048 keys (GLM-5.3's ``index_topk``): the window has no lowering for one, so a class with more
   keys than that has no window (`class_window`).
 """
@@ -191,7 +189,7 @@ def first_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: in
 
 
 def live_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`GreedyCombine_v3{V, N, O, STOP, MAX_MODEL_LEN}`, a decode step's select: `greedy_stages.GreedyCombine_v2{V, N}`'s
+    """`GreedyCombineLive_v1{V, N, O, STOP, MAX_MODEL_LEN}`, a decode step's select: `greedy_stages.GreedyCombine_v2{V, N}`'s
     token over its logits and its chunks' results, taking its step's bit and count and writing the next step's, and the
     two ids (module docstring, "The select is where the mask lives"):
 
@@ -210,7 +208,7 @@ def live_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: int
 
 
 def class_check(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`GreedyStopCheck_v2{V, N, P, T, STOP, MAX_MODEL_LEN}` at T = ``O``, one bit:
+    """`GreedyStopCheckClass_v1{V, N, P, T, STOP, MAX_MODEL_LEN}` at T = ``O``, one bit:
 
         (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, ids: Array<T, i32>, request: Array<4, i32>, count: WORD,
          live: WORD) -> bit
@@ -369,13 +367,11 @@ def class_request(registered: Registered, P: int, O: int, policy: Mapping[str, A
     ``policy``: the sampling policy, greedy (`window_class.GREEDY`) and None alike; a stochastic one is refused, since
     the selects are the greedy select's. ``named`` is refused: no trace names a class Program.
 
-    Refused (until proofs rules): a span with no stop class, for which no class Program is built; and, by the check's
-    bit, a prompt shorter than P.
+    ``P`` is the class's exact prompt length, so every row the Program reads is a prompt id: no position, sample row or key
+    depends on a value. Refused: a span with no stop class, for which no class Program is built; and, by the check's
+    bit, a prompt of other than P ids.
 
-    NOT decided: how a prompt shorter than P would be served. Its sample is at row lp - 1, its decode step s at
-    position lp + s, and its decode keys past lp are the prompt's zero rows: each is a value's choice, which the
-    Program at P must make in the circuit (a select on lp); until then the class holds only prompts of exactly P ids.
-    Nor a launch context other than the request alone: a batched target's class Program needs the launch fixed by the
+    NOT decided: a launch context other than the request alone: a batched target's class Program needs the launch fixed by the
     class or read as a value."""
     from verity.circuits.codec import program_digest
 
@@ -383,8 +379,9 @@ def class_request(registered: Registered, P: int, O: int, policy: Mapping[str, A
 
     from .build import build_program
     from .phi import Phi
-    if not (_power(P) and _power(O)):
-        raise ValueError(f"a class is (P, O), powers of two of at least 2, not ({P!r}, {O!r})")
+    if not (type(P) is int and P >= 1 and _power(O)):
+        raise ValueError(f"a class is (P, O), P a prompt length of at least 1 and O a power of two of at least 2, not "
+                         f"({P!r}, {O!r})")
     if dict(policy or {}).get("kind", "greedy") != "greedy":
         raise Unexpressible(f"a class Program's selects are the greedy select's, and the policy is {policy!r}")
     if named:
