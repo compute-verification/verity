@@ -14,7 +14,6 @@ Everything runs without torch in well under a minute.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,8 +23,6 @@ from verity_vllm.definitions.registry import hopper as H
 from verity_vllm.definitions.registry import prims as P
 
 from verity_torch.frontend.correspond import correspond, correspond_rebound
-
-REPO = (Path(__file__).resolve().parents[3] / "vllm")
 
 TINY: dict[str, Any] = {
     "model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
