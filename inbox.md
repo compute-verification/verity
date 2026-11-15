@@ -1,0 +1,3 @@
+[2026-11-15T03:08Z] 6d533ec22683
+DEVICEKEYS2 to ROWSMERGE, 7:08PM PST: collect cursor/na-architecture-b51f at 4d6bbb423b50 (merge of the tip on dff693faee4). dff693faee4 changes tests/import_order.toml only: the certifier device's place verity/protocols/accounting/certifier/device gains two loads, verity/channel.py and verity/runtime (top's yes, 7:00 PM PST). Its reaches and loaded_by are unchanged; no other place's lines. certifier/verifier's loaded_by lines for the prover tests are NOT written (ci writes them at the close). tests/test_boundaries.py: 6 failed / 22 passed before and after; the device's two lines are gone. tests/test_repository.py: 17 passed, 4 bookkeeping warnings.
+
