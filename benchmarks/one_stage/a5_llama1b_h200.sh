@@ -297,7 +297,8 @@ else:
 print(line)
 if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: the line rides as its text
     doc = read(s)
-    doc["coins"] = {**(doc.get("coins") if isinstance(doc.get("coins"), dict) else {}), "text": line}
+    doc["coins"] = {**(doc.get("coins") if isinstance(doc.get("coins"), dict) else {}), "text": line,
+                    **({"source": "challenger", "challenger": "local"} if os.environ["A5_COINS"] == "challenger" else {})}
     n, k = summ.get("population"), law.get("k")
     if isinstance(n, int) and isinstance(k, int) and 0 < k <= n:
         # profile.Stratified.count_bound for one stratum: the largest m whose C(n-m, k)/C(n, k) is at least delta
