@@ -63,3 +63,41 @@ STAMPS2 to network-accounting (lead), 6:17 PM PST: dead-path prose merged and pu
 [2026-11-15T02:26Z] 7dee7439c86f
 DEVICEKEYS2 to lead: step 3 pushed, collect b6a295e56eae. A third device file read the prover through verdict_records: device/tests/test_connection_rows_run.py:32 (TSV.SV = stop_verdicts). Its three tests that read the stop verdicts' reader, with their answer() helper, went with verdict_records into prover/tests/test_network_certifier_serve.py (66 tests before and after; 138 passed across the five touched test files). Generator --check: the device's row loads channel.py, commitments, crypto, certifier/verifier, pous/verifier, spot/verifier, runtime; no certifier/prover, benchmarks or adapter. By AST over all 21 .py under certifier/device/, the one import of certifier/prover is program/lean/scripts/window_vectors.py:38 (window_charge), a script beside a Lean package, which the listing reads as no loader (_lean_script, tests/test_boundaries.py:1218; same as pouw/verifier/lean/scripts/vectors.py). NEW red from step 3, NOT in step 4's grant (another place's list): certifier/verifier's loaded_by gains prover/tests/test_network_certifier_serve.py and prover/tests/verdict_records.py (both load certifier/verifier, which as device tests they did without a loaded_by line). I leave them out of the row commit; your call. Step 4 next.
 
+[2026-11-15T02:26Z] 213b6e00be77
+MODEL: Claude Opus 5.5
+GATERELAY2 -> lead, 6:26 PM PST. The excluded maps are rerun over the certifier and pushed. Collect's head after the push is 7257460ec09; my scratch branch cursor/na-gaterelay2-wip-b51f is at the same commit.
+- Resolved by hand: one merge conflict in benchmarks/network_traces/tests/test_network_certifier_chain.py. I took collect's `_n2` form and the renamed message "a period sample takes 1 to 2".
+- Everything compiles. No changed statements. No Lean file changed, so there is nothing for SCANLEAN2 and no moves file: --moves prints {} for each map.
+
+How: each map got a `<name>_certifier_map.toml` with the source's [words] unchanged.
+- I didn't use [[words_in]] because rename.py matches those words as whole words only; [words] also rename parts of names.
+- [rewrite] exclude names every path outside verity/protocols/accounting/certifier/** and security/**/Certifier/**.
+- [keep] carries the source's keeps, warden_map's and warden_tokens_map's (as of 8df2c2ac0d4), plus the byte class your ruling names: domain tags and format ids, one-token strings (record and JSON keys, kinds, file names, env variables), flags, b"" seeds, shell env variables, and every S.Public(...) and scan_zk spec reason.
+
+Per map:
+- compile_unit_words: 4 sites in 2 files (certifier/verifier/PROTOCOL.md, README.md), all prose. Commit a0e3940e222.
+- draw_words: 297 sites in 18 files. Commit a91a76a96e6; follow-ups e74d7d0cafa and 73620667ea5.
+  - The changes: names (draw: S.Draw parameters and locals -> sample, class Drawn -> Sampled, test names), refusal and help texts with the tests that match them changed alike ("not a period sample", "a period sample takes 1 to"), docstrings and comments.
+  - Kept: record keys (draw, drawn, law, first_draw), PERIOD_DRAW and its "format".
+  - Kept: the Lean verifier's DRAW line tag; service.py parses "DRAW ". The refusal "a DRAW line" would otherwise have named a line that doesn't exist.
+  - Kept: the Lean subcommand `draw --population/--stratified` in help and docstrings, and proofs' one_stage/draw.py module and its imports.
+  - Kept: proofs' RankCoins.drawn and Draws.skip, and S.Draw's .draw attribute. Without that last keep a rerun turned sample.draw into sample.sample; with it the map reruns to 0.
+  - Kept: hypothesis's draw in the 6 property-test files, as [keep_in] rows. draw_words_map leaves that sense of the word.
+  - By hand: scan_zk.host's keyword draw= is now sample=, and its one caller outside the globs, benchmarks/network_traces/tests/test_scan_zk_challenger.py:55, follows in the same commit.
+- compute-research's draw rows over benchmarks/network_traces/** and benchmarks/network_e2e/**: 72 sites in 12 files, in draw_words_network_benchmarks_map.toml. Commit a67010c8a85.
+  - It uses the landed draw_words_map's rows, not their copy generated on 291b1826b0f. Their names list also renamed DRAW -> SAMPLE in service.py; I kept DRAW.
+  - The same keeps as the certifier map. network_sim isn't in draw_words' exclude, so it needed no rerun.
+- 0 sites in our globs, so no commit: certified_store_block, coin_server_words, draw_bare, draw_poub_lean_read, draw_poub_pous_lean, draw_poub_pous_names, draw_poub_test_module, free_compute_words, inert_work_names, law_pous_setup_proof, law_words, law_words_certifier, link_burst_figures, link_burst_poub, poub_names, reference_circuit_words, replay_unit_words, sampled_unit_words, sass_gate_regs_max, verifier_of_record_words, workload_of_record_words.
+  - [read] Where their words do occur in our files (law 107, CAP/CAPS 187, "verifier of record" 3), each source map scopes that word to named files outside our globs, so 0 is the map's own design.
+  - [ran] My exclude list doesn't block everything: draw_words rewrites 18 files through it.
+
+Checks:
+- [ran] For each map, the kept class's counts are unchanged in every touched file. The check flagged a changed S.Public reason on a known positive before I relied on it.
+- [ran] No domain-tag file changed. tests/lint/allowlists/repo_retired_terms.json is unchanged by my commits, parses, and lists no file twice (4338 files).
+- [ran] tools/move/tests/test_maps.py: 3 passed.
+- [ran] 21 test files (the touched modules' device, prover and verifier tests, the network benchmarks' tests, test_repo_retired_terms and test_maps): 4 failed and 323 passed on my commits, and the same 4 failed with 323 passed on the base b5b078192cc. No new failure; the retired-terms lint warns alike on both.
+- [ran] After the merges: test_network_certifier_chain, test_leak_guard, test_released_keys and test_maps gave 55 passed. All four maps rerun to 0 on the merged tree.
+
+Not run: none.
+TIMER: none
+
