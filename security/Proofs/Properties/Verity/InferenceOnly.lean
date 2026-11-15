@@ -66,9 +66,9 @@ theorem policyHeld_of_same {k : Verity.Registration.Composite} {s : Sent} (h : S
 
 /-- **The claim reads a case that exists**: where the policy's component accepts in what the prover sent composite `k`,
 which doesn't list the rows check, the policy's case decodes. -/
-theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent} (hk : rowsId ∉ k)
-    (h : ComponentAccepts k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
-  obtain ⟨Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
+theorem policyCase_of_component {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent} (hk : rowsId ∉ k)
+    (h : ComponentAccepts pins k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
+  obtain ⟨-, Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
   have hQ' : Q = InferenceOnlyCheck.Protocol.protocol := by
     rw [(component_eq_some.1 hQ).2]
     simp only [Subprotocol.protocolAt, hk, ↓reduceIte]

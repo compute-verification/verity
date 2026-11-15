@@ -496,7 +496,7 @@ window's `ε` share of its population's proof blocks is incorrect at the project
 structure ExecutionPhaseDeployed (V : Vocab d α) (K : ExecutionPhaseConstructions V)
     (S : ByteArray → Array ByteArray → Option ExecutionPhase) : Prop where
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
-  forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
+  forger : ∀ θ F c σ, V.forger .sampled 0 θ F c σ = K.forger θ F c σ
   loss : ∀ θ x, V.loss .sampled θ x = 0
   claim : ∀ θ F W, S θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
@@ -527,6 +527,7 @@ theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : Byt
   · exact recursiveForm_refused V k θ hP F c σ
   unfold Vocab.error Accounting.condError
   beta_reduce
+  simp only [AuditorPins.reads, List.length_singleton, Nat.cast_one, one_mul]
   split_ifs with hE
   swap
   · exact le_top
@@ -568,8 +569,8 @@ theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : Byt
     have hforge : ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify) ≤
         ENNReal.ofReal (V.epsForge θ (V.callsMul θ .sampled * t + V.callsAdd θ .sampled) (V.signatures θ)) := by
       rw [← hD.forger θ F c σ]
-      exact ENNReal.ofReal_le_ofReal
-        (hUf (fun x => V.forger_calls .sampled θ F c σ x) (fun x => V.forger_signed .sampled θ F c σ x))
+      exact ENNReal.ofReal_le_ofReal (hUf 0 (List.mem_singleton_self 0) (fun x => V.forger_calls .sampled 0 θ F c σ x)
+        (fun x => V.forger_signed .sampled 0 θ F c σ x))
     simp only [hD.loss, add_zero]
     refine hver.trans ((hC θ F W hS c σ).trans ?_)
     calc _ ≤ (K.live W θ F c σ).sessionDelta t +
