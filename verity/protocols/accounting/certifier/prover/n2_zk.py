@@ -4,7 +4,9 @@ system's `Stream`), selected (Selection All: its one proof block, no coins), its
 both ends' head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
 decided by `TransferBlocks.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
 the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
-comparison to each verdict, which decides nothing.
+comparison to each verdict, which decides nothing and goes to ``--witness``, the public summary keeping the flag alone.
+The public summary (``summary.json``) holds only the keys its list of released_keys.json declares; the run's path,
+the device, timings and memory, the references' failed parts and the scan's finds go to ``--witness``.
 
     python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
@@ -13,8 +15,8 @@ comparison to each verdict, which decides nothing.
   ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
   certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
-  what the node sent, so a member's summary says only whether it refused any (``certifier_refused``), and the phases
-  go to ``--witness`` alone.
+  what the node sent, so the public summary of a run whose signer refused any holds each member's
+  ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the network certifier's, its head failing its signed digest alone. The prover's references
@@ -90,6 +92,22 @@ RECEIVED = {"registration.json": "the registration record", "draw.json": "the st
 
 def log(msg: str) -> None:
     print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def wlog(a, msg: str) -> None:
+    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, or printed when
+    there is no witness side (a run by hand, which releases nothing)."""
+    if a.witness is None:
+        return log(msg)
+    a.witness.parent.mkdir(parents=True, exist_ok=True)
+    with open(a.witness.with_name("n2.log"), "a") as f:
+        f.write(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}\n")
+
+
+def plog(a, msg: str) -> None:
+    """A line of public values that says something per execution phase: public, but on the witness side when the
+    signer refused any phase, as the public summary then holds nothing per window."""
+    (wlog if getattr(a, "refused_any", False) else lambda _a, m: log(m))(a, msg)
 
 
 def _no_coins(n: int) -> bytes:
@@ -379,11 +397,11 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
-        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
-            f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        plog(a, f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
+             f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
         if forge is not None:
             drawn = {**drawn, "units": forge(drawn)}
-            log(f"{name}: the prover proves windows {drawn['units']} instead")
+            plog(a, f"{name}: the prover proves windows {drawn['units']} instead")
         (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
         windows = [rd.windows[u] for u in drawn["units"]]
     previous, rows = None, []
@@ -442,17 +460,17 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
                               and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
-        log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
-            f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
-            f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
-            f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
-            f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
+        plog(a, f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
+             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
+             f"{proof['opened_word']}; {'as expected' if row['as_expected'] else 'UNEXPECTED'}")
+        wlog(a, f"{name} window {x.window}: prove {row['prove']['session_s']} s (prove_total "
+             f"{row['prove']['prove_total_s']} s, {row['prove']['proof_bytes']} B), verify {verify_s} s")
     network = lw.network_verdict(stream, rd.plan["windows"], drawn)
     if drawn is not None:
         sel = network["selection"]
-        log(f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
-            f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
-                                                   "the windows proved are the draw of record's"))
+        plog(a, f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+             f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
+                                                    "the windows proved are the draw of record's"))
     return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
             **({} if segment is None else {"segment": segment})}
 
@@ -483,6 +501,45 @@ def prove(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     run = Path(a.network_certifier_run)
     summary: dict = {"run": str(run), "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
+    # what the public summary leaves to --witness: the run's path, the prover's device, timings and memory, values in
+    # the clear, the prover's own reference parts and scan files, and which execution phases the signer refused
+    kept = ("run", "gpu", "instances_s", "staging/evaluate_s", "staging/reference_s", "staging/write_s",
+            "stager/lower_s", "members/*/issuer_refused", "members/*/reference/*/failed", "members/*/windows/*/failed",
+            "members/*/windows/*/prove", "members/*/windows/*/verify_s", "members/*/windows/*/clear",
+            "members/*/received/verifier_bytes", "members/*/received/verifier_found",
+            "members/*/received/public_pieces", "members/*/received/placed", "members/*/received/was",
+            "members/*/received/structured", "members/*/received/control/bytes",
+            "members/*/received/control/blobs_found", "members/*/received/control/missing")
+
+    def take(doc, segs: list[str], into: dict) -> None:
+        for k in (list(doc) if isinstance(doc, dict) else range(len(doc))) if segs[0] == "*" else [segs[0]]:
+            if isinstance(doc, dict) and k not in doc:
+                continue
+            if len(segs) == 1:
+                into[str(k)] = doc.pop(k)
+            elif isinstance(doc[k], (dict, list)):
+                take(doc[k], segs[1:], sub := into.setdefault(str(k), {}))
+                if not sub:
+                    del into[str(k)]
+
+    def write(summary: dict) -> None:
+        """The public summary, and the rest to --witness (a list's entries by their index). A run whose signer refused
+        an execution phase is public as each member's flag and its ok alone, so nothing public says where."""
+        full = json.loads(json.dumps(summary, default=str))
+        public, private = json.loads(json.dumps(full)), {}
+        for path in kept:
+            take(public, path.split("/"), private)
+        if any(m.get("certifier_refused") for m in public.get("members", {}).values()):
+            private |= {"members": full["members"], "link": {"windows": full["link"]["windows"]},
+                        **({"sampled": public.pop("sampled")} if "sampled" in public else {})}
+            public["members"] = {k: {"certifier_refused": True, **({"ok": m["ok"]} if "ok" in m else {})}
+                                 for k, m in public["members"].items()}
+            public["link"].pop("windows", None)
+        (out / "summary.json").write_text(json.dumps(public, indent=1, sort_keys=True))
+        if a.witness is not None:
+            a.witness.parent.mkdir(parents=True, exist_ok=True)
+            a.witness.write_text(json.dumps(private, indent=1, sort_keys=True))
+
     t = time.time()
     members = {"honest": phases(run), "tampered": phases(run, edit=every_count if a.draw else one_count)}
     members["tampered"].every = bool(a.draw)
@@ -508,24 +565,22 @@ def prove(a) -> int:
                        "windows": {k: len(v.windows) for k, v in members.items()},
                        "planned_windows": {k: v.plan["windows"] for k, v in members.items()}}
     summary["instances_s"] = round(time.time() - t, 1)
+    a.refused_any = any(rd.issuer_refused for rd in members.values())
     for name, rd in members.items():
         if rd.lw.partition != lw0.partition or rd.lw.program != lw0.program:
             raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
-            "certifier_refused": bool(rd.issuer_refused)}
-        log(f"{name}: {len(rd.windows)} execution phases, words {[x.word for x in rd.windows]}, expected verdicts "
-            f"{[x.expect for x in rd.windows]}, failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
+            "certifier_refused": bool(rd.issuer_refused), "issuer_refused": rd.issuer_refused}
+        plog(a, f"{name}: {len(rd.windows)} execution phases, words {[x.word for x in rd.windows]}, expected "
+             f"verdicts {[x.expect for x in rd.windows]}")
+        wlog(a, f"{name}: failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
         if not expected(name, rd):
             raise SystemExit(f"{name}: the references are not the {name} round's")
-    if a.witness is not None:
-        a.witness.parent.mkdir(parents=True, exist_ok=True)
-        a.witness.write_text(json.dumps({name: {"issuer_refused": rd.issuer_refused} for name, rd in members.items()},
-                                        indent=1, sort_keys=True, default=str))
     if not summary["link"]["pinned"]:
         raise SystemExit(f"a gate names no pinned circuit digest: {summary['link']['gates']}")
     if a.dry:
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        write(summary)
         log("dry: done")
         return 0
 
@@ -536,11 +591,12 @@ def prove(a) -> int:
     summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {lw0.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
-        f"pin {sg.st.pin[:16]}")
+    log(f"stager: {lw0.proof_block.id}, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, pin {sg.st.pin[:16]}")
+    wlog(a, f"stager: lowered in {sg.lower_s} s")
     summary["staging"] = stage(M, sg, members, os.urandom(32), out)
-    log(f"staged: {summary['staging']}")
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log(f"staged: {summary['staging']['statements']} statements")
+    wlog(a, f"staged: {summary['staging']}")
+    write(summary)
 
     def go(k: int, name: str) -> tuple[str, dict]:
         res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0,
@@ -568,17 +624,19 @@ def prove(a) -> int:
                 "audit": {"accepted": net["accepted"], "wrong_units": wu},
                 "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
                 else None}
-            log(f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of {sel['population']}: "
-                f"at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta {wu['delta']:.3g}"
-                + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
-        log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
-            f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
-            f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
-            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the public "
-            f"circuit holds left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
-            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            plog(a, f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of "
+                 f"{sel['population']}: at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta "
+                 f"{wu['delta']:.3g}" + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
+        plog(a, f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
+             f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}")
+        plog(a, f"member {name}: the verifier received {rec['files']} files, scanned for {rec['blobs']} witness "
+             f"pieces: leaked {rec['leaked'] or 'none'}, control holds all {rec['control']['holds_all']}; "
+             f"{'as expected' if good else 'UNEXPECTED'}")
+        wlog(a, f"member {name}: verifier received {rec['verifier_bytes']} bytes, witness pieces found there: "
+             f"{rec['verifier_found'] or 'none'} ({len(rec['public_pieces'])} pieces the public circuit holds left "
+             f"out), structured {rec['structured'] or 'none'}, control {rec['control']['blobs_found']}")
     summary["ok"] = ok
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    write(summary)
     log("done: " + ("ok" if ok else "FAILED"))
     return 0 if ok else 1
 
@@ -607,8 +665,9 @@ def main(argv=None) -> int:
                         "window's root is committed, and only those proved (TransferBlocks.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
-    p.add_argument("--witness", type=Path, help="where each member's execution phases its signer refused are written, "
-                                                "on the chain's private side")
+    p.add_argument("--witness", type=Path, help="where what the public summary leaves out is written, on the chain's "
+                                                "private side: the timings, the values in the clear, and each "
+                                                "member's execution phases its signer refused")
     a = ap.parse_args(argv)
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)

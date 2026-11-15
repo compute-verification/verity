@@ -227,7 +227,7 @@
   "FlockSoundness.Audit.Analysis.BindSound": {
    "owner": "@proofs",
    "digest": "5a8cf97e623b4d06efc754808b4a93f4f79f4ee9eb0bfec3ccd8c9b58971c698",
-   "why": "δ_link of the layer below, as `KnowledgeSound`."
+   "why": "ε_bind of the layer below, as `KnowledgeSound`."
   },
   "FlockSoundness.Audit.Analysis.KnowledgeSound": {
    "owner": "@proofs",
@@ -6171,6 +6171,7 @@
  },
  "four_names": [
   "InferenceOnly",
+  "Slowdown",
   "NetTiming",
   "Pous",
   "Pouw",

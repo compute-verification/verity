@@ -33,7 +33,6 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVIC
 #: each device record's atom and promotion period as the Definitions' statics
 ATOMS = {"h100": (HopperE4m3QgmmaDot32, 4), "sm120": (BlackwellE4m3QmmaDot32, 4)}
 SALT, ROOT_A, ROOT_B, UNIT = bytes(range(32)), bytes(range(100, 164)), bytes((7 * i + 3) % 256 for i in range(64)), 3
-REGISTRY_DIR = (Path(K.__file__).parent.parent.parent.parent.parent.parent.parent / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry")
 #: the Definitions a row is laid out in, by name: -h3's hashes and a line's codes, the forming's codes, the atom, and the
 #: FP32 steps of the statistics, the promotions and the peel factors
 UNITS_A = {"PearlCRowBlock", "PearlCShaBlock", "PearlCRowSeedHead", "PearlCRowSeedTail", "PearlCLineKey", "PearlCLineRaw",
@@ -177,8 +176,8 @@ def test_a_row_is_laid_out_in_units_each_under_the_whole_lowering():
     row = K.units(on(K.PearlCRowAV2, "h100", K=2048, R=32))
     assert row["PearlCRowBlock_v2"] == (72, 57_947) and row["PearlCShaBlock_v2"] == (5, 57_947)
     pins = {}
-    for module in ("pearl_c_noise", "pearl_c_forming", "pearl_c_call"):
-        pins |= json.loads((REGISTRY_DIR / f"{module}.circuit-check.json").read_text())["definitions"]
+    for module in (N, F, K):
+        pins |= json.loads(Path(module.__file__).with_suffix(".circuit-check.json").read_text())["definitions"]
     ours = [i for i in row if i.startswith("PearlC")]
     assert len(ours) == 10 and all(i in pins for i in ours), [i for i in ours if i not in pins]
     assert K.bindings()[-1].id in pins and K.ands(K.bindings()[-1]) <= K.LOWERED_WHOLE

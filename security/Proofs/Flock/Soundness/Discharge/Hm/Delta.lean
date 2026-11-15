@@ -113,13 +113,13 @@ theorem constBit_v1 {p : Port} {n t : ℕ} (hv : p.v2 = false) (hs : p.segs = no
     (hw : 2 * p.words = 128 * n) (ht : t < 1024) :
     HmRow.constBit p (HmRow.tailOf p) n t = some (wordsBit (HmRow.padWords p.words) t) := by
   have hby : p.bytes = 2 * p.words := by simp [Port.bytes, hv]
-  have hj : (HmRow.blockBit t).1 = 8 * (t / 64) + 7 - t % 64 / 8 := rfl
-  have hb8 : (HmRow.blockBit t).2 = t % 8 := rfl
+  have hj : (HmRow.chunkBit t).1 = 8 * (t / 64) + 7 - t % 64 / 8 := rfl
+  have hb8 : (HmRow.chunkBit t).2 = t % 8 := rfl
   unfold HmRow.constBit HmRow.tailOf
   simp only [hby, hb, hs]
   rw [if_neg (by rw [hj, hb8]; omega), padTail_eq (by omega), HmRow.padWords,
     wordsBit_eq _ (n := 16) (by omega), decide_eq_true (by omega), Bool.true_and,
-    show 128 * n + (HmRow.blockBit t).1 - 2 * p.words = 8 * (t / 64) + 7 - t % 64 / 8 by rw [hj]; omega, hb8, wbit,
+    show 128 * n + (HmRow.chunkBit t).1 - 2 * p.words = 8 * (t / 64) + 7 - t % 64 / 8 by rw [hj]; omega, hb8, wbit,
     List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (by omega), Option.map_some, Option.getD_some,
     wordsBE_getElem! (by omega), getLsbD_wordL _ _ _ (by omega), get!_eq_getD,
     show 0 + 8 * (t / 64) + (7 - t % 64 / 8) = 8 * (t / 64) + 7 - t % 64 / 8 by omega,

@@ -201,8 +201,8 @@ def OutputsCommitted : Prop :=
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-          outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-        (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+          outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+        (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
 /-- **`CommitPairSpec`**: the row commitment's extractor outputs a SHA-512 collision whenever two different rows'
 bytes have one commit string `b ‖ c`, under any salts. -/
@@ -236,13 +236,13 @@ def OutputsBinding : Prop :=
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
     D.proved[o.val * st.c.g + g] = D'.proved[o'.val * st'.c.g + g'] →
-    outBytes (Hm.blockBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j →
+    outBytes (Hm.chunkBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j →
     Binding.Collides (commitPair
       ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-        outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-      (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+        outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+      (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
       ((HmRow.rowPrefix (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words).data.toList ++
-        outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j)
-      (Hm.bytesOf (Hm.blockBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
+        outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
+      (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
 end FlockSoundness.Discharge.Hidden
