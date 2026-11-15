@@ -283,14 +283,15 @@ verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] 
 
 | layer | reads | prover seconds | Lean verifier |
 |---|---|---|---|
-| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines) and `summary.json` | Flock's prover a drawn block, the mean over every rank's drawn blocks | every rank accepted, each with `lean-verify/m0` true |
+| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines) and `summary.json` | Flock's prover a drawn block, the mean over every rank's drawn blocks | every rank accepted, each rank's own audited `A5` line with `lean-verify/m0` true |
 | `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
 | `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
 | `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
 
 The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
 more than one honest arm is refused: give the arm's directory. A `--flock` or `--zk` row whose output states the other
-proof, or none, prints no number, whichever command wrote it.
+proof, or none, prints no number, whichever command wrote it. Each printed row states its proof (`plain`, `zk`, or "not
+stated"), so a plain run's numbers in the sampling row say plain.
 
 A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
 table. Its last column is one line, `ran with: coins COINS; parameters PARAMETERS (DETAIL)`: COINS is `deployed

@@ -303,15 +303,21 @@ def read_prove_path(d: Path, row: Row) -> None:
                          "directory")
     arm, pp = honest[0]
     ranks = pp.get("ranks") or {}
-    lean = _lean_verdicts([x for x in _tagged(_text(arm / "audit.log"), "A5", row.notes) if "audit" in x])
+    audits = [x for x in _tagged(_text(arm / "audit.log"), "A5", row.notes) if "audit" in x]
+    per_rank = [_lean_verdicts([x]) for x in audits]
+    lean = [v for vs in per_rank for v in vs]
+    each = len(audits) == len(ranks) and all(per_rank)
+    if not each:
+        row.notes.append(f"{len(audits)} audited A5 line(s) for {len(ranks)} rank(s), "
+                         f"{sum(1 for vs in per_rank if not vs)} without a Lean verify verdict: not one verdict a rank")
     row.accepted = (pp.get("ok") is True and bool(ranks) and all(r.get("accepted") is True for r in ranks.values())
-                    and bool(lean) and all(v is True for _, v in lean))
+                    and each and all(v is True for _, v in lean))
     if row.accepted:
         row.lean = f"accepted: every rank's audit ({len(ranks)}), each with Lean's {', '.join(sorted({k for k, _ in lean}))}"
     else:
         held = [f"PROVE-PATH ok {pp.get('ok')}"] + [f"rank {r} accepted {x.get('accepted')}" for r, x in sorted(ranks.items())
                                                    if x.get("accepted") is not True]
-        held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if lean else ["no Lean verify verdict in the log"])
+        held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if each else ["not every rank has a Lean verify verdict"])
         row.lean = "not accepted: " + "; ".join(held)
     counts: dict[str, int] = {}
     for r in ranks.values():
@@ -418,11 +424,12 @@ def render(rows: Sequence[Row]) -> str:
     """The table as text: a row a layer, then why each row without a number has none."""
 
     lines = ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`).", "",
-             "| layer | workload | prover s | Lean verifier | Lean s | proof bytes | ran with |",
-             "|---|---|---|---|---|---|---|"]
+             "| layer | workload | proof | prover s | Lean verifier | Lean s | proof bytes | ran with |",
+             "|---|---|---|---|---|---|---|---|"]
     for r in rows:
         unit = f"{r.prover_unit}: {r.prover_what}" if r.prover_what else r.prover_unit
-        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {_cell(r.prover_s, unit)} | {r.lean} | "
+        proof = r.proof or (NOT_STATED if r.status == "read" else "—")
+        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {_cell(r.prover_s, unit)} | {r.lean} | "
                      f"{_cell(r.lean_s, r.lean_what)} | {_cell(r.proof_bytes, r.bytes_what, bytes_=True)} | {r.ran_with} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]

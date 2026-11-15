@@ -33,15 +33,16 @@ def recursion(root: Path, composed: bool | None = True) -> Path:
     return root
 
 
-def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = False, lean: bool = True) -> Path:
+def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = False, lean: bool = True, ranks: int = 1,
+                   a5_lines: int | None = None) -> Path:
     arm = out / name
     arm.mkdir(parents=True)
     a5 = {"audit": {"accepted": lean, "verdicts": {"lean-draw/m0": True, "lean-verify/m0": lean, "m0-verifier/m0": True}}}
     rank = {"accepted": lean, "ok": lean, "population": 8, "draw_counts": {"SiluMul_v2{I=8192}": 2},
             "per_unit": {"SiluMul_v2{I=8192}": {"units": 2, "proof_bytes": 1700000, "prove_s_per_unit": 3.0,
                                                 "lean_verify_s_per_unit": 1.0}}}
-    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "ranks": {"0": rank}}
-    (arm / "audit.log").write_text("A5 {\"lean_workers\": 1}\n" + "A5 " + json.dumps(a5) + "\n"
+    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "ranks": {str(r): rank for r in range(ranks)}}
+    (arm / "audit.log").write_text("A5 {\"lean_workers\": 1}\n" + ("A5 " + json.dumps(a5) + "\n") * (a5_lines or ranks)
                                    + "PROVE-PATH " + json.dumps(line) + "\n")
     (arm / "summary.json").write_text(json.dumps({"coins": {"source": "challenger", "challenger": "local"}}))
     return arm
@@ -110,6 +111,27 @@ def test_the_flock_row_is_the_plain_proofs(tmp_path):
 def test_a_prove_path_run_whose_lean_verify_refused_prints_no_number(tmp_path):
     row = PL.read("zk", str(prove_path_arm(tmp_path, "llama", lean=False)))
     assert not row.accepted and row.prover_s is None and "lean-verify/m0 False" in row.lean
+
+
+def test_every_rank_needs_its_own_lean_verify_verdict(tmp_path):
+    """Two ranks with one audited A5 line between them are not every rank verified by Lean, though that one line is."""
+
+    assert PL.read("zk", str(prove_path_arm(tmp_path / "a", "llama", ranks=2))).accepted
+    row = PL.read("zk", str(prove_path_arm(tmp_path / "b", "llama", ranks=2, a5_lines=1)))
+    assert not row.accepted and row.prover_s is None and "not every rank has a Lean verify verdict" in row.lean
+    assert "1 audited A5 line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
+
+
+def test_the_printed_row_states_its_proof(tmp_path):
+    """A plain a5 out given as ``--sampling`` keeps its numbers, and its printed row says plain."""
+
+    rows = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
+            PL.read("flock", None)]
+    text = PL.render(rows)
+    assert rows[0].prover_s == 5.0 and "| with sampling | row llama32-1b__int8__h200__tp1__b4: " in text
+    line = {r.layer: x for r, x in zip(rows, text.splitlines()[4:7], strict=True)}
+    assert "| plain | 5 (s a block" in line["sampling"] and "| zk | 3 (s a block" in line["zk"]
+    assert line["flock"].startswith("| Flock | not run | — | — |")
 
 
 def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_than_it_says(tmp_path):
