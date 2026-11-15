@@ -2759,8 +2759,8 @@ def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_pat
     """An open premise (its issue and due date), a domain hypothesis (its `why`) and a named assumption (its id and owner),
     each taken by a guarantee and moved with it: `--update --moved` re-keys their entries with every field, and the review
     says each is the same statement moved, by the digest of what it reads under its old names (`Facts.lean`'s `moved-read`
-    texts of the premises' walks); a plain `--update` then changes nothing.  A premise moved with a new body is a
-    statement change."""
+    texts of the premises' walks); a plain `--update` then changes nothing.  Staged for the run (``defer``), the lock is
+    left as it was until the run writes it.  A premise moved with a new body is a statement change."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Prem\nimport Control.Uses\n")
@@ -2789,7 +2789,9 @@ def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_pat
     hyp.write_text(hyp.read_text().replace("def Hyp", "def Base"))
     thms.write_text(thms.read_text().replace("Control.Hyp", "Control.Base"))
     build()
-    rep = audit(moved={"Control.P": "Control.R", "Control.T": "Control.U", "Control.Hyp": "Control.Base"})
+    rep = audit(moved={"Control.P": "Control.R", "Control.T": "Control.U", "Control.Hyp": "Control.Base"}, defer=True)
+    assert A.load(pkg) == was
+    shutil.copyfile(rep["staged"], pkg / A.POLICY)
     now = A.load(pkg)
     assert now["open"] == {"Control.R.Op": {"owner": "@amy", "digest": now["open"]["Control.R.Op"]["digest"]} | ticket}
     assert now["domain"] == {"Control.R.Dom": {"owner": "@lean", "digest": now["domain"]["Control.R.Dom"]["digest"], "why": why}}
