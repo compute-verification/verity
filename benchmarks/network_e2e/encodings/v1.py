@@ -6,7 +6,8 @@ is certified, replayed, derived and sent, the windows and the string), re-export
 load this one by path. This module adds a trace's certified record (`record_of`), its I1 v0 advice (`advice_of`) and,
 for a trace served with a draft, which no I1 v0 says, its schedule (`schedule_of`, `schedule_code`'s),
 a trace's residual windows (`windows_of`) and the books held out from it (`held_out_books`), and the table
-(`measure`, `render`):
+(`measure`, `render`), which is of I1 v0 and so has an error row for a trace served with a draft (`by_class.py`
+reads one):
 
     python v1.py LABEL=DIR ... --stops IDS [--T 600 --ingress client --jobs N] --out TABLE.json
 """
@@ -96,7 +97,10 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
 def advice_of(trace: Any, record: Record) -> I1.Advice:
     """The trace as I1 v0: its rows in the order its runner ran them, I1's numbering by first row, each admitting row's
     hit its start and its sources the canonical ones, and each kept output released in the record's bucket. The trace's
-    requests are the record's, by id."""
+    requests are the record's, by id. A trace served with a draft is refused: `schedule_of` says it."""
+    if trace.engine.num_speculative_tokens:
+        raise AdviceCodeError("the trace was served with a draft, and I1 v0's rows emit one output each: `schedule_of` "
+                              "gives its schedule")
     steps_rows = [list(st.rows) for st in trace.steps]
     num: dict[int, int] = {}
     order: list[int] = []
@@ -193,7 +197,7 @@ TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
     """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
-    or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
+    or on a `.released` view the network certifier's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
     decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
     to the trace's I1 v0; the residual's decisions and order entries; the length terms' bits, which every string holds
@@ -293,8 +297,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--T", type=int, default=600, help="the window, in the trace's certified buckets: its tick's τ_b, "
                                                           "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
-                    help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
-                         "release), or the engine's own arrival stamp (warden: no deviations)")
+                    help="the certified order's stand-in: the client's send (client; on a .released view, the network certifier's "
+                         "release), or the engine's own arrival stamp (network_certifier: no deviations)")
     ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
     ap.add_argument("--out", type=Path, required=True, help="the table's JSON")
     a = ap.parse_args(argv)

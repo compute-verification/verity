@@ -11,9 +11,9 @@ import json
 import shutil
 
 import pytest
-
 import ra_cases as M
 import replay as R
+
 from verity.protocols.accounting.poub.verifier import audit, wire
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -34,7 +34,7 @@ def verifier_json(r: M.Run) -> dict:
     for e in r.events:
         if e["kind"] == "receive" and 0 <= e["t"] < len(s.windows):
             arrivals.setdefault(e["t"], []).append(e["now"])
-    drawn_at = {e["t"]: e["now"] for e in r.events if e["kind"] == "close"}
+    sampled_at = {e["t"]: e["now"] for e in r.events if e["kind"] == "close"}
     drew = {t // g for t, w in enumerate(s.windows) if w.draws}
     v = s.failed
     pace = r.params.pace
@@ -48,7 +48,7 @@ def verifier_json(r: M.Run) -> dict:
         "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
                           "deadline_ns": s.deadline(t) if w.boundary_ns is not None else None,
                           "passes": len(w.roots), "arrivals_ns": arrivals.get(t, [])[:len(w.roots)],
-                          "draws_sent_ns": drawn_at.get(R.last_of(t, g, len(s.windows))) if t // g in drew else None}
+                          "draws_sent_ns": sampled_at.get(R.last_of(t, g, len(s.windows))) if t // g in drew else None}
                          for t, w in enumerate(s.windows)]}
     if s.outcome == "accepted":
         rec = s.record()
@@ -114,7 +114,7 @@ def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tm
 
 
 @pytest.mark.parametrize("key", ["samples", "min_passes"])
-def test_a_transcript_whose_windows_could_draw_nothing_is_refused_by_both(server, tmp_path, key) -> None:
+def test_a_transcript_whose_windows_could_sample_nothing_is_refused_by_both(server, tmp_path, key) -> None:
     """Both verifiers reject a window with no samples `malformed` whatever its frames (`Session.verify`), and no session
     has one: with `samples` or `min_passes` at 0, the transcript, a frame neither can read beside each window's
     openings, is refused by both before its first event."""
@@ -161,10 +161,10 @@ def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name)
 
 @pytest.mark.parametrize("name, outcome", [("honest-shared-4", "accepted"), ("honest-shared-paced-uneven", "accepted"),
                                            ("few-shared", "few")])
-def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
+def test_a_verifier_json_sampled_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
                                                                                             outcome) -> None:
     """Sampled g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each sample closes at its last window
-    under W + ⌈W/g⌉ coins and draws as many receipts as its windows' shares recorded: an honest session, even and
+    under W + ⌈W/g⌉ coins and samples as many receipts as its windows' shares recorded: an honest session, even and
     uneven, replays every sample, and a sample with a window short of its passes is rejected `few` at that window."""
     r = run(name)
     assert r.s.outcome == outcome and r.params.groups_per_coin > 1
@@ -181,7 +181,7 @@ def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_record
         assert len(row["lean"]["drawn"]) == -(-W // g) and row["why"] == "every draw drawn, as many as recorded"
 
 
-def test_a_verifier_json_drawn_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:
+def test_a_verifier_json_sampled_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:
     """At one window in flight no property covers a session sampled g > 1 windows a coin, and the driver refuses one:
     a record of one has no verdict to replay."""
     v = verifier_json(run("honest-shared-4"))

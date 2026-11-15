@@ -3,11 +3,17 @@ nothing, key material and big files never leave the machine."""
 from __future__ import annotations
 
 import datetime as dt
+import os
+import select
+import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from waits import FakeClock, Gate
 
 from research import notes
 from research import notes_sync as NS
@@ -121,16 +127,323 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
     assert not (b / ".git" / "rebase-merge").exists()
 
 
-def test_a_detached_head_commits_nothing(machines):
+def test_a_detached_head_the_branch_is_not_behind_commits_nothing(machines):
     """Once HEAD is detached, a pass that commits onto it can't push, nor can any pass after it; a sync on a detached HEAD
-    leaves the work uncommitted for the branch to take."""
+    that the branch has commits beside leaves the work uncommitted for the branch to take."""
     _, a, _ = machines
-    _git(a, "checkout", "-q", "--detach")
+    _insert_after(a / DOC, "<!-- b -->", "a on the branch")
+    _git(a, "commit", "-qam", "on the branch")
+    _git(a, "checkout", "-q", "--detach", "HEAD~1")
     _insert_after(a / DOC, "<!-- a -->", "a while detached")
     before = _git(a, "rev-parse", "HEAD")
     rep = NS.sync(a, secrets=[])
     assert (rep["rc"], rep["commit"], rep["pushed"]) == (2, None, False) and "detached" in NS.render_sync(rep)
     assert _git(a, "rev-parse", "HEAD") == before and "a while detached" in (a / DOC).read_text()
+    assert "a on the branch" in _git(a, "show", f"main:{DOC}")
+
+
+def _start(clone: Path, *argv: str, **env: str) -> subprocess.Popen:
+    """`research notes ARGV` on the scratch ``clone``, started and not waited for (`_research` says in what environment)."""
+    shell = {k: v for k, v in os.environ.items() if k not in NS.IDENTITY_ENV}
+    return subprocess.Popen([sys.executable, "-m", "research", "notes", *argv, "--root", str(clone)], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True,
+                            env={**shell, "RESEARCH_NOTES": str(clone), NS.SYNC_ENV: "1", NS.CITE_ENV: "0", **env})
+
+
+def _hook(clone: Path, body: str) -> Path:
+    """Install ``body`` as the clone's post-checkout hook, which git runs when a rebase has checked out the commit it rebases
+    onto: HEAD is detached there, and nothing is picked yet."""
+    hook = clone / ".git" / "hooks" / "post-checkout"
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text(f"#!/bin/sh\n{body}\n")
+    hook.chmod(0o755)
+    return hook
+
+
+@pytest.fixture
+def held(tmp_path):
+    """``hold(clone)``: the clone's next rebase stops once it has detached HEAD, until ``go.release()``; ``reached(proc)``
+    returns once the rebase ``proc`` runs is stopped there."""
+    at, go = Gate(tmp_path / "at"), Gate(tmp_path / "go")
+    started: list[subprocess.Popen] = []
+
+    def hold(clone: Path) -> None:
+        once = tmp_path / "held-once"
+        _hook(clone, f"[ -e '{once}' ] && exit 0\n: > '{once}'\necho held > '{at.path}'\nhead -c 1 '{go.path}' > /dev/null")
+
+    def reached(proc: subprocess.Popen) -> None:
+        started.append(proc)
+        ready, _, _ = select.select([at, proc.stdout], [], [])
+        assert at in ready, f"the sync ended before its rebase began: {proc.communicate()}"
+        at.readline()
+
+    try:
+        yield SimpleNamespace(hold=hold, reached=reached, go=go, started=started)
+    finally:
+        go.release()
+        for proc in started:
+            proc.kill()
+            proc.communicate()
+        at.close()
+        go.close()
+
+
+def _state(clone: Path) -> tuple[str, bool, list[str]]:
+    """The branch HEAD is on ('' when detached), whether a rebase or merge is in progress, and the clone's rescue branches."""
+    head = subprocess.run(["git", "-C", str(clone), "symbolic-ref", "-q", "--short", "HEAD"], capture_output=True, text=True)
+    busy = any((clone / ".git" / x).exists() for x in ("rebase-merge", "rebase-apply", "MERGE_HEAD"))
+    return head.stdout.strip(), busy, _git(clone, "for-each-ref", "--format=%(refname:short)", "refs/heads/rescue-*").split()
+
+
+def _report(clone: Path, lane: str, text: str) -> str:
+    rel = f"lanes/{lane}/report.md"
+    (clone / rel).parent.mkdir(parents=True, exist_ok=True)
+    (clone / rel).write_text(text)
+    return rel
+
+
+def test_two_syncs_of_one_clone_at_the_same_moment_both_publish_and_leave_it_on_its_branch(machines, held):
+    """Two agents share one clone and sync at once.  The second starts while the first is inside its rebase, HEAD detached: it
+    waits for the first, saying whom it waits for, and then both have published and the clone is on its branch."""
+    origin, shared, other = machines
+    _insert_after(other / DOC, "<!-- b -->", "the other machine's line")
+    assert NS.sync(other, secrets=[])["pushed"]
+    one, two = _report(shared, "one", "one's report\n"), _report(shared, "two", "two's report\n")
+    held.hold(shared)
+    first = _start(shared, "sync", "--path", "lanes/one")
+    held.reached(first)
+    assert _state(shared)[:2] == ("", True), "the first sync is inside its rebase"
+    second = _start(shared, "sync", "--path", "lanes/two")
+    held.started.append(second)
+    waiting = second.stderr.readline()
+    held.go.release()
+    out1, out2 = first.communicate(), second.communicate()
+    assert (first.returncode, second.returncode) == (0, 0), (out1, waiting, out2)
+    assert f"waiting up to {NS.LOCK_WAIT_S:g} s for another sync of this clone to end" in waiting and f"pid {first.pid} on " in waiting
+    assert _state(shared) == ("main", False, []) and _git(shared, "status", "--porcelain") == ""
+    assert _git(origin, "show", f"main:{one}") == "one's report\n" and _git(origin, "show", f"main:{two}") == "two's report\n"
+    assert "the other machine's line" in _git(origin, "show", f"main:{DOC}")
+
+
+def test_lines_appended_under_another_sync_s_rebase_are_published_not_reset_away(machines, held):
+    """What lost two lines on a shared clone.  A reader's sync is inside its rebase, HEAD detached at the remote's commit, when
+    another agent appends two lines to a file the reader's commit also changed, and syncs.  The reader's rebase then stops at
+    that file (its pick would overwrite the two lines), and ending it with `git rebase --abort` alone resets the file: the
+    lines are in no file and no commit.  Here they are put back, the reader's sync rebases again, and both syncs publish."""
+    origin, shared, other = machines
+    _insert_after(other / DOC, "<!-- b -->", "the other machine's line")
+    assert NS.sync(other, secrets=[])["pushed"]
+    _insert_after(shared / DOC, "<!-- a -->", "the reader's line")
+    held.hold(shared)
+    reader = _start(shared, "sync", "-m", "the reader's sync")
+    held.reached(reader)
+    with (shared / DOC).open("a") as f:
+        f.write("appended line 1\nappended line 2\n")
+    appender = _start(shared, "sync", "-m", "the appender's sync")
+    held.started.append(appender)
+    said = appender.stderr.readline()
+    held.go.release()
+    out1, out2 = reader.communicate(), appender.communicate()
+    text = (shared / DOC).read_text()
+    assert "appended line 1\nappended line 2\n" in text, f"the two lines left the file: {(out1, said, out2)}"
+    assert (reader.returncode, appender.returncode) == (0, 0), (out1, said, out2)
+    published = _git(origin, "show", f"main:{DOC}")
+    assert published == text and all(x in published for x in ("the reader's line", "the other machine's line", "appended line 2"))
+    assert _state(shared) == ("main", False, []) and _git(shared, "status", "--porcelain") == ""
+
+
+def test_a_sync_waits_a_bounded_time_for_another_sync_of_its_clone_and_then_commits_nothing(machines, monkeypatch, capsys):
+    """One sync of a clone at a time: a sync that finds another at work waits for it, saying once whom it waits for, and
+    after LOCK_WAIT_S gives up with nothing committed."""
+    origin, a, _ = machines
+    clock = FakeClock()
+    monkeypatch.setattr(NS, "time", clock.module)
+    holder = NS._lock(a / ".git", 0)
+    _insert_after(a / DOC, "<!-- a -->", "a waited")
+    clock.at(60, lambda: os.close(holder))
+    rep = NS.sync(a, secrets=[])
+    err = capsys.readouterr().err
+    assert (rep["rc"], rep["pushed"]) == (0, True) and 60 <= clock.now < 61 and "a waited" in _git(origin, "show", f"main:{DOC}")
+    assert err.count("\n") == 1 and f"waiting up to {NS.LOCK_WAIT_S:g} s for another sync of this clone" in err and f"pid {os.getpid()} on " in err
+    holder = NS._lock(a / ".git", 0)
+    _insert_after(a / DOC, "<!-- a -->", "a gave up")
+    start = clock.now
+    rep = NS.sync(a, secrets=[])
+    os.close(holder)
+    assert (rep["rc"], rep["commit"], rep["pushed"]) == (1, None, False) and NS.LOCK_WAIT_S <= clock.now - start < NS.LOCK_WAIT_S + 1
+    assert f"still running after {NS.LOCK_WAIT_S:g} s" in rep["error"] and f"pid {os.getpid()} on " in rep["error"]
+    assert _git(a, "status", "--porcelain").strip() == f"M {DOC}", "the line waits, uncommitted, for the next sync"
+    assert NS.sync(a, secrets=[])["pushed"] and "a gave up" in _git(origin, "show", f"main:{DOC}")
+
+
+def _killed_rebase(clone: Path, *args: str) -> None:
+    """`git rebase ARGS origin/main` in the clone, killed once it has checked out the remote's commit: HEAD is detached there,
+    `.git/rebase-merge` is whole, and nothing is picked."""
+    _git(clone, "fetch", "-q", "origin")
+    hook = _hook(clone, "kill -9 $PPID")
+    died = subprocess.run(["git", "-C", str(clone), "rebase", *args, "refs/remotes/origin/main"], capture_output=True)
+    hook.unlink()
+    assert died.returncode == -9 and (clone / ".git" / "rebase-merge" / "head-name").is_file()
+
+
+def test_a_rebase_left_in_progress_by_a_process_that_died_is_ended_and_everything_local_is_published(machines):
+    """A sync killed inside its rebase leaves the clone detached with the rebase in progress, and every later sync refused.
+    The next sync ends the rebase and says so in one line; the commit it was rebasing, the line it had stashed, a line
+    appended to a tracked file since, and a new note are all published."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _insert_after(a / DOC, "<!-- a -->", "a committed")
+    (a / "kb" / "log.md").write_text("line 0\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "local")
+    with (a / "kb" / "log.md").open("a") as f:
+        f.write("a had this uncommitted\n")
+    _killed_rebase(a, "--autostash")
+    assert _state(a)[:2] == ("", True) and not (a / "kb" / "log.md").exists()
+    with (a / DOC).open("a") as f:
+        f.write("appended while it sat\n")
+    new = _report(a, "x", "a new note\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith("SYNC-WARN ended a rebase left in progress that no process was running") and "1 file(s)" in line
+    assert _state(a) == ("main", False, []) and _git(a, "status", "--porcelain") == "" and _git(a, "stash", "list") == ""
+    doc = _git(origin, "show", f"main:{DOC}")
+    assert all(x in doc for x in ("b first", "a committed", "appended while it sat"))
+    assert _git(origin, "show", "main:kb/log.md") == "line 0\na had this uncommitted\n" and _git(origin, "show", f"main:{new}") == "a new note\n"
+
+
+def test_a_rebase_that_died_before_it_began_is_cleared_and_what_it_stashed_is_published(machines):
+    """A rebase that dies between stashing the uncommitted changes and recording where it came from leaves a `rebase-merge`
+    holding only `autostash`: `git rebase --abort` can't read it, and every later rebase refuses to start beside it."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _insert_after(a / DOC, "<!-- a -->", "a had this uncommitted")
+    stash = _git(a, "stash", "create").strip()
+    _git(a, "reset", "-q", "--hard")
+    (a / ".git" / "rebase-merge").mkdir()
+    (a / ".git" / "rebase-merge" / "autostash").write_text(f"{stash}\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith("SYNC-WARN ended a rebase left in progress that no process was running")
+    assert _state(a) == ("main", False, []) and _git(a, "stash", "list") == ""
+    assert all(x in _git(origin, "show", f"main:{DOC}") for x in ("b first", "a had this uncommitted"))
+
+
+def _left_at_a_conflict(machines, op: str) -> tuple[Path, Path]:
+    """Machine a with a `git rebase` or `git merge` stopped at a conflict in DOC and left so, as a sync that died before its
+    abort leaves it; `kb/other.md` is tracked on both sides and not in conflict."""
+    origin, a, b = machines
+    (a / "kb" / "other.md").write_text("other\n")
+    assert NS.sync(a, secrets=[])["pushed"] and NS.sync(b, secrets=[])["rc"] == 0
+    _insert_after(b / DOC, "<!-- a -->", "b says no")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _insert_after(a / DOC, "<!-- a -->", "a says yes")
+    _git(a, "commit", "-qam", "local")
+    _git(a, "fetch", "-q", "origin")
+    stopped = subprocess.run(["git", "-C", str(a), op, "refs/remotes/origin/main"], capture_output=True)
+    assert stopped.returncode == 1 and _git(a, "diff", "--name-only", "--diff-filter=U").split() == [DOC]
+    return origin, a
+
+
+@pytest.mark.parametrize("op", ["rebase", "merge"])
+def test_a_rebase_or_merge_left_at_a_conflict_is_ended_and_the_conflict_is_reported_as_a_sync_s_own(machines, op):
+    """The clone is put back on its branch with the local commit kept and a line appended since still in its file; the
+    conflict is still there to resolve, and the sync says so as it does for a conflict of its own."""
+    origin, a = _left_at_a_conflict(machines, op)
+    with (a / "kb" / "other.md").open("a") as f:
+        f.write("appended while it sat\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["conflict"]) == (3, [DOC]), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith(f"SYNC-WARN ended a {op} left in progress that no process was running") and "1 file(s)" in line
+    assert _state(a) == ("main", False, []) and _git(a, "status", "--porcelain") == ""
+    assert "a says yes" in _git(a, "show", f"main:{DOC}") and "<<<<<<<" not in (a / DOC).read_text()
+    assert _git(a, "show", "main:kb/other.md") == "other\nappended while it sat\n"
+    assert "a says yes" not in _git(origin, "show", f"main:{DOC}")
+
+
+def test_a_line_written_into_a_file_left_in_conflict_is_kept_on_a_rescue_branch_and_the_sync_fails_once(machines):
+    """A line appended to the conflicted file itself can't be put back into the file the abort restores; the sync ends the
+    rebase, keeps the file as it was on a `rescue-` branch, and fails saying where."""
+    _, a = _left_at_a_conflict(machines, "rebase")
+    with (a / DOC).open("a") as f:
+        f.write("appended to the conflicted file\n")
+    rep = NS.sync(a, secrets=[])
+    branch, busy, (rescue,) = _state(a)
+    assert (rep["rc"], rep["commit"], branch, busy) == (2, None, "main", False), rep
+    assert f"the branch {rescue} keeps them as they were" in rep["error"] and DOC in rep["error"]
+    assert "appended to the conflicted file" in _git(a, "show", f"{rescue}:{DOC}")
+    assert "a says yes" in _git(a, "show", f"main:{DOC}")
+    again = NS.sync(a, secrets=[])
+    assert (again["rc"], again["conflict"], again.get("warn")) == (3, [DOC], []) and _state(a) == ("main", False, [rescue])
+
+
+def test_a_file_written_where_a_dead_rebase_had_taken_one_away_is_kept_on_a_rescue_branch_and_the_sync_fails_once(machines):
+    """A rebase takes a file its branch's own commit added out of the tree until it picks that commit again.  A line appended
+    there while a dead rebase sits makes a new file, which `git rebase --abort` refuses to write over: the sync keeps it on
+    a `rescue-` branch, ends the rebase, and fails saying where; the next sync publishes the branch."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    (a / "kb" / "log.md").write_text("line 0\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "local")
+    _killed_rebase(a)
+    assert not (a / "kb" / "log.md").exists()
+    with (a / "kb" / "log.md").open("a") as f:
+        f.write("appended while it sat\n")
+    rep = NS.sync(a, secrets=[])
+    branch, busy, (rescue,) = _state(a)
+    assert (rep["rc"], rep["commit"], branch, busy) == (2, None, "main", False), rep
+    assert f"the branch {rescue} keeps them as they were" in rep["error"] and "(kb/log.md)" in rep["error"]
+    assert _git(a, "show", f"{rescue}:kb/log.md") == "appended while it sat\n" and (a / "kb" / "log.md").read_text() == "line 0\n"
+    assert NS.sync(a, secrets=[])["pushed"] and _git(origin, "show", "main:kb/log.md") == "line 0\n"
+
+
+def test_a_rebase_in_progress_that_a_live_git_runs_is_left_alone(machines, monkeypatch):
+    _, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _killed_rebase(a)
+    with (a / DOC).open("a") as f:
+        f.write("appended while it runs\n")
+    monkeypatch.setattr(NS, "time", FakeClock().module)
+    monkeypatch.setattr(NS, "git_running", lambda root: 4242)
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["commit"]) == (2, None) and "git (pid 4242) is at work in this clone" in rep["error"]
+    assert _state(a) == ("", True, []) and "appended while it runs" in (a / DOC).read_text()
+
+
+@pytest.mark.parametrize("committed", [False, True])
+def test_a_head_left_detached_on_the_remote_s_commit_with_nothing_in_progress_is_put_back_on_its_branch(machines, committed):
+    """A rebase that lost its state after its first step leaves HEAD detached on the remote's commit, the branch behind it, no
+    `rebase-merge`, and the reflog's last line `rebase (start): checkout refs/remotes/origin/main`; every sync then refused.
+    The sync checks the branch out where HEAD is and says so in one line, and what was appended there, or committed there,
+    is published."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _killed_rebase(a)
+    shutil.rmtree(a / ".git" / "rebase-merge")
+    assert _state(a)[:2] == ("", False) and _git(a, "rev-parse", "HEAD") == _git(a, "rev-parse", "refs/remotes/origin/main")
+    assert _git(a, "reflog", "-1", "--format=%gs").strip() == "rebase (start): checkout refs/remotes/origin/main"
+    subprocess.run(["git", "-C", str(a), "merge-base", "--is-ancestor", "main", "HEAD"], check=True)
+    with (a / DOC).open("a") as f:
+        f.write("appended line 1\nappended line 2\n")
+    if committed:
+        _git(a, "commit", "-qam", "committed while detached")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith("SYNC-WARN HEAD was detached at ") and "git checkout -B main HEAD" in line
+    assert _state(a) == ("main", False, []) and _git(a, "status", "--porcelain") == ""
+    doc = _git(origin, "show", f"main:{DOC}")
+    assert doc.endswith("appended line 1\nappended line 2\n") and "b first" in doc
+    assert committed == ("committed while detached" in _git(origin, "log", "--format=%s", "main"))
 
 
 def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
@@ -240,6 +553,83 @@ def _note(repo: Path, rel: str, created: str | None = None) -> Path:
 
 def _tree(origin: Path) -> list[str]:
     return _git(origin, "ls-tree", "-r", "--name-only", "main").split()
+
+
+#: what a script exported and its shell kept; the author's and the committer's differ, so a commit says which git took
+EXPORTED = {"GIT_AUTHOR_NAME": "trial", "GIT_AUTHOR_EMAIL": "trial@invalid",
+            "GIT_COMMITTER_NAME": "scratch", "GIT_COMMITTER_EMAIL": "scratch@example.invalid"}
+AS_EXPORTED = ["trial <trial@invalid>", "scratch <scratch@example.invalid>"]
+DATES = {"GIT_AUTHOR_DATE": "2026-01-02T03:04:05+00:00", "GIT_COMMITTER_DATE": "2026-01-02T06:07:08+00:00"}
+
+
+def _research(clone: Path, *argv: str, **env: str) -> subprocess.CompletedProcess:
+    """`research notes ARGV` on the scratch ``clone``, one process: its environment is this one's less the four identity
+    variables (a check's tests run with them set) plus ``env``, as a shell that exported ``env`` starts it.  The notes it
+    knows are ``clone``, whose remote is the test's."""
+    proc = _start(clone, *argv, **env)
+    out, err = proc.communicate()
+    return subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
+
+
+def _who(repo: Path, rev: str = "HEAD") -> list[str]:
+    """``rev``'s author, committer, author date and committer date."""
+    return _git(repo, "log", "-1", "--format=%an <%ae>%n%cn <%ce>%n%aI%n%cI", rev).splitlines()
+
+
+def _edit(a: Path, lane: str) -> list[str]:
+    (a / "kb" / f"{lane}.md").write_text("an edit\n")
+    return []
+
+
+def _old_note(a: Path, lane: str) -> list[str]:
+    """A note stamped long ago, committed: what `archive --apply` moves in a commit of its own."""
+    _note(a, f"lanes/{lane}/20260920T0100Z-note-w.md")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "a note")
+    return [lane, "--apply"]
+
+
+@pytest.mark.parametrize("command, change", [
+    ("sync", _edit), ("checkpoint", lambda a, lane: [lane, "open", "started", "--commit", "none"]), ("snapshot", _edit),
+    ("archive", _old_note)], ids=["sync", "checkpoint", "snapshot", "archive"])
+def test_a_notes_commit_is_the_clones_whatever_names_the_shell_exported(machines, command, change):
+    """`research notes sync`, `checkpoint` (which syncs its lane), `snapshot` and `archive` commit as the author and committer
+    the clone's configuration names, with the four identity variables exported in the calling shell and without them; the
+    dates the shell pins are the commit's either way."""
+    _, a, _ = machines
+    for lane, exported in (("x", EXPORTED), ("y", {})):
+        argv, before = change(a, lane), _git(a, "rev-parse", "HEAD")
+        r = _research(a, command, *argv, **exported, **DATES)
+        assert r.returncode == 0 and _git(a, "rev-parse", "HEAD") != before, r.stderr
+        assert _who(a) == ["a <a@t>", "a <a@t>", DATES["GIT_AUTHOR_DATE"], DATES["GIT_COMMITTER_DATE"]], sorted(exported)
+
+
+def test_a_commit_the_rebase_replays_keeps_its_author_and_is_committed_by_the_clone(machines):
+    """A commit made under an exported name earlier, which a sync replays onto the remote's branch, keeps the author it was
+    made with, as git replays any commit; its committer is the clone's."""
+    origin, a, b = machines
+    (b / "kb" / "local.md").write_text("made earlier\n")
+    _git(b, "add", "-A")
+    subprocess.run(["git", "-C", str(b), "commit", "-qm", "made earlier"], check=True, capture_output=True, env={**os.environ, **EXPORTED})
+    assert _who(b)[:2] == AS_EXPORTED
+    _edit(a, "x")
+    assert _research(a, "sync").returncode == 0
+    r = _research(b, "sync", **EXPORTED)
+    assert r.returncode == 0 and "pushed" in r.stdout, r.stderr
+    assert _who(b)[:2] == _who(origin, "main")[:2] == [AS_EXPORTED[0], "b <b@t>"]
+
+
+@pytest.mark.parametrize("unset", [("user.name", "user.email"), ("user.email",)], ids=["no user", "a name without an address"])
+def test_a_clone_whose_configuration_names_no_whole_user_commits_as_the_variables_say(machines, tmp_path, unset):
+    """Where the configuration git reads in the clone lacks a name or an address, nothing is taken out of the environment:
+    the commit is the variables', all four, as it was (never the clone's name beside an exported address)."""
+    _, a, _ = machines
+    for key in unset:
+        _git(a, "config", "--unset", key)
+    (tmp_path / "gitconfig").write_text("")
+    _edit(a, "x")
+    r = _research(a, "sync", GIT_CONFIG_GLOBAL=str(tmp_path / "gitconfig"), **EXPORTED)
+    assert r.returncode == 0 and _who(a)[:2] == AS_EXPORTED, r.stderr
 
 
 def test_evidence_and_renders_stay_out_of_the_notes_and_their_removal_syncs(machines):
@@ -569,12 +959,14 @@ BROKER_EXPIRES = "2026-11-03T05:00:00Z"
 @pytest.fixture
 def broker(monkeypatch):
     """The agents' GitHub broker on localhost: each POST's (identity, body) is recorded and answered with a fresh token that
-    expires at BROKER_EXPIRES; `status` other than 200 refuses. This agent's identity is a fixed OIDC token."""
+    expires at BROKER_EXPIRES; `status` other than 200 refuses. This agent's identity is a fixed OIDC token. `waits` are the
+    waits notes_sync asked for, none taken."""
     import http.server
     import json as _json
 
     from research import slack
-    state = {"seen": [], "status": 200, "n": 0}
+    state = {"seen": [], "status": 200, "n": 0, "waits": []}
+    monkeypatch.setattr(NS, "sleep", state["waits"].append)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
@@ -749,14 +1141,187 @@ def test_a_refused_given_token_with_no_broker_to_go_on_with_fails_as_before_and_
     assert TOKEN not in err + str(rep) and NS.os.environ[NS.TOKEN_ENV] == TOKEN
 
 
-def test_a_refusal_of_the_brokers_own_token_is_not_laid_on_the_variable_nor_asked_again(cloud_vm, broker, monkeypatch, capsys):
+def test_a_refusal_of_the_brokers_own_token_is_asked_again_once_with_a_fresh_one_and_names_the_helper(cloud_vm, broker, monkeypatch,
+                                                                                                    capsys):
+    """A token the broker minted that GitHub refuses (one it does not accept yet, or one revoked) is not laid on the variable:
+    the request is made once more with a token minted afresh after the wait, and a second refusal says the helper's token was."""
     _, a, _ = cloud_vm
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     refused = _github_refuses(monkeypatch, "fetch", 403, token=None)
     (a / "kb" / "new.md").write_text("new\n")
     rep = NS.sync(a, secrets=[])
-    assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and len(refused) == 1 and len(broker["seen"]) == 1
-    assert capsys.readouterr().err == "" and "broker-token" not in str(rep)
+    assert rep["rc"] == 1 and rep["error"].startswith("git fetch origin failed: remote: Permission to") and rep["attempts"] == 1
+    assert (len(refused), len(broker["seen"]), broker["waits"]) == (2, 2, [NS.MINT_WAIT_S]), "once more, with a fresh mint, a wait apart"
+    assert rep["error"].endswith(" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper passed it, "
+                                 f"and a fresh one minted {NS.MINT_WAIT_S:g} s later too: the agents' GitHub App may have lost "
+                                 "research-notes from its repository access (`research doctor`)")
+    assert capsys.readouterr().err == "" and "broker-token" not in str(rep) and TOKEN not in str(rep)
+
+
+def test_a_brokers_token_github_refuses_once_is_minted_afresh_and_the_sync_gets_through(cloud_vm, broker, monkeypatch):
+    origin, a, _ = cloud_vm
+    assert NS.notes_token() == "broker-token-1"
+    refused = _github_refuses(monkeypatch, "fetch", 401, token="broker-token-1")
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (0, True, 1) and _git(origin, "show", "main:kb/new.md") == "new\n", rep
+    assert len(refused) == 1 and broker["waits"] == [NS.MINT_WAIT_S] and NS.os.environ[NS.TOKEN_ENV] == "broker-token-2"
+
+
+def test_a_refused_brokers_token_is_not_sent_again_when_the_fresh_mint_gives_none(cloud_vm, broker, monkeypatch):
+    """A fresh mint that fails leaves `notes_token` with the token GitHub just refused: the request is not made again with it,
+    and the failure does not say a fresh one was minted."""
+    _, a, _ = cloud_vm
+    assert NS.notes_token() == "broker-token-1"
+    broker["status"] = 503
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=None)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and rep["error"].startswith("git fetch origin failed: remote: Invalid username"), rep
+    assert (len(refused), len(broker["seen"]), broker["waits"]) == (1, 2, [NS.MINT_WAIT_S]), "the refused token is sent once"
+    assert rep["error"].endswith(" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper "
+                                 "passed it: the agents' GitHub App may have lost research-notes from its repository access "
+                                 "(`research doctor`)") and "broker-token" not in str(rep)
+
+
+@pytest.fixture
+def identity(tmp_path, monkeypatch):
+    """This machine has a Cursor agent's identity socket (a cloud VM), unlike conftest's laptop."""
+    sock = tmp_path / "api.sock"
+    sock.write_text("")
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(sock))
+
+
+def _identity_refuses(monkeypatch, times: int) -> list[str]:
+    """Cursor's identity service answering HTTP 429 to the first `times` token requests, as it does to a burst; the audiences asked."""
+    from research import slack
+    asked: list[str] = []
+
+    def oidc(aud):
+        asked.append(aud)
+        if len(asked) <= times:
+            raise slack.SlackError("the Cursor identity service is unavailable (HTTP 429)")
+        return "oidc-for-token"
+
+    monkeypatch.setattr(slack, "oidc_token", oidc)
+    return asked
+
+
+def test_an_identity_429_is_asked_again_once_after_the_wait(identity, broker, monkeypatch):
+    """Cursor's identity service refuses a burst of token requests for a few seconds: one more ask after the wait gets the token."""
+    asked = _identity_refuses(monkeypatch, 1)
+    assert NS.notes_token() == "broker-token-1" and len(asked) == 2 and broker["waits"] == [NS.MINT_WAIT_S]
+    assert NS.broker_why() is None and len(broker["seen"]) == 1
+
+
+def test_a_broker_that_gives_no_answer_is_named_with_the_reason(identity, broker, monkeypatch):
+    import urllib.error
+
+    def unanswered():
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(NS, "_mint", unanswered)
+    assert NS.notes_token() is None and NS.broker_why() == "the broker gave no usable answer (URLError: timed out)"
+    assert broker["waits"] == [], "not a 429: not asked again at once"
+
+
+def test_a_cursor_agent_whose_mint_fails_sends_nothing_and_says_the_mint_failed(cloud_vm, identity, broker, tmp_path, monkeypatch):
+    """With no token, a Cursor agent's git would go to the plain URL, which the VM's global rules rewrite to cursor[bot]'s oldest
+    token (`Invalid username or token`) or its newest (`Repository not found`): the sync sends nothing, and says why the mint
+    failed and which rule git would have used, never a credential."""
+    _, a, _ = cloud_vm
+    cfg = str(tmp_path / "gitconfig")
+    for n in (1, 2):
+        _git(tmp_path, "config", "--file", cfg, "--add", f"url.https://x-access-token:dummy-old-{n}@github.com/.insteadOf",
+             "https://github.com/")
+    asked = _identity_refuses(monkeypatch, 2)
+    seen = _argv_log(monkeypatch)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    why = "the Cursor identity service is unavailable (HTTP 429): this VM asked Cursor for too many identity tokens at once, which clears in seconds"
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (1, False, 1) and rep["commit"], rep
+    assert rep["error"] == (f"git fetch origin failed: {NS.MINT_FAILED} ({why}), so nothing was sent: this agent's own git credentials "
+                            f"are cursor[bot]'s (url.{tmp_path / 'bot'}/.insteadOf rewrites https://github.com/; 3 rules rewrite it "
+                            "alike, and git takes the first, the oldest), which the notes repository refuses; sync again in a minute, "
+                            "and `research doctor` checks the mint")
+    assert not [c for c in seen if {"fetch", "push"} & set(c)], "no git went to the network"
+    assert len(asked) == 2 and broker["waits"] == [NS.MINT_WAIT_S] and broker["seen"] == [] and "dummy-old" not in str(rep)
+
+
+IDENTITY_429 = ("the Cursor identity service is unavailable (HTTP 429): this VM asked Cursor for too many identity tokens at once, "
+                "which clears in seconds")
+
+
+@pytest.mark.parametrize("given", [{}, {NS.SOURCE_ENV: "broker", NS.EXPIRES_ENV: f"{BROKER_NOW - 1:.0f}"}],
+                         ids=["injected", "an-expired-brokers"])
+def test_a_cursor_agent_whose_mint_fails_never_sends_the_token_its_shell_holds_and_says_the_mint_failed(
+        cloud_vm, identity, broker, monkeypatch, capsys, given):
+    """A VM started before its injected notes token was removed still holds it, expired, and a shell may hold an expired token
+    an earlier mint exported: sent while the mint fails, GitHub's `Invalid username or token` was all the sync said, and why the
+    mint failed was only a line above it.  Neither is sent: the sync says the mint failed, as with no variable."""
+    _, a, _ = cloud_vm
+    for k, v in {NS.TOKEN_ENV: TOKEN, **given}.items():
+        monkeypatch.setenv(k, v)
+    asked = _identity_refuses(monkeypatch, 99)
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=TOKEN)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (1, False, 1) and rep["commit"], rep
+    assert rep["error"].startswith(f"git fetch origin failed: {NS.MINT_FAILED} ({IDENTITY_429}), so nothing was sent"), rep["error"]
+    assert refused == [] and len(asked) == 2 and broker["seen"] == [], "the token the shell holds is never sent"
+    assert capsys.readouterr().err == "" and TOKEN not in str(rep)
+    assert NS.token_source() == (None, f"git's own: there is no notes token ({IDENTITY_429}, and {NS.TOKEN_ENV} is set but not "
+                                       "used: a Cursor agent sends only the broker's)")
+
+
+def test_a_refused_brokers_token_this_process_only_inherited_names_the_mint_when_none_replaces_it(cloud_vm, identity, broker,
+                                                                                                   monkeypatch):
+    """A token a parent's mint exported is the broker's by its labels, but no mint here worked: when GitHub refuses it and the
+    fresh mint gives none, the failure names the mint, not the helper of a mint that 'worked'."""
+    _, a, _ = cloud_vm
+    for k, v in {NS.TOKEN_ENV: TOKEN, NS.SOURCE_ENV: "broker", NS.EXPIRES_ENV: f"{BROKER_NOW + 3000:.0f}"}.items():
+        monkeypatch.setenv(k, v)
+    asked = _identity_refuses(monkeypatch, 99)
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=TOKEN)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and rep["error"].startswith("git fetch origin failed: remote: Invalid username"), rep
+    assert (len(refused), len(asked), broker["waits"]) == (1, 2, [NS.MINT_WAIT_S] * 2), "sent once, then one fresh mint, asked twice"
+    assert rep["error"].endswith(f" -> {NS.MINT_FAILED} ({IDENTITY_429}): GitHub refused the broker's token this process was given "
+                                 f"({NS.SOURCE_ENV}=broker in its environment, minted elsewhere), and nothing minted one to replace "
+                                 "it; sync again in a minute, and `research doctor` checks the mint"), rep["error"]
+    assert "the mint worked" not in rep["error"] and TOKEN not in str(rep)
+
+
+def test_the_rewrite_git_uses_is_the_first_of_equally_long_rules_and_its_credential_is_masked(tmp_path, monkeypatch):
+    """What `rewrite` says is what git does: of rules with one prefix, the first, the oldest on a VM that adds one a refresh."""
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for n in (1, 2, 3):
+        _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "--add",
+             f"url.https://x-access-token:dummy-{n}@github.com/.insteadOf", "https://github.com/")
+    real = subprocess.run(["git", "-C", str(repo), "ls-remote", "--get-url", NS.NOTES_URL], capture_output=True, text=True,
+                          env={**NS.os.environ, "VERITY_GIT_GUARD": "off"}, check=True).stdout.strip()
+    assert real == "https://x-access-token:dummy-1@github.com/compute-verification/research-notes.git", "git takes the first"
+    assert NS.rewrite(repo, NS.NOTES_URL) == ("url.https://<credential>@github.com/.insteadOf rewrites https://github.com/; 3 rules "
+                                             "rewrite it alike, and git takes the first, the oldest")
+    assert NS.rewrite(repo, EXPLICIT) == "", "the explicit-user URL is never rewritten"
+
+
+def test_the_rewrite_masks_a_user_and_token_in_the_prefix_it_rewrites_too(tmp_path, monkeypatch):
+    """A clone whose remote carries a user and a token matches a rule whose insteadOf value carries them too: neither the base
+    nor the value is said with them."""
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "url.https://other:dummy-base@github.com/.insteadOf",
+         "https://user:dummy-tok@github.com/")
+    said = NS.rewrite(repo, "https://user:dummy-tok@github.com/compute-verification/research-notes.git")
+    assert said == "url.https://<credential>@github.com/.insteadOf rewrites https://<credential>@github.com/"
+    assert not any(s in said for s in ("dummy", "user", "other"))
 
 
 def test_a_pull_and_a_clone_whose_given_token_github_refuses_go_on_with_the_brokers_too(cloud_vm, broker, tmp_path, monkeypatch, capsys):
@@ -790,7 +1355,7 @@ def test_budgets_are_fetched_from_the_notes_origin_with_the_token(cloud_vm, monk
     from research.pods import budgets as B
 
     origin, a, b = cloud_vm
-    (b / B.FILE).write_text('[budgets]\n"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }\n')
+    (b / B.FILE).write_text('[budgets]\n"vy-a-" = { limit_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }\n')
     assert NS.sync(b, secrets=[])["pushed"]
     with pytest.raises(OSError):
         B.read(a)

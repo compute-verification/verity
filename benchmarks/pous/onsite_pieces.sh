@@ -1,6 +1,6 @@
 # The onsite product's own pieces of a served run, the ones its private subprotocols run: the wipe's, PoUS's and the
 # bandwidth audit's. `benchmarks/one_stage/served_verdicts.sh` and `served_composite.sh` source this file where
-# ONSITE_PIECES names it (demos/vllm/placement.toml's window run sets it), with the tree as cwd, and call:
+# ONSITE_PIECES names it (adapters/vllm/tools/served_run/placement.toml's window run sets it), with the tree as cwd, and call:
 #
 #   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set (empty: none):
 #       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it; that
@@ -8,13 +8,18 @@
 #       POUS_CMD       'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
 #                      holds and writes its answer where the bandwidth piece's goes, and each of the two cases is
-#                      answered by its Lean (pous-run-protocol, remote-audit-p2-protocol), which the piece builds
+#                      answered by its Lean (pous-run-protocol, poub-p2-protocol), which the piece builds
 #       POUS_TIMEOUT   with POUS_CMD, that piece's limit: PIECE_TIMEOUT's where set, else 120m, which leaves the Lean
 #                      builds and pous-run-protocol's answer on a served case their time beside the two sessions
 #       BANDWIDTH_CMD  once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect ...', which collects
 #                      it; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the
 #                      tree has it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its
 #                      registered store (BW_STORE's setup.json, default /workspace/research/pous-store/mem69-v2)
+#   onsite_pous_pins REPO REVISION   served_verdicts.sh's preflight, where POUS_CMD is this tree's piece: whether PoUS's
+#                           piece would answer the checkpoint the run serves. It asks the piece itself (served_piece.py's
+#                           `_pin` over its `PINS`), under the python and the path served_piece.sh runs it with, so the
+#                           answer is whatever manifests the piece reads. 0 pinned; 3 not, the piece's own refusal on
+#                           stdout; anything else, the piece doesn't load here (why on stderr). It takes no card.
 #   onsite_cases            served_composite.sh's, before it composes: PoUS's and the wipe's cases as their pieces wrote
 #                           them under SERVE_DIR/private (PoUS's in pous/wK, K its pous.json's window; the wipe's in
 #                           wipe), each beside its Lean's answer (pous-run-protocol's, wipe-protocol's). It takes no
@@ -52,6 +57,20 @@ onsite_piece_commands() {
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
   fi
   return 0
+}
+
+onsite_pous_pins() {
+  PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/tools/research/src PYTHONDONTWRITEBYTECODE=1 \
+    "$PY" - "$TREE/benchmarks/pous" "$1" "$2" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+import served_piece as piece
+try:
+    piece._pin(sys.argv[2], sys.argv[3], piece.PINS)
+except piece.Refusal as e:
+    print(e)
+    sys.exit(3)
+EOF
 }
 
 onsite_cases() {

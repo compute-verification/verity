@@ -1,8 +1,8 @@
 """Flock lowers the hashing Definitions traced with calls (each SHA-512 compression a call of
 `commitments.gates.sha512.Sha512CompressFolded`, which has no builder) to the circuit it lowered them to before: an activation
 of a part is lowered by its builder (`ir_lower._boolean_activation`), never through the calls. Each pin is the flock-ir-unit/v2
-netlist's sha256 and useful rows that `ir_lower.whole` gave with every compression's gates written out in the parts' bodies:
-a part alone, the reads that hold the parts, and the served segment and outer hash."""
+circuit description's sha256 and useful rows that `ir_lower.whole` gave with every compression's gates written out in the parts'
+bodies: a part alone, the reads that hold the parts, and the served segment and outer hash."""
 from __future__ import annotations
 
 import hashlib
@@ -14,10 +14,10 @@ from verity.circuits.boolean.forms import const_bits
 from verity.circuits.defs import bind
 from verity.commitments.gates import embedding as E, frame_v3 as F, hm96 as H, rowleaf as R
 from verity.commitments.gates.sha512 import IV, Sha512CompressFolded
-from verity_flock.ir_lower import _sha256, layout, netlist_pieces, whole
+from verity_flock.ir_lower import _sha256, layout, circuit_description_pieces, whole
 
 ROW = "hm96-sha512/row/v2"
-#: target -> (useful rows, netlist sha256) with the compressions' gates written out
+#: target -> (useful rows, circuit description sha256) with the compressions' gates written out
 PINS = {
     "Sha512RowSeg{N_BITS=13}": (154625, "1059ce504fd5ccfe9da2ce9095313e53f337e10eb9127979ea7391116261ef01"),
     "Hm96Sha512Leaf": (307201, "d16dac80db93fab68495b9d6f41f942d53fed7aea901ea3877d2a7796f7631c1"),
@@ -49,7 +49,7 @@ def test_a_call_trace_lowers_to_the_whole_circuit(name: str) -> None:
     U = whole(_target(name))
     lay = layout(U.circuit(), [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))])
     h = hashlib.sha256()
-    for piece in netlist_pieces(lay, "unit"):
+    for piece in circuit_description_pieces(lay, "unit"):
         h.update(_sha256(piece).digest())
     assert (lay.useful, h.hexdigest()) == PINS[name]
 

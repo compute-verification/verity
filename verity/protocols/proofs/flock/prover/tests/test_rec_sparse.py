@@ -276,7 +276,7 @@ def test_y_rest_is_the_inner_column_point_in_bit_order():
     sh, inner = RS.Shape(2, 8, 1, 1), A.Shape(22, 10, 2)
     rounds = _inner_rounds(inner)
     pts = RS.inner_points(inner, rounds)
-    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), A._extras_like(inner))[1]
+    info = A.run(inner, A.RoundCoins(rounds), A.symbolic(inner), A._extras_like(inner))[1]
     ts = info["fold"]["ts"]
     assert pts["y_rest"] == info["claims"][0].x[:inner.k_log - 6] == tuple(ts[::-1]) != tuple(ts)
     assert pts["x_rest"] == tuple(info["fold"]["rho_in"]) and pts["alpha"] == info["fold"]["alpha"] and pts["z"] == info["z"]
@@ -323,7 +323,7 @@ def test_the_registered_claim_is_a_row_at_the_coins_point_never_a_public_extra_c
     assert (rc.row, rc.port, rc.value) == (1, "claim", None)
     inner = A.Shape(22, 10, 3)
     with pytest.raises(TypeError, match="registered claim"):
-        A.run(inner, A.CoinSource(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
+        A.run(inner, A.RoundCoins(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
 
 
 def test_h_is_the_inner_sessions_h_round_read_at_row_r():
@@ -379,7 +379,7 @@ def test_the_copy_rows_at_the_binding_shape():
     assert RS.copy_rows(RS.Shape(2, 6, 1, 1)) == 6 * 2187 + 128 * 35 == 17_602
 
 
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 
 def _lean_statement(d: Path):

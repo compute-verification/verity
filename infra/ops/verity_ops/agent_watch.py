@@ -193,6 +193,10 @@ archive, is recorded as **no_step**, rung to top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it, and a coordinator working only in Slack makes no note or push for hours.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
+The open PRs of `--git-remote` are read from GitHub with the token `--gh-token-cmd` prints, run at each read, so the watch
+holds no token from its start. A read GitHub refuses (HTTP 401 or 403), or a command that gives no token, is recorded
+once as **github_refused**, which the relay rings infra for with what to do, and again only after a read that worked;
+meanwhile the last read's PR branches still count.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
 does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, deployed as `/data/agent-watch/nodes.json`: the
@@ -297,6 +301,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Callable, Iterator
 
+from research import settings
+
 API = "https://api.cursor.com"
 POLL_S = 60
 HELD_S = 15 * 60
@@ -391,7 +397,9 @@ WORKER_RELAUNCH = (
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
     "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
-    "results with `research inspect RUN --on NODE`. Your predecessor's newest note ({note}) follows; carry on from where it "
+    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-high` (or "
+    "`claude-sonnet-5-5-high` for a fully specified task), never Fable, `inherit` or none. You hold no timer or "
+    "subscription of your own. Your predecessor's newest note ({note}) follows; carry on from where it "
     "stopped, and name both {old} and your own id in your notes' origin.\n"
     "--- newest note ---\n{text}")
 HANDOVER = (
@@ -402,7 +410,8 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-MODEL = {"id": "claude-fable-5-2", "params": [{"id": "effort", "value": "high"}]}
+# a worker runs Opus 5.5 at high effort; only leads run Fable 5.2
+WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
@@ -426,7 +435,9 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage", "archived", "unplaced", "handin_waiting", "unjudged", "continued_itself")
+                "outage", "archived", "unplaced", "handin_waiting", "unjudged", "continued_itself", "github_refused")
+GH_REFUSED = (401, 403)         # GitHub's answers to a token it doesn't take, or that may not read what was asked
+GH_REFUSED_KEY = "github_refused:prs"   # in `done` while the open PRs' read is refused
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -489,15 +500,17 @@ def iso(t: float) -> str:
 def epoch(s: str | None) -> float | None:
     """The API's ISO time (2026-10-18T09:49:50.225Z) in epoch seconds; None when it doesn't parse."""
     try:
-        return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S"))
-    except (ValueError, TypeError):
+        return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S")) if s else None
+    except (ValueError, TypeError) as e:
+        print(f"{iso(time.time())} time {str(s)[:40]!r} does not parse; read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
 def read_json(p: Path | None) -> dict:
     try:
-        d = json.loads(p.read_text()) if p else {}
-    except (OSError, ValueError):
+        d = json.loads(p.read_text()) if p and p.exists() else {}
+    except (OSError, ValueError) as e:
+        print(f"{iso(time.time())} {p}: unreadable, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -547,7 +560,9 @@ def front_matter(p: Path) -> dict[str, str]:
     try:
         with open(p, encoding="utf-8", errors="replace") as f:
             head = f.read(8192)
-    except OSError:
+    except OSError as e:
+        print(f"{iso(time.time())} {p}: unreadable, so its front-matter is read as none ({type(e).__name__}: {e})",
+              file=sys.stderr, flush=True)
         return {}
     if not head.startswith("---\n") or (end := head.find("\n---", 4)) < 0:
         return {}
@@ -566,7 +581,9 @@ def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, di
     for p in sorted((notes / "lanes").glob("*/**/*.md")) if notes else []:
         try:
             heard = p.stat().st_mtime
-        except OSError:
+        except OSError as e:
+            print(f"{iso(time.time())} {p}: skipped, gone while the notes were listed ({type(e).__name__}: {e})",
+                  file=sys.stderr, flush=True)
             continue
         if t - heard < WORKER_NOTES_S:
             yield p, heard, front_matter(p)
@@ -873,9 +890,13 @@ def branch_handle(branch: str, registry: Path | None, handles: set[str]) -> str 
 def machine(machines_d: Path, name: str) -> dict | None:
     """A node's `machines.d/<name>.toml` (`research pods register --host`): host, port, user, root and python, with research's
     defaults; None when it is missing or names no host."""
+    if not (machines_d / f"{name}.toml").exists():
+        return None
     try:
         m = tomllib.loads((machines_d / f"{name}.toml").read_text())
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        print(f"{iso(time.time())} {machines_d / f'{name}.toml'}: unreadable, so {name} has no host ({type(e).__name__})",
+              file=sys.stderr, flush=True)
         return None
     if not isinstance(m.get("host"), str) or not m["host"]:
         return None
@@ -895,7 +916,8 @@ def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
     rc, out, err = sh(argv, RUNS_READER, 120)
     try:
         rows = json.loads(out) if rc == 0 else None
-    except ValueError:
+    except ValueError as e:
+        print(f"{iso(time.time())} {node}: its runs' listing is not JSON ({e})", file=sys.stderr, flush=True)
         rows = None
     if not isinstance(rows, list):
         return None, f"{node} unreadable (ssh exited {rc}: {err.strip()[-200:]})"
@@ -999,24 +1021,43 @@ def signer(name: str) -> str:
     return m[1] if m else ""
 
 
-def github_prs(remote: str, env_file: Path, pages: int = 10) -> Callable[[], list[dict]]:
+class GitHubRefused(ValueError):
+    """GitHub refused a read (HTTP 401 or 403), or the token command gave no token to read with."""
+
+
+def token_command(cmd: str, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd) -> Callable[[], str]:
+    """A source of GitHub tokens: `cmd` (a command line, `--gh-token-cmd`'s) run at each call, what it prints being the token
+    of the moment. Its stderr says why it gave none; its output is never quoted."""
+    argv = shlex.split(cmd)
+
+    def token() -> str:
+        rc, out, err = sh(argv, None, 120)
+        if rc != 0 or not out.strip():
+            raise GitHubRefused(f"`{cmd}` gave no token (exit {rc}: {err.strip()[-300:] or 'nothing on stderr'})")
+        return out.strip()
+    return token
+
+
+def github_prs(remote: str, token: Callable[[], str], pages: int = 10) -> Callable[[], list[dict]]:
     """A reader of `remote`'s open PRs on GitHub (`{"branch", "body"}` each, newest first, up to `pages` of 100), with the token
-    `env_file`'s `GH_TOKEN=` line holds, read at each call so a rotated token needs no restart."""
+    `token` gives at each read (`token_command`), so a watch that runs for weeks never reads with one from its start."""
     m = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", remote)
     if not m:
         raise ValueError(f"--git-remote {remote!r} names no GitHub repository")
 
     def read() -> list[dict]:
-        token = next((v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in env_file.read_text().splitlines())
-                      if k.strip().removeprefix("export ").strip() == "GH_TOKEN" and v.strip()), None)
-        if not token:
-            raise ValueError(f"no GH_TOKEN in {env_file}")
+        bearer = token()
         out: list[dict] = []
         for page in range(1, pages + 1):
             req = urllib.request.Request(f"https://api.github.com/repos/{m[1]}/pulls?state=open&per_page=100&page={page}",
-                                         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
-            with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (a literal https URL)
-                got = json.loads(r.read())
+                                         headers={"Authorization": f"Bearer {bearer}", "Accept": "application/vnd.github+json"})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (a literal https URL)
+                    got = json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                if e.code in GH_REFUSED:
+                    raise GitHubRefused(f"GitHub answered HTTP {e.code} to the read of {m[1]}'s open PRs") from None
+                raise
             out += [{"branch": (p.get("head") or {}).get("ref") or "", "body": p.get("body") or ""} for p in got]
             if len(got) < 100:
                 break
@@ -1049,8 +1090,9 @@ def doorbells(path: Path, t: float) -> tuple[dict[str, float], str]:
     for handle, i in (d.get("inboxes") or {}).items():
         try:
             out[str(handle)] = float(i["last"])
-        except (KeyError, TypeError, ValueError):
-            continue
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"{iso(time.time())} {path}: @{handle}'s doorbell skipped, its `last` unread ({type(e).__name__}: {e})",
+                  file=sys.stderr, flush=True)
     return out, "fresh"
 
 
@@ -1123,7 +1165,8 @@ class Api:
         h = {"Authorization": self.auth, "Accept": "application/json", **(headers or {})}
         if data is not None:
             h["Content-Type"] = "application/json"
-        return urllib.request.Request(self.base + path, data=data, method=method, headers=h)
+        return urllib.request.Request(self.base + path, data=data, method=method,  # noqa: S310 (self.base is API, a literal https URL)
+                                      headers=h)
 
     def get(self, path: str, timeout: float | None = None, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
@@ -1131,11 +1174,12 @@ class Api:
         if self.reads_until is not None:
             if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
                 raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
-        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:
+        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:  # noqa: S310 (self.base is API, a literal https URL)
             return json.load(r)
 
     def post(self, path: str, body: dict | None = None) -> dict:
-        with urllib.request.urlopen(self._req("POST", path, body if body is not None else {}), timeout=self.timeout) as r:
+        req = self._req("POST", path, body if body is not None else {})
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310 (self.base is API, a literal https URL)
             return json.load(r)
 
     def agents(self) -> Iterator[dict]:
@@ -1161,8 +1205,8 @@ class Api:
         while not stop():
             headers = {"Accept": "text/event-stream", **({"Last-Event-ID": last_id} if last_id else {})}
             try:
-                with urllib.request.urlopen(self._req("GET", f"/v1/agents/{agent}/runs/{run}/stream", headers=headers),
-                                            timeout=10 * 60) as r:
+                req = self._req("GET", f"/v1/agents/{agent}/runs/{run}/stream", headers=headers)
+                with urllib.request.urlopen(req, timeout=10 * 60) as r:  # noqa: S310 (self.base is API, a literal https URL)
                     event, data = "message", []
                     for raw in r:
                         line = raw.decode("utf-8", "replace").rstrip("\r\n")
@@ -1186,8 +1230,9 @@ class Api:
                 if e.code in (400, 404, 410):
                     return
                 raise
-            except (TimeoutError, OSError):
-                continue
+            except (TimeoutError, OSError) as e:
+                print(f"{iso(time.time())} stream {run} of {agent}: {type(e).__name__}: {e}; reading it again",
+                      file=sys.stderr, flush=True)
 
 
 @dataclass
@@ -1269,8 +1314,10 @@ class Watch:
         self.kids_lock = threading.Lock()           # `children`, which streams add to and `save` reads, under `lock` or not
         self.state_path = log.with_name("state.json")
         try:
-            s = json.loads(self.state_path.read_text())
-        except (OSError, ValueError):
+            s = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+        except (OSError, ValueError) as e:
+            print(f"{iso(time.time())} {self.state_path}: unreadable, so the watch starts from no state ({type(e).__name__}: "
+                  f"{e})", file=sys.stderr, flush=True)
             s = {}
         self.freed: dict[str, float] = s.get("freed", {})         # agent -> when the watch last cancelled or restarted it
         self.errors: dict[str, int] = s.get("errors", {})         # agent -> ERROR runs in a row the watch restarted
@@ -1333,9 +1380,13 @@ class Watch:
 
     def launch_key(self) -> str | None:
         """The key a relaunch creates agents with, from `launch.env` (one `CURSOR_API_KEY=` line); None while it is absent."""
+        if not self.launch_env.exists():
+            return None
         try:
             lines = self.launch_env.read_text().splitlines()
-        except OSError:
+        except OSError as e:
+            print(f"{iso(self.clock())} {self.launch_env}: unreadable, so no relaunch key ({type(e).__name__})", file=sys.stderr,
+                  flush=True)
             return None
         return next((v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in lines)
                      if k.strip().removeprefix("export ").strip() == "CURSOR_API_KEY" and v.strip()), None)
@@ -2286,7 +2337,7 @@ class Watch:
     def read_prs(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
         every agent its body names, so a worker on a branch named another way (`cursor/lean-...-fc8d`) isn't judged silent. A
-        failed read keeps the last one."""
+        failed read keeps the last one, and one GitHub refused is recorded `github_refused` once, until a read works again."""
         if self.open_prs is None or t - self.prs_read < HEADS_EVERY_S:
             return
         self.prs_read = t
@@ -2294,7 +2345,16 @@ class Watch:
             prs = self.open_prs()
         except (OSError, ValueError, urllib.error.URLError) as e:
             self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
+            if isinstance(e, GitHubRefused):
+                first = GH_REFUSED_KEY not in self.done
+                self.done[GH_REFUSED_KEY] = t           # kept for as long as GitHub refuses: once per spell, however long
+                if first:
+                    self.save()
+                    self.record("github_refused", Run("", "", ""), judged=False, owner="infra", what="the open PRs",
+                                why=str(e), every_min=HEADS_EVERY_S // 60)
             return
+        if self.done.pop(GH_REFUSED_KEY, None) is not None:
+            self.save()
         named: dict[str, set[str]] = {}
         lanes: dict[str, set[str]] = {}
         for pr in prs:
@@ -2920,7 +2980,7 @@ class Watch:
                                           + (f"; its newest note names {', '.join(named)}" if named else ""),
                                           note=note.name if note else "none in the last 12 h", text=note_text(note))
             body = {"name": f"{handle or lane or 'verity'} worker {short} (relaunch of {agent[-4:]})"[:100],
-                    "prompt": {"text": text}, "env": {"type": "cloud", "name": ENV_NAME}, "model": MODEL}
+                    "prompt": {"text": text}, "env": {"type": "cloud", "name": ENV_NAME}, "model": WORKER_MODEL}
             try:
                 new = ((self.launch_api(key).post("/v1/agents", body) or {}).get("agent") or {}).get("id")
                 action = f"relaunched it fresh as {new}"
@@ -3222,10 +3282,10 @@ class Publisher:
 def rate_wait(e: urllib.error.HTTPError, last: float) -> float:
     """Seconds to wait after a sweep the API refused with 429: its Retry-After when it gives one, else double the last wait
     (from `RATE_WAIT_S[0]`), at most `RATE_WAIT_S[1]`. A sweep every minute into a rate limit kept it shut for 3.5 h."""
-    first, cap = RATE_WAIT_S
+    first, limit = RATE_WAIT_S
     given = str((e.headers or {}).get("Retry-After") or "")
     asked = float(given) if re.fullmatch(r"\d+(?:\.\d+)?", given) else 0.0   # an HTTP-date form doubles instead
-    return min(cap, asked if asked > 0 else max(first, 2 * last))
+    return min(limit, asked if asked > 0 else max(first, 2 * last))
 
 
 def pump(watch: Watch, r: Run) -> None:
@@ -3266,9 +3326,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="Verity's remote, for `git ls-remote --heads` (pushes; without it nobody is judged silent)")
     lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
                     help="the nodes whose ended runs ring their sender's handle (no file: none)")
+    lp.add_argument("--gh-token-cmd", default=None,
+                    help="a command that prints a GitHub token, run at each read of --git-remote's open PRs, whose bodies name "
+                         "the agents their pushes count for (without it they aren't read)")
     lp.add_argument("--gh-env", type=Path, default=None,
-                    help="a file with a GH_TOKEN= line (--git-remote's open PRs, whose bodies name the agents their pushes count "
-                         "for) and the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
+                    help="a file with the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
                          "issues integrators take hand-ins on, and a shared team's issues' lane labels)")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
@@ -3280,7 +3342,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = ap.parse_args(argv)
     if ns.cmd == "runs":
         return print_runs(ns.nodes, ns.notes, ns.hours)
-    key = os.environ.get("CURSOR_API_KEY")
+    key = settings.get("CURSOR_API_KEY")
     if not key:
         print("agent_watch: no CURSOR_API_KEY in the environment", file=sys.stderr)
         return 2
@@ -3295,13 +3357,13 @@ def main(argv: list[str] | None = None) -> int:
             return {"run": {"id": "dry-run"}}
         api.post = post
     publish = None
-    if url := os.environ.get("AGENT_WATCH_PG_URL"):
+    if url := settings.get("AGENT_WATCH_PG_URL"):
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
                   worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher,
-                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None,
+                  open_prs=github_prs(ns.git_remote, token_command(ns.gh_token_cmd)) if ns.gh_token_cmd and ns.git_remote else None,
                   linear=Linear(ns.gh_env, ns.log.with_name("linear-token.json")) if ns.gh_env else None)
     if ns.dry_run:
         watch.launch = lambda argv, env: (print(f"dry-run: {shlex.join(argv)}", file=sys.stderr, flush=True), (1, "", "dry-run"))[1]

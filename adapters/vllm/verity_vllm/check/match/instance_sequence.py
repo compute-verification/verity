@@ -12,6 +12,7 @@ from typing import Any
 
 from verity.circuits import codec, refs
 from verity.circuits.program import RUN, input_id
+from verity_vllm.definitions.registry import catalog
 
 from verity_vllm.check.match import compiler_form, split_selects
 from verity_vllm.check.match import prefix_reads as PX
@@ -48,10 +49,9 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 
 def _registry():
-    """The registry every module loaded (`verity.definitions.registry.load`); a module that fails to import is named on stderr (its
+    """The registry every module loaded (`verity_vllm.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    from verity.definitions.registry.catalog import load
-    reg, errors = load()
+    reg, errors = catalog.load()
     for e in errors:
         logger.warning("[compare] registry module unavailable (%s): Programs naming its Definitions will not decode", e)
     return reg
@@ -72,6 +72,11 @@ class RootView(PeerReads, PX.PrefixInput):
     _wlos: list[int]
     input_base: dict[int, int]
     tp: dict[str, Any] | None   # a TP rank's rank and world: a fold's from program.json, a rank Program's from tp_links.json
+    # what `program_compare._canon_step_relative` keeps on a view it has compared, declared and nothing more: each instance's
+    # position in one filtered step list, that list with whether the comparison unfolds, and whether the remap is the identity
+    _pos_cache: dict[int, tuple[int, int]]
+    _pos_cache_key: tuple[bool, list[list[int]]]
+    _pos_ident: bool
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False, checks: Iterable[int] = ()):
@@ -113,7 +118,7 @@ class RootView(PeerReads, PX.PrefixInput):
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})
             # the decoded IR (node objects + Refs trees, O(LP^2) leaves for a long prefill's K/V gathers) is not retained: comparisons read
-            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096).  `n_nodes` keeps the count.
+            # `inst` only, and keeping it doubled the resident Program.  `n_nodes` keeps the count.
             self.n_nodes = len(body.nodes)
             self.nodes = None
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
@@ -170,7 +175,7 @@ class RootView(PeerReads, PX.PrefixInput):
         else:
             # Only the reader counts of the CANDIDATE constants are consulted below (a Const32 instance read as a select's splits
             # operand), so count per progression: a progression over one node (dI == 0) is `count` reads of it; a node-index progression
-            # (dI != 0: the gathers, 97 % of all runs) is one read of every candidate it visits -- found by bisection in the sorted
+            # (dI != 0: the gathers, most runs) is one read of every candidate it visits -- found by bisection in the sorted
             # candidates instead of enumerating its runs.  Exactly the record's per-run count on every consulted key.
             cands: set[int] = set()
             for r in self.inst:

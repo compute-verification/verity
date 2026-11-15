@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.JointLive
+public import Definitions.Compose.Guarantees.JointLive
 
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.JointLive` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Compose.Guarantees.JointLive` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 -/

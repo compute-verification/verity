@@ -67,7 +67,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import gemm_slowdown as GS  # noqa: E402
+import gemm_slowdown as GS
 
 #: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target
 #: (verity.circuits.targets.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none

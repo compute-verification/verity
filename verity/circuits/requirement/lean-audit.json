@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["CircuitRequirement", "CircuitRequirement.Difftest"],
  "exempt": {
   "CircuitRequirement.DifftestMain": "the requirement-difftest server's entry point, one line: Difftest.serve of CircuitRequirement.Difftest.table, which tests/test_requirement_difftest.py drives against the Python reference; audited under CircuitRequirement.Difftest"

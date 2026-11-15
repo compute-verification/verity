@@ -1,4 +1,4 @@
-"""Conformance of the Lean `Q_word` v1 evaluator (`flock-verify evaluate`, `Flock.Partition`) with core's (`verity.circuits.cut`,
+"""Conformance of the Lean `Q_word` v1 evaluator (`verity-verify-proof evaluate`, `Flock.Partition`) with core's (`verity.circuits.cut`,
 `verity.circuits.partition_object`), over Call graphs (descriptor decoding and graph extraction are not ported yet).
 
     python qword_agree.py --lean BIN --out DIR [--seed S] [--n N] [--max-gates G] [--vectors partition_vectors.json]

@@ -4,9 +4,9 @@ public import Properties.Pouw.Strata
 public import Std.Data.String.ToNat
 
 /-!
-# Proofs: a served window's work strata tile its units, and what `law`, `epsAt` and `established` answer
+# Proofs: a served window's work strata tile its units, and what `samplingDesign`, `epsAt` and `established` answer
 
-On Lean core. `law_ok`, `epsAt_ok` and the `workK` bounds are what `Proofs.Pouw.Credit`'s bound reads of `law` and
+On Lean core. `samplingDesign_ok`, `epsAt_ok` and the `workK` bounds are what `Proofs.Pouw.Credit`'s bound reads of `samplingDesign` and
 `epsAt`; `credited_eq` and `total_eq` read `established`'s two sums as sums over `servedWork` and `callWork`.
 
 `strataTile`: `strata_ok` peels `strata`'s checks and loops (`forIn_fold`) down to its last loop, a fold of `add` over
@@ -26,14 +26,14 @@ theorem nat_toJson (K : Nat) : PouwCheck.nat? (toJson K) = some K := by
   simp [PouwCheck.nat?, PouwWindow.natOf?, PouwWindow.intOf?, toJson, Lean.JsonNumber.fromNat]
 
 /-- Stratum `t` under the work sampling design at `K` over the work `W`. -/
-def lawOf (K W : Nat) (t : Flock.Draw.WorkStratum) : Flock.Draw.Stratum :=
+def samplingDesignOf (K W : Nat) (t : Flock.Draw.WorkStratum) : Flock.Draw.Stratum :=
   { t.toStratum with k := Flock.Draw.workK K t.work t.size W t.floor }
 
-/-- What `law` answers: `K` is at least one and at most the window's units, and the strata are `ss`'s under `lawOf`. -/
-theorem law_ok {ss : Array Flock.Draw.WorkStratum} {K : Nat} {strata : Array Flock.Draw.Stratum}
-    (h : PouwCheck.Credit.law ss (toJson K) = .ok strata) :
-    1 ≤ K ∧ K ≤ ss.foldl (fun a s => a + s.size) 0 ∧ strata = ss.map (lawOf K (Flock.Draw.totalWork ss)) := by
-  unfold PouwCheck.Credit.law at h
+/-- What `samplingDesign` answers: `K` is at least one and at most the window's units, and the strata are `ss`'s under `samplingDesignOf`. -/
+theorem samplingDesign_ok {ss : Array Flock.Draw.WorkStratum} {K : Nat} {strata : Array Flock.Draw.Stratum}
+    (h : PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata) :
+    1 ≤ K ∧ K ≤ ss.foldl (fun a s => a + s.size) 0 ∧ strata = ss.map (samplingDesignOf K (Flock.Draw.totalWork ss)) := by
+  unfold PouwCheck.Credit.samplingDesign at h
   rw [nat_toJson] at h
   by_cases hK : (1 ≤ K && K ≤ PouwCheck.Credit.MAX_K) = true
   · simp only [Option.filter, hK, ite_true, bind, Except.bind, pure, Except.pure] at h
@@ -44,8 +44,8 @@ theorem law_ok {ss : Array Flock.Draw.WorkStratum} {K : Nat} {strata : Array Flo
   · simp only [Option.filter, hK] at h
     cases h
 
-theorem getElem_lawOf (ss : Array Flock.Draw.WorkStratum) (K W : Nat) (s : Fin (ss.map (lawOf K W)).size) :
-    (ss.map (lawOf K W))[s] = lawOf K W ss[s.val]! := by
+theorem getElem_samplingDesignOf (ss : Array Flock.Draw.WorkStratum) (K W : Nat) (s : Fin (ss.map (samplingDesignOf K W)).size) :
+    (ss.map (samplingDesignOf K W))[s] = samplingDesignOf K W ss[s.val]! := by
   rw [getElem!_pos ss s.val (by simpa using s.isLt)]
   exact Array.getElem_map ..
 

@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Compute credit is not certified with deferred interiors
+# Compute credit is not certified with interior commitments
 
 Two-stage sampling commits only the replay blocks' boundaries at serve time and each sampled replay block's interior after
 the sample, and `RTwo` reads a trace only off the interiors: two boundary traces that agree there are in it together
@@ -192,7 +192,7 @@ theorem notNot_footprint (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notN
   have s2 : notNotStmt.prog.refIn [1, 2] (w.val H notNotCm notNotStmt) (fun _ => false) 2 = some true := by
     rw [Prog.refIn_of_boundary hb2, h2]
   funext ρ t
-  unfold footprint wrongIn
+  unfold footprint incorrectIn
   refine Finset.card_eq_zero.2 (Finset.filter_eq_empty_iff.2 fun v hv => not_not.2 ?_)
   have hv3 : v < 3 := by simpa [notNotPt, Partition.blocks] using Finset.mem_range.1 (cell_subset _ _ _ _ hv)
   have hρ : replayOf notNotPt notNotPρ v = some ρ := (Finset.mem_filter.1 hv).2.1
@@ -292,7 +292,7 @@ theorem notNotTwo_Pa_zero : notNotTwo.Pa notNotPt (fun _ _ => 0) = 1 := by
   have hw : window 0 2 (∅ : Finset ℕ) = ∅ := by decide
   rw [Design.Two.Pa_zero, notNotTwo_replay_Pa, if_pos hw]
 
-/-- **Compute credit is not certified with deferred interiors**: at every parser and partitions that read the toy, at
+/-- **Compute credit is not certified with interior commitments**: at every parser and partitions that read the toy, at
 `δ = 0`, `RTwo` takes the trace that never computes gate `1` as it takes the one that does, while the one-stage relation
 `R` takes only the latter. -/
 theorem deferred_not_credited (H : Msg → Msg) {parse : Msg → Option AuditStatement}

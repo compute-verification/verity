@@ -54,13 +54,13 @@ open FlockSoundness.Discharge.ZkHidden (recastAccH bcSiteH_recast parseH_tagsAt 
 open FlockSoundness.Discharge.Layout (portRowW)
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+  {d₀ : Lean.Json} (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
   (hrf : Hidden.Any.RowsFitS c)
 
 include ht in
 theorem tablePHJ_typed (S : Finset (Fin n)) (j : Fin (nTab I)) : (tablePHJ dj x₀ S j).1.tags.typed = false := by
-  by_cases h : Nonempty (DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tablePHJ_set dj x₀ h]
     exact typedPJ ht j
   · rw [tablePHJ_refused dj x₀ h]
@@ -71,7 +71,7 @@ include ht hc in
 theorem tablePHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     HmOut.parse (tablePHJ dj x₀ S j).1.tags (tablePHJ dj x₀ S j).1.circuitFile (tablePHJ dj x₀ S j).1.tables =
       .ok c := by
-  by_cases h : Nonempty (DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tablePHJ_set dj x₀ h]
     exact (parseH_tagsAt ht _ _ _ _).trans hc
   · rw [tablePHJ_refused dj x₀ h]
@@ -121,14 +121,14 @@ include hpub in
 /-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSiteI` at `inputsPJ I j`). -/
 theorem tablePHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
-    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupH (inputsPJ I j) mPts S' d), Tb = ⟨inputsPJ I j, x.table⟩)
+    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsPJ I j) mPts S' d), Tb = ⟨inputsPJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
     BcSiteH (Tb.2.acc p₁ p₂ hrf) pub (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
   exact tableH_bcSiteI p₁ p₂ hrf (fun _ => d) ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) x h
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** at `J` hidden-output tables: at a table flock-verify sets up by
+/-- **`BcSiteH` at every satisfiable site** at `J` hidden-output tables: at a table verity-verify-proof sets up by
 `tablePHJ_bcSiteI`; at a refused one no message satisfies the table. -/
 theorem sitesPHJI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
@@ -139,7 +139,7 @@ theorem sitesPHJI_bcSite :
   intro S R u h M hM
   refine bcSiteH_recast _ (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfPHJ_eq dj x₀ S R u)).symm _ _ ?_
-  by_cases hS : Nonempty (DrawSetupH (inputsPJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetupH (inputsPJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · exact tablePHJ_bcSiteI hrf hpub _ _ _ ⟨_, _, Classical.choice hS, tablePHJ_set dj x₀ hS⟩ (mem_partS h)
   · have hns : ∀ z, ¬ (Partition.tabOf (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀) S R u).S.Satisfies z := by

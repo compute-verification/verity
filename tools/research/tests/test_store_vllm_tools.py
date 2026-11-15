@@ -3,7 +3,9 @@ durability gate (`research data preserved`, store/preserved.py), against a Local
 from __future__ import annotations
 
 import json
+import runpy
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -105,7 +107,7 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
 
 def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monkeypatch):
     # Only for this test: left on sys.path, the repo root makes a later test's `--tool check` import the repo's own
-    # tools/verity/check/tool.py instead of its fixture's, outside the suite's inputs.
+    # tools/check/tool.py instead of its fixture's, outside the suite's inputs.
     monkeypatch.syspath_prepend(str(REPO))
     from adapters.vllm.verity_vllm.pipeline import research_tools as RT
 
@@ -321,6 +323,13 @@ def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch
     assert doc["derivation"] == sec["derivation"], (doc["key_conditions"], {k: sec["conditions"].get(k) for k in doc["key_conditions"]})
     assert doc["key_conditions"] == _pinned("build"), "lookup fills hw.family and the Tool's own probe"
     assert doc["attempts"] == [] and doc["key_params"]["row"] == ROW
+
+
+def test_running_the_file_directly_exits_with_pytests_status(monkeypatch):
+    monkeypatch.setattr(pytest, "main", lambda args: 5)
+    with pytest.raises(SystemExit) as e:
+        runpy.run_path(__file__, run_name="__main__")
+    assert e.value.code == 5
 
 
 if __name__ == "__main__":

@@ -8,21 +8,25 @@ A recipe is a command in a script of this tree (`SCRIPTS`: a `.sh`, `.yaml`, `.y
 launcher is `verity-vllm`, `python -m verity_vllm.pipeline.cli` or `"$VV"`, the name the epoch's scripts give the launcher they
 write. Its words are the shell's (`shlex`), up to the first operator. A number that touches the redirect after it (`2>/dev/null`) is
 that redirect's file descriptor and no word; one a space parts from it (`--config-run 1 > log`) is a word. `${NAME:+WORDS}` gives WORDS
-and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. Words the line doesn't spell (`"$@"`, `"${NAME[@]}"`, `$(...)`) and a line whose quotes
-`shlex` can't follow are failures that name the line (`UNREAD`), never a recipe passed over.
+and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. A line in a shell function whose one unspelled word is `"$@"`
+is read at each call of the function, with the call's words after the function's `shift`s in its place. Other words the line doesn't
+spell (`"$@"` outside a function, `"${NAME[@]}"`, `$(...)`) and a line whose quotes `shlex` can't follow are failures that name the
+line (`UNREAD`), never a recipe passed over.
 """
 from __future__ import annotations
 
+import ast
 import re
 import shlex
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline.research_tools import STAGES
+from verity_vllm.pipeline import cli, research_tools
+from verity_vllm.pipeline.research_tools import STAGES, row_config
 from verity_vllm.pipeline.research_tools import parse as tool_parse
 
 TREE = Path(__file__).resolve().parents[2]
@@ -43,6 +47,8 @@ _DEFAULT = re.compile(r"\$\{\w+:-([^{}]*)\}")
 _UNSPELLED = re.compile(r"\$[@*]|\$\{\w+\[[@*]\]|\$$")
 _VARIABLE = re.compile(r"\$\{[^{}]*\}|\$\w+")
 _OPERATOR = re.compile(r"[();<>|&]+")
+_FUNCTION = re.compile(r"^(\w+)\(\)\s*\{")
+_SHIFT = re.compile(r"(?<![\w-])shift(?:\s+(\d+))?(?![\w-])")
 #: a redirect's file descriptor: a number that is a whole word and touches the operator after it. The first group is text the shell
 #: quotes, where a number is never one.
 _DESCRIPTOR = re.compile(r"""('[^']*'|"(?:\\.|[^"\\])*"|\\.)|(?<![^\s;|&()<>])\d+(?=[<>])""", re.DOTALL)
@@ -89,22 +95,67 @@ def recipes(line: str) -> Iterator[tuple[str, list[str]]]:
             yield toks[i + 1], [_VARIABLE.sub(STAND_IN, _DEFAULT.sub(r"\1", a)) for a in argv]
 
 
-def found() -> tuple[list[tuple[str, int, str, list[str]]], list[str]]:
-    """(script, line number, command, arguments) of every recipe in the tree, and each line that names a command and isn't read."""
-    out, unread = [], []
-    for path in sorted(p for p in TREE.rglob("*") if p.suffix in SCRIPTS and p.is_file() and "tests" not in p.relative_to(TREE).parts):
-        where = path.relative_to(TREE).as_posix()
-        for n, line in lines(path.read_text(encoding="utf-8")):
-            if not (mentions := len(MENTION.findall(_COMMENT.sub("", line)))):
-                continue
-            try:
-                got = list(recipes(line))
-            except Unread as e:
+def calls(text: str, name: str, shifts: int) -> Iterator[tuple[int, list[str]]]:
+    """Each call of the script's shell function ``name`` with its line's number and what ``"$@"`` holds in the function's body
+    after its ``shifts`` shifts: the call's words up to the first operator, less the first ``shifts``."""
+    for n, line in lines(text):
+        if _FUNCTION.match(line):
+            continue
+        try:
+            lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            toks = list(lex)
+        except ValueError:
+            continue
+        if toks[:1] == [name]:
+            end = next((j for j in range(1, len(toks)) if _OPERATOR.fullmatch(toks[j])), len(toks))
+            yield n, toks[1 + shifts:end]
+
+
+def script_recipes(where: str, text: str) -> tuple[list[tuple[str, int, str, list[str]]], list[str]]:
+    """(script, line number, command, arguments) of each recipe in the script ``where`` whose text is ``text``, and each line that
+    names a command and isn't read. A recipe in a shell function whose one unspelled word is ``"$@"`` is read at each call of the
+    function, as that call fills it."""
+    out: list[tuple[str, int, str, list[str]]] = []
+    unread: list[str] = []
+    function, shifts = None, 0
+    for n, line in lines(text):
+        if head := _FUNCTION.match(line):
+            function, shifts = head[1], 0
+        elif function and line.strip() == "}":
+            function = None
+        elif function:
+            shifts += sum(int(k or 1) for k in _SHIFT.findall(_COMMENT.sub("", line)))
+        if not (mentions := len(MENTION.findall(_COMMENT.sub("", line)))):
+            continue
+        try:
+            got = list(recipes(line))
+        except Unread as e:
+            if not (function and _UNSPELLED.findall(line) == ["$@"] and '"$@"' in line):
                 unread.append(f"{where}:{n}: {e}")
                 continue
-            if len(got) < mentions:
-                unread.append(f"{where}:{n}: names {mentions} commands, of which {len(got)} are read")
-            out += [(where, n, command, argv) for command, argv in got]
+            called = list(calls(text, function, shifts))
+            if not called:
+                unread.append(f"{where}:{n}: {e}, and the script never calls {function}()")
+            for m, args in called:
+                try:
+                    out += [(where, m, command, argv) for command, argv in recipes(line.replace('"$@"', shlex.join(args)))]
+                except Unread as at_call:
+                    unread.append(f"{where}:{m}: {at_call} (a call of {function}(), whose line {n} runs it)")
+            continue
+        if len(got) < mentions:
+            unread.append(f"{where}:{n}: names {mentions} commands, of which {len(got)} are read")
+        out += [(where, n, command, argv) for command, argv in got]
+    return out, unread
+
+
+def found() -> tuple[list[tuple[str, int, str, list[str]]], list[str]]:
+    """Every script's recipes and unread lines (`script_recipes`), over the tree."""
+    out, unread = [], []
+    for path in sorted(p for p in TREE.rglob("*") if p.suffix in SCRIPTS and p.is_file() and "tests" not in p.relative_to(TREE).parts):
+        got, missed = script_recipes(path.relative_to(TREE).as_posix(), path.read_text(encoding="utf-8"))
+        out += got
+        unread += missed
     return out, unread
 
 
@@ -157,6 +208,22 @@ def test_words_a_line_does_not_spell_are_named_not_passed_over(line: str):
         list(recipes(line))
 
 
+def test_a_functions_dollar_at_is_read_at_each_call_after_its_shifts():
+    script = """row() {  # NAME ARGS...: one `verity-vllm row run`
+  local name=$1; shift
+  "$PY" -m verity_vllm.pipeline.cli row run "$ROW" R "$REPO" "$REV" --research-run-dir "$KEPT" "$@" > "$KEPT/$name.out"
+}
+row build --stages build --config-run 1 || stop build 10
+row replay --stages replay; rr=$?
+"""
+    got, unread = script_recipes("s.sh", script)
+    assert unread == []
+    assert got == [("s.sh", 5, "row", ["run", "1", "R", "1", "1", "--research-run-dir", "1", "--stages", "build", "--config-run", "1"]),
+                   ("s.sh", 6, "row", ["run", "1", "R", "1", "1", "--research-run-dir", "1", "--stages", "replay"])]
+    _, unread = script_recipes("s.sh", script.split("}\n")[0] + "}\n")
+    assert unread == ['s.sh:3: $@: words the line doesn\'t spell, and the script never calls row()']
+
+
 @pytest.mark.parametrize("where, n, command, argv", RECIPES, ids=[f"{where}:{n}" for where, n, _, _ in RECIPES])
 def test_a_recipe_parses(where: str, n: int, command: str, argv: list[str], capsys: pytest.CaptureFixture[str]):
     parsed(command, argv, capsys)
@@ -171,3 +238,45 @@ def test_the_run_stores_tools_read_a_row_recipe_as_the_parser_does(where: str, n
         for stage in STAGES:
             p = tool_parse([*launcher, "row", *argv], stage=stage)
             assert (p["row"], p["role"], p["model"], p["revision"], p["stage"]) == (o.row, o.role, o.repo, o.rev, named or stage)
+
+
+ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+NAMED = (ROW, "R", "org/repo", "rev1")
+
+
+@pytest.mark.parametrize("argv, stage, named", [
+    (["verity-vllm", "row", "stage", "match", *NAMED, "--lp", "8"], "match", NAMED),
+    (["/venv/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", *NAMED], "commit", NAMED),
+    (["bash", "/tree/run_row_v2.sh", "stage", "match", *NAMED], "match", NAMED),
+    (["bash", "/tree/row_pod.sh", *NAMED, "match,commit"], "match,commit", NAMED),
+    (["bash", "/tree/tp_stage.sh", *NAMED, "commit"], "commit", NAMED),
+    (["bash", "/tree/row_pod.sh", "stage", "match", ROW, "R"], "build", ("stage", "match", ROW, "R")),   # no stage line of its own
+    (["verity-vllm", "row", *NAMED, "--stages", "commit"], "commit", NAMED),
+    (["verity-vllm", "row", *NAMED], "build", NAMED),
+    (["verity-vllm", "row", "stage"], "build", ("stage", None, None, None)),                            # `stage` and no stage after it
+])
+def test_the_run_stores_tools_read_a_stage_line_and_an_earlier_runners_argv(argv: list[str], stage: str, named: tuple):
+    """`row stage STAGE ...` names its stage before the row, as the earlier `run_row_v2.sh stage` did; `row_pod.sh` and `tp_stage.sh`
+    named their stages after the revision; any other line's stage is its `--stages`, else the Tool's own (here `build`)."""
+    p = tool_parse(argv, stage="build")
+    assert (p["stage"], (p["row"], p["role"], p["model"], p["revision"])) == (stage, named)
+
+
+def test_a_row_id_is_read_into_its_ten_fields_and_any_other_id_keeps_its_first_token():
+    """The run store's key reads a row id's fields by position, a count as its number.  An id without the ten fields still gives a
+    derivation of its own: its first token as the model's tag and no other field."""
+    assert row_config(ROW) == {"model_tag": "llama32-1b", "dtype": "bf16", "hw": "l40s", "tp": 1, "batch": 1, "input": 256, "output": 32,
+                               "arrivals": "mixed", "sampling": "greedy", "exec": "bi-eager"}
+    assert row_config(ROW.replace("__tp1__", "__tpX__"))["tp"] == "tpX"                # a count that is no number stays as written
+    for other, tag in (("llama32-1b__bf16", "llama32-1b"), ("llama32-1b_bf16", "llama32-1b_bf16"), ("", "")):
+        fields = row_config(other)
+        assert fields.pop("model_tag") == tag and list(fields.values()) == [None] * 9
+
+
+def test_the_run_stores_tools_load_where_the_adapters_package_is_not_importable():
+    """research's own process loads this file by its path, with no `verity_vllm` to import (`research_tools._research`), so the
+    module's top imports the standard library alone; what it reads of the adapter, it imports where it reads it."""
+    top = ast.parse(Path(research_tools.__file__).read_text()).body
+    froms = {n.module or "" for n in top if isinstance(n, ast.ImportFrom)}
+    plain = {a.name for n in top if isinstance(n, ast.Import) for a in n.names}
+    assert {name.split(".")[0] for name in froms | plain} <= sys.stdlib_module_names

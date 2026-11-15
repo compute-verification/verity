@@ -22,7 +22,6 @@ from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, INTER, LP, T, G = 8, 256, 128, 2, 2, 128     # H, INTER multiples of the 128 block; gate_up N = 2 INTER = 256
-I = INTER                                          # the width's old name, which tests of two other directories import
 
 
 
@@ -216,8 +215,8 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     gemm_strata = {k: v for k, v in rep["strata"].items() if k.startswith("ScaledMmFp8Block")}
     assert gemm_strata and all(v["evaluated"] >= 1 for v in gemm_strata.values())
     assert {k.split("|")[4].rsplit(".", 1)[-1] for k in gemm_strata} == {"gate_up_proj", "down_proj"}
-    assert rep["evaluators"]["ScaledMmFp8BlockSharedScale_v1"].startswith("verity.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
-    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity.definitions.numerics.derived_rows.fp8_group_quant_row")
+    assert rep["evaluators"]["ScaledMmFp8BlockSharedScale_v1"].startswith("verity_vllm.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
+    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity_vllm.definitions.numerics.derived_rows.fp8_group_quant_row")
     # the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
     prov = rep["evaluator_provenance"]
     assert set(prov) == {"Fp8GroupQuant_v1", "ScaledMmFp8BlockSharedScale_v1"}

@@ -22,7 +22,7 @@ halves, then `roots[1]`'s).
 
 `tests/test_known_rows.py` holds `knownRows` to the Python that writes the served path's stand-in known rows
 (`benchmarks/pouw/h1_lanes/run.py`'s `known_rows`: `pub_words`, `bits_words` and `h1unit.OK`). Proofs read it through
-`Accounting.TS.Lanes.knownOf` (`Security/Proofs/Accounting/TS/Session/Lanes/KnownOf.lean`), the known content
+`Accounting.TS.Lanes.knownOf` (`security/Proofs/Pouw/TS/Session/Lanes/KnownOf.lean`), the known content
 `Accounting.Guarantees.TS.LeafLanesSound` hands each session.
 -/
 

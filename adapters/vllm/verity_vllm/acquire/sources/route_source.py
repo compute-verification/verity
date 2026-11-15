@@ -156,7 +156,8 @@ class RouteSource:
         self.sites = CM.route_sites(cmap)
         self.c, self.cmap, self.site, self.rank = com, cmap, self.sites[0], int(rank)
         self.on_target = on_target(cmap) if target is None else bool(target)
-        self.env = CM.symbols(cmap, model.config.to_dict(), world_of(model))
+        world = world_of(model)
+        self.env = CM.symbols(cmap, model.config.to_dict(), world)
         #: per site, layer -> the module whose method it is; a decision's layers are those of its sites
         self.site_layers: list[dict[int, Any]] = []
         self.decisions: dict[str | None, set[int]] = {}

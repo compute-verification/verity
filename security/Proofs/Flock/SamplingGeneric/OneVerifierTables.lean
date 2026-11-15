@@ -118,7 +118,7 @@ noncomputable def Compiled.atTables (L : Compiled Coin (Arg.ofFlock D)) (N : Msg
   scopeCheck := L.scopeCheck
   partition := L.partition
   commit := L.commit
-  stage2 := L.stage2
+  secondStage := L.secondStage
   checked := L.checked
   sh := sh
   κb := κb

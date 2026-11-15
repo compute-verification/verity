@@ -44,7 +44,7 @@ from verity_vllm.commit.capture_map import (
     tap_layers,
 )
 from verity_vllm.commit.identity import NAMED_LAYERS
-from verity_vllm.properties.record import REGISTRY as PROPERTIES
+from verity_vllm.records.property_record import REGISTRY as PROPERTIES
 
 
 def _walk(rec: dict[str, Any], path: str) -> Any:
@@ -275,7 +275,7 @@ def report(map_path: str | Path, config_path: str | Path, inventory_path: str | 
            tp: int | None = None) -> tuple[int, str]:
     """`check_document` of the inventory at ``inventory_path`` against the map, with the registry's Definitions: 1 and its
     report if any problem is found, else 0."""
-    from verity.definitions.registry import catalog
+    from verity_vllm.definitions.registry import catalog
 
     cmap = load(map_path)
     config = json.loads(Path(config_path).read_text())

@@ -26,6 +26,7 @@ to it by exec, so those are the commands to run:
 ~~~text
 research deploy drift [--on NODE]        how far each node's installed files are from origin/main
 research deploy install NODE --by WHO    install them from a pushed commit; a dry run without --apply
+research deploy roll PATH --by WHO       a file made from the register of machines, on every node that lists it, one at a time
 research keeper status --on NODE         a node's standing targets (`set` and `stop` change them)
 ~~~
 
@@ -52,7 +53,7 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 | The control disk alert and the notes sync check | `infra/control/control_disk_alert.py`, `control_disk.sh` |
 | Store index, garbage collection and fixture export | `infra/control/store_index.sh`, `store_gc.sh`, `fixtures_export.sh` |
 | The resource steward | `infra/control/steward-run.sh` |
-| GitHub App tokens for drive and the notes | `infra/control/gh_app_token.sh`, `gh_notes_token.sh` |
+| GitHub App tokens for drive and the notes, and the read-only one every watcher reads GitHub with | `infra/control/gh_app_token.sh`, `gh_notes_token.sh`, `gh_read_token.sh` |
 | `research msg` as root, for credentials that live only on the pod | `infra/control/msg.sh` |
 | The dead-man's switch, which alerts when the pod stops | `infra/control/deadman/` |
 

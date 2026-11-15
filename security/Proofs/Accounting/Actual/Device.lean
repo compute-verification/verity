@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Bridge
+public import Definitions.Certifier.Bridge
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Proofs.Accounting.Actual.Split

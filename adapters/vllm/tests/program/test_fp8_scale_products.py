@@ -11,9 +11,9 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import fp8_twins
-from verity.definitions.registry import fp8
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.numerics import fp8_twins
+from verity_vllm.definitions.registry import fp8
+from verity_vllm.definitions.registry import prims as P
 
 NAN = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FA00000, 0xFFBFFFFF]
 INF = [0x7F800000, 0xFF800000]

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.ExecSetup
 public import Proofs.Flock.Soundness.E2E
 public import Properties.Flock.Circuit.Keyed
+public import Properties.Flock.Circuit.ProgRows
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Lowering
 
@@ -10,7 +11,7 @@ import Proofs.Flock.Soundness.Lowering
 # `ProgPlaces` from `Stmt.setupH`'s accept
 
 `Prog.flock_headline` takes each sampled proof block's place in its table's statement (`ProgPlaces`). This file builds it from the
-executable's accept step on the untyped path (`tags.typed = false`, the statement production the circuit prover runs):
+executable's accept step on the untyped path (`tags.typed = false`, the statement the circuit prover runs):
 
 * `Accepted T`: a run of `Stmt.setupH` that accepted, whose statement (`Layout.model`, the level-0 matrices the verifier
   folds) is `T`. Its template instance rows `Accepted.rows` are the unit net's rows stacked `units_per_vu` times, placed
@@ -193,16 +194,6 @@ noncomputable def progPlaces_of_layout (outs : Finset (Fin N))
 end Sites
 
 /-! ## The program of a circuit's units -/
-
-/-- Every unit of `uniform` has rows `R`. -/
-theorem rows_uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :
-    ∀ n (u : Fin n), (uniform k R ins one hone n).rows u = R
-  | 0, u => u.elim0
-  | n + 1, u => by
-      simp only [uniform, Prog.rows]
-      split
-      · exact rows_uniform k R ins one hone n _
-      · rfl
 
 section Uniform
 

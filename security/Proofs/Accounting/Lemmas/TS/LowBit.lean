@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.LowBit
+public import Definitions.Pouw.Guarantees.TS.LowBit
 
 /-!
 # A one-register fold's low bit: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.TS.LowBit` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Pouw.Guarantees.TS.LowBit` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 

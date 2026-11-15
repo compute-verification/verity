@@ -131,7 +131,8 @@ def test_a_workload_has_its_runner_preserve_a_file_while_it_runs_and_never_holds
         assert (m.kind, m.meta) == (RP.KIND, {"what": "coin", "run_id": RID, "path": "out/coin.json"})
         assert (m.payload.type, m.payload.name, m.payload.sha256, m.payload.bytes) == ("file", "coin.json", SHA, len(COIN))
         assert (vault / object_key(SHA)).read_text() == COIN
-        preserved, refused = _answers(d).values()
+        # an answer is named by its command's process id, which doesn't say which was asked first: each is taken by its verdict
+        preserved, refused = sorted(_answers(d).values(), key=lambda a: a["verdict"])
         assert preserved == {"schema": RP.ANSWER_SCHEMA, "request": preserved["request"], "verdict": "PRESERVED", "art": art,
                              "bytes": len(COIN), "sha256": SHA, "path": "out/coin.json", "kind": RP.KIND, "run_id": RID}
 

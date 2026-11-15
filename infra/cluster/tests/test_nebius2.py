@@ -161,6 +161,16 @@ def test_locked_reads_the_kernels_line_for_a_held_flock(tmp_path):
     assert nebius2.locked({p, q}, proc) == set()
 
 
+def test_locked_says_when_the_kernels_list_is_unreadable_or_a_lock_file_is_gone(tmp_path, capsys):
+    p, proc = tmp_path / "0.lock", tmp_path / "proc"
+    proc.mkdir()
+    assert nebius2.locked({p}, proc) is None
+    assert f"lease read: {proc / 'locks'} unreadable, so no lock is known held (FileNotFoundError" in capsys.readouterr().err
+    (proc / "locks").write_text("")
+    assert nebius2.locked({p}, proc) == set()
+    assert f"lease read: {p} was gone when read, so not counted held" in capsys.readouterr().err
+
+
 def test_a_sampler_line_is_an_observation():
     rec = {"t": "2026-09-30T08:20:00Z", "gpus": [{"i": 0, "lease": FILL}, {"i": 1, "lease": None}],
            "wait_files": ["pid=5 n=1 run=- who=a since=2026-09-30T08:19:00Z"]}

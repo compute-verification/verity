@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Pouw.PearlC.Fp4Skip
+public import Definitions.Pouw.PearlC.NoiseSha512Fp4
 
 /-!
 # Pearl-C4's device record: NVFP4 on sm_120 (trusted; definitions only; staged, nothing pinned)
@@ -20,7 +21,7 @@ same fields and no promotion (`G = 0`):
   with its FP32 FMA chain, and the four BF16 K16 steps (`HOPPER_BF16_M16N8K16`, `PeelExact.k16Step`) are `PeelExact`'s
   `paRow?`, `pbRow?` and `uWord?` as they stand.
 * **The flags** (`Fp4Skip.fp4PureFlags`, debit (2)): firing `t` of word `(i, j)`'s chain from `+0` is flagged when the
-  chain is in the model and its lone skip leaves the word unchanged (`debit_pure` at the FP4 atom; soundness
+  chain is in the model and its lone skip leaves the word unchanged (`inert_work_pure` at the FP4 atom; soundness
   `Fp4Freeze.fp4PureFlags_iff`); `false` where a row's forming left the model.
 * **The salt-dead predicate** (`Fp4Dev.saltDead4`): of `PearlCSem.saltDead`'s type, on the E2M1 code's value under
   `formRow`, over every noise sample. The ρ_D bound on it is `Fp4Dev.RhoDFp4`, a named `Prop` that
@@ -31,12 +32,13 @@ same fields and no promotion (`G = 0`):
   salt-dead codes per element instead. The screen `x² > 90·ρ²`, about 9.49ρ (`Fp4Dev.screenDead`, `DEAD_RHO_SQ = 90`),
   covers every salt-dead element at the pinned scales (`CodeProofs.saltDead4_screened`), and `Fp4Dev.RowRules4`, D-NF
   with the cap, is kept as `RhoDFp4`'s premise.
-* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)`
-  (SHA-512 of the label block and the message, its first 32 bytes; `pearl_c4.labelled`), and `B̃ = form(B, E_B, F_B)`
-  with `E_B`, `F_B` sampled from `seed_B`. The verifier forms `B̃` itself on every sampled tile and rejects when the checked
-  values differ. It is a condition of the domain.
-* **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
-  units). Its executable reference is `pearl_c4.tile_debit` (`9363e5012`), and each term carries the
+* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines
+  SHA-512 gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB` and `sampleB`, op for op
+  `pearl_c4.seed_b` and `line`), at an injective encoding of the salt. The verifier forms `B̃` itself on every sampled
+  tile and rejects when the checked values differ. It is a condition of the domain, and the registered scheme's noise
+  (`pearl-c-nvfp4-v0`, h0; `sha512Fp4Sem`) meets it.
+* **The debit** (`Fp4Sem.tileInertWork`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
+  units). Its executable reference is `pearl_c4.tile_inert_work` (`9363e5012`), and each term carries the
   reference's name for it:
   - (0) D-24's 2:4 windows (`windows`), 64 per (row, aligned 128 of `k`, word the row feeds), for A′'s rows and B̃'s. A
     window is 2:4 by the hardware's pair rule: of each aligned 8-chunk's four pairs, at most two hold a nonzero code
@@ -67,7 +69,7 @@ same fields and no promotion (`G = 0`):
   charges at least this debit once its `two_four_windows` reads the pair rule (term (0)).
 * **The base-split fix** (§6.2–6.5, with its FP4 conditions). It adds terms (1), (6) and (7), and changes no forming,
   credit, `fs`, `qa` or `W_ref`. A tile whose credited rows' debit exceeds `ρ` (`1/400`, §6.6) is rejected by the cap,
-  not debited: `pearlCTilesFp4`'s `capOK`, and `pearlCProtocolFp4`'s per unit.
+  not debited: `pearlCTilesFp4`'s `inertBoundOK`, and `pearlCProtocolFp4`'s per unit.
   - *Replay (protocol side).* The verifier replays F1′, F2 and R1 from the sampled tile's own forming: its `E` rows, its
     realised scale bytes, and the clean rows and scales that the sampling design given `E` reads. The sampled-tile budget prices
     F1′'s pass, about one chain replay per tile.
@@ -83,10 +85,11 @@ same fields and no promotion (`G = 0`):
 * **The protocol, domain and tiles** (`pearlCProtocolFp4`, `pearlCDomainFp4`, `pearlCTilesFp4`) are
   `pearlCProtocolDev`'s, `pearlCDomainDev`'s at `G = 0` and `pearlCTilesDev`'s shapes, on these maps. The domain is
   the reference's shapes (`PearlC4.check`) with `n ≥ 4096` in place of its `n ≥ 128`. It also requires D-SK of
-  `sem`'s lines, so it is empty at a `sem` whose `B̃` is not keyed by A's salt.
+  `sem`'s lines, so it is empty at a `sem` whose `B̃` is not the one SHA-512 keys by this job's salt.
 
-`Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines from the oracle and the rows'
-scales `α` and `β`. `devFp4Sm120` is the record at `Fp4.sm120Nvf4` with the §3/§4 prices (`Fp4Prices.sm120`).
+`Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines and the rows' scales `α` and `β`.
+`sha512Fp4Sem` pins the lines to SHA-512's (`NoiseSha512Fp4`). `devFp4Sm120` is the record at `Fp4.sm120Nvf4` with the
+§3/§4 prices (`Fp4Prices.sm120`).
 -/
 
 @[expose] public section
@@ -172,7 +175,7 @@ def screenDead {k : ℕ} (x : Fin k → ℚ) (b : ℕ) : Prop :=
   negative, so no honest row changes verdict.
 - D-SS's scale clauses follow from D-NF and the design's floor, so they add no condition. D-SS's one-in-64 dead-block
   cap is no longer an admission rule. The debit charges a row's salt-dead codes per element instead
-  (`Fp4Sem.tileDebit`, terms (3) and (4)), and the tile's cap rejects a tile that this pushes past `ρ`. -/
+  (`Fp4Sem.tileInertWork`, terms (3) and (4)), and the tile's cap rejects a tile that this pushes past `ρ`. -/
 def RowAdmit4 (beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ) : Prop :=
   0 ≤ beta k x ∧ 8 ≤ (e4m3 (beta k x)).val ∧ (e4m3 (beta k x)).val < 128
 
@@ -331,7 +334,7 @@ def blockByte {k : ℕ} (α β : ℚ) (x : Fin k → ℚ) (e : Fin 32 → Nib) (
   (formRow α β x e F).bind fun r => r.2[b]?
 
 /-- **Block `b`'s modal scale byte given `E_i`** (§6.2's "modal A0"): the byte `formRow` sets on the block at the most
-bases `F`, every basis equally likely, so the mode of the byte's exact law given the row's `E` line `e`. Ties go to the
+bases `F`, every basis equally likely, so the mode of the byte's exact distribution given the row's `E` line `e`. Ties go to the
 smaller byte. It is salt-free given `E_i`. -/
 def modalByte {k : ℕ} (α β : ℚ) (x : Fin k → ℚ) (e : Fin 32 → Nib) (b : ℕ) : Fin 256 :=
   ((List.finRange 256).argmax fun v =>
@@ -344,7 +347,7 @@ def codeAt (α x β : ℚ) (e : Fin 32 → Nib) (s : Fin 256) (f : Fin 32 → Ni
 
 /-- **`p_t` under the exact noise distribution** (§6.2; the FP4 condition (2)): the chance that an element's code value at
 the scale byte `s` is not its modal value, the one `A0` takes. The basis line `f` is uniform over all `16^32`, and the
-value is a function of `f` given `E_i`, so this is the discrete law of the row's noise `E_i·F_t` through the noise atom
+value is a function of `f` given `E_i`, so this is the discrete distribution of the row's noise `E_i·F_t` through the noise atom
 itself, not the Gaussian at `σα`. -/
 def leaveProb (α x β : ℚ) (e : Fin 32 → Nib) (s : Fin 256) : ℚ :=
   1 - (((univ : Finset (Fin 32 → Nib)).sup fun f₀ =>
@@ -412,7 +415,7 @@ def f1BOverfit : ℚ := 10
 /-- **F1′'s charge per word of one row** (theory §6.2; the FP4 condition (1), with `κ` inside the expectation;
 the reference's `split_units` and `split_saving`), in FP4 units: over each aligned window `w` of 128 (8 blocks),
 `128·min(1, ovf·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]))` with `κ = min(c·M_w, 1/8)`. The expectation is
-under the exact law of the row's codes given its `E` line `e` (`rowLeave`), at §6.2's sorted in-block layout and modal
+under the exact distribution of the row's codes given its `E` line `e` (`rowLeave`), at §6.2's sorted in-block layout and modal
 `A0`. The row is the clean `x` at the scales `α`, `β`, with salt-dead elements `sd`, and `r` is its forming in the
 sampled tile. The overfit `ovf` is 1 on A′'s rows and `f1BOverfit` on B̃'s.
 - The two routes: one 2:4 pass plus a CUDA-core patch, or a skip or patch per k64 half. The sum bounds the better of
@@ -704,10 +707,9 @@ structure Lines4 (m n k : ℕ) where
   EB : Matrix (Fin n) (Fin 32) Nib
   FB : Matrix (Fin k) (Fin 32) Nib
 
-/-- What Pearl-C4's protocol takes that is not pinned yet, as `PearlCSem` does for FP8: the unit's noise lines from the
-oracle, keyed by the seed tuple (SHA-512 of the seeds under `pearl-c4/v2/line`, four lines to a block, `pearl_c4.line`);
-and a row's scale `α` and noise scale `β`
-as FP32 values (`pearl_c4.stats`). -/
+/-- What Pearl-C4's protocol takes that is not pinned yet, as `PearlCSem` does for FP8: the unit's noise lines, which
+D-SK (`Fp4Sem.SaltKeyedB`) and `sha512Fp4Sem` pin to SHA-512's (`NoiseSha512Fp4`); and a row's scale `α` and noise scale
+`β` as FP32 values (`pearl_c4.stats`). -/
 structure Fp4Sem (Q R S : Type) where
   lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
     Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k
@@ -716,26 +718,44 @@ structure Fp4Sem (Q R S : Type) where
 
 variable {Q R S : Type}
 
-/-- **D-SK: `B̃` is keyed by this job's salt** (theory §1, "D-SK"; `pearl_c4.seed_b`), a domain rule of
-TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), with the salt from this
-job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
-- `seedB s W` is the query `seed_B` at salt `s` and B's committed words `W`, which `root_B` binds. It is injective in
-  the salt, so a `B̃` keyed by another salt, or by none, is excluded.
-- `drawB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (SHA-512 under
-  `pearl-c4/v2/line` of `seed_B ‖ role ‖ ⌊index/4⌋`, line `index` its quarter `index mod 4`, `pearl_c4.line`). So `B̃` is a function of the salt and root_B alone, never of the
-  activations, and never an input fixed before the salt.
+/-- **D-SK: `B̃` is keyed by this job's salt through SHA-512** (theory §1, "D-SK"; `pearl_c4.seed_b`), a domain rule
+of TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB`), with the salt from this job's
+epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines SHA-512 gives from
+`seed_B` (`NoiseSha512Fp4.sampleB`, `pearl_c4.line`).
+- `salt s` is the salt's bytes, an injective encoding: distinct salts are distinct SHA-512 messages. Nothing here
+  assumes SHA-512 itself injective.
+- `rootB w` is the root of weight `w`'s commitment, fixed with the weights before the salt. So `B̃` is a function of the
+  salt and `root_B` alone, never of the activations or the oracle, and never an input fixed before the salt.
 - The ticket, U and the debit read `unitForm`'s `B̃`, never a prover-supplied one, and `Correct` compares a unit's words
   with theirs. So the verifier forms `B̃` itself on every sampled tile, and a transcript whose checked values differ from
   this `B̃`'s is rejected.
 
-A variant that fixes `B̃` before A's salt is outside D₄: it needs the per-salt split debit instead. -/
+The registered scheme's noise (`pearl-c-nvfp4-v0`, h0) meets it: `sha512Fp4Sem` at any injective salt encoding. A variant that fixes `B̃` before A's salt is
+outside D₄: it needs the per-salt split debit instead. -/
 def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
-  ∃ (seedB : S → Codes → Q) (drawB : (sh : Shape) → R →
-      Matrix (Fin sh.n) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib),
-    (∀ W : Codes, Function.Injective fun s : S => seedB s W) ∧
+  ∃ (salt : S → List ℕ) (rootB : ℕ → List ℕ), Function.Injective salt ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes),
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
-        drawB (U.layout.shape u) (H (seedB s (U.fixed (U.layout.fixedId u))))
+        NoiseSha512Fp4.sampleB (U.layout.shape u) (NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u)))
+
+/-- **Pearl-C4's semantics with SHA-512's noise**, the registered scheme's noise (`pearl-c-nvfp4-v0`, h0) at the right
+`rootA`: `base` with its lines replaced by `NoiseSha512Fp4`'s at the salt's bytes `salt s`, the root
+`rootA (salt s) u act` of unit `u`'s activation rows and the root `rootB (fixedId u)` of its weight: `E_A` from the
+unit's `seed_A`, and `F_A`, `E_B`, `F_B` from the weight's `seed_B`. The oracle is unused.
+
+`rootA` stands for h0's root of the unit's rows, committed after the salt under the salt and the unit's index: a plain
+SHA-256 tree over TurboSHAKE128 digests (`verity/protocols/pouw/verifier/serving.py`, `audit.commit_rows` with `public`).
+The spec has neither hash, so it is a parameter, and the term is the registered scheme's noise only at that `rootA`. At a
+`rootA` that doesn't read `act`, `seed_A` is fixed before the rows are, and Pearl-C's adaptive-A attack runs (measured on
+FP8, not run on FP4): TT_OUT-FP4 is not believed there, and what takes it holds there only vacuously. -/
+def sha512Fp4Sem (base : Fp4Sem Q R S) (salt : S → List ℕ) (rootA : List ℕ → ℕ → Codes → List ℕ)
+    (rootB : ℕ → List ℕ) : Fp4Sem Q R S :=
+  { base with
+    lines := fun _ s U u act =>
+      let sB := NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u))
+      let sA := NoiseSha512Fp4.seedA (salt s) (rootA (salt s) u act) (rootB (U.layout.fixedId u)) u
+      ⟨(NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).1, (NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).2,
+        (NoiseSha512Fp4.sampleB (U.layout.shape u) sB).1, (NoiseSha512Fp4.sampleB (U.layout.shape u) sB).2⟩ }
 
 /-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
 16 bits zero) and finite, every row passing `RowAdmit4`. -/
@@ -777,7 +797,7 @@ noncomputable def Fp4Sem.unitUseful (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q 
 
 open Classical in
 /-- **A tile's replayed debit at an FP4 record** (theory §2, with §6.2–6.5's base-split fix under its FP4 conditions;
-`pearl_c4.tile_debit` at `9363e5012` is the executable reference), in FP4 units, over the words `rows × cols` of unit
+`pearl_c4.tile_inert_work` at `9363e5012` is the executable reference), in FP4 units, over the words `rows × cols` of unit
 `u`, from the committed activations, the weights and the realized noise (the `unitForm` the ticket reads, and its lines
 `E_A`, `E_B`):
 - (0) D-24's 2:4 windows (`windows`): per row and aligned 128 of `k` that is 2:4 (`Fp4Dev.rowWin24`), 64 per word the
@@ -806,10 +826,10 @@ open Classical in
   them, so here the charge counts toward the cap: the credit is at most the rule's, and a tile of at most 64 credited
   rows holding such a row is rejected (its charge is at least `1/64` of the tile's credit).
 
-The cap (condition (5)) is the protocol's and the tiles' `capOK`: a tile whose debit exceeds `ρ` times its credit is
+The cap (condition (5)) is the protocol's and the tiles' `inertBoundOK`: a tile whose debit exceeds `ρ` times its credit is
 rejected, not debited. The verifier replays (1), (6) and (7) from the sampled tile's own forming, as it does (2) and (5)
 (condition (7)). -/
-noncomputable def Fp4Sem.tileDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
+noncomputable def Fp4Sem.tileInertWork (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
@@ -842,9 +862,9 @@ noncomputable def Fp4Sem.tileDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q �
     f2 + r1
 
 /-- **The unit's replayed debit at an FP4 record**: the tile debit over all its words. -/
-noncomputable def Fp4Sem.unitDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
+noncomputable def Fp4Sem.unitInertWork (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (act : Codes) : ℚ :=
-  sem.tileDebit d H s U u (range (U.layout.shape u).m) (range (U.layout.shape u).n) act
+  sem.tileInertWork d H s U u (range (U.layout.shape u).m) (range (U.layout.shape u).n) act
 
 /-! ## The protocol, the domain and the tiles -/
 
@@ -855,8 +875,8 @@ noncomputable def pearlCProtocolFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : �
   useful := fun H s U u act => atNat (sem.unitUseful d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
   fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
-  credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s U u act : ℚ) : ℝ)
-  capOK := fun H s U u act => sem.unitDebit d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
+  credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitInertWork d H s U u act : ℚ) : ℝ)
+  inertBoundOK := fun H s U u act => sem.unitInertWork d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
   Wref := fun L u => (wrefFp4 d (L.shape u) : ℝ)
 
 /-- **D₄'s shapes**: the reference's (`PearlC4.check`) with `n ≥ 4096` in place of its
@@ -877,7 +897,7 @@ def pearlCDomainFp4At (sem : Fp4Sem Q R S) (s : Shape) (L : Layout) : Prop :=
   pearlCDomainFp4 sem L ∧ ∀ u < L.N, L.shape u = s
 
 /-- **Pearl-C4's audit tiles at an FP4 record**, as `pearlCTilesDev` (credit on the credited rows), with `creditFp4`,
-`tileDebit` and `wrefFp4`. -/
+`tileInertWork` and `wrefFp4`. -/
 noncomputable def pearlCTilesFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) : TileRules Q R S where
   tiling := auditTiling 64 64
   rowOK := fun sh act i => sem.RowOK sh.m sh.k act i
@@ -885,10 +905,10 @@ noncomputable def pearlCTilesFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ)
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
     (((1 - ρ) * creditFp4 d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ)
-  capOK := fun H s U g act =>
+  inertBoundOK := fun H s U g act =>
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
-    sem.tileDebit d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
+    sem.tileInertWork d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
       ρ * creditFp4 d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g)
   Wref := fun L g =>
     let tl := auditTiling 64 64 L

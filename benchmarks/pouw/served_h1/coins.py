@@ -1,7 +1,7 @@
 """A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
 * **Off the node** (`Endpoint`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
-  coin commitment's root the gate's open answered): the proof system's challenger on its auditor host
+  coin commitment's root the gate's open answered): the proof system's challenger on its auditor device
   (`spot.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
   window's session id; the reserve counts toward its lane's open period, and one not opened by its ``expires_utc`` is
@@ -9,7 +9,7 @@
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
   the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
-  of record is vllm's H1 path, `adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds its
+  of record is vllm's H1 path, `verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`, which holds its
   salt, round-0 request table, R, session S and requests_root rules; serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
@@ -36,7 +36,7 @@
 `check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's
 out/, with record.json, key.json, releases.jsonl, hellos.jsonl and challenger.json, its signed close) and every head of
 the auditor's signed ledger it was shown (``ssh GATE ledger``, or infra's published `challenger-ledger head`), never the
-prover's bundle. The session is core's to establish, the one check the auditor host and every verifier run
+prover's bundle. The session is core's to establish, the one check the auditor device and every verifier run
 (`remote.trusted_session`, through `audited_window`), under the challenger's key from its deployment record
 (``--key-record``, infra's challenger-key/v1, never the ledger's key_sha512; no key is pinned in code): the ledger's
 heads, signatures, chain and entries; the one session it opens on the window's root, binding its reserve and carrying
@@ -64,7 +64,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import threading
@@ -79,6 +78,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger_gate import (
+    HEX_WITHHELD, SSH, gate_call, key_record, published, ssh_args)
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
@@ -95,7 +96,6 @@ DRAW_WITHHELD = ("a draw session is withheld: its challenger releases its coin c
 IN_PROCESS = "in-process (not certified)"
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"
 STAND_IN = "a stand-in (coins.stand_in_root of the session), never a window's root"
-SSH = ("ssh", "-o", "BatchMode=yes")
 
 
 @dataclass(frozen=True)
@@ -146,32 +146,6 @@ def layout(epoch: int, rounds: int | None) -> dict:
     `rounds` rounds, or its sample session's (`window.DRAW_FAMILIES`) for None."""
     families = Wd.DRAW_FAMILIES if rounds is None else Wd.live_families(rounds)
     return {"scheme": Wd.LIVE_SCHEME, "epoch": epoch, "families": [list(f) for f in families]}
-
-
-def ssh_args(key: str | None = None) -> list[str]:
-    return [*SSH, *(["-o", "IdentitiesOnly=yes", "-i", key] if key else [])]
-
-
-#: what a refusal shows of a gate answer it can't read: no run of hex digits long enough to be a session's secret or a root
-HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
-
-
-def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
-    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. It
-    quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
-    holds its session's secret."""
-    p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
-
-    def refused(why: object = None) -> Ch.CoinError:
-        return Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
-
-    try:
-        got = json.loads(p.stdout)
-    except ValueError:
-        raise refused() from None
-    if p.returncode or not isinstance(got, dict) or "refused" in got:
-        raise refused(got.get("refused") if isinstance(got, dict) else None)
-    return got
 
 
 def reserve(gate: str, peer: str, epoch: int, rounds: int | None, minutes: int | None = None,
@@ -509,13 +483,6 @@ def _openings(docs: list[dict]) -> list[Ch.LiveOpening]:
     return [Ch.LiveOpening.from_json(d) for d in docs]
 
 
-def published(directory: str | os.PathLike) -> Path:
-    """The challenger's out/ of a session as infra's gate publishes it (``fetch SESSION``): `directory`'s out/, beside
-    its reserve's request.json and its open's open.json, or `directory` when it is that out/."""
-    d = Path(directory)
-    return d / "out" if (d / "out").is_dir() else d
-
-
 def audited_window(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], root: bytes, key: Ch.ChallengerKey,
                    pins: Any, main: Any
                    ) -> tuple[Ch.LiveCommitment, dict[str, tuple[bytes, ...]], Ch.Audited, dict[str, dict]]:
@@ -562,13 +529,6 @@ def window_reasons(audited: Ch.Audited, entries: dict[str, dict], commitment: Ch
         "period": None if period is None or audited.period == period else
         f"session {audited.session} is a window of period {audited.period!r}, not {period!r}",
     }
-
-
-def key_record(path: str | os.PathLike) -> Ch.ChallengerKey:
-    """The challenger's key from its deployment record at `path` (infra's challenger-key/v1, read by core's
-    `challenger.key_of_record`), the key a verifier holds a session to, never the session's own key.json nor the
-    ledger's key_sha512."""
-    return Ch.key_of_record(json.loads(Path(path).read_text()))
 
 
 def draw_reason(directory: str | os.PathLike | None, heads: Sequence[str | os.PathLike], after: bytes | None,

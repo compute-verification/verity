@@ -16,9 +16,9 @@ from verity.circuits.boolean.trace import emit
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import rolled as RO
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import boolean_deepgemm as BDG
+from verity_vllm.definitions.registry import boolean_deepgemm as BDG
 from verity_flock import struct_lower as SL
-from verity_flock.ir_lower import _sha256, layout, netlist_pieces, whole
+from verity_flock.ir_lower import _sha256, layout, circuit_description_pieces, whole
 
 #: target -> (useful rows, the description's sha256) with the groups' flat bodies
 PINS = {
@@ -46,7 +46,7 @@ def _lowered(target) -> tuple[int, str]:
     U = whole(target)
     lay = layout(U.circuit(), [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))])
     h = hashlib.sha256()
-    for piece in netlist_pieces(lay, "unit"):
+    for piece in circuit_description_pieces(lay, "unit"):
         h.update(_sha256(piece).digest())
     return lay.useful, h.hexdigest()
 

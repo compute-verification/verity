@@ -121,7 +121,7 @@ def gap(f: str, r: dict, s: dict | None) -> str | None:
     if o == "no-piece":
         sub = r.get("sub_unit") or {}
         tail = f"; largest sub-unit with every piece: {short(sub.get('unit'), 60)} ({sub.get('outcome')})" if sub else ""
-        return f"{f}: no C-Flock piece for {', '.join(r.get('missing') or [a.get('piece', '?')])}; {size}; {share}{tail}"
+        return f"{f}: no Flock piece for {', '.join(r.get('missing') or [a.get('piece', '?')])}; {size}; {share}{tail}"
     if o == "not probed":
         return f"{f}: not probed; {size}; {share}"
     if o != "lowers":

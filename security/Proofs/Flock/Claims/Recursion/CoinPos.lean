@@ -52,8 +52,8 @@ such round of `R`. This file proves that from what the verifier checks, with no 
   (`transcriptRounds`, a `qsort` of a `filter`, so a permutation of them), number `0 … n-1` (`repCoins_places`), so
   there is at most one at each number (`count_le_one`).
 
-`coinTie_unique` is that in the verifier's code, and `staged_coinTie_unique` and `staged_coinTie_drawn_unique` are
-`staged_coinTie` and `staged_coinTie_drawn` with each round `g` unique.
+`coinTie_unique` is that in the verifier's code, and `staged_coinTie_unique` and `staged_coinTie_sampled_unique` are
+`staged_coinTie` and `staged_coinTie_sampled` with each round `g` unique.
 -/
 
 @[expose] public section
@@ -66,7 +66,7 @@ open FlockDeploy (Coin)
 open RecDeploy.CoinTie
 
 theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as :=
-  FlockSoundness.Audit.DrawExec.qsort_perm as lt
+  FlockSoundness.Audit.SampleExec.qsort_perm as lt
 
 theorem utf8_inj {s t : String} (h : s.toUTF8.toList = t.toUTF8.toList) : s = t := by
   rw [byteArray_toList_eq, byteArray_toList_eq] at h
@@ -224,7 +224,7 @@ theorem staged_coinTie_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPa
     exact Option.some.inj hsrc
   rw [hrec] at hdec
   obtain ⟨R', hRead', sp, hsp, hall⟩ := coinTie_core
-    (fun a lt x hx => (FlockSoundness.Audit.DrawExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
+    (fun a lt x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
   obtain ⟨R'', hRead'', huniq⟩ := coinTie_unique hic hR hdec hfind
   rw [hRead] at hRead' hRead''
   cases hRead'
@@ -233,9 +233,9 @@ theorem staged_coinTie_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPa
   obtain ⟨g, hg, h1, h2, h3⟩ := hall m (by simpa using hm)
   exact ⟨g, hg, h1, h2, by simpa using h3, fun g' hg' hs hk => huniq g g' hg hg' h1 (hs.trans h1) hk⟩
 
-/-- **`staged_coinTie_drawn`, with each round unique**: the inner round `g + 1` whose coin drew rep `r`'s round `m`'s
+/-- **`staged_coinTie_sampled`, with each round unique**: the inner round `g + 1` whose coin drew rep `r`'s round `m`'s
 coins is the only round of `R` of its stream at its round number. -/
-theorem staged_coinTie_drawn_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
+theorem staged_coinTie_sampled_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧
       shownOf recRead x xO = some (R.msgs.map fun mc => (mc.1, mc.2.toArray)) ∧

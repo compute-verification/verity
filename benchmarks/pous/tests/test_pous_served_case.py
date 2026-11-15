@@ -1,9 +1,10 @@
 """`served_case.py`, PoUS's and the wipe's pieces for the composite, built from what a served window kept.
 
 PoUS's window is `served_piece.py`'s, run on the CPU over the tiny int8 checkpoint at the small point with the PoUS tests'
-signer (`test_pous_served_piece`'s fixture); the builder encodes ``C*`` again from the same snapshot on the CPU. The wipe's
-is one wipe in this process at a small fill (`wipe_period.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
-``answer.json`` with the run's placement in its profile, ``served.json`` and the leg's ``wipe.case.json``. Each piece is
+signer (`test_pous_served_piece`'s fixture, and its BF16 one); the builder encodes ``C*`` again from the same snapshot on
+the CPU. The wipe's
+is one wipe in this process at a small fill (`wipe_run.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
+``answer.json`` with the run's placement in its profile, ``served.json`` and the subprotocol's ``wipe.case.json``. Each piece is
 held to the composite's form (`benchmarks/one_stage/composite.py`'s ``piece``: a case of commitment, evidence and params,
 an answer whose commitment is the digest of the case's commitment), and a kept output that was changed after the run is
 refused with its reason before anything is written.
@@ -20,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
@@ -38,7 +40,7 @@ def _load(name: str, path: Path):
 
 SPT = _load("pous_served_piece_tests", ROOT / "benchmarks" / "pous" / "tests" / "test_pous_served_piece.py")
 SC = _load("pous_served_case", ROOT / "benchmarks" / "pous" / "served_case.py")
-ts, served = SPT.ts, SPT.served
+ts, served, served_bf16 = SPT.ts, SPT.served, SPT.served_bf16
 WIPE_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL_WIPE = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
 
@@ -52,7 +54,9 @@ def _listing(d: Path) -> dict[str, bytes]:
 
 
 def _pous(s, **kw):
-    return SC.pous_piece(s.out, schemes=ts.SCHEMES, hf_home=s.hf, device="cpu", pins=s.pins, **kw)
+    """`pous_piece` over ``s``, asking `SPT.JUDGE`, the stand-in `SPT._run` serves, unless ``kw`` names an ``exe``."""
+    kw.setdefault("exe", SPT.JUDGE)
+    return SC.pous_piece(s.out, schemes=ts.SCHEMES, hf_home=s.hf, device="cpu", pins=[s.pins], **kw)
 
 
 def _edit(path: Path, change) -> None:
@@ -99,13 +103,28 @@ def test_pous_case_is_the_composites_piece_and_its_answer_the_runs(served, tmp_p
         assert secret not in "".join(p.decode() for p in public.values())
 
 
-def test_after_the_run_the_builder_writes_the_piece_the_run_wrote(served, tmp_path, monkeypatch):
+def test_a_run_with_no_lean_is_undecided_until_the_builders_lean_answers_its_case(served, tmp_path, monkeypatch):
+    """A run with no ``case_exe`` keeps the Python's accept as undecided (`period.NO_JUDGE`); the builder with no ``exe``
+    writes that again, and with a Lean (`SPT.JUDGE`, which answers as the Python) writes the Lean's accept."""
+    answer, _ = SPT._run(served, tmp_path, monkeypatch, case_exe=None)
+    assert answer["verdict"] == "undecided" and answer["reason"] == SC.period.NO_JUDGE
+    SPT._judge(monkeypatch, {})
+    _, got = _pous(served, exe=None)
+    assert got == json.loads((served.private / "run.json").read_text())["answer"] and got["verdict"] == "undecided"
+    _, got = _pous(served)
+    assert got["verdict"] == "accept" and got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
+    assert json.loads((served.private / "answer.json").read_text()) == got
+
+
+@pytest.mark.parametrize("form", ["served", "served_bf16"])
+def test_after_the_run_the_builder_writes_the_piece_the_run_wrote(form, request, tmp_path, monkeypatch):
     """The served piece writes its case through this builder; built again after the run, from the kept outputs and
-    ``C*`` encoded again, it is the same bytes."""
-    SPT._run(served, tmp_path, monkeypatch)
-    kept = {f: (served.private / f).read_bytes() for f in ("case.json", "answer.json")}
-    _pous(served)
-    assert {f: (served.private / f).read_bytes() for f in kept} == kept
+    ``C*`` encoded again, it is the same bytes, over the int8 checkpoint and over the BF16 one."""
+    s = request.getfixturevalue(form)
+    SPT._run(s, tmp_path, monkeypatch)
+    kept = {f: (s.private / f).read_bytes() for f in ("case.json", "answer.json")}
+    _pous(s)
+    assert {f: (s.private / f).read_bytes() for f in kept} == kept
 
 
 def test_a_tampered_pous_case_is_answered_otherwise(served, tmp_path, monkeypatch):
@@ -169,17 +188,17 @@ def test_weights_that_are_not_the_pins_make_no_pous_case(served, tmp_path, monke
 def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_path):
     SPT.SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=SPT.NODE, private=served.private,
                party=SPT.Side(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-               pins=served.pins, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
+               pins=[served.pins], schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
     with pytest.raises(SC.Refused, match="names no private directory: the run's session didn't complete"):
-        SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=served.pins)
+        SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=[served.pins])
 
 
-def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_bits: int = W.UNCOUNTED) -> tuple[Path, Path, W.Wipe]:
+def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, wipe_run.Wipe]:
     """A served wipe's public directory as `served_wipe.sh` leaves it, and the serve dir its ``served.json`` names."""
-    w = W.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
+    w = wipe_run.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
               log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
               protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, coin_secret=b"coins",
-              egress_bits=egress_bits)
+              egress_mib=egress_mib)
     assert w.verdict == "accept", w.answer
     serve, window = tmp_path / "serve", tmp_path / "pieces" / "wipe"
     window.mkdir(parents=True)
@@ -191,8 +210,8 @@ def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_bits: int = 
     return window, serve, w
 
 
-def test_the_wipe_case_is_the_legs_and_its_answer_the_legs_own(tmp_path):
-    """The case is the one the leg wrote, its answer the public one without the run's placement; both go to the serve
+def test_the_wipe_case_is_the_subprotocols_and_its_answer_the_subprotocols_own(tmp_path):
+    """The case is the one the subprotocol wrote, its answer the public one without the run's placement; both go to the serve
     dir's private wipe directory, and the public directory gains nothing."""
     window, serve, w = _wipe_window(tmp_path)
     public = _listing(window)
@@ -215,14 +234,25 @@ def test_the_wipe_case_kept_privately_is_the_one_read(tmp_path):
 
 def test_a_tampered_wipe_case_is_refused(tmp_path):
     """Another commitment is another digest than the answer's; a signed session changed after the challenger signed it
-    is rejected, not as the run answered; a case that is not what its own parts make is refused."""
+    is rejected, not as the run answered; another egress in the evidence is another answer than the run's; evidence in
+    an earlier format (a signed egress, no egress beside the session) doesn't decode; a case that is not what its own
+    parts make is refused."""
     window, serve, w = _wipe_window(tmp_path)
-    c = _hexjson(w.case["commitment"])
+    c, ev = _hexjson(w.case["commitment"]), _hexjson(w.case["evidence"])
+    assert ev["egress_mib"] is None and "egress_bits" not in ev["signed"]
     for name, case, reason in [
         ("commitment", w.case | {"commitment": _rehex(c | {"session": "44" * 32})},
          "the answer's commitment is not the digest"),
-        ("evidence", w.case | {"evidence": _rehex({"signed": _hexjson(w.case["evidence"])["signed"] | {"egress_bits": 7}})},
+        ("evidence", w.case | {"evidence": _rehex(ev | {"signed": ev["signed"] | {
+            "fill_start_ns": ev["signed"]["fill_start_ns"] - 1}})}, "the wipe protocol answers the case reject"),
+        ("egress", w.case | {"evidence": _rehex(ev | {"egress_mib": 0})}, "the wipe protocol answers the case accept"),
+        ("egress out of range", w.case | {"evidence": _rehex(ev | {"egress_mib": -1})},
          "the wipe protocol answers the case reject"),
+        ("egress no integer", w.case | {"evidence": _rehex(ev | {"egress_mib": True})}, "null or an integer of MiB"),
+        ("signed egress", w.case | {"evidence": _rehex({"signed": ev["signed"] | {"egress_bits": 7}})},
+         "the wipe's case doesn't decode"),
+        ("signed egress beside", w.case | {"evidence": _rehex(ev | {"signed": ev["signed"] | {"egress_bits": 7}})},
+         "is not the one its decoded commitment"),
         ("params", w.case | {"params": w.case["params"] | {"extra": 1}}, "is not the one its decoded commitment"),
     ]:
         (window / "wipe.case.json").write_text(json.dumps(case))

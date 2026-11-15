@@ -1,9 +1,9 @@
 """Row units cut along k (`verity.protocols.accounting.pouw.prover.circuit.rowk`, ``Shape.row_k``): on every row, admitted or refused, a row's head, forms
-and tail in sequence give the whole row unit's outputs, for Pearl-C on the H100, sm_120 and sm_120 unpromoted and for
-Pearl-C4, rows of A and of B; the cut roots give today's roots' outputs with the same computing gates, and their partition
+and tail in sequence give the whole row unit's outputs, for Pearl-C on the H100, sm_120 and sm_120 unpromoted, rows of A
+and of B; the cut roots give today's roots' outputs with the same computing gates, and their partition
 computes every value in exactly one unit; each piece's ports are committed rows of `leaves`' schemas and public input
 regions, a form's its segment of F_A and F_B under the slice rule, and the head commits the words its readers read; and
-with ``row_k`` unset nothing is the cut's."""
+with ``row_k`` unset nothing is the cut's.  Pearl-C4's cut (`pc4_rowk`) is `test_circuit_pc4_rowk`'s, on these helpers."""
 from __future__ import annotations
 
 import json
@@ -15,21 +15,19 @@ from dataclasses import replace
 import pytest
 
 import circuit_fixtures as CF
-import pearl_c4_vectors as V4
 import pearl_c_vectors as V8
 from verity.circuits import partition_object as PO
 from verity.circuits.cut import CallGraph
 from verity.circuits.defs import CompositeDefinition
 from verity.circuits.evaluation import evaluate
+from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.circuits.program import Program
 from verity.circuits.types import Value
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
-from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import pc4, pc8, plan, rowk
+from verity.protocols.accounting.pouw.prover.circuit import pc8, rowk
 from verity.protocols.accounting.pouw.prover.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Tile
@@ -37,7 +35,6 @@ from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Tile
 SEED = bytes(range(32))
 #: (device, k, row_k): three segments each, so a form carries a carry it was given
 CUTS8 = (("h100", 384, 128), ("sm120", 384, 128), ("sm120-unpromoted", 96, 32))
-K4, KS4 = 256, 64
 
 
 def _flat(lines) -> list[int]:
@@ -131,38 +128,6 @@ def test_pearl_c_pieces_give_the_whole_rows_outputs(side, dev, k, ks):
     assert not any(verdicts[n] for n in ("inf-unsampled", "nan-sampled", "squares-overflow", "zero", "dead-over"))
 
 
-def _rows4(k: int) -> dict[str, list[int]]:
-    """`test_circuit_pc4`'s rows at depth k, their words placed in later segments."""
-    base = [V4.row_codes("pc4-rowk", "A", i, k) for i in range(3)]
-    at = lambda w, updates: [updates.get(t, v) for t, v in enumerate(w)]  # noqa: E731
-    mid, last = (k // 2) // 8 * 8, k - 3
-    spike = lambda v: at(base[0], {last: P.f32_to_bf16(v)})  # noqa: E731
-    return {"honest-0": base[0], "honest-1": base[1], "negated": [w ^ 0x8000 for w in base[2]],
-            "inf-unsampled": at(base[0], {last: 0x7F80}), "minus-nan-sampled": at(base[0], {mid: 0xFFC1}),
-            "spike-2^16": spike(2.0 ** 16), "spike-256": spike(256.0), "max-unsampled": at(base[0], {mid + 1: 0x7F7F}),
-            "zero": [0] * k, "tiny": [0x0001] * k, "huge": [0x7F7F] * k}
-
-
-@pytest.mark.parametrize("side", ["a", "b"])
-def test_pearl_c4_pieces_give_the_whole_rows_outputs(side):
-    """Pearl-C4's head (its admission whole: `pc4._stats`), forms and tail of a row give `Pc4RowA`'s (`Pc4RowB`'s) codes,
-    scale bytes, P and ok on every row: a segment is whole 64-position atoms, so each form's chains carried from the one
-    before are the whole row's."""
-    fa, fb = _flat(F.basis(SEED, F.ROLE_FA, K4)), _flat(F.basis(SEED, F.ROLE_FB, K4))
-    own, other = (fa, fb) if side == "a" else (fb, fa)
-    extra = [] if side == "a" else [_flat(F.gram(F.NVFP4, SEED, K4))]
-    whole = pc4.templates(K4)[f"row_{side}"]
-    pieces = rowk.pieces4(K4, KS4, side)
-    verdicts = {}
-    for i, (name, x) in enumerate(_rows4(K4).items()):
-        e = F.line(SEED, F.ROLE_EA if side == "a" else F.ROLE_EB, i)
-        want = evaluate(whole, x, e, own, other, *extra)
-        ok, got = _in_sequence(pieces, KS4, rowk.HEAD4, 2, x, (), (e,), own, other, extra)
-        assert got + ok == want, name
-        verdicts[name] = want[-1]
-    assert {n for n, v in verdicts.items() if v} == {"honest-0", "honest-1", "negated", "spike-256"}
-
-
 # ---- the roots --------------------------------------------------------------------------------------------------------
 
 def _inputs8(dev: str, k: int, m: int, n: int):
@@ -177,24 +142,8 @@ def _inputs8(dev: str, k: int, m: int, n: int):
             _flat(C.gram(noise.seed_b, k, C.LINE_NORM_V1, s.device)))
 
 
-def _inputs4(k: int, m: int, n: int):
-    a = [w for i in range(m) for w in V4.row_codes("pc4-rowk", "A", i, k)]
-    b = [w for j in range(n) for w in V4.row_codes("pc4-rowk", "B", j, k)]
-    ea, eb = (_flat(F.line(SEED, role, i) for i in range(c)) for role, c in ((F.ROLE_EA, m), (F.ROLE_EB, n)))
-    return a, ea, b, eb, _flat(F.basis(SEED, F.ROLE_FA, k)), _flat(F.basis(SEED, F.ROLE_FB, k)), _flat(F.gram(F.NVFP4, SEED, k))
-
-
-def _shapes():
-    out = [pc8.Shape(2, k, 2, tile=(1, 1), dev=dev, row_k=ks) for dev, k, ks in CUTS8]
-    return out + [pc4.Shape(2, K4, 2, tile=(1, 1), row_k=KS4)]
-
-
-SHAPES = _shapes()
-IDS = [getattr(s, "dev", "pc4") for s in SHAPES]
-
-
-def _mod(shape):
-    return pc8 if isinstance(shape, pc8.Shape) else pc4
+SHAPES = [pc8.Shape(2, k, 2, tile=(1, 1), dev=dev, row_k=ks) for dev, k, ks in CUTS8]
+IDS = [s.dev for s in SHAPES]
 
 
 @pytest.mark.parametrize("hidden", [False, True], ids=["plain", "hidden"])
@@ -202,13 +151,18 @@ def _mod(shape):
 def test_the_cut_roots_give_todays_outputs(shape, hidden):
     """The cut's `weight`, `call` and `check` give today's roots' outputs on a scheme's honest block (the call reading the
     weight's committed rows), plain and hiding."""
-    mod, cut = _mod(shape), replace(shape, hidden=hidden)
+    cut = replace(shape, hidden=hidden)
+    roots_give_todays_outputs(pc8, cut, _inputs8(shape.dev, shape.k, 2, 2), lambda w, n, k: (w[:n * k], w[n * k:-n]))
+
+
+def roots_give_todays_outputs(mod, cut, inputs, committed_of):
+    """``mod``'s cut roots at ``cut`` against today's on ``inputs``, the call reading the weight's rows (``committed_of``)."""
     today = replace(cut, row_k=None)
-    a, ea, b, eb, fa, fb, g = _inputs8(shape.dev, shape.k, 2, 2) if mod is pc8 else _inputs4(shape.k, 2, 2)
+    a, ea, b, eb, fa, fb, g = inputs
     w = evaluate(mod.weight(today), b, eb, fa, fb, g)
     assert evaluate(mod.weight(cut), b, eb, fa, fb, g) == w
-    n, k = shape.n, shape.k
-    committed = (w[:n * k], w[n * k:-n]) if mod is pc8 else (w[:n * k], w[n * k:n * k + n * k // 16], w[n * k + n * k // 16:-n])
+    n, k = cut.n, cut.k
+    committed = committed_of(w, n, k)
     assert evaluate(mod.call(cut), a, ea, fa, fb, *committed) == evaluate(mod.call(today), a, ea, fa, fb, *committed)
     assert evaluate(mod.check(cut), a, ea, b, eb, fa, fb, g) == evaluate(mod.check(today), a, ea, b, eb, fa, fb, g)
     assert w[-n:] == (1,) * n
@@ -219,9 +173,14 @@ def test_the_cut_roots_give_todays_outputs(shape, hidden):
 @pytest.mark.parametrize("shape", SHAPES, ids=IDS)
 def test_the_cut_computes_every_value_in_exactly_one_unit(shape, side, hidden):
     """Per row a head, k/row_k forms and a tail, and a unit per tile; `validate_unit_cut` certifies every gate once with no
-    recompute, the partition object verifies, and the cut computes today's gates (pc4's forms decode their segment's BF16
-    words again: `Bf16ToF32`, wiring)."""
-    mod, cut = _mod(shape), replace(shape, hidden=hidden)
+    recompute, the partition object verifies, and the cut computes today's gates."""
+    cut_computes_every_value_once(pc8, replace(shape, hidden=hidden), side, set())
+
+
+def cut_computes_every_value_once(mod, cut, side, free):
+    """``mod``'s cut at ``cut``: beside today's gates it computes nothing, and its free gates add only ``free`` and
+    constants."""
+    shape = cut
     build = {"check": mod.check, "weight": mod.weight, "call": mod.call}[side]
     fn, segs = build(cut), shape.k // shape.row_k
     prog, q = Program(fn), mod.query(cut, side)
@@ -243,7 +202,7 @@ def test_the_cut_computes_every_value_in_exactly_one_unit(shape, side, hidden):
     computing = lambda gr: Counter(gr.prim_names[p] for p in gr.prim)  # noqa: E731
     assert computing(g) == computing(whole)
     extra = g.free_by_prim - whole.free_by_prim
-    assert set(extra) <= ({"Bf16ToF32_v1"} if mod is pc4 else set()) | {p for p in extra if "Const" in p}, extra
+    assert set(extra) <= free | {p for p in extra if "Const" in p}, extra
 
 
 def test_each_piece_is_one_static_circuit_per_segment():
@@ -258,27 +217,14 @@ def test_each_piece_is_one_static_circuit_per_segment():
     assert [n for n, _t in first.signature()[0]] == [n for n in carried if n not in dict(rowk.CARRY8)]
 
 
-def test_the_layout_proves_each_rows_pieces_with_its_tiles():
-    """`plan.tile_layout` on a cut shape: a tile's closure is the tile and its rows of A's units (head, forms, tail, row by
-    row), and its weight rows are its rows of B's in the weight's Program."""
-    shape = pc4.Shape(4, K4, 6, tile=(2, 3), row_k=KS4)
-    lay = plan.tile_layout(shape, 1)
-    lay.check()
-    us, ws = pc4.units(pc4.call(shape)), pc4.units(pc4.weight(shape))
-    for t in (u for u in us if u.role == "tile"):
-        rs, cs = t.where
-        assert lay.closure[t.index][0] == t.index
-        assert sorted(us[i].where[0] for i in lay.closure[t.index][1:]) == sorted(
-            [rs * 2 + i for i in range(2)] * (K4 // KS4 + 2))
-        assert all(us[i].role.startswith("row_a") for i in lay.closure[t.index][1:])
-        assert sorted(ws[j].where[0] for j in lay.b_rows[t.index]) == sorted([cs * 3 + j for j in range(3)] * (K4 // KS4 + 2))
-
-
 # ---- the ports and the anchors ----------------------------------------------------------------------------------------
 
 def _pieces_of(shape) -> dict[str, list]:
-    pieces = (lambda s: rowk.pieces8(shape.k, shape.row_k, shape.dev, s)) if isinstance(shape, pc8.Shape) else (
-        lambda s: rowk.pieces4(shape.k, shape.row_k, s))
+    return pieces_by_role(lambda s: rowk.pieces8(shape.k, shape.row_k, shape.dev, s))
+
+
+def pieces_by_role(pieces) -> dict[str, list]:
+    """A cut's pieces (``pieces(side)``: head, first, forms, tail) by unit role."""
     out = {}
     for side in ("a", "b"):
         head, first, forms, tail = pieces(side)
@@ -289,15 +235,18 @@ def _pieces_of(shape) -> dict[str, list]:
 
 @pytest.mark.parametrize("shape", SHAPES, ids=IDS)
 def test_the_ports_are_each_pieces_committed_rows(shape):
-    """Each piece's ports (`rowk.PORTS8`, `PORTS4`) list every parameter and output once: input rows read whole, the head,
-    carry and codes rows (a segment's codes rows at depth row_k, the tail reading one per segment), the data and ok rows,
-    and the anchors as public input regions; the tile's are today's."""
+    """Each piece's ports (`rowk.PORTS8`) list every parameter and output once: input rows read whole, the head, carry and
+    codes rows (a segment's codes rows at depth row_k, the tail reading one per segment), the data and ok rows, and the
+    anchors as public input regions; the tile's are today's."""
+    ports_are_committed_rows(pc8, shape, _pieces_of(shape), "fp8-codes")
+
+
+def ports_are_committed_rows(mod, shape, pieces, codes):
     ports = shape.ports
-    assert ports["tile"] == _mod(shape).PORTS["tile"]
+    assert ports["tile"] == mod.PORTS["tile"]
     assert set(ports) == set(rowk.ROLES["check"])
     segs = shape.k // shape.row_k
-    codes = "fp8-codes" if isinstance(shape, pc8.Shape) else "nvfp4-codes"
-    for role, fns in _pieces_of(shape).items():
+    for role, fns in pieces.items():
         for fn in fns:
             CF.check_ports(fn, ports[role], shape.derivations, shape.k, {"cs": segs, "ss": segs}, {codes: shape.row_k})
 
@@ -314,29 +263,32 @@ def _words(types_, values) -> list[int]:
 
 
 @pytest.mark.parametrize("side", ["a", "b"])
-@pytest.mark.parametrize("shape", [SHAPES[1], SHAPES[-1]], ids=["sm120", "pc4"])
-def test_the_head_commits_the_row_its_readers_read(shape, side):
+def test_the_head_commits_the_row_its_readers_read(side):
     """Flock commits each output port zero-padded to whole u16 words and reads an input row as its parameters' bits
-    run together (`class_statement.unit_lowering`).  So on every row, admitted or refused (Pearl-C's at every pair of
-    finite and floor bits), the head's pc8-head (pc4-head) ports, each padded, are `leaves.words_pc8_head`
-    (`words_pc4_head`) of its values: the very words the first form, each form and the tail read from that row."""
-    pc8_ = isinstance(shape, pc8.Shape)
-    head_row, schema = (rowk.HEAD8, "pc8-head") if pc8_ else (rowk.HEAD4, "pc4-head")
-    ports, pieces = shape.ports, _pieces_of(shape)
+    run together (`class_statement.unit_lowering`).  So on every row, admitted or refused (at every pair of finite and
+    floor bits), the head's pc8-head ports, each padded, are `leaves.words_pc8_head` of its values: the very words the
+    first form, each form and the tail read from that row."""
+    shape = SHAPES[1]
+    head_commits_its_readers_row(shape, side, _pieces_of(shape), rowk.HEAD8, "pc8-head", _rows8(shape.k),
+                                 lambda i: (P.sample_line(SEED, 0 if side == "a" else 1, i, 5),),
+                                 lambda h: L.words_pc8_head(h["alpha"], h["ep"], h["th"], h["finite"], h["floor"]),
+                                 lambda seen: seen == {0, 1, 2, 3})
+
+
+def head_commits_its_readers_row(shape, side, pieces, head_row, schema, rows, before_of, words_of, seen_ok):
+    ports = shape.ports
     (head,) = pieces[f"row_{side}_head"]
     fields = head.signature()[1].fields
     (outs,) = [ps for s, _r, ps in ports[f"row_{side}_head"]["rows"] if s == schema]
     readers = [(role, fn) for role in (f"row_{side}_{p}" for p in ("first", "form", "tail")) for fn in pieces[role]]
     assert len(readers) == shape.k // shape.row_k + 1
-    rows = _rows8(shape.k) if pc8_ else _rows4(shape.k)
     seen = set()
     for i, (name, x) in enumerate(rows.items()):
-        before = (P.sample_line(SEED, 0 if side == "a" else 1, i, 5),) if pc8_ else ()
+        before = before_of(i)
         vals = _split(evaluate(head, x, *before), fields)
         committed = [w for p in outs for w in _words([fields[p]], [vals[p]])]
         h = dict(zip([n for n, _t in head_row], _head_row(head, head_row, x, before)[0]))
-        want = (L.words_pc8_head(h["alpha"], h["ep"], h["th"], h["finite"], h["floor"]) if pc8_
-                else L.words_pc4_head(h["alpha"], h["ae"]))
+        want = words_of(h)
         assert len(want) == L.ROW_WORDS[schema](shape.k)
         assert committed == want, name
         for role, fn in readers:
@@ -344,7 +296,7 @@ def test_the_head_commits_the_row_its_readers_read(shape, side):
             types_ = dict(fn.signature()[0])
             assert _words([types_[n] for n in names], [h[n] for n in names]) == want, (name, fn.id)
         seen.add(want[-1])
-    assert seen == {0, 1, 2, 3} if pc8_ else len(seen) > 2, seen
+    assert seen_ok(seen), seen
 
 
 def test_each_row_is_its_elements_bits():
@@ -364,11 +316,7 @@ def test_each_row_is_its_elements_bits():
         assert (row_bytes(words, 16), 16 * len(words)) == (memory, n_bits), row
         assert len(words) == L.ROW_WORDS[row](128), row
         assert all(L.ROW_SCHEMA[row, role] == L.ROW_SCHEMA["ok", role] for role in (ROLE_X, ROLE_W)), row
-    for fn in (rowk.pieces8(256, 128, "sm120", "a")[3], rowk.pieces8(256, 128, "h100", "b")[3],
-               rowk.pieces4(128, 64, "a")[0], rowk.pieces4(128, 64, "b")[0]):
-        b = fn.body
-        gate = b.nodes[b.ret[len(b.ret) - 1][1]]
-        assert gate.fn.id == SelectBf16.id and b.nodes[gate.args[0].refs[0][1]].fn.id == BitAnd.id, fn.id
+    ok_is_a_select_of_an_and(rowk.pieces8(256, 128, "sm120", "a")[3], rowk.pieces8(256, 128, "h100", "b")[3])
     head = rowk.pieces8(256, 128, "sm120", "a")[0].body
     pad = head.nodes[head.ret[len(head.ret) - 1][1]]
     assert (pad.fn.family, pad.fn.evaluate()) == ("Const", 0)
@@ -379,6 +327,14 @@ def test_each_row_is_its_elements_bits():
         assert {(b.nodes[n].fn.family, b.nodes[n].fn.evaluate()) for n in fill} == {("Const", 0)}
 
 
+def ok_is_a_select_of_an_and(*fns):
+    """Each piece's last output, its ok word, is `SelectBf16` of a `BitAnd`: its bits are constants in gates."""
+    for fn in fns:
+        b = fn.body
+        gate = b.nodes[b.ret[len(b.ret) - 1][1]]
+        assert gate.fn.id == SelectBf16.id and b.nodes[gate.args[0].refs[0][1]].fn.id == BitAnd.id, fn.id
+
+
 def test_each_cut_row_is_short_or_whole_blocks():
     """At the deployed row_k each cut row is one SHA-512 block with its padding (at most 55 words) or whole blocks (64 |
     words), the v2 rows Flock's widened scope takes."""
@@ -387,11 +343,8 @@ def test_each_cut_row_is_short_or_whole_blocks():
         assert 2 * n + 17 <= 128 or n % 64 == 0, (row, n)
 
 
-def _anchors(shape):
-    if isinstance(shape, pc8.Shape):
-        scheme = C.PearlC(forming="v1", device=DEVICES[shape.dev], hashing="h0")
-    else:
-        scheme = F.PearlC4("nvfp4", hashing="h0")
+def _anchors(shape, scheme=None):
+    scheme = scheme or C.PearlC(forming="v1", device=DEVICES[shape.dev], hashing="h0")
     ctx = V8.ctx_of("pc-rowk-anchors", (shape.m, shape.k, shape.n), 3, 9)
     return TileAnchors.of(scheme, ctx, shape), TileAnchors.of(scheme, ctx, replace(shape, row_k=None))
 
@@ -400,7 +353,10 @@ def _anchors(shape):
 def test_a_form_reads_its_segment_of_the_bases(shape):
     """A form's F_A and F_B regions are its segment's lines of today's whole regions, under the slice rule; its E line
     and the tail's G are today's; a segment outside the row is refused."""
-    cut, today = _anchors(shape)
+    form_reads_its_segment(shape, *_anchors(shape))
+
+
+def form_reads_its_segment(shape, cut, today):
     segs, ks = shape.k // shape.row_k, shape.row_k
     for side, i in (("a", 1), ("b", 0)):
         whole = today.regions(f"row_{side}", i)
@@ -421,22 +377,13 @@ def test_a_form_reads_its_segment_of_the_bases(shape):
             cut.check_public_inputs(f"row_{side}_form", (0, 1), own, segs - 1 if segs > 2 else 0)
 
 
-SLICE_RULES = {"pc8": {f"{a}-slice": f"verity/pouw/anchor/pearl-c/{a}/slice/v1" for a in ("fa", "fb")},
-               "pc4": {f"{a}-slice": f"verity/pouw/anchor/pearl-c4/{a}/slice/v2" for a in ("fa", "fb")}}
+SLICE_RULES = {f"{a}-slice": f"verity/pouw/anchor/pearl-c/{a}/slice/v1" for a in ("fa", "fb")}
 
 
 def test_slice_rules_exist_only_under_the_cut():
     """The cut's shapes name today's five rules and the two slice rules; the class and a shape without ``row_k`` name
     today's five only, and a slice rule is refused unless derived per segment (and the reverse)."""
-    for name, mod, shape in (("pc8", pc8, SHAPES[0]), ("pc4", pc4, SHAPES[-1])):
-        today = {a: mod.DERIVATIONS[a].rule for a in ANCHORED}
-        assert {a: d.rule for a, d in mod.Shape.derivations.items()} == today
-        assert {a: d.rule for a, d in replace(shape, row_k=None).derivations.items()} == today
-        assert {a: d.rule for a, d in shape.derivations.items()} == today | SLICE_RULES[name]
-        assert mod.Shape.ports is mod.PORTS and replace(shape, row_k=None).ports is mod.PORTS
-        names = {p["derivation"] for role in rowk.ROLES["check"] if role != "tile" and shape.ports[role]["regions"]
-                 for p in public_ports(shape, role).values()}
-        assert names >= set(SLICE_RULES[name].values())
+    slice_rules_only_under_the_cut(pc8, SHAPES[0], SLICE_RULES)
     d = rowk.DERIVATIONS8["fa-slice"]
     assert d.per_segment and not d.per_row
     for bad in (dict(per_segment=False), dict(rule="verity/pouw/anchor/pearl-c/fa/v1"), dict(per_row=True)):
@@ -447,33 +394,42 @@ def test_slice_rules_exist_only_under_the_cut():
         replace(d, rule="verity/pouw/anchor/pearl-c/fa/slice")
 
 
+def slice_rules_only_under_the_cut(mod, shape, slice_rules):
+    today = {a: mod.DERIVATIONS[a].rule for a in ANCHORED}
+    assert {a: d.rule for a, d in mod.Shape.derivations.items()} == today
+    assert {a: d.rule for a, d in replace(shape, row_k=None).derivations.items()} == today
+    assert {a: d.rule for a, d in shape.derivations.items()} == today | slice_rules
+    assert mod.Shape.ports is mod.PORTS and replace(shape, row_k=None).ports is mod.PORTS
+    names = {p["derivation"] for role in rowk.ROLES["check"] if role != "tile" and shape.ports[role]["regions"]
+             for p in public_ports(shape, role).values()}
+    assert names >= set(slice_rules.values())
+
+
 def test_shapes_off_the_cut_are_refused():
-    """row_k is a positive multiple of the device's window and of 32 (Pearl-C) or of 64 (Pearl-C4) that divides k, and
-    `ROW_K` is one on every device."""
+    """row_k is a positive multiple of the device's window and of 32 that divides k, and `ROW_K` is one on every device."""
     for d in DEVICES.values():
         assert rowk.ROW_K % math.lcm(32, d.window) == 0
-    assert rowk.ROW_K % pc4.ATOM == 0
     pc8.Shape(1, 4096, 1, tile=(1, 1), row_k=rowk.ROW_K).check()
-    pc4.Shape(1, 4096, 1, tile=(1, 1), row_k=rowk.ROW_K).check()
     for shape in (pc8.Shape(1, 256, 1, tile=(1, 1), row_k=64), pc8.Shape(1, 384, 1, tile=(1, 1), row_k=256),
                   pc8.Shape(1, 256, 1, tile=(1, 1), row_k=0), pc8.Shape(1, 256, 1, tile=(1, 1), row_k=128.0),
-                  pc8.Shape(1, 96, 1, tile=(1, 1), dev="sm120-unpromoted", row_k=48),
-                  pc4.Shape(1, 256, 1, tile=(1, 1), row_k=32), pc4.Shape(1, 192, 1, tile=(1, 1), row_k=128),
-                  pc4.Shape(1, 256, 1, tile=(1, 1), row_k=True)):
-        for build in (_mod(shape).check, _mod(shape).weight, _mod(shape).call):
+                  pc8.Shape(1, 96, 1, tile=(1, 1), dev="sm120-unpromoted", row_k=48)):
+        for build in (pc8.check, pc8.weight, pc8.call):
             with pytest.raises(DomainError):
                 build(shape)
 
 
 def test_off_the_cut_nothing_is_the_cuts():
     """With ``row_k`` unset the roots, queries and units are today's: no root, template or role of the cut's."""
-    cut_ids = {id(d) for d in vars(rowk).values() if isinstance(d, CompositeDefinition)}
-    assert len(cut_ids) == 16 + 10
-    for mod, shape in ((pc8, pc8.Shape(4, 128, 6, tile=(2, 3))), (pc4, pc4.Shape(4, 64, 6, tile=(2, 3)))):
-        for side in ("weight", "call", "check"):
-            fn = getattr(mod, side)(shape)
-            assert id(fn.defn) not in cut_ids and all(id(nd.fn.defn) not in cut_ids for nd in fn.body.nodes)
-            assert {u.role for u in mod.units(fn)} <= {"row_a", "row_b", "tile"}
-            assert json.dumps(mod.query(shape, side)) == json.dumps(
-                PO.template_instances_query([mod.templates(shape.k, shape.tile, *(
-                    (shape.dev,) if mod is pc8 else ()))[r] for r in mod.ROLES[side]]))
+    shape = pc8.Shape(4, 128, 6, tile=(2, 3))
+    nothing_is_the_cuts(rowk, 8 + 5, pc8, shape, (shape.dev,))
+
+
+def nothing_is_the_cuts(cut_mod, n_defs, mod, shape, template_args):
+    cut_ids = {id(d) for d in vars(cut_mod).values() if isinstance(d, CompositeDefinition)}
+    assert len(cut_ids) == n_defs
+    for side in ("weight", "call", "check"):
+        fn = getattr(mod, side)(shape)
+        assert id(fn.defn) not in cut_ids and all(id(nd.fn.defn) not in cut_ids for nd in fn.body.nodes)
+        assert {u.role for u in mod.units(fn)} <= {"row_a", "row_b", "tile"}
+        assert json.dumps(mod.query(shape, side)) == json.dumps(
+            PO.template_instances_query([mod.templates(shape.k, shape.tile, *template_args)[r] for r in mod.ROLES[side]]))

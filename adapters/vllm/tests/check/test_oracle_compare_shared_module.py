@@ -77,7 +77,7 @@ def make_match(tmp: str) -> str:
 def make_committed(layer_of_invocation=None):
     """The collector's shape: per invocation k one meta per member under the SAME canonical name `ROT/<member>`; binding map identities under
     the canonical op_path with invocation k.  `layer_of_invocation(k)` = whose words meta k holds (default: its own layer's -- the honest record).
-    Returns (the production OpenedReader over those tensors, committed on the per-tensor host path; the binding map)."""
+    Returns (the library's OpenedReader over those tensors, committed on the per-tensor host path; the binding map)."""
     who = layer_of_invocation or (lambda k: k)
     tensors, entries = [], []
     ordinal = 0

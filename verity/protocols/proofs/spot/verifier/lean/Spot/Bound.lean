@@ -1,7 +1,7 @@
 /-
 The profile's bounds on incorrect proof blocks at δ, exact (`profile.Stratified.count_bound` and `stratum_bound`): independent uniform
 samples of `k_s` of the `n_s` units of each stratum miss a set of `m_s` incorrect proof blocks in each with probability
-`Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, the escape `Security/Proofs/Flock/Soundness/Audit/OneStage.lean`'s `audit_count`
+`Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, the escape `security/Proofs/Flock/Soundness/Audit/OneStage.lean`'s `audit_count`
 bounds by. `miss K` is the largest escape of a set of `K` incorrect proof blocks: the product of the `K` largest factors
 `(n_s − j − k_s) / (n_s − j)` over every stratum `s` and `j < finite_s`, taken greedily because each stratum's factors fall
 as `j` grows. `countBound δ` is the largest `K` with `miss K ≥ δ`: except with probability δ (plus the soundness terms), an
@@ -113,7 +113,7 @@ def boundOf (population : Nat) (d : Core.SamplingDesign) (δ : Ratio) : Nat :=
 
 `optimize.density_bound`, exactly. A set with `c_s` incorrect proof blocks in stratum `s` escapes with probability at most
 `exp(−∑ s k_s c_s / n_s)` and holds none past `n_s − k_s`, so at δ its harm, `h_s` per unit, is at most the fractional
-knapsack's value over `∑ s k_s c_s / n_s ≤ ln(1/δ)`: `Security/Proofs/Flock/Soundness/Audit/HarmBound.lean`'s
+knapsack's value over `∑ s k_s c_s / n_s ≤ ln(1/δ)`: `security/Proofs/Flock/Soundness/Audit/HarmBound.lean`'s
 `stratified_isHarmBound_fill` at the greedy fill, and `stratified_isHarmBound_dual` at any budget above `ln(1/δ)`, which
 `lnUpper` is. -/
 

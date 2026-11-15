@@ -51,14 +51,16 @@ def host_leaf(host, C, s, i):
     return host[s][i * C:(i + 1) * C]
 
 
-def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(tmp_path):
+def test_the_release_keeps_exactly_the_sampled_leaves_byte_equal_to_host(tmp_path):
     host, rc, dev = committed()
     C = dev.chunk
-    drawn = {0: [1, 2], 2: [0, 5]}
+    sampled = {0: [1, 2], 2: [0, 5]}
     assert leaf_bytes(dev, 0, 3) == host_leaf(host, C, 0, 3)
     with pytest.raises(ValueError, match="held on the device until their window's draw-gated release"):
         SD.dump(dev, rc, tmp_path / "early")
-    rec = DP.release(dev, drawn)
+    rec = DP.release(dev, sampled)
+    assert list(rec) == ["steps", "drawn_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "absorb_wait_s", "gather_s"]
+    assert rec["steps"] == 3 and rec["absorb_wait_s"] == 0.0 and isinstance(rec["gather_s"], float) and rec["gather_s"] >= 0
     assert rec["drawn_leaves"] == 4 and rec["kept_bytes"] == 4 * C == sum(b.retained_bytes for b, _u in dev._gpu_blocks.values())
     assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) - 4 * C
     assert rec["device_freed_bytes"] > 0 and dev.device_pool.held == 0
@@ -67,7 +69,7 @@ def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(tmp_path)
     store, run = SD.load(tmp_path / "w")
     assert [s.root for s in run.steps] == [s.root for s in rc.steps]
     for com in (dev, store):
-        for s, leaves in drawn.items():
+        for s, leaves in sampled.items():
             for i in leaves:
                 assert leaf_bytes(com, s, i) == host_leaf(host, C, s, i)
     assert sum((tmp_path / "w" / "raw" / f"s{s}.bin").stat().st_size for s in range(3)) == 4 * C
@@ -90,29 +92,40 @@ def test_a_dropped_leaf_is_refused_by_name_never_replayed(tmp_path):
         dev._gpu_blocks[0][0][0:dev.chunk]
 
 
-def test_a_released_window_dumps_slim_to_its_drawn_leaves(tmp_path):
+def test_a_released_window_dumps_slim_to_its_sampled_leaves(tmp_path):
     C = R.ROW_BYTES
     host, rc, dev = committed({0: [("model.embed_tokens", (bytes(range(251)) * (200 * C // 251 + 1))[:200 * C])]})
     runs = [(3, 6), (100, 101), (199, 200)]
     DP.release(dev, {0: [i for a, b in runs for i in range(a, b)]})
     doc = SD.dump(dev, rc, tmp_path / "w")
     st = doc["steps"][0]
-    assert st["drawn_only"] and st["ranges"] == [[a * C, b * C] for a, b in runs]
+    assert st["drawn_only"] is True, "the mark a slim dump's reader takes a dropped step by: a dump written under it loads"
+    assert st["ranges"] == [[a * C, b * C] for a, b in runs]
     assert 0 < len(st["nodes"]) < sum(st["levels"]) // 3
     assert (tmp_path / "w" / "levels" / "s0.bin").stat().st_size == SD.NODE * len(st["nodes"])
     assert not (tmp_path / "w" / "keys.bin").exists() and st.get("salted") == [list(r) for r in runs]
     store, run = SD.load(tmp_path / "w")
-    assert [s.root for s in run.steps] == [s.root for s in rc.steps]
+    assert [s.root for s in run.steps] == [s.root for s in rc.steps] and store._gpu_blocks[0][0].dropped
     rd = OV.OpenedReader(store, run)
     for a, b in runs:
         for lo in range(a, b):
             for hi in range(lo + 1, b + 1):
                 assert rd(0, "model.embed_tokens", lo * C, hi * C) == host[0][lo * C:hi * C]
     assert rd(0, "model.embed_tokens", 3 * C + 7, 6 * C - 3) == host[0][3 * C + 7:6 * C - 3]
-    with pytest.raises(RuntimeError, match="draw-gated release"):
+    with pytest.raises(RuntimeError, match="dropped at its window's"):
         store.open_range(0, 6, 7)
     again = SD.dump(store, run, tmp_path / "again")
     assert again["steps"][0]["nodes"] == st["nodes"] and again["steps"][0]["ranges"] == st["ranges"]
+
+
+def test_a_store_dumps_slim_only_when_every_one_of_its_steps_was_released():
+    _host, _rc, dev = committed()
+    whole = dev._gpu_blocks[1]
+    DP.release(dev, {0: [1]})
+    slim = SD.kept(dev)
+    assert slim is not None and sorted(slim.ranges) == [0, 1, 2] and slim.ranges[1] == []
+    dev._gpu_blocks[1] = whole
+    assert SD.kept(dev) is None, "one step still holds its whole block"
 
 
 def test_a_release_names_only_committed_leaves_and_happens_once():
@@ -179,10 +192,10 @@ def test_freed_pieces_coalesce_first_fit():
 
 
 def opts(retention=(), **kw):
-    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "pouw_h1", "draws_dir": "",
-         **dict(retention)}
-    return SimpleNamespace(**{"retention": SimpleNamespace(**r), "commit": True, "scheme": R.NAME, "window_gb": 32.0, "seal": True,
-                              **kw})
+    from verity_vllm.pipeline.serve_release import RetentionOptions
+
+    r = RetentionOptions(**{"retain": "device", "retain_device_gb": 32.0, "release_after": "pouw_h1", **dict(retention)})
+    return SimpleNamespace(**{"retention": r, "commit": True, "scheme": R.NAME, "window_gb": 32.0, "seal": True, **kw})
 
 
 def test_serve_openai_refuses_retain_device_without_the_rows_commit_or_room_for_a_window():
@@ -201,10 +214,11 @@ def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed():
         raise RuntimeError("worker failed")
     dev.wait_absorbed = failed
     rec = DP.discard(dev, "not sealed: RuntimeError: finalize failed")
+    assert rec["steps"] == 3 and rec["discarded"] == "not sealed: RuntimeError: finalize failed"
     assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) and rec["kept_bytes"] == 0
     assert rec["absorb_error"] == "RuntimeError: worker failed"
     assert dev.device_pool.held == 0 and all(b.retained_bytes == 0 for b, _u in dev._gpu_blocks.values())
-    with pytest.raises(KeyError, match="draw-gated release"):
+    with pytest.raises(KeyError, match="dropped at its window's"):
         dev._gpu_blocks[2][0][0:dev.chunk]
     assert DP.discard(dev, "again") is None
     with pytest.raises(RuntimeError, match="released already"):

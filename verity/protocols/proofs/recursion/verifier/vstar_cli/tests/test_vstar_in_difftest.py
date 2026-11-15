@@ -422,7 +422,7 @@ def _inner(tmp: Path) -> Path:
 
     def coins(hexes):
         return b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
-    proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192),
+    proxy = RL.Proxy(RL.LiveCoinPart(rand), lambda: g.randbytes(192),
                      schedule=RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3}))
     def send(*req):
         return RL.decode_resp(proxy.handle(RL.encode_req(*req)))

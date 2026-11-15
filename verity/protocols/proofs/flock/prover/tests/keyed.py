@@ -4,7 +4,7 @@
 A key is a sha256 over `FORMAT` and its parts: an absolute path by its content (a directory's: each file's relative path and
 content), any other string as itself, and with `code`, the static import closure of those modules (a repository module by its
 content and the environment variables it names, the rest by `uv.lock` and the interpreter). `run` keys an executable that
-reads only its argv's paths and what is under them (`flock-verify`, `flock-witness`). A directory's build samples its OS bytes
+reads only its argv's paths and what is under them (`verity-verify-proof`, `flock-witness`). A directory's build samples its OS bytes
 from a stream of its name, so two builds under one key are the same bytes, and is kept with the repository files it opened,
 which a hit must find unchanged. What can't be keyed (a relative or absent path, a read outside the repository, a process or
 thread started, a function run from a repository file outside the closure, a key that changed as it ran) is built and not
@@ -16,7 +16,6 @@ import ast
 import contextlib
 import functools
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -100,6 +99,22 @@ def _part(x) -> str | None:
     return f"d {h.hexdigest()}"
 
 
+def _origin(name: str) -> str | None:
+    """`name`'s file, found as the import system would find it but without importing it or its parents: `find_spec` of
+    a dotted name runs each parent's code, so a walk over sources would run module bodies (reading what they read) and see
+    a submodule only where its parent imports here."""
+    path, spec, parts = None, None, name.split(".")
+    for i in range(len(parts)):
+        full = ".".join(parts[:i + 1])
+        if full in sys.modules:
+            spec = getattr(sys.modules[full], "__spec__", None)
+        else:
+            spec = next((s for f in sys.meta_path if (s := getattr(f, "find_spec", lambda *_: None)(full, path))), None)
+        if spec is None or (path := spec.submodule_search_locations) is None and i < len(parts) - 1:
+            return None
+    return spec.origin
+
+
 @functools.cache
 def _code(roots: tuple[str, ...]) -> tuple[str, frozenset]:
     """The static import closure of the modules `roots` (imports in function bodies too) as a key's part, and its files. A
@@ -111,7 +126,7 @@ def _code(roots: tuple[str, ...]) -> tuple[str, frozenset]:
         visited.add(name)
         todo += [name.rsplit(".", i)[0] for i in range(1, name.count(".") + 1)]
         with contextlib.suppress(Exception):
-            f = importlib.util.find_spec(name).origin
+            f = _origin(name)
             f = os.path.realpath(f) if isinstance(f, str) and os.path.isabs(f) else ""
             if f.startswith(f"{ROOT}/") and not f.startswith(f"{os.path.realpath(sys.prefix)}/"):
                 seen[name] = f

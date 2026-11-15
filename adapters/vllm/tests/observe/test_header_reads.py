@@ -1,6 +1,7 @@
 """What the fold's patterns read when a document they read is missing, null, empty or zero, or full: a run header's sampling,
 backends, GPU and tensor-parallel facts, a step's KV groups, a sampler's scratch, the capture's external-buffers note and a Build's
-`result.json`.  Each value of `EMPTY` in a document's place reads as the document left out.
+`result.json`.  Each value of `EMPTY` in a document's place reads as the document left out.  A value of `NO_MAPPING` in the place
+of the sampling block, the NCCL environment or the engine flags is refused by the read itself.
 
 The readers: `verity_vllm.observe.fold.patterns.sampling`, `verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns`,
 `verity_vllm.observe.fold.patterns.fp8`, `verity_vllm.observe.fold.patterns.int8`, `verity_vllm.observe.fold.patterns.target`,
@@ -15,9 +16,10 @@ import dataclasses
 import json
 
 import pytest
-from verity.definitions.registry import tp_allreduce
+from verity_vllm.definitions.registry import tp_allreduce
 
 from tests.observe.test_patterns_synthetic import V, context, decode_step
+from verity_vllm.errors import Refused
 from verity_vllm.observe.events import Note, RunHeader
 from verity_vllm.observe.fold.patterns import GeometryError
 from verity_vllm.observe.fold.patterns.collectives import (
@@ -46,6 +48,9 @@ from verity_vllm.observe.fold.tree import step_events
 
 #: what reads as no document: a null, and each empty or zero value
 EMPTY: tuple = (None, {}, [], 0, "", False)
+
+#: what is not empty and is no mapping: pairs, which `dict` would read as one, a string and a number
+NO_MAPPING: tuple = ([("greedy", True)], (("greedy", True),), "no", 7)
 
 
 def _absent(key: str) -> list[dict]:
@@ -78,6 +83,15 @@ def test_greedy_sampling_names_what_is_not_greedy():
     assert why({"greedy": True, "temperature": 0.5}) == "sampling temperature is 0.5, not 0"
     assert why({"greedy": True, "temperature": 0.0, "top_k": 5}) == "top_k/top_p sampling (5/None) is not the registered TokenSelect"
     assert greedy_sampling(_ctx(profile={"sampling": {"greedy": True, "temperature": 0.0}}, workload={})) is None
+
+
+@pytest.mark.parametrize("block", NO_MAPPING)
+@pytest.mark.parametrize("held_by", ["workload", "profile"])
+def test_greedy_sampling_asks_the_sampling_block_itself_and_not_a_copy_of_it(held_by, block):
+    """A sampling block that is no mapping has no `get`, whatever `dict` would make of it: the workload's, and the profile's."""
+    ctx = _ctx(workload={"sampling": block}) if held_by == "workload" else _ctx(profile={"sampling": block}, workload={})
+    with pytest.raises(AttributeError, match="has no attribute 'get'"):
+        greedy_sampling(ctx)
 
 
 def test_request_sampling_reads_each_requests_own_values_then_its_record_then_the_workloads():
@@ -154,6 +168,19 @@ def test_the_all_reduce_settings_and_device_a_capture_recorded():
         assert capture_device(header(profile)) is None, profile
     assert capture_device(header({"gpu": {"compute_capability": [9, 0], "multi_processor_count": 132}})) == tp_allreduce.device_of([9, 0], 132)
     assert capture_device(header({"gpu": {"cc": [9, 0], "sms": 132}})) == tp_allreduce.device_of([9, 0], 132)
+
+
+@pytest.mark.parametrize("part", NO_MAPPING)
+@pytest.mark.parametrize("key", ["nccl_env", "engine_flags"])
+def test_the_all_reduce_settings_unpack_the_nccl_environment_and_the_engine_flags_as_mappings(key, part):
+    """Pairs are not read as the mapping they spell: each part is unpacked into the settings' environment, which takes a mapping."""
+    facts = {"parallel_config": {"disable_custom_all_reduce": False}}
+    if key == "nccl_env":
+        header = _ctx(notes={"tp2": {"facts": {**facts, key: part}}}).header
+    else:
+        header = _ctx(profile={key: part}, notes={"tp2": {"facts": facts}}).header
+    with pytest.raises(TypeError, match="is not a mapping"):
+        allreduce_settings(header)
 
 
 def test_a_kv_group_without_a_block_table_for_the_request_is_a_geometry_error():
@@ -235,12 +262,12 @@ def test_a_builds_programs_register_their_values_where_result_json_says_so(tmp_p
     registered = build("registered", {"program": {"supplied": {"registration": {"values": 3}}}})
     assert not program_registered_values([]) and not program_registered_values(held)
     assert all(not program_registered_values([d]) for d in held) and program_registered_values([registered, registered])
-    with pytest.raises(SystemExit, match="some Programs register their values and some hold them as constants"):
+    with pytest.raises(Refused, match="some Programs register their values and some hold them as constants"):
         program_registered_values([held[0], registered])
     (tmp_path / "empty").mkdir()
     unreadable = [str(tmp_path / "empty"), build("list", []), build("text", "x")]
     (tmp_path / "broken").mkdir()
     (tmp_path / "broken" / "result.json").write_text("{")
     for d in (*unreadable, str(tmp_path / "broken")):
-        with pytest.raises(SystemExit, match=r"no readable result\.json"):
+        with pytest.raises(Refused, match=r"no readable result\.json"):
             program_registered_values([registered, d])

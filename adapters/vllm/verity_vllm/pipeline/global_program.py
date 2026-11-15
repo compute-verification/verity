@@ -24,7 +24,6 @@ import gzip
 import hashlib
 import json
 import os
-import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -34,9 +33,10 @@ from verity.circuits.codec import canonical_json, descriptor_size
 
 # published as `global_program.REGISTRY`: the registry with every registry module loaded (the loop below)
 from verity.circuits.defs import REGISTRY as REGISTRY
-from verity.definitions.registry.catalog import load as _load_registry
+from verity_vllm.definitions.registry.catalog import load as _load_registry
 
 from verity_vllm.check.match.batch_decomp import derived_shape
+from verity_vllm.check.match.declaration import MODELLED_ENGINE, compilation_facts
 from verity_vllm.config import (
     RowEngine,
     done_source_refusal,
@@ -45,7 +45,9 @@ from verity_vllm.config import (
     workload_arg,
     workload_file,
 )
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import layout as build_paths
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.components import (  # noqa: F401
     component_of,
     component_provenance,
@@ -62,9 +64,11 @@ from verity_vllm.records.workload import Workload, WorkloadSampling
 
 __all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_id_of", "stop_rule", "workload_target"]
 
+logger = init_logger(__name__)
+
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
-    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
+    logger.warning("registry module unavailable (%s): components naming its Definitions will not decode", _e)
 
 
 def request_id_of(index: int) -> str:
@@ -105,40 +109,6 @@ def execution_of_workload(w: Workload) -> str:
     if ex := sweep.get("execution"):
         return str(ex)
     return row_execution(str(sweep.get("row_id") or "")) or ""
-
-
-# engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
-# weights input; a request's prefill may be chunked over engine steps (X-09's chunked-prefill criterion).  Prefix caching is the
-# manifest's (`workload_applicability`): with it on, a request whose first C rows the prefix cache serves (`program.prefix_plan`) is a
-# component that reads them as its `prefix` input, which Match binds to the producing requests' rows; no other cross-request read.
-MODELLED_ENGINE = {"enforce_eager": True, "enable_prefix_caching": False, "enable_chunked_prefill": "modelled (a request's prefill rows may span engine steps)"}
-
-# a COMPILED execution is modelled only when every component declares it (applicability.execution
-# 'bi-compiled…' AND an agreed `compilation` block {mode, cudagraph_mode, capture_sizes, …} written by derive_step from the TargetProfile);
-# the engine conditions then say enforce_eager False + those facts, and GM-01 G1 compares the record's header against them.
-COMPILATION_FACT_KEYS = ("mode", "cudagraph_mode", "capture_sizes", "backend", "use_inductor_graph_partition", "compile_cache",
-                         # the record-level pin of the Inductor output identity (control process): carried into
-                         # global_match.json execution.effective_compilation when the header attests it, NOT compared with the Build
-                         # (derive_step traces eagerly; the pin is an attempt-to-attempt condition the report/commit compare)
-                         "kernel_set_sha256", "call_set_sha256", "wrapper_norm_set_sha256")
-_FACT_ALIASES = {"compilation_mode": "mode"}   # compiled's TargetProfile.modelled_engine() names it compilation_mode
-
-
-def compilation_facts(block: dict | None) -> dict:
-    """The compilation facts of an applicability `engine`/`compilation` block, key-normalised (compilation_mode -> mode); {} if none."""
-    if not isinstance(block, dict):
-        return {}
-    out = {}
-    for k, v in block.items():
-        kk = _FACT_ALIASES.get(k, k)
-        if kk in COMPILATION_FACT_KEYS and v is not None:
-            out[kk] = _MODE_NAMES.get(str(v), v) if kk == "mode" else v
-    return out
-
-
-# vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
-# TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable
-_MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
 
 
 def workload_target(target: Mapping[str, Any] | None):
@@ -408,13 +378,13 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
-           "source": "verity.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
+           "source": "verity_vllm.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry")
         return out
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     out["splits"] = S = int(registered_splits(int(nsm)))
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "
@@ -723,9 +693,9 @@ def main(a: Options) -> int:
             return 5
     res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root, early=early, canon=canon, theta_registered=a.theta_registered)
     if not res.get("ok"):
-        print(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
+        write(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
         return 4
-    print(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
+    write(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
                       "requests": len(res["requests"]), "descriptor_bytes": res["descriptor"]["bytes"], "cost": res["cost"],
                       "eos_token_ids": _stated(res, "stop_rule", "eos_token_ids"),
                       "lag": _stated(res, "lag", "value"), "async_scheduling": _stated(res, "lag", "async_scheduling"),

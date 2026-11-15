@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.Canon
+public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
+
+/-!
 `coin-tree/hm96-sha512/v2`, the keyed coin tree (`docs/coin-tree-v2.md`, §3 and §7): the verifier's part. The prover's
 `Hello` carries its fresh 32-byte nonce in `coins`; the server answers with its root and a fresh 256-byte hm96 key for the
 session's tree, sampled after the nonce, never reused and never revealed before that answer. The record keeps
@@ -8,11 +14,6 @@ The verifier checks the record, not the openings: the commitment protects the pr
 nonce, the record's `coin_tree`, and, across the sessions it verifies together, that no key repeats. Nonces are not
 compared across sessions: a repeated prover nonce is not a soundness matter.
 -/
-module
-
-public import Flock.Canon
-public import Flock.JsonParse
-public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 

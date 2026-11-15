@@ -58,12 +58,12 @@ def session(a, prover_file: Path, verifier_file: Path, d: Path, port: int) -> di
     pin = lowering.PINS[a.relation]
     log = d / f"serve-{port}.log"
     srv = subprocess.Popen([a.bin, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(d / f"s{port}"), "--pin", pin,
-                            "--instances", str(verifier_file), "--netlist", str(net), "--sessions", "1"],
+                            "--instances", str(verifier_file), "--circuit-description", str(net), "--sessions", "1"],
                            stdout=open(log, "w"), stderr=subprocess.STDOUT)
     t = time.time()
     while "SERVING" not in (log.read_text() if log.exists() else "") and time.time() - t < 600:
         time.sleep(0.5)
-    out = subprocess.run([a.bin, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(prover_file), "--netlist", str(net),
+    out = subprocess.run([a.bin, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(prover_file), "--circuit-description", str(net),
                           *a.prove_arg], capture_output=True, text=True)
     srv.wait(timeout=300)
     live = [json.loads(line.split("\t", 1)[1], strict=False) for line in out.stdout.splitlines() if line.startswith("LIVE\t")]
@@ -82,7 +82,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     d = Path(a.out)
     d.mkdir(parents=True, exist_ok=True)
-    (d / "net.txt").write_text(lowering.netlist(a.relation))
+    (d / "net.txt").write_text(lowering.circuit_description(a.relation))
     honest = d / "honest.bin"
     instances.write(honest, a.relation, a.vus, leaf=a.leaf)
     ok = True

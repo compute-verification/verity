@@ -29,13 +29,14 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -88,9 +89,10 @@ def iso(text: Any) -> str | None:
         return None
     try:
         t = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
+    except ValueError as e:
+        print(f"research data: {text[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
-    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (t if t.tzinfo else t.replace(tzinfo=UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass(frozen=True)
@@ -468,7 +470,7 @@ class PostgresIndex:
 
 
 def _now(now: datetime | None) -> datetime:
-    return (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return (now or datetime.now(UTC)).astimezone(UTC)
 
 
 def _stamp(t: datetime) -> str:
@@ -582,7 +584,7 @@ def default_path(store_root: Path | str, policy: str = PRIVATE) -> Path:
 
 
 def dump(db: Path | str | SqliteIndex | PostgresIndex) -> dict[str, list[tuple]]:
-    """Every row of records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
+    """Every row of the tables records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
     if isinstance(db, PostgresIndex):
         s = db.schema
         recs = [(*r[:4], canon.dumps(json.loads(r[4])).decode())
@@ -625,7 +627,7 @@ def not_indexed(idx: SqliteIndex | PostgresIndex, wanted: Iterable[str], batch: 
 
 def local_records(store) -> list[str]:
     """The index ids of every record this store holds: its artifacts, its runs and `label:<hash>` for each assertion."""
-    from . import labels_sync as LS  # noqa: PLC0415
+    from . import labels_sync as LS
 
     return [*store.artifact_ids(), *store.attempt_ids(), *(f"label:{h}" for h in LS.local_labels(store))]
 

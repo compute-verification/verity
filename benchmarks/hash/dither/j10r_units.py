@@ -29,7 +29,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from verity_vllm.protocols.pouw.h1 import receipts as RC
+from verity_torch.pouw.h1 import receipts as RC
 
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
@@ -86,7 +86,7 @@ def lean_vectors() -> dict:
     """J10R's `J10RChecks.lean` theorems (the Lean kernel's own evaluation of J10R.lean) against this module's seeds:
     seed_c by the restatement, by `seeds.call_seed` and by h1_seeds_c's message; σ_R by `seeds.receipt_seed` and by
     h1_seeds_c's; and a block of seed_c's stream by `_stream`."""
-    path = Path(SD.__file__).resolve().parents[6] / "security" / "Proofs" / "Accounting" / "TS" / "J10RChecks.lean"
+    path = Path(SD.__file__).resolve().parents[6] / "security" / "Proofs" / "Pouw" / "TS" / "J10RChecks.lean"
     lean = {m[1]: m[2].strip() for m in re.finditer(r"^theorem (\w+_vec) :.*= (\[.*\]|\(.*\)) := by decide \+kernel$",
                                                     path.read_text(), re.MULTILINE)}
     salt = bytes(range(64))

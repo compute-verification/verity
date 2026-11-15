@@ -20,7 +20,7 @@ through a few run-level facts. Their files sit below `DeployVK`, so their forms 
   through `keep` and the checks (`nextK_decide_sha512`);
 * an accepted run of `VK keep` decides within its own log (`accK_within`), opens a column only as a Merkle opening
   (`plainK_opening_raw`), so a self-clash among its columns collides (`plainK_selfClash_tied`); a statement it accepts
-  is in scope (`accK_inScope`) and sets up at a sample (`accK_draw`);
+  is in scope (`accK_inScope`) and sets up at a sample (`accK_sample`);
 * the simulation the plain mixture reads (`PlainSimRunK`, `PlainSimK`).
 -/
 
@@ -214,7 +214,7 @@ theorem accK_inScope (keep : Bool → Bool) (rel : Readable.Parsed → Readable.
   · simpa only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some] using
       (hm 0 h0).1
 
-theorem nextK_acc_draw (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextK_acc_sample (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextK keep x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   cases ha : act false x as cs with
@@ -222,17 +222,17 @@ theorem nextK_acc_draw (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims
   | coin c => simp [nextK_coin keep sha512 ha] at h
   | decide s spec sts link c₁ mids f =>
     obtain ⟨-, hc⟩ := (nextK_decide_sha512 keep ha).1 h
-    obtain ⟨d, hd⟩ := checks_draw hc
+    obtain ⟨d, hd⟩ := checks_sample hc
     exact ⟨s, spec, sts, d, act_decide ha, hd⟩
 
-/-- **A statement some run of `VK keep` accepts at SHA-512 sets up at a sample** (`acc_draw` at `keep`). -/
-theorem accK_draw (keep : Bool → Bool) {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
+/-- **A statement some run of `VK keep` accepts at SHA-512 sets up at a sample** (`acc_sample` at `keep`). -/
+theorem accK_sample (keep : Bool → Bool) {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
   push Not at hacc
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
-  exact nextK_acc_draw keep has
+  exact nextK_acc_sample keep has
 
 end FlockDeploy.KS
 

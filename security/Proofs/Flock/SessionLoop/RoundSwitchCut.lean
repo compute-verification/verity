@@ -128,7 +128,7 @@ theorem runCut_switchBody {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDep
   have hk6 := hwf.hk6
   have hkm := hwf.hk
   have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos _ _ _
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, hst]
     exact (zkTab x j).hz

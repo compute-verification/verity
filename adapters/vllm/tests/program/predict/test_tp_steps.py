@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as I
+from verity.commitments.periods import interface as I
 
 from tests.pipeline.test_tp_wires import (
     in_order,
