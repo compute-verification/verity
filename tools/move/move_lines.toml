@@ -170,3 +170,11 @@ reason = "The rename ran by a copy of theta_map.toml narrowed by hand to the thr
 ["e961879c09863af3ee7abcd89de06861d6dd4125"]
 line = "Layout-move: tools/move/docket_paths_map.toml --no-lock"
 reason = "The commit ran layout.py with --no-lock, as its message's command says; its trailer leaves the flag out, so the rerun writes another uv.lock."
+
+["c1c1bad4e3bd8cb444a1843af65239d4eb6a798f"]
+line = "Layout-move: tools/move/tests_root_map.toml --no-lock"
+reason = "The subject holds the move line with the command after it, which MOVE_LINE doesn't take."
+
+["f9988ab8f188863a6644d0b861dd1a2171941ec1"]
+line = "Layout-move: tools/move/tests_root_suites_map.toml --no-lock"
+reason = "The subject holds the move line with the command after it, which MOVE_LINE doesn't take."
