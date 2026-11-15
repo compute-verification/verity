@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw", "CoreComposites"],
  "exempt": {
   "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
