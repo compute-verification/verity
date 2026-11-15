@@ -1,6 +1,7 @@
-"""The stagers ``drawn.py`` hands `verity.protocols.accounting.pouw.prover.serving.h1.sampled`'s ``stage`` (its `Stager`),
-built on Flock's Python (`verity_flock`), which verity does not import: `stager`, K's flat statement recomposed
-(``--recompose``), and `FileStager`, a statement on its committed circuit file, read and never composed."""
+"""The stagers ``benchmarks/pouw/h1_prove/drawn.py`` hands `verity.protocols.accounting.pouw.prover.serving.h1.sampled`'s
+``stage`` (its `Stager`), built on Flock's Python (`verity_flock`), which no part of verity but this lowering imports
+(``tests/import_order.toml``): `stager`, K's flat statement recomposed (``--recompose``), and `FileStager`, a statement on
+its committed circuit file, read and never composed."""
 from __future__ import annotations
 
 import hashlib

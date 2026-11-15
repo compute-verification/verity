@@ -33,7 +33,7 @@ kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_sal
 kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
 it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
 (`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
-and its record's root (`drawn.leaf_stagers`, `h1_prove/stagers.py`'s `FileStager.stage`, `stage_leaves`), and a saved window's Program
+and its record's root (`drawn.leaf_stagers`, `prover.lowering.stagers`' `FileStager.stage`, `stage_leaves`), and a saved window's Program
 (`pouw_h1_handoff.resume`).
 
 And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
