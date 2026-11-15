@@ -135,8 +135,7 @@ outputs a collision wherever the binding's does (`executionPhaseReadFinder_of`) 
 (`finder_of_files`). -/
 theorem logged_files_le (V : Vocab d α) (T : PinnedTables) (k : Verity.Registration.Composite)
     (dev : Exchange → Properties.Challenger.History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binding.Binds V k Binding.readsV2 dev θ)
-    (hs : Binding.SignsPlay V dev θ F c) :
+    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binding.Binds V k Binding.readsV2 dev θ) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧
         ¬ (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o)) (V.game θ F c) σ ≤
       ENNReal.ofReal ((executionPhaseReadFinder V T dev θ F c σ).Pr Verity.sha512Msg) +
@@ -156,8 +155,8 @@ theorem logged_files_le (V : Vocab d α) (T : PinnedTables) (k : Verity.Registra
         · exact .inl (executionPhaseReadFinder_of V T dev θ F c σ t
             (Binding.finder_of_tables V T dev θ F c σ t fun ht => hn ⟨hl, ht, hf⟩))
         have hθ := (Binding.play_reaches (Verity.Game.Tape.reaches_out _ σ t)).1
-        rcases hb _ hθ hv hl with ⟨x, hx, hk, hbr⟩ | ⟨u, v, huv, hne, hh⟩
-        · exact (Binding.finders_of_break V T dev θ F c σ t hs hx hk hbr).imp_left
+        rcases hb _ hθ hv hl with ⟨x, hx, hk, hpin, hbr⟩ | ⟨u, v, huv, hne, hh⟩
+        · exact (Binding.finders_of_break V T dev θ F c σ t hx hk hpin hbr).imp_left
             (executionPhaseReadFinder_of V T dev θ F c σ t)
         · exact .inl (executionPhaseReadFinder_of V T dev θ F c σ t (Binding.finder_of_open V T dev θ F c σ t huv ⟨hne, hh⟩))
     _ ≤ _ := Verity.Game.prCoin_or_le _ _

@@ -361,7 +361,7 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     finder_calls := fun _ _ _ _ _ _ => Nat.zero_le _
     finders := fun _ _ _ _ => []
     premises := fun _ _ _ _ _ => True
-    forger := fun _ _ _ _ _ => Verity.Idle.forger
+    forger := fun _ _ _ _ _ _ => Verity.Idle.forger
     forger_calls := fun _ _ _ _ _ _ => Nat.zero_le _
     signatures := (deployment H).signatures
     signs_le := (deployment H).signs_le families

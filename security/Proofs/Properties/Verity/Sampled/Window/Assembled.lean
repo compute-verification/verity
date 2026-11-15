@@ -15,8 +15,8 @@ and each member's files at its registered files (`FilesSent`), and v2 samples at
 session, so they hold at a window as they do at one session:
 
 * **(a), the binding** (`logged_files_le`): at the window's read finder (`executionPhaseReadFinder`) and the forger at the
-  device's history `dev`, wherever the device printed each play's log (`Binding.binds_of_prints`) and its history at
-  each play signed what the play's signatures are on (`Binding.SignsPlay`).
+  device's history `dev`, wherever an accepted play's log v2 read that isn't the device's carries a break under the
+  pinned key or a collision (`Binding.Binds`; `Binding.binds_of_prints` where the device printed each play's log).
 * **(a'), the digest** (`prob_not_sampledDigest_le`): at the bound digests' two-continuation finder at the window's
   budget (`executionPhaseBindFinder`).
 * **The sample's coins** (`ExecutionPhase.srcCoinsAt`, `ExecutionPhase.avg_srcCoinsAt`): the window's bytes as `m` fresh frames' coins,
@@ -84,8 +84,8 @@ binding's cut and the digest's. Soundness's vocabulary at `.sampled` reading, at
 constructions with the binding's finders at the device's history `dev`, the window's projection at the readings `rd`,
 the members' decoders `D` and the sample-coupled coin maps at the family `label`, the strategy's `afterAt` and the
 window's bytes as `nc` frames' coins, with `S` covering the one-stage form, meets SPOT's target at composite `k`
-wherever, at each window of `S`: the device printed each play's log after the parameters (`hP`); its history at each
-play signed what the play's signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); each round's reading
+wherever, at each window of `S`: an accepted play's log v2 read that isn't the device's carries a break or a
+collision (`hB`, `Binding.Binds`; `Device.Deployment.binds` at the deployed device); the window reads `nc` frames' bytes (`hL`); each round's reading
 picks only openings (`hR`); and the members' steps hold off the openings' empty classes at their counts (`hm`,
 `MemberSteps`) at accepted plays whose log v2 read is the device's, whose blobs sent hold each pinned table and each
 member's files at their registered files and whose sample answers the strategy's `afterAt`. -/
@@ -101,8 +101,7 @@ theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
     (I : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       (W.extend (executionPhaseSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω →
         Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
-    (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
+    (hB : ∀ θ F W, S θ F = some W → Binding.Binds V k Binding.readsV2 dev θ)
     (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)
     (hR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) j pre fr, (rd W θ F c).round j pre fr →
       ∃ i s n, fr = .opening i s n)
@@ -112,15 +111,14 @@ theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
           SampledDigest k o.sent (afterAt V k θ F c σ))
         W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
         (executionPhaseSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
-        (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-        (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
+        (fun _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+        (fun _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k :=
   executionPhaseSpotSound_of_sample V k e rd (K.withBinding T dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
     (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o)
     (fun θ F c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) I
     (fun θ F W hW H => ExecutionPhase.avg_srcCoinsAt (hL θ F W hW) H)
-    (fun θ F W hW c σ => logged_files_le V T k dev θ F c σ
-      (Binding.binds_of_prints V k dev θ (hP θ F W hW)) (hS θ F W hW c))
+    (fun θ F W hW c σ => logged_files_le V T k dev θ F c σ (hB θ F W hW))
     (fun θ F W _ c σ => prob_not_sampledDigest_le V k θ F c σ (2 * V.cost θ F c σ + 2 * W.h))
     hR hm
 

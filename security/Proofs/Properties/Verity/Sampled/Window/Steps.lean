@@ -353,7 +353,7 @@ theorem answered_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     {rd : Reading R} (hrd : rd = sessionReading R tb ev record₀ recordDigest) {σ : Strategy (V.game θ F c)}
     {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)} (hi : q.Inv (roundCuts V θ F c rd)) {pre : List Release}
     {f : List Release → Game Exchange} {a : Fin R → Prop}
-    (hf : ∀ log, f log = finish (V.signer θ) θ F c σ.1 (pre ++ log)) (hSO : StopOf rd.round rd.reveal pre f a q)
+    (hf : ∀ log, f log = finish (V.signer θ) (V.devices θ) θ F c σ.1 (pre ++ log)) (hSO : StopOf rd.round rd.reveal pre f a q)
     {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y) (hn : NoMiss V θ F c rd σ z) {s : SubmitJ J}
     (hs : (decodersAt reg fun j : Fin R => slotOf (#[tb] : Array String).size 1026 (j.val % 1026)).sub J q.modes =
       some s)
@@ -361,7 +361,7 @@ theorem answered_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
       ∃ (text : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (proofs : Array ByteArray)
         (sess : Flock.RunRecord) (J' : Json) (w₀ : Claims.Msg),
         SessionSpecAt (CoinTape.run (V.game θ F c) σ z) tb v text spec tabs proofs sess J' w₀) :
-    ∀ o' : OpeningAt (finish (V.signer θ) θ F c σ.1) q.g', o'.n = s.n := by
+    ∀ o' : OpeningAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g', o'.n = s.n := by
   subst hrd
   have hP := executionPhaseReadingAt_picks (R := R) #[tb] 1026 (sessionReveal #[tb] ev) record₀ recordDigest
   have hPS := executionPhaseReadingAt_served (R := R) #[tb] 1026 (sessionReveal #[tb] ev) record₀ recordDigest
@@ -414,18 +414,18 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
     {rd : Reading R} (hrd : rd = sessionReading R tb ev record₀ recordDigest) {σ : Strategy (V.game θ F c)}
     {M : ExecutionPhaseCoinMap (V.game θ F c) σ Ω R}
     (hML : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin R)) mPts (pts : Fin 2 → Fin mPts → 𝔽),
-      M.link i p mPts pts = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (linkBits fieldEnc pts))
+      M.link i p mPts pts = writeOpening (finish (V.signer θ) (V.devices θ) θ F c σ.1) p.s' (linkBits fieldEnc pts))
     (hMR : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin R)) J (s : SubmitJ J) (cs : Fin s.n → 𝔽),
-      M.round i p J s cs = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (roundBits fieldEnc cs))
+      M.round i p J s cs = writeOpening (finish (V.signer θ) (V.devices θ) θ F c σ.1) p.s' (roundBits fieldEnc cs))
     {S : Finset (Fin nJ)} {Rg : ByteArray} {i : ℕ} {m : Member nJ} (t : ℕ)
     {p q r : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg (m.toV5 t)) (memberPts (m.toV5 t))}
     (hmr : MemberReach (fun _ => sessionDecoders reg tb filesDec) M
-      (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1)) S Rg i (m.toV5 t) p q out)
+      (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (fun _ => roundEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) S Rg i (m.toV5 t) p q out)
     (hqr : q.Past r) (hpi : p.Inv (roundCuts V θ F c rd)) (hn : NoMiss V θ F c rd σ r.tape)
     {pre : List Release} {f : List Release → Game Exchange} {a : Fin R → Prop} {done : List (List Release)}
-    (hf : ∀ log, f log = finish (V.signer θ) θ F c σ.1 (pre ++ log))
+    (hf : ∀ log, f log = finish (V.signer θ) (V.devices θ) θ F c σ.1 (pre ++ log))
     (hSO : StopOf rd.round rd.reveal pre f a p.toStop)
     (hW : Walked rd.round (CoinTape.run (V.game θ F c) σ r.tape).log pre a done) {u : ℕ}
     (hDn : SessDone rd.round (fun j => j.val / 1026) (CoinTape.run (V.game θ F c) σ r.tape).log done u)
@@ -443,7 +443,7 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
     (hev : ev u (CoinTape.run (V.game θ F c) σ r.tape) = some w) (hfd : filesDec w = proofs)
     (hmP : spec.mPts = memberPts (m.toV5 t)) :
     (∃ (pre'' : List Release) (f'' : List Release → Game Exchange) (a'' : Fin R → Prop)
-        (done'' : List (List Release)), (∀ log, f'' log = finish (V.signer θ) θ F c σ.1 (pre'' ++ log)) ∧
+        (done'' : List (List Release)), (∀ log, f'' log = finish (V.signer θ) (V.devices θ) θ F c σ.1 (pre'' ++ log)) ∧
         StopOf rd.round rd.reveal pre'' f'' a'' q.toStop.consume.toStop ∧
         Walked rd.round (CoinTape.run (V.game θ F c) σ r.tape).log pre'' a'' done'' ∧
         SessDone rd.round (fun j => j.val / 1026) (CoinTape.run (V.game θ F c) σ r.tape).log done'' (u + 1)) ∧
@@ -467,8 +467,8 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
   -- the trace is off the empty classes
   obtain ⟨hK, hcntL⟩ := link_stop hP hPS hpi' hf hSO hzp hW hSP hDn hul hA.read hA.decode hA.points
   have hmr' : MemberReach (fun _ => sessionDecoders reg tb filesDec) M
-      (fun _ _ => linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) S Rg i (m.toV5 t) p q out := by
+      (fun _ _ => linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (fun _ => roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) S Rg i (m.toV5 t) p q out := by
     refine hmr.weaken (fun q' => q'.Inv (roundCuts V θ F c (sessionReading R tb ev record₀ recordDigest)) ∧
         StopsAt (sessionReading R tb ev record₀ recordDigest).round
           (sessionReading R tb ev record₀ recordDigest).reveal (V.signer θ) θ F c σ.1 q'.toStop)
@@ -714,7 +714,7 @@ def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArr
     (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) (i : ℕ)
     (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) : Prop :=
   ∃ (pre : List Release) (f : List Release → Game Exchange) (a : Fin W.rounds → Prop)
-    (done : List (List Release)), (∀ log, f log = finish (V.signer θ) θ F c σ.1 (pre ++ log)) ∧
+    (done : List (List Release)), (∀ log, f log = finish (V.signer θ) (V.devices θ) θ F c σ.1 (pre ++ log)) ∧
     StopOf rd.round rd.reveal pre f a p.toStop ∧
     Walked rd.round (CoinTape.run (V.game θ F c) σ r.tape).log pre a done ∧
     SessDone rd.round (fun j => j.val / 1026) (CoinTape.run (V.game θ F c) σ r.tape).log done
@@ -735,9 +735,9 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
     (filesDec : Claims.Msg → Array ByteArray) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
     (σ : Strategy (V.game θ F c)) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (hML : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) mPts (pts : Fin 2 → Fin mPts → 𝔽),
-      M.link i p mPts pts = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (linkBits fieldEnc pts))
+      M.link i p mPts pts = writeOpening (finish (V.signer θ) (V.devices θ) θ F c σ.1) p.s' (linkBits fieldEnc pts))
     (hMR : ∀ i (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) J (s : SubmitJ J) (cs : Fin s.n → 𝔽),
-      M.round i p J s cs = writeOpening (finish (V.signer θ) θ F c σ.1) p.s' (roundBits fieldEnc cs))
+      M.round i p J s cs = writeOpening (finish (V.signer θ) (V.devices θ) θ F c σ.1) p.s' (roundBits fieldEnc cs))
     (hMA : MembersAt W tb)
     (hses : ∀ (ω : (W.extend M.widening).L.Ω) (z : CoinTape (V.game θ F c) σ),
       (∃ w, z = (Pos.root (roundCuts V θ F c (sessionReading W.rounds tb ev record₀ recordDigest))
@@ -747,8 +747,8 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
         ExecutionPhaseSessions W tb ev filesDec ((W.extend M.widening).L.draw ω) (CoinTape.run (V.game θ F c) σ z)) :
     MemberSteps V θ F c k P W t (sessionReading W.rounds tb ev record₀ recordDigest) σ
       (fun _ => sessionDecoders reg tb filesDec) M
-      (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
+      (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (fun _ => roundEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (StepInv V θ F c W (sessionReading W.rounds tb ev record₀ recordDigest) σ M) := by
   have hP := executionPhaseReadingAt_picks (R := W.rounds) #[tb] 1026 (sessionReveal #[tb] ev) record₀ recordDigest
   refine memberSteps_of_verdicts V θ F c k P W t _ σ _ M _ _ _ (fun ω r => ?_)

@@ -87,7 +87,7 @@ theorem executionPhaseSessions_of_reach (W : ExecutionPhase) (rd : Reading W.rou
     Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω.1 = true ∧ ExecutionPhaseSessions W tb ev filesDec
       ((W.extend (executionPhaseSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.draw ω) x := by
   rw [executionPhaseFirstStop_sampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc) ω] at hreach
-  obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (V.families θ)) (V.families θ)
+  obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ)
     (V.signer θ) θ F c _ (fun a => releases_bind _ _ _ _) σ (roundCuts V θ F c rd) (roundCuts_heq V θ F c rd) nc
     (W.srcCoinsAt nc ω.1) ω.2 id
   obtain ⟨log', hlog, htail⟩ := hO x hreach
@@ -142,8 +142,8 @@ theorem memberSteps_sampleMap (P : Exchange → Prop) (W : ExecutionPhase) (t : 
       (fun _ => sessionDecoders reg tb filesDec)
       (executionPhaseSampleMap fieldEnc V θ F c W (sessionReading W.rounds tb ev record₀ recordDigest) σ label after
         (W.srcCoinsAt nc))
-      (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
+      (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (fun _ => roundEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (StepInv V θ F c W (sessionReading W.rounds tb ev record₀ recordDigest) σ
         (executionPhaseSampleMap fieldEnc V θ F c W (sessionReading W.rounds tb ev record₀ recordDigest) σ label after
           (W.srcCoinsAt nc))) :=
@@ -170,8 +170,8 @@ omit θ F c in
 the binding's finders at the device's history `dev`, the window's projection at those readings and decoders and the
 sample-coupled coin maps at the family `label`, the strategy's `afterAt` and the window's bytes as `nc` frames'
 coins, with `S` covering the one-stage form, meets SPOT's target at composite `k` wherever, at each window of `S`:
-the device printed each play's log after the parameters (`hP`); its history at each play signed what the play's
-signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); its members each have the one table `tb W`
+an accepted play's log v2 read that isn't the device's carries a break or a collision (`hB`, `Binding.Binds`); the
+window reads `nc` frames' bytes (`hL`); its members each have the one table `tb W`
 with hm96-sha512 rows (`hMA`); and `ExecutionPhaseRead` holds of each play the sampled verdict accepts, whose log v2 read is
 the device's, whose blobs sent hold each pinned table and each member's files at their registered files and whose
 sample answers the strategy's `afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant
@@ -189,8 +189,7 @@ theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (T 
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)
         fun W => W.srcCoinsAt nc)) S)
     (hCov : ExecutionPhaseCovers V k S)
-    (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
+    (hB : ∀ θ F W, S θ F = some W → Binding.Binds V k Binding.readsV2 dev θ)
     (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)
     (hMA : ∀ θ F W, S θ F = some W → MembersAt W (tb W))
     (hWR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c))
@@ -206,7 +205,7 @@ theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (T 
     (fun W θ F c σ => StepInv V θ F c W (sessionReadings tb ev record₀ recordDigest W θ F c) σ
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)
         (fun W => W.srcCoinsAt nc) W θ F c σ))
-    hP hS hL
+    hB hL
     (fun θ F W _ c =>
       executionPhaseReadingAt_picks #[tb W] 1026 (sessionReveal #[tb W] ev) (record₀ W θ F c) (recordDigest W θ F c))
     (fun θ F W hW c σ =>

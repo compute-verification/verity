@@ -248,9 +248,8 @@ noncomputable def placeK {β : Type} (L : Locate) {K : ℕ} (r : Fin K → Flock
 /-- **The period's game in the releases' continuation form**: the prover's request, then `relK` (`releases_bind`). -/
 theorem game_eq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     V.game θ F c = .send ByteArray fun a =>
-      relK (frames (V.families θ)) (V.families θ) [] (finish (V.signer θ) θ F c a) := by
-  show play (V.families θ) (V.signer θ) θ F c = _
-  unfold play
+      relK (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) [] (finish (V.signer θ) (V.devices θ) θ F c a) := by
+  show Game.send ByteArray _ = _
   congr 1
   funext a
   exact releases_bind _ _ _ _
@@ -272,7 +271,7 @@ noncomputable def place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) 
     (σ : Strategy (V.game θ F c)) (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) :
     Tape (V.game θ F c) σ → Tape (V.game θ F c) σ :=
   along (game_eq V θ F c)
-    (fun s t => placeK L r (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2 t) σ
+    (fun s t => placeK L r (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) [] [] (finish (V.signer θ) (V.devices θ) θ F c s.1) s.2 t) σ
 
 /-- **The frame at the locator `L`**: the coin map `place`, and a prover `P` the strategy is read as. -/
 noncomputable def frame (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -409,7 +408,7 @@ strategy's request. -/
 noncomputable def gapOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (L : Locate) (K : ℕ) : ℝ≥0∞ :=
   alongVal (game_eq V θ F c)
-    (fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2) σ
+    (fun s => gapK L K (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) [] [] (finish (V.signer θ) (V.devices θ) θ F c s.1) s.2) σ
 
 /-! ## The sampling design -/
 

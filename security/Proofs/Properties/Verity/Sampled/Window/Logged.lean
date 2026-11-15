@@ -183,9 +183,9 @@ and what the device releases, with every round live, where each round's reading 
 (`stopOf_firstStop`, at any readings and tape). -/
 theorem stopOf_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) :
-    StopOf rd.round rd.reveal [] (finish (V.signer θ) θ F c σ.1) (fun _ => True)
+    StopOf rd.round rd.reveal [] (finish (V.signer θ) (V.devices θ) θ F c σ.1) (fun _ => True)
       (Pos.root (roundCuts V θ F c rd) x).toStop := by
-  have h := walk_send_cast (rv := rd.reveal) (f := finish (V.signer θ) θ F c) (a := fun _ => True) hP
+  have h := walk_send_cast (rv := rd.reveal) (f := finish (V.signer θ) (V.devices θ) θ F c) (a := fun _ => True) hP
     (game_eq_relK V θ F c).symm σ (roundCuts V θ F c rd) x id fun _ => Or.inl ⟨trivial, rfl⟩
   have e : (cast (congrArg Strategy (game_eq_relK V θ F c)) σ).1 = σ.1 := cast_send_fst (game_eq_relK V θ F c) σ
   rw [e] at h

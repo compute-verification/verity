@@ -233,21 +233,21 @@ theorem executionPhaseSampleMap_couples_at (W : ExecutionPhase) (t : ℕ) (rd : 
     (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     ExecutionPhaseCouplesWithin V θ F c W t rd σ D (executionPhaseSampleMap e V θ F c W rd σ label after κ)
-      (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1))
+      (fun _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (fun _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (executionPhaseErr V θ F c W t rd σ D (executionPhaseSampleMap e V θ F c W rd σ label after κ)
-        (fun _ q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
+        (fun _ q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+          openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
         (fun _ mPts q =>
-          openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
-            openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' (mPts + mPts)
+          openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
+            openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (mPts + mPts)
               (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool))) := by
   have h := executionPhaseCouples_of_close V θ F c W t rd σ D _
-    (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-    (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1))
-    (executionPhaseOpenMap_roundClose e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+    (fun _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (fun _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (executionPhaseOpenMap_roundClose e (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
       (sampleStart V θ F c rd σ label after κ))
-    (executionPhaseOpenMap_linkClose e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+    (executionPhaseOpenMap_linkClose e (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
       (sampleStart V θ F c rd σ label after κ))
     (executionPhaseSampleMap_fresh e V θ F c W rd σ label after κ) (executionPhaseSampleMap_start e V θ F c W rd σ label after κ hκ)
   rwa [zero_add] at h
@@ -261,14 +261,14 @@ theorem executionPhaseErr_sampleMap_le_at (W : ExecutionPhase) (t : ℕ) (rd : R
     (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     executionPhaseErr V θ F c W t rd σ D (executionPhaseSampleMap e V θ F c W rd σ label after κ)
-      (fun _ q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun _ q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
       (fun _ mPts q =>
-        openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
-          openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' (mPts + mPts)
+        openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
+          openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (mPts + mPts)
             (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool)) ≤
       W.hidingTerm :=
-  executionPhaseErr_le_of_charge V θ F c W t rd σ D _ (openErr e (finish (V.signer θ) θ F c σ.1))
+  executionPhaseErr_le_of_charge V θ F c W t rd σ D _ (openErr e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
     (fun _ => openErr_none e openingOf_ret) (executionPhaseSampleMap_fresh e V θ F c W rd σ label after κ)
     (avg_executionPhaseSampleMap_start e V θ F c W rd σ label after κ hκ)
     (fun _ _ _ _ s _ => openGap_add_openEmptyAt_le_openErr e s.n)
@@ -299,12 +299,12 @@ theorem executionPhaseCouplingTarget_of_sample_at (rd : ExecutionPhaseReadings) 
       prob (fun o => V.Verdict k .sampled o ∧ ¬ Q c σ o) (V.game θ F c) σ ≤
         ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)))
     (hD : ∀ c σ, ExecutionPhaseDecodes V θ F c k (fun o => P o ∧ Q c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-      (executionPhaseSampleMaps e V rd label after κ W θ F c σ) (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-      (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1))) :
+      (executionPhaseSampleMaps e V rd label after κ W θ F c σ) (fun _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (fun _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))) :
     ExecutionPhaseCouplingTarget V k (K.withProject V rd D (executionPhaseSampleMaps e V rd label after κ)) W θ F :=
   executionPhaseCouplingTarget_of_logged V k rd K D (executionPhaseSampleMaps e V rd label after κ) W P θ F Q
-    (fun c σ _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-    (fun c σ _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) ha hq
+    (fun c σ _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (fun c σ _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) ha hq
     (fun c σ => executionPhaseCouples_of_within V θ F c (executionPhaseSampleMap_couples_at e V θ F c W (V.cost θ F c σ)
       (rd W θ F c) σ (D W θ F c σ) (label θ F c σ) (after θ F c σ) (κ W) hκ)
       (executionPhaseErr_sampleMap_le_at e V θ F c W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ) (label θ F c σ)

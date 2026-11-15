@@ -59,8 +59,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 theorem play_params (V : Vocab d α) {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy (V.game θ F c)} {o : Verity.Exchange}
     (h : Verity.Game.PlayReaches (V.game θ F c) σ o) : o.params = θ := by
-  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
-    (releases (frames (V.families θ)) (V.families θ) []) σ.2 h
+  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) (V.devices θ) θ F c σ.1)
+    (releases (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) []) σ.2 h
   exact (Verity.Sampled.reaches_finish ⟨s, h⟩).1
 
 /-- **The coins the check read agree with the run's**: on the play `o`, at each round the run's verifier reads, the

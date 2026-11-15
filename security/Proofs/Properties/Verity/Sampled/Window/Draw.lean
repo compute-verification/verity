@@ -705,7 +705,7 @@ after `σ`'s request (`executionPhaseOpenMap`). -/
 noncomputable def executionPhaseSampleMap (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool) :
     ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds :=
-  executionPhaseOpenMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+  executionPhaseOpenMap e (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
     (sampleStart V θ F c rd σ label after κ)
 
 /-- The window's projection's first stop is the walk from the start's tape to the first stop. -/

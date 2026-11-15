@@ -771,8 +771,8 @@ theorem distribution_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArra
     DistributionHolds (R := Fin K → FlockDeploy.Coin) (V.game θ F c) σ (fun r t => place V θ F c σ L r t)
       (gapOf V θ F c σ L K) :=
   distribution_along (game_eq V θ F c)
-    (Pl := fun r s t => placeK L r (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2 t)
-    (G := fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2)
+    (Pl := fun r s t => placeK L r (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) [] [] (finish (V.signer θ) (V.devices θ) θ F c s.1) s.2 t)
+    (G := fun s => gapK L K (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) [] [] (finish (V.signer θ) (V.devices θ) θ F c s.1) s.2)
     (fun s => by
       rcases s with ⟨m, s'⟩
       refine distribution_send _ _ _ ?_

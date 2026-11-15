@@ -164,8 +164,8 @@ theorem executionPhaseSpotSound_of_sample (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
       ∃ i s n, fr = .opening i s n)
     (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       MemberSteps V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-        (executionPhaseSampleMaps e V rd label after κ W θ F c σ) (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-        (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
+        (executionPhaseSampleMaps e V rd label after κ W θ F c σ) (fun _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+        (fun _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k :=
   spotSound_of_executionPhase V k hD hCov fun θ F W hW =>
     executionPhaseCouplingTarget_of_sample_at e V k rd K D label after κ W P θ F (Q θ F) (hκ θ F W hW) (ha θ F W hW)
@@ -174,8 +174,8 @@ theorem executionPhaseSpotSound_of_sample (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
           (D W θ F c σ) (executionPhaseSampleMaps e V rd label after κ W θ F c σ) _ _ _
           (memberDecodes_of_stops V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ
             (D W θ F c σ) (executionPhaseSampleMaps e V rd label after κ W θ F c σ)
-            (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-            (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ) (hR θ F W hW c)
+            (fun _ _ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+            (fun _ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (I W θ F c σ) (hR θ F W hW c)
             (hm θ F W hW c σ))
 
 end Verity.Sampled
