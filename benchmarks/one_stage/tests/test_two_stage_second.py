@@ -6,7 +6,9 @@ files and the capture (`two_stage.replayed`): the interior committed, its return
 salts, written as the one-stage audit reads a window, registered on the class's stream and sampled. Then what the
 verifier's half hands the one-stage audit and round 2 (`two_stage.prove`'s inputs: the verifier's reads, the params, the
 sessions' statements), held to round 2's check without the sessions, which run on a node (``two_stage_small.sh``): the
-public files the served path writes are the ones a5 stages, and a stand-in names them as a verdict of record does."""
+public files the served path writes are the ones a5 stages, and a stand-in names them as a verdict of record does.
+One class is no token select's: a check of two wired templates, inlined at two outputs a span, whose reader is wired
+to a writer of two units a block, which `two_stage.replayed` commits by the replay block's rows."""
 
 from __future__ import annotations
 
@@ -18,13 +20,16 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.circuits.codec import canonical_json
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
 from verity.commitments.windows import flock_inputs as FI, links as LK, rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
-from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
+from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, serving_rows as SRW
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -56,7 +61,8 @@ def run(served) -> dict:
     """The first stage under the class's own rule (`two_stage.rule_of`), ``stage1.json`` read again, and the replay
     side's half (`two_stage.replayed`)."""
     check, tmp = served["check"], served["tmp"]
-    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
+                   FC.Challenger("first", label=TS.family_of(served["class"].layout)))
     stage1 = json.loads(json.dumps(got.stage1()))
     again = TS.resume(stage1, check, FC.Challenger("second"))
     r = TS.replayed(again, served["class"], served["capture"], tmp / "interior")
@@ -111,6 +117,66 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
     rule = TS.rule_of(_layout(), f"rate:{Q}/{N}", K)
     assert rule.span_values == (("logits", O, (V, 16)),)
     assert [n for n, _s in rule.interior] == [f"{TID}/logits", f"{TID}/o0"]
+
+
+def _words(bits: np.ndarray) -> np.ndarray:
+    """Rows of bits as rows of u16 words, each word's low bit first."""
+    return np.packbits(np.asarray(bits, dtype=np.uint8), axis=1, bitorder="little").view("<u2")
+
+
+def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_replay_blocks_rows(tmp_path, monkeypatch):
+    """A check whose body is two templates, the second reading the first's output (a mask block of the long row's cut
+    and its positions, at small statics: registered templates, which an interior window lays out by id), inlined at
+    two outputs a span: its replay block holds two units of each, so the reader's wire is to a writer of two units a
+    block, and only the block's rows (`second_stage.replay_rows`) say which each reader unit reads, its own
+    instance's. `replayed` commits the sampled spans' units under the design's wires and rows: the interior's window
+    is the design's, each reader unit held to its instance's writer, the block's four parameters registered as values,
+    and K proof blocks of each template sampled in every sampled span. Without the rows the interior refuses the wire
+    by name. The spans stand in for a capture (`spans_of`), which reads a token select's alone: each unit's rows are
+    random bits and its outputs its Definition's on them."""
+    o = 2
+    mask, positions = (SRW.template(t).fn for t in ("DsaTopKMaskBlock_v2{N=4,AT=0,TOPK=2}", "DsaMaskPositions_v2{N=4,AT=0,K=2}"))
+    check = bind(CompositeDefinition("TwoStageSecondTestCut", 0, (),
+                                     lambda S_: (mask.signature()[0], positions.signature()[1].fields[1]),
+                                     lambda B, S_, *a: B.call(positions, B.call(mask, *a))[1], register=False))
+    ids = [BR.descriptor_id(t) for t in (mask, positions)]
+    layout = BR.Layout(check, 0, 1, 4, o, N, BR.run_root("test-serve", 0), True)
+    c = BR.commit([BR.Span(f"r{i}", SM.PROMPT, {**SM.GREEDY, "max_tokens": o}, (7, i), "length") for i in range(N)], layout, 0)
+    d = TS.design(layout)
+    assert d.cells == (o, o) and [(w.template, w.port, w.writer, w.wport) for w in d.wires] == [(ids[1], "mask", ids[0], "o0")]
+    assert d.rows == tuple(SS.replay_rows(layout.program, d.key))
+    assert [(x.per, x.runs) for x in d.rows if (x.template, x.port) == (ids[1], "mask")] == [(o, (SS.Run(0, o, 0, 1),))]
+    first = TS.first(c.public(), check, TS.rule_of(layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(layout)))
+    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    sample = [int(u) for u in again.sample.units]
+
+    def units(u: int) -> tuple[IR.Span, ...]:
+        rng = np.random.default_rng(u)
+        ins = [rng.integers(0, 2, (o, ty.leaves), dtype=np.uint8) for _p, ty in mask.signature()[0]]
+        m = np.asarray(BS.evaluate_bits(mask, *ins)).reshape(o, -1)
+        p = np.asarray(BS.evaluate_bits(positions, m)).reshape(o, -1)
+        cut = np.cumsum([0, *(f.leaves for f in positions.signature()[1].fields)])
+        rid, out = c.spans[u].engine_id, []
+        for t, rows, outs in ((ids[0], ins, [m]), (ids[1], [m], [p[:, a:b] for a, b in zip(cut, cut[1:], strict=False)])):
+            member = IR.member(t, o)
+            data = {"rows": {port: _words(x) for (port, _w), x in zip(member.rows, rows, strict=True)},
+                    "outs": {port: _words(x) for (port, _w), x in zip(member.outs, outs, strict=True)}}
+            out.append(IR.Span(rid, member, data, [[i, i + 1, rid, i] for i in range(o)], layout.partition["program"]))
+        return tuple(out)
+
+    monkeypatch.setattr(TS, "spans_of", lambda c, capture, sample, rids=None: ([units(int(u)) for u in sample], {}))
+    r = TS.replayed(again, c, tmp_path / "capture", tmp_path / "interior")
+    assert (r.design.wires, r.design.rows) == (d.wires, d.rows)
+    assert CS.expected_ports(r.design.window(again.registration.digest, sample)) == r.interior.ports
+    w = r.interior.committed.window
+    assert [(m.template, m.n) for m in w.members] == [(t, Q * o) for t in ids]
+    assert w.held_leaves(w.members[1], "mask") == tuple(range(Q * o))
+    assert [e["value"] for e in r.record["registered"]] == ["scores", "n", "key", "r"]
+    assert sorted(u // o for u in r.draw.units) == list(range(2 * Q))
+    with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
+        IR.interior([units(u) for u in sample], d.cells, again.registration.digest, sample, row=again.pub["window"],
+                    links=d.links, wires=d.wires)
 
 
 def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_sampled(run):
@@ -185,7 +251,7 @@ def test_a_serve_under_another_nonce_commits_under_another_run(tmp_path, served)
     assert pub["run"] == BR.run_root("another", 0) != served["pub"]["run"] == BR.run_root(SM.SERVE, 0)
 
 
-def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows(run):
+def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_for_the_logits_the_prover_registers(run):
     """What `two_stage.prove` hands over, held to round 2 (`two_stage.round_two`, the form allowed): the verifier's
     window (`Design.window`, public items alone) is the one the interior was committed under; the verifier's reads
     (`verifier_reads`) put the ``logits`` port at the value the interior registers, each unit at its own row, and the
@@ -193,9 +259,12 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows(run):
     the i-th sampled block at row ``sample[i]·O + j``; the development params (`references`) name the circuit the
     sessions' public files name and the same two values; and the public files the served path writes for the written
     window (`flock_input_files`, as a5 stages the sessions), each named by a stand-in verdict of record, pass every
-    check of round 2. With the return read at the interior's own port instead, as a record of round 1 without the
-    port leaves it, round 2 refuses that read (``second-read``), which is not the params' either (``second-values``).
-    Slow (about 15 s): it lowers the template for the references and the sessions' files."""
+    check of round 2 but one. ``second-inputs``: the ``logits`` the token select reads are a value the prover registers
+    after the first stage's sample, which no record of round 1 commits and the verifier doesn't fill, so the block's
+    audit is not one of the model's. Were ``logits`` a value the verifier filled round 2 would accept: the code stops
+    no other check, the return's read among them. With the return read at the interior's own port instead, as a record
+    of round 1 without the port leaves it, round 2 refuses that read too (``second-read``), which is not the params'
+    either (``second-values``). Slow (about 15 s): it lowers the template for the references and the sessions' files."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     mine, w = d.window(again.registration.digest, sample), r.interior.committed.window
@@ -230,17 +299,63 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows(run):
     parts = SS.parts(Q, P.strata(mine.program, mine.query))
     assert TS.pins(proofs, stmts) == {TID: True}
     layout = again.layout
-    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs)
-    assert got == {"ok": True, "codes": [], "detail": {}}
+    assert r.tie.get("supplied") is None and "pinned" not in r.tie and "outputs" not in r.tie
+    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                       r.tie)
+    inputs = {"value": "logits", "why": SS.INPUTS_WHY}
+    assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED], "detail": {TS.INPUTS_REFUSED: inputs}}
     assert [(x.port, x.value) for x in SS.replay_links(layout.program, d.key, brec)] == [("logits", "logits"), ("o0", "o0")]
     assert parts[0].n == O
+    filled = {**r.tie, "supplied": {"logits": [[{"bytes": "00000000"}]]}}
+    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                       filled)
+    assert got == {"ok": True, "codes": [], "detail": {}}
 
     own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
     assert own[key]["ports"]["o0"]["value"] == f"{TID}/o0" and own[key]["ports"]["o0"]["reads"] == list(range(Q * O))
     stmts, verdicts = _handed(tmp / "interior", tmp / "served-own", mine, own, drawn)
-    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs)
-    assert (got["ok"], got["codes"]) == (False, ["second-read", "second-values"])
+    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                       r.tie)
+    assert (got["ok"], got["codes"]) == (False, [TS.INPUTS_REFUSED, "second-read", "second-values"])
     assert got["detail"]["second-read"] == {"statement": 0, "template": TID}
+
+
+def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held():
+    """`two_stage.held` on a run's summary: a second stage whose every check passed and whose outcome round 2 refuses
+    by its form alone held; the same run with ``second-inputs`` among round 2's codes, or among the outcome's, did
+    not, whatever else it reports."""
+    s = {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
+         "audit": {"complete": True, "registered_reads": True, "verdicts": {"m0": True}}}
+    files, r2 = {TID: True}, {"ok": True, "codes": []}
+    o = {"accepted": False, "interior": ["statements"], "statements": [TS.FORM_REFUSED], "replay_sample": []}
+    assert TS.held(s, r2, o, files)
+    assert not TS.held(s, {"ok": False, "codes": [TS.INPUTS_REFUSED]}, o, files)
+    assert not TS.held(s, r2, {**o, "statements": [TS.INPUTS_REFUSED]}, files)
+    assert not TS.held(s, {"ok": True, "codes": [TS.INPUTS_REFUSED]}, {**o, "accepted": True, "statements": []}, files)
+
+
+
+def test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_an_unlinked_one():
+    """`two_stage_small.expect`: a linked run whose interior registers the block's inputs is refused by round 2 with
+    ``second-inputs`` alone, its return read at round 1's rows, and not with a read's refusal beside it, with no code or
+    with the form's; a linked run whose record of round 1 commits them is accepted by round 2 with no code and refused
+    by the form alone, and not by ``second-inputs``; an unlinked run links no parameter, registers no value, and is
+    refused by its wires alone."""
+    def summary(codes: list[str], statements: list[str] | None = None) -> dict:
+        return {"audit": {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
+                          "audit": {"verdicts": {"m0": True}}},
+                "pins": {TID: True}, "round_two": {"ok": not codes, "codes": codes},
+                "outcome": {"accepted": False, "interior": ["statements"], "replay_sample": [],
+                            "statements": codes if statements is None else statements}}
+    passed = {"before_draw": True, "pins": True, "lean_verdicts": True, "negatives": True}
+    assert all(SM.expect(summary([SM.INPUTS]), SM.INPUTS).values())
+    for codes in ([], ["second-read"], [SM.INPUTS, "second-read"], [TS.FORM_REFUSED]):
+        assert SM.expect(summary(codes), SM.INPUTS) == {**passed, "round_two": False, "outcome": False}
+    assert all(SM.expect(summary([], [SM.FORM])).values())
+    assert SM.expect(summary([SM.INPUTS])) == {**passed, "round_two": False, "outcome": False}
+    assert SM.expect(summary([], [SM.INPUTS])) == {**passed, "round_two": True, "outcome": False}
+    assert all(SM.expect(summary([SM.UNWIRED]), SM.UNWIRED).values())
+    assert not SM.expect(summary([SM.INPUTS, SM.UNWIRED]), SM.UNWIRED)["round_two"]
 
 
 @pytest.mark.slow
@@ -254,7 +369,8 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     v = 4096
     got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
-    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")

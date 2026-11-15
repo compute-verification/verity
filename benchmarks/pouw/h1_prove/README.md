@@ -12,7 +12,7 @@ selects, read from that window's run.
 
 `run.sh JOB [ARGS...]` starts one job's script with the arguments and environment as given; run it from the source tree,
 as a `research run`'s command (or, for PoUW's piece of a served window, `benchmarks/one_stage/served_verdicts.sh`'s).
-Each script's header has its full command, its knobs (`H1_*`) and what it writes.
+Each script's header has its full command, its knobs (`H1_*`, `DC_*`) and what it writes.
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --mem-gb G --declared-output 'out/*' \
@@ -29,6 +29,12 @@ One more job has no row, because its name is a term the Glossary retires; `run.s
 is PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's units staged on the
 window's registered values, a session a statement, the statements file checked as credit does, then
 `served_verdicts.py pouw`. It writes `PIECE_DIR/` (the statements file, a directory of logs a session).
+
+One more job has no row for the same reason: its name is that job's with `_cost` after it. It is what the ZK server
+adds to that job's sessions: on its test's served window, once under the ZK server and once on the `--zk` path without
+it, each arm stages, proves and has credit check the window's sampled calls. It writes `out/summary.json` (each arm's
+sessions: the job cgroup's CPU seconds over each, both sides' timing records, the live verdicts, credit's line, and the
+peak RSS summed over the ZK server's processes) and each arm's log and piece directory under `out/`.
 
 `recorded.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), and `run.sh` never starts it.
 

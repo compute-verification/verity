@@ -3,24 +3,40 @@
 # can't cover, so this map's commit is generated and reviewed, not certified: run it after those two.
 #
 # The tokens, by kind:
-# - constants and environment variables (`WARDEN`, `WARDEN_REQUESTS`, `CR_WARDEN_RUN`, `A5_WARDEN_UNITS`): `WARDEN` as
-#   one part of the name becomes `NETWORK_CERTIFIER`. Each name has its own row, and the name `WARDEN` one row for each
-#   form it is written in (`corpus.WARDEN`, `WARDEN =`, a script's `$WARDEN`), since the word alone is
-#   `warden_map.toml`'s and no row here is keyed on it;
-# - flags and what argparse makes of them (`--warden-run` and `a.warden_run`, `--warden` and `a.warden`);
+# - constants (`WARDEN`, `WARDEN_REQUESTS`, `WARDEN_SEED`): `WARDEN` as one part of the name becomes
+#   `NETWORK_CERTIFIER`. Each name has its own row, and the name `WARDEN` one row for each form it is written in
+#   (`corpus.WARDEN`, `WARDEN =`, a script's `$WARDEN`), since the word alone is `warden_map.toml`'s and no row here is
+#   keyed on it;
 # - hyphenated names of tools, threads and scratch directories (`warden-serve`, `warden-zk`, `warden-publisher`);
 # - plurals in identifiers (`wardens`, a test's `..._the_wardens_...`);
-# - sentences in string literals (a message, a help text, a log line), which say "network certifier" as prose does.
+# - sentences in string literals (a message, a help text, a log line), which say "network certifier" as prose does;
+# - the attributes the kept flags' declarations name (`dest=`: `a.network_certifier_run`, `a.network_certifier`), and a
+#   function and a parameter of that name;
+# - names that programs only write, which nothing reads back by name: a kept run's file names, a record's keys, a
+#   negative's name, a dictionary's keys and a test's own values, each with its row below;
+# - the word alone in quotes where programs only write it: the process label the serve program gives the stall
+#   probe, the key of two programs' summaries, and the directory `scan_zk.py` and `egress_zk.py` make under `--out`;
+#   and one path's segment, the scratch directory `scan_zk.sh` rehearses into, which no later run reads.
+#   No row can take these, since the same quoted word is a link window's kind, the gate's device value, a kept
+#   trace's key and a class, and the same segment is a kept run's directory, which [keep] holds: they are renamed
+#   by hand in the change that runs this map. A run kept from before it holds the older label, key or directory
+#   name.
 #
-# Kept bytes ([keep]), each a name something outside a commit's reach holds; `warden_map.toml`'s header says what to
-# regenerate to rename one:
-# - domain tags, format ids and circuit names; the word as a whole value, a path's segment or a class;
-# - a record's keys and a kept run's file names (`"warden_run"`, `warden_check`, `warden.json`,
-#   `warden-registration.json`) and the negatives' names;
-# - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them;
+# Kept bytes ([keep]), each a name that something a program must agree with holds: a file or a key a program in the
+# tree reads back from a kept run, a caller's launch line, a signed value, or bytes a digest takes in.
+# `warden_map.toml`'s header says what to regenerate to rename one:
+# - domain tags, format ids, circuit names and the names staged into a circuit; the word as a whole value, a path's
+#   segment or a class;
+# - a report's key and a kept run's file that a program reads back (`"warden_run"`, quoted; `warden.json`);
+# - the gate's verb `warden-rehearse`, which the deployed gate serves, and `warden-fails`, the link name of a window's
+#   fails certificate (`<link>-fails`), which signed certificates hold;
 # - the trace corpus's labels (`warden-heavy`, `warden-smallkv`);
-# - a message code makes from a kept value (`f"{label} thread"`, `f"device {device}"`), which a test spells whole: no
-#   phrase below rewords "warden thread", "warden ticker" or "device warden".
+# - a message code makes from a kept value (`f"device {device}"`, `f"on the {path} path"`): no phrase below rewords
+#   one, and a test builds its text from the value;
+# - the names a caller outside the tree sets, in a launch line or a settings file: the environment variables
+#   `A5_WARDEN_RUN`, `CR_WARDEN_RUN`, `N2_WARDEN_RUN`, `SC_WARDEN_RUN`, `A5_WARDEN_UNITS` and
+#   `WARDEN_SERVE_C_ALLOCATOR`, and the flags `--warden-run` and `--warden`. A map of their own renames them with
+#   their callers.
 #
 # Not this concept, and left as they are: as `warden_map.toml` has them.
 
@@ -90,21 +106,39 @@ files = ["*"]
 "kept warden" = "kept network certifier"
 "▶ warden" = "▶ network certifier"
 "| warden " = "| network certifier "
+# --- names that programs only write. A run kept from before this move holds the older file name, key or negative's
+# name (`warden-registration.json`, `warden-registration-<side>-<w>.json`, `"warden_check"`, `"warden_cost"`,
+# `"warden_costs"`, `"warden_cores_busy"`, `"warden_cpu_s"`, `"warden_invol"`, the two negatives' names below): no
+# program reads one back by that name. The keys are among [words]
+"warden-registration" = "network-certifier-registration"
+"prover-root-under-the-wardens-certificate" = "prover-root-under-the-network-certifiers-certificate"
+"window-naming-another-warden-root" = "window-naming-another-network-certifier-root"
+# --- a test's own values
+"g1/warden" = "g1/network_certifier"
+"not-the-wardens" = "not-the-network-certifiers"
 "warden-" = "network-certifier-"
 "-warden" = "-network-certifier"
 
 [words]
 "wardens" = "network_certifiers"
+# --- the attributes the flags' declarations name, `scan_zk`'s function and `scan_step`'s parameter; the quoted key
+# `"warden_run"` is kept
 "warden_run" = "network_certifier_run"
 "a.warden" = "a.network_certifier"
-# --- the constants and environment variables, each whole
-"A5_WARDEN_RUN" = "A5_NETWORK_CERTIFIER_RUN"
-"A5_WARDEN_UNITS" = "A5_NETWORK_CERTIFIER_UNITS"
-"CR_WARDEN_RUN" = "CR_NETWORK_CERTIFIER_RUN"
-"N2_WARDEN_RUN" = "N2_NETWORK_CERTIFIER_RUN"
+# --- a dictionary's keys, and the record's keys that programs only write ([[words_in]]'s note)
+"warden_certificates" = "network_certifier_certificates"
+"warden_endpoint_served" = "network_certifier_endpoint_served"
+"warden_endpoint" = "network_certifier_endpoint"
+"warden_check" = "network_certifier_check"
+"warden_costs" = "network_certifier_costs"
+"warden_cost" = "network_certifier_cost"
+"warden_cores_busy" = "network_certifier_cores_busy"
+"warden_cpu_s" = "network_certifier_cpu_s"
+"warden_invol" = "network_certifier_invol"
+# --- the constants, each whole
 "PUBLIC_WARDEN" = "PUBLIC_NETWORK_CERTIFIER"
-"SC_WARDEN_RUN" = "SC_NETWORK_CERTIFIER_RUN"
 "WARDEN_COUNTS" = "NETWORK_CERTIFIER_COUNTS"
+"WARDEN_DEFAULTS" = "NETWORK_CERTIFIER_DEFAULTS"
 "WARDEN_DIGEST" = "NETWORK_CERTIFIER_DIGEST"
 "WARDEN_END_S" = "NETWORK_CERTIFIER_END_S"
 "WARDEN_FILES" = "NETWORK_CERTIFIER_FILES"
@@ -123,7 +157,6 @@ files = ["*"]
 "WARDEN_SCHEDULE" = "NETWORK_CERTIFIER_SCHEDULE"
 "WARDEN_SEED" = "NETWORK_CERTIFIER_SEED"
 "WARDEN_SERVED_STUBBED" = "NETWORK_CERTIFIER_SERVED_STUBBED"
-"WARDEN_SERVE_C_ALLOCATOR" = "NETWORK_CERTIFIER_SERVE_C_ALLOCATOR"
 "WARDEN_STUBBED" = "NETWORK_CERTIFIER_STUBBED"
 "WARDEN_TAIL_S" = "NETWORK_CERTIFIER_TAIL_S"
 "WARDEN_TOKENS" = "NETWORK_CERTIFIER_TOKENS"
@@ -155,7 +188,7 @@ patterns = [
     '"warden"',                                       # the word as a whole value
     """'warden'(?![a-z])""",
     '''["']warden:''',
-    '(?<!certifier/)(?<=/)warden(?![\w-]|\.\w)',      # ... as a path's segment
+    '(?<!certifier/)(?<!"g1/)(?<=/)warden(?![\w-]|\.\w)',   # ... as a path's segment, a test's own value apart
     '(?<![\w./-])warden/(?=[\w$<{*])',
     'CR_PATH(?::-\}")?(?: = |=)warden',               # ... as a command's value, which reaches a quoted one
     '--class (?:test\|served\|)?warden',
@@ -163,9 +196,12 @@ patterns = [
     'negatives\.py warden',
     'client or warden',
     'served or warden\)',
-    '''["'/]warden_(?:run(?!": None\}\)\))|check|endpoint|endpoint_served|certificates|cores|cores_busy|cpu_s|invol|cost|costs)["'/]''',
+    '''["']warden_run["'](?!: None\}\)\))''',        # a report's key, quoted; a namespace's field written as one apart
     'warden\.json\b',
-    'warden-(?:registration|rehearse|fails|heavy|smallkv)',
+    'warden-(?:rehearse|fails|heavy|smallkv)',
+    '(?<![A-Z0-9])(?:A5|CR|N2|SC)_WARDEN_RUN(?![A-Z0-9_])',   # a variable a caller outside the tree sets, which the
+                                                      # row for `WARDEN_RUN` would reach
+    '--warden(?:-run)?(?![\w-])',                            # ... and a flag such a caller passes
     '(?m)^\| "warden", "network warden".*$',          # the Glossary's row of older names
 ]
 strings = [
@@ -173,9 +209,6 @@ strings = [
     "unit/warden-row",
     "unit/a5-warden",
     "a5-warden/rest/",
-    "prover-root-under-the-wardens-certificate",
-    "not-the-wardens",
-    "window-naming-another-warden-root",
     "functions as an active warden",
     "an *active warden*",
     "a passive warden",

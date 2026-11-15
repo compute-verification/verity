@@ -10,6 +10,7 @@ import pytest
 
 from research import remote
 from research import runs as R
+from research import settings
 from waits import Gate, wait_runner
 
 PY = sys.executable
@@ -67,7 +68,7 @@ def test_a_claimed_run_needs_no_remote_of_its_own(tmp_path, monkeypatch):
 def test_env_and_spaces_reach_the_workload(tmp_path):
     req, runs_root = _request(tmp_path, "r2", [PY, "-c", "import os, sys; print(os.environ['FOO'], '|', sys.argv[1])", "two  words"], env={"FOO": "bar baz"})
     assert remote.launch_request(req)["started"]
-    s = _wait_terminal(runs_root / "r2")
+    _wait_terminal(runs_root / "r2")
     assert (runs_root / "r2" / "stdout.log").read_text() == "bar baz | two  words\n"
 
 
@@ -123,7 +124,7 @@ def test_a_direct_run_on_a_gpu_lease_host_gets_gpus_only_through_gpu_lease(tmp_p
     (bin_dir / "gpu-lease").write_text('#!/bin/sh\necho "$*" > "$RESEARCH_RUN_DIR/lease-args"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
                                        'CUDA_VISIBLE_DEVICES=4,5 exec "$@"\n')
     (bin_dir / "gpu-lease").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{settings.need('PATH')}")
     show = [PY, "-c", "import os; print(repr(os.environ['CUDA_VISIBLE_DEVICES']))"]
     req, runs_root = _request(tmp_path, "g0", show, env={"CUDA_VISIBLE_DEVICES": "0"})
     out = remote.launch_request(req)

@@ -251,7 +251,7 @@ def test_a_hold_by_a_declared_writer_is_as_declared_and_any_other_is_drift(capsy
     (LEASE.replace("loop n1-lease 812\n", ""), "no n1_lease.py loop in tmux session n1-lease"),
     (LEASE.replace("session n1-lease-circuits\n", "loop n1-lease 814\nVY_POOL_MAX=6\nsession n1-lease-circuits\n"),
      "2 n1_lease.py loops in tmux session n1-lease, with different settings"),
-    (RuntimeError("ssh: connect to host 81.85.2.165 port 22: timed out"), "the lease pools' tmux panes couldn't be read"),
+    (RuntimeError("ssh: connect to host 192.0.2.11 port 22: timed out"), "the lease pools' tmux panes couldn't be read"),
 ])
 def test_a_lease_pool_that_cant_be_read_is_unknown_never_no_drift(capsys, lease, why):
     rc, rows = diff(capsys, "nebius-1", lease=lease)
@@ -716,3 +716,14 @@ def test_node_2_s_gate_fails_when_status_txt_cant_be_read(tmp_path):
     with pytest.raises(subprocess.CalledProcessError) as e:
         _sh(policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"), N2_TOPS)
     assert e.value.returncode == 1 and e.value.stdout == ""
+
+
+def test_a_node_whose_address_the_environment_doesnt_hold_is_unknown_naming_the_variable(capsys, monkeypatch):
+    """No file holds a node's address (`status.reach`): with its variable unset every key of the node is unknown, exit 3,
+    and its why names the variable; nothing is drift and nothing is sent."""
+    monkeypatch.delenv("VY_NEBIUS_2_HOST", raising=False)
+    monkeypatch.setattr(policy.status.subprocess, "run", lambda *a, **kw: pytest.fail("a command was sent"))
+    assert policy.main_diff(NEBIUS, "nebius-2", True) == 3
+    rows = [r for rep in json.loads(capsys.readouterr().out)["nodes"] for r in rep["keys"]]
+    assert rows and {r["status"] for r in rows} == {"unknown"}
+    assert all("VY_NEBIUS_2_HOST is unset: vy-nebius-2's address" in r["why"] for r in rows)

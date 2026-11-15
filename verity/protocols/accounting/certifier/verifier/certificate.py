@@ -67,6 +67,34 @@ certificate signs a record digest salted and a clock certificate a clock digest,
 each under its own tag, so one opens as the other only on a SHA-512 collision. The Lean device's issuer
 (`CertifierDevice.Issuer.clock`) signs the same, and its difftest holds it to `Issuer.salted_clock`.
 
+**The mark certificate** (`CertifiedMark`, `Issuer.mark`) certifies a mark, 64 bytes handed to the certifier, at an
+execution phase of a link. The certifier signs the mark hidden under a salt of its own, under the same message, on a
+link name of the marks' own (`marks_link`) as an egress certificate, so it names the key, the session, the link and
+the execution phase:
+
+    signed digest = SHA-512( "verity-network-certifier/mark/v1" ‖ salt_c ‖ mark )     (`mark_digest`)
+    link          = <link>-marks
+
+`salt_c` is 64 fresh bytes of the certifier's own coins, and never one an earlier mark certificate of the issuer has:
+under one salt two certificates of one mark would sign one digest, which shows that they certify one mark. The mark
+and its salt are witness, the opening the certifier hands back with the certificate. Only the certificate is public:
+that the key certified a mark of the link at that execution phase, and a hiding digest of the mark. A reader holds a
+mark to its certificate through that opening (`CertifiedMark.refusal`). The digest has its own tag, so a mark
+certificate opens as a record's or a clock's, or either of those as a mark's, only on a SHA-512 collision.
+`Issuer.mark` is the signing step alone: the execution phase is its caller's to give.
+
+**A certificate's bytes** (`Certificate.encode`, its inverse `Certificate.decode`) are its one serialization, every
+field fixed-width or length-prefixed:
+
+    u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖ u8 direction (0 egress, 1 ingress) ‖ u64be execution phase ‖
+    signed digest (64) ‖ u32be len(signature) ‖ signature
+
+They are the bytes a certified record's leaf ends with, after its head and its salt (`service.encode`), where the Lean
+reads them (`NetworkCheck.Check`'s commitment). `encode` refuses a certificate the layout cannot hold, and `decode`
+bytes that end inside a part, a length that names more bytes than are left, bytes left after the signature, a
+direction code other than 0 and 1 and a link that is not UTF-8. So a certificate has one encoding and an encoding one
+certificate, and SHA-512 of these bytes names a certificate up to a collision.
+
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
 (`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
@@ -87,6 +115,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
+from verity.commitments import domains
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.crypto import lms
@@ -100,8 +129,11 @@ FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
 CERTIFICATE_TAG = b"verity/net-cert/v1"
+MARK_TAG = domains.CERTIFIER_MARK.encode()
 DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 64
+#: what a link's name gains for the link its marks are certified under (`marks_link`)
+MARKS = "marks"
 
 STATUS_CODES: dict[Reason | None, int] = {
     None: 0,
@@ -313,6 +345,21 @@ def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
     return certificate_digest(salt, clock_digest(sync))
 
 
+def marks_link(link: str) -> str:
+    """The link name `link`'s marks are certified under, `<link>-marks`."""
+    return f"{link}-{MARKS}"
+
+
+def mark_digest(salt: bytes, mark: bytes) -> bytes:
+    """The digest a mark certificate signs: SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark), the 64-byte
+    mark hidden under the certifier's 64-byte salt."""
+    if type(salt) is not bytes or len(salt) != SALT_BYTES:
+        raise ValueError(f"a mark certificate's salt is {SALT_BYTES} bytes")
+    if type(mark) is not bytes or len(mark) != DIGEST_BYTES:
+        raise ValueError(f"a mark is {DIGEST_BYTES} bytes")
+    return hashlib.sha512(MARK_TAG + salt + mark).digest()
+
+
 class SignerRefused(Exception):
     """The signer's one-time-key state is missing, behind or held by another signer, so it signs nothing rather than risk
     reusing a key; or the session it is asked to start is already started."""
@@ -416,6 +463,65 @@ class Certificate:
     window: int
     digest: bytes
     signature: bytes
+
+    def encode(self) -> bytes:
+        """The certificate's bytes, its one serialization: u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖
+        u8 direction (0 egress, 1 ingress) ‖ u64be execution phase ‖ signed digest (64) ‖ u32be len(signature) ‖
+        signature. Raises `ValueError` on a certificate the layout cannot hold: a field of another type, a key id,
+        link or signature too long for its length, an execution phase that is not a u64, a digest that is not 64
+        bytes."""
+        if not (type(self.key_id) is bytes and type(self.link) is str and type(self.direction) is Direction
+                and type(self.digest) is bytes and type(self.signature) is bytes):
+            raise ValueError("a certificate's key id, digest and signature are bytes, its link a string and its "
+                             "direction a Direction")
+        if len(self.digest) != DIGEST_BYTES:
+            raise ValueError(f"a certificate's digest is {DIGEST_BYTES} bytes, not {len(self.digest)}")
+        return b"".join([
+            _u(len(self.key_id), 2, "len(I)"), self.key_id, _text(self.link, "link"),
+            _u(self.direction.code, 1, "direction"), _u(self.window, 8, "a certificate's execution phase"),
+            self.digest, _u(len(self.signature), 4, "len(signature)"), self.signature])
+
+    @classmethod
+    def decode(cls, data: bytes) -> Certificate:
+        """The certificate whose bytes `data` is, `encode`'s inverse. Raises `ValueError`, saying which, on bytes that
+        end inside a fixed-width part (a short buffer), on a length that names more bytes than are left (a length that
+        does not fit), on bytes left after the signature (trailing bytes), on a direction code other than 0 and 1, on
+        a link that is not UTF-8 and on anything that is not bytes."""
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise ValueError(f"a certificate's bytes are bytes, not a {type(data).__name__}")
+        data, at = bytes(data), 0
+
+        def fixed(n: int, what: str) -> bytes:
+            nonlocal at
+            if len(data) - at < n:
+                raise ValueError(f"a certificate's bytes end inside its {what}: it is {n} bytes from offset {at}, and "
+                                 f"{len(data) - at} are left")
+            at += n
+            return data[at - n:at]
+
+        def sized(width: int, what: str) -> bytes:
+            nonlocal at
+            n = int.from_bytes(fixed(width, f"{what}'s length"), "big")
+            if len(data) - at < n:
+                raise ValueError(f"a certificate's {what} does not fit: it is {n} bytes by its length, and "
+                                 f"{len(data) - at} are left")
+            at += n
+            return data[at - n:at]
+
+        key_id = sized(2, "key id")
+        try:
+            link = sized(2, "link").decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError("a certificate's link is not UTF-8") from None
+        code = fixed(1, "direction")[0]
+        if code > 1:
+            raise ValueError(f"a certificate's direction code is 0 or 1, not {code}")
+        window = int.from_bytes(fixed(8, "execution phase"), "big")
+        digest = fixed(DIGEST_BYTES, "digest")
+        signature = sized(4, "signature")
+        if at != len(data):
+            raise ValueError(f"{len(data) - at} bytes are left after a certificate's signature")
+        return cls(key_id, link, (Direction.EGRESS, Direction.INGRESS)[code], window, digest, signature)
 
     def message(self, session: bytes) -> bytes:
         """The message the certificate signs in certifier session ``session``."""
@@ -600,6 +706,50 @@ class SignedClocks:
         return tuple(out)
 
 
+@dataclass(frozen=True, slots=True)
+class CertifiedMark:
+    """What the certifier hands back for a mark: the mark and the salt it sampled for it (`salt_c`), both witness, and
+    the certificate, the one public part, which signs the mark salted by it (`mark_digest`) on the marks' link name
+    (`marks_link`) at the execution phase the mark is certified at (`window`)."""
+
+    mark: bytes
+    salt: bytes
+    certificate: Certificate
+
+    def __post_init__(self) -> None:
+        if type(self.salt) is not bytes or len(self.salt) != SALT_BYTES:
+            raise ValueError(f"a mark certificate's salt is {SALT_BYTES} bytes")
+        if type(self.mark) is not bytes or len(self.mark) != DIGEST_BYTES:
+            raise ValueError(f"a mark is {DIGEST_BYTES} bytes")
+
+    @property
+    def window(self) -> int:
+        """The execution phase the certificate names."""
+        return self.certificate.window
+
+    def refusal(self, key: PublicKey, session: bytes, link: str) -> str | None:
+        """Why the opening fails as a mark of `link` under `key` in certifier session `session`, or None when it
+        holds: ``link`` unless the certificate is on `link`'s marks link name, ``egress`` unless it is an egress one,
+        ``key`` unless it is `key`'s, ``opening`` unless the mark and the salt open the digest it signs, and
+        ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
+        binds the link name and the execution phase."""
+        c = self.certificate
+        if type(c) is not Certificate or c.link != marks_link(link):
+            return "link"
+        if c.direction is not Direction.EGRESS:
+            return "egress"
+        if c.key_id != key.key_id:
+            return "key"
+        if c.digest != mark_digest(self.salt, self.mark):
+            return "opening"
+        if not c.verify(key, session):
+            return "signature"
+        return None
+
+    def verify(self, key: PublicKey, session: bytes, link: str) -> bool:
+        return self.refusal(key, session, link) is None
+
+
 @dataclass
 class Issuer:
     """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed execution
@@ -611,7 +761,9 @@ class Issuer:
     (`no-verdict`), and a certificate that verifies under the key is of a complete record unless it is a forgery. Each
     record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
     randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
-    clock certificates have taken, none of which it takes again."""
+    clock certificates have taken, none of which it takes again. It certifies a mark the same way (`mark`), at the
+    execution phase its caller gives, under a salt of the same coins; `mark_salts` are those its signed mark
+    certificates have taken, none of which it takes again."""
 
     signer: Signer
     session: bytes
@@ -619,6 +771,7 @@ class Issuer:
     started: bool = False
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
+    mark_salts: set[bytes] = field(default_factory=set, repr=False)
 
     def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
@@ -654,11 +807,31 @@ class Issuer:
         self.clock_salts.add(salt)
         return CertifiedClock(sync, salt, certificate)
 
+    def mark(self, link: str, window: int, mark: bytes) -> CertifiedMark | None:
+        """The mark certificate of the 64-byte `mark` for `link` at the execution phase `window`, which is the
+        caller's to give: the mark salted by `SALT_BYTES` fresh bytes of `coins` (`mark_digest`), signed as an egress
+        certificate on `link`'s marks link name (`marks_link`), or None when the signer refuses (that link name's
+        execution phase is then listed in `refused`). Raises `ValueError` on a mark or coins of another length and on
+        a salt the coins gave an earlier signed mark certificate of this issuer, under which two certificates of one
+        mark would sign one digest. A salt is taken once signed under: a refused one signed nothing, so nothing public
+        shares it."""
+        salt = self.coins(SALT_BYTES)
+        if len(salt) != SALT_BYTES:
+            raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
+        if salt in self.mark_salts:
+            raise ValueError("the certifier's coins gave an earlier mark certificate's salt again, under which two "
+                             "certificates of one mark would sign one digest, so it signs no mark under it")
+        certificate = self.sign(marks_link(link), Direction.EGRESS, window, mark_digest(salt, mark))
+        if certificate is None:
+            return None
+        self.mark_salts.add(salt)
+        return CertifiedMark(mark, salt, certificate)
+
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
         """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
-        `salted_clock` a window's salted sync, and the network certifier's cell rows their head's digest
-        (`warden_rows`)."""
+        `salted_clock` an execution phase's salted sync, `mark` a salted mark, and the network certifier's cell rows
+        their head's digest (`warden_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:

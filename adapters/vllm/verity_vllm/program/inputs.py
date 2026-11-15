@@ -83,6 +83,8 @@ PARAMS: dict[str, Kind] = {
     "user": Kind("certified", "the request's certified id's bytes: ingress v1's parse unit outputs them (`IngressSampled_v1`)"),
     "prefix": Kind("block", "a request's first C positions' rows: the producers' outputs (a prefix-cache hit) or the last "
                             "window's edge ports (a carried request)"),
+    "prefix_scale": Kind("block", "over an fp8_ds_mla cache, the f32 scales of the history's e4m3 rows ``prefix``, as ``prefix``"),
+    "prefix_rope": Kind("block", "over an fp8_ds_mla cache, the bf16 k_pe of the history's rows, as ``prefix``"),
     "prefix_ik": Kind("block", "the indexer's key rows of the history, as ``prefix``"),
     "prefix_iks": Kind("block", "the indexer's key scales of the history, as ``prefix``"),
     "last_token": Kind("block", "a carried request's last kept output, the last window's ``edge.last``"),

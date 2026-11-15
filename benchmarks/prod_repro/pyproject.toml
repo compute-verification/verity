@@ -93,6 +93,8 @@ inputs = [
     "verity/circuits/evaluation",
     # and over committed rows: the hm96 row leaf, the frame, the LMS check and their SHA-512 gates
     "verity/commitments/__init__.py",
+    # the table of domain separators, where the certificate reads its mark's tag
+    "verity/commitments/domains.py",
     "verity/commitments/identity.py",
     "verity/commitments/indexed.py",
     "verity/commitments/limits.py",

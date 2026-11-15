@@ -41,8 +41,8 @@ path: `research msg owners PATH`.
 
 A generated file is its generator's: change the generator and run it, never the file.
 
-- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `benchmarks/pouw/lean_headline.py` and
-  `benchmarks/pouw/lean_headline_dc.py` write the instances there, which import the `Encoding.lean` beside them.
+- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
+  import the `Encoding.lean` beside them.
 - `Accounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 

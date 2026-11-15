@@ -29,9 +29,11 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
-          # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
-          # auditor read on import; and serve.py, which the challenger's ledgers test_records_audit signs with auditor read
+          # certifier_piece and warden_chain, what they import, and the site.json, settings.py and host.json that
+          # served_session and auditor read on import; and serve.py, which the challenger's ledgers test_records_audit
+          # signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
+          "benchmarks/network_traces/settings.py",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/connection_rows_run.py",

@@ -35,20 +35,22 @@ cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s
 `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
 
 **Modes.**  `CostModel.commit_weight` is the weight w on serving's commitments in a plan's total: at 1 they count as spent,
-and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest law costs
-`c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it: `n · b(s) · h`
-for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is sampled or not.
-`grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
-cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
-form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
+and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest sampling
+design costs `c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it:
+`n · b(s) · h` for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is sampled
+or not.  `grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s sampling design,
+`GranularityOptimum`'s cost) or the exfiltration target (`ExfiltrationOptimum`'s sampling design), and `sqrt_grain` is the
+work target's optimum in closed form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β`
+bytes.
 
 **Two-stage.**  A two-stage design (`Claims.Sampling.Design.Two`): serving commits only the replay blocks' boundaries, the
 first stage samples exactly K of a verification phase's n replay blocks, uniformly (the rate q = K/n; the bound holds
 at that rate), the prover commits each sampled one's interior, and the second
 stage samples k_t of the n_t proof blocks of each stratum t in it with fresh coins.  It certifies exfiltration alone
-(compute credit isn't certified with deferred interiors), in `CompiledTwo.Exfil`'s form: Σ over the admissible sets T of
-incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.  `two_stage_exfil` bounds that count's
-log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
+(compute credit isn't certified where interiors are committed after the first stage), in `CompiledTwo.Exfil`'s form: Σ over
+the admissible sets T of incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.
+`two_stage_exfil` bounds that count's log2 (a wholly incorrect replay block is charged all its bits, so the bound is near
+Λ/q of them), `two_stage_price`
 prices a sampled replay block's proving, each type's statements its own or its verification phase's
 (`two_stage_statements`), and `two_stage_design` the design with the least bound at a budget, width-stratified
 (the public size classes up to a threshold in one stratum, each wider one in its own; on request also each distinct
@@ -1000,14 +1002,14 @@ def leak_count(g: Grain, ell: float) -> int:
 
 
 def work_draws(g: Grain, target: float, delta: float) -> float:
-    """`Achievability`'s law on equal proof blocks for the free-compute target C: each sampled with probability
+    """`Achievability`'s sampling design on equal proof blocks for the free-compute target C: each sampled with probability
     min(1, Λ s / C), so (ns/C) Λ samples, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
     return g.units * min(1.0, log(1 / delta) * g.work / target)
 
 
 def leak_draws(g: Grain, ell: float, delta: float) -> float:
-    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) samples, at most n, and none once
-    every proof block may be incorrect."""
+    """`ExfiltrationOptimum`'s achieving sampling design for a leak target of `ell` bits: n Λ / (K + 1) samples, at most n, and
+    none once every proof block may be incorrect."""
     k = leak_count(g, ell)
     return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
 
@@ -1186,7 +1188,10 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     `Properties.Spot.TwoStageCheckServedSound`, whose `N` is `fanout`).  `fanout`, F, is the replay grain's fan-out
     (`partition.fanout`): the requests reading in a replay block serve at most F S bits together, so S is read as F S.
     F is 1 when every replay block is closed, each recomputing from its own inputs any value another computed while
-    serving; the patterns' form is priced only at closed replay blocks, so it refuses F > 1.  The sets' form
+    serving.  Above 1 the patterns' form reads the replay blocks that read one another's values as one request, which
+    reads in each of them and serves their bits, F S: a replay block's factor is the patterns' at one request serving
+    F S (`Properties.Spot.TwoStageCheckPatternsSound` at N = 1), which charges that request its F S bits in every
+    replay block it is heavy in.  The sets' form
     counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
     becomes Σ_m C(n, m) w^m 2^{min(m b, S)} <= 1 + Light + 2^S Heavy (`_capped`), by min(Σ_g x_g, S) <= Σ_g min(x_g, S),
     and each sum over nonempty T is also at most 2^S (∏_v (1 + w_v) − 1), so a wholly incorrect replay block of N proof
@@ -1200,9 +1205,8 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
         raise ValueError("needs 0 <= q <= 1, 0 < delta < 1 and replay_blocks >= 1")
     if (served is None and union) or (served is not None and not served >= 0):
         raise ValueError("a served-output cap is at least 0 bits, and the patterns' form needs one")
-    if not fanout >= 1 or (union and fanout > 1):
-        raise ValueError(f"a fan-out is at least 1, and the patterns' form is priced only where no replay block reads "
-                         f"a value another computed, so it needs fan-out 1, not {fanout}")
+    if not fanout >= 1:
+        raise ValueError(f"a fan-out is at least 1, not {fanout}")
     served = None if served is None else served * fanout
     strata = _strata(cells, k)
     groups: dict[tuple[float, float], float] = {}

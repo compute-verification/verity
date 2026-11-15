@@ -17,6 +17,7 @@ from verity_bench import (
     overhead,
     overhead_records,
     prove_records,
+    served_render,
     served_table,
     settings,
     spot_status,
@@ -26,7 +27,7 @@ from verity_bench import (
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
-from verity_bench.vllm.presets import local_checkpoint, served
+from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
 from verity_bench.vllm.result import write
 from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
@@ -39,13 +40,22 @@ def _spec_argument(parser: argparse.ArgumentParser) -> None:
                         help="find passing runs in this machine's catalog alone, not the store's remote")
 
 
+def _again_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--again", action="append", default=[], metavar="POINT",
+                        help="launch this point again though a passing run stands for it (repeatable; `jobs.again`): "
+                             "it labels and supersedes nothing")
+
+
 def _make_plan(args: Any) -> jobs.Plan:
-    """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's."""
+    """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's, with the points
+    `--again` names launched again."""
 
     root = jobs.repository_root()
     if steady_spec.is_steady(args.spec):
-        return steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
-    return jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
+        plan = steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
+    else:
+        plan = jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
+    return jobs.again(plan, args.again) if getattr(args, "again", None) else plan
 
 
 def _plan(args: Any) -> int:
@@ -65,7 +75,10 @@ def _check(args: Any) -> int:
 def _run(args: Any) -> int:
     plan = _make_plan(args)
     if isinstance(plan.spec, steady_spec.SteadySpec):
-        return steady_plan.dispatch(plan, args.spec, direct=args.direct)
+        return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores)
+    if args.card is not None or args.cores is not None:
+        raise ValueError(f"--card and --cores are a steady-state point's: spec {plan.spec.id!r}'s points lease their own "
+                         "GPUs")
     return jobs.dispatch(plan, args.spec, direct=args.direct)
 
 
@@ -80,7 +93,9 @@ def _point(args: Any) -> int:
     run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     # A requeued (preempted) point reruns in its run directory: an earlier attempt's verdict must not outlive it.
     (run_dir / "result.json").unlink(missing_ok=True)
-    spec = plan.spec
+    spec, point = jobs.vllm_spec(plan), item.point
+    if not isinstance(point, SweepPoint):
+        raise TypeError(f"{point.id} is a steady-state point: steady_plan runs it")
     jobs.check_point_environment(spec, settings.environ())
     if spec.preset.model_digest is not None:
         found = local_checkpoint(spec.preset, spec.preset.model).model_digest
@@ -92,7 +107,7 @@ def _point(args: Any) -> int:
     doc = run_benchmark(
         preset,
         arms,
-        (item.point,),
+        (point,),
         sweep=spec.sweep.id,
         reps=spec.reps,
         warmups=spec.warmups,
@@ -135,6 +150,7 @@ def _point(args: Any) -> int:
     temporary = run_dir / f"result.json.tmp.{os.getpid()}"
     temporary.write_text(json.dumps(envelope, indent=1) + "\n", encoding="utf-8")
     os.replace(temporary, target)
+    result.record(doc, run_dir, settings.RESEARCH_RUN_ID, "out/benchmark.json")
     print(render(doc), end="")
     return 0 if passed else 3
 
@@ -152,7 +168,9 @@ def _served_table(args: Any) -> int:
     if args.json:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
-        print(served_table.render(table), end="")
+        print(served_render.render(table), end="")
+    if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        served_render.record(table, args.metrics)
     return 0
 
 
@@ -201,6 +219,8 @@ def _overhead_run(args: Any) -> int:
 
 def _overhead_table(args: Any) -> int:
     table = overhead_records.build(local_only=args.local_only)
+    if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        overhead_records.record(table, args.metrics)
     if args.json:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
@@ -304,12 +324,19 @@ def _parser() -> argparse.ArgumentParser:
 
     plan = commands.add_parser("plan", help="expand a spec and report passing points without running")
     _spec_argument(plan)
+    _again_argument(plan)
     plan.set_defaults(run=_plan, command_parser=plan)
 
     run = commands.add_parser("run", help="launch one recorded research run per incomplete point")
     _spec_argument(run)
+    _again_argument(run)
     run.add_argument("--direct", metavar="NODE", default=None,
                      help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
+    run.add_argument("--card", type=int, default=None, metavar="INDEX",
+                     help="a steady-state point's booked card, which its lease is asked of alone (needs --cores)")
+    run.add_argument("--cores", default=None, metavar="CPUS",
+                     help="a steady-state point's booked slot, by its cores (34-43): the slot taker runs under "
+                          "`taskset -c CPUS`")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")
@@ -351,8 +378,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
-    """`metrics`: a runner's metric ids, each for the total of `prove`'s table it names (`prove_records.FIGURES`),
-    which `prove` records in a research run's result."""
+    """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
+    research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `overhead table` the γ of a
+    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`)."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

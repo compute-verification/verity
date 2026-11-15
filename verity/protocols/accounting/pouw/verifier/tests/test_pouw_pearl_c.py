@@ -323,7 +323,7 @@ def test_v1_rho_reads_every_eighth_position_only():
         if p % C.S5_STRIDE:
             y[p] = f32w(rng.uniform(-1, 1))
     assert C.s5_stats(x)[1] == C.s5_stats(y)[1]
-    exact = sum((P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8))) / 64
+    exact = sum(P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8)) / 64
     assert abs(P.f32_of_bits(C.s5_stats(x)[1]) / exact ** 0.5 - 1) < 1e-6
 
 

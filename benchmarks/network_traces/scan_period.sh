@@ -5,11 +5,11 @@
 # of 1: the rows form reads a registration of one sampling block's 2T proof blocks), every proof block sampled (SC_DRAW=K:
 # K of them, scan_zk.sh's); then scan_period.py's
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
-# mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (the rows form's branch) in a
-# worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+# mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (a ref on origin whose tree
+# has them) in a worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
 #   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_period.sh
-# env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (default cursor/allp-cert-warden-form-061a)
+# env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (needed when the tree has no period)
 #      SC_CLASS (default test; w63k4 with SC_PROMPT_MAX=32, SC_MAX_TOKENS=4 and SC_LATE_MS past its 2.7 s delay)
 # Kept in $OUT: honest/ and late/ (each scan_zk.sh's out/: the rehearsal's public files and the scan's kept files) and
 # period/ (each case's files and period.json).
@@ -24,10 +24,10 @@ setup
 export FLOCK_PROVE=$BIN FLOCK_SELFTEST=$SBIN FLOCK_VERIFY=$LEAN HZ_PYTHON=$PY
 export SC_CLASS=${SC_CLASS:-test} SC_GROUP=1 SC_REHEARSE=1 SC_REQUESTS=${SC_REQUESTS:-4} SC_RATE=${SC_RATE:-1} \
   SC_TAIL=${SC_TAIL:-3} SC_PROMPT_MAX=${SC_PROMPT_MAX:-40} SC_MAX_TOKENS=${SC_MAX_TOKENS:-8}
-REF=${SC_PERIOD_REF:-cursor/allp-cert-warden-form-061a}
 if [ -f verity/protocols/accounting/certifier/verifier/network/tests/period_case.py ]; then
   P=$SRC; log "period: network-period and the mirror from the tree"
 else   # a machine's clone has only the shipped commits, so a run there ships a commit with the period in it
+  REF=${SC_PERIOD_REF:?this tree has no period: set SC_PERIOD_REF to a ref on origin whose tree has it}
   P=$W/period; log "period: network-period and the mirror from $REF"
 fi
 # before the scans, not beside them: scan_zk.sh's sampled-proofs build writes the same path dependencies' .lake

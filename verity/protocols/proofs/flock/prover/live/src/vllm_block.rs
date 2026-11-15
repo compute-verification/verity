@@ -297,7 +297,7 @@ pub struct VllmStmt {
 
 impl VllmStmt {
     pub fn new(net: UnitNet, vus: usize, lay: Layout) -> Self {
-        // UL2: this statement's units are 2^13-row slots; refuse a larger netlist rather than truncate it
+        // UL2: this statement's units are 2^13-row slots; refuse a larger circuit description rather than truncate it
         assert_eq!(net.unit_log(), UNIT_LOG, "UL2: a {}-row unit does not fit flock-vllm-block's 2^13-row unit slot", net.useful);
         let nbl = log2ceil(vus).max(3);
         let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units, lay.unit_pos0());

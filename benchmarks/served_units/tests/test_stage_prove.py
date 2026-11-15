@@ -43,7 +43,8 @@ LAKE = '#!/usr/bin/env bash\necho "lake $* cvd=[${CUDA_VISIBLE_DEVICES-unset}]" 
 FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime${NOEXEC:+,noexec} ;; *) echo / ;; esac\n'
 #: window.py stage|prove UNITS | route UNITS GPU CPU: its call, groups, allowed cards and visible cards logged; `stage`
 #: stages one statement; `route` sends a line naming $TO_CPU to CPU; under $PROVED `prove` proves each line's statement,
-#: its name the unit's after `census:`, lower case, with two kept sessions and its exit, $PROVER_EXIT or 0
+#: its name the unit's after `census:`, lower case, with two kept sessions and its exit, $PROVER_EXIT or 0; one named in
+#: $BOUND is staged bound, with its program.json
 WINDOW = r'''import os, sys
 from pathlib import Path
 a = os.environ.get("GPU_LEASE_ALLOWED_FILE")
@@ -65,6 +66,8 @@ if sys.argv[1] == "prove" and os.environ.get("PROVED"):
         d.mkdir(parents=True, exist_ok=True)
         (d / "circuit.txt").write_text('flock-circuit\nMETA {"statement": "verity/flock-circuit"}\n')
         (d / "stage.json").write_text('{"word": "W"}')
+        if nm in os.environ.get("BOUND", "").split(","):
+            (d / "program.json").write_text("{}")
         for s in ("l0000-1", "l0001-1"):
             (out / "kept" / nm / "sessions" / s).mkdir(parents=True, exist_ok=True)
             (out / "kept" / nm / "sessions" / s / "session.json").write_text(s)
@@ -89,7 +92,7 @@ shift 2
 if [ "$1" = verity ]; then
   o=; t=; while [ $# -gt 0 ]; do case $1 in --out) o=$2; shift ;; --proof) t=$2; shift ;; esac; shift; done
   d=$(basename "$(dirname "$(readlink "$t/circuit.txt")")")
-  echo "lean-verify $d $(cat "$t/session/session.json") pub=$(readlink "$t/pub.bin")" >> "$CALLS"
+  echo "lean-verify $d $(cat "$t/session/session.json") pub=$(readlink "$t/pub.bin") $(cd "$t" && ls program*.json)" >> "$CALLS"
   case $d in *"${REFUSE:-@@}"*) a=false ;; *) a=true ;; esac
   l=; [ $a = true ] && l=L; echo "{\"accepted\": $a, \"label\": \"$l\", \"verifier\": {\"runs\": [{\"why\": \"refused\", \"wall_s\": 1.5}]}}" > "$o/lean-verify.json"
   exit 0
@@ -299,17 +302,17 @@ TWO = "census:Small_v1{N=1}@full\t1\t1\t1\t1\ncensus:Big_v1{N=9}@full\t1\t1\t1\t
 def test_prove_routes_past_the_gpu_bound_to_the_cpu_prover_and_checks_each_proof_with_lean(job, tmp_path: Path):
     """The statement route sends past the GPU prover's bound is proved with no card, one group, into out/cpu; the other on
     the cards. Each proved statement's last kept session is checked by the Lean verifier at FLOCK_WORK's statement with its
-    kept public files, before FLOCK_WORK is removed."""
+    kept public files and its Program (a bound statement's program.json, else the word's), before FLOCK_WORK is removed."""
     fw = staged(tmp_path, TWO)
-    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", TO_CPU="Big", PROVED="1", LAKE_OK="1")
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", TO_CPU="Big", PROVED="1", LAKE_OK="1", BOUND="big")
     out = tmp_path / "run/out"
     assert rc == 0 and "route: 1 statements to the cards, 1 past the GPU prover's nonzero bound to the CPU prover" in steps, steps
     assert calls[2:] == [
         "window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu census:Small_v1{N=1}@full",
         "window prove gpus=1 allowed=4,5 cvd=[] device=cpu census:Big_v1{N=9}@full",
         "lake build flock-verify cvd=[unset]",
-        f"lean-verify small-k0 l0001-1 pub={out}/kept/small/pub.bin",
-        f"lean-verify big-k0 l0001-1 pub={out}/cpu/out/kept/big/pub.bin"]
+        f"lean-verify small-k0 l0001-1 pub={out}/kept/small/pub.bin program-word.json",
+        f"lean-verify big-k0 l0001-1 pub={out}/cpu/out/kept/big/pub.bin program.json"]
     rows = [ln.split("\t")[:4] for ln in (out / "lean.tsv").read_text().splitlines()]
     assert rows == [["name", "session", "accepted", "label"], ["small", "l0001-1", "True", "L"], ["big", "l0001-1", "True", "L"]]
     assert "the Lean verifier: 2 proved statements accepted, 0 refused or not checked" in steps and not fw.exists()

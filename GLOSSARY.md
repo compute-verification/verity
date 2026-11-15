@@ -304,6 +304,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one R1CS block can't be proved as one.
 
   An R1CS block is never a proof block; `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
+- Flock's **Merkle cap** (`cap`, `caps`, `recursiveCaps`) is the row of a commitment tree's nodes that stands in for its root, the 2^c nodes at depth c (`Flock.Level.cap`), which a proof's rows open to (`Flock.merkleCheck`); it is not Pearl's "cap" (Older names).
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`).
@@ -398,7 +399,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
     `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
-    base too.
+    base too. Under `--gate verdict` a plain candidate (each member with a land verdict of its own, no move, and nothing
+    drive.toml's `lowrisk_excludes` or `verdict_excludes` names) lands on those verdicts and the quick tier, and `main`'s
+    whole check follows: its red reverts the one culprit or, with none, sends plain candidates back to the whole check.
   - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
     `queue/<sha12>` and checked as one.
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
@@ -416,7 +419,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
     what is checked.
   - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
-    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    verified queue runs with `--gate check` (under `--gate verdict`, every candidate but a plain one): one beside each
+    candidate and beside `main` each time it moves, `main`'s saying
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.

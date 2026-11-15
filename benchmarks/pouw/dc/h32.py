@@ -52,12 +52,12 @@ def price(row: dict) -> dict:
     until, gap = (row.get("until") or 0) - 1, row.get("stop_gap")
     if gap is not None and until < 0:
         raise ValueError(f"{row['probe']}: a stop_gap but no OP_UNTIL loop")
-    cap = None
+    sheet_rate = None
     if n["class"] == "mix" and n["shape"]:
         if n["shape"] not in SHAPES:
             raise ValueError(f"{row['probe']}: s={n['shape']} is no Shape100 shape")
         _, k, elems, nominal = SHAPES[n["shape"]]
-        cap = UNIT / (k * elems * nominal)
+        sheet_rate = UNIT / (k * elems * nominal)
     fixed = read_as_is = 0.0
     for key, rate in row["rates"].items():
         loop, pat = key.split(":", 1)
@@ -69,7 +69,7 @@ def price(row: dict) -> dict:
     missing = [p for p in n["w"] if not any(k.split(":", 1)[1] == p for k in row["rates"])]
     if missing:
         raise ValueError(f"{row['probe']}: note counts {missing}, which its rates don't hold")
-    regs = read_as_is + (fixed if cap is None else min(fixed, cap))
+    regs = read_as_is + (fixed if sheet_rate is None else min(fixed, sheet_rate))
     return {**n, "probe": row["probe"], "binary": row["binary"], "run": row["run"], "tags": row["tags"],
             "regs_sm_clk": regs, "price": UNIT / regs}
 
