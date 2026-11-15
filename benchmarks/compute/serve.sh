@@ -75,7 +75,8 @@ export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
   exit 3; }
 command -v lake > /dev/null || {
   echo "lake isn't on PATH (nor in $HOME/.elan/bin), and the Lean verifiers build with it: install elan" \
-       "(https://github.com/leanprover/elan) or put its bin directory on PATH" >&2
+       "(https://github.com/leanprover/elan), which fetches the toolchain each Lean package's lean-toolchain file names," \
+       "or put its bin directory on PATH" >&2
   exit 3; }
 # the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
 # TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
@@ -88,9 +89,13 @@ mkdir -p "$W/tmp" && chmod 700 "$W" || exit 3
 export TMPDIR=$W/tmp
 umask 077
 failed=0
+#: each long step's minutes in the measured run (r20261115-200421-8c63: one H200, 96 cores), printed as it starts
+declare -A ABOUT=([cubin]=2 [gate]=5 [serve]=1 [verify]=15 [lean]=32 [policy]=2 [circuit]=2)
 step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
   local name=$1 t rc
   shift
+  [ -z "${ABOUT[$name]:-}" ] || echo "$name: started $(date -u +%H:%MZ), about ${ABOUT[$name]} min in the measured run on" \
+    "96 cores (longer on fewer); its log is $OUT/logs/$name.log"
   t=$(date +%s)
   "$@" > "$OUT/logs/$name.log" 2>&1
   rc=$?
