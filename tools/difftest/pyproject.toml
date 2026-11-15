@@ -42,4 +42,4 @@ inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/
           "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
           "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
           "verity/protocols/proofs/recursion/verifier/firewall/tests/fixtures",
-          "verity/protocols/proofs/spot/verifier/lean/tests/fixtures", "verity/protocols/proofs/spot/verifier/tests/fixtures"]
+          "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served", "verity/protocols/proofs/spot/verifier/tests/fixtures"]
