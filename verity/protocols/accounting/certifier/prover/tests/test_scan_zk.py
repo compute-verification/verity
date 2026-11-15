@@ -704,7 +704,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 
 
 def test_a_network_certifier_runs_rows_are_read_under_its_deployments_key(tmp_path):
-    h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
+    h = sz.host(tmp_path / "host", published(tmp_path / "run"), sample=16)
     assert list(h.rounds) == ["block-0", "honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
     assert h.whole.run_id == "00" * 32 and "network certifier run" in h.whole.source
     assert h.whole.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
@@ -829,8 +829,8 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     reg = R.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
-    draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
-    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     a = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
@@ -985,8 +985,8 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
     for name, r in (("tampered-0", other), ("chain-0", chain)):
         (scan / name).mkdir()
         (scan / name / "registration.json").write_text(json.dumps(r))
-    draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
-    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
@@ -1374,7 +1374,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (["--challenger", "local", "--draw", "16"], "needs --main"),
     (["--group", "0"], "--group is 1 or more execution phases"),
 ])
-def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+def test_a_challenger_sample_that_cant_sample_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
     with pytest.raises(SystemExit):
         sz.main(["prove", "--dry", "--out", str(tmp_path / "out"), *flags])
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()

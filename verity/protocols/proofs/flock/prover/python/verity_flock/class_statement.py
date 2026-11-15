@@ -1398,7 +1398,11 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
-    sampling_design = ["--sample-design", os.environ["FLOCK_SAMPLE_DESIGN"]] if os.environ.get("FLOCK_SAMPLE_DESIGN") else []
+    design = os.environ.get("FLOCK_SAMPLE_DESIGN")
+    if os.environ.get("FLOCK_DRAW_LAW") and not design:
+        raise SystemExit("FLOCK_DRAW_LAW is set and FLOCK_SAMPLE_DESIGN is not: the sampling design is read from "
+                         "FLOCK_SAMPLE_DESIGN now; set FLOCK_SAMPLE_DESIGN instead")
+    sampling_design = ["--sample-design", design] if design else []
     chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted(os.environ) else []
     bounded = bounded or bool(chs)
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),

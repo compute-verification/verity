@@ -173,7 +173,7 @@ done
 TG=(); TPL=()
 for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
 [ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
@@ -189,7 +189,7 @@ fi
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
-  $TIME $PY verity/protocols/proofs/spot/prover/audit/window_audit.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
+  $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" "${PLAINS[@]}" --out $W/$1 \
     ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} > $O/$1/a5.log 2> $O/$1/a5.err
@@ -265,6 +265,7 @@ else
       keep $N
       continue
     fi
+    case $e in warden|warden:*) echo "STANDIN $e: its name is network_certifier${e#warden}; set that instead"; exit 3;; esac
     if [ "${e%%:*}" = network_certifier ]; then
       case $e in network_certifier) REFUSE=();; network_certifier:altered) REFUSE=(--altered);; network_certifier:pad|network_certifier:pad-named|network_certifier:swapped) REFUSE=(--made-for ${e#network_certifier:});;
         *) echo "STANDIN $e: network_certifier, network_certifier:altered, network_certifier:pad, network_certifier:pad-named or network_certifier:swapped"; exit 3;; esac

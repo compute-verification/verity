@@ -137,6 +137,6 @@ theorem helloSpec_of_text {spec : Flock.SessionSpec} {text : String} {sess : Flo
   rw [hjr] at hcj
   rw [← getD_of_fld hcj] at hC
   exact helloSpec_of_tree hT hR hl ht h
-    (sortedKeys_of_wf record (FlockComplete.JsonRT.parse_wf text record hJ)) hC hk
+    (Properties.Challenger.CanonRead.sortedKeys_of_wf record (FlockComplete.JsonRT.parse_wf text record hJ)) hC hk
 
 end Verity.Sampled.MemberForm

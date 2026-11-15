@@ -11,10 +11,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "network_traces"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "prove_path"))
 import certifier_piece
 
 from verity.protocols.accounting.certifier.prover.scan_zk import SCAN_STATE_FILE
-from verity.protocols.proofs.spot.prover.audit import prove_path
+import prove_path
 
 if __name__ == "__main__":
     raise SystemExit(prove_path.main(sys.argv[1:], kept_ingress=certifier_piece.kept_ingress,

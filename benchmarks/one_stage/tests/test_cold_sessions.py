@@ -40,9 +40,10 @@ def test_the_plan_names_each_members_statement_and_exits_1_naming_a_missing_file
     assert "PLAN-MISSING m7: missing" in out and "inst-4.bin" in out and "PLAN-MISSING m9: not in summary.json" in out
 
 
-def test_the_zk_servers_part_of_the_clock_is_what_witness_proving_and_wait_leave():
-    assert C.outside({"e2e_s": 100.0, "witness_s": 10.0, "prove_total_s": 50.0, "wait_e2e_s": 15.0}) == 25.0
-    assert C.outside({"e2e_s": 100.0, "prove_total_s": 50.0}) is None
+def test_the_zk_servers_part_of_the_clock_is_what_the_witness_and_the_proving_leave():
+    # the wait on the verifier is inside the proving: not taken out again
+    assert C.outside({"e2e_s": 100.0, "witness_s": 10.0, "prove_total_s": 50.0, "wait_e2e_s": 15.0}) == 40.0
+    assert C.outside({"e2e_s": 100.0, "wait_e2e_s": 15.0}) is None
 
 
 def test_the_table_has_a_row_a_member_with_each_arms_session_or_its_refusal(tmp_path):

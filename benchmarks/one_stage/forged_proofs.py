@@ -11,7 +11,7 @@ A tampered statement's rows and b || c agree with the outputs it commits, so onl
 with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) and sends the proofs of the false witness; with the check, it sends
 none, and Lean refuses the session for want of a proof (A8's negative).
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/forged_proofs.py --bin flock-circuit --lean verity-verify-proof \\
       --work DIR --fixture DIR
 
@@ -35,7 +35,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402

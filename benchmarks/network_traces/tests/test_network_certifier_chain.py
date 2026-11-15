@@ -49,7 +49,19 @@ def _load(name: str):
 
 cr = _load("chain_record")
 from verity.protocols.accounting.certifier.prover import n2_zk as n2  # noqa: E402
-from verity.protocols.accounting.certifier.device import leak_guard as LG  # noqa: E402
+from benchmarks.network_traces import leak_guard as LG  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
+
+zk_drivers.install()
+
+
+def _n2(run: Path, at: Path, *args: str) -> tuple[int, dict, dict, str]:
+    """n2 --dry on ``run``: its exit, its public summary, its witness summary and the witness side's log (a failure's
+    text is there alone)."""
+    w = at / "witness" / "summary.json"
+    rc = n2.main(["prove", "--warden-run", str(run), "--dry", "--out", str(at / "n2"), "--witness", str(w), *args])
+    read = lambda f: json.loads(f.read_text()) if f.is_file() else {}  # noqa: E731
+    return rc, read(at / "n2" / "summary.json"), read(w), w.with_name("n2.log").read_text()
 
 
 def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
@@ -223,7 +235,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
     what the step found of the traffic (`network_certifier_chain.WITNESS_KEYS`: which execution phases the signer refused, how
     many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
-    from verity.protocols.accounting.certifier.device import released_keys as RK
+    from verity.protocols.accounting.certifier.prover import released_keys as RK
 
     listing = RK.load().listing("certs.json")
     assert listing is not None and not RK.load().waits("certs.json")
@@ -293,8 +305,8 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     for read in (WC.deployment, WC.certificates, WC.io, WC.link):
         with pytest.raises(SystemExit, match=f"{proxy}.*plan.json is there"):
             read(certifier_run)
-    with pytest.raises(SystemExit, match=proxy):
-        n2.main(["prove", "--warden-run", str(certifier_run), "--dry", "--out", str(tmp_path / "n2")])
+    rc, _, _, held = _n2(certifier_run, tmp_path / "n2")
+    assert rc == 1 and re.search(proxy, held)
     with pytest.raises(SystemExit, match=proxy):
         cr.main(["certs", "--warden-run", str(certifier_run), "--out", str(tmp_path / "certs.json")])
     run = gate_run(tmp_path)
@@ -339,13 +351,14 @@ def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_r
 
 def test_n2_on_a_network_certifier_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
     run = gate_run(tmp_path)
-    assert n2.main(["prove", "--warden-run", str(run), "--gpu", "--dry", "--out", str(tmp_path / "n2")]) == 0
-    s = json.loads((tmp_path / "n2" / "summary.json").read_text())
-    assert s["warden_run"] == "00" * 32 and "no sync" in s["warden"]["syncs"] and s["gpu"] is True
+    rc, s, w, _ = _n2(run, tmp_path, "--gpu")
+    assert rc == 0 and s["warden_run"] == "00" * 32 and "no sync" in s["warden"]["syncs"] and w["gpu"] is True
     honest, tampered = (s["members"][k]["reference"] for k in ("honest", "tampered"))
-    assert [x["expect"] for x in honest] == [1] * sz.W63.windows and all(not any(x["failed"].values()) for x in honest)
+    failed = {k: w["members"][k]["reference"] for k in ("honest", "tampered")}
+    assert [x["expect"] for x in honest] == [1] * sz.W63.windows
+    assert all(not any(x["failed"].values()) for x in failed["honest"].values())
     assert [x["expect"] for x in tampered] == [0] + [1] * (sz.W63.windows - 1)
-    assert tampered[0]["failed"] == {"egress": ["signed"], "ingress": []}
+    assert failed["tampered"]["0"]["failed"] == {"egress": ["signed"], "ingress": []}
     assert s["draw"]["selection"] == "all" and n2.OTHER not in s["members"]
 
 
@@ -353,15 +366,15 @@ def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_prove
     """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the sample holds refuse
     it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
     run = gate_run(tmp_path)
-    assert n2.main(["prove", "--warden-run", str(run), "--draw", "1", "--dry", "--out", str(tmp_path / "n2")]) == 0
-    s = json.loads((tmp_path / "n2" / "summary.json").read_text())
-    assert (s["draw"]["law"], s["draw"]["k"], s["draw"]["population"]) == ("subset:1", 1, sz.W63.windows)
+    rc, s, w, _ = _n2(run, tmp_path, "--draw", "1")
+    assert rc == 0 and (s["draw"]["law"], s["draw"]["k"], s["draw"]["population"]) == ("subset:1", 1, sz.W63.windows)
     tampered, other = (s["members"][k]["reference"] for k in ("tampered", n2.OTHER))
     assert [x["expect"] for x in tampered] == [0] * sz.W63.windows
-    assert all(x["failed"] == {"egress": ["signed"], "ingress": []} for x in tampered)
+    assert all(x["failed"] == {"egress": ["signed"], "ingress": []}
+               for x in w["members"]["tampered"]["reference"].values())
     assert [x["expect"] for x in other] == [1] * sz.W63.windows
-    with pytest.raises(SystemExit, match="a period draw takes 1 to 2"):
-        n2.main(["prove", "--warden-run", str(run), "--draw", "3", "--dry", "--out", str(tmp_path / "n2x")])
+    rc, *_, held = _n2(run, tmp_path / "x", "--draw", "3")
+    assert rc == 1 and "a period sample takes 1 to 2" in held
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:

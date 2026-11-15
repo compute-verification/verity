@@ -56,7 +56,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, overload
 
 from verity_bench import exfiltration as E
 
@@ -93,6 +93,10 @@ def _json(path: Path | None) -> Any:
     return None if path is None else json.loads(path.read_text())
 
 
+@overload
+def _find(directory: Path, patterns: Sequence[str], what: str) -> Path: ...
+@overload
+def _find(directory: Path | None, patterns: Sequence[str], what: str) -> Path | None: ...
 def _find(directory: Path | None, patterns: Sequence[str], what: str) -> Path | None:
     """A run's file: ``directory`` itself where it is a file, else the first of ``patterns`` it holds."""
 
@@ -198,7 +202,7 @@ def ties(summary: Mapping, handoff: Mapping | None, check: Mapping | None, publi
              "holds": same(_class(summary.get("stage1")), first_class)},
             {"what": "both stages name the same sampled spans", "holds": same(first.get("units"), sampled)},
             {"what": "the first stage's check is of that registration",
-             "holds": None if None in (short, registration) else registration.startswith(short)},
+             "holds": None if short is None or registration is None else registration.startswith(short)},
             {"what": "the first stage's class is the serve's published one, field for field",
              "holds": None if handoff is None or published is None else published is not False}]
 
@@ -340,7 +344,7 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
             lacks("staging.gpus", "`audit.staging` holds its seconds and not the GPUs it held (`gpus`)")
 
     own = _find(replay, REPLAY, "a replay's run")
-    parts = {}
+    parts: dict[str, list[dict] | None] = {}
     for field, key in (("replay", "replay"), ("interior", "interior_commit")):
         held = summary.get(key)
         parts[field] = None
@@ -351,11 +355,12 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
                     lacks(f"{field}.{k}", f"`{key}` holds no `{k}`")
         elif field == "replay" and own is not None:
             its = json.loads(own.read_text())
-            parts[field] = [_entry(its.get("replay_wall_s"), its.get("gpus"))]
+            replayed = _entry(its.get("replay_wall_s"), its.get("gpus"))
+            parts[field] = [replayed]
             for k, why in (("seconds", "the replay's own file holds no `replay_wall_s`"),
-                           ("gpus", "the replay's own file holds its seconds (`replay_wall_s`) and not the GPUs its "
-                                    "engine held (`gpus`)")):
-                if parts[field][0][k] is None:
+                           ("gpus", ("the replay's own file holds its seconds (`replay_wall_s`) and not the GPUs its "
+                                     "engine held (`gpus`)"))):
+                if replayed[k] is None:
                     lacks(f"replay.{k}", why, own)
         else:
             lacks(field, f"`{key}` is absent: the two-stage audit reads no clock over it")
@@ -382,7 +387,7 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
     if record["stock"] is None and serving_cost is not None:
         record |= {"serving_cost": serving_cost, "serving_cost_source": serving_cost_source}
     record["audit"] = shown(summary, handoff, check, published, machine,
-                            None if its is None or Path(first).is_file() else _class(its, Path(first)), at)
+                            None if first is None or Path(first).is_file() else _class(its, Path(first)), at)
     return record, absent
 
 

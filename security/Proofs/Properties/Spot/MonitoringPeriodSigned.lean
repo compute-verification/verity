@@ -79,7 +79,7 @@ theorem chain_prev {v2 : Bool} {e : LedgerEntry} {n : Nat} {prev : String}
 set_option maxHeartbeats 4000000 in
 /-- **`verifyLedger` chained every entry to the one before it**: entry `i + 1` names as `prev` the SHA-512 of entry
 `i`'s whole text. -/
-theorem verifyLedger_prev {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
+theorem verifyLedger_prev {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : ∃ prev, PrevInv es.toList prev := by
   unfold verifyLedger at h
   rw [bind_ok] at h

@@ -16,6 +16,13 @@
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail
+# a job written for prove_leg.sh (LEG_*) or before the ZK server's rename sets keys nothing reads: refused by name
+for o in LEG_FIREWALL:SUBPROTOCOL_ZK_SERVER SUBPROTOCOL_FIREWALL:SUBPROTOCOL_ZK_SERVER \
+    LEG_CACHE:SUBPROTOCOL_CACHE LEG_CENSUS:SUBPROTOCOL_CENSUS LEG_DEFS:SUBPROTOCOL_DEFS LEG_KS:SUBPROTOCOL_KS \
+    LEG_LOWER_REFUSED:SUBPROTOCOL_LOWER_REFUSED LEG_MEM_GB:SUBPROTOCOL_MEM_GB LEG_N:SUBPROTOCOL_N \
+    LEG_NEGATIVES:SUBPROTOCOL_NEGATIVES LEG_READS:SUBPROTOCOL_READS LEG_REGISTERED:SUBPROTOCOL_REGISTERED; do
+  n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+    || { echo "prove-subprotocol: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 export HZ_CONFIGS=prove-leg HZ_MEM_GB=${SUBPROTOCOL_MEM_GB:-32}
 if [ -n "${SUBPROTOCOL_CACHE:-}" ] && mkdir -p "$SUBPROTOCOL_CACHE" 2>/dev/null && [ -w "$SUBPROTOCOL_CACHE" ]; then export HZ_CACHE=$SUBPROTOCOL_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
@@ -30,7 +37,7 @@ keep_subprotocol() {
 trap 'keep_subprotocol; rm -rf "$W"' EXIT
 trap 'exit 143' TERM INT HUP
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 # the prover's worker threads overflow the default stack on wide units
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup

@@ -13,7 +13,7 @@ docstring), and the run exits 0 only when the outcome is accepted and every nega
 serving wrote (``window/``, its private files too) and a5's records
 (``rank0/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --main FILE --out DIR
 """
@@ -30,7 +30,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
-from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
+import a5  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402

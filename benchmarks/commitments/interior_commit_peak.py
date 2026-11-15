@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The peak memory of an interior's commitment, made whole and made into its window directory
-(``verity.commitments.windows.rows.commit``, with and without ``into``), each in a process of its own.
+(``verity.commitments.periods.rows.commit``, with and without ``into``), each in a process of its own.
 
     research run --on auto --cwd source --mem-gb G -- bash -c 'd=$(mktemp -d); trap "rm -rf $d" EXIT; \\
         python benchmarks/commitments/interior_commit_peak.py --spans 6 --units 262144 --words 1536 --scratch "$d" --out "$OUT"'
@@ -43,7 +43,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import rows as SR
+from verity.commitments.periods import rows as SR
 from verity_config.settings import SHARED
 
 RESULT_SCHEMA = "research/result/v0.1"
@@ -155,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "spans": ns.spans, "units": ns.units, "words": ns.words, "workers": ns.workers,
                                      "rows": "shared-row members of one table row a unit a port, an input and an output a member, "
                                              "each member's input after the first its writer's output rows with no tree of its own",
-                                     "implementation": "verity.commitments.windows.rows.commit, whole and into a directory",
+                                     "implementation": "verity.commitments.periods.rows.commit, whole and into a directory",
                                      "cpu": platform.processor() or platform.machine(), "nproc": os.cpu_count(),
                                      "python": sys.version.split()[0]},
             "validation": {"status": "passed" if same else "failed",

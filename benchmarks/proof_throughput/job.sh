@@ -20,7 +20,12 @@
 #      check unless FC_ZK_SERVER=0; the result is zk-point's, no contract result and no bundle
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+for o in FLOCK_DRAW_LAW:FLOCK_SAMPLE_DESIGN; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "proof-throughput: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 : "${WORKLOAD:?WORKLOAD= is required}" "${B:?B= is required}"
+# a job written when the ZK server's controls were FC_FIREWALL* sets keys nothing reads: refused, naming the key read now
+for k in ${!FC_FIREWALL*}; do n=FC_ZK_SERVER${k#FC_FIREWALL}; [ -n "${!n+x}" ] \
+  || { echo "proof-throughput: $k is set and $n is not: the ZK server's controls are read under $n; set $n instead" >&2; exit 2; }; done
 # the ZK server rechecks a witness the host assembled (PROTOCOL §10.2), so both arms take it: their difference is the ZK server's
 [ "${ZK:-0}" = 1 ] && export FLOCK_ZK=1 FC_ZK_SERVER=${FC_ZK_SERVER:-1} FC_HOST_WITNESS=1 BUNDLE=0
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/pt-$$}/out}; mkdir -p "$O"
@@ -59,7 +64,7 @@ fi
 [ -x "$BIN" ] && [ -x "$PYBIN" ] || { log "missing the prover ($BIN) or the venv ($PYBIN)"; exit 1; }
 sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
 # the population (the class sweep's PT_VU, PT_N) and the verifier's stratified sampling design for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }

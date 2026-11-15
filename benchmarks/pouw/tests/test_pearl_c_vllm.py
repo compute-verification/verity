@@ -2422,7 +2422,7 @@ def test_a_window_class_that_is_no_three_positive_integers_is_refused_by_name():
 
 
 @pytest.mark.slow
-def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
+def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
     """With the execution phase's class (``window_class``, ``served_passes.py verify --class``), a tied run accepts only where its passes
     are the class's fixed load: a pass a round of the class's outputs, each retained or dropped, every call of round 0
     of slots x prompt rows and of a later round of slots, committed in rows padded to 16.  Here the class is 2 slots of 8
@@ -2479,6 +2479,11 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     for bad in ((2, 8), (2, 8, 0), (2, 8, True), "2,8,2"):
         with pytest.raises(ValueError, match="a window class is SLOTS, PROMPT, OUTPUTS"):
             run([a, b], window_class=bad)
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
+
+    # the served verify's node draw on `run`'s source: on the OS's coins its 3 draws can all land over the inert-work
+    # bound, at ε 1 and no give-up
+    monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 4)[:n])
     d = _serve_dir(tmp_path, [a, b])
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile), "--class", "2,8,2")
@@ -4183,7 +4188,7 @@ def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypa
     """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
     (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
     interpreted_triton(monkeypatch)
-    from verity_torch.pouw.pearl_c.run_device import screen as PS
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)

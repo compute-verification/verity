@@ -57,7 +57,7 @@ The run exits 0 when it is as expected: both ranks accepted with every negative 
 rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``--out`` holds the windows as committed
 (``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
@@ -445,7 +445,7 @@ def main(argv=None) -> int:
         ap.error("one refused statement a run: --altered or --made-for")
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
-    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    import a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 

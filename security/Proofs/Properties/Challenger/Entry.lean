@@ -173,7 +173,7 @@ theorem event_of_canon {d : Json} {line : String} (hg : Good d) (hc : Flock.cano
   refine ⟨j, ?_, hs⟩
   have hcj : Flock.canon j = .ok line := FlockComplete.JsonRT.canon_same d j hs ▸ hc
   unfold event
-  simp [hlen, hp, hcj, Verity.Sampled.sortedKeys_of_wf j (FlockDeploy.same_wf_right hs), pure, Except.pure]
+  simp [hlen, hp, hcj, CanonRead.sortedKeys_of_wf j (FlockDeploy.same_wf_right hs), pure, Except.pure]
 
 /-- **`Record.ofJson` reads an object as the record of its seven values**: its keys are the seven, its body is an
 object, its kind, prev, schema and sig strings, prev a SHA-512 in hex and sig hex, its seq a natural number and its
@@ -259,7 +259,7 @@ theorem ledgerEntry_of_record {r : Core.Record} {text session tag : String} {mb 
   obtain ⟨nb, hof, hsb⟩ := ofJson_alike hs hb hprev hhex
   have hce : Flock.canon e = .ok text := FlockComplete.JsonRT.canon_same _ _ hs ▸ hc
   have hpy : PyJson.canonical e = .ok text := (canonical_canon (plainAt_same hp hs)).trans hce
-  have hsk : sortedKeys e = true := Verity.Sampled.sortedKeys_of_wf e (FlockDeploy.same_wf_right hs)
+  have hsk : sortedKeys e = true := CanonRead.sortedKeys_of_wf e (FlockDeploy.same_wf_right hs)
   exact ⟨e, nb, hs, hsb, Steps.ledgerEntry_some_of_steps (r := { r with body := .obj nb }) hlen hpe hpy
     (escapesSurrogate_false (noEscape_canon hp hc)) hce hsk hof ht h4 hk hse hid (hbody _ hsb)⟩
 
@@ -337,7 +337,7 @@ theorem ledgerMessage_same {I : ByteArray} {m : Std.TreeMap.Raw String Json} {b 
   have hsb : getD b "schema" = .str schema := same_str (hs ▸ same_getD h "schema")
   obtain ⟨s, hc⟩ := FlockComplete.JsonRT.canon_ok_some _ (good_unsigned hg)
   have hu : Flock.canonUtf8 (Core.Record.unsigned b) = Flock.canonUtf8 (Core.Record.unsigned (.obj m)) := by
-    have hb : sortedKeys b = true := Verity.Sampled.sortedKeys_of_wf b (FlockDeploy.same_wf_right h)
+    have hb : sortedKeys b = true := CanonRead.sortedKeys_of_wf b (FlockDeploy.same_wf_right h)
     cases h with
     | @obj _ n hm hn hk hv =>
       exact canonUtf8_same (same_unsigned (.obj hm hn hk hv)) (CanonRead.sorted_unsigned ha)

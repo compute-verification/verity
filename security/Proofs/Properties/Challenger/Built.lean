@@ -243,7 +243,7 @@ theorem wf_of_good {j : Json} (h : Good j) : Wf j := by
 /-- **A printable value has a tagged hash.** -/
 theorem tagged_ok (tag : String) {j : Json} (hg : Good j) : ∃ d, taggedSha512 tag j = .ok d := by
   obtain ⟨s, hs⟩ := FlockComplete.JsonRT.canon_ok_some j hg
-  obtain ⟨t, ht, -⟩ := CanonLine.canon_utf8 (Verity.Sampled.sortedKeys_of_wf j (wf_of_good hg)) hs
+  obtain ⟨t, ht, -⟩ := CanonLine.canon_utf8 (CanonRead.sortedKeys_of_wf j (wf_of_good hg)) hs
   exact ⟨_, by unfold taggedSha512; rw [ht]; rfl⟩
 
 end Properties.Challenger.Built

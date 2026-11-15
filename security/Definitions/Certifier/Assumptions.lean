@@ -10,9 +10,9 @@ Each assumption is a named `Prop`, taken as a hypothesis by the theorems that us
 `docs/network-transparency/timing-channel.md` §1.2. `NetTiming.SecurityProofs.Sanity` gives a satisfiability
 witness for each.
 
-**The same `Prop`s serve ingress,** about the certifier read inward (`NetTiming.Protocol.Ingress`): there `Regenerates` is
-W2 for what enters X, `Packed` and `Allocated` are W4 for the rows the ingress links release into X, and
-`JitterBounded` is J for their release times.
+**The same `Prop`s serve ingress,** about the certifier read inward (`Definitions.Certifier.Ingress`): there
+`Regenerates` is W2 for what enters X, `Packed` and `Allocated` are W4 for the rows the ingress links release into X,
+and `JitterBounded` is J for their release times.
 
 **W1 (fixed parameters) has no `Prop`,** because it is structural here. The grid shape (`L`, `K`, `S`), the window
 structure (`winEnd`), the frame length `B`, the jitter bound `D` and the emission map `view` are arguments fixed before

@@ -43,15 +43,13 @@ import pytest
 from verity.commitments.periods import history as HW, interface as I, rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0, window_audit as a5
-from verity.protocols.proofs.spot.prover.audit import check_memo as AM
-
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(ROOT / "verity/protocols/proofs/spot/prover/tests"))
-import test_check_memo as TM  # noqa: E402
-import test_window_audit_history as TH  # noqa: E402
+import a0, a5  # noqa: E402
+import a5_memo as AM  # noqa: E402
+import test_a5_memo as TM  # noqa: E402
+import test_a5_history as TH  # noqa: E402
 
 GB = 2**30
 

@@ -24,6 +24,7 @@ import ast
 import hashlib
 import json
 import math
+import re
 import runpy
 import shutil
 import sys
@@ -607,6 +608,19 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert measured["status"] == "measured" and measured["verifier_seconds_per_token"] is None and measured["missing"] == []
     modeled = P.report(PF.Flock(unverified, SESSIONS, "art:card").table(P.Census.of(CENSUS)), 1.0)["totals"]
     assert modeled["status"] == "modeled" and modeled["missing"] == [] and modeled["steady_time_share"] < 1.0
+
+
+def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():
+    """Only steady-state and warm-session rows, every type priced from a run of its own: the total is still modeled,
+    since a statement proved from warm sessions on one card is not the steady state."""
+
+    both = P.Census.of({**CENSUS, "definitions": {k: CENSUS["definitions"][k] for k in (GEMM64, GEMM32)}})
+    rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
+    warm = (PF.Warm(P.definition_id(GEMM32), 19, 4, 4, 2.0, 1, 4, "r20261115-000000-0001", "gemm32"),)
+    doc = P.report(PF.Flock(rows, SESSIONS, "art:card", warm=warm).table(both), 1.0)
+    assert sorted(r["source"] for r in doc["rows"]) == [P.STEADY, P.WARM]
+    assert doc["totals"]["status"] == "modeled" and doc["totals"]["missing"] == []
+    assert doc["totals"]["steady_time_share"] < 1.0
 
 
 def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatch):
@@ -2021,6 +2035,145 @@ def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_p
     assert all("out/light/server-k2" in r["note"] for r in at_two)
 
 
+#: a scan that read two runs, and found one of them off its card's node
+SCAN = R.OffNodeScan("prove-glm53-flock-steady", frozenset({"r20261110-211750-65a0", "r20261111-000000-0001"}),
+                     frozenset({"r20261110-211750-65a0"}))
+
+
+@pytest.mark.parametrize("row, run, off", [
+    ({R.CARD_NUMA: 1, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261112-000000-0001", True),
+    ({R.CARD_NUMA: 0, "cores": {"count": 24, "numa_nodes": [0, 1]}}, "r20261112-000000-0001", True),
+    ({R.CARD_NUMA: 0, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261112-000000-0001", False),
+    # a row that records its card's node is read by it, whatever the scan says of its run
+    ({R.CARD_NUMA: 2, "cores": {"count": 24, "numa_nodes": [2]}}, "r20261110-211750-65a0", False),
+    ({R.CARD_NUMA: 1, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261111-000000-0001", True),
+    ({}, "r20261110-211750-65a0", True),
+    ({}, "r20261111-000000-0001", False),
+    ({R.CARD_NUMA: None, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261111-000000-0001", False),
+    # a run between two the scan read is no run it read
+    ({}, "r20261111-000000-0000", None),
+    ({}, "r20261112-000000-0001", None),
+    ({R.CARD_NUMA: None, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261111-000000-0000", None),
+    ({R.CARD_NUMA: 1, "cores": {"count": 24}}, "r20261112-000000-0001", None),
+    ({R.CARD_NUMA: True, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261112-000000-0001", None),
+], ids=["differs", "spans-two", "equal", "equal-but-listed", "differs-but-read", "listed", "read-unlisted",
+        "null-read-unlisted", "unread-between-read", "unread-later", "null-unread", "no-cpu-nodes", "not-a-node"])
+def test_a_rows_card_is_off_or_on_its_cpus_numa_node_by_its_own_record_else_by_the_scan_of_its_run(row, run, off):
+    assert R.off_node(row, run, SCAN) is off
+
+
+def test_the_scan_holds_the_six_priced_off_node_runs_among_the_79_it_found_in_the_220_it_read(tmp_path):
+    doc = json.loads(R.OFF_NODE.read_text())
+    scan = R.off_node_scan()
+    assert scan.record == doc["record"] == "prove-glm53-flock-steady"
+    assert len(scan.read) == 220 == len(doc["read"]) and len(scan.off) == 79 == len(doc["off"]) and scan.off <= scan.read
+    six = {"r20261110-211750-65a0": (2, [0]), "r20261110-190448-3b46": (2, [1]), "r20261110-190404-431a": (3, [2]),
+           "r20261110-190457-2ce7": (2, [1]), "r20261110-232129-ed12": (2, [1]), "r20261110-232120-0c7b": (2, [1])}
+    assert {r: (doc["off"][r]["card_numa_node"], doc["off"][r]["cpu_numa_nodes"]) for r in six} == six
+    assert all(R.off_node({}, r) is True for r in six)
+    assert R.off_node({}, "r20261111-013927-ac13") is False
+    # inside the span of the runs read, but none of them: a run of a superseded target, and another record's run
+    assert min(scan.read) < "r20261111-015333-38d6" < "r20261113-162903-6d87" < max(scan.read)
+    assert R.off_node({}, "r20261111-015333-38d6") is None and R.off_node({}, "r20261113-162903-6d87") is None
+    assert R.off_node({}, "r20261108-045435-b9cb") is None
+    assert "host record and lease line" in doc["source"] and "kernels lane" in doc["source"]
+
+    good = {"source": "s", "record": "prove-glm53-flock-steady", "read": ["r20261110-000000-0001", "r20261110-000000-0002"],
+            "off": {"r20261110-000000-0001": {"card_numa_node": 2, "cpu_numa_nodes": [1]}}}
+
+    def loaded(text: str) -> R.OffNodeScan:
+        path = tmp_path / "scan.json"
+        path.write_text(text)
+        return R.off_node_scan.__wrapped__(path)
+
+    scan = loaded(json.dumps(good))
+    assert (scan.of("r20261110-000000-0001"), scan.of("r20261110-000000-0002"), scan.of("r20261110-000000-0003")) == (
+        True, False, None)
+    for bad, match in [
+        (good | {"record": "prove-glm53-flock-single"}, "is no workload's steady-state record"),
+        (good | {"read": [*good["read"], "r20261110-000000-0002"]}, "`read` lists r20261110-000000-0002 more than once"),
+        (good | {"read": [*good["read"], "run-3"]}, "`read` lists what isn't a run id: run-3"),
+        (good | {"off": {"r20261110-000000-0009": {"card_numa_node": 2, "cpu_numa_nodes": [1]}}},
+         "off-node run r20261110-000000-0009 isn't among the runs the scan read"),
+        (good | {"off": {"r20261110-000000-0001": {"card_numa_node": 1, "cpu_numa_nodes": [1]}}},
+         "lists no card's NUMA node and CPUs' NUMA nodes other than it alone"),
+    ]:
+        with pytest.raises(ValueError, match=re.escape(match)):
+            loaded(json.dumps(bad))
+    twice = json.dumps(good).replace('"off": {', '"off": {"r20261110-000000-0002": {"card_numa_node": 2, "cpu_numa_nodes": [1]}, '
+                                     '"r20261110-000000-0002": {"card_numa_node": 2, "cpu_numa_nodes": [1]}, ')
+    with pytest.raises(ValueError, match="lists r20261110-000000-0002 more than once"):
+        loaded(twice)
+
+
+def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded_against_their_cards_numa_node(
+        tmp_path, monkeypatch):
+    """Runs the scan lists count off where their rows price a type, and not where they are superseded or their row
+    isn't a steady-state measurement. A row that records its card's node counts by it: off where it differs, on where
+    it's the CPUs' node. One that doesn't, or records null, counts on where the scan read its run, and not recorded
+    where it didn't, as the fixture's own runs. The shares are the table's own weights,
+    the rows' shares of the proving time at the sampling plan; the single-session card's rows are counted apart; and
+    the count moves no value and no mark."""
+
+    s, _ = recorded(tmp_path)
+    rows = {r["type"]: r for r in json.loads((FIXTURES / "steady" / RUNS[-1] / "rate" / "rate.json").read_text())}
+
+    def ran(run: str, row: dict) -> str:
+        files = tmp_path / "off-node" / run
+        (files / "out" / "rate").mkdir(parents=True)
+        (files / "out" / "rate" / "rate.json").write_text(json.dumps([row]))
+        s.ran(run, files)
+        return s.record(run, R.STEADY)
+
+    def cpus(card: int | None) -> dict:
+        return {R.CARD_NUMA: card, "cores": {"count": 24, "list": "0-23", "numa_nodes": [0]}}
+
+    listed = ["r20261110-211750-65a0", "r20261110-211750-65a1", "r20261110-211750-65a2", "r20261110-211750-65a3"]
+    monkeypatch.setattr(R, "off_node_scan", lambda: replace(SCAN, read=SCAN.read | {*listed, "r20261111-000000-0003"},
+                                                            off=frozenset(listed)))
+    priced = [ran(listed[0], rows["rmsnorm-v8"]), ran(listed[1], rows["ar-multimem"])]
+    unpriced = ran(listed[2], rows["residual-add"] | {"flat": False})
+    superseded = ran(listed[3], rows["fr-w2"])
+    s.label(superseded, R.SUPERSEDED_BY, listed[0])
+    differs = ran("r20261112-000000-0001", rows["fr-w13"] | cpus(1))
+    equal = ran("r20261112-000000-0002", rows["sm-fp8-k2048"] | cpus(0))
+    read = ran("r20261111-000000-0003", rows["sm-fp8-k6144"] | cpus(None))
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+
+    steady_rows = [r for r in doc["rows"] if r["source"] in (P.STEADY, P.FAMILY)]
+    by = {r["record"] for r in steady_rows}
+    assert {*priced, differs, equal, read} <= by and not {unpriced, superseded} & by
+    off, t = doc["totals"]["off_node"], doc["totals"]
+    assert off["off"]["runs"] == sorted([*priced, differs]) and off["on"]["runs"] == sorted([equal, read])
+    assert off["not_recorded"]["runs"] and set(off["not_recorded"]["runs"]) <= set(RUNS)
+    assert off["off"]["rows"] == 3 and off["on"]["rows"] == 2
+    assert off["rows"] == off["off"]["rows"] + off["on"]["rows"] + off["not_recorded"]["rows"]
+
+    def share(records: list[str]) -> float:
+        return sum(r["time_share"] for r in steady_rows if r["record"] in records)
+
+    for kind in ("off", "on", "not_recorded"):
+        assert off[kind]["time_share"] == pytest.approx(share(off[kind]["runs"]), rel=1e-12) and off[kind]["time_share"] > 0
+    single = [r for r in doc["rows"] if r["source"] in (P.SINGLE, P.MODELED) and r["seconds"] is not None]
+    assert single and off["single"] == {"rows": len(single), "time_share": pytest.approx(
+        sum(r["time_share"] for r in single), rel=1e-12)}
+    line = (f"card off its CPUs' NUMA node: 3 of {off['rows']} priced steady rows, {off['off']['time_share']:.4%} of the "
+            f"proving time; on its node by the runs' own records: 2 rows, {off['on']['time_share']:.4%}; not recorded: "
+            f"{off['not_recorded']['rows']} rows, {off['not_recorded']['time_share']:.4%}; priced from the single-session "
+            f"card, whose table records no CPUs: {len(single)} rows, {off['single']['time_share']:.4%}")
+    assert R.off_node_line(off) == line and f"\n- {line}\n" in R.render(doc)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token", "a/z": "proof_bytes_per_token"}
+    head, seconds, size = R.measurements(doc, metrics)
+    assert head["inputs"][3] == seconds["inputs"][1] == line and line not in size.get("inputs", [])
+
+    monkeypatch.setattr(R, "off_node_scan", lambda: R.OffNodeScan(SCAN.record, frozenset(), frozenset()))
+    none = R.build("spot", "glm53", store=s.fresh("unscanned"), root=REPO)
+    assert none["totals"]["off_node"]["off"]["runs"] == [differs] and none["totals"]["off_node"]["on"]["runs"] == [equal]
+    assert {k: v for k, v in none["totals"].items() if k != "off_node"} == {k: v for k, v in t.items() if k != "off_node"}
+    strip = [{k: v for k, v in m.items() if k != "inputs"} for m in R.measurements(none, metrics)]
+    assert strip == [{k: v for k, v in m.items() if k != "inputs"} for m in (head, seconds, size)]
+
+
 RMSNORM = next(name for name in fixture("census.json")["definitions"] if name.startswith("RMSNormFusedCudaVector8_v1{N=6144,"))
 LEAN_HOST = {"node": "cpu-node-0", "cores": 64, "host_cores": 128, "cpu_model": "A CPU 9000", "mem_gib": 512.0, "commit": "c" * 40}
 
@@ -2283,10 +2436,8 @@ class Verifier:
                 {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
 
 
-#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest, and a made-up
-#: partition object
+#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest
 PROGRAM = {"schema": "made-up", "program_fn": RMSNORM, "definitions": {"Staged_v1{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
-PARTITION = {"format": "made-up", "program": "p", "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 #: the program's file, spelled as no canonical form is
 PROGRAM_FILE = json.dumps(PROGRAM, indent=1).encode()
 
@@ -2299,6 +2450,8 @@ def _sha512(prefix: bytes, obj: object) -> str:
 #: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
 PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
 UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
+#: a made-up partition object, naming `PROGRAM` as a bound statement's names its Program
+PARTITION = {"format": "made-up", "program": PROGRAM_SHA512, "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 
 
 def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:
@@ -2449,7 +2602,8 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     A partition file that isn't the bound object, or that the circuit binds nothing for, ends the command before any
     verifier process starts; under the provisional cover the verifier takes no partition object, so the bound cover is
     checked and not handed to it. The program is held to nothing the circuit states: the record says which was handed,
-    and only one that names another Definition than `stage.json`'s `word` is refused. An accept on the provisional
+    and only one that names another Definition than `stage.json`'s `word` is refused; but a held partition under
+    `PARTITION_V1` names its Program, and the program is then held to that digest instead. An accept on the provisional
     cover is labelled as holding no Program to the circuit. The circuit is held to `stage.json`'s `circuit_sha512`."""
 
     def measured(*argv: str) -> dict:
@@ -2466,7 +2620,7 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
 
     tree = kept_proof(tmp_path, rule=L.PARTITION_V1)
     program, partition, circuit, stage = (tree / "stage" / n for n in ("program-word.json", "partition.json", "circuit.txt", "stage.json"))
-    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 7)
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 8)
 
     # the program: any descriptor is handed on, since the circuit's `program_sha512` is no digest of it; the record
     # says which, by the digest the verifier computes (annotations in none) and the Definition it names
@@ -2489,7 +2643,15 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     # the bound partition object goes to the verifier; another is refused
     partition.write_text(json.dumps(PARTITION, indent=2))
     doc = measured()
-    assert doc["statement"]["bound"]["held"] == ["partition"] and doc["statement"]["bound"]["withheld"] == []
+    assert doc["statement"]["bound"]["held"] == ["partition", "program"] and doc["statement"]["bound"]["withheld"] == []
+    # under it the program is held to the one the partition object names, not to the stage's word: a bound statement's
+    # population Program names its population, and the verifier refuses any program but the partition's
+    stage.write_text(json.dumps({"word": "Another_v1{N=2}"}))
+    assert measured()["statement"]["bound"]["held"] == ["partition", "program"]
+    stage.unlink()
+    program.write_text(json.dumps(other))
+    refused(r"program-word\.json is not the Program the partition object names: its digest is .*: no verifier was started")
+    program.write_bytes(PROGRAM_FILE)
     assert doc["label"] == f"accepted at --zk, the circuit's partition under {L.PARTITION_V1}"
     assert verifier.calls[-1][verifier.calls[-1].index("--partition") + 1] == "key-partition.json"
     partition.write_text(json.dumps(PARTITION | {"program": "q"}))
@@ -2682,8 +2844,14 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     assert head["mark"] == "modeled" and head["inputs"][:2] == [
         "modeled", (f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
                     f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")]
-    assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == targets
-    assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
+    off = ("card off its CPUs' NUMA node: 0 of 8 priced steady rows, 0.0000% of the proving time; on its node by the "
+           f"runs' own records: 0 rows, 0.0000%; not recorded: 8 rows, {t['off_node']['not_recorded']['time_share']:.4%}; "
+           f"priced from the single-session card, whose table records no CPUs: {t['off_node']['single']['rows']} rows, "
+           f"{t['off_node']['single']['time_share']:.4%}")
+    assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == [off, *targets]
+    assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == [
+        off, *targets]
+    assert f"\n- {off}\n" in outside
     assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
     for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
         assert by[name]["value"] is None and by[name]["mark"] == "modeled" and by[name]["inputs"] == ["modeled", *targets]
