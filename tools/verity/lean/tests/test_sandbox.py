@@ -154,6 +154,66 @@ def test_inside_the_sandbox_a_read_only_dir_is_read_and_never_written(tmp_path):
     assert (out / "got").read_bytes() == b"sealed" and not (seal / "no").exists()
 
 
+def linked_lake(tmp: Path, target: str) -> tuple[Path, Path]:
+    """A tree whose `pkg/.lake` is a link to ``target``, which a change can commit (`.gitignore`'s `**/.lake/` matches only
+    directories), beside `src/Main.lean`: (the tree, the package)."""
+    tree = tmp / "tree"
+    (tree / "src").mkdir(parents=True)
+    (tree / "src" / "Main.lean").write_text("orig\n")
+    (pkg := tree / "pkg").mkdir()
+    (pkg / ".lake").symlink_to(target)
+    return tree, pkg
+
+
+@needs_unshare
+@pytest.mark.parametrize("at", [False, True], ids=["plain", "at"])
+def test_a_lake_the_tree_holds_as_a_link_to_its_sources_stops_the_sandbox_before_its_command_runs(tmp_path, at):
+    """`pkg/.lake -> ../src`: bound read-write at its target, the build would rewrite the tree's sources, and with `--at`
+    (`check.bound` sees the link resolve inside the tree) as much. The sandbox refuses the link and the source stays."""
+    if at and not Path("/var/tmp").is_dir():
+        pytest.skip("no /var/tmp here, where --at refuses")
+    tree, pkg = linked_lake(tmp_path.resolve(), "../src")
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), *(["--at", FIXED, str(tree)] if at else []),
+                        str(pkg / ".lake"), "--", "bash", "-c", "echo pwned > .lake/Main.lean"], cwd=pkg,
+                       capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert f"sandbox.sh: {pkg / '.lake'}, a directory the build would write, is a symbolic link" in r.stderr, r.stderr
+    assert (tree / "src" / "Main.lean").read_text() == "orig\n"
+
+
+@needs_unshare
+def test_a_lake_the_tree_holds_as_a_link_out_of_it_stops_the_sandbox_before_its_command_runs(tmp_path):
+    """`pkg/.lake -> /an/absolute/directory` outside the tree (another slot's build, a cache): bound at its target, the
+    build would write there. The sandbox refuses the link and the directory stays as it was."""
+    tmp = tmp_path.resolve()
+    (cache := tmp / "cache").mkdir()
+    (cache / "e").write_text("entry\n")
+    _, pkg = linked_lake(tmp, str(cache))
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), str(pkg / ".lake"), "--", "bash", "-c",
+                        "echo poisoned > .lake/e"], cwd=pkg, capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "is a symbolic link" in r.stderr, r.stderr
+    assert (cache / "e").read_text() == "entry\n"
+
+
+@needs_unshare
+def test_a_read_only_dir_under_a_writable_one_that_is_a_link_stops_the_sandbox_before_its_command_runs(tmp_path):
+    """`--ro pkg/.lake/packages`, as `lean_changed.in_sandbox` passes a package's fetched dependencies (it tests `is_dir`,
+    which follows a link), where `packages` is a link: a change can commit one (`git add -f` inside the ignored `.lake`),
+    and `check.dev_restore` makes one for the length of a `cache.py get`. The link would choose which directory is bound
+    read-only, so the sandbox refuses it."""
+    tmp = tmp_path.resolve()
+    (lake := tmp / "tree" / "pkg" / ".lake").mkdir(parents=True)
+    (deps := tmp / "tree" / "deps").mkdir()
+    (lake / "packages").symlink_to(deps)
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(lake / "packages"), str(lake), "--", "bash",
+                        "-c", 'touch "$1/ran"', "_", str(lake)], capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert f"sandbox.sh: {lake / 'packages'}, a directory under {lake} that the build would read only, is a symbolic " \
+           "link" in r.stderr, r.stderr
+    assert not (lake / "ran").exists()
+
+
 def remount_refused(tmp: Path, monkeypatch, refused: Path, binds: list[tuple[Path, Path]],
                     locked: Path | None = None, cwd: Path | None = None, fakes: dict[str, str] | None = None,
                     also: str = "") -> subprocess.CompletedProcess:
@@ -242,13 +302,16 @@ def test_a_mount_the_command_cannot_write_whose_read_only_remount_fails_leaves_t
     ("id", "exit 1", "locked/inner"),
     ("stat", "exit 0", "locked/inner"),
     ("find", "exit 1", "tree"),
-    ("grep", "exit 2", "tree"),
-], ids=["id-fails", "stat-says-nothing", "find-fails-silently", "grep-fails"])
+    ("find", "echo \"find: '/x': Permission denied\"; echo \"hit $2\"; echo \"find: '/y': Permission denied\"; exit 1",
+     "tree"),
+], ids=["id-fails", "stat-says-nothing", "find-fails-silently", "find-hit-among-denials"])
 def test_a_probe_tool_that_fails_or_says_nothing_stops_the_sandbox_before_its_command_runs(
         tmp_path, monkeypatch, tool, body, refused):
     """The probe decides "out of reach" only on what its tools said. A failing `id` leaves the command's uid unknown, so a
-    locked directory it owns (and could chmod) must not read as someone else's; a `stat` that prints no owner, a `find`
-    that fails without a word, or a failing `grep` over `find`'s errors, likewise: each is doubt, and doubt refuses."""
+    locked directory it owns (and could chmod) must not read as someone else's; a `stat` that prints no owner, or a `find`
+    that fails without a word (its one line is empty, which is no "Permission denied"), likewise: each is doubt, and doubt
+    refuses. A `find` that exits 1 over "Permission denied" lines with a hit among them refuses too: every line must be
+    a denial."""
     tmp = tmp_path.resolve()
     (tmp / "locked" / "inner").mkdir(parents=True)
     (src := tmp / "src").mkdir()
@@ -637,6 +700,31 @@ def test_a_sandboxed_build_in_a_slot_tree_replaces_a_path_dependencys_outputs_an
         assert r.returncode == 0, r.stdout + r.stderr
     assert olean.read_bytes() != before
     assert (real / "a" / ".lake" / "x").exists() and not any(job.iterdir())
+
+
+@needs_unshare
+@needs_lake
+@needs_var_tmp
+def test_a_real_build_whose_compile_time_code_writes_a_source_through_a_linked_lake_is_refused_before_lake_runs(tmp_path):
+    """A change commits `pkg/.lake -> ../src` beside a module whose `#eval`, run while it compiles, writes `.lake/Main.lean`,
+    which is `src/Main.lean`. In the sandbox, as a build runs (`--at`), the build is refused and the source stays; the
+    same `lake build` outside it rewrites the source, so the `#eval` is a writer."""
+    tree = tmp_path.resolve() / "tree"
+    (src := tree / "src").mkdir(parents=True)
+    (src / "Main.lean").write_text("orig\n")
+    (pkg := tree / "pkg").mkdir()
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+    shutil.copy(CONTROL / "lean-toolchain", pkg / "lean-toolchain")
+    (pkg / "P.lean").write_text('#eval IO.FS.writeFile ".lake/Main.lean" "pwned\\n"\n')
+    (pkg / ".lake").symlink_to("../src")
+    env = {**os.environ, "LAKE_ARTIFACT_CACHE": "false"}
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(tree), str(pkg / ".lake"), "--", "lake",
+                        "build"], cwd=pkg, env=env, capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert f"sandbox.sh: {pkg / '.lake'}, a directory the build would write, is a symbolic link" in r.stderr, r.stderr
+    assert (src / "Main.lean").read_text() == "orig\n"
+    subprocess.run(["lake", "build"], cwd=pkg, env=env, check=True, capture_output=True)
+    assert (src / "Main.lean").read_text() == "pwned\n"
 
 
 @needs_unshare

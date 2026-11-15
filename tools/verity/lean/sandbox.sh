@@ -33,8 +33,32 @@ while [ "$1" != "--" ]; do
   esac
 done
 shift
+# The callers name each RW_DIR by the tree's own paths (a package's `.lake`), so one that is itself a symbolic link would let
+# the tree choose what the build writes: the link's target, a source of the tree or a cache outside it. A link above it
+# (a slot tree, a link into the node's cache root) is the node's own, and stays. An RO_DIR under an RW_DIR that is itself
+# a link is refused too: the tree would choose which directory is bound read-only.
+for d in "${rw[@]}"; do
+  if [ -L "$d" ]; then
+    echo "sandbox.sh: $d, a directory the build would write, is a symbolic link, so the tree would choose where the build" \
+      "writes: make it a directory" >&2
+    exit 3
+  fi
+done
 # a bind mount and /proc/self/mountinfo name a directory by its resolved path, so keep and seen hold the resolved ones
 for i in "${!rw[@]}"; do mkdir -p "${rw[i]}"; rw[i]=$(realpath "${rw[i]}"); done
+for d in "${ro[@]}"; do
+  [ -L "$d" ] || continue
+  up=$(dirname -- "$d")
+  up=$(realpath -m -- "$up")
+  for w in "${rw[@]}"; do
+    case "$up/" in
+      "$w"/*)
+        echo "sandbox.sh: $d, a directory under $w that the build would read only, is a symbolic link, so the tree would" \
+          "choose which directory is read-only: make it a directory" >&2
+        exit 3;;
+    esac
+  done
+done
 for i in "${!ro[@]}"; do ro[i]=$(realpath -m "${ro[i]}"); done
 # mountinfo writes a mount point's space, tab, newline and backslash as octal escapes (\040, \011, \012, \134): `path`
 # decodes them, and gives a name holding a newline (which no line-per-name list carries), any other escape or a stray
@@ -177,7 +201,7 @@ out=$(LC_ALL=C find "$m" -xdev ! -type l \( -writable -o -user "$me" -o -type d 
   -printf "hit %p\n" -quit 2>&1)
 s=$?
 [ $s -ne 0 ] || [ -n "$out" ] || exit 0
-[ $s -eq 1 ] && [ -n "$out" ] || exit 1
+[ $s -eq 1 ] || exit 1
 nl="
 "
 rest=$out$nl
