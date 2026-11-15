@@ -16,7 +16,7 @@ def test_only_comms_router_doorbells_go_to_the_platform(world, monkeypatch, tmp_
     raw = callback()
     ev = raw["event"]
     ev.update(type="message", channel=COORD, thread_ts=inbox, ts=event_ts, username="router", bot_id=BOT,
-              text=f"from infra, thread {source}: Please check this one item.")
+              text=f"from codex, thread {source}: @comms [comms relay test] Please check this one item.")
     for changed in ({"channel": "COTHER"}, {"thread_ts": world.boxes["top"]}, {"username": "comms"},
                     {"bot_id": "another"}, {"subtype": "message_changed"}):
         assert not comms.candidate(d, {**ev, **changed})
@@ -38,6 +38,11 @@ def test_only_comms_router_doorbells_go_to_the_platform(world, monkeypatch, tmp_
     orig = data["event"]["text"]
     data["event"]["text"] = orig.replace("thread ", "#chat-someone thread ")
     assert consumer.process(d, data) == "comms: source outside coordination"
+    data["event"]["text"] = orig
+    data["event"]["text"] = orig.replace("[comms relay test]", "regular")
+    assert consumer.process(d, data) == "comms: Cursor holds inbox"
+    data["event"]["text"] = orig.replace("from codex", "from infra")
+    assert consumer.process(d, data) == "comms: Cursor holds inbox"
     data["event"]["text"] = orig
     del d.env["COMMS_RELAY_CANARY_THREAD"]
     assert consumer.process(d, data) == "comms: Cursor holds inbox"

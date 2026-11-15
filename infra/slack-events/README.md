@@ -173,7 +173,7 @@ The existing Events API can forward a verified router doorbell in the comms inbo
 production agents platform. Set `COMMS_RELAY_INBOX` (channel ID/thread timestamp) and
 `COMMS_RELAY_UNTIL` (UTC ISO timestamp) in both production projects. The 24-hour window is
 closed by default. While Cursor holds the route, only the public coordination thread named by
-`COMMS_RELAY_CANARY_THREAD` can be rehearsed. Reserve that thread with the Cursor holder first.
+`COMMS_RELAY_CANARY_THREAD` can be rehearsed, on a doorbell from Codex containing `[comms relay test]`. Reserve that thread with the Cursor holder first.
 Full delivery requires the verified platform seat to hold the open comms route. The relay handles
 public coordination doorbells only. Private-channel work and other notification types require
 their own handoff before a full cutover.

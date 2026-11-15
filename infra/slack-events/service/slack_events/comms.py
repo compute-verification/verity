@@ -57,8 +57,11 @@ def forward(d: Deps, ev: dict) -> str:
     # reply across that boundary. Leave its original doorbell in Slack for the holder.
     if d.rs.doorbell_channel(ev["text"]) not in (None, d.rs.FRONT_DOOR, ev["channel"]):
         return "comms: source outside coordination"
-    if route["holder"] != SEAT and source != d.env.get("COMMS_RELAY_CANARY_THREAD"):
-        return "comms: Cursor holds inbox"
+    if route["holder"] != SEAT:
+        reserved = (source == d.env.get("COMMS_RELAY_CANARY_THREAD") and bell[1] == "codex"
+                    and "[comms relay test]" in ev["text"][bell.end():])
+        if not reserved:
+            return "comms: Cursor holds inbox"
     answer = exchange({"channel": ev["channel"], "inbox": ev["thread_ts"], "ts": ev["ts"], "text": ev["text"]})
     status = answer.get("status")
     if status == "pending":
