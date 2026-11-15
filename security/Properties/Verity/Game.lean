@@ -122,7 +122,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   store at onsite, and Pearl+'s run on the policy's record and its window record the one the record is chained after at
   remote, `AcceptTied`'s),
   and `a`'s compiled check's acceptance of its own case under the deployment's pins (`ComponentAccepts`, `PinnedFor`:
-  sampled proofs refuse a challenger key or session the pins don't hold). The log as each compiled check read it
+  SPOT refuse a challenger key or session the pins don't hold). The log as each compiled check read it
   (`coinsRead`) is the targets' to bind to the whole log of a party the check reads (`Logged`).
 * **PoUW counts gates at onsite and MACs at remote.** In a composite that doesn't list Pearl+'s id (onsite), gates of
   the committed circuit the play computed after their window's coin, over the period's windows (`computed`), with no
@@ -308,7 +308,7 @@ def HoldsPouwSession (P : AuditorPins) (s : String) : Prop := s.toUTF8.data.toLi
 def HoldsSession (P : AuditorPins) (r : Role) (s : ByteArray) : Prop := s.data.toList ∈ P.sessions r
 
 /-- **The pins whose signed logs subprotocol `a`'s check reads**, by their places in `keys`: SPOT's live challenger's
-(the first) for sampled proofs and PoUW, every memory challenger's for PoUS and the wipe, every network certifier's
+(the first) for SPOT and PoUW, every memory challenger's for PoUS and the wipe, every network certifier's
 for the network certifier, and none for PoUB-P2 and the inference-only policy, which read no device's
 signature. -/
 def reads (P : AuditorPins) : Subprotocol → List ℕ
@@ -324,7 +324,7 @@ def certifierPin (q : AuditorPin) : Core.Composites.CertifierPin :=
   ⟨q.link, ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩, ⟨q.session.toArray⟩, q.start⟩
 
 /-- **The pins as the compiled verifier reads them** (`Core.Composites.Pins`, `product IDS --pins`): the first
-pin's key and LMS parameters, when it is a challenger's, the sampled proofs' and, apart, the PoUW sessions designated
+pin's key and LMS parameters, when it is a challenger's, SPOT's and, apart, the PoUW sessions designated
 for the challenger; every memory
 challenger's key with its servers, and the sessions designated for the memory challengers; and every network certifier
 entry, its link, key, LMS parameters, session and start, in their order. -/
@@ -346,7 +346,7 @@ sessions the pins hold. -/
 def pinnedVerifier (P : AuditorPins) (k : Verity.Registration.Composite) : BlobProtocol :=
   Core.Composites.atPins P.compiled (verifier k)
 
-/-- **Sampled proofs' parameters name only what the pins hold**: each sampled component's challenger key is SPOT's
+/-- **SPOT's parameters name only what the pins hold**: each sampled component's challenger key is SPOT's
 pinned key under its pinned LMS parameters, and its window is a session the auditor designated for the challenger. -/
 def SpotPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
   ∀ p ∈ sampledParams θ,
@@ -355,7 +355,7 @@ def SpotPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
 /-- **PoUW's parameters name only the pinned challenger and designated sessions**: each PoUW period's challenger key,
 where it reads as one, is SPOT's pinned key, and its parameters list the sessions its windows are held to
 (`challengePhases`, the key `sessions`), each one of the PoUW sessions the auditor designated for the challenger
-(`HoldsPouwSession`), never a sampled proofs' window root. A session not in the pins is refused, and so is a period run
+(`HoldsPouwSession`), never a SPOT's window root. A session not in the pins is refused, and so is a period run
 alone, which lists none. -/
 def PouwPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
   ∀ p ∈ componentsAt Core.Composites.pouwAt θ,
@@ -387,7 +387,7 @@ def NetworkPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
 
 /-- **Subprotocol `a`'s pin check on the parameters `θ`**, each of the device keys its check verifies signatures
 under, as its own decoder reads them from its parameters, which the compiled verifier checks (`pinnedVerifier`):
-sampled proofs' challenger key and window (`SpotPinned`), PoUW's challenger key and sessions (`PouwPinned`), the
+SPOT's challenger key and window (`SpotPinned`), PoUW's challenger key and sessions (`PouwPinned`), the
 memory challengers' keys PoUS and the wipe trust, with their sessions (`PousPinned`, `WipePinned`), and the network
 certifier's entries for the period's link, each a key, its session and its start (`NetworkPinned`).
 PoUB-P2's and the inference-only policy's checks read no device's signature, and `True` is theirs. -/

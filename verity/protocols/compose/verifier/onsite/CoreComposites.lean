@@ -71,7 +71,7 @@ structure MemoryPin where
   servers : List ByteArray
 
 /-- **The auditor's pins**, as the composite reads them: its challenger's key (none: no challenger is pinned), the
-window roots of the sampled proofs' sessions it designated for the challenger and, apart from them, the PoUW sessions it
+window roots of SPOT's sessions it designated for the challenger and, apart from them, the PoUW sessions it
 designated for the challenger, each as the bytes of its text, so one protocol's session is never taken for the other's;
 its memory challengers and the sessions it designated for them; and its network certifiers' entries. -/
 structure Pins where
@@ -208,7 +208,7 @@ def networkPinned (P : Pins) (p : NetworkCheck.Period.Params) : Bool :=
   entriesHeld p.lms (P.certifiers.filter (·.link == p.link)) p.entries.toList
 
 /-- The composite's parameters `j` name only what `P` pins, in every component that reads a device's key or session:
-sampled proofs', PoUW's, PoUS's, the wipe's and the network certifier's. Parameters that don't read as a composite's
+SPOT's, PoUW's, PoUS's, the wipe's and the network certifier's. Parameters that don't read as a composite's
 pass, since the composite refuses them itself. -/
 def paramsPinned (P : Pins) (j : Json) : Bool :=
   match decodeParams j with
@@ -355,7 +355,7 @@ private def somePins : String :=
 #guard (pinsOf (somePins.replace "\"start\":4" "\"start\":\"4\"")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"session\":\"0c\"" "\"session\":\"0\"")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"servers\":[\"0d\"]" "\"servers\":\"0d\"")).toOption.isNone
--- a PoUW period passes where its sessions are PoUW sessions designated for the challenger, not sampled proofs'
+-- a PoUW period passes where its sessions are PoUW sessions designated for the challenger, not SPOT's
 -- window roots; a period run alone lists none, and is refused
 #guard match pinsOf (noPins "\"w1\"" "\"s1\",\"s2\"") with
   | .ok P =>

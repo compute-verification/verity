@@ -24,7 +24,7 @@ namespace Verity
 
 /-- **An auditor device's role**: which checks read what it signs. -/
 inductive Role where
-  /-- SPOT's live challenger: sampled proofs' coins and PoUW's salts -/
+  /-- SPOT's live challenger: SPOT's coins and PoUW's salts -/
   | challenger
   /-- the memory challenger: PoUS's challenges, PoUB's samples, the wipe's labels and reads -/
   | memoryChallenger
@@ -48,7 +48,7 @@ structure AuditorPin where
   servers : List Hash.Msg := []
 
 /-- **The deployment's pins for one monitoring period**: its devices' pins, SPOT's live challenger first, the
-sessions the auditor designated for each role (for the challenger, sampled proofs' window roots), and apart from them
+sessions the auditor designated for each role (for the challenger, SPOT's window roots), and apart from them
 the PoUW sessions it designated for the challenger, so that no protocol's session is taken for another's, all fixed
 before the prover's first move. -/
 structure AuditorPins where
