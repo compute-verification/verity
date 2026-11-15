@@ -44,6 +44,7 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           "verity/protocols/accounting/poub/prover/remote_session/session.cu", "verity/__init__.py",
           "tools/config/verity_config/verity_settings.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/poub/verifier",
+          "tests/verity/protocols/accounting/poub/verifier",
           "verity/channel.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
           # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
