@@ -56,10 +56,10 @@ def _py(argv: list[str], env: dict[str, str] | None = None) -> subprocess.Comple
     return subprocess.run([sys.executable, *argv], cwd=ROOT, capture_output=True, text=True, env=env)
 
 
-def _held(root: Path) -> dict[int, int]:
+def _held(root: Path) -> tuple[dict[int, int], dict[int, str]]:
     """Each live process whose command line names `root` (a session's ``serve`` verb and its serve.py), with a pidfd on
-    it, so its exit can be waited on."""
-    got = {}
+    it, so its exit can be waited on; and each process that went away while it was read, with what reading it raised."""
+    got, gone = {}, {}
     for d in Path("/proc").iterdir():
         if not d.name.isdigit():
             continue
@@ -68,9 +68,9 @@ def _held(root: Path) -> dict[int, int]:
             state = (d / "stat").read_text().rsplit(")", 1)[1].split()[0]
             if named and state != "Z":
                 got[int(d.name)] = os.pidfd_open(int(d.name))
-        except (OSError, IndexError):
-            continue
-    return got
+        except (OSError, IndexError) as e:
+            gone[int(d.name)] = type(e).__name__
+    return got, gone
 
 
 def _ledger(root: Path) -> list[dict]:
@@ -110,12 +110,12 @@ def test_the_local_challenger_samples_the_verifier_and_stop_leaves_none_of_its_p
         pending, _ = PHW.reserve_salt(g.call, g.ledger, gate["lane"], gate["peer"], 0)
         g.call("open", "--session", pending["session"], "--root", hashlib.sha512(b"no client").hexdigest())
     finally:
-        held = _held(root)
+        held, _ = _held(root)
         stop = _py([str(E2E), "stop", "--root", str(root), "--out", str(out)])
         for fd in held.values():
             select.select([fd], [], [])
             os.close(fd)
-    left = _held(root)
+    left, gone = _held(root)
     for fd in left.values():
         os.close(fd)
 
@@ -143,4 +143,4 @@ def test_the_local_challenger_samples_the_verifier_and_stop_leaves_none_of_its_p
     assert stop.returncode == 0, stop.stderr[-2000:]
     assert (out / "auditor" / "windows.jsonl").is_file() and (out / "auditor" / "public").is_file()
     assert int((root / f"{pending['session']}.pid").read_text()) in held
-    assert sorted(left) == []
+    assert sorted(left) == [], f"left running: {sorted(left)}; went away while read: {gone}"
