@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
@@ -26,11 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
-from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 
-SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
+SCAN = NetworkCertifierParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6

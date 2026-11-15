@@ -103,10 +103,10 @@ def ReadsFiles (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (bs : 
     ∀ b, bs.get vm.own.pub "public file" = .ok b → b = Verity.namedFile (digestOf vm.own.pub) R
 
 /-- **The statement the per-member form read for a member is the window's member's**: on the blobs sent `s`, where
-v2 reads the member's files among the files `R` and each pinned table the blobs hold is its registered file, the
-statement read for the parameters' member `vm` is `StatesMember` of the window's member `m` that is `vm` on `R`. -/
-theorem statesMember {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSent s)
-    {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn R vm m)
+v2 reads the member's files among the files `R` and each pinned table the blobs hold is its registered file in `T`,
+the statement read for the parameters' member `vm` is `StatesMember` of the window's member `m` that is `vm` on `R`. -/
+theorem statesMember {T : PinnedTables} {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSent T s)
+    {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn T R vm m)
     (hr : ReadsFiles R vm (_root_.Core.Blobs.ofArray s.blobs)) {slice : Json}
     {a : _root_.Spot.OneStageZk.StepAt}
     (ha : vm.statement slice (_root_.Core.Blobs.ofArray s.blobs) = .ok a) : StatesMember (stepAt a) m := by

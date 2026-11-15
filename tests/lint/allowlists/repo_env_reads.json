@@ -228,9 +228,9 @@
     {"file": "adapters/vllm/verity_vllm/definitions/numerics/_jit.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/definitions/numerics/dense_rows.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/prover/n2_zk.py", "count": 1},
-    {"file": "verity/protocols/accounting/certifier/device/tests/test_warden_serve_phase10.py", "count": 1},
-    {"file": "verity/protocols/accounting/certifier/device/warden_serve.py", "count": 3},
-    {"file": "verity/protocols/accounting/certifier/prover/warden_zk.py", "count": 1},
+    {"file": "verity/protocols/accounting/certifier/device/tests/test_network_certifier_serve_phase10.py", "count": 1},
+    {"file": "verity/protocols/accounting/certifier/device/network_certifier_serve.py", "count": 3},
+    {"file": "verity/protocols/accounting/certifier/prover/network_certifier_zk.py", "count": 1},
     {"file": "benchmarks/slowdown/run.py", "count": 1}
   ]
 }

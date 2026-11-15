@@ -467,6 +467,21 @@ def test_the_move_in_many_processes_is_the_move_in_one(toy, toy_map, tmp_path_fa
     assert got["1"] == got["4"] and "files rewritten: 0" not in got["1"][1]
 
 
+def test_only_renames_in_the_files_it_lists_and_those_it_moves(toy, toy_map, tmp_path_factory):
+    """`--only FILE` (a carry's rerun over what a merge brought) renames inside the listed files and the files it moves,
+    as the whole move does there, and leaves every other file's text as it was."""
+    whole = tmp_path_factory.mktemp("whole")
+    git(whole, "clone", "-q", str(toy), ".")
+    assert M.main(["--map", str(toy_map), "--root", str(whole)]) == 0
+    listed = tmp_path_factory.mktemp("listed") / "only.txt"
+    listed.write_text("README.md\n")
+    assert M.main(["--map", str(toy_map), "--root", str(toy), "--only", str(listed)]) == 0
+    for p in ("README.md", "w/certifier/grid.py", "w/certifier/tests/test_network_certifier_grid.py",
+              "Sec/Proofs/NetworkCertifier.lean"):
+        assert (toy / p).read_text() == (whole / p).read_text(), p
+    assert (toy / "Sec/lean-audit.json").read_text() == git(toy, "show", "HEAD:Sec/lean-audit.json")
+
+
 def test_the_record_of_the_moves_keeps_their_old_paths_whatever_the_map_excludes(toy, tmp_path_factory):
     """research's `moves.json` records each move's old paths: renamed in it, they'd be lost, and a second run would rename
     the entry the first appended."""

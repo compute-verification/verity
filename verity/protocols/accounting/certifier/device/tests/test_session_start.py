@@ -22,7 +22,7 @@ from verity.protocols.accounting.certifier.verifier.run_clock import VirtualCloc
 
 from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION
 
-from verity.protocols.accounting.certifier.device import warden_serve as ws  # by name, so that the spawned process finds its functions
+from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # by name, so that the spawned process finds its functions
 
 OTHER = bytes(range(1, 33))
 THIRD = bytes(range(2, 34))

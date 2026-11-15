@@ -28,7 +28,7 @@ from verity.protocols.accounting.certifier.verifier.pacer import raw_clock
 from verity.protocols.proofs.spot.device import remote as R
 from verity.protocols.proofs.spot.device.challenger import CoinError, LiveChallenger, LiveOpening, live_reason
 
-from test_network_certifier_warden import EarlyClock
+from test_network_certifier import EarlyClock
 
 SCHEME = "verity/test/coins/v1"
 FAMILIES = [("positions", 3), ("replay", 2)]
