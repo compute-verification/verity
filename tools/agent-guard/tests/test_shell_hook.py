@@ -1417,7 +1417,8 @@ def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is
 TOKEN = "gh" "s_" "dummyDUMMYdummy0123456789abcdefABCDEF"
 QUEUE_URLS = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",
               "git@github.com:compute-verification/verity.git", "ssh://git@github.com/compute-verification/verity",
-              f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity", "https://github.com/compute-verification/infra.git"]
+              f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity", "https://github.com/compute-verification/infra.git",
+              "https://github.com/compute-verification/platform.git", "git@github.com:compute-verification/platform"]
 OTHER_URLS = ["https://github.com/compute-verification/research-notes.git", "https://github.com/someone/verity-fork",
               "https://github.com/compute-verification/verity-notes", "https://github.com/someone/compute-verification/verity"]
 
