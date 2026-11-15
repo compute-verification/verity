@@ -109,8 +109,8 @@ registered link ends at places of the Site and every link at a sink has its othe
 theorem uncertified_sealed (β : Fin S.links.length → ℕ) (cert X sink : Finset String)
     (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places)
     (h : ∀ k ∈ S.links, (k.ends.1 ∈ sink → k.ends.2 ∈ X) ∧ (k.ends.2 ∈ sink → k.ends.1 ∈ X)) :
-    Accounting.uncertifiedCapacity S.placeEnds β (S.placesIn cert) (S.placesIn (X ∪ sink)) =
-      Accounting.uncertifiedCapacity S.placeEnds β (S.placesIn (cert ∪ sink)) (S.placesIn X) := by
+    Accounting.uncertifiedLinkCapacity S.placeEnds β (S.placesIn cert) (S.placesIn (X ∪ sink)) =
+      Accounting.uncertifiedLinkCapacity S.placeEnds β (S.placesIn (cert ∪ sink)) (S.placesIn X) := by
   classical
   have hp : ∀ (e : Fin S.links.length) (Y : Finset String),
       ((S.placeEnds e).1 ∈ S.placesIn Y ↔ (S.links[e.1]).ends.1 ∈ Y) ∧
@@ -118,7 +118,7 @@ theorem uncertified_sealed (β : Fin S.links.length → ℕ) (cert X sink : Fins
     intro e Y
     have h := hends (S.links[e.1]) (List.getElem_mem e.2)
     simp [placeEnds, placesIn, place, h.1, h.2]
-  unfold Accounting.uncertifiedCapacity Accounting.boundary
+  unfold Accounting.uncertifiedLinkCapacity Accounting.boundary
   rw [Finset.sum_filter, Finset.sum_filter, Finset.sum_filter, Finset.sum_filter]
   refine Finset.sum_congr rfl fun e _ => ?_
   have h1 := (h _ (List.getElem_mem e.2)).1
@@ -153,7 +153,7 @@ theorem leak_le_registered {Ω : Type*} (hkinds : S.LinkKinds)
           S.placesIn (S.certifiersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ S.placesIn (S.certifiersOf i ∪ units), K y) +
         jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.certifiersOf i ∪ units)).card +
-        Accounting.uncertifiedCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
+        Accounting.uncertifiedLinkCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
           (S.placesIn (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞) := by
   have hin : ∀ y ∈ S.challengersOf pinned i \ units, S.Within i y := fun y hy =>
     S.within_of_not_shared (Finset.mem_sdiff.2

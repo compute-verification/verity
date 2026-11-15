@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import domains
 from verity_vllm.compiler import compile_slice as CS, served_rows as SR
 from verity_vllm.compiler import served_statics as SS
 from tests.compiler.test_network_certifier_compile_slice import BOOK
@@ -41,6 +42,10 @@ def x():
     served = SR.register(S, session, RUN_ROOT)
     return SimpleNamespace(st=st, S=S, sl=sl, rows=rows, ids=ids, by_step=by_step, session=session, served=served,
                            record=served.record())
+
+
+def test_the_domain_is_the_tables_and_its_bytes_dont_move():
+    assert SR.SCHEMA is domains.CERTIFIER_SERVED_ROWS and SR.DOMAIN == SR.SCHEMA.encode() == b"verity/certifier/served-rows/v1"
 
 
 def test_the_runner_rows_are_the_slices(x):

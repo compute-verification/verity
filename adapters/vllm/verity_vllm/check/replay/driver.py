@@ -473,7 +473,7 @@ def _strata_keys(strata: dict[str, dict], ranks: list[int], all_vus: list[dict],
                                  "identities); else fresh-window; unwindowed collectors: one value, stated",
                          "sampled": dict(Counter(v["lifetime"] for v in picked))},
             "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
-                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to max_tokens' last step; steps past the "
+                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
                       "prefix are 'not-executed', split out of the pool by name)"),
             # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
             "phase_anchor": {r: anchors[r] for r in sorted(anchors)}}
@@ -709,7 +709,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                        "picked": len(picked), "evaluated": fold.evaluated, "equal": fold.equal,
                        "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(bound),
                        "stratified_picked": min(bound, n_strat), "targeted": targeted, "targeted_n": n_targeted,
-                       "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the bound",
+                       "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the cap",
                        "picks_by_request_step": picks_by_request_step,      # {request: {step: [picked, evaluated, mismatch]}}
                        # the step is the REQUEST-RELATIVE step (the executed prefix's n_exec counts the request's own steps); the engine
                        # step of a pick is arrival + step -- the arrival per request beside it, so a mixed-arrivals reader adds it, not guesses
