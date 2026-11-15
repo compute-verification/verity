@@ -175,10 +175,10 @@ class Piece:
 
 
 PIECES = {
-    "stop_record": Piece("verity/protocols/proofs/spot/prover/audit/stop_audit.py",
+    "stop_record": Piece("benchmarks/one_stage/stop_audit.py",
                          "no Lean guarantee covers the stop audit's command, which is Python around Lean's verdicts",
                          _stop_record),
-    "second_stage": Piece("verity/protocols/proofs/spot/prover/audit/two_stage.py", "the two-stage form's soundness is not proved",
+    "second_stage": Piece("benchmarks/one_stage/two_stage.py", "the two-stage form's soundness is not proved",
                           _second_stage),
 }
 

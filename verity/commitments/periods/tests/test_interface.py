@@ -10,7 +10,7 @@ reads) is rebuilt from the circuit record alone, its members stated by cap, wire
 writer commits each row as the table's leaf, whose root the verifier pins from the public bodies, and a commit into a
 period directory is the whole commit, made a run of rows at a time. A period written under
 core's registration, and `of_records` against it, are the records audit's tests
-(`verity/protocols/proofs/spot/prover/tests/test_records_audit.py`), since these may not import core."""
+(`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
 
 import copy
