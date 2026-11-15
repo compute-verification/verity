@@ -20,7 +20,8 @@ prove  the statements of UNITS_FILE staged under FLOCK_WORK, and under each WIN_
        FLOCK_WORKs, each statement linked file by file into FLOCK_WORK/data so its sessions are written there), a unit's
        statements on one GPU, in WIN_GPUS groups balanced by estimated time, each group one `prove_time.sh STEPS=prove
        PT_DEVICE=gpu` (WARM=1 RUNS=1 unless set) on its own slice of the job's cores under `gpu-lease 1` (the tree's
-       gpu_lease.sh where none is installed). A statement's estimate is its seconds in WIN_SECONDS (an earlier prove's
+       gpu_lease.sh where none is installed); under WIN_CARD_CPUS (CARD=CPU,..;..) group g leases its card alone, on the
+       CPUs given for it (its card's NUMA node's). A statement's estimate is its seconds in WIN_SECONDS (an earlier prove's
        out/seconds.tsv); one it doesn't hold finished takes WIN_UNMEASURED_S (default 900) or its unfinished seconds there,
        whichever is more, and its unit starts first in its group. Without WIN_SECONDS the estimate is a model of the
        circuit's size and k_log. As each statement's session set ends, its KEEP files (its public files and every session's
@@ -450,6 +451,9 @@ def prove(units: list[Unit]) -> int:
         (scratch / "gpu-lease").symlink_to(REPO / "tools/research/src/research/pods/sh/gpu_lease.sh")
         path = f"{scratch}:{path}"
     per = len(cpus) // ngpu
+    pinned = [(c, [int(x) for x in cs.split(",")]) for c, _, cs in (e.partition("=") for e in env("WIN_CARD_CPUS").split(";") if e)]
+    if pinned and (len(pinned) != ngpu or any(not set(cs) <= set(cpus) for _, cs in pinned)):
+        raise SystemExit(f"window.py: WIN_CARD_CPUS names {len(pinned)} cards for WIN_GPUS={ngpu} groups, or CPUs outside the job's")
     jobs = []
     log(f"prove: {len(staged)} types in {ngpu} groups, {per} CPUs each, host memory {mem / GB:.0f} GB, device {dev_mib / 1024:.0f} GiB a GPU")
     for g, items in enumerate(groups):
@@ -457,12 +461,17 @@ def prove(units: list[Unit]) -> int:
             continue
         units_arg = " ".join(f"{u.unit}@{','.join(ns)}" for u, ns, *_x in items)
         lease = int(env("LEASE_MIN"))
-        cores = ",".join(map(str, cpus[g * per:(g + 1) * per]))
+        cores = ",".join(map(str, pinned[g][1] if pinned else cpus[g * per:(g + 1) * per]))
+        card: dict[str, str] = {}
+        if pinned:
+            (scratch / f"card{g}").write_text(pinned[g][0] + "\n")
+            card = {"GPU_LEASE_ALLOWED_FILE": str(scratch / f"card{g}")}
+            log(f"group {g}: card {pinned[g][0]} alone, on its NUMA node's CPUs {cores}")
         log(f"group {g}: {len(items)} types ({sum(x[3] for x in items)} unmeasured, first), estimated "
             f"{sum(x[2] for x in items) / 60:.1f} min, lease {lease} min, cores {cores}")
         p = start(f"gpu group {g}", ["STEPS=prove", f"PT_DEVICE={env('WIN_DEVICE')}", f"PT_UNITS={units_arg}", f"LEASE_MIN={lease}",
                                      f"VCPUS={env('VCPUS')}", f"WARM={env('WARM')}", f"RUNS={env('RUNS')}"],
-                  OUT / f"gpu{g}", {"FLOCK_WORK": str(fw), "PATH": path, "GPU_LEASE_WHO": env("GPU_LEASE_WHO")},
+                  OUT / f"gpu{g}", {"FLOCK_WORK": str(fw), "PATH": path, "GPU_LEASE_WHO": env("GPU_LEASE_WHO"), **card},
                   prefix=["taskset", "-c", cores])
         jobs.append(Job(f"gpu{g}", p, time.time()))
     kept: set[str] = set()

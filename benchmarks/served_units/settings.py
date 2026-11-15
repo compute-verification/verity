@@ -24,6 +24,7 @@ DECLARED: dict[str, tuple[str | None, str]] = {
     "SM": ("", "the GPUs' compute capability the prover is built for (90 for H200, 120 for RTX PRO 6000); required on gpu"),
     "WIN_GPUS": ("8", "prove: the groups, one GPU each"),
     "WIN_DEV_GIB": ("45", "prove: device memory a group's prover may hold, GiB"),
+    "WIN_CARD_CPUS": ("", "prove: CARD=CPU,CPU..;CARD=.. one group a card, leasing that card alone, on those CPUs (its NUMA node's)"),
     "WIN_ALSO": ("", "prove: colon-separated FLOCK_WORKs whose staged statements are proved too"),
     "WIN_SECONDS": ("", "prove: an earlier prove's out/seconds.tsv, whose seconds balance the groups"),
     "WIN_UNMEASURED_S": ("900", "prove: the estimate of a statement WIN_SECONDS doesn't hold finished, at least"),

@@ -28,7 +28,8 @@ out, fw = Path(os.environ["RESEARCH_RUN_DIR"]) / "out", Path(os.environ["FLOCK_W
 plan = json.loads(Path(os.environ["STUB_PLAN"]).read_text())
 out.mkdir(parents=True, exist_ok=True)
 (out / "args.json").write_text(json.dumps({"args": a, "cpus": sorted(os.sched_getaffinity(0)),
-                                           "who": os.environ.get("GPU_LEASE_WHO")}))
+                                           "who": os.environ.get("GPU_LEASE_WHO"),
+                                           "allowed": Path(os.environ.get("GPU_LEASE_ALLOWED_FILE") or "/dev/null").read_text()}))
 summary = {}
 for spec in a["PT_UNITS"].split():
     u, _, ns = spec.rpartition("@")
@@ -66,7 +67,7 @@ def files(d: Path) -> set[str]:
     return {str(p.relative_to(d)) for p in d.rglob("*") if p.is_file()}
 
 
-def rehearse(w, mp: pytest.MonkeyPatch, root: Path, seconds: str = "") -> tuple[int, Path, dict]:
+def rehearse(w, mp: pytest.MonkeyPatch, root: Path, seconds: str = "", **extra: str) -> tuple[int, Path, dict]:
     """One `window.py prove` under `root`: FLOCK_WORK and a WIN_ALSO staged per UNITS, the stub as prove_time.sh, two
     groups; returns its exit, its out and each statement's name."""
     fw, also, out = root / "fw", root / "also", root / "run" / "out"
@@ -107,7 +108,7 @@ def rehearse(w, mp: pytest.MonkeyPatch, root: Path, seconds: str = "") -> tuple[
     env = {"FLOCK_WORK": str(fw), "WIN_ALSO": str(also), "WIN_CPUS": str(len(os.sched_getaffinity(0))),
            "WIN_DEVICE": "cpu", "WIN_GPUS": "2", "WIN_KEEP_ALSO": "extra.txt", "WIN_SECONDS": seconds,
            "STUB_PY": sys.executable, "STUB": str(root / "stub.py"), "STUB_PLAN": str(root / "plan.json"),
-           "STUB_START": str(START), "STUB_DONE": str(DONE)}
+           "STUB_START": str(START), "STUB_DONE": str(DONE), **extra}
     for k, v in env.items():
         mp.setenv(k, v)
     return w.prove(w.read_units(root / "units.tsv")), out, names
@@ -157,6 +158,15 @@ def test_prove(w, monkeypatch, tmp_path):
     assert "3 of 5 started statements finished with exit 0, 1 ended otherwise" in log
     assert not (tmp_path / "fw").exists()
     assert files(tmp_path / "also" / "data" / f"{d}-k0") == STAGED | {".done"}, "removing FLOCK_WORK reached WIN_ALSO's files"
+
+
+def test_win_card_cpus_puts_each_group_on_its_own_card_and_cpus(w, monkeypatch, tmp_path):
+    """Under WIN_CARD_CPUS group g leases its card alone (its own GPU_LEASE_ALLOWED_FILE) on the CPUs named for it."""
+    cpus = sorted(os.sched_getaffinity(0))
+    rc, out, _nm = rehearse(w, monkeypatch, tmp_path, WIN_CARD_CPUS=f"5={cpus[-1]};4={cpus[0]}")
+    g0, g1 = (json.loads((out / f"gpu{g}/out/args.json").read_text()) for g in (0, 1))
+    assert rc == 0 and (g0["allowed"], g0["cpus"], g1["allowed"], g1["cpus"]) == ("5\n", [cpus[-1]], "4\n", [cpus[0]])
+    assert "group 0: card 5 alone, on its NUMA node's CPUs" in (out / "window.log").read_text()
 
 
 def test_retry_balances_by_seconds(w, monkeypatch, tmp_path):

@@ -9,6 +9,7 @@ and has the Lean verifier check each proved statement's last kept session on FLO
 refusal fails the job (exit 7), once, with nothing retried."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -21,10 +22,11 @@ from conftest import HERE
 SP = HERE / "stage_prove.sh"
 FAR = "4102444800"  # 2100-01-01T00:00Z
 TREE = "c0ffee"
-#: nvidia-smi: card i's UUID is GPU-i; the compute processes are $APPS
+#: nvidia-smi: card i's UUID is GPU-i, its bus 00000000:0i:00.0; the compute processes are $APPS
 NVIDIA_SMI = r'''#!/usr/bin/env bash
 case "$*" in
   *--query-compute-apps*) printf '%b' "${APPS:-}" ;;
+  *--query-gpu=index,uuid,pci.bus_id*) for i in 0 1 2 3 4 5 6 7; do echo "$i, GPU-$i, 00000000:0$i:00.0"; done ;;
   "-i "*) echo "GPU-$2" ;;
   *) exit 2 ;;
 esac
@@ -44,14 +46,15 @@ FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime${NOEXEC
 #: window.py stage|prove UNITS | route UNITS GPU CPU: its call, groups, allowed cards and visible cards logged; `stage`
 #: stages one statement; `route` sends a line naming $TO_CPU to CPU; under $PROVED `prove` proves each line's statement,
 #: its name the unit's after `census:`, lower case, with two kept sessions and its exit, $PROVER_EXIT or 0; one named in
-#: $BOUND is staged bound, with its program.json
+#: $BOUND is staged bound, with its program.json; and each group of WIN_CARD_CPUS writes its lease record and host.txt,
+#: its prover on CPU 9999 under $OFF_NODE
 WINDOW = r'''import os, sys
 from pathlib import Path
 a = os.environ.get("GPU_LEASE_ALLOWED_FILE")
 units = [ln.split("\t")[0] for ln in Path(sys.argv[2]).read_text().splitlines()] if sys.argv[1] != "stage" else []
 with open(os.environ["CALLS"], "a") as f:
     f.write(f"window {sys.argv[1]} gpus={os.environ.get('WIN_GPUS', '')} allowed={Path(a).read_text().strip() if a else ''} "
-            f"cvd=[{os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')}]"
+            f"cvd=[{os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')}]" + (" pinned=" + ",".join(e.split("=")[0] for e in os.environ["WIN_CARD_CPUS"].split(";")) if os.environ.get("WIN_CARD_CPUS") else "")
             + (f" device={os.environ['WIN_DEVICE']} {' '.join(units)}" if sys.argv[1] != "stage" else "") + "\n")
 if sys.argv[1] == "route":
     to = os.environ.get("TO_CPU", "@@")
@@ -60,6 +63,11 @@ if sys.argv[1] == "route":
     Path(sys.argv[4]).write_text("".join(ln for ln in lines if to in ln))
 if sys.argv[1] == "prove" and os.environ.get("PROVED"):
     fw, out = Path(os.environ["FLOCK_WORK"]), Path(os.environ["RESEARCH_RUN_DIR"]) / "out"
+    for g, e in enumerate(filter(None, os.environ.get("WIN_CARD_CPUS", "").split(";"))):
+        c, _, cs = e.partition("=")
+        (out / f"gpu{g}/out").mkdir(parents=True, exist_ok=True)
+        (out / f"gpu{g}/gpu-lease-usage.jsonl").write_text('{"gpus": [{"index": %s}]}\n' % c)
+        (out / f"gpu{g}/out/host.txt").write_text(f"device=gpu cpus={cs} prover={9999 if os.environ.get('OFF_NODE') else cs} verifier={cs}\n")
     for u in units:
         nm = u.split(":")[1].split("_")[0].lower()
         d = fw / "data" / f"{nm}-k0"
@@ -128,6 +136,13 @@ def job(tmp_path, monkeypatch):
     (tmp_path / "benchmarks/served_units").mkdir(parents=True)
     (tmp_path / "benchmarks/served_units/window.py").write_text(WINDOW)
     shutil.copy(HERE / "lean_check.sh", tmp_path / "benchmarks/served_units/lean_check.sh")
+    shutil.copy(HERE / "numa.py", tmp_path / "benchmarks/served_units/numa.py")
+    for i in range(8):  # card i on NUMA node i // 2, every node listing every CPU the job may hold
+        (tmp_path / f"sys/bus/pci/devices/0000:0{i}:00.0").mkdir(parents=True)
+        (tmp_path / f"sys/bus/pci/devices/0000:0{i}:00.0/numa_node").write_text(f"{i // 2}\n")
+        (tmp_path / f"sys/devices/system/node/node{i // 2}").mkdir(parents=True, exist_ok=True)
+        (tmp_path / f"sys/devices/system/node/node{i // 2}/cpulist").write_text("0-4095\n")
+    monkeypatch.setenv("SYSFS", str(tmp_path / "sys"))
     run_dir, calls = tmp_path / "run", tmp_path / "calls"
 
     def run(**extra: str) -> tuple[int, str, list[str]]:
@@ -283,8 +298,8 @@ def test_prove_alone_proves_this_commits_staging_on_its_cards_alone(job, tmp_pat
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6")
     assert rc == 0 and "staged by this commit" in steps and "start check passed: cards 4,5 free" in steps, steps
     unit = "census:EmbeddingRead_v1{V=256,H=4}@full"
-    assert calls == ["4,5", f"window route gpus=2 allowed=4,5 cvd=[unset] device=gpu {unit}",
-                     f"window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu {unit}"]
+    assert calls == ["4,5", f"window route gpus=2 allowed=4,5 cvd=[unset] pinned=4,5 device=gpu {unit}",
+                     f"window prove gpus=2 allowed=4,5 cvd=[unset] pinned=4,5 device=gpu {unit}"]
     assert "flock-read-tmpl" not in steps and not fw.exists()
 
 
@@ -309,7 +324,7 @@ def test_prove_routes_past_the_gpu_bound_to_the_cpu_prover_and_checks_each_proof
     out = tmp_path / "run/out"
     assert rc == 0 and "route: 1 statements to the cards, 1 past the GPU prover's nonzero bound to the CPU prover" in steps, steps
     assert calls[2:] == [
-        "window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu census:Small_v1{N=1}@full",
+        "window prove gpus=2 allowed=4,5 cvd=[unset] pinned=4,5 device=gpu census:Small_v1{N=1}@full",
         "window prove gpus=1 allowed=4,5 cvd=[] device=cpu census:Big_v1{N=9}@full",
         "lake build flock-verify cvd=[unset]",
         f"lean-verify small-k0 l0001-1 pub={out}/kept/small/pub.bin program-word.json",
@@ -365,3 +380,19 @@ def test_cpu_prove_0_lists_the_past_bound_statements_and_proves_them_nowhere(job
     assert not any("device=cpu" in c for c in calls) and [c.split()[1] for c in calls if c.startswith("lean-verify")] == [
         "small-k0", "small-k0"]
     assert (tmp_path / "run/out/cpu.units").read_text().startswith("census:Big_v1{N=9}@full") and not fw.exists()
+
+
+def test_each_cards_prover_runs_on_its_numa_node_and_the_run_records_it(job, tmp_path: Path):
+    """Cards 4 and 5 share NUMA node 2: each group leases its own card alone on an equal share of that node's CPUs, and
+    out/topology.json and out/pinning.tsv say so; a group whose prover ran elsewhere fails the job with exit 8."""
+    fw = staged(tmp_path, TWO)
+    rc, steps, _ = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", LAKE_OK="1")
+    out = tmp_path / "run/out"
+    topo = json.loads((out / "topology.json").read_text())
+    c4, c5 = topo["cards"]
+    assert rc == 0 and (c4["numa_node"], c5["numa_node"]) == (2, 2) and c4["cpus"] and len(c4["cpus"]) == len(c5["cpus"])
+    assert not set(c4["cpus"]) & set(c5["cpus"]) and "NUMA check passed" in steps, steps
+    assert [r.split("\t")[1:3] + r.split("\t")[5:] for r in (out / "pinning.tsv").read_text().splitlines()[1:]] == [
+        ["4", "2", "1"], ["5", "2", "1"]]
+    rc, steps, _ = job(STEPS="prove", FLOCK_WORK=str(staged(tmp_path, TWO)), HELD="6", PROVED="1", LAKE_OK="1", OFF_NODE="1")
+    assert rc == 8 and "NUMA OFF NODE: gpu0: card 4 on node 2, prover CPUs 9999" in steps, steps

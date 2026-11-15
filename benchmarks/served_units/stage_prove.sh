@@ -24,8 +24,10 @@
 #      STEPS=stage the job ends here, FLOCK_WORK kept and, if every statement staged, .staged naming the commit
 #   3. (prove) on DEV=gpu, window.py route first: a statement past the GPU prover's nonzero bound goes to the CPU prover
 #      (out/gpu.units, out/cpu.units). window.py prove: one group per card of CARDS (one group on the CPU), each group's
-#      `gpu-lease 1` taken only among CARDS (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step
-#      under `timeout` to KILL_AT less 90 s; every session kept in out/kept/NAME. Then the CPU prover's statements, one
+#      `gpu-lease 1` taken on its own card alone and on that card's NUMA node's CPUs (numa.py pin: out/topology.json, the
+#      same count a card), ending by KILL_AT less 3 minutes, the whole step under `timeout` to KILL_AT less 90 s; every
+#      session kept in out/kept/NAME. numa.py check then reads each group's card and CPUs into out/pinning.tsv: a group
+#      off its card's node is NUMA OFF NODE in steps.txt and the job exits 8. Then the CPU prover's statements, one
 #      group on the job's cores with no card, into out/cpu/out (its kept/ there); under CPU_PROVE=0 they are only listed
 #      (out/cpu.units), for CPU nodes to prove
 #   4. (prove, LEAN=1, the default) Flock's Lean verifier on each proved statement's kept sessions, in this job and on
@@ -84,6 +86,11 @@ if [ "$DEV" = gpu ] && has prove; then
   done
   ngroups=$(tr ',' '\n' <<< "$CARDS" | grep -c .)
   say "start check passed: cards $CARDS free in gpu-lease status and holding no compute process (out/lease-at-start.txt, out/cards-at-start.txt)"
+  nvidia-smi --query-gpu=index,uuid,pci.bus_id --format=csv,noheader > "$S/gpus.csv" 2>&1
+  pin=$(python3 benchmarks/served_units/numa.py pin "$CARDS" "$S/gpus.csv" "$OUT/topology.json" 2>&1) \
+    || { say "REFUSED: $pin: nothing started"; exit 9; }
+  export WIN_CARD_CPUS=$pin
+  say "NUMA: each card's prover and verifier on its own node's CPUs, card=CPUs: $pin (out/topology.json)"
 elif [ "$DEV" = gpu ]; then
   export CUDA_VISIBLE_DEVICES=; say "no card: STEPS=stage builds and stages on the CPU with CUDA_VISIBLE_DEVICES empty"
 fi
@@ -171,6 +178,13 @@ if [ -s "$GU" ]; then
   say "window.py prove: $ngroups groups, lease $LEASE_MIN min, stopped in $left s"
   timeout --signal=TERM --kill-after=60 "$left" python3 benchmarks/served_units/window.py prove "$GU"; rc=$?
   say "window.py prove exit $rc"
+  if [ "$DEV" = gpu ]; then
+    if off=$(python3 benchmarks/served_units/numa.py check "$OUT/topology.json" "$OUT" 2>&1); then
+      say "NUMA check passed: every group's prover and verifier on its card's node (out/pinning.tsv)"
+    else
+      say "NUMA OFF NODE: ${off//$'\n'/; }: its times are not on its card's node (out/pinning.tsv)"; [ "$rc" != 0 ] || rc=8
+    fi
+  fi
   [ "$DEV" = gpu ] && nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name --format=csv,noheader > "$OUT/cards-at-end.txt" 2>&1
   fin=$(awk -F'\t' 'NR > 1 && $4 == 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l)
   say "statements: $(awk 'NR > 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l) started, $fin finished with exit 0; kept: $(ls "$OUT/kept" 2>/dev/null | wc -l)"
@@ -180,7 +194,7 @@ if [ -s "$CU" ] && [ "${CPU_PROVE:-1}" = 0 ]; then
 elif [ -s "$CU" ]; then
   left=$(( KILL_AT - 90 - $(date +%s) ))
   say "window.py prove on the CPU prover: $(grep -c . "$CU") statements, one group on $NCPU cores, no card, stopped in $left s (out/cpu/out)"
-  RESEARCH_RUN_DIR=$OUT/cpu WIN_DEVICE=cpu WIN_GPUS=1 CUDA_VISIBLE_DEVICES= \
+  RESEARCH_RUN_DIR=$OUT/cpu WIN_DEVICE=cpu WIN_GPUS=1 WIN_CARD_CPUS= CUDA_VISIBLE_DEVICES= \
     timeout --signal=TERM --kill-after=60 "$left" python3 benchmarks/served_units/window.py prove "$CU"; c=$?
   say "window.py prove on the CPU prover exit $c"; [ "$rc" != 0 ] || rc=$c
 fi
