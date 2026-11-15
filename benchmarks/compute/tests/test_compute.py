@@ -815,6 +815,12 @@ def no_store(*args, **kwargs):
     raise AssertionError("--record touched the evidence store")
 
 
+@pytest.fixture
+def local(monkeypatch) -> None:
+    """No `research run` around the command, so it writes no output."""
+    monkeypatch.delenv("OUT", raising=False)
+
+
 @pytest.mark.parametrize("argv", [[], ["--per-call", "--top", "2"]])
 def test_a_record_directory_prints_what_the_store_prints_for_the_same_record(store, tmp_path, capsys, argv):
     """The fixture is a run's directory as the store keeps its record: `--record` reads it as it lies, with the run id
@@ -828,14 +834,13 @@ def test_a_record_directory_prints_what_the_store_prints_for_the_same_record(sto
     assert (doc["value"], doc["run"], doc["commit"], doc["credited_macs"]) == (0.75, RUN, COMMIT, CREDITED)
 
 
-def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys, monkeypatch):
+def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys, monkeypatch, local):
     """`--record` imports nothing of research's: with its store client's modules unimportable and the store's opener
     raising, the number is printed, its per-call split too."""
     import sys
     for name in ("research", "research.store", "research.store.local", "research.store.labels_sync",
                  "research.store.vocab"):
         monkeypatch.setitem(sys.modules, name, None)
-    monkeypatch.delenv("OUT", raising=False)
     with pytest.raises(C.Unreadable, match="the evidence store's client isn't installed here"):
         C.opened()
     assert C.main(["--record", str(RECORD), "--per-call"], store_of=no_store) == 0
@@ -844,7 +849,7 @@ def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys
 
 
 @pytest.mark.parametrize("name", ["ANSWER", "POLICY"])
-def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, capsys, name):
+def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, capsys, local, name):
     record = a_record(tmp_path, **{name: None})
     assert C.main(["--record", str(record)], store_of=no_store) == 2
     out, err = capsys.readouterr()
@@ -852,7 +857,7 @@ def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, 
     assert out == "" and f"compute: the record directory {record} holds no {path} ({C.REQUIRED[path]})" in err
 
 
-def test_a_record_directory_that_is_no_run_directory_exits_2_and_says_what_to_name(tmp_path, capsys):
+def test_a_record_directory_that_is_no_run_directory_exits_2_and_says_what_to_name(tmp_path, capsys, local):
     """A run's `out/` named in place of the run's directory is refused with a hint, and a path that is no directory is
     refused as a path, never sent to the store as a run id."""
     assert C.main(["--record", str(RECORD / "out")], store_of=no_store) == 2
@@ -865,7 +870,7 @@ def test_a_record_directory_that_is_no_run_directory_exits_2_and_says_what_to_na
     assert e.value.code == 2 and "not allowed with argument" in capsys.readouterr().err
 
 
-def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp_path, capsys):
+def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp_path, capsys, local):
     record = a_record(tmp_path, JOB=None)
     assert C.main(["--record", str(record)], store_of=no_store) == 0
     text, doc, _ = printed(capsys)
