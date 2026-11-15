@@ -29,11 +29,11 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-COMPOSE = HERE.parents[1] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "compose_circuit.py"
+COMPOSE = HERE.parents[1] / "benchmarks" / "one_stage" / "compose_circuit.py"
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402

@@ -162,15 +162,14 @@ def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
 
 
 def test_the_one_stage_audits_two_longest_tests_run_on_two_shards():
-    """The one-stage audit's two longest tests, served_cases' inference-only case on the 4,32,4 class (benchmarks/one_stage)
-    and the two-stage driver's round 2 (verity-vllm), are most of their suites' time.  By test id they hash to
-    benchmarks/one_stage's part 2 of seven and verity-vllm's part 3 of three, and every plan runs the first beside the
-    security analysis's audit and the second with the Rust build, so no shard runs both; a rename that moves either fails
-    here, and the plans are placed again."""
+    """The one-stage audit's two longest tests, served_cases' inference-only case on the 4,32,4 class and the two-stage
+    driver's round 2 (both benchmarks/one_stage), are most of their suite's time.  By test id they hash to its parts 2 and
+    4 of seven, and every plan runs the first beside the security analysis's audit and the second with the Rust build, so
+    no shard runs both; a rename that moves either fails here, and the plans are placed again."""
     GUARD = _module("verity_suite_guard_for_shards", ROOT / "tools" / "check" / "guard" / "verity_suite_guard.py")
     longest = (("benchmarks/one_stage", 7, ONE_STAGE[1],
                 "tests/test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets"),
-               ("adapters/vllm", 3, VLLM[2], "tests/pipeline/test_two_stage_driver.py::"
+               ("benchmarks/one_stage", 7, ONE_STAGE[3], "tests/test_two_stage_driver.py::"
                 "test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name"))
     for suite, m, part, nodeid in longest:
         path, _, name = nodeid.partition("::")
