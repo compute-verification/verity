@@ -207,7 +207,8 @@ NOTES = "https://github.com/compute-verification/research-notes.git"
 VERITY = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",
           "git@github.com:compute-verification/verity.git", "ssh://git@github.com/compute-verification/verity.git",
           f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity"]
-INFRA = ["https://github.com/compute-verification/infra.git", f"https://x-access-token:{TOKEN}@github.com/compute-verification/infra"]
+INFRA = ["https://github.com/compute-verification/infra.git", f"https://x-access-token:{TOKEN}@github.com/compute-verification/infra",
+         "https://github.com/compute-verification/platform.git", f"https://x-access-token:{TOKEN}@github.com/compute-verification/platform"]
 NOT_QUEUE = [NOTES, f"https://x-access-token:{TOKEN}@github.com/compute-verification/research-notes.git",
              "https://github.com/someone/verity-fork", "https://github.com/compute-verification/verity-notes",
              "https://github.com/someone/compute-verification/verity", "https://github.com/compute-verification/verity.git.bak",

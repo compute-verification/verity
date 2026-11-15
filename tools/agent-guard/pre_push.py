@@ -11,7 +11,7 @@ pre-push hook git would have run without it (`AGENT_GUARD_CHAIN_HOOKS`, the hook
 
 The pusher is the agent whose shell started it: `CURSOR_CONVERSATION_ID`, which Cursor sets in every agent's shell and every
 process under it inherits. A push is judged when that is set and it goes to a repository whose `main`, `checked` and `next`
-drive lands, compute-verification/verity or compute-verification/infra on GitHub (`worktree_guard.queue_remote`: the URL git
+drive lands, compute-verification/verity or compute-verification/platform (or its old name, infra) on GitHub (`worktree_guard.queue_remote`: the URL git
 hands the hook, whole, in https, ssh or scp form, with or without `.git` and a credential; `AGENT_GUARD_PUSH_REMOTES`, a
 regular expression, names others in their place): for each `refs/heads/` branch it creates, moves, forces or deletes,
 the push is refused when the branch is `main`, `checked` or `next` (a lander's repair of `next` alone passes with
