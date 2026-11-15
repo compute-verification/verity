@@ -19,7 +19,8 @@ ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COM
        "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 TREE = {
     "pyproject.toml": '[project]\nname = "verity"\nversion = "0"\n\n[tool.uv.workspace]\n'
-                      'members = ["adapters/dist", "tools/plain"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+                      'members = ["adapters/dist", "tools/plain"]\n\n[tool.uv.sources]\nverity = { workspace = true }\n\n'
+                      '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
     "tests/test_tree.py": "def test_tree():\n    pass\n",
     "verity/__init__.py": "",
     "verity/a/__init__.py": "",
@@ -83,14 +84,15 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
     assert TR.run_split(TR.Tree(r), []) == ["adapters/dist"]
     member = tomllib.loads((r / "adapters/dist/tests/pyproject.toml").read_text())
     assert member["project"]["name"] == "dist-tests" and member["project"]["dependencies"] == ["dist[x]"]
-    assert member["tool"]["uv"] == {"package": False, "sources": {"dist": {"workspace": True}}}
+    assert member["tool"]["uv"] == {"package": False}
     assert member["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": [".."]}
     assert member["tool"]["verity"]["tests"] == {"untraced": ["test_d.py"], "inputs": ["adapters/dist"]}
     dist = (r / "adapters/dist/pyproject.toml").read_text()
     assert tomllib.loads(dist)["tool"] == {"verity": {"tests": {"exports": ["adapters/dist/dist"]}}}
     assert "# what its dependents read\nexports" in dist
-    members = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]
-    assert members == ["adapters/dist", "adapters/dist/tests", "tools/plain"]
+    uv = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]
+    assert uv["workspace"]["members"] == ["adapters/dist", "adapters/dist/tests", "tools/plain"]
+    assert uv["sources"] == {"verity": {"workspace": True}, "dist": {"workspace": True}}
     assert not (r / "adapters/dist/conftest.py").exists()
     conftest = (r / "adapters/dist/tests/conftest.py").read_text()
     assert conftest.index("OUTER") < conftest.index("INNER")
