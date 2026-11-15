@@ -34,9 +34,9 @@ At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of 
   verifier holds of `stacked/rep0` at those rounds (`StageHeld`'s first two parts at `ix = id`);
 * `roundIn_stacked`, `holoSelOne_stacked`: R's stream last in `holoStreams`' order, its round `q` of coins is sampled at
   history round one past every earlier stream's and R's rounds before `q` (`roundAt_reps`, `holoSelOne_rep` at R);
-* `drawn_stacked`: where R's rounds from `k₂` each sampling coins, the history's rounds from R's round `k₂`'s sample them in
+* `sampled_stacked`: where R's rounds from `k₂` each sampling coins, the history's rounds from R's round `k₂`'s sample them in
   order (`StageHeld`'s last part);
-* `stackedRounds_coins`: every round of R's stream flips coins, at each shape `fast100` has (`drawn_stacked`'s `hpos`).
+* `stackedRounds_coins`: every round of R's stream flips coins, at each shape `fast100` has (`sampled_stacked`'s `hpos`).
 
 * `stackedCoins_of_innerCommitsAt`: where the verifier holds the inner transcript and R's stream, META names R's shape,
   at R's two claims, and the stream holds a round of coins for each round of `stackedRounds` there
@@ -160,7 +160,7 @@ theorem holoSelOne_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : A
 
 /-- **R's Ligerito stage's samples** (`StageHeld`'s last part at `ix = id`): where R's `n` rounds from `k₂` each sampling
 coins, the history's round `p` past R's round `k₂`'s (`holoSelOne_stacked`) samples R's round `k₂ + p`. -/
-theorem drawn_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
+theorem sampled_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)} {k₂ n : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some (L ++ [(.stacked, rs)]))
     (hL : ∀ e ∈ L, e.1.idx ≠ HoloStream.idx .stacked)
@@ -175,7 +175,7 @@ theorem drawn_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array 
   have h := holoSelOne_stacked (q := k₂ + p) hS hL hf (hpos p hlt)
   rwa [heldBefore_stacked p fun p' hp' => hpos p' (by omega), ← Nat.add_assoc] at h
 
-/-- **Every round of R's stream flips coins** (`drawn_stacked`'s `hpos` at every `k₂`): at R's two claims, each of the
+/-- **Every round of R's stream flips coins** (`sampled_stacked`'s `hpos` at every `k₂`): at R's two claims, each of the
 fourteen shapes `fast100` has (`m` from 22 to 35) by evaluation, and past them `stackedRounds` is none. -/
 theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims = Flock.RecVStar.STACKED_CLAIMS)
     {rs : Array SchedRound} (h : Flock.RecVStar.stackedRounds sh = some rs) :

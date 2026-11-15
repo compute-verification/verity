@@ -108,7 +108,6 @@ SECONDS: dict[str, float] = {
     "tests/program/test_sigmoid_moe_fp8_derive.py": 37,
     "tests/program/test_fp8_shared_scale.py": 37,
     "tests/program/test_fa2_softcap.py": 36,
-    "tests/properties/test_golden.py": 36,
     "tests/program/test_lifted_tiny.py": 34,
     "tests/lint/test_p13_duplicate_bodies.py": 34,
     "tests/program/test_lifted_workload_padrev.py": 34,
@@ -143,7 +142,7 @@ SECONDS: dict[str, float] = {
 #: what each part's job runs, from the repository's root; {k}/{n} names the part and {opts} the suites.py options. A part that
 #: lists nothing stops the job: suites.py with no modules would run the whole suite
 JOB = ("uv sync -q --all-packages --extra torch-cpu && P=$(python3 adapters/vllm/tools/suite_parts.py {k}/{n})"
-       " && test -n \"$P\" && uv run tools/verity/check/suites.py verity-vllm"
+       " && test -n \"$P\" && uv run tools/check/suites.py verity-vllm"
        " --jobs \"$(nproc)\" --logs \"$OUT/logs\"{opts} -- $P")
 #: the memory each part's job asks for: 4 CPUs' workers at the suite's worker_gb
 JOB_MEM_GB = 32

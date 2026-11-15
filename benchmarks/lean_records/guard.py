@@ -281,8 +281,8 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     out_dir, base = a.out, a.base
     out_dir.mkdir(parents=True, exist_ok=True)
-    common = load("guard_common", ROOT / "tools/verity/check/common.py")
-    ls = load("guard_lean_slot", ROOT / "tools/verity/check/lean_slot.py")
+    common = load("guard_common", ROOT / "tools/check/common.py")
+    ls = load("guard_lean_slot", ROOT / "tools/check/lean_slot.py")
     if not ls.SLOTS.exists() or "build" not in ls.parse(ls.SLOTS.read_text()):
         say("this node has no `build` Lean pool, so no kept records tree to measure on")
         return 3

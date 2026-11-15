@@ -1,0 +1,779 @@
+diff --git a/crates/flock-core/configs/ligerito/m32_fast100_wide.toml b/crates/flock-core/configs/ligerito/m32_fast100_wide.toml
+new file mode 100644
+index 0000000..2b5067d
+--- /dev/null
++++ b/crates/flock-core/configs/ligerito/m32_fast100_wide.toml
+@@ -0,0 +1,137 @@
++m = 32
++log_n = 25
++initial_k = 7
++target_security_bits = 100
++analysis_version = "f256_split_johnson_two_point_ood_query100_c3_algebraic_row_union_over_bchks25_thm_4_6"
++field = "f256"
++hash = "blake3"
++grinding_step = "post_commit_pre_queries"
++
++[[levels]]
++log_inv_rate = 1
++log_msg_cols = 18
++log_num_interleaved = 7
++k_recursive = 7
++regime = "johnson_ood"
++eta = 0.02
++queries = 218
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 1
++target_security_bits = 100
++expected_eps_pg_bits = 209.0
++expected_eps_query_bits = 100.2
++expected_eps_ood_bits = 237.1
++expected_eps_claim_batch_bits = 122.9
++expected_eps_sumcheck_bits = 249.9
++expected_eps_consistency_batch_bits = 119.9
++
++[[levels]]
++log_inv_rate = 2
++log_msg_cols = 15
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 106
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 214.8
++expected_eps_query_bits = 100.0
++expected_eps_ood_bits = 237.2
++expected_eps_claim_batch_bits = 122.4
++expected_eps_sumcheck_bits = 249.4
++expected_eps_consistency_batch_bits = 119.5
++
++[[levels]]
++log_inv_rate = 3
++log_msg_cols = 12
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 71
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 217.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.7
++expected_eps_claim_batch_bits = 121.9
++expected_eps_sumcheck_bits = 248.9
++expected_eps_consistency_batch_bits = 119.0
++
++[[levels]]
++log_inv_rate = 4
++log_msg_cols = 9
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 53
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 220.1
++expected_eps_query_bits = 100.1
++expected_eps_ood_bits = 236.3
++expected_eps_claim_batch_bits = 121.4
++expected_eps_sumcheck_bits = 248.4
++expected_eps_consistency_batch_bits = 118.8
++
++[[levels]]
++log_inv_rate = 5
++log_msg_cols = 6
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 43
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 222.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.9
++expected_eps_sumcheck_bits = 247.9
++expected_eps_consistency_batch_bits = 118.3
++
++[[levels]]
++log_inv_rate = 6
++log_msg_cols = 3
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 36
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 11
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 224.7
++expected_eps_query_bits = 100.3
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.4
++expected_eps_sumcheck_bits = 247.4
++expected_eps_consistency_batch_bits = 117.8
++
++[final_block]
++yr_log_n = 3
+diff --git a/crates/flock-core/configs/ligerito/m33_fast100_wide.toml b/crates/flock-core/configs/ligerito/m33_fast100_wide.toml
+new file mode 100644
+index 0000000..1a2e935
+--- /dev/null
++++ b/crates/flock-core/configs/ligerito/m33_fast100_wide.toml
+@@ -0,0 +1,137 @@
++m = 33
++log_n = 26
++initial_k = 8
++target_security_bits = 100
++analysis_version = "f256_split_johnson_two_point_ood_query100_c3_algebraic_row_union_over_bchks25_thm_4_6"
++field = "f256"
++hash = "blake3"
++grinding_step = "post_commit_pre_queries"
++
++[[levels]]
++log_inv_rate = 1
++log_msg_cols = 18
++log_num_interleaved = 8
++k_recursive = 8
++regime = "johnson_ood"
++eta = 0.02
++queries = 218
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 1
++target_security_bits = 100
++expected_eps_pg_bits = 208.0
++expected_eps_query_bits = 100.2
++expected_eps_ood_bits = 237.0
++expected_eps_claim_batch_bits = 122.9
++expected_eps_sumcheck_bits = 249.9
++expected_eps_consistency_batch_bits = 119.9
++
++[[levels]]
++log_inv_rate = 2
++log_msg_cols = 15
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 106
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 214.8
++expected_eps_query_bits = 100.0
++expected_eps_ood_bits = 237.2
++expected_eps_claim_batch_bits = 122.4
++expected_eps_sumcheck_bits = 249.4
++expected_eps_consistency_batch_bits = 119.5
++
++[[levels]]
++log_inv_rate = 3
++log_msg_cols = 12
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 71
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 217.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.7
++expected_eps_claim_batch_bits = 121.9
++expected_eps_sumcheck_bits = 248.9
++expected_eps_consistency_batch_bits = 119.0
++
++[[levels]]
++log_inv_rate = 4
++log_msg_cols = 9
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 53
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 220.1
++expected_eps_query_bits = 100.1
++expected_eps_ood_bits = 236.3
++expected_eps_claim_batch_bits = 121.4
++expected_eps_sumcheck_bits = 248.4
++expected_eps_consistency_batch_bits = 118.8
++
++[[levels]]
++log_inv_rate = 5
++log_msg_cols = 6
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 43
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 222.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.9
++expected_eps_sumcheck_bits = 247.9
++expected_eps_consistency_batch_bits = 118.3
++
++[[levels]]
++log_inv_rate = 6
++log_msg_cols = 3
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 36
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 11
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 224.7
++expected_eps_query_bits = 100.3
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.4
++expected_eps_sumcheck_bits = 247.4
++expected_eps_consistency_batch_bits = 117.8
++
++[final_block]
++yr_log_n = 3
+diff --git a/crates/flock-core/configs/ligerito/m34_fast100_wide.toml b/crates/flock-core/configs/ligerito/m34_fast100_wide.toml
+new file mode 100644
+index 0000000..7d2a0a1
+--- /dev/null
++++ b/crates/flock-core/configs/ligerito/m34_fast100_wide.toml
+@@ -0,0 +1,137 @@
++m = 34
++log_n = 27
++initial_k = 9
++target_security_bits = 100
++analysis_version = "f256_split_johnson_two_point_ood_query100_c3_algebraic_row_union_over_bchks25_thm_4_6"
++field = "f256"
++hash = "blake3"
++grinding_step = "post_commit_pre_queries"
++
++[[levels]]
++log_inv_rate = 1
++log_msg_cols = 18
++log_num_interleaved = 9
++k_recursive = 9
++regime = "johnson_ood"
++eta = 0.02
++queries = 218
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 1
++target_security_bits = 100
++expected_eps_pg_bits = 207.0
++expected_eps_query_bits = 100.2
++expected_eps_ood_bits = 236.9
++expected_eps_claim_batch_bits = 122.9
++expected_eps_sumcheck_bits = 249.9
++expected_eps_consistency_batch_bits = 119.9
++
++[[levels]]
++log_inv_rate = 2
++log_msg_cols = 15
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 106
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 214.8
++expected_eps_query_bits = 100.0
++expected_eps_ood_bits = 237.2
++expected_eps_claim_batch_bits = 122.4
++expected_eps_sumcheck_bits = 249.4
++expected_eps_consistency_batch_bits = 119.5
++
++[[levels]]
++log_inv_rate = 3
++log_msg_cols = 12
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 71
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 217.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.7
++expected_eps_claim_batch_bits = 121.9
++expected_eps_sumcheck_bits = 248.9
++expected_eps_consistency_batch_bits = 119.0
++
++[[levels]]
++log_inv_rate = 4
++log_msg_cols = 9
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 53
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 220.1
++expected_eps_query_bits = 100.1
++expected_eps_ood_bits = 236.3
++expected_eps_claim_batch_bits = 121.4
++expected_eps_sumcheck_bits = 248.4
++expected_eps_consistency_batch_bits = 118.8
++
++[[levels]]
++log_inv_rate = 5
++log_msg_cols = 6
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 43
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 222.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.9
++expected_eps_sumcheck_bits = 247.9
++expected_eps_consistency_batch_bits = 118.3
++
++[[levels]]
++log_inv_rate = 6
++log_msg_cols = 3
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 36
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 11
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 224.7
++expected_eps_query_bits = 100.3
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.4
++expected_eps_sumcheck_bits = 247.4
++expected_eps_consistency_batch_bits = 117.8
++
++[final_block]
++yr_log_n = 3
+diff --git a/crates/flock-core/configs/ligerito/m35_fast100_wide.toml b/crates/flock-core/configs/ligerito/m35_fast100_wide.toml
+new file mode 100644
+index 0000000..5b01bd6
+--- /dev/null
++++ b/crates/flock-core/configs/ligerito/m35_fast100_wide.toml
+@@ -0,0 +1,137 @@
++m = 35
++log_n = 28
++initial_k = 10
++target_security_bits = 100
++analysis_version = "f256_split_johnson_two_point_ood_query100_c3_algebraic_row_union_over_bchks25_thm_4_6"
++field = "f256"
++hash = "blake3"
++grinding_step = "post_commit_pre_queries"
++
++[[levels]]
++log_inv_rate = 1
++log_msg_cols = 18
++log_num_interleaved = 10
++k_recursive = 10
++regime = "johnson_ood"
++eta = 0.02
++queries = 218
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 1
++target_security_bits = 100
++expected_eps_pg_bits = 206.0
++expected_eps_query_bits = 100.2
++expected_eps_ood_bits = 236.8
++expected_eps_claim_batch_bits = 122.9
++expected_eps_sumcheck_bits = 249.9
++expected_eps_consistency_batch_bits = 119.9
++
++[[levels]]
++log_inv_rate = 2
++log_msg_cols = 15
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 106
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 6
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 214.8
++expected_eps_query_bits = 100.0
++expected_eps_ood_bits = 237.2
++expected_eps_claim_batch_bits = 122.4
++expected_eps_sumcheck_bits = 249.4
++expected_eps_consistency_batch_bits = 119.5
++
++[[levels]]
++log_inv_rate = 3
++log_msg_cols = 12
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 71
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 9
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 217.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.7
++expected_eps_claim_batch_bits = 121.9
++expected_eps_sumcheck_bits = 248.9
++expected_eps_consistency_batch_bits = 119.0
++
++[[levels]]
++log_inv_rate = 4
++log_msg_cols = 9
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 53
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 7
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 220.1
++expected_eps_query_bits = 100.1
++expected_eps_ood_bits = 236.3
++expected_eps_claim_batch_bits = 121.4
++expected_eps_sumcheck_bits = 248.4
++expected_eps_consistency_batch_bits = 118.8
++
++[[levels]]
++log_inv_rate = 5
++log_msg_cols = 6
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 43
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 10
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 222.8
++expected_eps_query_bits = 100.9
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.9
++expected_eps_sumcheck_bits = 247.9
++expected_eps_consistency_batch_bits = 118.3
++
++[[levels]]
++log_inv_rate = 6
++log_msg_cols = 3
++log_num_interleaved = 4
++k_recursive = 4
++regime = "johnson_ood"
++eta = 0.02
++queries = 36
++grinding_bits = 0
++fold_grinding_bits = 0
++claim_batch_grinding_bits = 8
++consistency_batch_grinding_bits = 11
++ood_samples = 2
++target_security_bits = 100
++expected_eps_pg_bits = 224.7
++expected_eps_query_bits = 100.3
++expected_eps_ood_bits = 236.1
++expected_eps_claim_batch_bits = 120.4
++expected_eps_sumcheck_bits = 247.4
++expected_eps_consistency_batch_bits = 117.8
++
++[final_block]
++yr_log_n = 3
+diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
+index ab5ac12..6634623 100644
+--- a/crates/flock-core/src/pcs/ligerito.rs
++++ b/crates/flock-core/src/pcs/ligerito.rs
+@@ -741,6 +741,37 @@ macro_rules! profile_configs {
+ const EMBEDDED_CONFIGS: &[((usize, LigeritoProfile), &str)] =
+     profile_configs!(22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35);
+ 
++/// The wide level-0 leaf's configs: Fast100 for a table of 2^32 to 2^35 bits with level 0 interleaved over
++/// `2^(m − 25)` lanes where [`EMBEDDED_CONFIGS`]' entry interleaves 2^6, so level 0's codeword has 2^19 symbols at
++/// every size and the levels after it are m = 31's. Each is [`LigeritoSecurityConfig::derive_wide`]'s output, and
++/// [`prover_config_for`] and [`verifier_config_for`] select it by `log_batch_size`.
++const EMBEDDED_WIDE_CONFIGS: &[(usize, &str)] = &[
++    (32, include_str!("../../configs/ligerito/m32_fast100_wide.toml")),
++    (33, include_str!("../../configs/ligerito/m33_fast100_wide.toml")),
++    (34, include_str!("../../configs/ligerito/m34_fast100_wide.toml")),
++    (35, include_str!("../../configs/ligerito/m35_fast100_wide.toml")),
++];
++
++/// The wide leaf's `initial_k` at `m`: `m − 25` for 32 ≤ m ≤ 35, none elsewhere.
++pub fn wide_initial_k(m: usize) -> Option<usize> {
++    (32..=35).contains(&m).then(|| m - 25)
++}
++
++/// The embedded config a caller asking for `log_batch_size` gets: the wide leaf's where `(m, profile)` has one at
++/// that width, else [`embedded_security_config`]'s, whose `initial_k` the caller's must then equal.
++fn embedded_security_config_at(
++    m: usize,
++    profile: LigeritoProfile,
++    log_batch_size: usize,
++) -> Option<&'static str> {
++    if profile == LigeritoProfile::Fast100 && wide_initial_k(m) == Some(log_batch_size) {
++        return EMBEDDED_WIDE_CONFIGS
++            .iter()
++            .find_map(|&(wide_m, toml)| (wide_m == m).then_some(toml));
++    }
++    embedded_security_config(m, profile)
++}
++
+ /// Look up the embedded security config TOML for `(m, profile)`.
+ /// Returns `None` if no config has been derived for this combination yet.
+ pub fn embedded_security_config(m: usize, profile: LigeritoProfile) -> Option<&'static str> {
+@@ -792,7 +823,7 @@ pub fn prover_config_for(
+     profile: LigeritoProfile,
+ ) -> Result<ProverConfig, String> {
+     let m = log_n + LOG_PACKING;
+-    let toml = embedded_security_config(m, profile).ok_or_else(|| {
++    let toml = embedded_security_config_at(m, profile, log_batch_size).ok_or_else(|| {
+         format!(
+             "no security config registered for (m={m}, profile={}). \
+              Add a TOML at configs/ligerito/m{m}_{}.toml and register it in \
+@@ -822,7 +853,7 @@ pub fn verifier_config_for(
+     profile: LigeritoProfile,
+ ) -> Result<VerifierConfig, String> {
+     let m = log_n + LOG_PACKING;
+-    let toml = embedded_security_config(m, profile).ok_or_else(|| {
++    let toml = embedded_security_config_at(m, profile, log_batch_size).ok_or_else(|| {
+         format!(
+             "no security config registered for (m={m}, profile={})",
+             profile.as_str()
+@@ -1971,6 +2002,13 @@ impl LigeritoSecurityConfig {
+         Self::derive_profile_ladder(m, profile, 3, rate_gain)
+     }
+ 
++    /// The wide leaf's config at `m` ([`wide_initial_k`]): Fast100's derivation with level 0 interleaved over
++    /// `2^(m − 25)` lanes.
++    pub fn derive_wide(m: usize) -> Result<Self, String> {
++        let initial_k = wide_initial_k(m).ok_or_else(|| format!("m = {m}: no wide leaf"))?;
++        Self::derive_profile_ladder_at(m, LigeritoProfile::Fast100, 3, 1, Some(initial_k))
++    }
++
+     /// [`Self::derive_profile`] with a tunable recursion ladder — fold
+     /// `folds_per_level` original variables per recursive level and climb the
+     /// rate by `rate_gain` per level (see [`derive_ladder_shape_tuned`]).
+@@ -1982,6 +2020,17 @@ impl LigeritoSecurityConfig {
+         profile: LigeritoProfile,
+         folds_per_level: usize,
+         rate_gain: usize,
++    ) -> Result<Self, String> {
++        Self::derive_profile_ladder_at(m, profile, folds_per_level, rate_gain, None)
++    }
++
++    /// [`Self::derive_profile_ladder`] with level 0's interleave given (`level0_k`), not the profile's own.
++    fn derive_profile_ladder_at(
++        m: usize,
++        profile: LigeritoProfile,
++        folds_per_level: usize,
++        rate_gain: usize,
++        level0_k: Option<usize>,
+     ) -> Result<Self, String> {
+         /// Johnson slack below the Johnson radius, flat across levels.
+         const JOHNSON_ETA: f64 = 0.02;
+@@ -2045,6 +2094,7 @@ impl LigeritoSecurityConfig {
+             ) => 4usize,
+             _ => 6usize,
+         };
++        let initial_k = level0_k.unwrap_or(initial_k);
+ 
+         // Length-agnostic per-query estimate for ladder-shape feasibility
+         // (the per-level codeword length `n` is not known until the shape is
+@@ -5767,6 +5817,7 @@ mod tests {
+                 round_msg_and_eval_eq_point_blocked, round_msg_eval_and_lookahead, round1,
+                 sample_queries, transpose_forward_ntt, transpose_forward_ntt_sparse, udr_queries,
+                 verifier_config_for, verify_level_opens,
++                EMBEDDED_WIDE_CONFIGS, embedded_security_config, wide_initial_k,
+             },
+             stratified::LevelSchedule,
+         },
+@@ -6081,6 +6132,98 @@ mod tests {
+         }
+     }
+ 
++    /// Writes the wide leaf's TOMLs, the derivation's canonical output, into `configs/ligerito/`:
++    ///   cargo test --release --lib regen_wide_tomls -- --ignored
++    #[test]
++    #[ignore]
++    fn regen_wide_tomls() {
++        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("configs/ligerito");
++        for &(m, _) in EMBEDDED_WIDE_CONFIGS {
++            let toml = LigeritoSecurityConfig::derive_wide(m)
++                .and_then(|cfg| cfg.to_toml_string())
++                .unwrap_or_else(|e| panic!("derive wide m={m}: {e}"));
++            std::fs::write(dir.join(format!("m{m}_fast100_wide.toml")), toml)
++                .unwrap_or_else(|e| panic!("write wide m={m}: {e}"));
++        }
++    }
++
++    /// Each wide config validates under Fast100's analysis, is exactly the derivation's output, and is the shape
++    /// its verifier's schedule states: level 0 at rate 1/2 over 2^18 columns (2^19 leaves) and `2^(m − 25)` lanes
++    /// with Fast100's 218 queries, then m = 31's levels and final block, field for field.
++    #[test]
++    fn ligerito_wide_configs_validate_and_match_derivation() {
++        let rest = |toml: &'static str| {
++            let at = toml.match_indices("[[levels]]").nth(1).expect("two levels").0;
++            &toml[at..]
++        };
++        let m31 = embedded_security_config(31, LigeritoProfile::Fast100).expect("m31 fast100");
++        assert_eq!(EMBEDDED_WIDE_CONFIGS.len(), 4);
++        for &(m, toml) in EMBEDDED_WIDE_CONFIGS {
++            let cfg = LigeritoSecurityConfig::from_toml_str(toml)
++                .unwrap_or_else(|e| panic!("wide config m={m} invalid: {e}"));
++            cfg.validate_profile(LigeritoProfile::Fast100)
++                .unwrap_or_else(|e| panic!("wide config m={m}: {e}"));
++            let derived = LigeritoSecurityConfig::derive_wide(m)
++                .and_then(|cfg| cfg.to_toml_string())
++                .unwrap_or_else(|e| panic!("derive wide m={m}: {e}"));
++            assert_eq!(toml, derived, "wide m={m} differs from generator output");
++            assert_eq!(wide_initial_k(m), Some(m - 25));
++            assert_eq!((cfg.m, cfg.log_n, cfg.initial_k), (m, m - 7, m - 25));
++            let l0 = &cfg.levels[0];
++            assert_eq!(
++                (l0.log_inv_rate, l0.log_msg_cols, l0.log_num_interleaved, l0.k_recursive, l0.queries, l0.ood_samples),
++                (1, 18, m - 25, m - 25, 218, 1),
++                "wide m={m} level 0"
++            );
++            assert_eq!(rest(toml), rest(m31), "wide m={m}: the levels after level 0 are m = 31's");
++        }
++        assert!((0..32).chain(36..64).all(|m| wide_initial_k(m).is_none()));
++    }
++
++    /// A caller selects the wide config by `log_batch_size` and nothing else: the same `(m, Fast100)` still loads
++    /// its own entry at `initial_k` 6, no other width loads, no other profile has a wide config, and below m = 32
++    /// the lookup is the one it was.
++    #[test]
++    fn ligerito_wide_lookup_is_by_log_batch_size() {
++        for m in 32..=35usize {
++            let (log_n, k) = (m - LOG_PACKING, m - 25);
++            let wide = prover_config_for(log_n, k, LigeritoProfile::Fast100).expect("wide prover config");
++            let wide_v = verifier_config_for(log_n, k, LigeritoProfile::Fast100).expect("wide verifier config");
++            assert_eq!((wide.initial_k, wide.initial_log_msg_cols, wide.recursive_steps), (k, 18, 5));
++            assert_eq!(wide.queries, vec![218, 106, 71, 53, 43, 36]);
++            assert_eq!(wide.log_inv_rates, vec![1, 2, 3, 4, 5, 6]);
++            assert_eq!(wide.recursive_ks, vec![4; 5]);
++            assert_eq!(wide.recursive_log_msg_cols, vec![15, 12, 9, 6, 3]);
++            assert_eq!(
++                (wide_v.initial_k, &wide_v.queries, &wide_v.recursive_ks, &wide_v.log_inv_rates),
++                (k, &wide.queries, &wide.recursive_ks, &wide.log_inv_rates)
++            );
++            let own = prover_config_for(log_n, 6, LigeritoProfile::Fast100).expect("the profile's own config");
++            assert_eq!((own.initial_k, own.initial_log_msg_cols), (6, log_n - 6));
++            assert_eq!(embedded_initial_k(m, LigeritoProfile::Fast100), Some(6));
++            for other in (0..16).filter(|&b| b != 6 && b != k) {
++                assert!(prover_config_for(log_n, other, LigeritoProfile::Fast100).is_err());
++                assert!(verifier_config_for(log_n, other, LigeritoProfile::Fast100).is_err());
++            }
++            for profile in [
++                LigeritoProfile::Fast,
++                LigeritoProfile::Slim,
++                LigeritoProfile::Slim100,
++                LigeritoProfile::Secure,
++            ] {
++                assert!(prover_config_for(log_n, k, profile).is_err());
++                assert!(verifier_config_for(log_n, k, profile).is_err());
++            }
++        }
++        for m in 22..=31usize {
++            let k = embedded_initial_k(m, LigeritoProfile::Fast100).expect("registered");
++            for other in (0..16).filter(|&b| b != k) {
++                assert!(prover_config_for(m - LOG_PACKING, other, LigeritoProfile::Fast100).is_err());
++            }
++            assert!(prover_config_for(m - LOG_PACKING, k, LigeritoProfile::Fast100).is_ok());
++        }
++    }
++
+     /// `derive_paper_compatible` produces a config that validates for every
+     /// `(m, log_inv_rate)` combination we ship.
+     #[test]

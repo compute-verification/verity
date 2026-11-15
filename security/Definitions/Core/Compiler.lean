@@ -21,7 +21,7 @@ advice: the gates holding θ's values, which were committed beforehand.
   `C.N + i` of the appended circuit, each reading earlier gates of `C` or of the block (the KV cache a later phase reads,
   say). `C.append E` (`Circuit.append`) is the circuit with the block appended; `C`'s gates keep their indices.
 * **What the compiler outputs** (`Compiler.Output`): a circuit file, its registered input gates `θ`, its partition `𝓘`
-  into inference blocks, which the inference-only check reads, its partition `P` into proof blocks, which sampled proofs
+  into inference blocks, which the inference-only check reads, its partition `P` into proof blocks, which SPOT
   prove, nested in `𝓘` (`Partition.Refines`), and each gate's position in the committed trace (`pos`).
 * **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks, each proof
   block's inference block, and its gates' positions, numbered after `o`'s (`Compiler.Output.append`).
@@ -204,10 +204,15 @@ def Output.append (o : Output) (b : Phase o) : Output where
 end Compiler
 
 /-- **A registered value of θ** (weights, initial state, tables), as the registration's information entry registers
-it: its name and its committed root. -/
+it: its name, its committed root, its rows (`leaves`) of `words` words of `wordBits` bits each, and the domain its leaves
+are hashed under. -/
 structure Registration.Theta where
   value : String
   root : String
+  leaves : ℕ
+  words : ℕ
+  wordBits : ℕ
+  domain : String
   deriving DecidableEq
 
 /-- **The registered compiler** `B`, fixed at setup: the most bits of advice it reads in one phase (`ℓa`, a public

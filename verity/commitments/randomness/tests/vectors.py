@@ -10,7 +10,7 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-from verity.commitments.randomness import derive, frame
+from verity.commitments.randomness import derive, derive_wide, frame
 
 OUT = Path(__file__).with_name("vectors.json")
 FRAMES = (b"", b"ab", "é", 0, 255, 256)
@@ -24,6 +24,10 @@ STREAM, STREAM_BYTES, SHARD = ["s", 3], 80, 5
 UNIFORM = ((1, 0), (7, 0), (7, 1), (1000, 2), (2**127 + 1, 3), (10**30, 4))
 BERNOULLI = (("1/2", 0), ("1/3", 1), ("2/3", 2), ("0", 3), ("1", 4))
 SUBSET = ((0, 5, 0), (3, 10, 1), (10, 10, 2), (4, 10**12, 3))
+#: `derive_wide`'s cases: `CASES` with `STREAM`, and PoUB's 64-row signs at a seed of 64 zero bytes, row 63's 512 bytes
+WIDE = tuple((*case, STREAM, STREAM_BYTES) for case in CASES) + (
+    ("00" * 64, "verity/remote-bandwidth/sketch-signs/v1", {"k": {"int": 64}, "n": {"int": 4096}, "tag": {"str": "sketch-sha512"}},
+     ["row", 63], 512),)
 
 
 def _context(doc: dict) -> dict:
@@ -42,7 +46,12 @@ def build() -> dict:
             "bernoulli": [[p, i, key.bernoulli(Fraction(p), i)] for p, i in BERNOULLI],
             "subset": [[k, n, i, list(key.subset(k, n, i))] for k, n, i in SUBSET],
         })
-    return {"frame": [[repr(x), frame(x).hex()] for x in FRAMES], "cases": cases}
+    wide = []
+    for source, domain, context, index, n in WIDE:
+        key = derive_wide(bytes.fromhex(source), domain, _context(context))
+        wide.append({"source": source, "domain": domain, "context": context, "key": key.value.hex(),
+                     "stream": {"index": index, "bytes": key.stream(tuple(index), n).hex()}})
+    return {"frame": [[repr(x), frame(x).hex()] for x in FRAMES], "cases": cases, "wide": wide}
 
 
 def main() -> int:

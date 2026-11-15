@@ -306,7 +306,7 @@ theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Tra
 
 /-- **An event at some sample `E^rep` reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's identity at
 the event's indicator as the weight), over a tape, the judged sample and the waits' samples. -/
-theorem Pr_exists_rerun_draws {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
+theorem Pr_exists_rerun_samples {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
     (run : Ω → D → Transcript) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
     (Q : Ω → D → Prop) :
     Pr (fun s : Ω × D × (Fin m → Fin K → D) =>
@@ -786,7 +786,7 @@ theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : �
 /-- **`E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus
 `N_I` times one run's chance to be bad**: off the bad runs `E^rep` reruns at, it sees at `DE` what it sees at
 `IVStar` (`openRun_rel`, `openRun_seen`), and the judged run is the plurality prover's, accepted; a bad rerun costs
-`N_I` times one sample's (`Pr_exists_rerun_draws`). -/
+`N_I` times one sample's (`Pr_exists_rerun_samples`). -/
 theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (ℕ × Col) → List T)
     (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤
@@ -844,7 +844,7 @@ theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (
       (Inner.ofFlock Bd.DE decI).PrBadAbort H x (Bd.plurP H x P keep decC) (Bd.plurKeep H x P keep) := rfl
   have hZ : Pr Rbad ≤ (1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) *
       Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) :=
-    Pr_exists_rerun_draws H (Bd.openRun H x P keep) _ _ _ _ _ _ (Bd.BadA H x P keep)
+    Pr_exists_rerun_samples H (Bd.openRun H x P keep) _ _ _ _ _ _ (Bd.BadA H x P keep)
   exact hYZ.trans (add_le_add hY.le hZ)
 
 /-- **`B` at the plurality prover's aborting runs finds only collisions `B` at `P`'s finds**: a kept run's calls are
@@ -883,29 +883,29 @@ ways**, a collision among `IVStar`'s calls in the two runs: at the last round `f
 alike; before it the round's message is one, so their rows differ at some commit string (`opens_coll`). -/
 theorem Bound.fork_tied (hB : Bd.Binds) (j : Fin (Bd.IVStar.k x)) (ω : Ω)
     (d d' : (Fin (Bd.IVStar.k x) → Coin) × A)
-    (h : Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkDraw j d d') ∧
-      Bd.fA H x P keep ω d j ≠ Bd.fA H x P keep ω (forkDraw j d d') j) :
+    (h : Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkSample j d d') ∧
+      Bd.fA H x P keep ω d j ≠ Bd.fA H x P keep ω (forkSample j d d') j) :
     TiedColl H ((abortRun H P Bd.IVStar x keep ω d).vLog ++
-      (abortRun H P Bd.IVStar x keep ω (forkDraw j d d')).vLog) := by
+      (abortRun H P Bd.IVStar x keep ω (forkSample j d d')).vLog) := by
   obtain ⟨hg, hg', hne⟩ := h
   obtain ⟨-, hr⟩ := Bound.gA_run hg
   obtain ⟨-, hr'⟩ := Bound.gA_run hg'
   have hacc : (run H P Bd.IVStar x ω d.1).out = .acc := hr ▸ hg
-  have hacc' : (run H P Bd.IVStar x ω (forkDraw j d d').1).out = .acc := hr' ▸ hg'
+  have hacc' : (run H P Bd.IVStar x ω (forkSample j d d').1).out = .acc := hr' ▸ hg'
   obtain ⟨-, os, last, hf, hlen, hrounds, -, hov⟩ := Bd.accFacts H x P ω d.1 hacc
-  obtain ⟨-, os', last', hf', hlen', hrounds', -, hov'⟩ := Bd.accFacts H x P ω (forkDraw j d d').1 hacc'
+  obtain ⟨-, os', last', hf', hlen', hrounds', -, hov'⟩ := Bd.accFacts H x P ω (forkSample j d d').1 hacc'
   have hjk : j.val < Bd.DE.V.k x := j.isLt
   have hfA : Bd.fA H x P keep ω d j = (Bd.opened os last).getD j [] := by
     unfold Bound.fA
     rw [hr, hov, List.map_map, getD_range_map _ _ hjk]
     rfl
-  have hfA' : Bd.fA H x P keep ω (forkDraw j d d') j = (Bd.opened os' last').getD j [] := by
+  have hfA' : Bd.fA H x P keep ω (forkSample j d d') j = (Bd.opened os' last').getD j [] := by
     unfold Bound.fA
     rw [hr', hov', List.map_map, getD_range_map _ _ hjk]
     rfl
   have hms : ((run H P Bd.IVStar x ω d.1).msgs.map Prod.fst).getD j [] =
-      ((run H P Bd.IVStar x ω (forkDraw j d d').1).msgs.map Prod.fst).getD j [] :=
-    run_fst_getD H P Bd.IVStar x ω j fun i hi => by simp only [forkDraw, forkCoins, hi, ↓reduceIte]
+      ((run H P Bd.IVStar x ω (forkSample j d d').1).msgs.map Prod.fst).getD j [] :=
+    run_fst_getD H P Bd.IVStar x ω j fun i hi => by simp only [forkSample, forkCoins, hi, ↓reduceIte]
   by_cases hj1 : j.val + 1 < Bd.DE.V.k x
   · have hjo : j.val < os.length := by omega
     have hjo' : j.val < os'.length := by omega
@@ -966,8 +966,8 @@ theorem Bound.Pr_badA_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (hB
             right_inv := fun _ => rfl }
         rw [← Pr_equiv e]
         exact Pr_fork_le_abort H Bd.IVStar P x keep hk j
-          (fun ω d d' => Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkDraw j d d') ∧
-            Bd.fA H x P keep ω d j ≠ Bd.fA H x P keep ω (forkDraw j d d') j)
+          (fun ω d d' => Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkSample j d d') ∧
+            Bd.fA H x P keep ω d j ≠ Bd.fA H x P keep ω (forkSample j d d') j)
           fun ω d d' h => Bound.fork_tied hB j ω d d' h
     have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (Bd.IVStar.k x)))
       (f := fun _ : Fin (Bd.IVStar.k x) => (1 : ℝ)) (g := fun j => forkPrA H Bd.IVStar P x keep hk j)

@@ -75,9 +75,9 @@ the check's suites and `verity check`. The same command through `research run`, 
 `AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
 No tool call may block more than 20 minutes: an agent blocked in one long call looks silent and misses its wake-ups. So it
-refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
+refuses a command that plainly would: a `sleep` past BLOCK_LIMIT_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
 there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the background (`&`), and
-`research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+`research run --wait-max S` past the limit. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
@@ -97,7 +97,9 @@ shell's environment. So it refuses, wherever it is typed, a command that leaves 
 `declare` or `typeset`, an assignment with no command after it. This rule alone refuses in doubt: in a subshell or what a
 carrier runs too, where the name may die with it. The names ahead of one command, an `unset` and a read pass. Not covered: a
 variable the shell held before the guard arrived, one a script exports, and a name the shell builds
-(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`).
+(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`). The same reading refuses leaving `PYTHONPATH` or `RESEARCH_AT_CHECKOUT`
+set, which changes which code every later command runs (`kept_code_reason`, CODE_VARIABLES), but only in the shell itself
+(`own_shell`) and never in doubt: what a carrier, a subshell or a script runs passes.
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
@@ -1164,7 +1166,7 @@ def local_work_reason(command: str) -> str | None:
 
 
 #: no tool call may block longer: an agent blocked in one long call looks silent and misses its wake-ups
-BLOCK_CAP_S = 1200
+BLOCK_LIMIT_S = 1200
 DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
 UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -1216,13 +1218,13 @@ def blocks_text(text: str) -> float:
 
 
 def block_reason(command: str) -> str | None:
-    """Why this command may not run as one tool call (it would block past BLOCK_CAP_S), or None."""
+    """Why this command may not run as one tool call (it would block past BLOCK_LIMIT_S), or None."""
     s = blocks_text(command)
-    if s <= BLOCK_CAP_S:
+    if s <= BLOCK_LIMIT_S:
         return None
-    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_CAP_S} s: no tool call may block "
+    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_LIMIT_S} s: no tool call may block "
             "more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer subscription wake you. "
-            f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
+            f"`research run --wait` stops after {BLOCK_LIMIT_S} s on its own and names the command to check back with.")
 
 
 def flattened(text: str) -> list[list[str]]:
@@ -1337,6 +1339,56 @@ def shell_identity_reason(command: str) -> str | None:
         except ValueError:
             raw += [cut.split() for cut in re.split(r"[;&|()`\n]+", part)]
     return guard().kept_identity_reason(shell_keeps(raw))
+
+
+#: variables that change which code every later command of a shell runs: each name with what it changes and the command
+#: that takes it for one run
+CODE_VARIABLES = {
+    "PYTHONPATH": ("every later `python3` and `research` imports from its directories first, a scratch tree's code among them, "
+                   "and from an older installed copy once that tree is gone", "`PYTHONPATH=DIR python3 ...`"),
+    "RESEARCH_AT_CHECKOUT": ("every later `research` runs the checkout's own copy instead of re-executing from origin/main's code",
+                             "`RESEARCH_AT_CHECKOUT=1 research ...`"),
+}
+SUBSTITUTION = re.compile(r"\$\([^()]*\)|`[^`]*`")
+
+
+def own_shell(text: str) -> list[list[str]]:
+    """The simple commands of `text` that run in the shell reading it, as `words_of` splits them, and what an `eval` among
+    them runs: not what a subshell runs (`( ... )`, a pipeline's member, one sent to the background), a command substitution
+    (`$( ... )`, a backquote, taken out first, innermost first) or a carrier. Each `(` left is marked with a word of its own,
+    which the split would drop with the empty command before it."""
+    while (cut := SUBSTITUTION.sub("_", text)) != text:
+        text = cut
+    out, depth, before = [], 0, ""
+    for words, op in words_of(text.replace("(", " \0 (")):
+        words = [w for w in words if w != "\0"]
+        if depth == 0 and words and not {before.strip("()"), op.strip("()")} & {"|", "|&"} and op.strip("()") != "&":
+            run = unwrap(words)
+            out += own_shell(" ".join(run[1:])) if run[:1] == ["eval"] else [words]
+        depth, before = max(0, depth + op.count("(") - op.count(")")), op
+    return out
+
+
+def kept_code_reason(command: str) -> str | None:
+    """Why this command, which leaves one of CODE_VARIABLES set in the shell that runs it (`shell_keeps` of `own_shell`), may
+    not run, or None. Unlike the identity rule it never refuses in doubt: the harm is only in the shell that persists, and
+    a carrier, a subshell or a script exporting PYTHONPATH in its own process is honest work, so a text the hook can't split
+    passes."""
+    if not any(name in command for name in CODE_VARIABLES):
+        return None
+    try:
+        kept = shell_keeps(own_shell(command))
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the rule for code variables ({e})", file=sys.stderr)
+        return None
+    for name in kept:
+        if name in CODE_VARIABLES:
+            changes, one_run = CODE_VARIABLES[name]
+            return (f"this command leaves `{name}` set in the shell itself, and a name left set changes which code every later "
+                    f"command of this shell runs: {changes}. Put it on the one command instead, {one_run}, or run it in a "
+                    f"subshell, `( export {name}=...; cmd )`; if the shell already holds it, `unset {' '.join(CODE_VARIABLES)}` "
+                    f"clears it.")
+    return None
 
 
 def own_tmux(given: dict[str, str]) -> bool:
@@ -1565,7 +1617,7 @@ def main() -> int:
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     try:
-        low = low or (None if deny else shell_identity_reason(command))
+        low = low or (None if deny else shell_identity_reason(command) or kept_code_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
     except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell

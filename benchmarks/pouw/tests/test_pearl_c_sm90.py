@@ -1,4 +1,4 @@
-"""Pearl-C's sm_90a tree off the card (benchmarks/pouw/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+"""Pearl-C's sm_90a tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
 tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
 fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
@@ -26,7 +26,8 @@ from verity_config.settings import of
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+POUW = Path(__file__).resolve().parents[1]
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
@@ -196,12 +197,12 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
         else:
             monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
         assert anew("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
-        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+        assert of(POUW / "settings.py").PEARLC_BF16_ROWS is on
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 
-def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypatch):
-    """`Debit.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
+def test_the_resident_inert_work_body_is_words_launches_with_nothing_copied(monkeypatch):
+    """`InertWork.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
     chunk's rows in the one copy put before it), and after its first call nothing else: no copy, synchronization or
     allocation, so `Dev.timed` times the count's kernels alone."""
     class Dev:
@@ -234,7 +235,7 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
     rng = np.random.default_rng(7)
     a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
     budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
-    w, r = deb.Debit(b"", budget), deb.Debit(b"", budget)
+    w, r = deb.InertWork(b"", budget), deb.InertWork(b"", budget)
     w.words(a, b)
     body = r.resident(a, b)
     put = [e for e in r.dev.log if e[0] == "cuMemcpyHtoD_v2"]

@@ -12,6 +12,7 @@ from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # no
 from verity_vllm.check.match import input_layout
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
+from verity_vllm.errors import Refused
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline.match import Plan
@@ -78,7 +79,7 @@ def test_the_match_folds_under_registered_values_when_the_builds_programs_regist
     from verity_vllm.pipeline import cli
     reg, const = _build_dir(tmp_path, "reg", True), _build_dir(tmp_path, "const", False)
     assert program_registered_values([reg]) and not program_registered_values([const]) and not program_registered_values([])
-    with pytest.raises(SystemExit, match="some Programs register"):
+    with pytest.raises(Refused, match="some Programs register"):
         program_registered_values([reg, const])
     wl = tmp_path / "workload.json"
     wl.write_text(json.dumps({"requests": [{"request_id": "r-0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}]}))

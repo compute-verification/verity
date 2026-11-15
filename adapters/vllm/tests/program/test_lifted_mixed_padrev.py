@@ -1,6 +1,6 @@
 """Adversarial tests for the MIXED BATCH stage (LIFTING-REVIEW attack list A1/A5), Program side, TINY shape.
 
-Two requests share ONE weights Input and one EOS set; request A stops early (EOS at event 3), request B never stops (cap decides).
+Two requests share ONE weights Input and one EOS set; request A stops early (EOS at event 3), request B never stops (its length bound decides).
 The attacks these tests aim at:
 
   A1  ⊥ leaking across requests — A's deactivation must not change one bit of B's values (no cross-request edge in the greedy
@@ -23,9 +23,9 @@ from verity.circuits.defs import composite
 from verity.circuits.layout import resolve
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 

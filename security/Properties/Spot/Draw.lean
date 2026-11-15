@@ -35,9 +35,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Sampled proofs' sample in the claims' slots: it misses proof blocks no more often than `P_a` (`Spot.Slots.select`)
+# SPOT's sample in the claims' slots: it misses proof blocks no more often than `P_a` (`Spot.Slots.select`)
 
-The property of the challenger's sample as the claims read it (`Deploy.checked`, `Claims.Sampling.DrawLaw`): the
+The property of the challenger's sample as the claims read it (`Deploy.checked`, `Claims.Sampling.SampleDesign`): the
 sample `Slots.select` makes from `L` uniform bytes under a Spec's selection rule, over the verifier's own program and query,
 checks no proof block at a slot of `B` with probability at most the claims' acceptance probability
 `P_a(B)` of the design it samples, on the partition it samples over. It takes no premise: the sample is a function of its inputs
@@ -45,7 +45,7 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
 
 * **The partition** (`slotPartition`) is `Slots.layout`'s, its classes the population's strata and the input class, each
   proof block its gates.
-* **The design** (`slotDesign`) is the one the sample runs: the first class's design the Flock law it samples
+* **The design** (`slotDesign`) is the one the sample runs: the first class's design the Flock sampling design it samples
   (`Select.select`'s, `oneStageOf`), `all` for the `All` rule; the input class sampled `all`. The bound is `0` where the
   sample is refused before it samples (`missBound`).
 * **The bytes** are `src`'s, in order (`bytesOf`): a sample that would read past them is refused, so it misses nothing.
@@ -71,8 +71,8 @@ def puGates (b : Slots.ProofBlock) : List ℕ := List.range' b.gates.1 (b.gates.
 def slotPartition (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map puGates⟩
 
-/-- The claims' one-stage design of a Flock law. -/
-def oneStageOf : Flock.Draw.Law → Claims.Sampling.OneStage
+/-- The claims' one-stage design of a Flock sampling design. -/
+def oneStageOf : Flock.Draw.SamplingDesign → Claims.Sampling.OneStage
   | .subset k => .subset k
   | .bernoulli num den => .bernoulli num den
   | .stratified k _ => .stratified k
@@ -83,12 +83,12 @@ the sampling design `Select.select` samples (`all` for the `All` rule), and the 
 `Select.select` refuses before it samples. -/
 def slotDesign (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) : Flock.V Claims.Sampling.Design := do
   let n ← Partition.units d query
-  let named ← rule.lawOver n
-  let derived ← Draw.deriveLaw d query named table
+  let named ← rule.samplingDesignOver n
+  let derived ← Draw.deriveSamplingDesign d query named table
   let first ← match rule with
     | .all => pure Claims.Sampling.OneStage.all
     | _ => do
-      let parsed ← Draw.flockLaw ((derived.map (·.toJson)).getD named) n
+      let parsed ← Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
       pure (oneStageOf (derived.getD parsed))
   return ⟨[first, .all]⟩
 

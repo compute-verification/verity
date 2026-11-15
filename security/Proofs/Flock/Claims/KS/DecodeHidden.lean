@@ -39,8 +39,8 @@ hidden outputs**: `decodesTable_wrP_sc` at the hidden tables and their openings 
 returned (`tableAtH_of_acceptsI`). -/
 theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
     Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leaf512 cap pend os)
@@ -248,8 +248,8 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
 layout reads (`Integrate.model_eq`), and the schedule is `fast100`'s at `st.m`. -/
 theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.tags.isTmpl = false) {n : ℕ}
     (dj : Finset (Fin n) → Json)
-    {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : HiddenExec.DrawSetupH I spec.mPts S₀ (dj S₀))
-    {S : Finset (Fin n)} (x : HiddenExec.DrawSetupH I spec.mPts S (dj S)) {st : Stmt} (hx : x.st = st)
+    {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : HiddenExec.SampleSetupH I spec.mPts S₀ (dj S₀))
+    {S : Finset (Fin n)} (x : HiddenExec.SampleSetupH I spec.mPts S (dj S)) {st : Stmt} (hx : x.st = st)
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -268,7 +268,7 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.
     Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC hi yh)).1) L
       (Hidden.setupHidden_spec yh).leaf ywf.1 _
   unfold plainTab
-  simp only [HiddenExec.DrawSetupH.table, HiddenExec.DrawSetupH.specAt]
+  simp only [HiddenExec.SampleSetupH.table, HiddenExec.SampleSetupH.specAt]
   congr 1
   exact hS'.symm
 
@@ -306,9 +306,9 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
     cases hf : Flock.fast100 st.m with
     | none => rw [hf] at e; cases e
     | some sch => exact ⟨sch, rfl⟩
-  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
+  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { st.c with outPorts := #[] }) hdr
+  obtain ⟨x₀, hx₀⟩ := HiddenExec.sampleSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
     hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
   have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
@@ -317,7 +317,7 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
     exact tableAtH_plainTab ht (HmOut.parse_isTmpl hc) (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀
       hx₀ L m k0 l₀ l₁
       rest ext hsch hm hlay
-  have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
+  have hS : HiddenDec.SampleOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩

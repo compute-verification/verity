@@ -7,6 +7,8 @@
 # B200 headline binds the issue ceiling (UNI,issue = 0.924, above the async-joint row), so the refit does not move it.
 current = "DC-100"
 epochs = ["DC-100", "DS-100", "DC-100-ri"]
+# The card file (hardware/cards/) the data sheet and the table route read this device's numbers from.
+card = "b200-sxm-180gb"
 
 # The CUDA lane classes a word on lanes may use: every lane class the census prices. LOP3, SHF and LEA.HI share ALU's
 # pipe row A; FFMA has only the issue rows. No IDP4A or LDS kind is measured on sm_100. The uniform datapath (UNI, on

@@ -1,5 +1,5 @@
 """On the certified served window (`served_commit.Challenger(certifier=…)`), a sampled proof block's proof is
-held to the window's certified salt at its opening of record (`core_check.opening`'s ``salt``, Lean `PouwCheck.opening`'s).
+held to the window's certified salt at its opening of record (`core_check.opening_twin`'s ``salt``, Lean `PouwCheck.opening`'s).
 
 A witness that lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified
 check, the opening included. The opening now opens a certified window's unit only when its template is salted
@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import itertools
 import json
 import random
 import sys
@@ -22,22 +21,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.certifier.verifier import active
-from verity.protocols.accounting.certifier.verifier.active import Proxy
-from verity.protocols.accounting.certifier.verifier.certificate import LmsKey, LmsSigner
-from verity.protocols.accounting.certifier.verifier.grid import GridParams
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.proofs.spot.device import challenger as Ch
 
 import served_commit as SC
-import of_record as OR
+import of_record_lean as ORL
 
 _CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
@@ -45,21 +40,19 @@ for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_
     sys.modules[_name] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules[_name])
 openings, canon = sys.modules["pouw_opening_cases"], sys.modules["pouw_check_cases"]._canon
+_spec = importlib.util.spec_from_file_location("certified_salt", Path(CC.__file__).resolve().parent / "tests/certified_salt.py")
+CS = sys.modules["certified_salt"] = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(CS)
 
 K, M, N = 128, 3, 4
-EGRESS, INGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512), GridParams(buckets=6, allocation=2, frame_bytes=512)
 LINK = "requests"
-#: a PoUW window is two certifier windows; the proxy serves four, so PoUW windows 0 and 1
+#: a PoUW window is two certifier windows; the certifier sampled PoUW windows 0 and 1
 POUW_WINDOW, WINDOWS = 2, 4
 SCHEME = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
 MATMUL = Matmul(5, Shape(16, K, N), 2)
 RUN = "r-salt-bind"
 #: the runner's record of a request served at the verifier's fixed length under ignore_eos
 SERVED = {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS], "served": [SC.MAX_TOKENS]}
-#: the network certifier's LMS key and the challenger's, which the certifier registers, and the certifier run's id
-CERTIFIER, CHALLENGER = (lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(s).digest())
-                         for s in (b"certifier", b"challenger"))
-RUN_ID = bytes(range(32))
 
 
 def _rows(seed: int, n: int) -> list[bytes]:
@@ -93,40 +86,21 @@ def _pass(run: str) -> tuple[dict, dict[int, bytes], Workload]:
     return man, roots, Workload((MATMUL,))
 
 
-def _prover(seed: bytes):
-    k, leaves = lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(seed).digest()), itertools.count()
-    return LmsKey(k.params, lms.public_key(k)), lambda m: lms.sign_at(k, next(leaves), m).encode()
+def _prover(seed: bytes) -> bytes:
+    """A prover's LMS public key."""
+    return lms.public_key(lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(seed).digest()))
 
 
 def _sid(stream: str = "window") -> bytes:
     return SC.stream_id({"deployment": f"served-zk/{RUN}"}, stream,
-                        {"key_id": CERTIFIER.I.hex(), "link": LINK, "run_id": RUN_ID.hex()})
+                        {"key_id": CS.KEY_ID.hex(), "link": LINK, "run_id": CS.RUN_ID.hex()})
 
 
-def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
-               reveals) -> tuple[active.CertifierClient, dict[int, bytes]]:
-    """The certifier's run `RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
-    salts are sampled, both published, served on localhost (`reveals`): the challenger's client of it, and the salts it
-    sampled."""
-    sampled: dict[int, bytes] = {}
-    signers = []
-    for name, k in (("certifier", CERTIFIER), ("challenger", CHALLENGER)):
-        (tmp_path / name).mkdir()
-        signers.append(LmsSigner.create(k, tmp_path / name / "signer-state.json"))
-
-    def source(p: int, n: int) -> bytes:
-        sampled[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
-        return sampled[p]
-
-    c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
-              clock=lambda: 0.0, ingress_link=LINK, salt=source, registered=PS.registered, prover_key=key,
-              prover_context=sid, pouw_window=POUW_WINDOW, challenger_key=signers[1].public_key(), signer=signers[0],
-              run_nonce=lambda n: RUN_ID)
-    for p in range(WINDOWS // POUW_WINDOW):
-        c.commit_weights(p, record, sign(active.weights_message(LINK, p, record, sid)))
-    for _ in range(WINDOWS * INGRESS.buckets):
-        c.bucketer.tick()
-    return active.CertifierClient(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), sampled
+def _certifier(record: bytes) -> tuple[CS.Certifier, dict[int, bytes]]:
+    """The certifier's run `CS.RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
+    salts are sampled: the certifier as the challenger reads it, and the salts it sampled."""
+    c = CS.Certifier(CS.salts(WINDOWS // POUW_WINDOW), dict.fromkeys(range(WINDOWS // POUW_WINDOW), record), link=LINK)
+    return c, c.salts
 
 
 def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Challenger:
@@ -134,7 +108,7 @@ def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Cha
     live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
-    return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
+    return SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=c, prover=prover,
                          coin_record=path, deployment=deployment, opens=ledger)
 
 
@@ -167,19 +141,18 @@ def _pub(priv, advice, t: int) -> bytes:
 
 
 @pytest.mark.slow
-def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
+def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch):
     """The served path. The witness: lift `unit_reason` and the prover's rows, formed once under a salt
-    that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
-    client, `CertifierClient`), `pass_epoch` of record, the registration ledger and the live sample. They now stop at the
+    that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal
+    (`certified_salt.Certifier`), `pass_epoch` of record, the registration ledger and the live sample. They now stop at the
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every sampled proof block is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
-    `core_check.opening` under that salt and under none. Only this test takes the certified served path to the opening at
+    `core_check.opening_twin` under that salt and under none. Only this test takes the certified served path to the opening at
     every sampled proof block; the next one holds the opening alone."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
-    key, sign = _prover(b"the prover")
-    prover, sid = PS.prover_id(key.public), _sid()
+    prover, sid = PS.prover_id(_prover(b"the prover")), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
-    c, sampled = _certifier(sid, key, sign, committed, tmp_path, reveals)
+    c, sampled = _certifier(committed)
     ledger = PS.WindowOpens()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
@@ -191,13 +164,13 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
         assert d.units
         salt = CC.certified_salt(w["raw"], w["params"]["context"], sampled[p], committed, sid, prover)
         assert salt == PS.pouw_salt(sampled[p], p, sid, prover) == ch.salts[f"w{p}"]
-        params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(OR.hexed(w["rec"])))
+        params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(ORL.Record(lean=False).hexed(w["rec"])))
         for u in d.units:
             pub, op = _pub(w["priv"], w["advice"], u), SC.opening(w["advice"], w["priv"], w["params"], u)
             why = ch.check(f"w{p}", u, pub, op)
             assert why is not None and why.startswith(refused), why
             for held in (salt, None):
-                assert CC.opening(CC.params(params), rec, list(d.units), u, pub, op, held).startswith(refused)
+                assert CC.opening_twin(CC.params(params), rec, list(d.units), u, pub, op, held).startswith(refused)
 
 
 def test_a_salted_unit_formed_under_its_own_salt_is_refused_under_the_certified_one():
@@ -206,8 +179,7 @@ def test_a_salted_unit_formed_under_its_own_salt_is_refused_under_the_certified_
     certified salt the verifier holds, the opening of record (`of_record.py_opening`, the difftest's input) refuses the
     s* proof at its public row and opens the proof formed under the certified salt (the honest twin: every rule of the
     opening met), so the one statement credited is the certified salt's."""
-    key, _ = _prover(b"the prover")
-    sid, prover = _sid(), PS.prover_id(key.public)
+    sid, prover = _sid(), PS.prover_id(_prover(b"the prover"))
     reveal = hashlib.shake_256(b"certifier salt 0").digest(PS.SALT_BYTES)
     w = _window(0, reveal, sid, prover, PRECOMPUTED)
     ctx = w["params"]["context"]

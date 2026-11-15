@@ -32,14 +32,14 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   against a server that is a `Server S D Q L` of this module, with the memory challenger's coins flipped as the code
   samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from uniform bytes. The honest
   full-state server's lemmas, `HonestPassesRing` and `HonestPassesAccepts`, are in
-  `Security/Proofs/Pous/Lemmas/EndToEnd.lean`.
+  `security/Proofs/Pous/Lemmas/EndToEnd.lean`.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-host`) and the coins flipped online, after its state is fixed. It
+   host never restores an earlier copy: `trusted-device`) and the coins flipped online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
@@ -63,7 +63,7 @@ code (`pous-ring-device`), not by an early commitment.
 Two gaps stood between these statements and the deployed verifier:
 
 * **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-host` covers once it is widened to the challenger's host. The check's half: a session's
+  presumption, which `trusted-device` covers once it is widened to the challenger's host. The check's half: a session's
   `binding` is required and is the setup's root (`Run.check` refuses any other), so a session names the setup it audits,
   and its id is the one the
   auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
@@ -128,10 +128,10 @@ def blockStrings (pk : ByteArray) (dev : Challengers) (C : Array (Array ByteArra
 /-- The run's own data holds a break: two distinct strings it hashes with one SHA-512 digest (`cr/sha-512`), or a
 signature verifying under a trusted key over a session message the device never signed (`euf-cma/lms-sha512-n64`,
 under the one-role reading of `MemoryChallenger.Properties`). Every witness is bounded by the run. -/
-def RunBreak (trusted : List ByteArray) (s : SignedSession) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
+def RunBreak (trusted : List ByteArray) (s : SignedChallengePhase) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
   (let xs := runStrings s dev ++ blockStrings s.publicKey dev C
    ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
-    ∃ p m, SCHEMES.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ sessionMessage s = some m ∧
+    ∃ p m, SCHEMES.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ challengePhaseMessage s = some m ∧
       LmsVerifies p s.publicKey m s.signature ∧ ¬ Signed dev s.publicKey m
 
 /-- `C*` decodes to a payload other than `W` whose commitment is `W`'s: two distinct strings `Commit.commit` hashes,
@@ -147,7 +147,7 @@ def CommitBreak (W : ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array
 /-- The session audits the setup `pub` at the deployed point: the setup published `2^19` blocks under a 24-byte salt,
 and the session audits every one of them in `k = 105` rounds, within `Δ + RTT`, with answers of the point's 2,056
 bytes, bound to the published root. -/
-def AuditsSetup (pub : SetupProtocol.Public) (sc : SessionCommitment) : Prop :=
+def AuditsSetup (pub : SetupProtocol.Public) (sc : ChallengePhaseCommitment) : Prop :=
   pub.blocks = q.blocks ∧ pub.salt.size = Run.SALT ∧ sc.blocks = q.blocks ∧ sc.k = K ∧ sc.limitNs ≤ LIMIT_NS ∧
     sc.blockBytes = q.blockBytes ∧ sc.binding = pub.root
 
@@ -322,7 +322,7 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
 derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
-challenger's `SessionLog` under its host presumption, which `trusted-host` covers once it is widened to the challenger's
+challenger's `SessionLog` under its host presumption, which `trusted-device` covers once it is widened to the challenger's
 host. G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=

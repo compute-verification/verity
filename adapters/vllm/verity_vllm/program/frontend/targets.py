@@ -28,10 +28,10 @@ replay on the captured operands; the `gemm_target_correspondence` driver) is che
 from __future__ import annotations
 
 import json
-from typing import Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
-from verity.circuits.defs import bind
-from verity.definitions.numerics import fa3_model as FA3
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.prims import (
     BlackwellE4m3QmmaDot32,
     BlackwellNvf4OmmaDot64,
@@ -39,24 +39,27 @@ from verity.circuits.ops.prims import (
     HopperE4m3MmaV2Dot32,
     HopperE4m3QgmmaDot32,
 )
-from verity.definitions.registry import (
+from verity_vllm.definitions.numerics import fa3_model as FA3
+from verity_vllm.definitions.registry import (
     attention_vocab,
     b1,
     fp8,
     fp8_vocab,
     nvfp4,
 )
-from verity.definitions.registry import cuda_rmsnorm as CR
-from verity.definitions.registry import dense as DN
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import fa2_softcap as F2S
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import gemm_bias as GB
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import value_inputs as VI
-from verity.definitions.registry.hopper import Fa3InvSum
+from verity_vllm.definitions.registry import cuda_rmsnorm as CR
+from verity_vllm.definitions.registry import dense as DN
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import fa2_softcap as F2S
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import gemm_bias as GB
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import value_inputs as VI
+from verity_vllm.definitions.registry.hopper import Fa3InvSum
+from verity_vllm.program.frontend.gemm_targets import GemmTarget, UnregisteredGemmTarget
 
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
+if TYPE_CHECKING:
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
 
 class UnregisteredTarget(ValueError):
@@ -128,14 +131,14 @@ TARGETS: dict[str, dict[str, Any]] = {
 }
 
 
-def target_family(profile) -> str:
+def target_family(profile: TargetProfile) -> str:
     fam = profile.tensor_core_family
     if fam not in TARGETS:
         raise UnregisteredTarget(f"compute capability {profile.capability_str}: no registered tensor-core pipeline ({fam})")
     return fam
 
 
-def gemm_target(profile, arch_family=...):
+def gemm_target(profile: TargetProfile, arch_family: Any = ...) -> GemmTarget:
     """The registered GEMM specialization of the target (`gemm_targets.GemmTarget`), re-raised as `UnregisteredTarget` when there is none."""
     try:
         return profile.gemm_target(arch_family)
@@ -143,7 +146,7 @@ def gemm_target(profile, arch_family=...):
         raise UnregisteredTarget(str(e)) from e
 
 
-def tensor_core_dot(profile):
+def tensor_core_dot(profile: TargetProfile) -> PrimitiveDefinition:
     """The registered k16 step primitive of the declared target (the `GemmTarget.dot` record's primitive)."""
     name = gemm_target(profile).dot
     if name not in DOTS:
@@ -151,7 +154,7 @@ def tensor_core_dot(profile):
     return DOTS[name]
 
 
-def moe_expert_dot(profile):
+def moe_expert_dot(profile: TargetProfile) -> PrimitiveDefinition | None:
     """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
     target's registered step for the `_v2{E,K,N,DOT}` ones.  A family binds them when its record says `moe_expert_dot` (its
     fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one: cc 9.0 and 12.0); the Ampere/Ada family keeps the
@@ -159,7 +162,7 @@ def moe_expert_dot(profile):
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
 
 
-def gemm_bias_dot(profile):
+def gemm_bias_dot(profile: TargetProfile) -> PrimitiveDefinition | None:
     """The k16 step of a biased linear's one-Call Definition `GemmBias_v2{K,N,DOT}` on the declared target, or None: the accepted kinds
     bind `GemmBias_v1`, and a family whose record does not say `gemm_bias_dot` keeps `Gemm_v2` + `BiasAdd_v1`.  An unregistered target
     raises `UnregisteredTarget`."""
@@ -168,7 +171,7 @@ def gemm_bias_dot(profile):
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("gemm_bias_dot") else None
 
 
-def gemm_bias_spec(profile, K: int, N: int):
+def gemm_bias_spec(profile: TargetProfile, K: int, N: int) -> SpecializedDefinition | None:
     """The registered one-Call Definition of a batch-invariant linear with a bias (the launch, then `output + bias` in bf16) on the
     declared target, or None when the target keeps the pair as two Calls."""
     if uses_accepted_kinds(profile):
@@ -177,17 +180,17 @@ def gemm_bias_spec(profile, K: int, N: int):
     return None if dot is None else bind(GB.GemmBiasV2, K=int(K), N=int(N), DOT=dot)
 
 
-def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
+def moe_expert_gemm_spec(profile: TargetProfile, E: int, K: int, N: int, *, routed: bool) -> SpecializedDefinition:
     """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
     (`routed` False) or the w2 launch with the routed weight."""
-    from verity.definitions.registry import moe as MOE
+    from verity_vllm.definitions.registry import moe as MOE
     dot = moe_expert_dot(profile)
     if dot is None:
         return bind(MOE.MoeExpertGemmW if routed else MOE.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
     return bind(MOE.MoeExpertGemmWV2 if routed else MOE.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
 
 
-def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
+def moe_tuned_tile_refusal(profile: TargetProfile, kb: Any) -> str | None:
     """None when a tuned bf16 `fused_moe_kernel` tile (vLLM's per-device table, which batch invariance does not override) is one the
     Definitions model on the declared target: cc 9.0, where every tile's `tl.dot` is the k16 step `moe_expert_dot` names (wgmma or MMA
     v2, both Hopper's) and a row's chain does not depend on the tile, and BLOCK_SIZE_K a multiple of that step; else why not.  The
@@ -199,7 +202,7 @@ def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
     return None
 
 
-def moe_expert_fp8_dot(profile):
+def moe_expert_fp8_dot(profile: TargetProfile) -> PrimitiveDefinition:
     """The e4m3 k32 step of the block-FP8 fused-MoE expert GEMMs (`TritonExperts`' `fused_moe_kernel`) on the declared target: the GEMM
     target's `fp8_moe_dot`, its own measurement rather than the per-tensor FP8 linear's (`fp8_dot`) or the blockwise one's
     (`fp8_block_dot`); refused by name where the target records none."""
@@ -211,7 +214,7 @@ def moe_expert_fp8_dot(profile):
     return dot
 
 
-def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool):
+def moe_expert_fp8_launch_dot(profile: TargetProfile, bm: int, bn: int, warps: int, swap: bool) -> PrimitiveDefinition:
     """The registered e4m3 k32 step of one block-FP8 fused-MoE launch.
 
     A tuned cc 9.0 launch is tile-dependent: use `fp8_moe.sm90_dot`, the Triton 3.7.1 lowering rule.  Other
@@ -220,7 +223,7 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
     target_dot = moe_expert_fp8_dot(profile)
     if profile.batch_invariant or tuple(profile.compute_capability) != (9, 0):
         return target_dot
-    from verity.definitions.registry import fp8_moe
+    from verity_vllm.definitions.registry import fp8_moe
     dot = fp8_moe.sm90_dot(int(bm), int(bn), int(warps), bool(swap))
     if dot not in FP8_DOTS.values():
         raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
@@ -228,7 +231,7 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
     return dot
 
 
-def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
+def moe_fp8_tuned_tile_refusal(profile: TargetProfile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
     """None when a tuned (not batch-invariant) block-FP8 `fused_moe_kernel` tile is one the Definitions model on the declared target:
     cc 9.0, SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, vLLM d9105ea80 fused_moe/utils.py:628-633), BLOCK_SIZE_K
     a multiple of the k32 step, and a step selected by `fp8_moe.sm90_dot` with a registered primitive; else why not.  The Build's
@@ -250,21 +253,21 @@ def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, s
     return None
 
 
-def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, BM: int, BN: int, WARPS: int,
-                             routed: bool):
+def moe_expert_fp8_gemm_spec(profile: TargetProfile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, BM: int, BN: int, WARPS: int,
+                             routed: bool) -> SpecializedDefinition:
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
-    from verity.definitions.registry import fp8_moe_experts as X
+    from verity_vllm.definitions.registry import fp8_moe_experts as X
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
                 SWAP=bool(SWAP), DOT=moe_expert_fp8_launch_dot(profile, BM, BN, WARPS, SWAP))
 
 
-def tuned_gemm_table(profile) -> dict[tuple[int, int], dict[str, Any]]:
+def tuned_gemm_table(profile: TargetProfile) -> dict[tuple[int, int], dict[str, Any]]:
     """vLLM's tuned batch-invariant GEMM table of the declared target (`GemmTarget.tuned_table`; empty = default tiling for every shape)."""
     return dict(gemm_target(profile).tuned_table)
 
 
-def check_flash_attn_registered(profile) -> int:
+def check_flash_attn_registered(profile: TargetProfile) -> int:
     """The effective FA version of the target, refused when the target has no registered attention chain for it."""
     fam = target_family(profile)
     v = profile.effective_flash_attn_version()
@@ -290,21 +293,21 @@ def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule") from e
 
 
-def fa3_check_inf(profile) -> bool:
+def fa3_check_inf(profile: TargetProfile) -> bool:
     """True when the target builds FA3's attention rows with the per-iteration `Check_inf` chain (`Attention_v4`):
     an effective FA3 target whose effective `fa3_construction` is `"check-inf-per-iteration"` (the default)."""
     construction = getattr(profile, "effective_fa3_construction", None)
     return profile.effective_flash_attn_version() == 3 and construction is not None and construction() == "check-inf-per-iteration"
 
 
-def fa3_masked_from(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int) -> int:
+def fa3_masked_from(profile: TargetProfile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int) -> int:
     """`MASKED_FROM` of an `Attention_v4` row: the FA3 tile's `n_block_min_causal_local_mask` for query row `row` of its sequence (its
     index among the sequence's query rows in the launch; `seqlen_q` = the launch's max_seqlen_q, which picks the tile)."""
     g = max(1, int(NH) // max(1, int(KVH)))
     return attention_vocab.fa3_masked_from(T, fa3_kblock_n(D, seqlen_q, g), row, fa3_tile_m(D, seqlen_q, g), g)
 
 
-def fa2_check_inf(profile) -> bool:
+def fa2_check_inf(profile: TargetProfile) -> bool:
     """True when the target builds FA2's attention rows with FA2's per-iteration `Check_inf` chain (`Attention_v5`): an effective FA2
     target whose family registers `fa2_construction = "check-inf-per-iteration"`.  The other FA2 families keep the chain their records
     were accepted under (every block guarded)."""
@@ -312,7 +315,7 @@ def fa2_check_inf(profile) -> bool:
             and TARGETS.get(profile.tensor_core_family, {}).get("fa2_construction") == "check-inf-per-iteration")
 
 
-def fa2_masked_from(profile, T: int, D: int, seqlen_q: int, row: int, own_rows: int) -> int:
+def fa2_masked_from(profile: TargetProfile, T: int, D: int, seqlen_q: int, row: int, own_rows: int) -> int:
     """`MASKED_FROM` of an `Attention_v5` row: the lowest key block FA2's kernel guards for query row `row` of its sequence (its index among
     the sequence's `own_rows` query rows in the launch; the sequence's key count is the last row's, `T - 1 - row + own_rows`).  The launch's
     max_seqlen_q (`seqlen_q`) decides causality: `varlen_fwd` runs a launch of one query row per sequence non-causal."""
@@ -343,6 +346,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
                              -> the same, for a request whose prefill ran in launches of n0, n1, ... rows in turn (`chunks`; the
                                 chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`): its steps are its chunks, then its decodes
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
+        any other str        -> the int, list or dict it spells (a count, or JSON), read as above; a string that spells none is refused
     Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]},
     + "chunks": [int, ...])."""
     if spec is None or spec == "":
@@ -351,7 +355,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         s = spec.strip()
         if s.lower() == "conflict":
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
-        spec = int(s) if s.lstrip("-").isdigit() else json.loads(s)
+        try:
+            spec = int(s) if s.lstrip("-").isdecimal() else json.loads(s)
+        except ValueError as e:
+            raise ValueError(f"launch context: {spec!r} is neither a count nor JSON ({e}); it is max_seqlen_q as a count (1024), a JSON "
+                             'list of it per step ([1024, 1, 1]), a JSON object ({"0": 1024}, or {"batch": [[[rows, start], ...], ...]} '
+                             'for the batch itself) or "conflict"') from e
     if isinstance(spec, bool):
         raise ValueError(f"launch context: {spec!r}")
     if isinstance(spec, int):
@@ -451,7 +460,7 @@ def graph_tokens(n: int, capture_sizes: tuple[int, ...] = ()) -> int:
     return min(fits) if fits else int(n)
 
 
-def graph_launch(n: int, uniform_decode: bool, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+def graph_launch(n: int, uniform_decode: bool, capture_sizes: Sequence[int], max_num_seqs: int) -> tuple[str, int]:
     """vLLM d9105ea80's CUDA-graph dispatch of a step of `n` tokens under FULL_AND_PIECEWISE (`CudagraphDispatcher.dispatch`):
     (FULL | PIECEWISE | NONE, the tokens its forward runs at).  Past the largest capture size it runs uncaptured at n; otherwise at
     its `graph_tokens`, as a FULL graph where it is a uniform decode (one row a sequence) padded to at most `max_num_seqs` (the FULL
@@ -465,7 +474,7 @@ def graph_launch(n: int, uniform_decode: bool, capture_sizes, max_num_seqs: int)
     return ("FULL" if uniform_decode and padded <= max_num_seqs else "PIECEWISE"), padded
 
 
-def launch_graph(own_rows: int, step: int, launch: dict[str, Any] | None, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+def launch_graph(own_rows: int, step: int, launch: dict[str, Any] | None, capture_sizes: Sequence[int], max_num_seqs: int) -> tuple[str, int]:
     """`graph_launch` of the step a request's `own_rows` run in at its request `step` (the declared batch's sequences, or the request
     alone without one): its mode and the tokens its forward runs at (`launch_tokens`)."""
     seqs = launch_sequences(step, launch)
@@ -499,7 +508,7 @@ def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
     return None if seqs is None else [p + i + 1 for n, p in seqs for i in range(n)]
 
 
-def attention_geometry(profile, D: int, seqlen_q: int, NH: int, KVH: int) -> dict[str, Any]:
+def attention_geometry(profile: TargetProfile, D: int, seqlen_q: int, NH: int, KVH: int) -> dict[str, Any]:
     """`{"BN", "INV", "DOT", "fa_version"}` of the attention launch on the declared target for head dim D: the online-softmax block
     (keys per block), the epilogue reciprocal and the k16 step.  `seqlen_q` = the launch's query rows (per request; under varlen the
     batch max), consulted by FA3's tile rule only."""
@@ -510,19 +519,19 @@ def attention_geometry(profile, D: int, seqlen_q: int, NH: int, KVH: int) -> dic
     return {"BN": fa3_kblock_n(D, seqlen_q, max(1, int(NH) // max(1, int(KVH)))), "INV": Fa3InvSum, "DOT": dot, "fa_version": 3}
 
 
-def uses_accepted_kinds(profile) -> bool:
+def uses_accepted_kinds(profile: TargetProfile) -> bool:
     """True when the target binds the accepted records' kinds (`Gemm_v1`, `Attention_v3`): Ampere-family step under FA2."""
     return target_family(profile) == "ampere" and profile.effective_flash_attn_version() == 2
 
 
-def gemm_spec(profile, K: int, N: int):
+def gemm_spec(profile: TargetProfile, K: int, N: int) -> SpecializedDefinition:
     """The registered GEMM Definition of a bf16 `[*,K] x W[N,K]^T` batch-invariant launch on the declared target."""
     if uses_accepted_kinds(profile):
         return bind(b1.Gemm, K=int(K), N=int(N))
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
-def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
+def scaled_mm_fp8_spec(profile: TargetProfile, K: int, N: int, bias: bool) -> SpecializedDefinition:
     """The registered Definition of the per-tensor FP8 linear (`_C.cutlass_scaled_mm` over the quantised row) on the declared
     target: `ScaledMmFp8NoSwap_v1{K,N,BIAS,DOT}` where the GEMM target records the unswapped epilogue and its e4m3 step
     (`GemmTarget.fp8_scale_order == "no_swap"`, `fp8_dot`); refused by name elsewhere."""
@@ -533,7 +542,7 @@ def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
     raise UnregisteredTarget(f"per-tensor FP8 linear on {gt.key} ({profile.capability_str}): no registered binding")
 
 
-def fp8_block_dot(profile):
+def fp8_block_dot(profile: TargetProfile) -> PrimitiveDefinition | None:
     """The e4m3 k32 step the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`) binds on the declared target, as the version 3
     Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8BlockSharedScale_v1` is that step's chain, and the
     recorded Programs bind it).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
@@ -546,7 +555,7 @@ def fp8_block_dot(profile):
     return None if dot is HopperE4m3QgmmaDot32 else dot
 
 
-def scaled_mm_fp8_block_spec(profile, K: int, N: int, G: int, scale: str | None = None):
+def scaled_mm_fp8_block_spec(profile: TargetProfile, K: int, N: int, G: int, scale: str | None = None) -> SpecializedDefinition:
     """The registered Definition of the blockwise FP8 linear on one token row on the declared target, under the scale construction
     `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` on hopper, its
     version 3 form `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
@@ -561,7 +570,7 @@ def _fp4_dot(profile):
     return dot
 
 
-def nvfp4_quant_spec(profile, K: int):
+def nvfp4_quant_spec(profile: TargetProfile, K: int) -> SpecializedDefinition:
     """The registered Definition of the NVFP4 activation quantizer (`cvt_fp16_to_fp4`) on one row: `Nvfp4ActQuant_v1{K}` where the
     GEMM target records the NVFP4 linear (`GemmTarget.fp4_dot`); refused by name elsewhere and for K not a multiple of 16."""
     _fp4_dot(profile)
@@ -570,7 +579,7 @@ def nvfp4_quant_spec(profile, K: int):
     return bind(nvfp4.Nvfp4ActQuant, K=int(K))
 
 
-def nvfp4_gemm_spec(profile, K: int, N: int):
+def nvfp4_gemm_spec(profile: TargetProfile, K: int, N: int) -> SpecializedDefinition:
     """The registered Definition of the NVFP4 GEMM (`cutlass_scaled_fp4_mm`) on one row: `ScaledMmNvfp4_v1{K,N,DOT}` with the
     target's block-scaled step; refused by name elsewhere and for K not a multiple of 64 (the step)."""
     dot = _fp4_dot(profile)
@@ -579,7 +588,7 @@ def nvfp4_gemm_spec(profile, K: int, N: int):
     return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
 
 
-def rmsnorm_spec(profile, N: int, EPS: float, M: int = 1):
+def rmsnorm_spec(profile: TargetProfile, N: int, EPS: float, M: int = 1) -> SpecializedDefinition:
     """The registered Definition of `_C.rms_norm` on one row for a launch of ``M`` rows.
 
     Batch-invariant serving dispatches the Triton kernel.  Default serving dispatches
@@ -592,7 +601,7 @@ def rmsnorm_spec(profile, N: int, EPS: float, M: int = 1):
                 BLOCK=CR.launch_block(int(M), int(N), fused=False))
 
 
-def rmsnorm_value_spec(profile, N: int):
+def rmsnorm_value_spec(profile: TargetProfile, N: int) -> SpecializedDefinition:
     """The registered-epsilon twin of :func:`rmsnorm_spec`, available on the
     batch-invariant Triton path."""
     if not profile.batch_invariant:
@@ -600,7 +609,7 @@ def rmsnorm_value_spec(profile, N: int):
     return bind(VI.RMSNormTritonV3, N=int(N))
 
 
-def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: bool = False, M: int = 1):
+def rmsnorm_fused_spec(profile: TargetProfile, N: int, EPS: float | None = None, eps_input: bool = False, M: int = 1) -> SpecializedDefinition:
     """The registered Definition of `_C.fused_add_rms_norm` on one row on the declared target: under `batch_invariant` the generic
     kernel (`RMSNormFusedCuda_v2{N,EPS}`; with `eps_input` its twin `RMSNormFusedCuda_v4{N}` that reads eps as an input); refused by
     name for a registered epsilon otherwise.  Default serving dispatches the width-8
@@ -620,8 +629,8 @@ _SCALE_INPUT = {"Attention_v3": VI.AttentionV10, "Attention_v2": VI.AttentionV12
                 "Attention_v5": F2.AttentionV11, "AttentionSoftcap_v1": VI.AttentionSoftcapV4, "AttentionSoftcap_v2": VI.AttentionSoftcapV5}
 
 
-def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
-                   cap: float | None = None, scale_input: bool = False):
+def attention_spec(profile: TargetProfile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
+                   cap: float | None = None, scale_input: bool = False) -> SpecializedDefinition:
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
     construction the row's index among its sequence's query rows in the launch (`row`) selects its tile (FA3, `fa3_check_inf`); FA2
     (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`).  A logit soft cap `cap` selects the softcapped
@@ -650,7 +659,7 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
     return bind(b1.AttentionV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"])
 
 
-def softcapped(spec, cap: float):
+def softcapped(spec: SpecializedDefinition, cap: float) -> SpecializedDefinition:
     """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
     for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
     chain has a registered softcapped form (UnregisteredTarget)."""
@@ -661,7 +670,7 @@ def softcapped(spec, cap: float):
     return bind(body, **spec.bindings, CAP=float(cap))
 
 
-def describe(profile) -> dict[str, Any]:
+def describe(profile: TargetProfile) -> dict[str, Any]:
     """The target's registered bindings as a record (applicability manifests, run headers, reports)."""
     fam = target_family(profile)
     t = TARGETS[fam]

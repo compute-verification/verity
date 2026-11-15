@@ -2,7 +2,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The coin link (`coin_link`)
 
-D7 (`security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
+D7 (`security/Definitions/Certifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
 ingress link of the server's network certifier: its timing is charged on the ingress grid, its content is exempt for
 coin openings that open against the challenger's committed coin root, and everything else on it is counted. The
 prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one window's
@@ -10,8 +10,8 @@ session, and `verity/protocols/compose/device/live_challenger/coin_link.py` runs
 
 ### The path
 
-The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor host, the device that
-runs the server's network certifier (`trusted-host`). A window's session takes this path:
+The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor device, the device that
+runs the server's network certifier (`trusted-device`). A window's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
 2. `serve.py` signs the challenger's record, which states the session's coin commitment, then listens on the host's
@@ -61,15 +61,17 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
   and the same record. Flow control carries nothing from inside either. A side that leaves more than `BACKLOG` bytes
   untaken fails the link closed (`delivery-refused`), as does a queue past Q (`overflow`) or cells still queued when
   their connection ends (`dropped`). Each fault cuts the connection at that tick and is its execution phase's status.
-- **One clock (RP8).** The ticks read the host's monotonic clock from one origin, and `serve.py`'s release log reads
-  the same clock. A tick later than `slack` (25 ms) faults both grids for the rest of the execution phase
-  (`monitor-unavailable`). It never shifts the grid.
+- **One clock (RP8).** The ticks read the network certifier's clock (`pacer.raw_clock`, the host's raw monotonic clock,
+  which no time service steers) from one origin read on it, and `serve.py`'s release log reads the same clock. A tick
+  whose wait ends early waits again, so none runs before its time on that clock. A tick later than `slack` (25 ms)
+  faults both grids for the rest of the execution phase (`monitor-unavailable`). It never shifts the grid. A host that
+  gives no raw monotonic clock runs no link.
 - **Release order.** A challenger device releases its coin-commitment root only
   after the prover's commitment is in. The open entry, which binds the prover's root, comes before `serve.py` starts.
   The record comes before `serve.py` listens, and the link starts after it listens, so no challenger frame reaches the
   prover before the prover's root is in the ledger. The gate's `open` answer carries the commitment root too. It is
   given after the open entry, and on the gate's own ssh channel, which carries no coin.
-- **WitnessPathPrivate.** The coins leave the trusted host only inside the tunnel's ssh channel. That channel goes
+- **WitnessPathPrivate.** The coins leave the trusted device only inside the tunnel's ssh channel. That channel goes
   straight to the server's own sshd: the link sets `ProxyJump` and `ProxyCommand` to `none`, and refuses a peer whose
   line names a jump host or a proxy (`jump`). From the server's sshd to the prover's client is the server's loopback.
   So the hop from the certifier to the server crosses no developer-controlled host beyond the server itself, and what the
@@ -79,8 +81,9 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 
 The challenger's premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock`, named in
 `verity/protocols/proofs/spot/verifier/README.md`.
-Here the challenger and the link are one device, the trusted host: the coins cross only its loopback until the link
-releases them, and the link's ticks read the host's monotonic clock, which the challenger's release log reads too (RP8).
+Here the challenger and the link are one device, the trusted device: the coins cross only its loopback until the link
+releases them, and the link's ticks read the host's raw monotonic clock, which the challenger's release log reads too
+(RP8).
 
 ### Parameters and record
 

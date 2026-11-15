@@ -15,10 +15,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.program import Program
-from verity.definitions.numerics import moe_twins
-from verity.definitions.registry import moe
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
+from verity_vllm.definitions.numerics import moe_twins
+from verity_vllm.definitions.registry import moe
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
 
 NEG_INF, PINF, QNAN = 0xFF800000, 0x7F800000, 0x7FC00000
 TIERS = ((128, 8), (256, 8), (384, 8), (512, 8), (512, 22), (768, 16), (896, 16), (1024, 16))   # SigmoidBiasTiers

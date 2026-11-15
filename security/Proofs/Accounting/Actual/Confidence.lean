@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Confidence
+public import Definitions.Pouw.Guarantees.Confidence
 public import Proofs.Accounting.Actual.Split
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset

@@ -123,20 +123,20 @@ class Attention(torch.nn.Module):
     def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor) -> torch.Tensor:
         m = hidden_states.shape[0]
         g = torch.Generator().manual_seed(1000 * self.layer + int(positions[0]))
-        draw = lambda *shape: torch.randn(*shape, generator=g).to(torch.bfloat16)  # noqa: E731
-        q_c, kv_c, k_pe = draw(m, QL), draw(m, KVL), draw(m, DR)
-        index_k = draw(m, ID) if self.has_indexer else None
-        index_weights = draw(m, IH) if self.has_indexer else None
+        randn = lambda *shape: torch.randn(*shape, generator=g).to(torch.bfloat16)  # noqa: E731
+        q_c, kv_c, k_pe = randn(m, QL), randn(m, KVL), randn(m, DR)
+        index_k = randn(m, ID) if self.has_indexer else None
+        index_weights = randn(m, IH) if self.has_indexer else None
         output = torch.empty(m, NHL * DV, dtype=torch.bfloat16)
         kv_c_out, k_pe_out = torch.empty_like(kv_c), torch.empty_like(k_pe)
         q_c = fused_norm_rope(positions, q_c, None, 1e-6, kv_c, None, 1e-6, k_pe, None, index_k, None, None, 1e-6, None,
                               self.topk_indices_buffer, slot_mapping=self.slots,
                               indexer_k_cache=self.indexer.k_cache.kv_cache if self.has_indexer else None, mla_kv_cache=self.kv_cache,
                               has_indexer=self.has_indexer, kv_c_out=kv_c_out, k_pe_out=k_pe_out)
-        q = draw(m, NHL, DN + DR)
+        q = randn(m, NHL, DN + DR)
         q_nope, q_pe = q.split([DN, DR], dim=-1)
         ql_nope = torch.bmm(q_nope.transpose(0, 1), self.W_UK_T).transpose(0, 1)
-        index_q = draw(m, IH, ID) if self.has_indexer else None
+        index_q = randn(m, IH, ID) if self.has_indexer else None
         index_q_fp8, index_weights_out, mqa_q = fused_q(positions, q_pe, None, index_q, None, ql_nope, None, index_weights, 0.5, 0.25,
                                                         has_indexer=self.has_indexer)
         self.seen = {"positions": positions, "q_c": q_c, "kv_c": kv_c_out, "k_pe": k_pe_out, "ql_nope": ql_nope, "mqa_q": mqa_q, "index_q_fp8": index_q_fp8,

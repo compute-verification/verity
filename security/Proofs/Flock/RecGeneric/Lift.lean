@@ -12,7 +12,7 @@ often as in the second, plus as often as its plan there asks about a run where t
 (`RunFinder.PrAt_le_map`).
 
 `P_O`'s aborting runs (`runModel` at `Comp.innerPO` and `Comp.keepAO`) map so to the composite's reruns
-(`Comp.innerModel`) by `extendDraw` (`Proofs.Flock.RecGeneric.Coupling`), the runs where they may accept differently
+(`Comp.innerModel`) by `extendSample` (`Proofs.Flock.RecGeneric.Coupling`), the runs where they may accept differently
 being reruns that accept at a sample `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives witnesses outside
 `R_O` (`Comp.OutRO`): `Comp.PrAt_le_lift`.
 
@@ -119,7 +119,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {K : Co
 
 /-- **A run finder at `P_O`'s aborting runs finds a collision at most as often as at the composite's reruns, plus as
 often as its plan there asks about a rerun that accepts at a bad sample or at one where `E_O` gives witnesses outside
-`R_O`**: runs map to reruns uniformly (`unifMap_extendDraw`), named and with coins alike (`named_extend`,
+`R_O`**: runs map to reruns uniformly (`unifMap_extendSample`), named and with coins alike (`named_extend`,
 `coins_extend`), accepting alike off those reruns (`accAt_iff`), and a collision among runs' calls is one among their
 reruns' searched evaluations (`findColl_cover`), which are true (`rerunCalls_true`). -/
 theorem PrAt_le_lift (F : RunFinder Coin) (hCF : I.LastCoinFree H) (decC : Msg → Coin)
@@ -129,13 +129,13 @@ theorem PrAt_le_lift (F : RunFinder Coin) (hCF : I.LastCoinFree H) (decC : Msg �
       F.PrAt H (K.innerModel (S.IVStar I.V I.ans) H P x) (K.xI x) +
         F.PrAsk (K.innerModel (S.IVStar I.V I.ans) H P x) (K.xI x) fun ω u =>
           (K.BadO I S H P x ω u ∨ K.OutRO H P x ω u) ∧ (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω u := by
-  refine F.PrAt_le_map H _ _ extendDraw (unifMap_extendDraw hn) _ (K.xI x) (named_extend decC hn)
+  refine F.PrAt_le_map H _ _ extendSample (unifMap_extendSample hn) _ (K.xI x) (named_extend decC hn)
     (coins_extend decC hn) (fun ω u hu => accAt_iff hCF decC hdec hn ω u hu) fun ω l g h => ?_
   refine findColl_cover (P := P) hCF decC hdec hRp hL ω (fun p hp => ?_) (fun p hp => ?_) h
   · obtain ⟨e, -, hpe⟩ := List.mem_flatMap.1 hp
-    exact rerunCalls_true (P := P) hRp hT ω (extendDraw (g e)) p hpe
+    exact rerunCalls_true (P := P) hRp hT ω (extendSample (g e)) p hpe
   · obtain ⟨e, he, hpe⟩ := List.mem_flatMap.1 hp
-    refine ⟨extendDraw (g e), ?_, fun p' hp' => List.mem_flatMap.2 ⟨e, he, hp'⟩⟩
+    refine ⟨extendSample (g e), ?_, fun p' hp' => List.mem_flatMap.2 ⟨e, he, hp'⟩⟩
     rw [← abortRun_eqO decC hn]
     exact hpe
 

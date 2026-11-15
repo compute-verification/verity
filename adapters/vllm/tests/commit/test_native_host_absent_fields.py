@@ -1,7 +1,8 @@
-"""What `verity_vllm.commit.committer.native_host` makes of a record that leaves a field out, gives it null or gives it empty: an
-expected manifest that names no TP sites, no counts for them, no MoE layers beside its plain ones and nothing ruled out; a step
-bound without the model's geometry; a declared request without its prompt's ids; a schedule with no largest step; and a step
-that staged nothing.  Each of the three means the same, and each case holds the value the code gives for it.  Offline (no CUDA)."""
+"""What `verity_vllm.commit.committer.native_host` and its identity check (`identity_check`) make of a record that leaves a field out,
+gives it null or gives it empty: an expected manifest that names no TP sites, no counts for them, no MoE layers beside its plain
+ones and nothing ruled out; a step bound without the model's geometry; a declared request without its prompt's ids; a schedule
+with no largest step; and a step that staged nothing.  Each of the three means the same, and each case holds the value the code
+gives for it.  Offline (no CUDA)."""
 from __future__ import annotations
 
 from collections import Counter
@@ -14,6 +15,7 @@ pytest.importorskip("torch")
 
 from tests.commit import test_bound_phases as BP
 from tests.commit import test_x03_identities as XI
+from verity_vllm.commit.committer import identity_check
 from verity_vllm.commit.committer import native_host as NH
 
 ABSENT = object()
@@ -37,23 +39,23 @@ SITE = "model.layers.0.mlp.down_proj"
 @pytest.mark.parametrize("sites", [*LEFT_OUT, []])
 def test_a_manifest_that_names_no_tp_site_passes_a_step_without_partials_and_fails_one_with(sites: Any) -> None:
     man = _with({}, tp_sites=sites)
-    assert NH.tp_partials_bad(man, Counter({"model.layers.0.mlp.down_proj": 1})) == {}
-    assert NH.tp_partials_bad(man, Counter({PARTIAL: 2, "x/shard_rank1": 1})) == {"<undeclared tp source>": 3}
+    assert identity_check.tp_partials_bad(man, Counter({"model.layers.0.mlp.down_proj": 1})) == {}
+    assert identity_check.tp_partials_bad(man, Counter({PARTIAL: 2, "x/shard_rank1": 1})) == {"<undeclared tp source>": 3}
 
 
 @pytest.mark.parametrize("counts", [*LEFT_OUT, {}])
 def test_a_site_whose_manifest_gives_no_count_binds_one_partial_a_step(counts: Any) -> None:
     man = _with({"tp_sites": [SITE]}, tp_site_counts=counts)
-    assert NH.tp_partials_bad(man, Counter({PARTIAL: 1})) == {}
-    assert NH.tp_partials_bad(man, Counter({PARTIAL: 2})) == {SITE: 2}
-    assert NH.tp_partials_bad(man, Counter()) == {SITE: 0}
+    assert identity_check.tp_partials_bad(man, Counter({PARTIAL: 1})) == {}
+    assert identity_check.tp_partials_bad(man, Counter({PARTIAL: 2})) == {SITE: 2}
+    assert identity_check.tp_partials_bad(man, Counter()) == {SITE: 0}
 
 
 def test_a_site_with_a_count_binds_that_many_and_another_rank_s_partial_is_named() -> None:
     man = {"tp_sites": [SITE], "tp_site_counts": {SITE: 2}, "tp_rank": 0}
-    assert NH.tp_partials_bad(man, Counter({PARTIAL: 2})) == {}
-    assert NH.tp_partials_bad(man, Counter({PARTIAL: 1})) == {SITE: 1}
-    assert NH.tp_partials_bad(man, Counter({PARTIAL: 1, f"{SITE}/part_rank1": 1})) == {"<foreign rank tag>": 1}
+    assert identity_check.tp_partials_bad(man, Counter({PARTIAL: 2})) == {}
+    assert identity_check.tp_partials_bad(man, Counter({PARTIAL: 1})) == {SITE: 1}
+    assert identity_check.tp_partials_bad(man, Counter({PARTIAL: 1, f"{SITE}/part_rank1": 1})) == {"<foreign rank tag>": 1}
 
 
 # --- a step bound's model, and a declared request's prompt -------------------------------------------------------------------------------

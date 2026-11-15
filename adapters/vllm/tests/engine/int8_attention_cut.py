@@ -1,4 +1,4 @@
-"""Cut one decoder layer's int8 attention scope out of a served capture (`pipeline.m1_capture` with `--snapshot-steps`), with the
+"""Cut one decoder layer's int8 attention scope out of a served capture (`pipeline.match_capture` with `--snapshot-steps`), with the
 memory words its fold reads and writes, as the recorded test's fixture (`test_int8_attention_recorded`).
 
     python -m tests.engine.int8_attention_cut CAPTURE_DIR --layer L --steps 0,1 --out CUT.jsonl.gz [--origin WHERE]
@@ -158,7 +158,7 @@ def values_path(cut_path: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("capture", type=Path, help="m1_capture's --out: log.jsonl.gz, snapshots.json, values/")
+    ap.add_argument("capture", type=Path, help="match_capture's --out: log.jsonl.gz, snapshots.json, values/")
     ap.add_argument("--layer", type=int, required=True)
     ap.add_argument("--steps", required=True, help="comma-separated engine steps, e.g. 0,1")
     ap.add_argument("--out", type=Path, required=True, help="the cut log, NAME.jsonl.gz; the words go to NAME.values.npz beside it")

@@ -12,7 +12,7 @@ from research.store.local import LocalStore
 
 T = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 ARGV = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
-CHECK_ARGV = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
+CHECK_ARGV = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py", "--keep-going"]
 STDOUT = """lean-records: taking the slot path: check.py on /c/lean-records/build-1
 AUDIT /c/lean-records/build-1/Security: PASS  24170 declarations in 646 modules; axioms propext; 1003 guarantees; {'build': 46.3}
 AUDIT /c/lean-records/build-1/Security/Proofs: PASS  160227 declarations in 3191 modules; axioms propext; 0 guarantees; {}
@@ -215,15 +215,15 @@ def test_lean_times_reads_the_remotes_attempts_of_the_window(remote, capsys):
     assert not [p for p in (tmp / "reader" / "objects").rglob("*") if p.is_file()], "the run records' blobs are read, not kept"
 
 
-def test_a_check_from_a_tree_with_the_check_at_tools_check_is_read_as_one_from_tools_verity_check(remote, capsys):
-    """A tree whose check is at tools/check/ runs tools/check/check.py: its Lean steps are tasks as at tools/verity/check/, and
-    a look-alike path's are none."""
+def test_a_check_from_a_tree_with_the_check_at_tools_verity_check_is_read_as_one_from_tools_check(remote, capsys):
+    """A tree whose check is at tools/verity/check/ runs tools/verity/check/check.py: its Lean steps are tasks as at
+    tools/check/, and a look-alike path's are none."""
     tmp, cfg = remote
     node = LocalStore(tmp / "node", config_path=cfg)
     meta = {"kind": "check/v1", "steps": [_step("lean-audit", seconds=600.0, ended="2026-10-28T11:20:00Z")],
             "reuse": {"steps": {"lean-audit": {"reran": ["security"]}}}}
-    moved = [a.replace("tools/verity/check/", "tools/check/") for a in CHECK_ARGV]
-    odd = ("x/tools/check/check.py.bak", "tools/checks/check.py")
+    moved = [a.replace("tools/check/", "tools/verity/check/") for a in CHECK_ARGV]
+    odd = ("x/tools/verity/check/check.py.bak", "tools/verity/checks/check.py")
     for rid, argv in (("r20261028-101000-aaaa", moved), *((f"r20261028-10200{i}-bbbb", ["python3", p]) for i, p in enumerate(odd))):
         _publish(node, tmp, rid, argv, kind="check/v1", meta=meta, end="2026-10-28T11:30:00Z")
     assert L.main(["--until", "2026-10-28T12:00:00Z", "--hours", "6", "--json"], store=LocalStore(tmp / "reader", config_path=cfg)) == 0

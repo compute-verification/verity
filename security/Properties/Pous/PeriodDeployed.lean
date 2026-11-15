@@ -30,7 +30,7 @@ floor give, outside both regions.
   session's `105` rounds), its honest strategy (`honestStrategy`, which keeps all of `C` and answers by lookup), the
   empty period (`emptyRun`) and the certificate `HONEST_S = 63,000,000` bits: what the honest and nontrivial lemmas of
   `PeriodHeld` and `PeriodHeldDeployed`, `PeriodHeldHonest` and `PeriodHeldNontrivial`
-  (`Security/Proofs/Pous/Lemmas/PeriodDeployed.lean`), are stated at.
+  (`security/Proofs/Pous/Lemmas/PeriodDeployed.lean`), are stated at.
 
 The step from the deployed device to the ring model is two premises, and no theorem here discharges either: the device
 model (`DeviceModel`: the state at each round boundary within `B + S_chip + ∑ cap_i · round`, and each on-time answer
@@ -94,9 +94,9 @@ def PeriodHeldDeployed : Prop :=
 
 /-- **The honest device**, one H200 serving `C*`, with one tick a round of the session: `2^30` bits of on-chip state, at
 least the H200's 992,061,184 bits of registers, shared memory with L1 and L2 at its data sheet
-(`Verity.Accel.H200.size`); `C*`'s `2^19 · 16,448` bits of device memory; and one side channel, its PCIe Gen 5 ×16
-link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured GPU-to-host copy is
-57.2 GB/s). -/
+(`store` in `hardware/cards/h200-sxm-141gb.toml`); `C*`'s `2^19 · 16,448` bits of device memory; and one side
+channel, its PCIe Gen 5 ×16 link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured
+GPU-to-host copy is 57.2 GB/s). -/
 def honestDevice : Accounting.Device Unit := ⟨2 ^ 30, FULL, fun _ => 0, 0, fun _ => 437248000⟩
 
 /-- A period on the honest device whose capacity account holds `m ≤ FULL` bits at every tick, its window the session's
