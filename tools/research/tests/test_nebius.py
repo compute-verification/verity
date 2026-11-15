@@ -266,7 +266,7 @@ def stop_group(p: subprocess.Popen) -> None:
     try:
         os.killpg(p.pid, signal.SIGTERM)
     except ProcessLookupError:
-        pass
+        assert p.poll() is not None, "a group is gone only once its leader is reaped"
     p.wait()
 
 
