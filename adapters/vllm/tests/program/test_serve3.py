@@ -1,6 +1,6 @@
 """`Serve@3` at TINY-PAD against its frozen semantics — the prefix property (`n ∈ {0, 3, D_MAX}`), the absorbing
 property and the inactive step-boundary relation, output interpretation, digest distinctness, the measured gate budget,
-and the vectorized reference evaluator (`verity/definitions/numerics/serve3_reference.py`) bit-for-bit against the
+and the vectorized reference evaluator (`adapters/vllm/verity_vllm/definitions/numerics/serve3_reference.py`) bit-for-bit against the
 gate-level evaluation.
 
 Fixture: TINY-PAD dims (the test-suite TINY with `MAX_POS` 8 → 16), random bf16 weights
@@ -23,9 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
 from verity.circuits.codec import program_digest
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import b1, serve3
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry.b1 import weights_type
 
 TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
               "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
@@ -175,7 +175,7 @@ def test_output_interpretation(ell):
         assert out[ell] == eos  # stop evidence: the live event ℓ samples and commits the EOS
         assert out[ell + 1:] == [0] * (D_MAX - ell)
     else:
-        assert out[D_MAX] == Y_RAW[D_MAX]  # length cap: slot D_MAX committed, never a semantic output
+        assert out[D_MAX] == Y_RAW[D_MAX]  # length bound: slot D_MAX committed, never a semantic output
     # well-formedness — theorems of the circuit, checked on its outputs
     assert all(live[g] <= live[g - 1] for g in range(1, D_MAX + 1))
     assert all(live[g] == (live[g - 1] and out[g] != eos) for g in range(1, D_MAX + 1) if live[g - 1] == 1)

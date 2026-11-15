@@ -26,7 +26,7 @@ paths = []
 # moved one, and `tests/tree.toml`, the layout of record, whose lines top writes.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
-           "tools/verity/check/tests/test_move_check.py", "tools/verity/check/move_check.py",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
            "tools/research/src/research/store/moves.json", "tests/tree.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
 # Kept in one file: `rho/params.py`, a path from the calculator's directory in a comment of a suite outside it, which

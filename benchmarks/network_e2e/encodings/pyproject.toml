@@ -10,7 +10,7 @@
 # Those fixtures (`tests/fixtures/`; `tests/fixtures_draft/`, `vllm_trace.py`'s with a draft) and the certifier's
 # vectors these modules write are fetched fixtures (`artifacts.json`), which `suites.py` fetches before the
 # suites that read them; one a module rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
-# `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
+# `encodings`), and they run here as a suite (`uv run tools/check/suites.py benchmarks/network_e2e/encodings`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -24,7 +24,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/certifier", 
           "verity/protocols/accounting/certifier/prover", "verity/circuits", "verity/commitments",
           "verity/commitments/crypto",
-          # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports sampled proofs'
+          # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports SPOT's
           # produced and registered row helpers
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
@@ -41,8 +41,10 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
           # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
           "adapters/vllm/verity_vllm/pipeline/advice_code",
+          # the compile slice and its pieces, the vLLM integration's compiler, which the pool drivers and their tests import
+          "adapters/vllm/verity_vllm/compiler",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
-          "verity/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
           # the certifier's `head_check` counts a Definition's ANDs with the census (`census.BooleanWork`), and the
           # advice code's codec imports it (`window_code`, the certifier's `window_charge`, `arith_encode`):
           # test_arith_vectors, the first test to load v1.py, reads it

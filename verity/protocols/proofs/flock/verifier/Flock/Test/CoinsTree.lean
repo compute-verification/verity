@@ -1,15 +1,16 @@
-/-
+module
+
+public import Flock.HmRow
+public import Flock.Statement
+meta import Flock.HmRow
+
+/-!
 What a statement keeps without parsing its own output. The keyed coin tree a session reads (`Stmt.coinTree`,
 `SessionSpec.coinTree`) is the setup's coins' (`Coins.tree?`), which is what the setup's `Hello` names
 (`CoinTree.ofHello (helloOf …)`): the tree's spec for `.tree`, none for a seed's. The public header is
 kept as `Flock.norm` of what `JsonParse.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
 puts the sample in, and the same canonical bytes (`publicDigest` hashes those).
 -/
-module
-
-public import Flock.HmRow
-public import Flock.Statement
-meta import Flock.HmRow
 
 @[expose] public section
 

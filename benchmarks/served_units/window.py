@@ -71,7 +71,7 @@ env = _settings().get
 REPO = Path.cwd()
 PT = REPO / "benchmarks/served_units/prove_time.sh"
 #: what the staging tree's digest covers, the Python under each: prove_time.sh's KEY_PATHS, the same list
-KEY_PATHS = "benchmarks/served_units/stage.py verity/circuits verity/definitions verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
+KEY_PATHS = "benchmarks/served_units/stage.py verity/circuits verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
 OUT = Path(env("RESEARCH_RUN_DIR")) / "out"
 GB = 1e9
 RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processes' RSS against WIN_MEM_GB

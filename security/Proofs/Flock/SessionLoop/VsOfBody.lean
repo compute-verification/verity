@@ -90,7 +90,7 @@ section PiopPos
 open FlockSoundness.Refine (Frame encs)
 open Claims Claims.ZKMal
 open _root_.Flock (SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace LeanRelease
 
@@ -101,7 +101,7 @@ next round is rep stream `2j + r`'s PIOP round `jj`, `1 ≤ jj ≤ piopNR`, the 
 state is at the values of the rounds before it (`repState_piop`), at any tape and whatever the worker sends. -/
 theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) {x : Msg} (hSv : Loop.Serves x)
-    (ρ : Loop.Tp) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) {m : _root_.Flock.Firewall.Frame.Masker}
+    (ρ : Loop.Tp) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) {m : _root_.Flock.ZkServer.Frame.Masker}
     (hA : (ofLoop Masked.dataE L₁ real).answered x ρ ((m₀, ρ₀) :: ops) = .ok m) (j : Fin (Masked.jOf x))
     (r : Fin 2) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {jj : ℕ}
@@ -116,7 +116,7 @@ theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨-, -, hspec, htabs⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -191,12 +191,12 @@ theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
     try rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hjjT : a + 1 ≤ piopNR tb.st.m tb.st.fold.kLog := by rw [htm, htk']; exact hjj
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
-  have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.Firewall.Finish.flat tb.cm0.cap) Sched.root0
+  have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size, piopV_length_eq _ _ _ _ _ _ _ _ hjjT]
+    rw [hc', Loop.ofSamples_order, absorbed_size, piopV_length_eq _ _ _ _ _ _ _ _ hjjT]
     have e := piopLen_le tb.st.m tb.st.fold.kLog hjjT
     simp only [_root_.Flock.Zk.PadLayout.fa]
     omega
@@ -223,8 +223,8 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (Stmt SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
-open _root_.Flock.Firewall.Frame (Cfg Masker absorbed nLig)
+open _root_.Flock.ZkServer.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig)
 
 namespace Loop
 

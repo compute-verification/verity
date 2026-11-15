@@ -1,9 +1,3 @@
-/-
-Where the builder's rows put their outputs: after `nIn` input bits only `fresh` adds rows, each outputting the next bit,
-so the `k`-th row in creation order outputs bit `nIn + k` (`Good`), the column `Flock.HmNets.layout` gives it
-(`col_and`). `Fresh m`: running `m` keeps that. Both nets keep it from the end of their inputs (`good_compression3`,
-`good_hm96Row`).
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Top
@@ -24,6 +18,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
+
+/-!
+Where the builder's rows put their outputs: after `nIn` input bits only `fresh` adds rows, each outputting the next bit,
+so the `k`-th row in creation order outputs bit `nIn + k` (`Good`), the column `Flock.HmNets.layout` gives it
+(`col_and`). `Fresh m`: running `m` keeps that. Both nets keep it from the end of their inputs (`good_compression3`,
+`good_hm96Row`).
+-/
 
 @[expose] public section
 

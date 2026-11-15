@@ -144,10 +144,10 @@ theorem pub_digest_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     exact Hidden.pop_digest_sizeW hload hi hq
   | some d =>
     have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hsome d rfl
-    obtain ⟨D, hD, hpn, hn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D, hD, hpn, hn, -⟩ := Layout.sampled_spec hdrawn
     have hlt := Layout.proved_lt_population hD
     have hr : i < D.proved.size := hn ▸ hi
-    exact (congrArg ByteArray.size (Hidden.drawn_digestW hload hdrawn hD hlt hr hq)).trans
+    exact (congrArg ByteArray.size (Hidden.sampled_digestW hload hdrawn hD hlt hr hq)).trans
       (Hidden.pop_digest_sizeW hload (by rw [← hpn]; exact hlt _ (Array.getElem_mem hr)) hq)
 
 /-- **A site's row commits its table's `b ‖ c`**: in a satisfying witness of an accepted statement whose regions

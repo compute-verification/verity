@@ -48,7 +48,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
-  counts, the link-windows, the origin and the session's span. Every file is first written to a fresh hold under
+  counts, the execution phases, the origin and the session's span. Every file is first written to a fresh hold under
   KEEP/held (0700), and reaches ``--out`` only through the record's leak guard (``leak_guard.py``), whatever the exit:
   each file of the hold and member of ``bundle.tgz`` that holds a prompt's ids is removed, then the guard reads
   ``--out`` and the hold against the kept fetch, moves what holds a piece of the witness to KEEP/quarantine and releases
@@ -73,7 +73,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
   by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period sampled
-  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
+  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 execution phases (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
@@ -120,7 +120,7 @@ the gate takes the challenger host's address from where it is launched, ``--env`
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
       --store-read --send challenger-key.json --env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST \\
       -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
+      tools/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
@@ -157,6 +157,8 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+#: the record's leak guard, which chain_record.sh runs on its way out and `release` runs on a session's record
+LEAK_GUARD = "verity.protocols.accounting.certifier.device.leak_guard"
 TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
@@ -208,7 +210,7 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not adapters/vllm/tools/served_run/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
@@ -319,7 +321,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                 "chain": f"research run --on {on} --source . --project verity --as network-accounting "
                          f"--cwd clone --timeout 270m --store-read --send challenger-key.json {host} -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
-                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
+                         "python3 tools/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
                          f"--endpoint ART --draw 8 --coins gate{coin_peer} "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
@@ -354,9 +356,8 @@ def outcome(bundle: bytes) -> dict:
     dep = json.loads(files["out/deployment.json"]) if "out/deployment.json" in files else {}
     n, params = dep.get("windows"), dep.get("params") or {}
     span = n * params["window"] * params["bucket_ms"] / 1000 if n is not None and params else None
-    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "ended_utc": end.get("ended_utc"),
-            "pinned": end.get("pinned"), "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"),
-            "windows": n, "session_s": span}
+    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "pinned": end.get("pinned"),
+            "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"), "windows": n, "session_s": span}
 
 
 def needles(ps: list[list[int]]) -> list[bytes]:
@@ -464,7 +465,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
-    A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
+    A.certifier_run(host, run, pinned=pinned(),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
 
@@ -504,7 +505,7 @@ def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path
 def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
     """The record's leak guard on `out` and `hold` against the kept fetch, which releases the hold to `out` once it
     passes (0 when it found nothing, 3 when it moved a find to `quarantine`)."""
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(out), str(quarantine),
+    got = subprocess.run([sys.executable, "-m", LEAK_GUARD, str(out), str(quarantine),
                           *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
                           "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
                          capture_output=True, text=True)
@@ -552,11 +553,14 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
 
 
 def served_peer(fetch: Path) -> str | None:
-    """The node the kept gate run served on: its ``request.json``'s peer."""
+    """The node the kept gate run served on: its request's peer, which the gate's fetch holds in the witness's
+    ``request.json`` alone (`auditor.certifier_fetch`), so in a fetch with the run's own lane's key. A fetch kept
+    from a gate that still named the peer in the run's own ``request.json`` is read there."""
     with tarfile.open(fetch, "r:gz") as tar:
         for m in tar:
-            if m.isfile() and m.name.count("/") == 1 and m.name.endswith("/request.json"):
-                return json.loads(tar.extractfile(m).read()).get("peer")
+            if m.isfile() and m.name.split("/")[1:] in ([A.WITNESS, "request.json"], ["request.json"]):
+                if (peer := json.loads(tar.extractfile(m).read()).get("peer")) is not None:
+                    return peer
     return None
 
 
@@ -590,7 +594,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused("--coins gate draws --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
-        raise Refused(f"{fetch} holds no request.json naming the node it served on, so the coin peer can't be checked")
+        raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
+                      "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
                       f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
@@ -609,7 +614,7 @@ def certified_io(fetch: Path) -> tuple[dict, dict]:
     """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
     directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
         with tarfile.open(fetch, "r:gz") as tar:
             tar.extractall(d, filter="data")
@@ -757,8 +762,8 @@ def endpoint(a: argparse.Namespace) -> int:
 
 
 def chain(a: argparse.Namespace) -> int:
-    if not (HERE / "leak_guard.py").is_file():
-        raise Refused("this tree has no record leak guard (leak_guard.py), which chain_record.sh runs on its "
+    if importlib.util.find_spec(LEAK_GUARD) is None:
+        raise Refused(f"this tree has no record leak guard ({LEAK_GUARD}), which chain_record.sh runs on its "
                       "way out: run the chain from a tree with it")
     fetch = a.keep / a.run / "fetch.tar.gz"
     if not fetch.is_file():

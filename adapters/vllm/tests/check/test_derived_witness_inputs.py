@@ -13,8 +13,8 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import b1, b1_tp2
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1, b1_tp2
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.check.match import program_compare as CMP
 from verity_vllm.check.match.canonical_operands import as_progression

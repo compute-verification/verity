@@ -145,7 +145,8 @@ theorem bytes_of_list (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray
 the leaf of a recursive session's inner statement (`flock-leaf/sha512-unsalted`, `Tags.withPlainLeaves`). -/
 def leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 where
   leaf c _ := H512 (enc512.col c)
-  bind _ _ _ _ hc h := ⟨_, _, fun e => hc (enc512.col_inj e), h⟩
+  pair c _ c' _ := (enc512.col c, enc512.col c')
+  pair_spec _ _ _ _ hc h := ⟨fun e => hc (enc512.col_inj e), h⟩
 
 /-- **The executable's unsalted leaf is the model's plain leaf**, under any salt. -/
 theorem leafPlain_leaf (id : String) (row : Array F128) (salt : ByteArray) (y : List UInt8) :
@@ -165,7 +166,7 @@ theorem walk_val (msId : String) : ∀ (sibs : List Dig) (idx : ℕ) (acc : Dig)
       simp only [Merkle.walk, List.map_cons, climb]
       rw [walk_val msId rest (idx / 2)]
       congr 1
-      unfold Merkle.up
+      unfold Merkle.up Merkle.upIn
       split_ifs <;> rw [H512_append] <;> rfl
 
 theorem climb_size (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (acc : ByteArray), acc.size = 64 →

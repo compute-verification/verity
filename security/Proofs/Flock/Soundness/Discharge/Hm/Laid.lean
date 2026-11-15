@@ -1,9 +1,3 @@
-/-
-What a laid-out net's rows force: if its computed rows (from the end of its input rows to its constant) hold under the
-column values `v`, a row's `A` and `B` the XOR of `v` over its columns, and its constant column is 1 (`LaidRows`), then
-every row of the builder holds under `v ∘ col` (`laid_rows`), and output `j`'s column holds output `j`'s form
-(`laid_outs`).
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Fresh
@@ -23,6 +17,13 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
+
+/-!
+What a laid-out net's rows force: if its computed rows (from the end of its input rows to its constant) hold under the
+column values `v`, a row's `A` and `B` the XOR of `v` over its columns, and its constant column is 1 (`LaidRows`), then
+every row of the builder holds under `v ∘ col` (`laid_rows`), and output `j`'s column holds output `j`'s form
+(`laid_outs`).
+-/
 
 @[expose] public section
 

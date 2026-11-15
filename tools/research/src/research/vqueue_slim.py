@@ -78,11 +78,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
+from . import quick_tier
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
                       NOT_STARTED, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
                       step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
-from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git
+from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
@@ -92,7 +93,7 @@ from .vqueue_records import FAULT_RE
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
 #: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
 #: how its launch is waited for
-OWN_TRAIN = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "train.sh"
+OWN_TRAIN = Path(__file__).resolve().parents[3] / "check" / "train.sh"
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
@@ -112,6 +113,9 @@ FIXTURES_CODE = "tools/research/src/research"
 KEY_TAG = "verity-vqueue-slim-step/v1"
 #: a record's ``gate`` when its run is the check that gates (`start` with ``shards``)
 CHECK = "check"
+#: the record of a candidate's quick tier (`start_quick`), which gates a plain one where the land verdicts gate
+#: (`vqueue_loop.VERDICT_GATE`); its suites are pytest's, so its failures are that step's
+QUICK, QUICK_STEP = "quick", "pytest"
 #: `start`'s ``shards`` naming N shards of an auto plan of the candidate's tree
 AUTO_SHARDS = re.compile(r"auto:([1-9]\d*)")
 #: lean-audit's own failures of no package, in its log
@@ -126,10 +130,10 @@ AUDIT_BUILT_RE = re.compile(r"build: |lean: proved_in: \S+'s build did not pass 
 #: failure, not the tree's
 STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.M)
 #: what a log prints when its machine failed it, beyond `vqueue_records.FAULT_RE`: `tele run` refusing a run its machine's cgroups
-#: would leave without a memory limit (`telemetry.cgroup.uncapped`)
-MACHINE_SAYS = re.compile(r"refused to start the workload: this machine caps each login session")
+#: would leave without a memory limit (`telemetry.cgroup.uncapped`), in its wording before and after its rename
+MACHINE_SAYS = re.compile(r"refused to start the workload: this machine (?:limits|caps) each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
-SUITE_RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard")
+SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard")
 #: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
 #: and each file it reads as it is compiled (`include_str`, relative to it)
 IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
@@ -146,7 +150,7 @@ LEAN_FILES = "**/*.lean"
 #: runs them as the step does, so a change to one that took the verdict of the candidate below would land unrun and fail in
 #: the next candidate that audits, on that one's members.  What they load that every candidate's check runs (`settings.py`,
 #: `slot.py`) is no Lean input.  `tests/test_gate_paths.py` holds these to the step `check.py` declares
-LEAN_AUDIT_STEP = ("tools/verity/check/check.py", "tools/verity/check/lean_slot.py")
+LEAN_AUDIT_STEP = ("tools/check/check.py", "tools/check/lean_slot.py")
 #: the files whose directory is a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
 #: the part of a check that replays every module of the security analysis's proofs, which `start`'s ``heavy_on`` sends to its
@@ -246,18 +250,18 @@ def deselection(driver: Landing, listed: Path | None) -> Path | None:
 
 
 def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
-    """``steps`` but those candidate ``sha``'s own `tools/verity/check/ci.toml` declares no job of (`merge.declared`), one line
+    """``steps`` but those candidate ``sha``'s own `tools/check/ci.toml` declares no job of (`merge.declared`), one line
     logged naming them: check.py refuses a `--deferred` naming a job its tree doesn't declare, so sending one would fail the
     candidate's own check.  Every one of ``steps``, logged, when that ci.toml can't be read."""
     from .merge import declared
 
     if (jobs := declared(driver.repo, sha)) is None:
-        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its --deferred "
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml can't be read: its --deferred "
                      f"keeps every step ({','.join(steps)})")
         return steps
     names = {t["name"] for t in jobs}
     if gone := [s for s in steps if s not in names]:
-        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job "
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml declares no job "
                      f"{', '.join(gone)}, which check.py refuses: left out of its --deferred")
     return [s for s in steps if s in names]
 
@@ -422,6 +426,77 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     return rec if _go(driver, rec, go, gone) is None else None
 
 
+def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
+    """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
+    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one, but of those
+    ``avoid`` doesn't name (the machine its tier before ended in infra on, ``erred_on``) where that leaves any.  The record to
+    keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
+    (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
+    ``driver`` launches nothing (a dry run, or its queue's shadow)."""
+    if not driver.on:
+        raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
+    ms = elsewhere(driver.on, avoid).split(",")
+    on = ms[int(sha[:8], 16) % len(ms)]
+    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
+    if driver.dry_run or driver.q.shadow:
+        driver.q.log(f"research queue vqueue: would launch {what}")
+        return None
+    got, tail = driver._started(driver.launch_quick(driver.repo, sha, base, on))
+    if got is None:
+        driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
+        return None
+    driver.q.log(f"research queue vqueue: {what}: {' '.join(got['ids']) or 'launching'}")
+    return {**got, "tip": sha, "base": base, "at": driver.now(), "on": on, "steps": [QUICK_STEP], "gate": QUICK}
+
+
+def _quick(driver: Landing, rec: dict) -> Verdict:
+    """The verdict of the quick tier `start_quick` recorded in ``rec``: pending while it launches or runs, or its records can't
+    be fetched yet; once it ended, its result.json judged as `research queue ready` judges the remote tier
+    (`queue.judge_report`, each failure an allowance at ``base`` covers counting as passed): pass; fail, ended, when only suites
+    failed, one `Failed` of step `QUICK_STEP` as the check's (`read_suite` of each, what it declares at the candidate,
+    `suite_reads`), so `vqueue.decide` reads it as it reads the check's; infra when it registered no run, was lost, never ran
+    or ended without its facts (`queue.tier_report`), or failed on what no suite says (a Lean build, a checkout not at it);
+    infra of a run that was lost or ended keeps its machine as ``erred_on``, which a start again avoids (`start_quick`)."""
+    tip, base = rec["tip"], rec["base"]
+    if (tail := driver._resolve(rec, f"the quick tier of candidate {tip[:12]}")) is not None:
+        return _keep(rec, _down(rec, f"registered no run: {tail}"))
+    if "launch" in rec:
+        return Verdict(PENDING)
+    if not (ids := rec["ids"]):
+        return _keep(rec, _down(rec, "registered no run"))
+    states = driver.states(driver.repo, ids)
+    if driver._lost(rec, states):
+        return _keep(_erred(rec), _down(rec, "was lost"))
+    st, rc, *_ = states.get(ids[0]) or ("unknown", None)
+    if st in ACTIVE:
+        return Verdict(PENDING)
+    if (got := driver.fetch(ids[0], ["result.json"])) is None:
+        return Verdict(PENDING)
+    status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
+    res, why = tier_report(got[0], ids[0], on, status)
+    if why is not None:
+        return _keep(_erred(rec), _down(rec, f"{why}"))
+    covers = allowed(driver.repo, base)
+    if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
+        return _keep(rec, Verdict(PASS), [QUICK_STEP])
+    tier = res.doc.get("tier") or {}
+    rows = [r for r in tier.get("rows") or () if isinstance(r, dict) and r.get("status") == "failed"
+            and not (covers is not None and covers(r))]
+    if not rows or quick_tier.judge({**tier, "rc": 0}, tip) is not None:
+        return _keep(_erred(rec), _down(rec, f"failed on what no suite says: {why}"))
+    k = key(driver.repo, tip, QUICK_STEP) or f"{tip}:{QUICK_STEP}"
+    parts = [read_suite(r.get("name") or r.get("suite") or ".", r, "", unnamed(k),
+                        *suite_reads(driver.repo, tip, r.get("suite") or ".")) for r in rows]
+    return _keep(rec, Verdict(FAIL, (_failure(QUICK_STEP, k, key(driver.repo, base, QUICK_STEP), parts),), ended=True), [])
+
+
+def _erred(rec: dict) -> dict:
+    """``rec``, a quick tier's record, keeping the machine it ran on as ``erred_on``."""
+    if rec.get("on"):
+        rec["erred_on"] = [rec["on"]]
+    return rec
+
+
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
     (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`) and ``suites_from`` (`_lending`), the
@@ -439,7 +514,7 @@ def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
             _grouped(got)
     else:
         with _carrying(carry), _lending(lend):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
+            got, tail = driver._started(driver.launch_after_landing(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
                                                                **kw, train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
@@ -478,7 +553,7 @@ def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | 
         ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
     ons = [elsewhere(on, avoid) for on in ons]
     with _carrying(carry), _lending(lend):
-        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
+        got = [driver._started(driver.launch_after_landing(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
                for k, on in enumerate(ons, 1)]
     if any(r is None for r, _ in got):
@@ -576,6 +651,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         return _kept(rec["verdict"])
     if "wait" in rec:
         return _waited(driver, rec)
+    if rec.get("gate") == QUICK:
+        return _quick(driver, rec)
     tip, check = rec["tip"], rec.get("gate") == CHECK
     what = f"the run of {', '.join(rec['steps'])} " + (f"as candidate {tip[:12]}'s check" if check else
                                                       f"beside candidate {tip[:12]}'s check")

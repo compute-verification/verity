@@ -309,9 +309,9 @@ is built. Irreducible, so that no unification against it builds the net. -/
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>"
     else pure ()
 
-/-- A layout as `ir_lower.netlist` writes it without `LEAVES` or `CUT` (`circuit._expanded`): the header, then one line a
+/-- A layout as `ir_lower.circuit_description` writes it without `LEAVES` or `CUT` (`circuit._expanded`): the header, then one line a
 row. -/
-def netlist (name : String) (l : Laid) : String :=
+def circuitDescription (name : String) (l : Laid) : String :=
   let line := fun (xs : List Nat) => " ".intercalate (xs.map toString)
   let side := fun (gs : Array Group) =>
     gs.size :: gs.toList.flatMap fun g => [g.col, g.words, g.bits.size] ++ g.bits.toList

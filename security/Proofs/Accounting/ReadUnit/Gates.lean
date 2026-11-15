@@ -5,13 +5,13 @@ public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
 public import Properties.Composition
 public import Properties.Flock.Circuit.CircuitOf
 public import Properties.Verity.Sha512
-public import Definitions.Accounting.JointLive
+public import Definitions.Compose.JointLive
 public import Definitions.Core.Blocks
 public import Definitions.Core.Game
 public import Definitions.Core.Site
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.RowLeaf
-public import Definitions.Nci
+public import Definitions.InferenceOnly
 public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
@@ -52,7 +52,7 @@ import Mathlib.Topology.Sheaves.Init
 # The table read's net, part by part: what each part's net must compute
 
 A read unit's gates (`Accounting.ReadUnit.GatesRefine`) are `EmbeddingRead_v1{V, H}`'s rows, which
-`verity/ml/commitments/gates/embedding.py` composes from four parts' nets. Each part is built here over the verifier's
+`verity/commitments/gates/embedding.py` composes from four parts' nets. Each part is built here over the verifier's
 builder (`Flock.HmNets`: forms over committed bits, a row a committed product), and each part's statement says what its
 net computes whenever its rows hold (`FlockSoundness.Discharge.Hm.Sound`), against `Hash`'s definitions at SHA-512
 (`Verity.sha512`):

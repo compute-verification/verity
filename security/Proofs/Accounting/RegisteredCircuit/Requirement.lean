@@ -5,10 +5,10 @@ public import Proofs.Accounting.RegisteredCircuit.Credit
 public import Proofs.Accounting.RegisteredCircuit.Run
 
 /-!
-# A declared circuit's space and bandwidth from an accepted audit
+# A registered circuit's space and bandwidth from an accepted audit
 
 `Accounting.SecurityProofs.RegisteredCircuitRequirement`, the theorem of
-`Accounting.Guarantees.RegisteredCircuitRequirement`. A carrier of the declared circuit's over at most `L` of the audit's
+`Accounting.Guarantees.RegisteredCircuitRequirement`. A carrier of the registered circuit's over at most `L` of the audit's
 windows carries at most `C` bits (`Carrier.card_le_census`), so every pass rebuilds at most `X_r·τ + C` bits of its
 appended tiles, and its tiles of `W` are appended tiles. Each window's reads in its passes' tiles of `W`, with each
 pass's tiles short of the store counted as read, against the window's correct receipts: a window short by more than a
@@ -24,7 +24,7 @@ shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_
 
 namespace Accounting.RateSketch.Carrier
 
-/-- **A carrier of a declared circuit's over at most `L` of the audit's windows carries at most `C` bits**: its inputs
+/-- **A carrier of a registered circuit's over at most `L` of the audit's windows carries at most `C` bits**: its inputs
 at most `8·R_L` and its encodes at most `⌈1024·L·c·P·N·4096/E⌉`, the nonlinear units of each of its windows within the
 caps' `c = caps.total` units a byte of the window's certified reads, at most `P·N·4096` bytes, under the encode bound
 at 1024-bit words and `E` nonlinear units a word. -/
@@ -185,7 +185,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **A declared circuit's held and moved bits from an accepted stacked audit, at the deployed parameters**,
+/-- **A registered circuit's held and moved bits from an accepted stacked audit, at the deployed parameters**,
 `Accounting.Guarantees.RegisteredCircuitRequirement`. -/
 theorem RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRequirement := by
   intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose layout steer

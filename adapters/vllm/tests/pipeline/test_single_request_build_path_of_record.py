@@ -82,7 +82,7 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
     code = ("import json, sys\n"
             "from verity_vllm.query import program_view as PV\n"
             "from verity.circuits import word as WQ\n"
-            "from verity.definitions.numerics.rows import EVALUATORS\n"
+            "from verity_vllm.definitions.numerics.rows import EVALUATORS\n"
             "P = PV.from_instances(sys.argv[1] + '/build_request/instances.json.gz')\n"
             "specs = {(c.family, json.dumps(c.statics, sort_keys=True, default=str)): c for c in P.calls}\n"
             "for (fam, st), c in specs.items():\n"

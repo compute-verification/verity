@@ -13,7 +13,7 @@ w_commitment  tagged_sha512("verity-pous/w-commitment/v2", payload)
 tagged_sha512(tag, x) = SHA512("verity/tagged-sha512/v1\0" ‖ u32be(len tag) ‖ tag ‖ u64be(len x) ‖ x)
 ~~~
 
-`verity.ml.commitments.identity.tagged_sha512` is `Identity.taggedSha512`. `commitState` is the hash before the first byte of `W`
+`verity.commitments.identity.tagged_sha512` is `Identity.taggedSha512`. `commitState` is the hash before the first byte of `W`
 (`setup._commitment_hash`), which setup streams the decoded payload into, one segment at a time. The manifest is
 `P2Params.manifest()` of a v4 codec: `scheme`, `w`, `c0`, `profile`, `blocks_per_segment`, `segments` and `expander`,
 through Flock's canonical JSON (sorted keys, compact; its integers and ASCII strings are what Python's

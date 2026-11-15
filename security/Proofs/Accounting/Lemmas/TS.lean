@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS
+public import Definitions.Pouw.Guarantees.TS
 
 /-!
 # The tensor–scalar model's guarantee statements: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.TS` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Pouw.Guarantees.TS` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 

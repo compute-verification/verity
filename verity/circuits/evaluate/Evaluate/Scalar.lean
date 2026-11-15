@@ -3,15 +3,15 @@ module
 /-!
 # The scalar primitives: integer, bit, select and comparison operations, and the FP32 operations on the encoding
 
-Executable transcriptions, function for function and branch for branch, of `verity.ml.circuits.ops.scalar` and of the word
+Executable transcriptions, function for function and branch for branch, of `verity.circuits.ops.scalar` and of the word
 primitives the vLLM integration registers (`verity_vllm.program.registry`: `dsa`, `topp_word_gates`, `ref_prims`). Words are
 natural numbers: an f32 or an i32 (two's complement, bit 31 the sign) below `2^32`, an i64 below `2^64`, a bf16 below `2^16`, a
 bit `0` or `1`. Each function takes its operands unmasked, as the Python does, and is the Python's function on every
 non-negative integer; `Int` holds the Python's signed integers, and Python's `&` of a negative integer and `2^k - 1` is
 `Int.emod` by `2^k`.
 
-Each definition's doc names the definition of `Security/Definitions/Core/Scalar.lean` it must equal, to be proved in
-`Security/Proofs` as the certifier's copies are; where Security defines none yet, the Python function is the definition.
+Each definition's doc names the definition of `security/Definitions/Core/Scalar.lean` it must equal, to be proved in
+`security/Proofs` as the certifier's copies are; where Security defines none yet, the Python function is the definition.
 -/
 
 @[expose] public section

@@ -27,9 +27,11 @@ from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_S
 from verity.circuits.types import Tuple
 from verity_flock import circuit as FC
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import pc4, pc8
+from verity.protocols.experimental.pearl_c4.prover import pc4
+from verity.protocols.accounting.pouw.prover.circuit import pc8
 
 POUW_TESTS = Path(__file__).resolve().parents[4] / "accounting" / "pouw" / "verifier" / "tests"
+PC4_TESTS = Path(__file__).resolve().parents[4] / "experimental" / "pearl_c4" / "tests"
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 _spec = importlib.util.spec_from_file_location("pouw_rows_vectors", POUW_TESTS / "pouw_rows_vectors.py")
 V = importlib.util.module_from_spec(_spec)
@@ -412,7 +414,7 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
         x = sha512_row_v2_digest(row_bytes(out, 16), 64)
         assert bcs[i][2] == L.INST.commit_string(L.KEY, x, got["salts"]["o0"][i]), (m, i)
     for coins in ((), ("--coins", "tree")):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit", "--circuit",
                             str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), *coins], capture_output=True, text=True)
         assert p.returncode == 0, p.stdout + p.stderr
         assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want["seed"], (m, coins)
@@ -432,7 +434,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     from verity_flock import class_statement as CS
     from verity.protocols.accounting.pouw.prover.circuit.anchors import public_ports
 
-    spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
+    spec = importlib.util.spec_from_file_location("pearl_c4_regions_vectors", PC4_TESTS / "pearl_c4_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(RV)
     t = RV.anchors("pc4-64", "pc4", 64, None)
@@ -453,7 +455,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
         return tmp_path / sub
 
     def statement(d, own):
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit", "--circuit",
                                str(d / "circuit.txt"), "--public", str(d / "pub.bin"), "--public-inputs", str(own)], capture_output=True, text=True)
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)

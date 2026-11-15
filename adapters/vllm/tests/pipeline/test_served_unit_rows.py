@@ -8,13 +8,13 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
-STATEMENTS = ("7c7dddb9687e6d5895f492881964df6bea65a453cb26a6988650be7631824de8"
-              "e8e37acea0bce0a1d5f6c09266f1c43129184db6e814d29b4fb6e9338ef6a0b6")
+STATEMENTS = ("6ff4651c1dca7b032ad82abc0f4a4a504b3513c05f04621bc7e4b35db9c85858"
+              "be50fe69e46ed17e82b5b755507a26e3e25f1e79df9d19d8326ba6611c42425a")
 
 
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):

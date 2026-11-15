@@ -1,4 +1,4 @@
-"""The lengths row's proof block (`lengths_row`): its request row is the arrival slots' layout, its bytes are the
+"""The lengths row's proof block (`lengths_row`): its request row is K slots as a struct of arrays, its bytes are the
 canonical id request's whatever the cell size, the Boolean Definition computes its reference's outputs bit for bit on
 rows of its form and on rows that are not, and on the network certifier's own releases, signed and registered
 (`connection_rows`), the prover's blocks return the signed lengths rows, which the verifier's registered reads accept,
@@ -17,9 +17,8 @@ import pytest
 import signers
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, PLAIN, traffic
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import run
@@ -101,14 +100,11 @@ def test_the_block_reads_two_rows_and_returns_the_lengths_row():
         assert [t.leaves for t in out.fields] == [16, 16, 96 * sh.K] and out.width_set() == frozenset({1})
 
 
-def test_the_request_row_is_the_arrival_slots_layout():
-    """The request row's fields are `replay_chain`'s K arrival slots without a cap bit (valid, id, P, O as a struct of
-    arrays, LW the bit length of the longest request), each element least significant bit first, zero-padded to whole
-    words."""
+def test_the_request_row_is_k_slots_as_a_struct_of_arrays():
+    """The request row's fields are K slots without a cap bit (valid, id, P, O as a struct of arrays, LW the bit length
+    of the longest request), each element least significant bit first, zero-padded to whole words."""
     sh = LR.Shape(3, 512, 7, 10)
-    chain = RC.Shape(R=1, W=1, A=1, L=1023, NB=1, IW=7, Q=1, D=1, P=1, K=3)
-    assert RC.widths(chain).LW == sh.LW
-    assert [(name.removeprefix("a_"), n, w) for name, n, w in RC.arrival_fields(chain)] == LR.request_fields(sh)
+    assert LR.request_fields(sh) == [("valid", 3, 1), ("id", 3, 7), ("P", 3, 10), ("O", 3, 10)]
     slots = [Request(1, 5, 700, 3), Request(0, 127, 1023, 1023), Request(1, 0, 1, 0)]
     bits = LR.request_row(sh, slots)
     assert len(bits) == sh.request_bits == 96
@@ -132,7 +128,7 @@ def test_the_request_row_is_the_arrival_slots_layout():
 
 @pytest.mark.parametrize("B", (387, 395, 505, 509, 512, 4096))
 def test_request_bytes_is_the_id_requests_length(B):
-    """`request_bytes` is the length of the canonical id request in B-byte cells (`active.id_request` at offset 0) at
+    """`request_bytes` is the length of the canonical id request in B-byte cells (`id_form.id_request` at offset 0) at
     every prompt length around each cell's end and at lengths between, whatever the request's other fields, and it
     is increasing in the prompt's length, so a request's bytes hold its prompt's length."""
     f = LR.form(B)

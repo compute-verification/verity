@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.PearlC.Fp4IssueGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.Lemmas.PearlC
 
 /-!

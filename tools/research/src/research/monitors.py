@@ -62,11 +62,14 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+
+from . import settings
 
 SCHEMA = "research/monitors-{}/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
@@ -299,7 +302,7 @@ def booked(text: str) -> list[list]:
         f = body.split()
         try:
             s = datetime.fromisoformat(f[0])
-            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
             out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
         except (IndexError, ValueError) as e:
             print(f"monitors: a window line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
@@ -593,7 +596,7 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
             span = f"`{sessions[0]}`" + (f" to `{sessions[-1]}`" if len(sessions) > 1 else "")
             out.append(Finding("system:session-*.scope", f"*{name}: {len(sessions)} login session scope"
                                f"{'s have' if len(sessions) > 1 else ' has'} failed* ({span}): those logins (ssh, and the runs sent "
-                               "over it) got no scope of their own, so no per-run memory cap. `journalctl -u UNIT` names the cause; once it's fixed, "
+                               "over it) got no scope of their own, so no per-run memory limit. `journalctl -u UNIT` names the cause; once it's fixed, "
                                "`systemctl reset-failed 'session-*.scope'`.",
                                cleared=f"*Cleared:* no failed login session scope on {name.lower()}."))
         return out
@@ -714,13 +717,18 @@ def redirected_base(url: str, key: str) -> str:
     """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
     anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
     import urllib.error
+    import urllib.parse
     import urllib.request
+
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"the public export's URL is not an http or https URL (scheme {scheme!r})")
 
     class Stay(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
 
-    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD",  # noqa: S310 (http or https, checked above)
+                                 headers={"User-Agent": "research-store-fetch"})
     try:
         urllib.request.build_opener(Stay).open(req, timeout=30).close()
     except urllib.error.HTTPError as e:
@@ -948,7 +956,7 @@ def answering(ctx: Ctx) -> list[Finding]:
 WORKSPACE = "/workspace"
 DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
-#: twice tools/verity/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
+#: twice tools/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
 #: stand past INODES_FULL_PCT for days and that finding pages only once
 INODES_FREE_PAGE = 800_000
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
@@ -1044,7 +1052,7 @@ def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, s
     """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
     argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
             "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
-    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    env = {**os.environ, "XDG_RUNTIME_DIR": settings.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
     r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
     if r.returncode:
         raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
@@ -1128,8 +1136,8 @@ FAILED_RECENT_S = 6 * 3600
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
-#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
-#: the step it killed did not fail
+#: drive's reason when it cancels a landed candidate's check (drive.py, in the platform repository): its deferred steps run in the
+#: after-landing run, so the step it killed did not fail
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
@@ -1138,7 +1146,7 @@ FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL
 #: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
 RATCHET_LINES = 40
 #: the check's jobs and their owners
-CI_TOML = "tools/verity/check/ci.toml"
+CI_TOML = "tools/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
 # "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
@@ -1542,11 +1550,11 @@ MONITORS: list[Monitor] = [
     Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
     Monitor("memory-pressure", "infra", "page", "machine", memory_pressure,
             "Find what is growing (`systemd-cgtop -m` on the machine; the alert names the biggest runs) and tell its sender; a "
-            "run past its scope's cap is OOM-killed whole, so pressure that holds means the caps or the slice's headroom are too "
+            "run past its scope's limit is OOM-killed whole, so pressure that holds means the limits or the slice's headroom are too "
             "loose for what runs there.", for_s=300, clear_s=300),
     Monitor("oom-kills", "infra", "warn", "machine", oom_kills,
-            "Tell the run's sender why it died (the alert names both) and what its scope's cap is; if a check, size its "
-            "parallelism from memory (check.py's memory_gb) rather than raising the cap.", events=True),
+            "Tell the run's sender why it died (the alert names both) and what its scope's limit is; if a check, size its "
+            "parallelism from memory (check.py's memory_gb) rather than raising the limit.", events=True),
     Monitor("answering", "infra", "page", "machine", answering,
             "`nebius compute instance get` for its state; preserve what it can (its runs' custody), then restart it "
             "(`nebius compute instance stop` and `start`), and tell the owners of the runs it had.", for_s=180, clear_s=120),
@@ -1560,7 +1568,7 @@ MONITORS: list[Monitor] = [
             "unit); `systemctl enable --now UNIT` once its cause is fixed. A unit off there by design goes in EXPECTED_OFF in research/monitors.py with "
             "the reason, or out of that machine's `nodes` in deploy.toml.", every_s=300, for_s=300, clear_s=300),
     Monitor("lost-checks", "infra", "warn", "machine", lost_checks,
-            "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
+            "Read each lost check's failure.json; fix the cause on the machine (memory limits, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
     Monitor("drift", "infra", "warn", "relay", deploy_drift,
             "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
@@ -1603,7 +1611,8 @@ MONITORS: list[Monitor] = [
             "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
             "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
             "`peaks=` on them. Lean: the machine's Lean slots. "
-            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            "Peers: `research deploy roll /etc/vy/peers --by WHO` (a dry run; `--apply` does it) writes each machine's "
+            "/etc/vy/peers from the register of machines and has it take the key from every machine its list names.",
             every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
@@ -1687,8 +1696,11 @@ def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
 
 
 def webhook_post(url: str, text: str) -> None:
-    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"${WEBHOOK_ENV} is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(),  # noqa: S310 (http or https, checked above)
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 (http or https, checked above)
         r.read()
 
 
@@ -2034,7 +2046,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
     reg = slack.load_registry(slack.registry_path())
-    api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)
+    api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), dry_run=dry)
     alerts, front, routes = slack.channel_id_for(reg, "agent-alerts"), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()
 
     def tag(h: str) -> str:
@@ -2084,7 +2096,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
 def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=settings.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -2139,7 +2151,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
     try:
         state = load(state_path)
         evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
-                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   webhook=settings.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)
         return state, evs

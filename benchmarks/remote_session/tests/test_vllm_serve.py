@@ -1,10 +1,11 @@
 """vLLM serving under PoUB (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
-and `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proving its store to an in-process verifier while it serves a trace of
-requests, one session a process.  Skipped without vLLM, a GPU, or a `StoreBackend` to import (the vLLM integration's
-remote session)."""
+and PoUB's prover's `serving.StoreBackend` proving its store to an in-process verifier while it serves a trace of
+requests, one session a process.  The engine's test is skipped without vLLM or a CUDA card, saying which; what
+`serve.py` imports to serve is tested without either."""
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import subprocess
 import sys
@@ -17,21 +18,31 @@ SERVE = HERE.parent / "serve.py"
 sys.path[:0] = [str(HERE.parents[2]), str(HERE.parents[2] / "adapters" / "vllm")]
 
 
-def remote_or_skip():
+def engine_or_skip():
     if importlib.util.find_spec("vllm") is None:
-        pytest.skip("no vLLM")
-    torch = pytest.importorskip("torch")
+        pytest.skip("needs the library vLLM, which is not installed")
+    torch = pytest.importorskip("torch", reason="needs the library torch, which is not installed")
     if not torch.cuda.is_available():
-        pytest.skip("no GPU")
-    remote = pytest.importorskip("verity_vllm.protocols.remote_bandwidth.remote")
-    if not hasattr(remote, "StoreBackend"):
-        pytest.skip("no StoreBackend in verity_vllm.protocols.remote_bandwidth.remote")
+        pytest.skip("needs a CUDA card, and torch sees none")
 
 
-def serve(out: Path, plan: str) -> dict:
+def test_what_serve_imports_to_serve_loads_without_a_card_and_its_backend_and_prove_fit_its_call():
+    """`serve.py`'s serving imports (`provers`) and the backend it builds on them, which the engine's test reaches
+    only on a card: the backend is a `StoreBackend`, and `prove` takes the arguments `serve.py` passes it."""
+    spec = importlib.util.spec_from_file_location("remote_session_serve", SERVE)
+    serve_py = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(serve_py)
+    serving, binder, memory = serve_py.provers()
+    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend)
+    assert callable(binder) and callable(memory)
+    inspect.signature(serving.prove).bind(None, "127.0.0.1:0", "serve", node=b"n", codec=None, log=print)
+
+
+def serve(out: Path, plan: str, code: int) -> dict:
+    """`serve.py --local` under ``plan``, which must exit ``code``: 0 only for an accepted session."""
     r = subprocess.run([sys.executable, str(SERVE), "--local", "--plan", plan, "--out", str(out)],
                        capture_output=True, text=True)
-    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-4000:]
+    assert r.returncode == code, r.stdout[-4000:] + r.stderr[-4000:]
     return json.loads((out / "serve.json").read_text())
 
 
@@ -41,8 +52,8 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     the engine's allocs, KV writes and frees reach the verifier as appends, releases and plans, a pass a step.  Honest
     serving is accepted, with the memory line's weights the layout's and its KV read the record's post-seed reads; a
     prover that withholds the first block appended is rejected at a receipt on it (every receipt is sampled)."""
-    remote_or_skip()
-    d = serve(tmp_path / "serve", "serve")
+    engine_or_skip()
+    d = serve(tmp_path / "serve", "serve", 0)
     v, p = d["verifier"], d["prover"]
     assert v["accepted"] and p["accepted"] and v["failure"] is None
     assert d["trace"]["steps"] >= 12 and sum(r["finished"] is not None for r in d["trace"]["requests"]) >= 2
@@ -55,7 +66,7 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     assert mem["labels"] and not mem["kv_credited"] and mem["read"]["kv"] == sum(pub["post_seed"]) * B
     assert all(w["held"]["weights"] == weights for w in mem["windows"])
 
-    d = serve(tmp_path / "drop", "servedrop:1")
+    d = serve(tmp_path / "drop", "servedrop:1", 6)
     v, p = d["verifier"], d["prover"]
     assert not v["accepted"] and not p["accepted"]
     assert v["failure"]["failure"] == "receipt" and p["failure_on_dropped"] is True

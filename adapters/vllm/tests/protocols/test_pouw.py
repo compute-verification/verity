@@ -35,15 +35,23 @@ from verity.protocols.accounting.pouw.verifier.coins import (
     coin_reason,
 )
 from verity.protocols.accounting.pouw.verifier.protocol import Context as UnitContext
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile
+from verity.protocols.accounting.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+    Shape,
+    Tile,
+)
 
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as pouw_h1
-from verity_vllm.protocols.pouw import lead as pouw_lead
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import kernel as PPK
+from verity.protocols.accounting.pouw.prover.serving import h1 as pouw_h1
+from verity.protocols.accounting.pouw.prover.serving import ncp as NCP
+from verity.protocols.accounting.pouw.prover.serving import operands as OPS
+from verity.protocols.accounting.pouw.prover.serving import lead as pouw_lead
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity_torch.pouw.pearl_c import run_device as PPDR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
 
@@ -90,8 +98,8 @@ def _serve(*enabled, settings=None, **kw):
 
 
 def _int7_linear(x, w, bias=None):
-    a, s = pouw.quantize(x)
-    b, t = pouw.quantize(w)
+    a, s = OPS.quantize(x)
+    b, t = OPS.quantize(w)
     z = a.astype(np.int64) @ b.astype(np.int64).T
     y = (s[:, None] * t[None, :]).astype(np.float32) * z.astype(np.float32)
     return y if bias is None else y + bias
@@ -111,7 +119,7 @@ def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
     scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
-    on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
+    on = {"pouw": {"device": "cuda", "kernel": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120"}}
     assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
     assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
     commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings=on)
@@ -215,33 +223,32 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     model = Model(w0, w1)
     coins = _coins()
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
-    comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
-    opt = comp.get("pouw")
-    key = pouw._SALT_KEYS["pouw:ncp-v1"]
-    rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
-    roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
-    plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
-    assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
-    declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
-    c = opt.commitment()
-    assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
-    assert c["weights_root"] == weights_root(roots).hex()
-    opening = CoinOpening.from_json(c["salt_opening"])
-    assert CoinCommitment.from_json(c["coins"]) == coins.commitment
-    assert coin_reason(coins.commitment, opening, "salt", weights_root(roots)) is None
-    assert c["salt"] == Epoch.start(declared, roots, coins.commitment, opening).salt.hex()
-    with pytest.raises(DomainError):                         # install opened the salt coin, and a coin opens once
-        coins.open("salt", weights_root(roots))
-    assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
-    assert len(hooks.live("pouw:ncp-v1")) == 2
+    with PO.install(model, _serve("pouw:ncp-v1", settings=settings)) as comp:
+        opt = comp.get("pouw")
+        key = pouw._SALT_KEYS["pouw:ncp-v1"]
+        rows = {w: [r.tobytes() for r in OPS.quantize(m)[0]] for w, m in enumerate((w0, w1))}
+        roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
+        plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
+        assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
+        declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
+        c = opt.commitment()
+        assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
+        assert c["weights_root"] == weights_root(roots).hex()
+        opening = CoinOpening.from_json(c["salt_opening"])
+        assert CoinCommitment.from_json(c["coins"]) == coins.commitment
+        assert coin_reason(coins.commitment, opening, "salt", weights_root(roots)) is None
+        assert c["salt"] == Epoch.start(declared, roots, coins.commitment, opening).salt.hex()
+        with pytest.raises(DomainError):                         # install opened the salt coin, and a coin opens once
+            coins.open("salt", weights_root(roots))
+        assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
+        assert len(hooks.live("pouw:ncp-v1")) == 2
 
-    x, bias = rng.standard_normal((5, K), np.float32), rng.standard_normal(N, np.float32)
-    layer = model.layers[0]
-    assert np.array_equal(layer.quant_method.apply(layer, x, bias), _int7_linear(x, w0, bias))
-    info = opt.info()
-    assert (info["units"], info["tiles"], info["padded_rows"]) == (1, N // 16, 11)
+        x, bias = rng.standard_normal((5, K), np.float32), rng.standard_normal(N, np.float32)
+        layer = model.layers[0]
+        assert np.array_equal(layer.quant_method.apply(layer, x, bias), _int7_linear(x, w0, bias))
+        info = opt.info()
+        assert (info["units"], info["tiles"], info["padded_rows"]) == (1, N // 16, 11)
 
-    comp.close()
     assert hooks.live("pouw:ncp-v1") == () and "apply" not in vars(layer.quant_method)
     c = opt.commitment()
     assert c["units"] == 1 and c["tiles"] == N // 16 and len(bytes.fromhex(c["transcript_root"])) > 0
@@ -258,7 +265,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     rows = [r.tobytes() for r in a]
     ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
-    got = pouw.ncp_tiles(s, ctx, noise, a, pouw.Operands(np.ones(N, np.float32), *pouw.stack_y(s, ctx.salt, u.weight, b, noise)))
+    got = OPS.ncp_tiles(s, ctx, noise, a, OPS.Operands(np.ones(N, np.float32), *OPS.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))
     ops = s.encode(ctx, noise, rows, [b[j].tobytes() for j in tile.cols], tile)
     checked = s.checked(ctx, ops)
@@ -272,13 +279,13 @@ def test_weight_operands_formed_in_blocks_equal_one_block(monkeypatch):
     w = rng.standard_normal((N, K), np.float32)
     ctx = UnitContext(b"\x33" * 32, Matmul(0, Shape(16, K, N), 2), b"", b"\x44" * 32)
     noise = s.noise(ctx)
-    whole = pouw.weight_operands(s, ctx.salt, 2, w, noise)
-    monkeypatch.setattr(pouw, "FORM_BYTES", 128 * K * 7)                  # 7 rows a block, the last one short
-    blocks = pouw.weight_operands(s, ctx.salt, 2, w, noise)
+    whole = NCP.weight_operands(s, ctx.salt, 2, w, noise)
+    monkeypatch.setattr(NCP, "FORM_BYTES", 128 * K * 7)                  # 7 rows a block, the last one short
+    blocks = NCP.weight_operands(s, ctx.salt, 2, w, noise)
     for got, want in ((blocks.scales, whole.scales), (blocks.y, whole.y), (blocks.c0, whole.c0)):
         assert got.dtype == want.dtype and np.array_equal(got, want)
-    b, _ = pouw.quantize(w)
-    assert np.array_equal(whole.y, pouw.stack_y(s, ctx.salt, 2, b, noise)[0])
+    b, _ = OPS.quantize(w)
+    assert np.array_equal(whole.y, OPS.stack_y(s, ctx.salt, 2, b, noise)[0])
 
 
 # --- composition -------------------------------------------------------------------------------------------------------------
@@ -416,8 +423,10 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
             pass
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
-    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
+    monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), _coins()
     settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
     with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:

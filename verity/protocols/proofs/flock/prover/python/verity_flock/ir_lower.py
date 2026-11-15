@@ -7,7 +7,7 @@ Definition that the walk holds whole is lowered by the Definition's builder inst
 
 :func:`units` splits a template instance into identical units read off its IR graph: the connected components of the gate
 graph (with the input leaves) must all compute the same function of their inputs; the unit is one component, and the
-arrangement lists which input and output leaves of the instance each unit takes. :func:`netlist` lays a unit circuit out as
+arrangement lists which input and output leaves of the instance each unit takes. :func:`circuit_description` lays a unit circuit out as
 ``flock-ir-unit/v2`` (see its docstring), the format the block statement ``verity/flock-ir-block/v1`` reads.
 """
 from __future__ import annotations
@@ -17,7 +17,8 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache, partial, reduce
-from typing import Callable, Collection, Iterator, Sequence
+from itertools import chain
+from typing import Any, Callable, Collection, Iterable, Iterator, NamedTuple, Sequence
 
 import numpy as np
 
@@ -34,7 +35,7 @@ FORMAT = "flock-ir-unit/v2"
 WORD = 128
 #: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
 #: 100 KB), and the characters a digest encodes at a time
-NETLIST_ROWS = 1 << 10
+CIRCUIT_DESCRIPTION_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
@@ -55,7 +56,7 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
@@ -129,7 +130,7 @@ def _boolean_build(key):
     """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
-    `verity.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `verity.circuits.ops.boolean.versions` leaves it out: it lowers only the activations that bind it. None when none is left;
     `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
     module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
     `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has
@@ -200,7 +201,7 @@ def no_piece(pids: Collection[str]) -> str:
     """Why a unit holding the primitives ``pids`` can't be lowered, with the fix where there is one."""
     import re
 
-    why = "C-Flock has no piece for " + ", ".join(pids)
+    why = "Flock has no piece for " + ", ".join(pids)
     if any(re.fullmatch(TOPP_WORD, p) for p in pids):
         why += (": the top-p keep word over every split count is `topp_word`'s composition, about 10^11 ANDs at a served "
                 "vocabulary, which no unit holds; bind the word-gate keep word (TopPKeepWord_v2{V,S}, one per split count S, "
@@ -223,7 +224,7 @@ def _value(word) -> int:
 
 
 def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None,
-                reads: Collection[int] = ()) -> dict[int, list]:
+                reads: Collection[int] | None = None) -> dict[int, list]:
     """Lower ``gates`` (``verity.circuits.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
     -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces.
 
@@ -231,9 +232,97 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
     ``build``) is lowered at its first gate by the builder, over its parameter leaves' wires and with an AND memo of its own,
     as its trace had: so C has the builder's commits (`forms.Circuit.commit`'s rows, which its gates drop) and its trace's
     ANDs, and only its returned gates get words. One that ``gates`` hold in part (a unit's split or cut, a dead gate dropped),
-    whose parameter leaves are not all in ``wires``, or with a gate other than its returns in ``reads`` (gate indices the
-    caller reads besides the gates' own operands) is lowered gate by gate."""
+    whose parameter leaves are not all in ``wires``, or with a gate other than its returns in ``reads`` is lowered gate by
+    gate.
+
+    ``reads`` is every gate whose word the caller reads from ``wires`` afterwards, a later call on the same ``wires``
+    included. Given, ``wires`` holds only those words on return: every other word, the caller's own among them, leaves
+    ``wires`` once the last gate or activation that reads it is lowered, so a unit's words are not all held at once; a later
+    read of one is a KeyError. Not given (None), the caller may read any word and every word stays. The circuit is the same
+    either way."""
     pieces = PIECES if pieces is None else pieces
+    if reads is None:
+        for g in _singly(gates, (), wires, lambda s, build, rets: _lower_activation(C, s, build, wires, pieces, None, rets)):
+            _lower_gate(C, g, wires, pieces)
+        return wires
+    steps, left = _steps(gates, wires, reads)
+
+    def lowered(read: Iterable[int], made: Iterable[int]) -> None:
+        for o in read:
+            left[o] -= 1
+            if not left[o]:
+                del left[o], wires[o]
+        for j in made:
+            if j not in left:
+                wires.pop(j, None)
+
+    lowered((), list(wires))
+    steps.reverse()
+    while steps:
+        step = steps.pop()
+        if isinstance(step, _Gate):
+            _lower_gate(C, step, wires, pieces)
+            lowered(step.operands, (step.index,))
+        elif _lower_activation(C, step.scope, step.build, wires, pieces, step.leaves, step.rets):
+            lowered(chain.from_iterable(step.leaves), _inside(step.scope, step.rets))
+        else:
+            raise AssertionError(f"{step.scope.spec.id} at gate {step.scope.offset}: a parameter leaf's word left before its builder ran")
+    if left != dict.fromkeys(reads, 1):
+        raise AssertionError(f"{sum(left.values()) - len(set(reads))} reads counted over the gates were not made in lowering them")
+    return wires
+
+
+class _Gate(NamedTuple):
+    """A gate that `lower_gates` holds until it lowers it: a ``verity.circuits.layout.Gate`` without its scope."""
+
+    index: int
+    prim: Any
+    operands: Sequence[int]
+
+
+class _Built(NamedTuple):
+    """An activation that `lower_gates` holds until its builder lowers it, with what it reads and writes: `_param_leaves` and
+    `_returns` of its scope."""
+
+    scope: Any
+    build: Callable
+    leaves: list[list[int]]
+    rets: list[int]
+
+
+def _steps(gates, wires: dict[int, list], reads: Collection[int]) -> tuple[list, dict[int, int]]:
+    """What `lower_gates` lowers over ``gates``, in order (each a `_Gate` or a `_Built`), decided from the words ``wires`` holds
+    and the ones earlier steps write, as lowering them decides it; and each word's readers: one for each time a step reads
+    it, and one, which no step takes, for each word ``reads`` names. The circuit's gates are produced once, here, so that
+    dropping words costs a count and not a second walk."""
+    have, steps, left = set(wires), [], dict.fromkeys(reads, 1)
+
+    def read(words: Iterable[int]) -> None:
+        for o in words:
+            left[o] = left.get(o, 0) + 1
+
+    def built(s, build, rets) -> bool:
+        leaves = _param_leaves(s)
+        if not all(have.issuperset(ls) for ls in leaves):
+            return False
+        steps.append(_Built(s, build, leaves, rets))
+        read(chain.from_iterable(leaves))
+        have.update(_inside(s, rets))
+        return True
+
+    for g in _singly(gates, reads, have, built):
+        steps.append(_Gate(g.index, g.prim, g.operands))
+        read(g.operands)
+        have.add(g.index)
+    return steps, left
+
+
+def _singly(gates, reads: Collection[int], have, activation: Callable) -> Iterator:
+    """The gates of ``gates`` that `lower_gates` lowers one by one, in order: every gate but the inputs, each of which ``have``
+    must hold, and the gates of the activations that ``activation(scope, build, rets)`` takes (``rets``: `_returns` of the
+    scope). It is asked once for each activation of a Boolean Definition that ``gates`` hold whole and that has no gate other
+    than its returns in ``reads``, when the walk reaches it: by then every word an earlier gate or activation writes is
+    written, or in ``have``."""
     region = isinstance(gates, Region)
     if region:
         i, end = gates.lo, gates.hi
@@ -241,8 +330,8 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
     else:
         gates = list(gates)
         i, end = 0, len(gates)
-        have = {g.index for g in gates}
-        held = lambda lo, hi: all(j in have for j in range(lo, hi))  # noqa: E731
+        index = {g.index for g in gates}
+        held = lambda lo, hi: all(j in index for j in range(lo, hi))  # noqa: E731
     reads = sorted(reads)
     whole: dict[int, bool] = {}
     while i < end:
@@ -252,38 +341,41 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
             s, build = act
             lo, hi = s.offset, s.offset + s.spec.gates
             if lo not in whole:
-                rets = {resolve(s, r) for r in s.spec.body.ret}
-                whole[lo] = held(lo, hi) and all(j in rets for j in reads[bisect.bisect_left(reads, lo):bisect.bisect_left(reads, hi)])
-            if whole[lo]:
-                whole[lo] = _lower_activation(C, s, build, wires, pieces)
-            if whole[lo]:
-                i += hi - lo
-                continue
-        prim = g.prim
-        fam = getattr(prim, "family", None)
+                rets = _returns(s)
+                named = reads[bisect.bisect_left(reads, lo):bisect.bisect_left(reads, hi)]
+                whole[lo] = held(lo, hi) and set(rets).issuperset(named) and activation(s, build, rets)
+                if whole[lo]:
+                    i += hi - lo
+                    continue
         i += 1
-        if fam == "Input":
-            if g.index not in wires:
+        if getattr(g.prim, "family", None) == "Input":
+            if g.index not in have:
                 raise KeyError(f"input gate {g.index} has no wires")
             continue
-        ops = [wires[o] for o in g.operands]
-        if fam == "Const" or all(_is_const(o) for o in ops):
-            wires[g.index] = const_bits(prim.evaluate(*[_value(o) for o in ops]), _width(prim))
-            continue
-        piece = pieces.get(prim.id)
-        if piece is None:
-            raise NoPiece(no_piece([prim.id]))
-        out = piece(C, *ops)
-        if len(out) != _width(prim):
-            raise AssertionError(f"piece for {prim.id} returned {len(out)} bits, the primitive returns {_width(prim)}")
-        wires[g.index] = out
-    return wires
+        yield g
+
+
+def _lower_gate(C: Circuit, g, wires: dict[int, list], pieces) -> None:
+    """Lower the gate ``g``, not an input, into C: its word is its primitive's piece on its operands' words, or the constant
+    its primitive evaluates to on constant ones."""
+    prim = g.prim
+    ops = [wires[o] for o in g.operands]
+    if getattr(prim, "family", None) == "Const" or all(_is_const(o) for o in ops):
+        wires[g.index] = const_bits(prim.evaluate(*[_value(o) for o in ops]), _width(prim))
+        return
+    piece = pieces.get(prim.id)
+    if piece is None:
+        raise NoPiece(no_piece([prim.id]))
+    out = piece(C, *ops)
+    if len(out) != _width(prim):
+        raise AssertionError(f"piece for {prim.id} returned {len(out)} bits, the primitive returns {_width(prim)}")
+    wires[g.index] = out
 
 
 def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
-    `verity.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
+    `verity_vllm.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
     (`verity.circuits.boolean.trace.folded`) has no ``build``, so its caller's builder lowers it; only one no builder in the
     chain holds is lowered by its own (``fold_build``)."""
     s = getattr(g, "scope", None)
@@ -303,12 +395,30 @@ def _boolean_activation(g):
     return None
 
 
-def _lower_activation(C: Circuit, s, build: Callable, wires: dict[int, list], pieces) -> bool:
+def _param_leaves(s) -> list[list[int]]:
+    """The gates the activation ``s``'s parameters are bound to, leaf by leaf: one list a parameter."""
+    return [[param_leaf(s, pi, j) for j in range(t.leaves)] for pi, (_, t) in enumerate(s.spec.signature()[0])]
+
+
+def _returns(s) -> list[int]:
+    """The gates the activation ``s`` returns, leaf by leaf. Its builder writes the ones inside it (`_inside`); any other is a
+    parameter leaf it returns as it is."""
+    return [resolve(s, r) for r in s.spec.body.ret]
+
+
+def _inside(s, gates: Iterable[int]) -> list[int]:
+    """Those of ``gates`` that are gates of the activation ``s``."""
+    lo, hi = s.offset, s.offset + s.spec.gates
+    return [j for j in gates if lo <= j < hi]
+
+
+def _lower_activation(C: Circuit, s, build: Callable, wires: dict[int, list], pieces, leaves: list | None = None,
+                      rets: list | None = None) -> bool:
     """Run ``build`` on C for the activation ``s`` (`lower_gates`), setting its returned gates' words; False, building nothing,
     when a parameter leaf has no wire. Its operands are its parameters' elements (`boolean.elements`, one bit a leaf), as
-    `trace` gives them."""
+    `trace` gives them. ``leaves`` and ``rets`` are `_param_leaves` and `_returns` of ``s``, from a caller that has them."""
     params, ret = s.spec.signature()
-    leaves = [[param_leaf(s, pi, j) for j in range(t.leaves)] for pi, (_, t) in enumerate(params)]
+    leaves = _param_leaves(s) if leaves is None else leaves
     if any(o not in wires for ls in leaves for o in ls):
         return False
     els = []
@@ -326,8 +436,7 @@ def _lower_activation(C: Circuit, s, build: Callable, wires: dict[int, list], pi
     finally:
         C.cse = memo
     lo, hi = s.offset, s.offset + s.spec.gates
-    for r, f in zip(s.spec.body.ret, outs):
-        j = resolve(s, r)
+    for j, f in zip(_returns(s) if rets is None else rets, outs):
         if lo <= j < hi:
             wires.setdefault(j, [f])
     return True
@@ -350,7 +459,7 @@ def lower(C: Circuit, target, inputs: Sequence[list]) -> list[list]:
         return [wires[0]]
     _prog, call = standalone(t)
     wires = dict(zip(call.args, inputs))
-    lower_gates(C, call, wires)
+    lower_gates(C, call, wires, reads=call.returns)
     return [wires[r] for r in call.returns]
 
 
@@ -1005,13 +1114,13 @@ class _Read:
         assert at[0] == self.at + self.rows
 
 
-def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
-    """The layout as ``flock-ir-unit/v2`` text (:func:`netlist_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
-    return "".join(netlist_pieces(lay, name, cut, leaves))
+def circuit_description(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
+    """The layout as ``flock-ir-unit/v2`` text (:func:`circuit_description_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
+    return "".join(circuit_description_pieces(lay, name, cut, leaves))
 
 
-def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
-    """:func:`netlist`'s text a piece at a time (its header line, its rows :data:`NETLIST_ROWS` lines at a time, its pins),
+def circuit_description_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
+    """:func:`circuit_description`'s text a piece at a time (its header line, its rows :data:`CIRCUIT_DESCRIPTION_ROWS` lines at a time, its pins),
     for a caller that writes or hashes it as it is rendered (`circuit.compose_to`): one piece is alive at a time.
 
     The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
@@ -1024,15 +1133,15 @@ def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves:
         for c, words, bits in groups:
             head += [c, words, len(bits), *bits]
     yield " ".join(map(str, head)) + "\n"
-    for k in range(0, lay.useful, NETLIST_ROWS):
+    for k in range(0, lay.useful, CIRCUIT_DESCRIPTION_ROWS):
         yield "\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
-                         for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n"
-    yield netlist_pins(cut, leaves)
+                         for a, b in zip(lay.rows_a[k:k + CIRCUIT_DESCRIPTION_ROWS], lay.rows_b[k:k + CIRCUIT_DESCRIPTION_ROWS])]) + "\n"
+    yield circuit_description_pins(cut, leaves)
 
 
-def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
-    """The ``LEAVES`` and ``CUT`` lines :func:`netlist` ends with: ``netlist(lay, name, cut, leaves)`` is
-    ``netlist(lay, name) + netlist_pins(cut, leaves)``."""
+def circuit_description_pins(cut: dict | None, leaves: dict | None) -> str:
+    """The ``LEAVES`` and ``CUT`` lines :func:`circuit_description` ends with: ``circuit_description(lay, name, cut, leaves)`` is
+    ``circuit_description(lay, name) + circuit_description_pins(cut, leaves)``."""
     pins = "" if leaves is None else "LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")) + "\n"
     return pins + ("" if cut is None else "CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")) + "\n")
 
@@ -1169,24 +1278,24 @@ class Lowering:
 
     @property
     def text(self) -> str:
-        return netlist(self.layout, self.name, self.cut, self.leaves)
+        return circuit_description(self.layout, self.name, self.cut, self.leaves)
 
     @cached_property
     def sha256(self) -> str:
         """:func:`digest` of :attr:`text`, rendered on first read only: nothing changes a lowering once it is built."""
-        return self.sha256_of(netlist(self.layout, self.name))
+        return self.sha256_of(circuit_description(self.layout, self.name))
 
     def sha256_of(self, expanded: str) -> str:
-        """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
+        """:attr:`sha256` from ``expanded``, the unit's ``circuit_description(layout, name)`` (:attr:`text` without its LEAVES and CUT
         lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the circuit description is rendered
         once."""
         return self.sha256_after(_sha256(expanded))
 
     def sha256_after(self, h: hashlib._Hash) -> str:
-        """:attr:`sha256` from ``h``, SHA-256 so far of the unit's ``netlist(layout, name)``, for a caller that hashes it as it
+        """:attr:`sha256` from ``h``, SHA-256 so far of the unit's ``circuit_description(layout, name)``, for a caller that hashes it as it
         writes it (`circuit.compose_to`); ``h`` is left as it was."""
         h = h.copy()
-        h.update(netlist_pins(self.cut, self.leaves).encode())
+        h.update(circuit_description_pins(self.cut, self.leaves).encode())
         return h.hexdigest()
 
     def _index(self, src: list[list[tuple]], n_leaf: int) -> np.ndarray:
@@ -1299,7 +1408,7 @@ def write_tables(out_dir) -> dict:
     :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity.definitions.numerics import fa2_relation, rms_relation
+    from verity_vllm.definitions.numerics import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -1375,7 +1484,7 @@ def check_staged(low: Lowering, input_set, path) -> list[str]:
 
 
 def stage(low: Lowering, input_set, lo: int, hi: int, out_dir):
-    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/inst-<n>.bin`` and the unit netlist as ``<out_dir>/net.txt``."""
+    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/inst-<n>.bin`` and the unit circuit description as ``<out_dir>/net.txt``."""
     from pathlib import Path
 
     sub = input_set.subcircuit

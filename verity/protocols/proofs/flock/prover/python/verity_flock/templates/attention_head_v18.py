@@ -46,10 +46,10 @@ def lowering_for_set(input_set):
 
 def supports(subcircuit, scheme):
     if int(subcircuit.params["D"]) % 16:
-        return f"C-Flock lowers {FAMILY} with D a multiple of 16, not D = {subcircuit.params['D']}"
+        return f"Flock lowers {FAMILY} with D a multiple of 16, not D = {subcircuit.params['D']}"
     if scheme in SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: tensor-core steps as units, the "
+    return (f"Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: tensor-core steps as units, the "
             f"softmax in the statement), not under {scheme}")
 
 

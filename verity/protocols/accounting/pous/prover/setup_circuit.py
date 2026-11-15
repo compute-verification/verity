@@ -1,12 +1,15 @@
 """PoUS's setup unit as a Boolean circuit: one sampled block of the store C decoded and held to the registered row of W
 that holds its payload, as one output bit.
 
-    PousP2SetupCheck_v1{W, C0, L, N}  (block: Array<W>, base: Array<8L>, row: Array<8N>, slot: Array<S>) -> Array<1>
-    PousP2SlotMatch_v1{P, N}          (decoded: Array<8P + 1>, row: Array<8N>, slot: Array<S>) -> Array<1>
+    PousP2SetupCheck_v1{W, C0, L, N}  (block: Array<W/16, Array<16>>, base: Array<L/2, Array<16>>,
+                                       row: Array<N/2, Array<16>>, slot: Array<16>) -> Array<1>
+    PousP2SlotMatch_v1{P, N}          (decoded: Array<8P + 1>, row: Array<8N>, slot: Array<16>) -> Array<1>
 
-Every array is of `Value<1>`, byte strings and integers in `decode_circuit`'s orders: a byte string is bits in byte order,
-bit t being bit t mod 8 of byte ⌊t/8⌋, and the slot is an integer, least significant bit first.  P = (W − 16)/8 is the
-decode's payload bytes (2,054 at P2's point), n = ⌈N/P⌉ is the row's slots and S = max(1, ⌈log₂ n⌉) the slot's bits.
+Every leaf is a `Value<1>`, byte strings and integers in `decode_circuit`'s orders: a byte string is bits in byte order,
+bit t being bit t mod 8 of byte ⌊t/8⌋, and the slot is an integer, least significant bit first.  The setup unit's ports
+are u16 words of those bits, a window's rows (`verity.commitments.periods.interface.layout`), so N is even, and its body
+hands the decode and the slot match the same bits flat.  P = (W − 16)/8 is the decode's payload bytes (2,054 at P2's
+point), n = ⌈N/P⌉ is the row's slots, at most 2^16, and S = max(1, ⌈log₂ n⌉) the slot's bits the selection reads.
 
 **The layout it reads.** W's registered rows are row-aligned in the store: each N-byte row starts at a block boundary and
 fills ⌈N/P⌉ blocks, P of its bytes a block, its last block zero past the row's end, as `TensorLayout` places a tensor
@@ -25,19 +28,24 @@ row's end.  The unit hashes nothing beyond the decode's keys: which row of W and
 
 **The slot.** One Program serves every block of a row width: the slot is an input, and `PousP2SlotMatch_v1` selects
 its P bytes by a multiplexer tree over the row's n slots, one AND a bit a merge, (n − 1)·8P in all; then one AND tree
-over the 8P bits' agreement with the payload, ok and slot < n (at most 8P + 1 ANDs), the bound itself at most S − 1
-more, and none when n is a power of two.  Its counts at P2's payload are pinned in
+over the 8P bits' agreement with the payload, ok and slot < n (at most 8P + 1 ANDs), the bound itself at most 15
+more over the slot's 16 bits.  Its counts at P2's payload are pinned in
 `verity/protocols/accounting/pous/verifier/tests/test_pous_setup_circuit.py`.
 """
 from __future__ import annotations
 
 from verity.circuits.boolean.forms import ONE, ZERO, and_reduce
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
 
 from .circuit import _check, _traced_body, bits
 from .decode_circuit import PousP2Decode, _field_sig
 
-__all__ = ["PousP2SetupCheck", "PousP2SlotMatch", "slot_bits", "slot_payload", "slots"]
+__all__ = ["SLOT_BITS", "PousP2SetupCheck", "PousP2SlotMatch", "slot_bits", "slot_payload", "slots"]
+
+#: the slot's width: one u16 word
+SLOT_BITS = 16
 
 
 def slots(N: int, P: int) -> int:
@@ -46,7 +54,7 @@ def slots(N: int, P: int) -> int:
 
 
 def slot_bits(N: int, P: int) -> int:
-    """The slot's width: enough bits for every slot of the row, and at least one."""
+    """The slot's bits the selection reads: enough for every slot of the row, and at least one."""
     return max(1, (slots(N, P) - 1).bit_length())
 
 
@@ -81,7 +89,7 @@ def select(C, leaves, slot):
 def slot_match(C, P: int, N: int, decoded, row, slot):
     n = slots(N, P)
     padded = list(row) + [ZERO] * (8 * (n * P - N))
-    want = select(C, [padded[8 * P * k:8 * P * (k + 1)] for k in range(n)], slot)
+    want = select(C, [padded[8 * P * k:8 * P * (k + 1)] for k in range(n)], slot[:slot_bits(N, P)])
     same = [(a ^ b).inv() for a, b in zip(decoded[:8 * P], want)]
     return [and_reduce(C, same + [decoded[8 * P], below(C, slot, n)])]
 
@@ -90,7 +98,10 @@ def slot_match(C, P: int, N: int, decoded, row, slot):
 
 def _match_sig(S):
     _check("PousP2SlotMatch", P=S.P, N=S.N)
-    return (("decoded", bits(8 * S.P + 1)), ("row", bits(8 * S.N)), ("slot", bits(slot_bits(S.N, S.P)))), bits(1)
+    if slots(S.N, S.P) > 1 << SLOT_BITS:
+        raise ValueError(f"PousP2SlotMatch's row has at most {1 << SLOT_BITS} slots, not {slots(S.N, S.P)} (N = {S.N}, "
+                         f"P = {S.P})")
+    return (("decoded", bits(8 * S.P + 1)), ("row", bits(8 * S.N)), ("slot", bits(SLOT_BITS))), bits(1)
 
 
 PousP2SlotMatch = CompositeDefinition(
@@ -106,13 +117,21 @@ def _setup_sig(S):
     W = _field_sig("PousP2SetupCheck", S)
     _check("PousP2SetupCheck", N=S.N)
     bind(PousP2Decode, W=W, C0=S.C0, L=S.L).signature()
-    return (("block", bits(W)), ("base", bits(8 * S.L)), ("row", bits(8 * S.N)),
-            ("slot", bits(slot_bits(S.N, (W - 16) // 8)))), bits(1)
+    if W % 16 or S.L % 2 or S.N % 2:
+        raise ValueError(f"PousP2SetupCheck's ports are u16 words, so W/16, L/2 and N/2 are whole: not W = {W}, "
+                         f"L = {S.L}, N = {S.N}")
+    bind(PousP2SlotMatch, P=(W - 16) // 8, N=S.N).signature()
+    return (("block", _words(W)), ("base", _words(8 * S.L)), ("row", _words(8 * S.N)), ("slot", bits(SLOT_BITS))), bits(1)
+
+
+def _words(n: int):
+    return Array(n // 16, bits(16))
 
 
 def _setup_body(B, S, block, base, row, slot):
-    decoded = B.call(bind(PousP2Decode, W=S.W, C0=S.C0, L=S.L), block, base)
-    return B.call(bind(PousP2SlotMatch, P=(S.W - 16) // 8, N=S.N), decoded, row, slot)
+    flat = lambda x, n: Coll(bits(n), x.refs)  # noqa: E731
+    decoded = B.call(bind(PousP2Decode, W=S.W, C0=S.C0, L=S.L), flat(block, S.W), flat(base, 8 * S.L))
+    return B.call(bind(PousP2SlotMatch, P=(S.W - 16) // 8, N=S.N), decoded, flat(row, 8 * S.N), slot)
 
 
 PousP2SetupCheck = CompositeDefinition(

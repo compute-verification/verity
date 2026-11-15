@@ -18,7 +18,7 @@ from verity_flock import circuit as FC
 
 ROOT = Path(__file__).resolve().parents[6]
 LEAN = ROOT / "verity/protocols/proofs/flock/verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 STATEMENT = "verity/flock-circuit+plain-leaves"
 
 
@@ -66,7 +66,7 @@ def test_the_plain_leaf_identity_is_the_provers():
     assert '"leaf_scheme": c.leaf_scheme,' in rust
     assert 'setObjVal! "leaf_scheme" leafSchemePlain' in body
     assert 'merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }' in body
-    assert "t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
+    assert "t.pinnedLeafScheme.map ZkServer.canonForm == some (ZkServer.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
 
 
 def test_the_pinned_leaf_scheme_is_a_constant():
@@ -89,13 +89,13 @@ def test_a_plain_leaf_opening_carries_an_empty_salt_vector():
 
 def test_the_plain_leaf_statement_is_the_default_one_by_name():
     assert f'{{ circuit.withPlainLeaves with name := "{STATEMENT}" }}' in _lean_def("circuitPlainLeaves")
-    assert "circuitPlainLeaves]" in _lean_def("all")
+    assert "circuitPlainLeaves" in re.findall(r"\w+", _lean_def("all").split(":=", 1)[1])
 
 
 def _verify(*args: str) -> subprocess.CompletedProcess:
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return subprocess.run([str(BIN), "verify", "--statement", STATEMENT, *args], capture_output=True, text=True, check=False)
 
 
