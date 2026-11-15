@@ -442,9 +442,10 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   **`kit.record(arg, *, paths=None)`** is the same read as a `kit.Record`, its `path` and its `withdrawn`, a withdrawal
   of only other files of the record, which the command passes to `kit.report(..., withdrawn=...)`.
 - **`kit.ran_with(coins, parameters, detail=None, *, verified=False)`:** the line `ran with: coins COINS; parameters
-  PARAMETERS (DETAIL)` and its object, in the fixed words (`kit.COINS`, `kit.PARAMETERS`); other words are refused, and
-  `deployed challenger` without `verified=True`, which a command passes only where it checked the challenger's
-  signature against a pinned key itself. These are in
+  PARAMETERS (DETAIL)` and its object, in the fixed words (`kit.COINS`, `kit.PARAMETERS`); other words are refused.
+  `verified=True` is passed only where the command checked the challenger's signature against a pinned key itself;
+  `deployed challenger` without it is the record's own word (`verified: false`), which `kit.report` states under the
+  audit line (`coins by the record's own word, not checked`) and never takes for an audit. These are in
   `verity_bench/kit_report.py`, which `kit` re-exports.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a

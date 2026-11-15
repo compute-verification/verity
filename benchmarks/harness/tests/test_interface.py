@@ -1,7 +1,7 @@
 """The core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface") as the kit holds it:
 `record_dir` reads a directory with nothing of research's and a run id only through it, past its withdrawals (which
 `record` also gives),
-`ran_with` takes only the fixed words and the deployed challenger's only verified, and `report` prints the line after
+`ran_with` takes only the fixed words and states the deployed challenger's unverified coins as the record's word, and `report` prints the line after
 the first, says where it is not an audit and where its record is made up, and gives no number for a run the Lean
 verifier didn't accept. The section's table is held too: each listed directory's README has the three parts, its
 command calls `kit.report` with `ran_with` and `accepted`, and each measurement name its source gives is a row of its
@@ -243,16 +243,14 @@ def test_ran_with_is_one_line_in_the_fixed_words_and_its_object():
         kit.ran_with("local challenger", "not stated")
 
 
-def test_the_deployed_challengers_coins_are_taken_only_verified_against_a_pinned_key():
-    for args in (("deployed challenger", "deployed"), ("deployed challenger", "development", "signed")):
-        with pytest.raises(ValueError) as e:
-            kit.ran_with(*args)
-        assert str(e.value) == ("coins 'deployed challenger' is taken only with verified=True, which a command passes "
-                                "only when it itself checked the challenger's signature against a pinned key: a record's "
-                                "own word about its coins is never enough for an audit")
+def test_the_deployed_challengers_unverified_coins_keep_their_line_and_say_verified_false():
+    line, said = kit.ran_with("deployed challenger", "deployed", "signed")
+    assert line == "ran with: coins deployed challenger; parameters deployed (signed)"
+    assert said == {"coins": "deployed challenger", "parameters": "deployed", "detail": "signed", "verified": False}
     with pytest.raises(ValueError, match="verified is True or False"):
         kit.ran_with("deployed challenger", "deployed", verified="yes")
     assert kit.ran_with("local challenger", "deployed", verified=True)[1]["verified"] is True
+    assert "verified" not in kit.ran_with("in-process", "development")[1]
 
 
 # ---- report
@@ -281,6 +279,8 @@ def said(capsys, out: Path) -> tuple[list[str], dict, dict]:
 
 @pytest.mark.parametrize(("coins", "parameters", "verified", "audit"), [("deployed challenger", "deployed", True, True),
                                                                         ("deployed challenger", "development", True, False),
+                                                                        ("deployed challenger", "deployed", False, False),
+                                                                        ("deployed challenger", "development", False, False),
                                                                         ("local challenger", "deployed", True, False),
                                                                         ("local challenger", "deployed", False, False),
                                                                         ("in-process", "development", False, False)])
@@ -289,14 +289,15 @@ def test_the_ran_with_line_follows_the_first_and_the_kit_says_where_it_is_not_an
     pair = kit.ran_with(coins, parameters, "64 draws", verified=verified)
     assert kit.report("x", "x: 0.25\n  more", DOC, MEASURED, ran_with=pair, accepted=True) == 0
     text, doc, got = said(capsys, out)
-    assert text == ["x: 0.25", pair[0], *([] if audit else ["a measurement, not an audit"]), "  more"]
+    own = ["coins by the record's own word, not checked"] if coins == "deployed challenger" and not verified else []
+    assert text == ["x: 0.25", pair[0], *([] if audit else ["a measurement, not an audit"]), *own, "  more"]
     assert list(doc) == [*DOC, "ran_with", "audit"] and doc["ran_with"] == pair[1] and doc["audit"] is audit
     assert got["a/metric"]["value"] == 0.25
 
 
 @pytest.mark.parametrize("said", [{"coins": "deployed challenger", "parameters": "deployed", "detail": None},
                                   {"coins": "deployed challenger", "parameters": "deployed", "detail": None,
-                                   "verified": False}])
+                                   "verified": "yes"}])
 def test_a_pair_not_made_by_ran_with_is_refused_so_a_records_word_is_no_audit(said, out):
     with pytest.raises(ValueError):
         kit.report("x", "x: 0.25", DOC, ran_with=("ran with: coins deployed challenger; parameters deployed", said))

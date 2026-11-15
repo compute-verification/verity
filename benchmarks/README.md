@@ -117,16 +117,18 @@ The core benchmarks take and print the same things in the same form. Each rule i
    PARAMETERS (DETAIL)`, and in the document `ran_with: {coins, parameters, detail}`. COINS is `deployed challenger`,
    `local challenger` (its own process on this machine) or `in-process` (the serve holds the challenger); PARAMETERS
    is `deployed` or `development`; DETAIL is the command's own words (draws, δ, scheme, key). `kit.ran_with(coins,
-   parameters, detail, verified=...)` refuses other words, and refuses `deployed challenger` unless `verified=True`,
-   which a command passes only where it itself checked the challenger's signature on the coins against a pinned key. A
-   record that predates the field prints `ran with: not stated` (`ran_with=None`), and `ran_with` null.
+   parameters, detail, verified=...)` refuses other words. `verified=True` is passed only where the command itself
+   checked the challenger's signature on the coins against a pinned key. `deployed challenger` without it is the
+   record's own word: the object holds `verified: false`, and the line `coins by the record's own word, not checked` is
+   printed under the audit line. A record that predates the field prints `ran with: not stated` (`ran_with=None`), and
+   `ran_with` null.
 3. **A number only from a run the Lean verifier accepted:** `kit.report(..., accepted=False, why=WHY)` prints
    `NAME: no number: WHY` first, writes `value` null beside `no_number`, writes each measurement with no value and its
    why, and returns exit code 1, which `main()` returns; an accepted run returns 0.
 4. **Not an audit:** the document holds `audit: true` only for coins the deployed challenger drew, verified by the
    command against a pinned key, at `deployed` parameters. Anywhere else the line `a measurement, not an audit` is
    printed under the `ran with` line, and the document holds `audit: false`. A record's own word about its coins is
-   never enough for an audit. The kit derives it from `ran_with`; the command does not choose it.
+   stated as such and is never an audit. The kit derives it from `ran_with`; the command does not choose it.
 5. **Its README's three parts,** under these headings: `## What you may change`, `## What is fixed` and
    `## How a cheating change is refused`.
 6. **Its numbers on the dashboard:** every number the command prints is also a measurement, written by the kit's writer

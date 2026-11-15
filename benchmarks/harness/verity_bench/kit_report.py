@@ -35,9 +35,9 @@ MADE_UP = "a made-up record, not a run's"
 #: the mark of a made-up record's measurements: figures no run measured (`kit.MARKS`)
 MADE_UP_MARK = "modeled"
 WITHDRAWN_LINE = "  part of the run's record was withdrawn, none of it a file read here: "
-UNVERIFIED = ("coins 'deployed challenger' is taken only with verified=True, which a command passes only when it itself "
-              "checked the challenger's signature against a pinned key: a record's own word about its coins is never "
-              "enough for an audit")
+#: the line under the audit line where the deployed challenger's coins are only the record's word: the command didn't
+#: check the challenger's signature against a pinned key itself
+OWN_WORD = "coins by the record's own word, not checked"
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 #: research's run ids, the one form `record_dir` reads through the store
@@ -118,19 +118,18 @@ def ran_with(coins: str, parameters: str, detail: str | None = None, *,
              verified: bool = False) -> tuple[str, dict[str, Any]]:
     """The run's coins and parameters as its one line, ``ran with: coins COINS; parameters PARAMETERS[ (DETAIL)]``, and
     as the document's ``ran_with``; `detail` is the command's own words (draws, δ, scheme, key). Words other than
-    `COINS`' and `PARAMETERS`' are refused, and the deployed challenger's without `verified`: True only where the command
-    itself checked the challenger's signature on the coins against a pinned key (`UNVERIFIED`), and then the object's
-    ``verified: true``."""
+    `COINS`' and `PARAMETERS`' are refused. `verified` is True only where the command itself checked the challenger's
+    signature on the coins against a pinned key; the deployed challenger's coins without it are the record's own word,
+    which the object holds as ``verified: false`` and `report` states (`OWN_WORD`) and never takes for an audit."""
     if coins not in COINS:
         raise ValueError(f"coins {coins!r}: one of {', '.join(map(repr, COINS))}")
     if parameters not in PARAMETERS:
         raise ValueError(f"parameters {parameters!r}: one of {', '.join(map(repr, PARAMETERS))}")
     if verified is not True and verified is not False:
         raise ValueError(f"verified is True or False, not {verified!r}")
-    if coins == COINS[0] and not verified:
-        raise ValueError(UNVERIFIED)
     line = f"ran with: coins {coins}; parameters {parameters}" + (f" ({detail})" if detail else "")
-    return line, {"coins": coins, "parameters": parameters, "detail": detail} | ({"verified": True} if verified else {})
+    said = {"coins": coins, "parameters": parameters, "detail": detail}
+    return line, said | ({"verified": verified} if verified or coins == COINS[0] else {})
 
 
 #: `ran_with`, under a name `report`'s parameter of that name doesn't hide
@@ -150,7 +149,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
 
     `ran_with` (`ran_with()`'s pair, or None for a record that predates the field, printed as `NOT_STATED`) is printed
     after the text's first line and is the document's ``ran_with``; below it, `NOT_AN_AUDIT` unless the coins are the
-    deployed challenger's, verified, and the parameters deployed, and the document's ``audit``. With `made_up` (a record
+    deployed challenger's, verified, and the parameters deployed, and the document's ``audit``; below that `OWN_WORD`
+    where the deployed challenger's coins aren't verified. With `made_up` (a record
     made up for a test or a fixture, not a run's) `MADE_UP` is printed below those, the document holds ``made_up: true``
     and is no audit, and each measurement is written at `MADE_UP_MARK` with ``made_up: true``. With `accepted` False (the
     Lean verifier didn't accept the run) the first line is ``NAME: no number: WHY``, the document's value is null beside
@@ -181,7 +181,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
             raise ValueError(f"ran_with is ran_with()'s pair, not {ran_with!r}")
         audit = (not made_up and said is not None and said.get("verified") is True
                  and (said["coins"], said["parameters"]) == (COINS[0], PARAMETERS[0]))
-        under = [line, *([] if audit else [NOT_AN_AUDIT])]
+        own_word = said is not None and said["coins"] == COINS[0] and said.get("verified") is not True
+        under = [line, *([] if audit else [NOT_AN_AUDIT]), *([OWN_WORD] if own_word else [])]
         doc |= {"ran_with": None if said is None else dict(said), "audit": audit}
     if made_up:
         under.append(MADE_UP)
