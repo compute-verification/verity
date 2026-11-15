@@ -81,11 +81,6 @@ its body takes the token from `TokenSelect_v1`, the function of the chunks and t
 ANDs it with the bits its select gives, word for word the select's ``o0`` and ``o3``. Its ``o1`` and ``o2`` are the
 select's.
 
-**Stand-ins.** The selects and the check are `class_select`'s, the masked block `class_masked`'s. While a module is not
-on the tree, its Definitions are stand-ins of the same names with ``StandIn`` added and the same ports (`stand_ins`),
-whose bodies only hold the ports (a select's ids are the combine's token, its bit and count its inputs'): so a window
-built on them checks the wiring, and its digests are not the real window's.
-
 **Refused until proofs rules on them:** a request the rule does not end within O, a ``min_tokens`` other than 0, a span
 with no stop, and a prompt shorter than P. The check refuses the first, second and fourth by its bit, 0 where the
 rule's finish is 0, where ``min_tokens`` is not 0 and where ``lp`` is not P (`class_check`); a span with no stop has no
@@ -101,17 +96,14 @@ stop class (`pipeline.boundary_stop`), so no class Program is built for it.
 """
 from __future__ import annotations
 
-import importlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from functools import cache
 from typing import TYPE_CHECKING, Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.ops.argmax import U16
 from verity.circuits.ops.prims import const
-from verity.circuits.ops.scalar import BitNot, SelectI32
+from verity.circuits.ops.scalar import SelectI32
 from verity.circuits.refs import Coll, Refs, concat, runs
 from verity.circuits.types import Array, Tuple
 from verity.commitments.periods import interface as IF
@@ -150,37 +142,20 @@ TOKEN, NEXT, AHEAD, KEY = "o0", "o1", "o2", "o3"
 WORD = Array(16, BIT)
 #: the key block's family, the one decode template besides the select that `masked` takes, and its masked version's
 KEY_BLOCK, MASKED_BLOCK = "SparseMlaHeadBlock_v1", "SparseMlaHeadBlockLive_v1"
-#: the families `masked` takes: the decode templates that read the cache, the key block and, in the column cut, its keys
-MASKED = frozenset({KEY_BLOCK, "SparseMlaHeadKeysWire_v1"})
 #: the class window's name, beside `node_window.NAME`
 CLASS_NAME = f"{NAME}/class"
 #: the class Program's select and check rows' families (`ClassSelect`, `ClassStopCheck`)
 SELECT, CHECK = "ClassSelect", "ClassStopCheck"
-#: the modules whose Definitions the class form takes, each with a stand-in while it is not on the tree (`stand_ins`)
-MODULES = ("class_select", "class_masked")
 #: GLM-5.3's ``index_topk``: past it a key block reads the indexer's selection, which the window doesn't lower
 INDEX_TOPK = 2048
-
-
-def _module(name: str) -> Any:
-    try:
-        return importlib.import_module(f"{__package__}.{name}")
-    except ModuleNotFoundError as e:
-        if e.name != f"{__package__}.{name}":
-            raise
-        return None
-
-
-def stand_ins() -> tuple[str, ...]:
-    """The modules of `MODULES` not on this tree, whose Definitions the class form takes from stand-ins."""
-    return tuple(m for m in MODULES if _module(m) is None)
 
 
 # ---- the Definitions, each its module's
 
 def masked(fn: SpecializedDefinition) -> SpecializedDefinition:
-    """The masked version of a key block ``fn``, `KEY_BLOCK` at any of its statics (every NVIS and FIRST): `MASKED_BLOCK`
-    at ``fn``'s statics, a family of its own, with ``fn``'s parameters, then `LIVE` (`WORD`), and its outputs ``fn``'s
+    """The masked version of a decode unit ``fn`` that reads the cache, `KEY_BLOCK` at any of its statics (every NVIS and
+    FIRST) or, in the column cut, `SparseMlaHeadKeysWire_v1` (`class_masked.MASKED`). For a key block: `MASKED_BLOCK` at
+    ``fn``'s statics, a family of its own, with ``fn``'s parameters, then `LIVE` (`WORD`), and its outputs ``fn``'s
     (``o0`` the running max, ``o1`` the lanes, ``o2`` O, 1,034 words at DV = 512) where the bit is 1 and zeros where it
     is 0, word for word: ``fn``'s body followed by one AND of each output bit with the bit. It has its own id, so its hash
     and its Lean verdict are its own, and `KEY_BLOCK` stays for the prefill and for a class that always serves O ids. A
@@ -238,14 +213,8 @@ def class_check(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_
     return built(V, N, P, O, stops, max_model_len)
 
 
-# ---- the stand-ins (module docstring)
-
 def _bits(B: Any, value: int, n: int) -> Coll:
     return Coll(Array(n, BIT), concat([B.call(const(1, (value >> i) & 1)).refs for i in range(n)]))
-
-
-def _select_ret(S: Any) -> Tuple:
-    return Tuple(Array(2, U16), BIT, Array(S.O.bit_length(), BIT), Array(2, U16))
 
 
 def _widened(B: Any, f: Coll) -> Coll:
@@ -254,69 +223,16 @@ def _widened(B: Any, f: Coll) -> Coll:
     return f if n == 16 else Coll(WORD, concat([f.refs, _bits(B, 0, 16 - n).refs]))
 
 
-def _select_params(S: Any, first: bool) -> tuple:
-    G._whole(S)
-    return (("logits", Array(S.N, BF16)), *((f"r{c}", Array(3, U16)) for c in range(S.V // S.N - 1)), (REQUEST, Array(4, I32)),
-            *(() if first else ((COUNT, WORD), (LIVE, WORD))))
-
-
-def _stand_in_select(first: bool) -> CompositeDefinition:
-    def body(B: Any, S: Any, logits: Coll, *rest: Coll) -> Coll:
-        k = S.V // S.N - 1
-        token = B.call(bind(G.GreedyCombine, V=S.V, N=S.N), logits, *rest[:k])
-        n = S.O.bit_length()
-        count, live = (_bits(B, 1, n), _bits(B, 1, 1)) if first else (rest[k + 1][:n], rest[k + 2][:1])
-        return Coll(_select_ret(S), concat([token.refs, live.refs, count.refs, token.refs]))
-    return CompositeDefinition(
-        "GreedyCombineFirstStandIn" if first else "GreedyCombineStandIn", 1, ("V", "N", "O", "STOP", "MAX_MODEL_LEN"),
-        lambda S: (_select_params(S, first), _select_ret(S)), body, register=False,
-        doc="a stand-in of the class select's ports: its ids the combine's token, its bit and count its inputs'")
-
-
-def _stand_in_check_body(B: Any, S: Any, logits: Coll, *rest: Coll) -> Coll:
-    k = S.V // S.N - 1
-    B.call(bind(G.GreedyCombine, V=S.V, N=S.N), logits, *rest[:k])
-    return B.call(BitNot, rest[-1][0])
-
-
-StandInFirst, StandInLive = _stand_in_select(True), _stand_in_select(False)
-StandInCheck = CompositeDefinition(
-    "GreedyStopCheckStandIn", 1, ("V", "N", "P", "O", "STOP", "MAX_MODEL_LEN"),
-    lambda S: ((*_select_params(S, True)[:-1], ("ids", Array(S.O, I32)), (REQUEST, Array(4, I32)), (COUNT, WORD), (LIVE, WORD)),
-               BIT),
-    _stand_in_check_body, register=False, doc="a stand-in of the class check's ports: 1 where the last bit is 0")
-
-
-@cache
-def _stand_in_masked(defn: Any) -> CompositeDefinition:
-    def sig(S: Any) -> tuple:
-        params, ret = bind(defn, **vars(S)).signature()
-        return (*params, (LIVE, WORD)), ret
-    return CompositeDefinition(f"{defn.name}LiveStandIn", 1, defn.statics, sig,
-                               lambda B, S, *args: B.call(bind(defn, **vars(S)), *args[:-1]), register=False,
-                               doc="a stand-in of the masked key block's ports: the block's outputs, unmasked")
-
-
 def _statics(stops: Sequence[int], max_model_len: int) -> dict:
     return {"STOP": tuple(int(s) for s in stops), "MAX_MODEL_LEN": int(max_model_len)}
 
 
-def _select_def(first: bool, V: int, N: int, O: int, stops: Sequence[int], max_model_len: int, stand_in: bool) -> Any:
-    if stand_in:
-        return bind(StandInFirst if first else StandInLive, V=V, N=N, O=O, **_statics(stops, max_model_len))
+def _select_def(first: bool, V: int, N: int, O: int, stops: Sequence[int], max_model_len: int) -> Any:
     return (first_select if first else live_select)(V, N, O, tuple(stops), max_model_len)
 
 
-def _check_def(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_len: int, stand_in: bool) -> Any:
-    if stand_in:
-        return bind(StandInCheck, V=V, N=N, P=P, O=O, **_statics(stops, max_model_len))
+def _check_def(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_len: int) -> Any:
     return class_check(V, N, P, O, tuple(stops), max_model_len)
-
-
-def _masked_def(fn: Any) -> Any:
-    if descriptor_id(fn).split("{")[0] not in MASKED:
-        raise Unexpressible(f"{descriptor_id(fn)}: the masked templates are {sorted(MASKED)}'s alone")
-    return masked(fn) if _module("class_masked") is not None else bind(_stand_in_masked(fn.defn), **fn.bindings)
 
 
 # ---- the class Program's rows (module docstring, "In the Program")
@@ -336,7 +252,7 @@ def _select_sig(S: Any) -> tuple:
 
 def _select_row(B: Any, S: Any, logits: Coll, request: Coll, *state: Coll) -> Coll:
     N, lanes, results = _chunks(B, S.V, logits)
-    st = B.call(_select_def(S.FIRST, S.V, N, S.O, S.STOP, S.MAX_MODEL_LEN, S.STAND_IN), lanes, *results, request, *state)
+    st = B.call(_select_def(S.FIRST, S.V, N, S.O, S.STOP, S.MAX_MODEL_LEN), lanes, *results, request, *state)
     token = B.call(bind(b1.TokenSelect, V=S.V), logits)
     zero = B.call(const(32, 0))
     served = token if S.FIRST else B.call(SelectI32, state[1][0], token, zero)
@@ -345,24 +261,24 @@ def _select_row(B: Any, S: Any, logits: Coll, request: Coll, *state: Coll) -> Co
     return Coll(Tuple(I32, WORD, WORD, I32), concat([served.refs, nxt.refs, count.refs, key.refs]))
 
 
-#: `ClassSelect_v1{V, O, STOP, MAX_MODEL_LEN, FIRST, STAND_IN}` (logits: bf16[V], request: Array<4, i32>[, count: WORD,
+#: `ClassSelect_v1{V, O, STOP, MAX_MODEL_LEN, FIRST}` (logits: bf16[V], request: Array<4, i32>[, count: WORD,
 #: live: WORD]) -> (i32, WORD, WORD, i32): a step's select over its whole row, the served id, the next bit and count, and the
 #: next step's key (module docstring, "In the Program")
 ClassSelect = CompositeDefinition(
-    SELECT, 1, ("V", "O", "STOP", "MAX_MODEL_LEN", "FIRST", "STAND_IN"), _select_sig, _select_row, register=False,
+    SELECT, 1, ("V", "O", "STOP", "MAX_MODEL_LEN", "FIRST"), _select_sig, _select_row, register=False,
     doc="a class Program's select: the chunks, then first_select or live_select, its ids TokenSelect_v1's token ANDed with "
         "its bits")
 
 
 def _check_row(B: Any, S: Any, logits: Coll, ids: Coll, request: Coll, count: Coll, live: Coll) -> Coll:
     N, lanes, results = _chunks(B, S.V, logits)
-    return B.call(_check_def(S.V, N, S.P, S.O, S.STOP, S.MAX_MODEL_LEN, S.STAND_IN), lanes, *results, ids, request, count, live)
+    return B.call(_check_def(S.V, N, S.P, S.O, S.STOP, S.MAX_MODEL_LEN), lanes, *results, ids, request, count, live)
 
 
-#: `ClassStopCheck_v1{V, P, O, STOP, MAX_MODEL_LEN, STAND_IN}` (logits: bf16[V], ids: Array<O, i32>, request: Array<4, i32>,
+#: `ClassStopCheck_v1{V, P, O, STOP, MAX_MODEL_LEN}` (logits: bf16[V], ids: Array<O, i32>, request: Array<4, i32>,
 #: count: WORD, live: WORD) -> bit: the class's length check over the last step's whole row (`class_check`)
 ClassStopCheck = CompositeDefinition(
-    CHECK, 1, ("V", "P", "O", "STOP", "MAX_MODEL_LEN", "STAND_IN"),
+    CHECK, 1, ("V", "P", "O", "STOP", "MAX_MODEL_LEN"),
     lambda S: ((("logits", Array(S.V, BF16)), ("ids", Array(S.O, I32)), (REQUEST, Array(4, I32)), (COUNT, WORD), (LIVE, WORD)),
                BIT),
     _check_row, register=False, doc="a class Program's length check: the chunks, then class_check")
@@ -378,7 +294,6 @@ class Selects:
     O: int
     stops: tuple[int, ...]
     max_model_len: int
-    stand_in: bool
     request: Coll | None = None
     state: tuple[Coll, Coll] | None = None
     key: Coll | None = None
@@ -389,15 +304,14 @@ class Selects:
         return [(REQUEST, Array(4, I32))]
 
     def config(self) -> dict:
-        return {"P": self.P, "O": self.O, "stops": list(self.stops), "max_model_len": self.max_model_len,
-                "stand_in": self.stand_in}
+        return {"P": self.P, "O": self.O, "stops": list(self.stops), "max_model_len": self.max_model_len}
 
     def bind(self, inputs: Sequence[Coll]) -> Selects:
         (self.request,) = inputs
         return self
 
     def _statics(self, V: int) -> dict:
-        return {"V": V, "O": self.O, **_statics(self.stops, self.max_model_len), "STAND_IN": self.stand_in}
+        return {"V": V, "O": self.O, **_statics(self.stops, self.max_model_len)}
 
     def select(self, call: Any, k: Any, logits: Refs, V: int) -> Coll:
         if self.request is None or self.n >= self.O:
@@ -469,7 +383,7 @@ def class_request(registered: Registered, P: int, O: int, policy: Mapping[str, A
     mml = min(int(hf["max_position_embeddings"]), int(eng.get("max_model_len") or hf["max_position_embeddings"]))
     if P + O > mml:
         raise Unexpressible(f"the class (P {P}, O {O}): positions to {P + O - 1}, past the model's length {mml}")
-    klass = Selects(P, O, SR.stop_ids(hf), mml, bool(stand_ins()))
+    klass = Selects(P, O, SR.stop_ids(hf), mml)
     batched = not phi.target_profile().batch_invariant
     batch = [[[P, 0]], *([[1, P + s]] for s in range(O - 1))] if batched else None
     r = build_program(phi, "request", LP=P, T=O - 1, dead_free=True, batch=batch, with_desc=False, batched=batched,
@@ -495,9 +409,11 @@ class ClassWindow(NodeWindow):
         self.masked: list[tuple[str, int, int]] = []
 
     def unit(self, family: str, fn: Any, count: int) -> tuple[str, int]:
+        from .class_masked import MASKED
+
         if self._masking is None or descriptor_id(fn).split("{")[0] not in MASKED:
             return super().unit(family, fn, count)
-        tid, at = super().unit(family, _masked_def(fn), count)
+        tid, at = super().unit(family, masked(fn), count)
         self.b.feed(tid, LIVE, at, count, (self._masking,), ((count, 0),))
         self.masked.append((tid, at, count))
         return tid, at
@@ -536,7 +452,7 @@ def lower_select(w: NodeWindow, j: int, node: Any) -> None:
     plan = list(NSEL.stages(V))
     last = plan[-1][0]
     N = last.lanes[1] - last.lanes[0]
-    plan[-1] = (last, _select_def(first, V, N, O, S["STOP"], S["MAX_MODEL_LEN"], bool(S["STAND_IN"])))
+    plan[-1] = (last, _select_def(first, V, N, O, S["STOP"], S["MAX_MODEL_LEN"]))
     N, _R, _logits, grids = _cut_logits(w, node, plan)
     at: dict[tuple, tuple[str, int]] = {}
     for u, fn in plan:
@@ -574,7 +490,7 @@ def lower_check(w: NodeWindow, j: int, node: Any) -> None:
     V, N, _M, grids, wires = w.combines[sel]
     if [x for x in runs(w.arg(node, 0, 0))] != [x for x in runs(w.fn.body.nodes[sel].args[0].refs)]:
         raise Unexpressible(f"{w.name}: node {j} ({node.fn.id}): its logits are not its last select's")
-    fn = _check_def(V, N, int(S["P"]), int(S["O"]), S["STOP"], S["MAX_MODEL_LEN"], bool(S["STAND_IN"]))
+    fn = _check_def(V, N, int(S["P"]), int(S["O"]), S["STOP"], S["MAX_MODEL_LEN"])
     t, a = w.unit(fam, fn, M)
     w.feed_rows(t, "logits", a, grids, (M,))
     for param, wt, wa in wires:
@@ -666,7 +582,7 @@ def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = No
     return NJ.Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
 
 
-__all__ = ["AHEAD", "CHECK", "CLASS_NAME", "COUNT", "FAMILIES", "KEY", "KEY_BLOCK", "LIMITS", "LIMITS_ROW", "LIVE", "MASKED", "MASKED_BLOCK",
-           "MODULES", "NEXT", "REQUEST", "SELECT", "TOKEN", "WORD", "ClassSelect", "ClassStopCheck", "ClassWindow", "Selects",
+__all__ = ["AHEAD", "CHECK", "CLASS_NAME", "COUNT", "FAMILIES", "KEY", "KEY_BLOCK", "LIMITS", "LIMITS_ROW", "LIVE", "MASKED_BLOCK",
+           "NEXT", "REQUEST", "SELECT", "TOKEN", "WORD", "ClassSelect", "ClassStopCheck", "ClassWindow", "Selects",
            "boundary_reads", "class_check", "class_request", "class_window", "first_select", "live_select", "lower_check",
-           "lower_select", "masked", "masked_split", "rank_window", "request_reads", "stand_ins"]
+           "lower_select", "masked", "masked_split", "rank_window", "request_reads"]
