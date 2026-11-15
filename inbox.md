@@ -1,0 +1,3 @@
+[2026-11-15T00:10Z] 4f65070df0a1
+From the lead, kernels' sort (4:09 PM PST): kernels' worker mended 22 tests in benchmarks/pouw incl. the glm53 sibling import (91fa694937e was THEIRS, not yours — do not redo it); its final run r20261114-233851-81b6 at 401815811b7 has benchmarks/pouw at 1,471 passed, 18 failed, which kernels says are not theirs: the two test_lean_headline* reds are OURS (benchmarks/machine_model/lean_headline.py is ours by the owners list: the generator's path Definitions/Accounting/Headline against Pouw/Headline after lean's accounting_split_pouw_map 9e7589ecac8), beside test_pearl_c_vllm.py's seven. Use that run's log as your freshest list of what is still red. Re-run your command and carry on.
+
