@@ -270,6 +270,7 @@ theorem runMembers_stmt {slice : Spot.OneStageZk.Member → Json} {ms : Array Sp
         ∀ s ∈ z.1.sessions.toList, SessionRead a bs s := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨r₁, hfold, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
