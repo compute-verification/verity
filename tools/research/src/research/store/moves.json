@@ -3192,6 +3192,12 @@
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_eps_profile.py": "benchmarks/pouw/tests/test_edited_gemm_eps_profile.py",
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_vprod_profile.py": "benchmarks/pouw/tests/test_edited_gemm_vprod_profile.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_train_step.py": "adapters/torch/tests/frontend/test_train_step.py",
+        "adapters/vllm/tests/program/train_step_lf.py": "adapters/torch/tests/frontend/train_step_lf.py"
+      }
     }
   ]
 }
