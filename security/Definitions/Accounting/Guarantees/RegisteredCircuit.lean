@@ -18,7 +18,7 @@ requirement (A1's
 `Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
 appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
 weights and the filler are the registration audit's to count. Its theorem is
-`Accounting.SecurityProofs.RegisteredCircuitRequirement`, in `Security/Proofs/Accounting/RegisteredCircuit/Requirement.lean`
+`Accounting.SecurityProofs.RegisteredCircuitRequirement`, in `security/Proofs/Accounting/RegisteredCircuit/Requirement.lean`
 with its pieces beside it.
 -/
 

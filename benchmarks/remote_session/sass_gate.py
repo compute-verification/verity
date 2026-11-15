@@ -62,7 +62,7 @@ ONCE = {"signs_kernel<64>", "chain_prepare_kernel<64>"}
 WANT = SKETCHING | ONCE
 #: by arch, as ptxas builds them: `local`, the bytes of stack frame or spill a kernel holds (a kernel it doesn't name,
 #: none): the consumers and the leaf pass's reader run at the register limit, as their 16-row twins do, and the
-#: once-a-pass kernels keep a SHA-512 schedule on the stack, as theirs do; and `capped`, what a kernel held to CAP
+#: once-a-pass kernels keep a SHA-512 schedule on the stack, as theirs do; and `capped`, what a kernel held to REGS_MAX
 #: registers (two receipt CTAs an SM) may hold beside. The leaf pass's two are sm_120a's alone, as CUDA 13.0.88 builds
 #: them; the rest as 12.9's does
 ARCHS = {
@@ -72,7 +72,7 @@ ARCHS = {
                           "leaf_pass64_kernel": 64, "leaf_consumer64_kernel": 88},
                 "capped": {"sketch64_pass_kernel": 32}},
 }
-CAP = 128
+REGS_MAX = 128
 COUNTS = {"LDL": r"\bLDL\b", "STL": r"\bSTL\b"}
 #: the float instructions of the compiler's unsigned division by a runtime divisor, by the divisor's width (`u16_13`:
 #: CUDA 13.0's 16-bit form, its dividend converted as a u32); a form's mark (`DIV_OF`) is in no other: its truncation,
@@ -159,7 +159,7 @@ def gate(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
     regs, _ = H.ptxas_report(report, arch)
     local_ok = {n: table["local"].get(short(n), 0) for n in mine}
     for n in mine:
-        if short(n) in table["capped"] and (regs.get(n, {}).get("regs") or CAP + 1) <= CAP:
+        if short(n) in table["capped"] and (regs.get(n, {}).get("regs") or REGS_MAX + 1) <= REGS_MAX:
             local_ok[n] = table["capped"][short(n)]
     funcs, problems = H.mma_gate(
         report, "\n".join(f"Function : {n}\n" + "\n".join(listed[n]) for n in sorted(mine) if n in listed), mine,

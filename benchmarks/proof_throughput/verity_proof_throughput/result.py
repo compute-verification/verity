@@ -43,7 +43,7 @@ COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coi
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
-                    "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (verity-verify-proof verify "
+                    "from a loopback flock-circuit serve --sample-design; then the compiled Lean verifier (verity-verify-proof verify "
                     "--coins tree --stratified B) on each timed session"}
 
 
@@ -53,7 +53,7 @@ PHASES = ("t.link", "t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito", 
 
 def statement_seconds(lv: Mapping[str, Any]) -> float:
     """A statement's steady-state prover seconds from its median timed LIVE record: the witness wait plus both reps, or the
-    pipelined witness builds' share when they are slower (``verity/ml/flock/pod/gemm_slowdown.statement_seconds``)."""
+    pipelined witness builds' share when they are slower (``verity/protocols/proofs/flock/prover/pod/gemm_slowdown.statement_seconds``)."""
     full = (lv.get("witness_s") or 0.0) + lv["prove_total_s"]
     if lv.get("witness_prebuilt_s") is not None and lv.get("pipeline_depth"):
         full = max(full, lv["witness_prebuilt_s"] / lv["pipeline_depth"])

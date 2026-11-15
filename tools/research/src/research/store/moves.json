@@ -4201,6 +4201,11 @@
     },
     {
       "paths": {
+        "security/Properties/Accounting/Remote/HonestLog/Case.lean": "security/Properties/Compose/Remote/HonestLog/Case.lean"
+      }
+    },
+    {
+      "paths": {
         "security/Definitions/Accounting/Guarantees/Sketch.lean": "security/Definitions/Poub/Guarantees/Sketch.lean",
         "security/Definitions/Certifier/Assumptions/RemoteOutside.lean": "security/Definitions/Poub/Assumptions/RemoteOutside.lean",
         "security/Definitions/Compose/Assumptions/Remote.lean": "security/Definitions/Poub/Assumptions/Remote.lean",
@@ -4226,6 +4231,7 @@
         "security/Definitions/Compose/Remote/Node.lean": "security/Definitions/Poub/Remote/Node.lean",
         "security/Definitions/Compose/Remote/Outside.lean": "security/Definitions/Poub/Remote/Outside.lean",
         "security/Definitions/Compose/Remote/Run.lean": "security/Definitions/Poub/Remote/Run.lean",
+        "security/Definitions/Compose/Remote/Sample.lean": "security/Definitions/Poub/Remote/Sample.lean",
         "security/Definitions/Compose/Remote/Sketch.lean": "security/Definitions/Poub/Remote/Sketch.lean",
         "security/Definitions/Compose/Remote/SketchLine.lean": "security/Definitions/Poub/Remote/SketchLine.lean",
         "security/Definitions/Compose/Remote/SketchToy.lean": "security/Definitions/Poub/Remote/SketchToy.lean",
@@ -4249,6 +4255,7 @@
         "security/Proofs/Compose/RemoteHeld/Meets.lean": "security/Proofs/Poub/RemoteHeld/Meets.lean",
         "security/Proofs/Compose/RemoteHeld/Outside.lean": "security/Proofs/Poub/RemoteHeld/Outside.lean",
         "security/Proofs/Compose/RemoteHeld/OverTime.lean": "security/Proofs/Poub/RemoteHeld/OverTime.lean",
+        "security/Proofs/Compose/RemoteHeld/Sample.lean": "security/Proofs/Poub/RemoteHeld/Sample.lean",
         "security/Proofs/Compose/RemoteHeld/Sketch.lean": "security/Proofs/Poub/RemoteHeld/Sketch.lean",
         "security/Proofs/Compose/RemoteHeld/SketchLine.lean": "security/Proofs/Poub/RemoteHeld/SketchLine.lean",
         "security/Proofs/Compose/RemoteHeld/SketchMeets.lean": "security/Proofs/Poub/RemoteHeld/SketchMeets.lean",
@@ -4269,6 +4276,8 @@
         "security/Proofs/Properties/Compose/": "security/Proofs/Properties/Poub/",
         "security/Properties/Compose/Remote.lean": "security/Properties/Poub/Remote.lean",
         "security/Properties/Compose/Remote/Coins.lean": "security/Properties/Poub/Remote/Coins.lean",
+        "security/Properties/Compose/Remote/HonestLog.lean": "security/Properties/Poub/Remote/HonestLog.lean",
+        "security/Properties/Compose/Remote/HonestLog/Case.lean": "security/Properties/Poub/Remote/HonestLog/Case.lean",
         "security/Properties/Compose/Remote/InProofs.lean": "security/Properties/Poub/Remote/InProofs.lean",
         "security/Properties/Compose/Remote/Line.lean": "security/Properties/Poub/Remote/Line.lean",
         "security/Properties/Compose/Remote/Line/Premises.lean": "security/Properties/Poub/Remote/Line/Premises.lean",
@@ -4455,6 +4464,12 @@
         "benchmarks/pous/p2_v1/bandwidth.py": "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
         "benchmarks/torch_gpu/p2_stage/stage.py": "verity/protocols/accounting/poub/prover/p2_stage/stage.py",
         "benchmarks/torch_gpu/p2_stage/layout.py": "verity/protocols/accounting/poub/prover/p2_stage/layout.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py": "verity/protocols/proofs/spot/prover/tests/test_pearltie.py",
+        "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py": "verity/protocols/proofs/spot/prover/tests/test_remotetie.py"
       }
     },
     {

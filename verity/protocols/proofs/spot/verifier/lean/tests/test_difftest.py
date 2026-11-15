@@ -3172,13 +3172,13 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
         for name, (other, work, kind) in uncovered.items():
-            a = audit_of(d, draw, coins, sampling_design=other, **({} if work is None else {"work_table": work}))
+            a = audit_of(d, draw, coins, law=other, **({} if work is None else {"work_table": work}))
             with pytest.raises(D.Reject) as refused:
                 decode_params_v2(a["params"])
             out = outcome(a)
             assert (str(refused.value), out["verdict"], out["reason"]) == (
                 subset_only(kind), "reject", f"params: {subset_only(kind)}"), (seed, name)
-        rate = audit_of(d, draw, coins, sampling_design="rate:3/5")
+        rate = audit_of(d, draw, coins, law="rate:3/5")
         assert decode_params_v2(rate["params"])["law"] == sampling_design and (python(rate), lean(rate)) == ("verdict", "verdict"), seed
         for name, (c, why) in unclosed(coins).items():
             a = audit_of(d, draw, c)
@@ -4159,9 +4159,9 @@ PUBLIC_ITEMS = [
     lambda c, x: {**c, "query": QUERIES[x % len(QUERIES)]},
     lambda c, x: {**c, "scheme": "frame-v3/blake3"},
     lambda c, x: {**c, "record": [None, "a record", [], 5][x % 4]},
-    lambda c, x: _record_with(c, sampling_design={"law": "stratified", "strata": [
+    lambda c, x: _record_with(c, law={"law": "stratified", "strata": [
         {"k": 1, "template": [PAIR.id, None, 5, True, "x", -2, [1], {"a": 1}, 0][x % 9]}, [TRIPLE.id, None, False, 7][x % 4]]}),
-    lambda c, x: _record_with(c, sampling_design={"law": "stratified", "strata": "s"}),
+    lambda c, x: _record_with(c, law={"law": "stratified", "strata": "s"}),
     lambda c, x: _record_with(c, roots=[[{"port": [1]}, {"port": {"a": 1}}, {"port": 5}, {"port": None}, {"root": "r"}, "x",
                                          {"port": "x", "call": 1, "root": "r"}][x % 7], *c["record"]["roots"]]),
     lambda c, x: _record_with(c, registered=[{"value": [["W"], {}, 1, None, "W", "out"][x % 6], "leaves": 1, "root": "r"}]),

@@ -59,7 +59,7 @@ def nonceOf (hex : String) : Except String ByteArray :=
   if CoinTree.isHex (2 * NONCE_BYTES) hex then unhex hex
   else .error s!"a nonce `{hex}` that is not {2 * NONCE_BYTES} lowercase hex digits"
 
-/-- The verifier's own draw-law inputs, as `verity-verify-proof verify` reads them: `--work K` with `--work-table F`
+/-- The verifier's own sampling design inputs, as `verity-verify-proof verify` reads them: `--work K` with `--work-table F`
 (`Draw.workTableOfJson`), `--stratified K` and `--closure F` (`Draw.closureMapOfJson`), each optional. A stratified or work
 sample sets up only on them (`Stmt.setupTables`, U2), so they are the session's statement's as much as its files are. -/
 def samplingDesignOf (args : List String) :

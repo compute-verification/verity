@@ -56,6 +56,16 @@ order = [
 directory = "verity/protocols/proofs/flock"
 owner = "proofs"
 reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
+# the files of `verity` that load it, each by its path, until `known_reason`'s day; the list only shrinks
+known = [
+    "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
+    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/template_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
+    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+]
+known_reason = "SPOT's prover audit runs Flock's prover; owner proofs; goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/verifier/check"
@@ -70,7 +80,7 @@ reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never
 [[distribution]]
 directory = "verity/protocols/accounting/pous/prover/p2"
 owner = "memory-accounting"
-reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by the vLLM adapter and by its harness in `benchmarks/`"
+reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by PoUS's `weight_store` (whose tensors are its `tensors.py`), the vLLM adapter and its harness in `benchmarks/`"
 
 [[distribution]]
 directory = "verity/protocols/compose/device/live_challenger"
@@ -801,6 +811,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
     "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
     "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
+    "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
 ]
 
 [[place]]
@@ -844,7 +855,6 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
-    "benchmarks/pous/streamed_wipe/wipe_on_node.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",

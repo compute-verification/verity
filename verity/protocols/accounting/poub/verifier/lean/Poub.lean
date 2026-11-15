@@ -19,7 +19,7 @@ public import Poub.P2Session
 /-!
 # PoUB's verifier, as executable Lean
 
-The library of the package `poub`, the definition that the Python of `verity.protocols.poub.verifier` is held
+The library of the package `poub`, the definition that the Python of `verity.protocols.accounting.poub.verifier` is held
 to (`audit.py` and what it calls, by `tests/`):
 
 * `Basic`, the byte encodings, SHA-512 and frame-v3-sha512 openings; `Codec`, the store's codec, decoding; `Plan`, a

@@ -49,6 +49,7 @@ from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
 from verity_vllm.pipeline.row_json import field_of
 from verity_vllm.program import prefix_plan as PP
@@ -128,7 +129,7 @@ class SingleRow(Row):
         os.makedirs(self.d, exist_ok=True)
         os.makedirs(self.ncb, exist_ok=True)
         if not os.path.isfile(self.path(self.wl)):
-            print(f"no manifest {self.wl}")
+            write(f"no manifest {self.wl}")
             raise Stop(2)
         self.trap = True
         rel_line, rel_src = self.release_line(" (release_json.py failed; not installed here by pod_release.sh)")

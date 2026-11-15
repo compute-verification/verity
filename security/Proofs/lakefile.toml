@@ -247,4 +247,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.SessionLive", "Proofs.Properties.Verity.SampledTwo.FormDraw",
   "Proofs.Properties.Verity.SampledTwo.FormCircuit", "Proofs.Properties.Verity.SampledTwo.FormBytes",
   "Proofs.Properties.Verity.SampledTwo.FirstEarly", "Proofs.Properties.Verity.SampledTwo.FormMember",
-  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent"]
+  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent",
+  "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
+  "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
+  "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
+  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol"]

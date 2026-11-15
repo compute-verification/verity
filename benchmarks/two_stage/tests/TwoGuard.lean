@@ -4,7 +4,7 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, with Flock's and
+`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `security/Proofs`, with Flock's and
 SPOT's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the model's
 round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`) built from
 `DIR/held.json`, the reference statements `DIR/ref-<t>.bin` and their templates' reference reads
