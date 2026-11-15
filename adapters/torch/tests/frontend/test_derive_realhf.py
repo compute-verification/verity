@@ -27,10 +27,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
 import numpy as np
 import pytest
 import torch
@@ -38,12 +34,14 @@ from torch import nn
 from verity.circuits.types import Array, RecordType, Value
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 
+from tests.frontend import settings
 from verity_torch.frontend.derive import (
     DERIVE_VERSION,
     DeriveReport,
     derive_report,
 )
 
+settings.offline()
 transformers = pytest.importorskip("transformers")
 
 # ---------------------------------------------------------------------------------------------------------
@@ -52,17 +50,17 @@ transformers = pytest.importorskip("transformers")
 
 H, NL, NH, KVH, V, I, MAXPOS, EPS = 64, 2, 4, 2, 128, 128, 64, 1e-5
 LP = 8
-STEPS = int(os.environ.get("REALHF_STEPS", "4"))
-EVAL = os.environ.get("REALHF_EVAL", "1") != "0"
-ONLY = os.environ.get("REALHF_ONLY", "")
-OUT_PATH = os.environ.get("REALHF_OUT") or "/tmp/realhf/realhf.jsonl"
-POS_STATIC = os.environ.get("REALHF_POS") == "static"  # wrappers pass position_ids=arange(T)[None] explicitly (see PROBES)
+STEPS = int(settings.get("REALHF_STEPS"))
+EVAL = settings.get("REALHF_EVAL") != "0"
+ONLY = settings.get("REALHF_ONLY")
+OUT_PATH = settings.get("REALHF_OUT")
+POS_STATIC = settings.get("REALHF_POS") == "static"  # wrappers pass position_ids=arange(T)[None] explicitly (see PROBES)
 DT = {"f32": torch.float32, "bf16": torch.bfloat16}
 
 
 def _git_head() -> str:
-    if os.environ.get("REALHF_HEAD"):
-        return os.environ["REALHF_HEAD"]
+    if settings.get("REALHF_HEAD"):
+        return settings.get("REALHF_HEAD")
     try:
         return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
                               capture_output=True, text=True).stdout.strip()
@@ -276,7 +274,7 @@ if ONLY:
 # NOT "the real class derives" and is reported separately from the frozen result (REALHF_PROBE=0, the default).
 # ---------------------------------------------------------------------------------------------------------
 
-PROBE = int(os.environ.get("REALHF_PROBE", "0"))
+PROBE = int(settings.get("REALHF_PROBE"))
 
 
 def _probe_patches(level: int) -> list[str]:
@@ -394,7 +392,7 @@ def _probe_patches(level: int) -> list[str]:
         import transformers.integrations.sdpa_attention as sa
         sa.use_gqa_in_sdpa = lambda *a, **k: False
         applied.append("P8:use_gqa_in_sdpa -> False (repeat_kv instead of enable_gqa)")
-    if os.environ.get("REALHF_POS") == "static":
+    if settings.get("REALHF_POS") == "static":
         # Not a transformers patch: the wrappers pass position_ids = arange(T).unsqueeze(0) explicitly (the value HF computes as
         # `arange(T) + past_seen_tokens`; the `+ 0` is what HFRotaryTable's positions scan does not look through).
         applied.append("POS:position_ids=arange(T)[None] passed explicitly")

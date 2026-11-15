@@ -20,7 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 # `VFull` and the verifier's U4
 
 `VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s sampling design samples. V*'s sampling designs are the full
-sample (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
+sample (`VSamplingDesign.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
 `Flock.HmRow`) refuses a sampled statement unless every unit its own registered reads name for a round's commitment
 (`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is sampled
 in full; under a stratified sample that is the stratum holding it.

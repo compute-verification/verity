@@ -1,7 +1,7 @@
 """vLLM serving under PoUB (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
 and PoUB's prover's `serving.StoreBackend` proving its store to an in-process verifier while it serves a trace of
-requests, one session a process.  The engine's test is skipped without vLLM or a CUDA card, saying which; what
-`serve.py` imports to serve is tested without either."""
+requests, one session a process.  The engine's test is skipped without vLLM or a CUDA card, saying which; the
+prover `serve.py` serves by is tested without either, and without the adapter."""
 from __future__ import annotations
 
 import importlib.util
@@ -26,15 +26,17 @@ def engine_or_skip():
         pytest.skip("needs a CUDA card, and torch sees none")
 
 
-def test_what_serve_imports_to_serve_loads_without_a_card_and_its_backend_and_prove_fit_its_call():
-    """`serve.py`'s serving imports (`provers`) and the backend it builds on them, which the engine's test reaches
-    only on a card: the backend is a `StoreBackend`, and `prove` takes the arguments `serve.py` passes it."""
+def test_the_prover_serve_proves_by_loads_without_a_card_or_the_adapter_and_its_prove_fits_the_call():
+    """`serve.py`'s prover (`provers`) and the backend it builds on it, which the engine's test reaches only on a
+    card: they load none of the adapter, the backend is a `StoreBackend`, and `prove` takes the arguments `serve.py`
+    passes it."""
     spec = importlib.util.spec_from_file_location("remote_session_serve", SERVE)
     serve_py = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(serve_py)
-    serving, binder, memory = serve_py.provers()
-    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend)
-    assert callable(binder) and callable(memory)
+    adapter = {m for m in sys.modules if m.partition(".")[0] == "verity_vllm"}
+    serving, memory = serve_py.provers()
+    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend) and callable(memory)
+    assert {m for m in sys.modules if m.partition(".")[0] == "verity_vllm"} == adapter
     inspect.signature(serving.prove).bind(None, "127.0.0.1:0", "serve", node=b"n", codec=None, log=print)
 
 

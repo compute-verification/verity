@@ -94,7 +94,7 @@ def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
     key = AC.Ch.ChallengerKey(4, 5, bytes(AC.Ch.PUBLIC_BYTES))
-    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.registration.digest), b"\x5a",
+    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.docket.digest), b"\x5a",
                            AC.lms_verify) == CC.DRAW_FORM
 
 

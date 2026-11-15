@@ -53,7 +53,7 @@ theorem vstarCount_eq {ish : Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
 /-- **(h) V*'s statements over the verifier's list**: at every binding of each, a family whose files, where the
 verifier parses them into scope, parse to its circuits, at the outer sampling design's points, rounds and samples. -/
 theorem vstarParsesScoped_of_list (ish : Flock.RecVStar.Inner) (bind : Fin (vstarCount ish) → VStar.Bindings)
-    (mPts J : ℕ) (samplingDesign : (nv : ℕ) → VLaw nv) :
+    (mPts J : ℕ) (samplingDesign : (nv : ℕ) → VSamplingDesign nv) :
     ∃ Vs : Fin (vstarCount ish) → VStmt, VStarParsesScoped Flock.Tags.circuit ish bind Vs ∧
       ∀ j, (Vs j).mPts = mPts ∧ (Vs j).J = J ∧ (Vs j).samplingDesign = samplingDesign (Vs j).nv := by
   have key : ∀ j : Fin (vstarCount ish), ∃ q : Flock.Circuit × ℕ, FlockSoundness.Built q.1.unit ∧
