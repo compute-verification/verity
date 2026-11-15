@@ -96,9 +96,9 @@ ALLOW = (
     Rule("/usr/local/bin/vy-lean-sandbox", "*", "journal n1 5 (`vy-lean-sandbox probe`); lean_sandbox.py:17 is meant for `sudo -n` "
          "and never runs a build as root, research or a privileged group"),
     Rule("/usr/bin/systemctl", "start vy-steward-watch.service", "journal n1 3 (infra's duty pass; the watch is read-only)"),
-    Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (infra/cluster/src/cluster/status.py:54)"),
+    Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (infra/cluster/src/cluster/status.py, its bundles read)"),
     Rule("/usr/local/sbin/vy-sudo", "du-bundles", "journal n1 23,140 each `find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev "
-         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py:54, sky/release.py's: a "
+         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py, its bundles read, sky/release.py's: a "
          "root unit after the switch); vy-sudo runs that find with -exec du, since `xargs du` as root takes du's options from stdin"),
 )
 #: research -> root on a CPU node: what a run and the store need there, and nothing of the cluster's
@@ -112,7 +112,7 @@ CPU_ALLOW = (
     Rule("/usr/local/sbin/vy-seal-runs", "evict *", "research data evict --runs on a sealed run (vy-store-evict-research.service, as research)"),
     Rule("/usr/bin/systemctl", "start --no-block vy-lean-cache-daily.service", "the Lean cache's publish after a landing that touches "
          "Lean (merge.py lean_publish starts it on the node that builds the cache); the unit takes nothing of the caller's"),
-    Rule("/usr/bin/true", "", "`sudo -n true` (infra/cluster/src/cluster/status.py:54)"),
+    Rule("/usr/bin/true", "", "`sudo -n true` (infra/cluster/src/cluster/status.py, its bundles read)"),
 )
 #: who besides root research may run as, for anything: itself (journal n1 1,471 tmux, 512 env), and the job user ubuntu (journal n1
 #: 311 `env HOME=* PYTHONPATH=* ...`, 27 mv: n1_custody.sh:245, n2_build.sh:98,202, n2_commit.sh:50,197,215) once ubuntu has no root
