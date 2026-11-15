@@ -289,8 +289,9 @@ verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] 
 | `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
 
 The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
-more than one honest arm is refused: give the arm's directory. A `--flock` or `--zk` row whose output states the other
-proof, or none, prints no number, whichever command wrote it. Each printed row states its proof (`plain`, `zk`, or "not
+more than one honest arm is refused: give the arm's directory. A `--flock` row must state the plain proof, and a `--zk`
+or `--sampling` row the zk proof (the sampling layer is Flock with zero knowledge at the sampling plan): one whose output
+states another proof, or none, prints no number and writes null with why, whichever command wrote it. Each printed row states its proof (`plain`, `zk`, or "not
 stated"), so a plain run's numbers in the sampling row say plain.
 
 A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the

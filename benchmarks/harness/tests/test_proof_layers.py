@@ -123,15 +123,25 @@ def test_every_rank_needs_its_own_lean_verify_verdict(tmp_path):
 
 
 def test_the_printed_row_states_its_proof(tmp_path):
-    """A plain a5 out given as ``--sampling`` keeps its numbers, and its printed row says plain."""
+    """Each printed row says its proof; a plain a5 out given as ``--sampling`` (Flock with zero knowledge at the sampling
+    plan) says plain, prints no number and says why."""
 
     rows = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
             PL.read("flock", None)]
     text = PL.render(rows)
-    assert rows[0].prover_s == 5.0 and "| with sampling | row llama32-1b__int8__h200__tp1__b4: " in text
     line = {r.layer: x for r, x in zip(rows, text.splitlines()[4:7], strict=True)}
-    assert "| plain | 5 (s a block" in line["sampling"] and "| zk | 3 (s a block" in line["zk"]
+    assert line["sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
+    assert "| plain | — |" in line["sampling"] and "| zk | 3 (s a block" in line["zk"]
     assert line["flock"].startswith("| Flock | not run | — | — |")
+    assert ("- with sampling: no number: --sampling is the zk proof's row, and this output says its proof is plain"
+            in text.splitlines())
+
+
+def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
+    rows = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
+    own = [m for m in PL.measured(rows, IDS) if m["member"] is None]
+    assert [m["name"] for m in own] == list(IDS)
+    assert all(m["value"] is None and "says its proof is plain" in m["why"] and m["extra"]["proof"] == "plain" for m in own)
 
 
 def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_than_it_says(tmp_path):

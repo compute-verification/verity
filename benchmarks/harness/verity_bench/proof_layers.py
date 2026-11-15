@@ -38,8 +38,9 @@ LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with
 RECURSION, PROVE_PATH, A5 = "recursion_e2e", "prove_path", "a5"
 #: the outputs a layer's row may be read from
 ACCEPTS = {"flock": (PROVE_PATH,), "zk": (PROVE_PATH, A5), "sampling": (A5, PROVE_PATH), "recursion": (RECURSION,)}
-#: the proof a prove_path row of the layer must have run (its PROVE-PATH line's ``proof``)
-PROOF = {"flock": "plain", "zk": "zk"}
+#: the proof a row of the layer must state it ran, whichever command wrote it: the sampling layer is Flock with zero
+#: knowledge at the sampling plan
+PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
 #: the name the report writes its JSON under
 REPORT = "proof-layers"
 #: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in
