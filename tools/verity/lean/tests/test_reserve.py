@@ -65,7 +65,7 @@ def test_a_pass_kept_under_one_reserve_json_is_reused_under_another_and_a_change
     root = tmp_path / "repo"
     files = {"tools/verity/lean/check.py": FAKE_CHECK, "tools/verity/lean/lean_audit.py": "",
              "tools/verity/lean/reserve.py": FILE.read_text(), "tools/verity/lean/reserve.json": DATA.read_text(),
-             "tools/verity/check/common.py": "", LA.CONTRACT: "",
+             "tools/check/common.py": "", LA.CONTRACT: "",
              "pkg/a/lakefile.toml": "", "pkg/a/lean-toolchain": "v1\n", "pkg/a/A.lean": "theorem a : True := trivial\n",
              "pkg/a/lake-manifest.json": json.dumps({"packages": []}), "pkg/a/lean-audit.json": "{}"}
     for f, text in files.items():
