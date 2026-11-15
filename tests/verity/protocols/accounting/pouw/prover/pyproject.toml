@@ -6,7 +6,7 @@
 inputs = ["verity", "hardware/cards", "security", "tools/config/verity_config"]
 parallel = true
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_pouw_h1_import_loads.py"]
+untraced = ["test_pouw_h1_import_loads.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]

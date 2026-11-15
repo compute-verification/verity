@@ -16,5 +16,5 @@ worker_gb = 8
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_lms_sign_lean_difftest.py"]
+tests = ["test_lms_sign_lean_difftest.py"]
 paths = ["verity/commitments/crypto"]

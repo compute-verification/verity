@@ -70,11 +70,11 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/commitments/lean"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "tests/test_coins.py",
-    "tests/test_difftest.py",
-    "tests/test_leaf_own.py",
-    "tests/test_live_verified_difftest.py",
-    "tests/test_verified_difftest.py",
+    "test_coins.py",
+    "test_difftest.py",
+    "test_leaf_own.py",
+    "test_live_verified_difftest.py",
+    "test_verified_difftest.py",
 ]
 # check runs it as three parts by test id (`lean-suites:verity-pouw-check-difftest:K/3`, `suites.py`'s `id_part_of`), each
 # collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread its one process over

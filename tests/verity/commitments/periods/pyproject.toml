@@ -5,7 +5,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_interface.py"]
+untraced = ["test_interface.py"]
 inputs = ["verity", "verity/circuits", "verity/commitments", "verity/circuits/kernels"]
 parallel = true
 
@@ -13,5 +13,5 @@ parallel = true
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_blocks.py", "tests/test_interface.py"]
+tests = ["test_blocks.py", "test_interface.py"]
 paths = ["verity/circuits/ops"]

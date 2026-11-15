@@ -857,7 +857,7 @@ loaded_by = [
 
 [[place]]
 paths = [
-    "tests/verity/protocols",
+    "tests/verity/protocols/tests",
 ]
 trusted = true
 

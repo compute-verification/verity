@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_interop.py"]
+tests = ["test_interop.py"]
 paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py", "verity/protocols/accounting/pous/verifier/p2_v1/wire.py",
          "verity/protocols/accounting/pous/verifier/p2_v1/vectors.json", "verity/protocols/accounting/pous/verifier/p2_v1/audit-vectors.json",
          "verity/protocols/accounting/pous/verifier/p2_v1/audit-negative-vectors.json"]
@@ -25,13 +25,13 @@ paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/verifier/p2_
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "tests/test_interop.py",
-    "tests/test_run.py",
-    "tests/test_run_protocol.py",
-    "tests/test_setup_difftest.py",
-    "tests/test_signed_run.py",
-    "tests/test_timed_audit.py",
-    "tests/test_verdict_difftest.py",
+    "test_interop.py",
+    "test_run.py",
+    "test_run_protocol.py",
+    "test_setup_difftest.py",
+    "test_signed_run.py",
+    "test_timed_audit.py",
+    "test_verdict_difftest.py",
 ]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface and Flock's verifier's
 # Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the vectors are `p2_v1`'s

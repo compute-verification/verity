@@ -230,21 +230,21 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built spot-verifier from the pytest
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
+AFTER_LEAN = ("verity-flock-tests", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "tests/verity", "verity-core-evaluate", "verity-core-zk-server",
-              "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
-              "verity/protocols/accounting/registration/verifier/lean",
-              "verity/protocols/accounting/poub/verifier/lean", "verity/protocols/accounting/poub/verifier",
-              "verity/protocols/accounting/poub",
-              "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "tests/verity/protocols/proofs/recursion/verifier/vstar_cli", "tests/verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
+              "tests/verity/protocols/accounting/registration/verifier/lean",
+              "tests/verity/protocols/accounting/poub/verifier/lean", "tests/verity/protocols/accounting/poub/verifier",
+              "tests/verity/protocols/accounting/poub",
+              "tests/verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
+              "verity-pouw-check-difftest", "tests/verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/device", "verity/protocols/proofs/spot/prover",
-              "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
-              "verity/protocols/accounting/certifier/prover",
-              "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "tests/verity/protocols/proofs/spot/verifier", "tests/verity/protocols/proofs/spot/device", "tests/verity/protocols/proofs/spot/prover",
+              "tests/verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
+              "tests/verity/protocols/accounting/certifier/prover",
+              "tests/verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
-              "verity/protocols/accounting/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
+              "tests/verity/protocols/accounting/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
@@ -2200,7 +2200,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
         p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                              *spread, *([f"--basetemp={basetemp / 'b'}"] if basetemp else []), *args], cwd=ROOT / suite.path,
+                              *(f"--ignore={ROOT / q}" for q in suite.nested), *spread, *([f"--basetemp={basetemp / 'b'}"] if basetemp else []), *args], cwd=ROOT / suite.path,
                              env=env, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
         if basetemp:
             with contextlib.suppress(OSError, IndexError, ValueError):
