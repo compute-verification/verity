@@ -424,6 +424,14 @@ on it; this exposes the inner `sortStrings` over the tree's structurally-reducib
 private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
     Spot.keys? (Lean.Json.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
 
+/-- `"1/2".splitOn "/" = ["1", "2"]`, stepped through `String.splitOnAux`'s equation (the walk cannot evaluate
+`String.splitOn`, which is not kernel-reducible); fed to the walk so `Core.Ratio.ofString "1/2" _` reduces (its `natOf`
+and `gcd` the walk then runs in the kernel). The one split the parameters' `delta` needs. -/
+private theorem split_half : "1/2".splitOn "/" = ["1", "2"] := by
+  unfold String.splitOn
+  simp (config := {decide := true}) only [ite_true, ite_false]
+  repeat (rw [String.splitOnAux.eq_1]; simp (config := {decide := true}) only [ite_true, ite_false])
+
 /-! ## v2's parameters, with every field named -/
 
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
@@ -505,7 +513,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
       show (Flock.unhex gk).toOption = some keyPub
       rw [← hgk, Flock.Hex.unhex_hexOf]; rfl
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, poolValues_none, keys?_mkObj, keys?_obj,
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, split_half, poolValues_none, keys?_mkObj, keys?_obj,
       sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
