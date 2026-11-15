@@ -2286,6 +2286,18 @@ def test_a_path_dependency_outside_the_tree_is_refused_before_a_build_writes_it(
     assert A.bound([pkg / ".lake"]) == ["--at", str(A.FIXED), str(tree.resolve())]
 
 
+def test_a_proved_in_package_outside_the_tree_is_refused_before_it_is_audited(tmp_path, monkeypatch):
+    """A `proved_in` entry is the tree's own content, and check.py audits each package it names beside the one naming
+    it, building it and writing its `.lake`: one outside the tree is refused, naming the policy and the entry."""
+    tree = tmp_path / "tree"
+    (pkg := tree / "S").mkdir(parents=True)
+    (tmp_path / "victim").mkdir()
+    monkeypatch.setattr(A, "TREE", tree)
+    with pytest.raises(A.OutsideTree, match=f"{pkg / A.POLICY}: proved_in '../../victim' resolves to .*, outside"):
+        A.provers(pkg, {"proved_in": ["../../victim"]})
+    assert A.provers(pkg, {"proved_in": ["../P"]}) == [("../P", (tree / "P").resolve())]
+
+
 def test_a_package_of_the_tree_that_is_a_link_out_of_it_is_refused(tmp_path, monkeypatch):
     """`tree/P -> /elsewhere`: named by its path in the tree, the package would be built (and its `.lake` written)
     outside it, so `writable` refuses it. A package given by a path outside the tree (a control's fixture) is bounded by

@@ -2032,6 +2032,21 @@ def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, 
     assert "pkg/a/inner/X.lean" not in LA.own_files("pkg/a", nested)
 
 
+@pytest.mark.parametrize("file, text", [
+    ("lake-manifest.json", json.dumps({"packages": [{"name": "v", "type": "path", "dir": "../../../victim"}]})),
+    ("lake-manifest.json", json.dumps({"packages": [{"name": "v", "type": "path", "dir": "/var/tmp/victim"}]})),
+    ("lean-audit.json", json.dumps({"proved_in": ["../../.."]})),
+], ids=["manifest-up", "manifest-absolute", "proved-in-up"])
+def test_a_package_a_records_run_would_take_a_build_into_from_outside_the_tree_is_refused(tmp_path, monkeypatch, file,
+                                                                                            text):
+    """A path dependency's `dir` or a `proved_in` entry is the tree's own content: the job takes a kept build into each
+    path dependency's directory (`WarmBuilds.take`) before check.py runs, outside any sandbox, and check.py builds each
+    one's `.lake`. One that names a directory outside the tree is refused, naming the file and the entry."""
+    _tree(tmp_path, monkeypatch, {f"pkg/b/{file}": text})
+    with pytest.raises(LA.lean_check().OutsideTree, match=f"pkg/b/{file}: .*outside the tree"):
+        LA.read_packages("pkg/b")
+
+
 def test_a_spec_reads_the_packages_proving_its_guarantees_and_misses_with_them(tmp_path, monkeypatch):
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/a/lean-audit.json").write_text(json.dumps({"proved_in": ["../b", "../b/"]}))

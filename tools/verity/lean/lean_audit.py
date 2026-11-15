@@ -224,15 +224,27 @@ def own_files(pkg: str, files: list[str]) -> list[str]:
             and not any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in UNREAD_NAMES)]
 
 
+def in_tree(pkg: str, entry: str, file: str) -> str:
+    """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a kept build
+    is taken into it and its `.lake` built, so one outside the tree is refused (`check.OutsideTree`)."""
+    p = os.path.relpath(os.path.normpath(ROOT / pkg / entry), ROOT)
+    if p == ".." or p.startswith("../"):
+        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} "
+                                       f"would write: a package it requires by path or names under proved_in must lie in "
+                                       f"the tree")
+    return p
+
+
 def path_deps(pkg: str) -> list[str]:
-    """The packages ``pkg`` requires by path, as `audit.path_deps` reads them (its manifest lists the inherited ones too)."""
+    """The packages ``pkg`` requires by path, as `audit.path_deps` reads them (its manifest lists the inherited ones too),
+    each in the tree (`in_tree`)."""
     m = ROOT / pkg / "lake-manifest.json"
     if not m.exists():
         return []
     out = []
     for d in json.loads(m.read_text()).get("packages", []):
         if d.get("type") == "path":
-            out.append(os.path.relpath(os.path.normpath(ROOT / pkg / d["dir"]), ROOT))
+            out.append(in_tree(pkg, d["dir"], "lake-manifest.json"))
     return sorted(set(out))
 
 
@@ -243,7 +255,7 @@ def provers(pkg: str) -> list[str]:
         named = json.loads(p.read_text()).get("proved_in", []) if p.is_file() else []
     except (OSError, ValueError, AttributeError):
         return []                                       # the audit fails the policy
-    return sorted({os.path.relpath(os.path.normpath(ROOT / pkg / d), ROOT) for d in named if isinstance(d, str)})
+    return sorted({in_tree(pkg, d, "lean-audit.json") for d in named if isinstance(d, str)})
 
 
 #: How the audit runs, and so part of every key

@@ -4272,8 +4272,13 @@ def source_graph(pkg: Path, roots: list[str]) -> tuple[dict[str, list[str]], lis
 
 
 def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
-    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
-    return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
+    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved, each inside
+    ``pkg``'s `home`: they are audited beside it, their `.lake` written, so one outside is refused (`OutsideTree`)."""
+    got = [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
+    if out := [(p, q) for p, q in got if not q.is_relative_to(root := home(pkg))]:
+        raise OutsideTree(f"{pkg / POLICY}: proved_in {out[0][0]!r} resolves to {out[0][1]}, outside {root}, so its audit "
+                          f"would write its .lake there: a package named under proved_in must lie in the tree")
+    return got
 
 
 def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str], dict[str, list[str]]]:
@@ -4800,9 +4805,10 @@ def sandboxed() -> bool:
     return _SANDBOX
 
 
-class OutsideTree(ValueError):
-    """A directory the tree's own content chose for a build to write (a package, a path dependency) that lies outside the
-    tree: a build of the tree writes only in it, so it is refused."""
+class OutsideTree(Exception):
+    """A directory the tree's own content chose for a build to write (a package, a path dependency, a `proved_in` package)
+    that lies outside the tree: a build of the tree writes only in it, so it is refused. No `ValueError`, which callers
+    take as a policy's error and go on without."""
 
 
 def home(pkg: Path) -> Path:
