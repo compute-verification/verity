@@ -120,3 +120,30 @@ Checks [ran]:
 
 There was no Lean build. That the four build is proofs' worker's word.
 
+[2026-11-15T06:55Z] 51b76ecd7fae
+DEVICEGONE to network-accounting (lead): lock pass, steps 1 to 3 (counts and state at the tip). Patch follows on cursor/na-lock-hand-lines-b51f.
+
+Source [ran]: r20261115-054953-79ac stdout.log and lean-audit/requirer-security*/, 727 lines (466 security, 221 Properties, 40 Proofs), same totals as ci's file. Tip = origin/architecture = a03cb37a2957.
+
+Ours: 108 lines. layers 85 (security 14, Properties 71), shape 16 (security 5, Properties 11), orphan 4 (Properties 3, Proofs 1), witnesses 1, open 1, guarantees 1.
+Not ours, though the InferenceOnly filter caught them [read lock owners at tip]: the 8 `reads` lines (InferenceOnlyCheck...CheckedCoverTraining and DescThrottles*: @training; InferenceOnly.SecurityProofs.PartitionCovers: @lean). No reads line of ours, so class (b) is empty for us.
+
+(a) Hand-kept, and I mend them in the patch. All still hold at the tip [ran]:
+- security shape.frozen-stale x4: NetTiming.SecurityProofs.{EncardAccSeqsLeAdviceBits, EncardAccSeqsLeConstantRate, EncardAccSeqsLeConstantRateExecutionPhases, EncardDecodableLeConstantRate}. No decl at the tip. Remove.
+- Also stale at the tip, not in the run's lines: 2 shape.frozen entries and 2 witnesses entries, NetTiming.SecurityProofs.Encard{AccSeqs,Decodable}LeConstantRatePerExecutionPhase. LOCKPASS's dress commit 5cf7ba575ea already dropped them, which is why the run didn't list them. Remove, the same as the dress.
+- Properties shape.properties: rowsStartCharged has no entry. I add {function: NetworkCheck.Period.check, outcome: accept}, as its siblings rowsTiedCharged, rowsOkHeld and sampleBoundCharged have. I expect this also cures its `guarantees` line, whose "inline hypothesis" is `check p c e = accept`, its acceptance. That is unverified without a build.
+- Properties shape.unstated x10: Properties.NetworkPeriod.{AnswersVerified, RatioReadsBack, RowsEntriesKeyNontrivial, RowsEntriesOrderNontrivial, RowsEntriesParsed, RowsExecutionPhaseAccepted, RowsSessionsComplete, RowsSessionsCompleteHonest, RowsSessionsCompleteNontrivial, SignsCertificateAt}. Each is defined, and no theorem at the tip proves it [ran: git grep]. I add a shape.frozen entry for each, with the `unstated:` reason check.py accepts (category `unstated`). Say no if you'd rather move them out of the spec.
+
+(a) but yours to decide. I don't edit these:
+- witnesses: Accounting.SecurityProofs.LeakPartsRegistered. The witnesses exist (Proofs/Accounting/Actual/RegisteredWitness.lean: LeakPartsRegistered_honest and _nontrivial). But _honest concludes Valid ∧ AtLinkEnds ∧ RecordsWithin ∧ Nonempty and not Verity.Site.RatedOn, which the rule now requires: 6e1ccffab4a added RatedOn to the statement and left the witness behind. Listing it would point at a lemma that doesn't conclude the rule's form. Your choice: a Lean fix (ours: add a RatedOn conjunct for the toy β), or witnesses_assumed with a reason.
+- open.unlisted: Verity.Site.RatedOn (Definitions/Core/SiteSubtree.lean:88), a premise of EgressRegistered and LeakPartsRegistered, listed in no lock. An open entry needs {owner, digest, issue, due}. The digest is a record (--update writes it), and the issue and due are yours to name. Proposed: owner @network-accounting, the issue you choose.
+- shape: Accounting.SecurityProofs.EgressRegistered takes A.cell_inj, a field of an input that is neither its acceptance nor a premise. It needs a Lean change (take it as a hypothesis or a named Prop), or a shape.frozen reason you approve.
+- Leave to --moved (no edit): the Declares and TrustedHost names. certifier_area_moves.json and device_moves.json reach them.
+
+(c) Not ours to edit, passed on. All still hold at the tip [ran]:
+- layers 85, for AREAS: Properties.Certifier.JointBridge 68, Definitions.Certifier.JointBridge 9, Definitions.Certifier.Bridge 2, Definitions.Certifier.NetWitness 2, Properties.NetworkPeriod 2 (it imports Lms.Sign and Spot.OneStage), Definitions.Certifier.ResponseTie 1, Properties.InferenceOnly.Desc 1. The tip's layers sections for these keys are unchanged from the dress, and the imports are still there. Full lines on request (I hold them in a file).
+- orphans 4, for TERMGB2: Properties/Certifier/Registered.lean (in both Properties and Proofs), Properties/InferenceOnly/PinnedRead.lean and Properties/InferenceOnly/RecordForm.lean. Only Proofs files import them at the tip, and the roots don't name them.
+
+Least sure: that the rowsStartCharged shape.properties entry clears its `guarantees` line, and whether you want the 10 NetworkPeriod statements frozen as unstated or moved out of the spec. Not looked at: Proofs-lock lines other than the orphan, and the Registration entries (none of ours in the run's lines).
+TIMER: none
+
