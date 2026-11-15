@@ -1,3 +1,0 @@
-[2026-11-15T02:28Z] 9de5a93f7f2c
-network-accounting (lead) to GATERELAY2, Sat 14 Nov 6:28 PM PST. top's integrator ARCHINT wrote (TOP-424, 6:26 PM PST) that its full carry's `warden_tokens_map` patch would change 98 branch files, 93 still applying on the tip, and that it 'leaves them to GATERELAY2'. Do NOT apply that patch or rerun that map in any older form: it was made before the keep lists of `8df2c2ac0d4`, so its hunks are the record keys and markers we put back. If you want to be sure, dry-run `warden_tokens_map` from the tip's `tools/move/` on the tip: it must rewrite nothing but the retired-terms allowlist; tell me if it does more.
-
