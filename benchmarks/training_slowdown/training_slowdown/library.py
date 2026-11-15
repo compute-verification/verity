@@ -34,6 +34,11 @@ import math
 import sys
 from pathlib import Path
 
+if __name__ == "__main__" and not __package__:
+    # run by path (`metrics.toml`'s command): the relative imports below need the package, from its parent directory
+    sys.path[0] = str(Path(__file__).resolve().parents[1])
+    __package__ = "training_slowdown"
+
 import numpy as np
 
 from . import calculator, config, policy, starts, traced, work
@@ -237,7 +242,29 @@ def main(argv=None) -> int:
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "library.json").write_text(json.dumps(
             {"schema": SCHEMA, "rows": [r | {"periods": periods(r)} for r in rows], "parts": PARTS}, indent=1) + "\n")
+        if not a.entry and a.starts == starts.REGISTRY:
+            write_metric(a.out, rows)
     return 0
+
+
+#: the metric's id (`benchmarks/training_slowdown/metrics.toml`), whose row gives the unit it is written in
+METRIC = "training/library-least-slowdown"
+
+
+def write_metric(out: Path, rows: list[dict]) -> None:
+    """The least slowdown over the rows that have one, written into the run's result under `METRIC` in its row's unit:
+    partial where a row has none, since the least is then over part of the library. Written only for a run of every
+    entry at the registered starts."""
+    import tomllib
+
+    from verity_bench import kit
+
+    rows_of = tomllib.loads((Path(__file__).parents[1] / "metrics.toml").read_text())["metric"]
+    unit = next(m["unit"] for m in rows_of if m["id"] == METRIC)
+    priced = [r for r in rows if r["slowdown"] is not None]
+    least = min((r["slowdown"] for r in priced), default=None)
+    kit.writer(out).measurement(METRIC, least, unit, mark="measured" if len(priced) == len(rows) else "partial",
+                                why=None if priced else "no entry has a slowdown")
 
 
 if __name__ == "__main__":

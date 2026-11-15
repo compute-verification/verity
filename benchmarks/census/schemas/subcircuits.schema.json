@@ -363,7 +363,7 @@
           },
           "variable_bounds": {
             "type": "object",
-            "description": "for a variable that varies per input, its bounds from the parameters of the verification unit it serves in: the VU parameter named by `by` selects a case, whose min and max are integer expressions over the VU parameters",
+            "description": "for a variable that varies per input, its bounds from the parameters of the proof block it serves in: the VU parameter named by `by` selects a case, whose min and max are integer expressions over the VU parameters",
             "additionalProperties": {
               "type": "object",
               "additionalProperties": false,

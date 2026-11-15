@@ -676,14 +676,6 @@
    "descriptor_id": "DsaMqaLogit_v2{H=8,D=32}",
    "digest": "119f1ed2d02d0ff5bb42e22f8c25bc55f7215aa0b5b356346e6b48e25b9e382e7b73d51a5396f93286ae676484e9c2aa240599e7de22351f66e6e79ca1ab33ca"
   },
-  "DsaMqaLogits_v1{N=4,H=32,D=128}": {
-   "descriptor_id": "DsaMqaLogits_v1{N=4,H=32,D=128}",
-   "digest": "e9bcc13309608a27a729db2351ab048fa01b5ea2b6a23665e7c7ad73114eea57cb4415678eeb4850485dfd7464b0ec272a031d27e84c99fa9fce96180b337acc"
-  },
-  "DsaMqaLogits_v2{N=2,H=8,D=32}": {
-   "descriptor_id": "DsaMqaLogits_v2{N=2,H=8,D=32}",
-   "digest": "150d4aa42eb45fd497d8aa0cd9b1034070ac457215e7eafa2ec53afeb39906de8059bd79d460500711d23c6fb8ad2bffa9cb980c02476b1d851f63dc06a7f818"
-  },
   "DsaTopKShortRow_v1{TOPK=2048}": {
    "descriptor_id": "DsaTopKShortRow_v1{TOPK=2048}",
    "digest": "8dd53d0bc5e2abf6c50426f3470ee6c6072f69543c1316bc21f015a6042a8b8c184e337a34a0697679ef688849e6e7e1d6f4d215f195a1aac77399490f87daab"
@@ -901,8 +893,6 @@
   "DsaIndexerQ_v2": "boolean_dsa",
   "DsaMqaLogit_v1": "dsa",
   "DsaMqaLogit_v2": "boolean_dsa",
-  "DsaMqaLogits_v1": "dsa",
-  "DsaMqaLogits_v2": "boolean_dsa",
   "DsaTopKShortRow_v1": "dsa",
   "DsaTopKShortRow_v2": "boolean_dsa",
   "DsaUe8m0Quant_v1": "dsa",
@@ -3914,8 +3904,6 @@
    "DsaIndexerQ_v2{H=2,D=32,ROPE=16}",
    "DsaMqaLogit_v1{H=32,D=128}",
    "DsaMqaLogit_v2{H=8,D=32}",
-   "DsaMqaLogits_v1{N=4,H=32,D=128}",
-   "DsaMqaLogits_v2{N=2,H=8,D=32}",
    "DsaTopKShortRow_v1{TOPK=2048}",
    "DsaTopKShortRow_v2{TOPK=16}",
    "DsaUe8m0Quant_v1{N=128}",
@@ -4352,10 +4340,6 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}",
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}",
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}",
-   "MoeExpertFp8BlockGemmW_v1{K=64,N=48,G=32,KB=32,SWAP=True}",
-   "MoeExpertFp8BlockGemmW_v2{K=32,N=40,G=32,KB=32,SWAP=True}",
-   "MoeExpertFp8BlockGemm_v1{K=128,N=80,G=64,KB=32,SWAP=False}",
-   "MoeExpertFp8BlockGemm_v2{K=32,N=40,G=32,KB=32,SWAP=False}",
    "MoeExpertGemmW_v1{E=2,K=32,N=3}",
    "MoeExpertGemmW_v1{E=4,K=32,N=16}",
    "MoeExpertGemmW_v1{E=4,K=64,N=1}",
@@ -4641,7 +4625,6 @@
    "ReluRef_v1{N=16,DT='bf16'}",
    "ReluRef_v1{N=16,DT='f32'}",
    "ResidualAdd_v1{N=16}",
-   "RoPEGptJ_v1{NHEADS=2,D=16}",
    "RoPEGptJ_v2{NHEADS=2,D=16}",
    "RoPEGptJ_v3{NHEADS=2,D=8}",
    "RoPEHeadGptJ_v1{D=16}",

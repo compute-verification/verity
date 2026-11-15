@@ -1,12 +1,12 @@
 """The integration's one challenge module: every sample over committed values.
 
 A sample on `verity.commitments.randomness` derives through its `derive` from a `source`, the run's live coin
-(`pipeline.commit_coins`: the auditor host's challenger opens it after the run's root), with the run root and the sample's
+(`pipeline.commit_coins`: the auditor device's challenger opens it after the run's root), with the run root and the sample's
 other bindings as context.  Such a sample without its coin is refused by name:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
-* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
+* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of SPOT's former derived
   proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
   No replay calls it.
 
@@ -16,7 +16,7 @@ moves every sample taken from it.  Every replay of the Commit takes a legacy see
 alone, with no coin: the prover fixes the root, so it steers the sample by committing again, in about the lesser of 1/p
 and 2^64 tries, p the chance one sample misses its faults, and a replay under it is a measurement.
 `legacy_replay_seed` hashes a challenge string with the root through SHA-256 and keeps 8 bytes: it is a coin's only
-when the auditor host's challenger issued that string.
+when the auditor device's challenger issued that string.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ __all__ = ["case_seed", "challenge_positions", "challenge_seed", "generator", "l
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
-REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
+REPLAY_KEY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
 
 
 def _source(source: bytes | None) -> bytes:
@@ -93,7 +93,7 @@ def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, sour
 
 def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
     """The legacy replay seed under a challenge string: sha256(challenge || "|" || run_root)[:8], SHA-256 cut to 64 bits.
-    It is a coin's only when the auditor host's challenger issued the string after the root (the served C2 under a
+    It is a coin's only when the auditor device's challenger issued the string after the root (the served C2 under a
     challenger gate); under a flag's string or the process's own bytes the replay is a measurement.  Its non-legacy form
     is `replay_key`."""
     return int.from_bytes(hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()[:8], "big")
@@ -101,7 +101,7 @@ def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
 
 def replay_key(source: bytes, run_root: bytes) -> Key:
     """The replay sample's key, derived after the run root."""
-    return derive(_source(source), REPLAY_DOMAIN, {"run_root": bytes(run_root)})
+    return derive(_source(source), REPLAY_KEY_DOMAIN, {"run_root": bytes(run_root)})
 
 
 def stratum_picks[T](pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:

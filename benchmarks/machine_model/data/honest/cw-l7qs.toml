@@ -8,7 +8,7 @@
 # is 6.0% of the GEMM.
 name = "cw-l7qs"
 status = "measured"
-source = "cw_l7qs (benchmarks/pouw/edited_gemm/cwgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's co32c_words and c_l7qs's receipts, cwgemm_ref.py)"
+source = "cw_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cwgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's co32c_words and c_l7qs's receipts, cwgemm_ref.py)"
 L = 32
 
 [mma]

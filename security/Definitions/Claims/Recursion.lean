@@ -324,7 +324,7 @@ structure Form where
   unitRangeInBlock : Bool
 
 /-- **A V* session's sample record**, the sample as its record holds it: its sampling design's `k` when the sampling design is `subset` (`none` for
-another law), its population, its units and its closure. -/
+another sampling design), its population, its units and its closure. -/
 structure DrawRecord where
   subset : Option ℕ
   population : ℕ
@@ -371,7 +371,7 @@ table's error, `N₀`, the weight `C`, the outer verifier's rounds, `E^rep`'s wa
 messages before the coins (`leaves`), and of its answers to one sample of the coins (`coinLeaves`). -/
 structure Nums where
   εtable : ℝ
-  N₀ : ℝ
+  N₀ : ℚ
   weight : ℝ
   rounds : ℕ
   waits : ℕ
@@ -379,8 +379,23 @@ structure Nums where
   leaves : ℕ
   coinLeaves : ℕ
 
-/-- `E^rep`'s accepted reruns per wait, `k = ⌈4·N₀/e⌉`, as `Flock.Deploy.k`. -/
-noncomputable def Nums.k (n : Nums) : ℕ := ⌈4 * n.N₀ / Real.exp 1⌉₊
+/-- `e`'s Taylor sum to `m` terms, `Σ_{i<m} 1/i!`: at most `e`, and at least `e − (m+1)/(m!·m)` at `m ≥ 1`. -/
+def eSum (m : ℕ) : ℚ := ∑ i ∈ Finset.range m, (i.factorial : ℚ)⁻¹
+
+/-- **`k = ⌈4·N₀/e⌉` in arithmetic on `ℚ`**: at `m ≥ 1` terms `e` lies between `eSum m` and `eSum m + (m+1)/(m!·m)`,
+so where the ceilings at the two ends agree, they are `k`. `kOf` tries `m = 8, 16, …, 256` terms, and then takes
+`⌈2·N₀⌉·den(N₀) + 1`, where `⌈4·N₀/eSum m⌉ = k` exactly (`kOf_eq`). -/
+def kOf (N₀ : ℚ) : ℕ := go 6 8
+where
+  /-- `f` more tries, the next at `m` terms. -/
+  go : ℕ → ℕ → ℕ
+    | 0, _ => ⌈4 * N₀ / eSum (⌈2 * N₀⌉₊ * N₀.den + 1)⌉₊
+    | f + 1, m =>
+      if ⌈4 * N₀ / (eSum m + (m + 1) / (m.factorial * m))⌉₊ = ⌈4 * N₀ / eSum m⌉₊ then ⌈4 * N₀ / eSum m⌉₊
+      else go f (2 * m)
+
+/-- `E^rep`'s accepted reruns per wait, `k = ⌈4·N₀/e⌉` (`kOf`), as `Flock.Deploy.k`. -/
+def Nums.k (n : Nums) : ℕ := kOf n.N₀
 
 /-- The outer session's knowledge error, as `Flock.κ`: `4·ε_table + 2^{−m′} + 2k/K + e^{−k/8}`. -/
 noncomputable def Nums.κ (n : Nums) : ℝ :=

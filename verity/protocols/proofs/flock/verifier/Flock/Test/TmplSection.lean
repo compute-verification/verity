@@ -1,4 +1,13 @@
-/-
+module
+
+public import Flock.HmRow
+public import Flock.Test.Tmpl
+public import Flock.TmplLines
+meta import Flock.HmRow
+meta import Flock.Test.Tmpl
+meta import Flock.TmplLines
+
+/-!
 A templated statement's template section, right after META: `HmOut.tmplOf` reads its header `TEMPLATE n` and the
 template's `n` lines off the file's head alone, so bytes past the section that aren't UTF-8 still give the template, and a
 file without the section, with a malformed header or with fewer lines than its header names gives none.
@@ -8,14 +17,6 @@ size class's, before it reads the template. `HmOut.tmplOfView` reads the same te
 ASCII file's line view, and the template's parse through the view (`View.tmplLine`, `View.tmplNums`) prints
 `Flock.Test.Tmpl`'s template as its parse of the lines does, and refuses a row that isn't numbers with the same error.
 -/
-module
-
-public import Flock.HmRow
-public import Flock.Test.Tmpl
-public import Flock.TmplLines
-meta import Flock.HmRow
-meta import Flock.Test.Tmpl
-meta import Flock.TmplLines
 
 @[expose] public section
 
@@ -72,6 +73,6 @@ def viewParsed (b : ByteArray) : Option (Except String (Array String) × Except 
 def classMeta : ByteArray := "flock-circuit/tmpl u\nMETA {\"definition\":\"d\",\"layout\":\"iv\"}\nTEMPLATE 0\n".toUTF8
 
 #guard HmOut.parseTmpl Tags.circuitTmpl classMeta matches
-  .error "META definition: a unit class has no templated statement"
+  .error "META definition: a proof-block class has no templated statement"
 
 end Flock.Test.TmplSection

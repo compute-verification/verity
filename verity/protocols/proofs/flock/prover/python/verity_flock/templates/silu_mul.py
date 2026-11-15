@@ -2,8 +2,8 @@
 (gate[i], up[i]), lowered piece by piece (``verity_flock.ir_lower``): ``bf16(silu(g))`` is a 16-bit lookup enumerated from
 the primitive's own helpers, then an f32 multiply and the torch bf16 cast.
 
-The unit's rows do not depend on I; its ``flock-ir-unit/v2`` netlist, whose LEAVES line places the units on the row's words, is
-pinned per I by :data:`PINS` (the frame statement's two-element unit by :data:`FRAME_PINS`)."""
+The unit's rows do not depend on I; its ``flock-ir-unit/v2`` circuit description, whose LEAVES line places the units on the row's
+words, is pinned per I by :data:`PINS` (the frame statement's two-element unit by :data:`FRAME_PINS`)."""
 TEMPLATE = "silu-mul"
 UNIT = "silu-mul/bf16/element"
 PINS = {8192: "a698c50c235f36fbfac74a545158fcc2579a7645433560aa55f53fcf6eadb537",
@@ -38,7 +38,7 @@ def frame_lowering(subcircuit):
 def supports(subcircuit, scheme):
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
             f"{scheme} is not wired yet")
 
 

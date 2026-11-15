@@ -24,7 +24,11 @@ from verity.protocols.accounting.pous.verifier.codec import Codec, split
 from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
 from verity.protocols.accounting.pous.verifier.oracle import KeyQuery, run
 from verity.protocols.accounting.pous.verifier.params import Params
-from verity.protocols.accounting.pous.verifier.primitives import Primitives, key_program, reference
+from verity.protocols.accounting.pous.verifier.primitives import (
+    Primitives,
+    key_program,
+    reference,
+)
 from verity.protocols.accounting.pous.verifier.scheme import P3
 from verity.protocols.accounting.pous.verifier.verifier import (
     MerkleTree,
@@ -46,7 +50,7 @@ class World:
         self.prims = dense.reference(params)
         self.w = random.Random(21).randbytes(params.w_bytes)
         self.commitment = setup.commit(params, self.w)
-        self.salt = setup.draw_salt(b"verifier-secret", self.commitment)
+        self.salt = setup.sample_salt(b"verifier-secret", self.commitment)
         self.honest = self.server()
 
     def server(self, w=None, salt=None):

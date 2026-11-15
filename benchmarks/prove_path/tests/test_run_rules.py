@@ -7,6 +7,8 @@ script:
   blocks for the honest run, every one for the forged run, and a stratified design under ``PP_PLAIN=1``;
 * the rule the script's weights tie arm states to its records audit is the rate of every unit of the tie, which names
   the tie's own design, work over every one of its units;
+* that arm tells its records audit what each tie that must be refused forges, a registered read or a unit, and no other
+  arm of the script audits a window as forging a read;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
   (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
@@ -17,17 +19,17 @@ import json
 import re
 from pathlib import Path
 
-from verity.commitments.windows.population import population_program
+from verity.commitments.periods.population import population_program
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import serving_rows as SRW
 
-BENCH = Path(__file__).resolve().parents[1]
+BENCH = (Path(__file__).resolve().parents[1])
 REPO = BENCH.parents[1]
-RUN_SH = BENCH / "run.sh"
+RUN_SH = REPO / "benchmarks" / "prove_path" / "run.sh"
 #: where the partition files are kept: beside this benchmark's drivers and beside the one-stage audit's
 KEPT = (BENCH, REPO / "benchmarks" / "one_stage")
 #: the script's variable for the kind of its stand-in's rules, and a partition file's key for the rule it states
-VAR, KEY = "LAW", "law"
+VAR, KEY = "SAMPLING_DESIGN", "law"
 #: the stand-in's window a rank (`tests.pipeline.served_tp --world 2 --I 256`): its one template and its proof blocks
 STANDIN, UNITS = "SiluMul_v2{I=256}", 8
 RATE = "a rate (rate:NUM/DEN, stratified-rate:NUM/DEN or work-rate:NUM/DEN)"
@@ -51,7 +53,7 @@ def rule_of(text: object) -> tuple[S.Selection | None, str | None]:
     """``text`` as a stream's rule, as `a5.stream_of` makes it of what the audit states, or why a stream refuses it: a
     text that is no rate, or a Bernoulli design, which `Stream.register` refuses. -> (the rule, None) or (None, why)."""
     try:
-        rule = S.Law(text)
+        rule = S.SamplingDesign(text)
     except ValueError as e:
         return None, str(e)
     return (None, S.BERNOULLI) if rule.text.startswith("bernoulli") else (rule, None)
@@ -88,7 +90,7 @@ def partitions() -> dict[str, object]:
 def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registers():
     """`prove_path.py audit` states its partition file's text as the stream's rule, so a fixed design there ends the audit
     at the rule check, before any session opens. Each of the stand-in's four rules is a rate, and over a rank's window the
-    sampling design the stream names for it, which its `register` holds the registration to, is the one the window
+    sampling design the stream names for it, which its `register` holds the docket to, is the one the window
     registers: the serving rows read the partition file's text as a rate of that kind and resolve it over the window's
     program, by the steps of `serving_rows.population`. The honest run samples half a rank's proof blocks and the forged
     run every one, so its forged unit is sampled; a plain session's design is stratified."""
@@ -99,10 +101,10 @@ def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registe
     program, query = population_program([(SRW.template(STANDIN).fn, UNITS)])
     for plain, forged, text in rules:
         rule, _why = rule_of(text)
-        names = S.selection_law(rule, UNITS, S.selection_sizes(rule, program, query))
-        read = SRW.law_of(text)
+        names = S.selection_sampling_design(rule, UNITS, S.selection_sizes(rule, program, query))
+        read = SRW.sampling_design_of(text)
         assert read == {KEY: names[KEY], "rate": text}, (text, read)
-        registers, table = S.params_law(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
+        registers, table = S.params_sampling_design(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
         assert registers == names and table is None, (text, registers, names, table)
         assert names["k"] == (UNITS if forged else UNITS // 2), (text, names)
         assert not plain or names[KEY] == "stratified", (text, names)
@@ -115,7 +117,7 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
     whose sampling design over N proof blocks is work with K = N, every unit sampled, at any N. A rate of fewer would name
     another design than the tie's window registers, and leave units unproved."""
     arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
-    rules = re.findall(r"records_audit\.py audit [^\n]*--law (\S+)", arm)
+    rules = re.findall(r"records_audit\.py audit [^\n]*--sampling-design (\S+)", arm)
     assert rules == ["work-rate:$units/$units"], (
         f"{RUN_SH.name}'s weights tie arm no longer states the rate of every unit of the tie to its records audit "
         f"(`--{KEY} work-rate:$units/$units`): found {rules}; a fixed count is refused by name, and a rate of fewer units "
@@ -126,8 +128,42 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
         rule, why = rule_of(text)
         assert rule is not None, (text, why)
         program, query = population_program([(SRW.template(STANDIN).fn, units)])
-        names = S.selection_law(rule, units, S.selection_sizes(rule, program, query))
+        names = S.selection_sampling_design(rule, units, S.selection_sizes(rule, program, query))
         assert names == {KEY: "work", "k": units}, (text, names)
+
+
+def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
+    """The weights tie's arm audits two ties that must be refused and tells `records_audit.py audit` what each forges,
+    since the audit passes a refused window on that kind's check alone. ``weights-tie-other`` serves another
+    checkpoint's words as the registered one's: a registered read that opens no pinned root, in a window of no false
+    unit (``--forged-read``). ``weights-tie-forged`` forges its ends' digests too: false units (``--forged``). The
+    honest tie is told neither. `tie` sets what the audit is told from its own arguments, each in turn, and hands it to
+    the audit, and no other arm of the script names ``--forged-read``."""
+    def code(text: str) -> str:
+        """``text``'s lines but its comments', each without a comment after its code."""
+        return "\n".join(x.split(" #", 1)[0] for x in text.splitlines() if not x.lstrip().startswith("#"))
+
+    script = code(RUN_SH.read_text())
+    arm = script.split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    told = dict(re.findall(r"^\s*(--[\w-]+)\) forged=(\S+);", arm, re.M))
+    ties = re.findall(r"\btie (weights-tie[\w-]*)((?: --[\w-]+)*) \|\| rc=1", arm)
+    assert told and ties and re.search(r'for x in "\$@"; do\s+case \$x in', arm), (
+        f"{RUN_SH.name}'s weights tie arm no longer sets what its audit is told as this test reads it (a `case` over "
+        f"`tie`'s arguments in turn, each `--ARG) forged=FLAG;`, and `tie NAME [--ARG ...] || rc=1`): {told}, {ties}")
+
+    def audited(args: str) -> str | None:
+        flag = None
+        for x in args.split():
+            flag = told.get(x, flag)
+        return flag
+    assert {name: audited(args) for name, args in ties} == {
+        "weights-tie": None, "weights-tie-other": "--forged-read", "weights-tie-forged": "--forged"}, (told, ties)
+    audits = re.findall(r"records_audit\.py audit [^\n]*", arm.replace("\\\n", " "))
+    assert len(audits) == 1 and " $forged " in audits[0] and "--forged" not in audits[0], (
+        f"{RUN_SH.name}'s weights tie arm hands its one records audit what `tie` set, and no flag of its own: {audits}")
+    assert script.count("--forged-read") == arm.count("--forged-read") == 1, (
+        f"{RUN_SH.name} audits a window as forging a registered read (`--forged-read`) outside its weights tie's "
+        "`--served`: say in its header which arm passes on that refusal, and hold it here")
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():

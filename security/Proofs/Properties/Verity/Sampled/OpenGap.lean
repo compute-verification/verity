@@ -401,7 +401,7 @@ theorem release_swap_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [F
 
 /-- **The written coin's shortfall at an hm96 leaf is at most `2·δ₁` plus a collision term, averaged over the sample**:
 the leaf `L(ω, y) = H(x(ω) + M·y, c(y))` (`hL`) of uniform coins `ω` and salt `y` releases `P ω` (`hrel`), and live
-coins `u` sampled independently have bits `bits u` with the release's law (`hlaw`). Where the class at each sample `d₀` has
+coins `u` sampled independently have bits `bits u` with the release's sampling design (`hlaw`). Where the class at each sample `d₀` has
 the sampling design of releases of `d₀`'s fiber (`hG`), its shortfall `G d₀` averaged over the sample is at most `2·δ₁` plus the
 probability that two independent live coins' bits agree (`avg_shortfall_fiber_le`, with `release_swap_le` cancelling
 the over-weighted terms). -/

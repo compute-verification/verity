@@ -1,4 +1,4 @@
-"""Conformance of the Lean circuit-type check (`flock-verify circuit-type`, `Flock/CircuitType.lean`) with the reference,
+"""Conformance of the Lean circuit-type check (`verity-verify-proof circuit-type`, `Flock/CircuitType.lean`) with the reference,
 `verity_flock.circuit_types`: the same digest for every type, and the same verdict (accepted or refused).
 
     python circuit_type_agree.py --lean BIN --out DIR [--seed S] [--n N]

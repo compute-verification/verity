@@ -1,6 +1,6 @@
 {
   "lane": "network-accounting",
-  "gate": "research@204.12.178.84",
+  "gate": "research@${VY_CHALLENGER_1_HOST}",
   "gate_key": "vy-gate-network-accounting",
   "keep": "/workspace/research/lanes/network-accounting/gate",
   "peer": "vy-dc-h200-2",

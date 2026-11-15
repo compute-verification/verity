@@ -314,9 +314,9 @@ theorem Bound.accAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (B
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hn : Bd.DE.V.k (xI D x) ≤ D.V.k x) (ω : Ω)
     (t : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
       (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
-    (hb : ¬ Bd.BadO decI H D DO decO P x ω (extendDraw t)) :
+    (hb : ¬ Bd.BadO decI H D DO decO P x ω (extendSample t)) :
     accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) ω t ↔
-      accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω (extendDraw t) := by
+      accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω (extendSample t) := by
   unfold accAt
   rw [Bound.abortRun_eqO decC hn, Bound.innerFO_acc_iff decC hdec hV, Bound.keepDO_iff_accAtI hb]
 
@@ -328,10 +328,10 @@ theorem Bound.opensAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     (Cp : Caps Coin) (q : Fin (Cp.width (xI D x))) (ω : Ω)
     (t : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
       (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
-    (hb : ¬ Bd.BadO decI H D DO decO P x ω (extendDraw t)) :
+    (hb : ¬ Bd.BadO decI H D DO decO P x ω (extendSample t)) :
     opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) q ω t ↔
-      opensAtI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x q ω (extendDraw t) := by
-  have hc : (fun i : Fin ((Inner.ofFlock Bd.deploy decI).V.k (xI D x)) => coinSeq (extendDraw t).1 i.val) = t.1 :=
+      opensAtI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x q ω (extendSample t) := by
+  have hc : (fun i : Fin ((Inner.ofFlock Bd.deploy decI).V.k (xI D x)) => coinSeq (extendSample t).1 i.val) = t.1 :=
     innerCoins_extend D (Inner.ofFlock Bd.deploy decI) x hn t.1 t.2.1
   unfold opensAt opensAtI
   rw [hc]
@@ -360,11 +360,11 @@ theorem Bound.findColl_cover (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC
 omit [DecidableEq Col] [DecidableEq Col'] in
 /-- A run's coins forked at a cap's round, extended, are the samples forked at that round (capped at the inner
 rounds). -/
-theorem Bound.extendDraw_capFork (Cp : Caps Coin) (q : Fin (Cp.width (xI D x)))
+theorem Bound.extendSample_capFork (Cp : Caps Coin) (q : Fin (Cp.width (xI D x)))
     (d₀ v : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
       (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) :
-    extendDraw (capFork Bd.DE.V Cp (xI D x) q d₀ v) =
-      capForkI D (Inner.ofFlock Bd.deploy decI) DO decO Cp x q (extendDraw d₀) (extendDraw v) :=
+    extendSample (capFork Bd.DE.V Cp (xI D x) q d₀ v) =
+      capForkI D (Inner.ofFlock Bd.deploy decI) DO decO Cp x q (extendSample d₀) (extendSample v) :=
   Prod.ext (extend_fork_min (Cp.round (xI D x) q) d₀.1 v.1 d₀.2.1 v.2.1) rfl
 
 omit [DecidableEq Col] [DecidableEq Col'] in
@@ -373,15 +373,15 @@ open Classical in
 theorem Bound.Ex_badO (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] (ω : Ω) :
     Ex (fun u : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
         (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
-      ((if Bd.BadO decI H D DO decO P x ω (extendDraw u) then 1 else 0 : ℕ) : ℝ)) =
+      ((if Bd.BadO decI H D DO decO P x ω (extendSample u) then 1 else 0 : ℕ) : ℝ)) =
       Pr (fun d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
         Bd.BadO decI H D DO decO P x ω d) := by
   have hn : Bd.DE.V.k (xI D x) ≤ D.V.k x := hR x
-  have h1 := (unifMap_extendDraw (C := (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) hn).Pr
+  have h1 := (unifMap_extendSample (C := (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) hn).Pr
     (fun d => Bd.BadO decI H D DO decO P x ω d)
   rw [← h1, ← Ex_ind]
   refine congrArg Ex (funext fun u => ?_)
-  by_cases hb : Bd.BadO decI H D DO decO P x ω (extendDraw u) <;> simp [hb]
+  by_cases hb : Bd.BadO decI H D DO decO P x ω (extendSample u) <;> simp [hb]
 
 omit [DecidableEq Col'] in
 /-- **The caps' link at `P_O`'s aborting runs is `FCI`, but where its loop meets a bad sample**: the first run, opening,
@@ -410,13 +410,13 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
       (∃ u v, (FC H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) M
         hW).out s = some (u, v) ∧ Collision H u v) →
       (∃ u v, (FCI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M hW).out
-          (s.1, s.2.1, extendDraw s.2.2.1, fun i => extendDraw (s.2.2.2 i)) = some (u, v) ∧ Collision H u v) ∨
+          (s.1, s.2.1, extendSample s.2.2.1, fun i => extendSample (s.2.2.2 i)) = some (u, v) ∧ Collision H u v) ∨
         (opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x)
             s.1 s.2.1 s.2.2.1 ∧
           loopCost (fun v => opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
               (Bd.keepAO decI H D DO decO P x) s.1 s.2.1 (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v))
             (fun v => if Bd.BadO decI H D DO decO P x s.2.1
-              (extendDraw (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0) M s.2.2.2 ≠ 0) := by
+              (extendSample (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0) M s.2.2.2 ≠ 0) := by
     rintro s ⟨a, b, hout, -⟩
     have hop : opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
         (Bd.keepAO decI H D DO decO P x) s.1 s.2.1 s.2.2.1 := by
@@ -425,45 +425,45 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     by_cases hz : loopCost (fun v => opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
         (Bd.keepAO decI H D DO decO P x) s.1 s.2.1 (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v))
       (fun v => if Bd.BadO decI H D DO decO P x s.2.1
-        (extendDraw (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0) M s.2.2.2 = 0
+        (extendSample (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0) M s.2.2.2 = 0
     swap
     · exact Or.inr ⟨hop, hz⟩
     left
-    have hk : Bd.keepDO decI H D DO decO P x s.2.1 (extendDraw s.2.2.1) = true := by
+    have hk : Bd.keepDO decI H D DO decO P x s.2.1 (extendSample s.2.2.1) = true := by
       have h : (abortRun H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x)
           (Bd.keepAO decI H D DO decO P x) s.2.1 s.2.2.1).out = .acc := hop.1
       rw [Bound.abortRun_eqO decC hn] at h
       exact (Bound.innerFO_acc_iff decC hdec hV s.2.1 _).1 h
     have hopI := (Bound.opensAt_iff decC hdec hV hn Cp s.1 s.2.1 s.2.2.1 (Bound.not_badO_of_keepDO hk)).1 hop
-    have hpick := firstPick_map_of_loopCost_zero extendDraw
+    have hpick := firstPick_map_of_loopCost_zero extendSample
       (fun v => opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
         (Bd.keepAO decI H D DO decO P x) s.1 s.2.1 (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v))
       (fun v => opensAtI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x s.1 s.2.1
-        (capForkI D (Inner.ofFlock Bd.deploy decI) DO decO Cp x s.1 (extendDraw s.2.2.1) v))
+        (capForkI D (Inner.ofFlock Bd.deploy decI) DO decO Cp x s.1 (extendSample s.2.2.1) v))
       (fun v => if Bd.BadO decI H D DO decO P x s.2.1
-        (extendDraw (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0)
+        (extendSample (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0)
       (fun v hv => by
-        have hbv : ¬ Bd.BadO decI H D DO decO P x s.2.1 (extendDraw (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) := by
+        have hbv : ¬ Bd.BadO decI H D DO decO P x s.2.1 (extendSample (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) := by
           intro hb
           simp [hb] at hv
         have h := Bound.opensAt_iff decC hdec hV hn Cp s.1 s.2.1 (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v) hbv
-        rw [Bound.extendDraw_capFork] at h
+        rw [Bound.extendSample_capFork] at h
         exact h)
       M s.2.2.2 hz
     have hpick' : (firstPick (fun v => opensAtI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x s.1 s.2.1
-          (capForkI D (Inner.ofFlock Bd.deploy decI) DO decO Cp x s.1 (extendDraw s.2.2.1) v)) M
-          (fun i => extendDraw (s.2.2.2 i))).getD (extendDraw s.2.2.1) =
-        extendDraw ((firstPick (fun v => opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
+          (capForkI D (Inner.ofFlock Bd.deploy decI) DO decO Cp x s.1 (extendSample s.2.2.1) v)) M
+          (fun i => extendSample (s.2.2.2 i))).getD (extendSample s.2.2.1) =
+        extendSample ((firstPick (fun v => opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
           (Bd.keepAO decI H D DO decO P x) s.1 s.2.1 (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) M
           s.2.2.2).getD s.2.2.1) := by
       rw [← hpick, optionGetD_map]
     simp only [FC, hop, ↓reduceIte] at hout
     rw [Bound.abortRun_eqO decC hn, Bound.abortRun_eqO decC hn] at hout
     simp only [FCI, hopI, ↓reduceIte, hpick']
-    rw [← Bound.extendDraw_capFork]
+    rw [← Bound.extendSample_capFork]
     have ht : ∀ d₁ d₂ : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x,
-        ∀ p ∈ D.callsAt H x d₁.1 (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₁) ++
-          D.callsAt H x d₂.1 (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₂), H p.1 = p.2 :=
+        ∀ p ∈ D.callsAt H x d₁.1 (sampleWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₁) ++
+          D.callsAt H x d₂.1 (sampleWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₂), H p.1 = p.2 :=
       fun d₁ d₂ p hp => (List.mem_append.1 hp).elim (callsAt_true hT hN0 s.2.1 d₁ p) (callsAt_true hT hN0 s.2.1 d₂ p)
     refine Bound.findColl_cover (x := x) (P := P) (decO := decO) decC hdec hV hL s.2.1 (ht _ _) (fun e he => ?_)
       (Option.isSome_iff_exists.2 ⟨_, hout⟩)
@@ -477,7 +477,7 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
         loopCost (fun v => opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x)
             (Bd.keepAO decI H D DO decO P x) s.1 s.2.1 (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v))
           (fun v => if Bd.BadO decI H D DO decO P x s.2.1
-            (extendDraw (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0) M s.2.2.2 ≠ 0) ≤
+            (extendSample (capFork Bd.DE.V Cp (xI D x) s.1 s.2.2.1 v)) then 1 else 0) M s.2.2.2 ≠ 0) ≤
       Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
         Bd.BadO decI H D DO decO P x t.1 t.2) := by
     refine (le_of_eq (Pr_prod _)).trans ?_
@@ -488,13 +488,13 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
         Bd.BadO decI H D DO decO P x t.1 t.2)).symm))
     exact (Pr_gate_loop_fork_le (Cp.round (xI D x) q)
       (opensAt H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) q ω)
-      (fun t => if Bd.BadO decI H D DO decO P x ω (extendDraw t) then 1 else 0) M).trans
+      (fun t => if Bd.BadO decI H D DO decO P x ω (extendSample t) then 1 else 0) M).trans
       (le_of_eq (Bound.Ex_badO hR ω))
   have hΦ : UnifMap (fun s : CapCoins Bd.DE.V Cp Ω
       ((Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) (xI D x) M =>
-      ((s.1, s.2.1, extendDraw s.2.2.1, fun i => extendDraw (s.2.2.2 i)) :
+      ((s.1, s.2.1, extendSample s.2.2.1, fun i => extendSample (s.2.2.2 i)) :
         CapCoinsI D (Inner.ofFlock Bd.deploy decI) DO decO Cp Ω x M)) :=
-    UnifMap.self.prod (UnifMap.self.prod ((unifMap_extendDraw hn).prod (UnifMap.pi (unifMap_extendDraw hn) M)))
+    UnifMap.self.prod (UnifMap.self.prod ((unifMap_extendSample hn).prod (UnifMap.pi (unifMap_extendSample hn) M)))
   exact (Pr_mono key).trans ((Pr_or_le _ _).trans (add_le_add (le_of_eq (hΦ.Pr (fun s' =>
     ∃ u v, (FCI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M hW).out s' = some (u, v) ∧ Collision H u v)))
     hbad))
@@ -523,12 +523,12 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
       (∃ u v, (F0 H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x)
         ((Inner.ofFlock Bd.deploy decI).k (xI D x)) R).out s = some (u, v) ∧ Collision H u v) →
       (∃ u v, (F0I H D (Inner.ofFlock Bd.deploy decI) DO decO P x R).out
-          (s.1, extendDraw s.2.1, fun i j => extendDraw (s.2.2 i j)) = some (u, v) ∧ Collision H u v) ∨
+          (s.1, extendSample s.2.1, fun i j => extendSample (s.2.2 i j)) = some (u, v) ∧ Collision H u v) ∨
         ∃ i, accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x)
             s.1 s.2.1 ∧
           loopCost (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
               (Bd.keepAO decI H D DO decO P x) s.1)
-            (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendDraw t) then 1 else 0) R (s.2.2 i) ≠ 0 := by
+            (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendSample t) then 1 else 0) R (s.2.2 i) ≠ 0 := by
     rintro s ⟨a, b, hout, -⟩
     have hacc : accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x)
         s.1 s.2.1 := by
@@ -536,26 +536,26 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
       simp [F0, hacc] at hout
     by_cases hz : ∀ i, loopCost (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
         (Bd.keepAO decI H D DO decO P x) s.1)
-      (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendDraw t) then 1 else 0) R (s.2.2 i) = 0
+      (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendSample t) then 1 else 0) R (s.2.2 i) = 0
     swap
     · push_neg at hz
       obtain ⟨i, hi⟩ := hz
       exact Or.inr ⟨i, hacc, hi⟩
     left
-    have hk : Bd.keepDO decI H D DO decO P x s.1 (extendDraw s.2.1) = true := by
+    have hk : Bd.keepDO decI H D DO decO P x s.1 (extendSample s.2.1) = true := by
       have h : (abortRun H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x)
           (Bd.keepAO decI H D DO decO P x) s.1 s.2.1).out = .acc := hacc
       rw [Bound.abortRun_eqO decC hn] at h
       exact (Bound.innerFO_acc_iff decC hdec hV s.1 _).1 h
     have haccI := (Bound.accAt_iff decC hdec hV hn s.1 s.2.1 (Bound.not_badO_of_keepDO hk)).1 hacc
     have hpick : ∀ i, (firstPick (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
-        (Bd.keepAO decI H D DO decO P x) s.1) R (s.2.2 i)).map extendDraw =
+        (Bd.keepAO decI H D DO decO P x) s.1) R (s.2.2 i)).map extendSample =
         firstPick (accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1) R
-          (fun j => extendDraw (s.2.2 i j)) := fun i =>
-      firstPick_map_of_loopCost_zero extendDraw
+          (fun j => extendSample (s.2.2 i j)) := fun i =>
+      firstPick_map_of_loopCost_zero extendSample
         (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) s.1)
         (accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1)
-        (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendDraw t) then 1 else 0)
+        (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendSample t) then 1 else 0)
         (fun t ht => Bound.accAt_iff decC hdec hV hn s.1 t (by intro hb; simp [hb] at ht)) R (s.2.2 i) (hz i)
     simp only [F0, hacc, ↓reduceIte] at hout
     rw [Bound.abortRun_eqO decC hn] at hout
@@ -564,12 +564,12 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
       (fun e he => ?_)
       (Option.isSome_iff_exists.2 ⟨_, hout⟩)
     · rcases List.mem_append.1 hp with hp | hp
-      · exact callsAt_true hT hN0 s.1 (extendDraw s.2.1) p hp
+      · exact callsAt_true hT hN0 s.1 (extendSample s.2.1) p hp
       · obtain ⟨i, -, hpi⟩ := List.mem_flatMap.1 hp
         rcases hfp : firstPick (accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1) R
-            (fun j => extendDraw (s.2.2 i j)) with _ | d
+            (fun j => extendSample (s.2.2 i j)) with _ | d
         · simp [hfp] at hpi
-        · have hpi' : p ∈ D.callsAt H x d.1 (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 d) := by
+        · have hpi' : p ∈ D.callsAt H x d.1 (sampleWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 d) := by
             simpa [hfp] using hpi
           exact callsAt_true hT hN0 s.1 d p hpi'
     · rcases List.mem_append.1 he with he | he
@@ -578,16 +578,16 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
         rcases hfp : firstPick (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
             (Bd.keepAO decI H D DO decO P x) s.1) R (s.2.2 i) with _ | t
         · simp [hfp] at hei
-        · have hei' : e ∈ (Bd.innerFO decI H D DO decO P x decC s.1 (extendDraw t)).vLog := by
+        · have hei' : e ∈ (Bd.innerFO decI H D DO decO P x decC s.1 (extendSample t)).vLog := by
             rw [← Bound.abortRun_eqO decC hn]
             simpa [hfp] using hei
           have hm : firstPick (accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1) R
-              (fun j => extendDraw (s.2.2 i j)) = some (extendDraw t) := by
+              (fun j => extendSample (s.2.2 i j)) = some (extendSample t) := by
             rw [← hpick i, hfp]
             try rfl
           refine ⟨_, hei', fun p hp => List.mem_append_right _ (List.mem_flatMap.2 ⟨i, List.mem_finRange i, ?_⟩)⟩
-          have hp' : p ∈ D.callsAt H x (extendDraw t).1
-              (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 (extendDraw t)) := hp
+          have hp' : p ∈ D.callsAt H x (extendSample t).1
+              (sampleWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 (extendSample t)) := hp
           simpa [hm] using hp'
   have hbad : Pr (fun s : ConflictCoins Bd.DE.V Ω
       ((Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) (xI D x)
@@ -596,7 +596,7 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
           s.1 s.2.1 ∧
         loopCost (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
             (Bd.keepAO decI H D DO decO P x) s.1)
-          (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendDraw t) then 1 else 0) R (s.2.2 i) ≠ 0) ≤
+          (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendSample t) then 1 else 0) R (s.2.2 i) ≠ 0) ≤
       ((Inner.ofFlock Bd.deploy decI).k (xI D x) : ℝ) *
         Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
           Bd.BadO decI H D DO decO P x t.1 t.2) := by
@@ -609,7 +609,7 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
               s.1 s.2.1 ∧
             loopCost (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
                 (Bd.keepAO decI H D DO decO P x) s.1)
-              (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendDraw t) then 1 else 0) R (s.2.2 i) ≠ 0) ≤
+              (fun t => if Bd.BadO decI H D DO decO P x s.1 (extendSample t) then 1 else 0) R (s.2.2 i) ≠ 0) ≤
         Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
           Bd.BadO decI H D DO decO P x t.1 t.2) := by
       intro i
@@ -625,22 +625,22 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
           (Bd.keepAO decI H D DO decO P x) b.1 b.2.1 ∧
         loopCost (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x)
             (Bd.keepAO decI H D DO decO P x) b.1)
-          (fun t => if Bd.BadO decI H D DO decO P x b.1 (extendDraw t) then 1 else 0) R b.2.2 ≠ 0))).trans ?_
+          (fun t => if Bd.BadO decI H D DO decO P x b.1 (extendSample t) then 1 else 0) R b.2.2 ≠ 0))).trans ?_
       refine (le_of_eq (Pr_prod _)).trans ((Ex_mono fun ω => ?_).trans (le_of_eq (Pr_prod
         (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
           Bd.BadO decI H D DO decO P x t.1 t.2)).symm))
       exact (Pr_gate_loop_le
         (accAt H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) ω)
-        (fun t => if Bd.BadO decI H D DO decO P x ω (extendDraw t) then 1 else 0) R).trans
+        (fun t => if Bd.BadO decI H D DO decO P x ω (extendSample t) then 1 else 0) R).trans
         (le_of_eq (Bound.Ex_badO hR ω))
     refine (Finset.sum_le_sum fun i _ => hi i).trans (le_of_eq ?_)
     rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
   have hΦ : UnifMap (fun s : ConflictCoins Bd.DE.V Ω
       ((Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) (xI D x)
       ((Inner.ofFlock Bd.deploy decI).k (xI D x)) R =>
-      ((s.1, extendDraw s.2.1, fun i j => extendDraw (s.2.2 i j)) :
+      ((s.1, extendSample s.2.1, fun i j => extendSample (s.2.2 i j)) :
         ConflictCoinsI D (Inner.ofFlock Bd.deploy decI) DO decO Ω x ((Inner.ofFlock Bd.deploy decI).k (xI D x)) R)) :=
-    UnifMap.self.prod ((unifMap_extendDraw hn).prod (UnifMap.pi (UnifMap.pi (unifMap_extendDraw hn) R) _))
+    UnifMap.self.prod ((unifMap_extendSample hn).prod (UnifMap.pi (UnifMap.pi (unifMap_extendSample hn) R) _))
   exact (Pr_mono key).trans ((Pr_or_le _ _).trans (add_le_add (le_of_eq (hΦ.Pr (fun s' =>
     ∃ u v, (F0I H D (Inner.ofFlock Bd.deploy decI) DO decO P x R).out s' = some (u, v) ∧ Collision H u v)))
     hbad))

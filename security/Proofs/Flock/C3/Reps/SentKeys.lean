@@ -34,8 +34,8 @@ Stage `s`'s keys for rep `ρ` are the keys of the messages rep `ρ` sends at sta
 * `wColsAt_of_w`: `WColsAt` from L's side of the decoder (`WDecodes`: `rep₀` reads each element of `w` off columns),
   S's reads file per key (`WSel`, `SelPort`) and the keys being elements of `w` (`WKeys`, `valOf_w`).
 * At `ValsSrc`'s values: `hb_of_shape` gives `tsRead_valsSrc`' `hb` from V*'s shape; a constant source cap gives
-  `CapRead` (`capRead_of_const`, reading no history) and the cap tie (`capTie_vals`); `RepsDrawn` at the identity `ix`
-  is a statement on `b` alone (`DrawnOf`, `repsDrawn_valsSrc`), the rep's consumed rounds `repIdxB` starting at 0.
+  `CapRead` (`capRead_of_const`, reading no history) and the cap tie (`capTie_vals`); `RepsSampled` at the identity `ix`
+  is a statement on `b` alone (`SampledOf`, `repsSampled_valsSrc`), the rep's consumed rounds `repIdxB` starting at 0.
 -/
 
 @[expose] public section
@@ -767,7 +767,7 @@ open FlockVBridge.AccChain (levelLanes)
 open FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
   {stmt : Fin S → VStar.Stmt} {sh : Flock.Shape}
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
@@ -1120,17 +1120,17 @@ def repIdxB (S₀ : Model.Statement) (b : ValsSrc) : List ℕ :=
   List.range' 0 (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6)) ++
     List.range' (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1) (b.t₄.k - (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1))
 
-/-- **`RepsDrawn` on `b` alone**: at every layers, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed
+/-- **`RepsSampled` on `b` alone**: at every layers, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed
 rounds) samples round `q` of stream `s i`, `q` the `p`-th of rep `i`'s (`repIdxB`), and those rounds are below `r`. -/
-def DrawnOf (S₀ : Model.Statement) (r : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc)
+def SampledOf (S₀ : Model.Statement) (r : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc)
     (selC : ℕ → String → ℕ → Prop) (s : Fin 2 → String) : Prop :=
   ∀ Lb i, repStart (repIdxB S₀ (b Lb 0)).length i + (repIdxB S₀ (b Lb i)).length ≤ r ∧
     ∀ p q, (repIdxB S₀ (b Lb i))[p]? = some q → selC (repStart (repIdxB S₀ (b Lb 0)).length i + p) (s i) q
 
-/-- **`RepsDrawn` at `ValsSrc`'s values and the identity `ix`** (`repRoundsHeld_of_rounds`'), from `DrawnOf`. -/
-theorem repsDrawn_valsSrc {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {selC : ℕ → String → ℕ → Prop}
-    {s : Fin 2 → String} (h : DrawnOf ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) r b selC s) :
-    RepsDrawn zs dg N k Rw sh rep (fun R ω t Lb i => (b Lb i).vals sh (rep R ω t Lb i)) selC s fun _ q => q :=
+/-- **`RepsSampled` at `ValsSrc`'s values and the identity `ix`** (`repRoundsHeld_of_rounds`'), from `SampledOf`. -/
+theorem repsSampled_valsSrc {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {selC : ℕ → String → ℕ → Prop}
+    {s : Fin 2 → String} (h : SampledOf ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) r b selC s) :
+    RepsSampled zs dg N k Rw sh rep (fun R ω t Lb i => (b Lb i).vals sh (rep R ω t Lb i)) selC s fun _ q => q :=
   fun R ω t R₂ τ _ _ i _ _ => h (layers zs dg N k Rw R ω t R₂ τ) i
 
 end

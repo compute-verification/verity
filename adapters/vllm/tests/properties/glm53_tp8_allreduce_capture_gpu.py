@@ -105,10 +105,10 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import tp_allreduce as T
-from verity.definitions.registry import tp_allreduce_check as K
-from verity.definitions.registry import tp_allreduce_nodes as TN
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import tp_allreduce as T
+from verity_vllm.definitions.registry import tp_allreduce_check as K
+from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -739,7 +739,8 @@ class FusedTap:
         from vllm.models.common.ops import fused_allreduce_rms_norm as FAR
 
         self.calls: list[dict[str, Any]] = []
-        self.saved = [(FAR, "_can_use_flashinfer"), (FAR, "tensor_model_parallel_all_reduce"), (FA, "trtllm_mnnvl_fused_allreduce_add_rmsnorm")]
+        self.saved: list[tuple[Any, ...]] = [(FAR, "_can_use_flashinfer"), (FAR, "tensor_model_parallel_all_reduce"),
+                                             (FA, "trtllm_mnnvl_fused_allreduce_add_rmsnorm")]
         self.saved = [(m, n, getattr(m, n)) for m, n in self.saved]
         can_use, reduce, mnnvl = (f for _, _, f in self.saved)
 

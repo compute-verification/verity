@@ -42,7 +42,7 @@ def test_the_arm_is_the_tick_arm_with_the_certifier_in_front(tmp_path: Path, mon
     assert {k: json.loads(env["VERITY_TICK"])[k] for k in ("bucket_us", "sat_us", "free_us")} == {
         "bucket_us": 250000, "sat_us": 220000, "free_us": 230000}
     assert S.changes_of(ARM) == [*S.changes_of("tick"), "the network certifier in front"]
-    assert S.not_in_target(glm, ARM) == ["the step record", "the network certifier in front"]
+    assert S.not_in_target(glm, ARM) == ["the network certifier in front"]
     assert [x["off"] for x in S.target_parts(glm, ARM)][0] == []
     # a pass waits out the engine's idle time, so that the engine empties its prefix cache for it
     assert S.IDLE_S > P.IDLE_RESET_S
@@ -374,11 +374,11 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     (chat,) = r["loads"]
     assert (chat["load"], chat["rung"], chat["reps"], chat["value"], chat["verdict"]) == ("chat", 2, 1, 50.0, S.NOT_COMPARABLE)
     assert (r["value"], r["verdict"]) == (None, S.NOT_COMPARABLE)
-    assert r["not_in_target"] == ["the step record", "the network certifier in front"] and r["certifier"] == k
+    assert r["not_in_target"] == ["the network certifier in front"] and r["certifier"] == k
     text = S.cost_text(r)
     assert f"{ARM} is served through the network certifier" in text and "is not GPU time a token" in text
     assert "its 2 lanes carry at most 8 output tokens a second whatever its engine does" in text
-    assert "turns on the step record and the network certifier in front, which the target has no part for" in text
+    assert "turns on the network certifier in front, which the target has no part for" in text
 
 
 def test_the_cost_of_an_arm_behind_the_certifier_says_what_it_is_of():

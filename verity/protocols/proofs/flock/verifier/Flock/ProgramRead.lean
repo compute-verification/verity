@@ -240,7 +240,7 @@ def deriveTemplateUnitsBy (readDesc : ByteArray → V TemplateQuery.Desc)
     match TemplateQuery.locate rs i with
     | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the unit class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
+  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
 
 /-- `deriveQwordUnits`, the program read by `readProg`. -/
@@ -308,12 +308,12 @@ def qwordFindingBy (readProg : ByteArray → V Program.Prog)
 
 /-- `templateStrata`, the program read by `readDesc`. -/
 def templateStrataBy (readDesc : ByteArray → V TemplateQuery.Desc)
-    (law : String) (obj : Json) (program : ByteArray) :
+    (samplingDesign : String) (obj : Json) (program : ByteArray) :
     V (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"{law}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+    | throw s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
   let ts ← ts
   let d ← readDesc program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
@@ -323,20 +323,20 @@ def templateStrataBy (readDesc : ByteArray → V TemplateQuery.Desc)
     | .error e => throw s!"partition: {e}"
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
 
-/-- `stratifiedLaw`, the program read by `readDesc`. -/
+/-- `stratifiedSamplingDesign`, the program read by `readDesc`. -/
 def stratifiedDesignBy (readDesc : ByteArray → V TemplateQuery.Desc)
-    (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+    (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrataBy readDesc "stratified" obj program
   match Draw.derive k strata with
-  | .ok law => return (law, population)
+  | .ok samplingDesign => return (samplingDesign, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `workLaw`, the program read by `readDesc`. -/
+/-- `workSamplingDesign`, the program read by `readDesc`. -/
 def workDesignBy (readDesc : ByteArray → V TemplateQuery.Desc)
-    (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
+    (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrataBy readDesc "work" obj program
   match Draw.deriveWork k strata table with
-  | .ok law => return (law, population)
+  | .ok samplingDesign => return (samplingDesign, population)
   | .error e => throw s!"work: {e}"
 
 end HmRow
@@ -371,10 +371,10 @@ def Stmt.setupHiddenBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
     | some d => HmIn.drawn c pi pop d
     | none => pure pop
   if let some d := draw then
-    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
-      let (law, _) ← HmRow.stratifiedDesignBy readDesc obj prog k
-      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+    if let (Except.ok (Draw.SamplingDesign.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitSample.ofJson d).map (·.samplingDesign), partition, program) then
+      let (samplingDesign, _) ← HmRow.stratifiedDesignBy readDesc obj prog k
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
   let linked := J.has c.metaJ "links"
   let finding ← match finding0, partition, program with
@@ -430,8 +430,8 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
     (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
   -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
-    if let .ok u := Draw.UnitDraw.ofJson d then
-      if let .work .. := u.law then
+    if let .ok u := Draw.UnitSample.ofJson d then
+      if let .work .. := u.samplingDesign then
         match closure with
         | some cm =>
           if u.closure != Draw.closureOf cm u.units then
@@ -440,21 +440,21 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
   -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.SamplingDesign.stratified k strata) := (Draw.UnitSample.ofJson d).map (·.samplingDesign) then
       let (some obj, some prog, some K) := (partition, program, stratified)
         | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← HmRow.stratifiedDesignBy readDesc obj prog K
-      if law != Draw.Law.stratified k strata then
+      let (samplingDesign, _) ← HmRow.stratifiedDesignBy readDesc obj prog K
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.SamplingDesign.work k strata) := (Draw.UnitSample.ofJson d).map (·.samplingDesign) then
       let (some obj, some prog, some (K, table)) := (partition, program, work)
         | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← HmRow.workDesignBy readDesc obj prog K table
-      if law != Draw.Law.work k strata then
+      let (samplingDesign, _) ← HmRow.workDesignBy readDesc obj prog K table
+      if samplingDesign != Draw.SamplingDesign.work k strata then
         throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
@@ -485,12 +485,12 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
-  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  -- the sample's sampling design and count are refused before the circuit is read
+  let u? ← draw.mapM Draw.UnitSample.ofJson
   if let some u := u? then
-    match u.law with
+    match u.samplingDesign with
     | .subset _ | .stratified .. => splits u.units.size
-    | _ => throw Draw.TABLES_LAW
+    | _ => throw Draw.TABLES_SAMPLING_DESIGN
   -- without a sample, the population's units (`setupH` checks a sample's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
@@ -512,7 +512,7 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
+            unitSample := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option maxRecDepth 20000 in
 theorem Stmt.setupHiddenOf_eq_by (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)

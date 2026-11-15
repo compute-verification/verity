@@ -7,7 +7,7 @@ the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a pr
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`AdviceCodeError`),
 deterministically. A string longer than ℓ (`Registered.cap_bits`) is refused unread, and `encode` writes none.
 
-**Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile unit holds them as witness):
+**Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile slice's proof block holds them as witness):
 - the network certifier's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
@@ -40,7 +40,7 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 The hits, the resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so
 v1 sends none. Every prefix-cache lookup's hit is the replay's block pool's (`pool.BlockPool`, its LRU and eviction
 included), past the cumulative pool bound too, as the compile slice's pool derives it
-(`verity.protocols.accounting.certifier.prover.compile_slice_v4`), so no hit is the prover's choice. The registered caps hold the
+(`verity_vllm.compiler.compile_slice_v4`), so no hit is the prover's choice. The registered caps hold the
 hits, the resumes and the lag bits at 0 (`CAPS`), so their counts code in 0 bits. The KV pool's size is registered
 before the run, never sent: a prover that chose it could declare a bigger pool and buy hits with it.
 
