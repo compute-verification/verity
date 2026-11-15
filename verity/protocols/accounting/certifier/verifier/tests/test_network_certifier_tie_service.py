@@ -98,7 +98,7 @@ class Run:
         releases = self.served.releases if releases is None else releases
         lanes = self.tie.lanes(advice, releases, w) if lanes is OWN_LANES else lanes
         return draw, standin.prove_tie(self.tie, self.cells[w], draw, lanes,
-                                       self.tmp / f"tie-{draw.registration.order}", **kw)
+                                       self.tmp / f"tie-{draw.docket.order}", **kw)
 
     def decide(self, w, draw, delivered, advice, head=None):
         return self.tie.outcome(self.stream, draw, delivered, circuit_sha512=standin.circuit_sha512(delivered),
@@ -276,7 +276,7 @@ def test_an_outcome_on_another_advice_in_the_clear_or_late_is_refused(tmp_path):
                              releases=SERVED.releases, head=run.cells[1].head)
     assert verdict["accepted"]
     outcome = run.stream.outcome(draw, {TS.VERIFIER: {**verdict, "decided_by": "clear"}}, run.tie.statement(draw),
-                                 session_roots={TS.VALUE: draw.registration.record["roots"][0]["root"]})
+                                 session_roots={TS.VALUE: draw.docket.record["roots"][0]["root"]})
     assert outcome.accepted
     assert run.verdict(advice).accepted == (True, False)
 
