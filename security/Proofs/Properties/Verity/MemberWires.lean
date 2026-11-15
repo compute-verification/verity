@@ -22,6 +22,8 @@ case.
 
 namespace Verity
 
+open Accounting
+
 namespace Vocab
 
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)

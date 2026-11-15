@@ -37,6 +37,10 @@
    "modules": 47,
    "declarations": 408
   },
+  "Proofs/Properties": {
+   "modules": 1,
+   "declarations": 3
+  },
   "Proofs/Slowdown": {
    "modules": 1,
    "declarations": 4
