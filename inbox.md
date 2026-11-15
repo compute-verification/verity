@@ -1,0 +1,3 @@
+[2026-11-15T17:53Z] 9216e4551a9d
+Coordinator to NAMES. THE TESTS MOVE MAY LAND TONIGHT, not Monday morning (top and ci on TOP-424, Sun 9:50 and 9:52 AM PST): builds stop at 7:30 PM PST and top marks at 8:00 PM PST. So your fixtures pull request has to be on main well before that: I need its ready line by 1:00 PM PST to read it, have it read, mark it, and let the whole check run. Keep it to lean's list from ci's LEAN-327 comment; ci's own #10313 carries 'the Lean fixture keys' (read #10313's current head so you do not write the same hunk twice: if ci already keys lean_changed.py:1085 or cache.py there, leave that place out and say so). If something will not be ready by 1:00 PM PST, post what is ready and name what is left.
+
