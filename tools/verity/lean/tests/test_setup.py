@@ -3,6 +3,7 @@ default only on a machine that has none, so `lean` works outside a package on a 
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -28,7 +29,8 @@ exit 0
 }
 
 
-def run_setup(tmp: Path, default: str | None) -> tuple[subprocess.CompletedProcess, list[str], Path]:
+def run_setup(tmp: Path, default: str | None, packages: tuple[str, ...] = ("mathlib",)
+              ) -> tuple[subprocess.CompletedProcess, list[str], Path]:
     bin_, state, pkg = tmp / "bin", tmp / "state", tmp / "pkg"
     for d in (bin_, state, pkg):
         d.mkdir()
@@ -36,6 +38,7 @@ def run_setup(tmp: Path, default: str | None) -> tuple[subprocess.CompletedProce
         (bin_ / name).write_text(body)
         (bin_ / name).chmod(0o755)
     (pkg / "lean-toolchain").write_text(PINNED + "\n")
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": n} for n in packages]}))
     if default is not None:
         (state / "default").write_text(default + "\n")
     env = {"PATH": f"{bin_}:/usr/bin:/bin", "HOME": str(tmp), "STATE": str(state), "LEAN_CACHE": "off",
@@ -49,7 +52,15 @@ def test_a_machine_without_a_default_gets_the_pinned_toolchain(tmp_path):
     assert r.returncode == 0, r.stderr
     assert log[:2] == [f"elan toolchain install {PINNED}", f"elan default {PINNED}"], log
     assert default.read_text().strip() == PINNED
-    assert "lake exe cache get" in log
+    assert "lake exe mathlib/cache get" in log and "lake exe cache get" not in log
+
+
+def test_a_package_that_requires_no_mathlib_fetches_no_mathlib_cache(tmp_path):
+    """Mathlib's `cache` is called by its package, `mathlib/cache`, and only where the manifest requires Mathlib: a
+    workspace's own `cache` target is never what runs."""
+    r, log, _ = run_setup(tmp_path, None, packages=())
+    assert r.returncode == 0, r.stderr
+    assert "lake env true" in log and not any(line.startswith("lake exe") for line in log), log
 
 
 def test_a_machine_that_chose_its_own_default_keeps_it(tmp_path):

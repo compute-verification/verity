@@ -2128,16 +2128,17 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     assert all("rep, policy, work = _open(pkg, out)" in ast.unparse(funcs[f]) for f in both), "the name the walk starts from"
     assert [n.value for n in ast.walk(module) if isinstance(n, ast.Constant) and isinstance(n.value, str)
             and (n.value == A.POLICY or n.value.endswith("/" + A.POLICY))] == [A.POLICY], "a lock's path that `POLICY` does not name"
-    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index) and in
-    # `upstream.py`'s own command line, and check.py calls neither
+    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index), in
+    # `upstream.py`'s own command line and in `cache.py`'s docstring and `packages` (the tracked locks, by name), and
+    # check.py calls none of them
     siblings = {c.args[0].value for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"}
     naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parent / f"{s}.py").read_text()).body
               if any((isinstance(v := getattr(n, "value", None), str) and A.POLICY in v) or getattr(n, "id", None) == "POLICY"
                      for n in ast.walk(top))}
-    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main"}, (
+    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main", "cache.", "cache.packages"}, (
         f"of the siblings check.py loads ({', '.join(sorted(siblings))}), these name the lock's file: {sorted(naming)}; one that "
         f"a step before the judge calls reads the lock by its path, where this walk does not follow it")
-    assert not {"policy_roots", "main"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
+    assert not {"policy_roots", "main", "packages"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
         "check.py calls a sibling's function that reads the lock by its path"
 
 
@@ -2385,10 +2386,9 @@ def test_a_package_declaring_its_own_cache_executable_is_refused_by_a_real_build
                                   f's!"pwned {{args}}\\n"\n  IO.FS.writeFile "{tool}/PWNED" "pwned\\n"\n')
     (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"], "exempt": {"Pwn": "an executable"}, "guarantees": {}}))
     out = tmp_path / "out"
-    r = subprocess.run([sys.executable, str(HERE.parent / "check.py"), "--build", "--no-replay", "--no-runs", "--out",
-                        str(out), "--repo", str(tmp_path), str(pkg)], capture_output=True, text=True, env=A.lake_env())
+    assert A.main([str(pkg), "--build", "--no-replay", "--no-runs", "--out", str(out), "--repo", str(tmp_path)]) == 1
     (rep,) = json.loads((out / "audit.json").read_text())["packages"]
-    assert r.returncode == 1 and rep["failure_codes"] == ["setup.cache-target"], r.stdout + r.stderr
+    assert rep["failure_codes"] == ["setup.cache-target"], rep
     assert victim.read_text() == "orig\n" and not any(tool.iterdir())
     subprocess.run(["lake", "exe", "cache", "get"], cwd=pkg, env=A.lake_env(), check=True, capture_output=True)
     assert victim.read_text() == "pwned [get]\n" and (tool / "PWNED").exists()
