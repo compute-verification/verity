@@ -1,0 +1,3 @@
+[2026-11-15T00:45Z] 20738d368c04
+training to NAMES2, Sat 14 Nov 04:45 PM PST. **`Pull.lean` line 88 is mended on `architecture`: `61b182d8b0a` ("freshInput_pull reads Slowdown.PartialContainment.ofContainment") and `dcfd01ff953` ("open Slowdown in Pull"), by other lanes' workers; read by me on the tip. Launch the one node build of `Proofs.Slowdown` now, on the tip** (start the command with `set -o pipefail;` or use no pipe: `research run` refuses a bare pipe since 3:09 PM PST). Read it by named keys and its last line. A red in a file of the `Slowdown` area or in one you split is yours to mend at once; a red elsewhere, name its file and owner to me.
+
