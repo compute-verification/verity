@@ -112,7 +112,8 @@ theorem PooledLeakRegisteredChecked_honest :
       (twoLay).Fits twoStmt.prog 1 ∧
       Verity.Assumptions.TrustedDevice () checkedTrace₂ (fun p => recordingCode checkedFormat₂ p.1 (checkedArr₂ p.2)) ∧
       checkedFormat₂.ReadsBy checkedRead₂ (fun _ _ => True) ∧
-      (∀ ω : Ω₂, MonitoringPeriodChannelReg checkedFormat₂ (fun _ _ => True) Set.univ (Set.univ : Set Unit)
+      (∀ ω : Ω₂, MonitoringPeriodChannelReg checkedFormat₂ (fun (_ : Unit) _ => True) (Set.univ : Set Unit)
+        (Set.univ : Set Unit)
         (fun z => checkedSched₂ z ω) (fun _ => ()) (fun _ => ()) fun p => (checkedTrace₂ () p).1) ∧
       (∀ s, (twoL Bool).parse [] = some s →
         CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) ∧
