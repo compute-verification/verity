@@ -150,7 +150,9 @@ uv run verity bench compute --from DIR --per-call --top 5
 ~~~
 
 `--from DIR` reads a run's record from the directory DIR, through no network and with no key. `verity bench` starts
-the command at the clone's root, so a relative DIR is taken from the root, whichever directory you run it from.
+the command at the clone's root, so a relative DIR is taken from the root. Run it from the root too: `uv run` in a
+directory with a `pyproject.toml` of its own, as this one has for its tests, makes that directory's environment instead
+of the workspace's.
 `tests/fixtures/record/` is a record directory written by hand: its shapes are the served model's and its totals add
 up, but no verifier wrote it and no card served it, and the output's fourth line says so. `--per-call` also prints
 where the MACs the credit leaves out went, by cause and by matrix multiplication call (the top N, 10 by default).
