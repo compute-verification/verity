@@ -785,7 +785,9 @@ theorem MonitoringPeriodLeakChecked_honest :
           Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])) 1 1 1 (fun _ => notLay) (fun _ => 1) 0
         (fun _ => ∅) (fun _ _ => True ∧ True) 1 Claims.Witness.SamplingGeneric.copyStmt (fun _ => false)
         (fun _ => certOps) [] ⟨[]⟩ ((recordingCode frameFormat ⟨0, 0, Empty.elim, Empty.elim⟩ fun c => c.elim).2 0) :=
-  ⟨ks_placed, binds_deployOf _ _ _,
+  ⟨ks_placed,
+    binds_deployOf (FlockDeploy.deployZk _root_.Flock.Readable.relation) Claims.Witness.SamplingGeneric.placedCode
+      FlockDeploy.sha512,
     ⟨fun _ => rfl, fun _ _ hF => by
       simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
       exact Finset.sum_le_sum_of_subset hF.1⟩,
