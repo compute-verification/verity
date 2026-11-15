@@ -287,7 +287,7 @@ wheels = [
 [[package]]
 name = "core-identity"
 version = "0.1.0"
-source = { virtual = "verity/commitments/identity" }
+source = { virtual = "tests/verity/commitments/identity" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1058,7 +1058,7 @@ wheels = [
 [[package]]
 name = "memory-challenger-lean"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pous/device/lean" }
+source = { virtual = "tests/verity/protocols/accounting/pous/device/lean" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1493,7 +1493,7 @@ wheels = [
 [[package]]
 name = "pous-check"
 version = "0.1.0"
-source = { virtual = "verity/protocols/accounting/pous/verifier/check" }
+source = { virtual = "tests/verity/protocols/accounting/pous/verifier/check" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -2395,7 +2395,7 @@ requires-dist = [
 [[package]]
 name = "verity-bench-specs"
 version = "0.0.0"
-source = { virtual = "benchmarks/harness/specs" }
+source = { virtual = "tests/benchmarks/harness/specs" }
 
 [[package]]
 name = "verity-bench-tests"
@@ -2411,7 +2411,7 @@ requires-dist = [{ name = "verity-bench" }]
 [[package]]
 name = "verity-certifier-timing"
 version = "0.0.0"
-source = { virtual = "benchmarks/certifier_timing" }
+source = { virtual = "tests/benchmarks/certifier_timing" }
 dependencies = [
     { name = "verity" },
     { name = "verity-config" },
@@ -2426,7 +2426,7 @@ requires-dist = [
 [[package]]
 name = "verity-check"
 version = "0.0.0"
-source = { virtual = "tools/check" }
+source = { virtual = "tests/tools/check" }
 dependencies = [
     { name = "research" },
 ]
@@ -2491,7 +2491,7 @@ requires-dist = [{ name = "verity-cli" }]
 [[package]]
 name = "verity-commitments-benchmarks"
 version = "0.0.0"
-source = { virtual = "benchmarks/commitments" }
+source = { virtual = "tests/benchmarks/commitments" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2536,7 +2536,7 @@ requires-dist = [{ name = "verity-config" }]
 [[package]]
 name = "verity-core-composition"
 version = "0.0.0"
-source = { virtual = "verity/protocols/compose/verifier/lean" }
+source = { virtual = "tests/verity/protocols/compose/verifier/lean" }
 dependencies = [
     { name = "verity-difftest" },
 ]
@@ -2547,12 +2547,12 @@ requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
 [[package]]
 name = "verity-core-evaluate"
 version = "0.0.0"
-source = { virtual = "verity/circuits/evaluate" }
+source = { virtual = "tests/verity/circuits/evaluate" }
 
 [[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
-source = { virtual = "verity/protocols/proofs/spot/verifier/lean" }
+source = { virtual = "tests/verity/protocols/proofs/spot/verifier/lean" }
 dependencies = [
     { name = "hypothesis" },
 ]
@@ -2563,7 +2563,7 @@ requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 [[package]]
 name = "verity-core-zk-server"
 version = "0.1.0"
-source = { virtual = "verity/protocols/proofs/recursion/verifier/zk_server" }
+source = { virtual = "tests/verity/protocols/proofs/recursion/verifier/zk_server" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity-difftest" },
@@ -2699,7 +2699,7 @@ requires-dist = [{ name = "verity-landq" }]
 [[package]]
 name = "verity-lean-audit"
 version = "0.0.0"
-source = { virtual = "tools/verity/lean" }
+source = { virtual = "tests/tools/verity/lean" }
 dependencies = [
     { name = "research" },
 ]
@@ -2736,7 +2736,7 @@ requires-dist = [{ name = "verity-machine-model" }]
 [[package]]
 name = "verity-native-peak"
 version = "0.0.0"
-source = { virtual = "benchmarks/native_peak" }
+source = { virtual = "tests/benchmarks/native_peak" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2758,7 +2758,7 @@ provides-extras = ["torch"]
 [[package]]
 name = "verity-network-e2e"
 version = "0.0.0"
-source = { virtual = "benchmarks/network_e2e" }
+source = { virtual = "tests/benchmarks/network_e2e" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2769,7 +2769,7 @@ requires-dist = [{ name = "verity", editable = "." }]
 [[package]]
 name = "verity-network-traces"
 version = "0.0.0"
-source = { virtual = "benchmarks/network_traces" }
+source = { virtual = "tests/benchmarks/network_traces" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2834,7 +2834,7 @@ requires-dist = [{ name = "verity-ops" }]
 [[package]]
 name = "verity-pouw-benchmarks"
 version = "0.0.0"
-source = { virtual = "benchmarks/pouw" }
+source = { virtual = "tests/benchmarks/pouw" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2870,12 +2870,12 @@ provides-extras = ["research", "exact-kit"]
 [[package]]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/check" }
+source = { virtual = "tests/verity/protocols/accounting/pouw/verifier/lean/check" }
 
 [[package]]
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/window" }
+source = { virtual = "tests/verity/protocols/accounting/pouw/verifier/lean/window" }
 
 [[package]]
 name = "verity-proof-throughput"
@@ -2912,7 +2912,7 @@ requires-dist = [{ name = "verity-proof-throughput" }]
 [[package]]
 name = "verity-slack-events"
 version = "0.0.0"
-source = { virtual = "infra/slack-events" }
+source = { virtual = "tests/infra/slack-events" }
 dependencies = [
     { name = "fastapi" },
     { name = "tzdata" },
@@ -2931,7 +2931,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe"
 version = "0.0.0"
-source = { virtual = "benchmarks/tc_probe" }
+source = { virtual = "tests/benchmarks/tc_probe" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2950,7 +2950,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe-fp4"
 version = "0.0.0"
-source = { virtual = "benchmarks/tc_probe_fp4" }
+source = { virtual = "tests/benchmarks/tc_probe_fp4" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
