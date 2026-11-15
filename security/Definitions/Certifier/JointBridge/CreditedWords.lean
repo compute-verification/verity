@@ -47,7 +47,7 @@ PoUW's per-period statements credit words. `Properties.Pouw.MonitoringPeriod.H1C
 the play accepts while its words fixed right fall below the check's credit (`creditPrefix`: `(1 − ε(j))₊` of the live
 words of the windows before the check's first refusal). The two differ in their unit and in what they are about:
 
-* A credited word is a committed word of the declared circuit (`Compose.isWord`), not an op. An H1 + fx1 tile's words
+* A credited word is a committed word of the registered circuit (`Compose.isWord`), not an op. An H1 + fx1 tile's words
   are its CP-W receipt words before `O′` (`Gates.roleOf` at `Gates.Place.receipt`), `2·(K/32)` a tile. Each checkpoint
   binds one 32-wide `K`-segment of the tile's `R·C` products, `32·R·C` multiply-adds, and is split into two committed
   words (`Gates.Place.parts`), so one word stands for `16·R·C` of them (`receiptWordMacs`). `PouwH1Tile_v1` (`K = 64`,
@@ -71,7 +71,7 @@ time, and the joint period's PoUW claim is priced ops.
   certificate within the priced credit, less the outsourced units, on every accepted period.
 * `receiptWordMacs`: the multiply-adds an H1 + fx1 tile's committed receipt word stands for.
 * `receiptUnitMacs`: the multiply-adds an H1 + fx1 tile's credited receipt words stand for together.
-* `Compose.minWordMacs`: the fewest multiply-adds any credited word of a declared circuit stands for.
+* `Compose.minWordMacs`: the fewest multiply-adds any credited word of a registered circuit stands for.
 -/
 
 @[expose] public section
@@ -111,7 +111,7 @@ when `32 ∣ K`. `PouwH1Tile_v1`'s is `receiptUnitMacs 64 4 8 = 2048`; `_v5`'s a
 `K = 4096` and `14680064` at `K = 14336`. -/
 def receiptUnitMacs (K R C : ℕ) : ℕ := 2 * (K / 32) * receiptWordMacs R C
 
-/-- **The fewest multiply-adds any credited word of the declared circuit stands for**, at `macs k` for a word of kind
+/-- **The fewest multiply-adds any credited word of the registered circuit stands for**, at `macs k` for a word of kind
 `k` (`receiptWordMacs R C` for an H1 + fx1 tile's): the minimum over its credited words (`Compose.creditedWords`), and
 `0` for a circuit of none. It is exact for a circuit whose words are all of one kind (H1 + fx1 alone). -/
 def Compose.minWordMacs {ι K : Type} (Sc : Compose.Scheme K) (Cd : Compose.Declared ι) (macs : Compose.Kind → ℕ) : ℕ :=

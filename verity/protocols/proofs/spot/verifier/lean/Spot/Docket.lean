@@ -54,7 +54,7 @@ where the log registers none, to name neither a compiler nor advice (`R6-compile
 reads is refused by name.
 
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
-declarations) holds the record's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
+declarations) holds the record's program to the day's one registered circuit (`declaredCode`): `R2-undeclared` when the day has no
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
