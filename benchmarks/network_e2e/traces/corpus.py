@@ -24,14 +24,14 @@ continues in the next window, hitting its own cached blocks. Each open request i
 whether a cut moves any request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set
 and its cost.
 
-`NETWORK_CERTIFIER`'s traces serve a trace's server and load through the active network attester: `network_certifier_serve.py serve` in front of the
+`NETWORK_CERTIFIER`'s traces serve a trace's server and load through the active network attester: `network_attester_serve.py serve` in front of the
 server, a process beside it on its host (``network certifier beside the server, not on the auditor device``), and the client
-(`drive_network_certifier`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
-their own (`cpu_plan`), the relay under `network_certifier_probe.py` (its every tick, publish and collection) and the host's load
+(`drive_network_attester`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
+their own (`cpu_plan`), the relay under `network_attester_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
 holds what the relay published (its deployment, certified records and connection log), the probes' records and the
-shim's record of every connection; `summarize` runs `network_certifier_serve.py check` on it first. Which relay served (its
-egress from the release a, or from the admission s) is the trace's meta.json `network_certifier.egress_base`
+shim's record of every connection; `summarize` runs `network_attester_serve.py check` on it first. Which relay served (its
+egress from the release a, or from the admission s) is the trace's meta.json `network_attester.egress_base`
 (`egress_base`). Every trace's server also loads `vllm_accept_stamp`, which records each request's
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
 the wire.
@@ -41,7 +41,7 @@ the wire.
 tracer, configured by ``VERITY_TICK``, and `tick_plugin.TickFeed` as its outermost middleware, which writes the release
 headers and the watermark the server gets to its feed (``raw/tick-feed.jsonl``). In a `NETWORK_CERTIFIER` trace they come from the
 network attester in front of the server: it numbers each request it releases, in its release order, with the bucket of
-its release, and streams the watermark to the server (`network_certifier_serve.py serve --watermark`), its bucket τ_b
+its release, and streams the watermark to the server (`network_attester_serve.py serve --watermark`), its bucket τ_b
 (`tick_for`). In every other trace the client stands in for the network attester, which isn't in front of the server
 (`StandIn`): it numbers the requests in the order it sends them, puts each in the bucket of its send (`TICK_BUCKET_MS`
 buckets from the trace's origin), sends both in the release headers, and streams the watermark's line for each bucket as
@@ -150,30 +150,30 @@ CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"e
 TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
            for name, c in CUT.items()}
 #: network attester trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active network attester (`verity.protocols.resource_accounting.network.verifier.network_certifier`, run by `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py serve`), in
+#: active network attester (`verity.protocols.resource_accounting.network.verifier.network_attester`, run by `verity/protocols/resource_accounting/network/attester/network_attester_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the network attester's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the network attester (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network attester has an arrival trace's
 #: schedule: the gate adds to a request at most a bucket and its clock's lag behind the engine (τ_sat below a saturated
 #: step's time) before its admission, and stretches each engine step of its life to at most τ_free (`serve_admit`),
 #: which on these traces' busy cycles is estimated, not measured, to stay inside D's headroom over those figures. A cell
-#: D doesn't cover fails its connection late, which the summary counts (`summary.network_certifier_summary`'s ``failed``), so it
+#: D doesn't cover fails its connection late, which the summary counts (`summary.network_attester_summary`'s ``failed``), so it
 #: can't pass unseen.
 NETWORK_CERTIFIER = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
 NETWORK_CERTIFIER_WHERE = "network certifier beside the server, not on the auditor device"
-#: a stall of the client's event loop it records (`drive_network_certifier`), in seconds: a fifth of a bucket
+#: a stall of the client's event loop it records (`drive_network_attester`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
 #: the descriptors the client holds beside its connections' (the server's and network attester's pipes, the loop's, the logs')
 FD_MARGIN = 256
 #: the network attester's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the network attester never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in
-#: memory; and the bytes egress form, as vLLM streams its text completions (`network_certifier`'s "The egress form")
+#: memory; and the bytes egress form, as vLLM streams its text completions (`network_attester`'s "The egress form")
 NETWORK_CERTIFIER_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096, "egress": "bytes"}
 #: seconds the network attester runs past the last arrival's D, for the last responses' egress cells
 NETWORK_CERTIFIER_TAIL_S = 60.0
 #: seconds the trace waits for the network attester past its last window: a spawned publisher may still be committing the last
-#: windows' records (`network_certifier_probe`'s `publisher`)
+#: windows' records (`network_attester_probe`'s `publisher`)
 NETWORK_CERTIFIER_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active network certifier, D = {d} buckets of 100 ms "
                                    f"({NETWORK_CERTIFIER_WHERE})")
@@ -544,24 +544,24 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
     return rec
 
 
-def network_certifier_modules():
-    """`verity`'s network_certifier and its device's `network_certifier_serve`, imported only for a network attester trace; benchmarks/network_traces
-    is on the path for what `network_certifier_serve` still loads from there by name."""
+def network_attester_modules():
+    """`verity`'s network_attester and its device's `network_attester_serve`, imported only for a network attester trace; benchmarks/network_traces
+    is on the path for what `network_attester_serve` still loads from there by name."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.protocols.resource_accounting.network.verifier import network_certifier
+    from verity.protocols.resource_accounting.network.verifier import network_attester
 
-    from verity.protocols.resource_accounting.network.attester import network_certifier_serve
-    return network_certifier, network_certifier_serve
+    from verity.protocols.resource_accounting.network.attester import network_attester_serve
+    return network_attester, network_attester_serve
 
 
-async def drive_network_certifier(deployment: dict, endpoints: dict, served: str, requests: list[dict], arrivals: list[float],
+async def drive_network_attester(deployment: dict, endpoints: dict, served: str, requests: list[dict], arrivals: list[float],
                        ids: list[str], out: Path, drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
     """`drive` through the network attester: from the network attester's origin, each request at its arrival on a connection of its own to the
-    network attester's listener, sent as cells and read through the client shim (`network_certifier.cells`, `network_certifier.Shim`), to the network attester's
+    network attester's listener, sent as cells and read through the client shim (`network_attester.cells`, `network_attester.Shim`), to the network attester's
     close. client.jsonl has `drive`'s fields (`read_response`) and each request's network attester ordinal and outcome, and
-    warden/client.json the shim's record of every connection in `network_certifier_serve.connection_log`'s form, for its `check`.
+    warden/client.json the shim's record of every connection in `network_attester_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
     every thread of the process with it (numpy's among them), with the garbage collector off and every object made
@@ -569,10 +569,10 @@ async def drive_network_certifier(deployment: dict, endpoints: dict, served: str
     table grown to hold every connection before the first is opened
     (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
     after the origin, ms]), every collection that still ran, and the table's size."""
-    from network_certifier_probe import Collections
+    from network_attester_probe import Collections
 
-    network_certifier, ws = network_certifier_modules()
-    params = network_certifier.NetworkCertifierParams(**deployment["params"])
+    network_attester, ws = network_attester_modules()
+    params = network_attester.NetworkCertifierParams(**deployment["params"])
     B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(endpoints["listen"])
     host = "%s:%d" % tuple(endpoints["upstream"])
     loop = asyncio.get_running_loop()
@@ -611,16 +611,16 @@ async def drive_network_certifier(deployment: dict, endpoints: dict, served: str
             sent = time.time()
             rec = {"id": rid, "i": r["i"], "planned_s": round(at, 6), "send_s": round(loop.time() - t0, 6), "send_unix": sent,
                    "max_tokens": r["max_tokens"], "seed": body.get("seed"), "output_ids": [], "chunks": []}
-            shim = network_certifier.Shim(B, time.time)
+            shim = network_attester.Shim(B, time.time)
             try:
                 reader, writer = await asyncio.open_connection(*listen)
                 try:
-                    writer.write(network_certifier.cells(request, B))
+                    writer.write(network_attester.cells(request, B))
                     await shim.read(reader)
                 finally:
                     writer.close()
                 rec["warden"] = {"ordinal": shim.ordinal, "outcome": shim.outcome}
-                times = [t for t, kind in shim.arrivals if kind in (network_certifier.DATA, network_certifier.END)]
+                times = [t for t, kind in shim.arrivals if kind in (network_attester.DATA, network_attester.END)]
                 rec |= read_response(bytes(shim.data), times, params.payload, sent)
                 if shim.outcome != "end":
                     rec.setdefault("error", f"the network certifier's connection ended: {shim.outcome}")
@@ -660,7 +660,7 @@ def reserve_fds(n: int) -> int:
     """Grow the process's descriptor table to hold `n` descriptors (at most RLIMIT_NOFILE's soft limit) now; returns its
     size. The kernel grows it as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
     waits for an RCU grace period (`expand_fdtable`), the growing thread asleep in D: on a loaded node, every connection's
-    cell read a bucket late (`network_certifier_serve.reserve_fds`). The table never shrinks."""
+    cell read a bucket late (`network_attester_serve.reserve_fds`). The table never shrinks."""
     n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
     fd = os.open(os.devnull, os.O_RDONLY)
     try:
@@ -694,10 +694,10 @@ def taskset(cpus: list[int] | None) -> list[str]:
     return ["taskset", "-c", ",".join(map(str, cpus))] if cpus else []
 
 
-def egress_base(network_certifier) -> str:
+def egress_base(network_attester) -> str:
     """Which point the relay's D counts from, read from its module's docstring: egress cell i at
     a + D + i/r from the release a (the ingress end), or at s + D + i/r from the admission s."""
-    doc = network_certifier.__doc__ or ""
+    doc = network_attester.__doc__ or ""
     if "before a + D" in doc:
         return "release a (the ingress end): egress cell i at a + D + i/r"
     if "before s + D" in doc:
@@ -705,9 +705,9 @@ def egress_base(network_certifier) -> str:
     return "unknown (the network certifier's docstring names neither a + D nor s + D)"
 
 
-def start_network_certifier(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
+def start_network_attester(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
                  cpus: list[int] | None = None, watermark: bool = False) -> tuple[subprocess.Popen, dict]:
-    """`network_certifier_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `network_certifier_probe.py`
+    """`network_attester_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `network_attester_probe.py`
     (its ticks, publishes and collections to d/warden/ticks.json), writing to d/warden/ (its log to serve.log) with a
     fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `NETWORK_CERTIFIER_TAIL_S`; with
     `watermark`, also streaming the watermark to the server (``--watermark``). Returns the process and its deployment
@@ -717,11 +717,11 @@ def start_network_certifier(d: Path, port: int, delay: int, span_s: float, key: 
     windows = math.ceil((span_s + delay * tau + NETWORK_CERTIFIER_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/network/attester/network_certifier_serve.py"), "keys", "--dir", str(key)],
+    subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
     flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))] + ["--watermark"] * watermark
     with open(w / "serve.log", "w") as log:
-        proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "network_certifier_probe.py"), "serve", "--upstream",
+        proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "network_attester_probe.py"), "serve", "--upstream",
                                  f"127.0.0.1:{port}", "--listen", "127.0.0.1:0", "--out", str(w), "--key", str(key),
                                  "--session", secrets.token_hex(32), "--windows", str(windows), "--start-in", "2", *flags],
                                 stdout=subprocess.PIPE, stderr=log, text=True, env=env)
@@ -731,12 +731,12 @@ def start_network_certifier(d: Path, port: int, delay: int, span_s: float, key: 
     return proc, json.loads((w / "deployment.json").read_text())
 
 
-def check_network_certifier(d: Path) -> int:
-    """`network_certifier_serve.py check` of a network attester trace's d/warden (its certificates, the audit of its records and the client's
+def check_network_attester(d: Path) -> int:
+    """`network_attester_serve.py check` of a network attester trace's d/warden (its certificates, the audit of its records and the client's
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
-        return subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/network/attester/network_certifier_serve.py"), "check", "--run",
+        return subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"), "check", "--run",
                                str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 
@@ -826,7 +826,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     if delay is not None:
         meta["cpus"] = cpus or f"not pinned: the job has {len(os.sched_getaffinity(0))} cores"
     t = clock()
-    network_certifier = sampler = None
+    network_attester = sampler = None
     key = Path(tempfile.mkdtemp(prefix="trace-corpus-network-certifier-")) if delay is not None else None
     with open(d / "server.log", "wb") as log:
         server = subprocess.Popen([*taskset(cpus and cpus["server"]), *argv], stdout=log, stderr=subprocess.STDOUT, env=env,
@@ -844,28 +844,28 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                 "where": "the client's stand-in network certifier (corpus.StandIn)"}
         else:
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
-            network_certifier, dep = start_network_certifier(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
-            ends = network_certifier_modules()[1].read_endpoints(d / "warden" / "deployment.json")
+            network_attester, dep = start_network_attester(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
+            ends = network_attester_modules()[1].read_endpoints(d / "warden" / "deployment.json")
             end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
-            meta["warden"] = {"where": NETWORK_CERTIFIER_WHERE, "egress_base": egress_base(network_certifier_modules()[0]), "params": dep["params"],
+            meta["warden"] = {"where": NETWORK_CERTIFIER_WHERE, "egress_base": egress_base(network_attester_modules()[0]), "params": dep["params"],
                               "digest": dep["digest"], "windows": dep["windows"], "origin_unix": dep["origin_unix"],
                               "listen": ends["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
             if tick:
                 meta["tick"] = {**tick, "hold_ms": TICK_HOLD_MS, "origin_unix": dep["origin_unix"], "run": dep["run_id"],
-                                "where": f"the network certifier ({NETWORK_CERTIFIER_WHERE}; network_certifier_serve.py serve --watermark)"}
+                                "where": f"the network certifier ({NETWORK_CERTIFIER_WHERE}; network_attester_serve.py serve --watermark)"}
             pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
-                                        f"warden:{network_certifier.pid}", f"client:{os.getpid()}", f"server={server.pid}",
+                                        f"warden:{network_attester.pid}", f"client:{os.getpid()}", f"server={server.pid}",
                                         *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
             print(f"[corpus] {name}: network certifier ({NETWORK_CERTIFIER_WHERE}) on {ends['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
-            meta |= asyncio.run(drive_network_certifier(dep, ends, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
+            meta |= asyncio.run(drive_network_attester(dep, ends, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
-                meta["warden"]["rc"] = network_certifier.wait(max(0.0, end - time.time()) + NETWORK_CERTIFIER_END_S)
+                meta["warden"]["rc"] = network_attester.wait(max(0.0, end - time.time()) + NETWORK_CERTIFIER_END_S)
             except subprocess.TimeoutExpired:
                 meta["warden"]["rc"] = f"still running {NETWORK_CERTIFIER_END_S:g} s past its last window"
             meta["warden"]["ended_past_last_window_s"] = round(time.time() - end, 3)
@@ -874,9 +874,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                 meta["tick"]["watermark"] = (json.loads(log.read_text()).get("watermark") if log.exists() else
                                              {"error": "the network certifier wrote no warden.json"})
     finally:
-        if network_certifier is not None and network_certifier.poll() is None:
-            network_certifier.terminate()
-            network_certifier.wait()
+        if network_attester is not None and network_attester.poll() is None:
+            network_attester.terminate()
+            network_attester.wait()
         if sampler is not None:
             sampler.terminate()
             sampler.wait()
@@ -1001,7 +1001,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "summarize":
         for w in sorted(Path(args.dir).glob("*/warden/deployment.json")):
             if not (w.parent / "check.json").exists():
-                print(f"[corpus] {w.parent.parent.name}: network certifier check rc {check_network_certifier(w.parent.parent)}", flush=True)
+                print(f"[corpus] {w.parent.parent.name}: network certifier check rc {check_network_attester(w.parent.parent)}", flush=True)
         summary.summarize(Path(args.dir))
         return 0
     out = summary.compare_corpora([summary.corpus_spec(x) for x in args.corpora], Path(args.out))

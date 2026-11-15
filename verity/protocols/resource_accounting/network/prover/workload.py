@@ -10,7 +10,7 @@ workload -> prover     CommittedRows, ReportedAdvice
 The forms the workload and the network attester agree on are declared here for the workload: the link frame's header
 (`FRAME_HEADER`), the canonical id request (`id_request`), and a response's id events (`id_event`) and its last bytes
 (`TRAILER`). The verifier keeps its own (`link_frame.HEADER`, `id_form.id_request`, `io_tie.id_event`, `io_tie.TRAILER`)
-and reads nothing of this module; `test_network_certifier_id_request_writers.py` holds each pair equal.
+and reads nothing of this module; `test_network_attester_id_request_writers.py` holds each pair equal.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     """The canonical `/v1/completions` request of a token-id prompt in the network attester's `frame_bytes`-byte
     cells, which carry the request's bytes alone: every field at a place fixed by the prompt's length and the frame
     size, none straddling a frame. The verifier's `id_form.id_request` at ``offset=0`` writes the same bytes and
-    refuses the same fields (`test_network_certifier_id_request_writers.py`)."""
+    refuses the same fields (`test_network_attester_id_request_writers.py`)."""
     if not prompt or isinstance(prompt, (str, bytes)):
         raise ValueError("an id request's prompt is at least one token id")
     pieces = [b'{"max_tokens":' + _u32(max_tokens, "max_tokens"),
@@ -105,7 +105,7 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
 def id_event(token_id: int, size: int = _ID_EVENT_BYTES) -> bytes:
     """The canonical event of one token id in `size` bytes: its head, the id right-aligned in 10 decimal characters,
     then its tail with spaces (JSON whitespace) ahead of its blank line to fill `size`. The verifier's `io_tie.id_event`
-    writes the same bytes and refuses the same arguments (`test_network_certifier_id_request_writers.py`)."""
+    writes the same bytes and refuses the same arguments (`test_network_attester_id_request_writers.py`)."""
     if type(token_id) is not int or not 0 <= token_id < 1 << 32:
         raise ValueError(f"a token id is a u32, not {token_id!r}")
     if type(size) is not int or size < _ID_EVENT_BYTES:

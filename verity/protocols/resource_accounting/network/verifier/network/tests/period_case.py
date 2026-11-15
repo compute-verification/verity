@@ -12,8 +12,8 @@ session's signed start (`certifier.certificate`'s `CertifiedStart.refusal`, unde
 `_start_check`: an entry whose start is not where its session's signed base puts it after its key's first listed entry
 is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
 `registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule
-(`network_certifier.NetworkCertifierParams`), the verifier's read of each row registration
-(`network_certifier_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
+(`network_attester.NetworkCertifierParams`), the verifier's read of each row registration
+(`network_attester_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
 phase (`scan_ok.constants` and `held`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
@@ -45,7 +45,7 @@ a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
 shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
 `first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
-(`network_certifier_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network attester session;
+(`network_attester_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network attester session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network attester leaves a window in which it refused a
@@ -122,12 +122,12 @@ from pathlib import Path
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.protocols.resource_accounting.network.verifier import content_rows, io_request, scan_ok
-from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
                                                                         start_digest, start_link)
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
-from verity.protocols.resource_accounting.network.verifier.network_certifier import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkCertifierParams
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
@@ -1042,7 +1042,7 @@ def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
 
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
-    """`rowsCheck`: the verifier's own read of the registration (`network_certifier_rows.check_registration`) under the entry the
+    """`rowsCheck`: the verifier's own read of the registration (`network_attester_rows.check_registration`) under the entry the
     period's execution phase `w` picks: its key, its session, which the registration's domain binds, and that session's
     number for the execution phase, `w` less the entry's start, which its value, window, layout, domain and head name. A
     signer that is another listed key, outside its stretch, or that the parameters don't list is refused by name."""

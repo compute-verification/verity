@@ -228,7 +228,7 @@ the following:
   window, enabled slots first, never the prover's. Its `mt` are the certified max_tokens. Nothing reads a disabled
   slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover chose would
   pass log2(C(H, h) · C(O, o) · C(L, l)) bits and those values uncharged
-  (`test_network_certifier_window_charge_slots.py`: every arrangement and disabled values past every cap give one
+  (`test_network_attester_window_charge_slots.py`: every arrangement and disabled values past every cap give one
   charge and one carry).
 - It holds the returned bits to c_w as now. The tests check this inline: c_w equal to the charge accepts, and one bit
   less refuses.

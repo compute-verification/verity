@@ -9,10 +9,10 @@ import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import (blob_files as bf, connection_rows as CR, content_rows as CT,
-    record_files as RF, network_certifier_rows as WR)
+    record_files as RF, network_attester_rows as WR)
 from verity.protocols.resource_accounting.network.verifier.certificate import LmsKey
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 
 ROWS, SALTS = "rows.jsonl", "rows.salts"
 #: in a schedule with content rows, the releases each execution phase's hand filed in each class, a line each

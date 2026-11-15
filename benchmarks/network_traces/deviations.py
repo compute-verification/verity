@@ -1,6 +1,6 @@
 """deviations: a server that deviates behind the network attester's relay, six classes, each tried, read back and scored.
 
-A process between the network attester (`network_certifier_serve`'s relay, its id egress form) and the server's id front plays
+A process between the network attester (`network_attester_serve`'s relay, its id egress form) and the server's id front plays
 the cheating server. It plants a random string and tries one way to send it out, a class a try:
 
 - ``honest``: nothing changes; the control, tried first: when it is refused no deviation is tried.
@@ -26,11 +26,11 @@ bucket of the first cell that isn't padding and whether the connection failed, w
 trailer. `score` sets the reading beside the planted bits: how many it has right, and the mutual information between
 the two over the try.
 
-**The checks.** The relay's is `relay_check.check`, whose refusal's words are its audit's (`network_certifier.audit`). The I/O
+**The checks.** The relay's is `relay_check.check`, whose refusal's words are its audit's (`network_attester.audit`). The I/O
 tie's is its content part (`io_tie.cells_match`, `IoTieContent`'s reference) on each bucket of the egress record
 (`tie`), with two stand-ins for what a try doesn't have: the map is the certified placement, each data cell its
 stream's next output, and the Commit is the ids given (``--ids``, the server's record of each request's sampled ids),
-or under ``--stand-in`` the stand-in endpoint's own (`network_certifier_serve.fake_ids` of each request). Without either the tie
+or under ``--stand-in`` the stand-in endpoint's own (`network_attester_serve.fake_ids` of each request). Without either the tie
 isn't run, and the row says so. ``--ids`` is JSON lines, a request each with its `output_ids`: under its `user`, or
 under its `id` ``verity-<run>-<N>``, the name the certified tick gives a request that brings none (`tick_plugin`), the
 certifier's run id and the request's release number, so the server's own record of its requests is read as it is.
@@ -72,7 +72,7 @@ class is tried, the command says which try it stopped at, why, and which classes
     python deviations.py table --out DIR [--ids FILE] [--stand-in]
 
 - `try` runs each class as one try, with a network attester process of its own: the deviating process (`relay`) in
-  front of the front, then `network_certifier_serve.py rehearse --ids` through it (its key, its traffic, `serve`, `client` and
+  front of the front, then `network_attester_serve.py rehearse --ids` through it (its key, its traffic, `serve`, `client` and
   `check`; the flags after ``--`` are its own, the schedule's among them), then what it keeps and the row. It prints
   the table, a class a row: what is changed, the check that refuses it, the refusal's own words, the bits planted,
   read right and charged, and the try's seconds end to end; `rows.json` holds the rows and `table.txt` the table. It
@@ -88,7 +88,7 @@ class is tried, the command says which try it stopped at, why, and which classes
   them, holds each of a try's requests once, and ``--ids`` reads the right row.
 - The front's address is the value of the environment variable ``--front-env`` names, ``HOST:PORT``. It has no
   default, only `relay` reads it, and nothing a try writes holds it: the network attester's upstream is the
-  deviating process on the loopback. ``--stand-in`` starts `network_certifier_serve.py fake --id-payload` as the front instead.
+  deviating process on the loopback. ``--stand-in`` starts `network_attester_serve.py fake --id-payload` as the front instead.
 - `relay` is the deviating process alone. It relays an id request (``POST /v1/completions``) to the front and deviates
   its response as the class says, as the front's bytes arrive; every other connection it relays byte for byte. Once it
   listens it writes ``{"listening": [HOST, PORT]}`` on stdout. ``--log`` gets one JSON line an id request when its
@@ -127,13 +127,13 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 from verity.protocols.resource_accounting.network.attester.runner_cli import _address, _announce  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
-from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import release as REL  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_certifier import END, FAIL, NetworkCertifierParams, read_cell  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, NetworkCertifierParams, read_cell  # noqa: E402
 
 #: the classes in the order they are tried: the control first, and the one with the longest try last
 CLASSES = ("honest", "tokens", "length", "fail", "extra", "bucket")
@@ -356,7 +356,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     `DATA` and `END` cells of the egress record, where their SHA-256 is the one its client logged of what it got
     (`held`; else none). An egress cell is [bucket, slot, kind, stream, id] where `io_tie.parse_cell` reads it, else
     [bucket, slot, its bytes in hex without their zero fill]; stream 0's padding isn't listed. Under `stand_in` a
-    connection also has the stand-in endpoint's own ids of its request (`network_certifier_serve.fake_ids`). `watermark` is
+    connection also has the stand-in endpoint's own ids of its request (`network_attester_serve.fake_ids`). `watermark` is
     what the network attester logged of its watermark (`watermark_log`)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = NetworkCertifierParams(**dep["params"])
@@ -723,14 +723,14 @@ def _stop(procs: Sequence[subprocess.Popen]) -> None:
 
 def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     """One try of class `cls` in the run directory `run` (the module docstring's `try`): the stand-in front when
-    asked, the deviating process before the front, and `network_certifier_serve.py rehearse` through it; the seconds it took end
+    asked, the deviating process before the front, and `network_attester_serve.py rehearse` through it; the seconds it took end
     to end. `NoCheck` when it wrote no check."""
     run.mkdir(parents=True, exist_ok=True)
     payload = NetworkCertifierParams(cell_bytes=args.cell_bytes).payload
     requests = args.bucket_requests if cls == "bucket" else args.requests
     start, procs, env, name = clock(), [], dict(os.environ), args.front_env
     me = [sys.executable, str(HERE / "deviations.py")]
-    relay = [sys.executable, "-m", "verity.protocols.resource_accounting.network.attester.network_certifier_serve"]
+    relay = [sys.executable, "-m", "verity.protocols.resource_accounting.network.attester.network_attester_serve"]
     try:
         if args.stand_in:
             fake = subprocess.Popen(relay + ["fake", "--listen", "127.0.0.1:0", "--id-payload", str(payload),
@@ -870,7 +870,7 @@ def parser() -> argparse.ArgumentParser:
     t.add_argument("--scratch", type=Path, help="where each try's run directory goes, and stays (default: a temporary "
                                                 "directory, removed when the command ends)")
     t.add_argument("rehearse", nargs="*", metavar="REHEARSE-FLAG", default=["--window", "60", "--lanes", "64"],
-                   help="after --: network_certifier_serve.py rehearse's own flags, the schedule's among them (default: "
+                   help="after --: network_attester_serve.py rehearse's own flags, the schedule's among them (default: "
                         "--window 60 --lanes 64)")
     r.add_argument("--class", dest="cls", choices=CLASSES, required=True)
     r.add_argument("--payload", type=int, required=True, help="an id event's bytes, the network certifier's B - 9")

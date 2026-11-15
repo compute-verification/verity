@@ -89,7 +89,7 @@ from typing import Any
 
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
 from verity.protocols.resource_accounting.network.verifier.connection_rows import Head
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 
 #: the four verdicts a class owes before it is charged below its schedule
 STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"

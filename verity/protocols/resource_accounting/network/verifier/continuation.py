@@ -41,13 +41,13 @@ the right stamps out of N order (`order`). Records the rule can't read are refus
 stamped response past its `max_tokens` (`over`).
 
 **The records.** `Response` is one released request and its response as certified records give them, whatever their
-form. `read` reads the network attester's own records (`network_certifier.py`'s schedule in the id egress form: `Record`s of
-`NetworkCertifierParams.window` buckets) up to b, through `network_certifier.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
+form. `read` reads the network attester's own records (`network_attester.py`'s schedule in the id egress form: `Record`s of
+`NetworkCertifierParams.window` buckets) up to b, through `network_attester.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
 number of complete execution phases the records cover, a cell that isn't the certifier's, a request that isn't a
 canonical id request, an egress cell out of the id form, an id cell before its request's release or after its end
-cell, and a request cell after its `END`. That each cell is in its schedule's slot is `network_certifier.audit`'s check, which
+cell, and a request cell after its `END`. That each cell is in its schedule's slot is `network_attester.audit`'s check, which
 this one doesn't repeat. `edge` is the rule on those records: the stamps and the continuations at b.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ from __future__ import annotations
 import json
 from typing import Collection, NamedTuple, Sequence
 
-from verity.protocols.resource_accounting.network.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid, row_count
 from verity.protocols.resource_accounting.network.verifier.io_tie import parse_cell

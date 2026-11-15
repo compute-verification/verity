@@ -11,7 +11,7 @@ definitions). It has no console script.
   it; the parts of its life the runtime has no form for yet raise `NotImplementedError` naming their goal.
   `device_needs` holds those needs, one proposed type each. `coin_link.CoinLink` is the link for a window's challenges,
   which `verity/protocols/compose/verifier/live_challenger/coin_link.py` runs (`../verifier/protocol/coin-link.md`).
-  Their tests are in `../verifier/tests`. The relay (`../verifier/network_certifier.py`) and its pacer stay in `../verifier`,
+  Their tests are in `../verifier/tests`. The relay (`../verifier/network_attester.py`) and its pacer stay in `../verifier`,
   whose modules read the schedule and the cells' layout from them.
 
 - **Lean**: `program/lean/` is the Lake package `certifier_program`, whose library `NetworkCertifier` the packages at
