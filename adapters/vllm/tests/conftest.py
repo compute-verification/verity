@@ -1,3 +1,96 @@
+"""Suite-wide isolation guard: no test may leave a loaded `verity` module swapped for another copy.
+
+A re-executed `verity.circuits.defs` is a second module with its own empty REGISTRY; every registry module first imported against it registers
+into that orphan for the rest of the process, so the failure surfaces in whichever later file shares the worker, never in the test that
+caused it.  The guard fails the causing test by name and puts the original modules back.  It looks once the test's `monkeypatch`
+has undone what was set with it, so a module swapped with `monkeypatch` is not one the test left: the `monkeypatch` a test or a
+fixture of this suite is handed is this file's, which is pytest's set up after the guard.
+
+Every process of the suite runs under the engine profile's fixed Inductor switches (`engine.env.FIXED`), as an engine's process
+does: torch reads them once, when `torch._inductor.config` is imported, so this file pins them and imports that module itself,
+before any test.  No test is then the first to import it, whatever that test has cleared from the environment, and a test that
+builds engine arguments (`engine.env.require_inductor`) doesn't depend on which test ran before it.  A second guard fails, by
+name, a test that leaves the loaded module reading a fixed switch otherwise, and puts the pinned value back; it looks once the
+test's teardown has finalized every fixture, so a change the test's `monkeypatch` undoes is not one it left."""
+from __future__ import annotations
+
+import importlib.util
+import sys
+
+import pytest
+
+from tests.lint._imports import core as _core
+from verity_vllm.engine import env as _engine_env
+
+_engine_env.pin({k: _engine_env.ENGINE[k] for k in _engine_env.FIXED})
+if importlib.util.find_spec("torch") is not None:  # torch is an extra of this package: where it is absent, nothing reads the switches
+    import torch._inductor.config  # noqa: F401
+
+import verity.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
+
+_MISSING = object()
+
+
+def _verity_modules() -> dict[str, tuple[object, object, object]]:
+    """{name: (module, parent package, the parent's attribute of that name)} -- the attribute is snapshotted, not assumed to be the
+    module: a package may re-export a function under its submodule's name (`verity.circuits.query`)."""
+    snap = {}
+    for n, m in list(sys.modules.items()):
+        if m is None or not _core(n):
+            continue
+        parent, _, child = n.rpartition(".")
+        pkg = sys.modules.get(parent) if parent else None
+        snap[n] = (m, pkg, _MISSING if pkg is None else getattr(pkg, child, _MISSING))
+    return snap
+
+
+@pytest.fixture(autouse=True)
+def _verity_modules_not_swapped():
+    before = _verity_modules()
+    yield
+    swapped = []
+    for n, (m, pkg, attr) in before.items():
+        child = n.rpartition(".")[2]
+        if sys.modules.get(n) is not m or (pkg is not None and getattr(pkg, child, _MISSING) is not attr):
+            swapped.append(n)
+            sys.modules[n] = m
+            if pkg is not None and attr is not _MISSING:
+                setattr(pkg, child, attr)
+    if swapped:
+        pytest.fail(f"test left loaded verity module(s) swapped for another copy (sys.modules or package attribute): {sorted(swapped)}; "
+                    f"a re-executed verity.circuits.defs carries its own REGISTRY and orphans every registry module imported against it",
+                    pytrace=False)
+
+
+@pytest.fixture
+def monkeypatch(_verity_modules_not_swapped, monkeypatch):
+    """pytest's `monkeypatch`, set up after the swap guard whoever asks for it first, and so torn down before the guard looks.
+    Under pytest's own, a plugin whose autouse fixture takes `monkeypatch` (the one `suites.py` loads into every suite) has it set
+    up before the guard, and the guard fails a test for a swap its `monkeypatch` was about to undo."""
+    return monkeypatch
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item):
+    """The Inductor guard, after the test's every fixture is finalized (the hook's own work), not as a fixture among them: an
+    autouse fixture is torn down before `monkeypatch` undoes the test's change wherever `monkeypatch` was set up first, as under a
+    plugin whose own autouse fixture takes it, and would read what the test was about to put back."""
+    try:
+        result = yield
+    finally:
+        cfg, pinned = sys.modules.get("torch._inductor.config"), dict(_engine_env.FIXED.values())
+        left = {attr: getattr(cfg, attr) for attr, want in pinned.items() if cfg is not None and getattr(cfg, attr, want) != want}
+        for attr in left:
+            setattr(cfg, attr, pinned[attr])
+    if left:
+        pytest.fail(f"test left torch._inductor.config reading {left}, where every process of the suite reads {pinned} "
+                    f"(engine.env.FIXED): it set the attribute, or unloaded the module and imported it again without the pin in its "
+                    f"environment, and every later engine build in this process would be refused (engine.env.require_inductor); undo "
+                    f"what the test changed (monkeypatch.setattr, monkeypatch.delitem)", pytrace=False)
+    return result
+
+
+# The conftest of the suite's tests/ before its tables moved there.
 """Known failures on `main`, marked expected to fail so that `check` gates every other test of this suite.
 
 Each one failed on `main` with torch 2.14 and 2.4.1 on CPU, before this suite joined
@@ -9,7 +102,6 @@ Tests that take over about 5 s carry `@pytest.mark.slow` in their own module. Th
 cases stay in the default run, and circuit-check's `word_view` checks each Boolean Definition against its word Definition off the
 merge gate (`off_gate` in `tools/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
-from __future__ import annotations
 
 import importlib
 import os

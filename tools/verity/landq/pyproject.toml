@@ -12,7 +12,3 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["verity_landq"]
 dev-mode-exact = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
