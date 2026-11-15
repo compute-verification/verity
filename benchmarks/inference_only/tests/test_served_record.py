@@ -21,6 +21,8 @@ import served_verdicts as SV
 import tied as T
 
 CLASS = (2, 2, 2)
+#: the class's tag in its count's file name, `block-counts-<TAG>.json`
+TAG = "-".join(map(str, CLASS))
 RUN = "made"
 SCAN = "the scan state row"
 #: the compiled command's printout, made by the check's own script from its reference's verdicts
@@ -39,6 +41,13 @@ print("[1 s] count: " + json.dumps(got["count"]))
 def _vectors():
     spec = importlib.util.spec_from_file_location("record_difftest_vectors",
                                                   B.PACKAGE / "scripts" / "record_difftest_vectors.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _script():
+    spec = importlib.util.spec_from_file_location("served_record_case", R.SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -66,24 +75,37 @@ def stand_in(tmp_path) -> Path:
 
 def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9, macs: int | None = None,
          tie: str | None = "same", n: int | None = None, kinds: bool = True, counts: int = 1,
-         limits: dict | None = None) -> list[str]:
+         limits: dict | None = None, registered: bool = False, unregister: bool = False) -> list[str]:
     """``case`` as a served run's files under ``where``, and the options that read them. Its rate rule's limits are the
     case's, or ``limits``; its policy is the case's count limits (``n`` in place of its n) on class `CLASS`, k by kind
     made of the linears' outputs and a scan state row of 16 bits (none where not ``kinds``). Its PoUW row is a development accept, or with ``accept`` Pearl+'s accept of record
     crediting ``credited`` of the ``macs`` it counts (default the class's linears), its window record the run's
-    registration's previous (``tie`` "same"), another, or none."""
+    registration's previous (``tie`` "same"), another, or none. With ``unregister`` its log's first record registers
+    no entry for the smallest parameter the record reads, as the case script's ``--unregister smallest`` makes it.
+    With ``registered`` the Program, the circuit record and the log are in its out/ (`record.REGISTERED`), and the
+    options are ``--served`` with the run's directory alone."""
     inst, tr = case["instance"], case["trusted"]
     run, out = where / "run", where / "out"
     (out / "record").mkdir(parents=True)
     run.mkdir()
+    log = tr["log"]
+    if unregister:
+        made_case, _ = _script().served_case(inst["program"], inst["record"], log,
+                                             {"alpha": inst["alpha"], "gamma": inst["gamma"]}, unregister="smallest")
+        log = made_case["trusted"]["log"]
     (run / "program.json").write_text(inst["program"])
     (run / "circuit.json").write_text(inst["record"])
-    logs = [run / f"log{k}.json" for k in range(len(tr["log"]))]
-    for path, rec in zip(logs, tr["log"]):
+    logs = [run / f"log{k}.json" for k in range(len(log))]
+    for path, rec in zip(logs, log):
         path.write_text(json.dumps(rec))
+    if registered:
+        (out / "registered").mkdir()
+        (out / R.REGISTERED["program"]).write_text(inst["program"])
+        (out / R.REGISTERED["circuit"]).write_text(inst["record"])
+        (out / R.REGISTERED["log"]).write_text("".join(json.dumps(rec) + "\n" for rec in log))
     count = {**case["count"], **({"n": n} if n else {})}
-    for k in range(counts):
-        (out / f"block-counts-{k}.json").write_text(json.dumps(count))
+    for tag in (TAG, "record", *map(str, range(2, counts)))[:counts]:
+        (out / f"block-counts-{tag}.json").write_text(json.dumps(count))
     (out / "inference-only-limits.json").write_text(json.dumps(limits or {"alpha": inst["alpha"], "gamma": inst["gamma"]}))
     work = B.block_work(CLASS, B.MODEL)
     policy = {"format": R.POLICY_FORMAT, **{x: count[x] for x in "ckn"}, "serve": {"model": B.MODEL},
@@ -105,6 +127,8 @@ def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9
         row = {"verdict": "missing", "owner": "compute-accounting", "why": f"{SV.DEV_VERDICT}: not of record",
                "development": {"piece": "pearlplus", "verdict": "accept"}}
     (out / "record" / "verdicts.json").write_text(json.dumps({"run": RUN, "protocols": {"work": row}}))
+    if registered:
+        return ["--served", str(where)]
     return ["--served", str(out), "--program", str(run / "program.json"), "--circuit", str(run / "circuit.json"),
             "--log", *map(str, logs)]
 
@@ -123,7 +147,7 @@ def _record(lines: list[str]) -> list[str]:
 def test_with_no_accept_of_record_the_value_is_one_and_measured(case, stand_in, tmp_path, capsys) -> None:
     """A development accept is no accept: s = 1, and the value is 1, marked measured, over every fleet and period too.
     The print names the run and the field that says the verdict is of record, prints each rule's public form only and
-    the check's cost, and the weekly metric is not written from it."""
+    the check's cost, and the metric is written from it: its value 1 at its mark, and the record's run."""
     doc = _main(made(case, tmp_path), stand_in, tmp_path / "result")
     out = capsys.readouterr().out
     rec, lines = doc["record"], _record(out.splitlines())
@@ -147,7 +171,10 @@ def test_with_no_accept_of_record_the_value_is_one_and_measured(case, stand_in, 
     # the private detail is nowhere: neither its keys nor the scratch the check wrote it to
     for word in ("bool_gates", "unregistered", "openings", "failure"):
         assert word not in out and word not in json.dumps(rec)
-    assert not (tmp_path / "result" / "result.json").exists()
+    result = json.loads((tmp_path / "result" / "result.json").read_text())
+    assert [(m["name"], m["value"], m["mark"], m["verdict"]) for m in result["measurements"]] == [
+        (report.METRIC, 1, "measured", "misses")]
+    assert (doc["value"], doc["run"]) == (1, RUN)
 
 
 def test_an_accept_of_record_prices_the_class_under_the_tie_at_its_share(case, stand_in, tmp_path, capsys) -> None:
@@ -191,6 +218,88 @@ def test_an_accept_with_no_window_record_says_nothing_ties_it(case, stand_in, tm
     assert f"  tie       {R.NO_TIE}" in out.splitlines() and f"({R.NO_TIE});" in out
 
 
+def test_with_a_record_read_its_number_heads_the_print_and_the_json_at_its_own_mark(case, stand_in, tmp_path,
+                                                                                    capsys) -> None:
+    """With a record read the command's number is the record's: the headline printed first, the JSON's value and run,
+    and the measurement under the metric's id at the record's own mark. The stated policy's number follows, labelled
+    as not the result."""
+    doc = _main(made(case, tmp_path, accept=True), stand_in, tmp_path / "result")
+    out = capsys.readouterr().out
+    lines, one = out.splitlines(), doc["record"]["block"]
+    assert lines[1] == f"{report.MEASUREMENT} The served run's record read: {tmp_path / 'out'}"
+    assert lines[2] == R.made_with({}) and lines[3] == ""
+    assert lines[4].startswith(f"FROM RUN {RUN}'s RECORD: {report._n(one['value'])} (partial), ")
+    stated = [i for i, x in enumerate(lines) if x.startswith("THE SERVED POLICY'S NUMBER, NOT THE RESULT: ")]
+    assert len(stated) == 1 and stated[0] > 4 and "AS SERVED" not in out
+    shown = json.loads(lines[-1])
+    assert list(shown)[:4] == ["value", "unit", "commit", "run"]
+    assert (shown["value"], shown["run"]) == (doc["value"], doc["run"]) == (one["value"], RUN)
+    result = json.loads((tmp_path / "result" / "result.json").read_text())
+    assert [(m["name"], m["value"], m["mark"], m["verdict"]) for m in result["measurements"]] == [
+        (report.METRIC, one["value"], "partial", report.verdict(one["value"]))]
+
+
+def test_a_record_with_no_figure_writes_no_value_and_says_why(case, stand_in, tmp_path, capsys) -> None:
+    doc = _main(made(case, tmp_path, accept=True, kinds=False), stand_in, tmp_path / "result")
+    one = doc["record"]["block"]
+    assert (one["value"], one["mark"], doc["value"]) == (None, None, None) and one["reading"] == f"no figure: {R.NO_KINDS}"
+    assert capsys.readouterr().out.splitlines()[4].startswith(f"FROM RUN {RUN}'s RECORD: ")
+    result = json.loads((tmp_path / "result" / "result.json").read_text())
+    assert [(m["name"], m["value"], m["mark"], m["why"]) for m in result["measurements"]] == [
+        (report.METRIC, None, "partial", one["reading"])]
+
+
+def test_a_record_that_states_no_run_is_named_by_its_directory(case, stand_in, tmp_path, capsys) -> None:
+    args = made(case, tmp_path)
+    verdicts = tmp_path / "out" / "record" / "verdicts.json"
+    verdicts.write_text(json.dumps({k: v for k, v in json.loads(verdicts.read_text()).items() if k != "run"}))
+    doc = _main(args, stand_in)
+    lines = capsys.readouterr().out.splitlines()
+    assert doc["run"] == doc["record"]["run"] == tmp_path.name
+    assert lines[4].startswith(f"FROM RUN {tmp_path.name}'s RECORD: 1 (measured), ")
+
+
+def test_the_first_lines_say_which_coins_and_parameters_the_record_states(case, stand_in, tmp_path, capsys) -> None:
+    """One line says which coins and parameters PoUW's piece was made with where the record states them, its accept
+    of record's piece or a development row's: the challenger's live session and the parameter set, or that the record
+    names none."""
+    piece = {"coins": {"check": {"session": "s-made", "reason": None}}, "scheme": "development"}
+    said = ("Made with, as the record states it: PoUW's coins from the challenger's live session 's-made'; its "
+            "parameters 'development'.")
+    assert R.made_with({"protocols": {"work": {"piece": piece}}}) == said
+    assert R.made_with({"protocols": {"work": {"development": piece}}}) == said
+    assert R.made_with({"protocols": {"work": {"piece": {"coins": {}, "scheme": "development"}}}}) == (
+        "Made with, as the record states it: the record names no live challenger session for PoUW's coins; its "
+        "parameters 'development'.")
+    assert R.made_with({}) == R.made_with({"protocols": {"work": "missing"}}) == (
+        "Made with, as the record states it: the record names no live challenger session for PoUW's coins; the record "
+        "names no parameters for PoUW's piece.")
+    args = made(case, tmp_path)
+    verdicts = tmp_path / "out" / "record" / "verdicts.json"
+    doc = json.loads(verdicts.read_text())
+    doc["protocols"]["work"]["development"] |= piece
+    verdicts.write_text(json.dumps(doc))
+    _main(args, stand_in)
+    assert capsys.readouterr().out.splitlines()[2] == said
+
+
+def test_the_served_class_option_picks_one_count_of_several(case, stand_in, tmp_path, capsys) -> None:
+    """Where a record holds counts of more than one class, `--served-class` reads the one it names; a class the record
+    holds no count of is refused naming the classes it holds, and the option without a record is refused."""
+    args = made(case, tmp_path, counts=2)
+    for cls in ("2,2,2", "record"):
+        assert _main([*args, R.CLASS_OPTION, cls], stand_in)["record"]["block"]["mark"] == "measured"
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as e:
+        _main([*args, R.CLASS_OPTION, "9,9,9"], stand_in)
+    assert e.value.code == 2 and (f"{R.CLASS_OPTION} 9,9,9: the record holds no count of that class; it holds counts "
+                                  "of the classes 2,2,2, record") in capsys.readouterr().err
+    with pytest.raises(SystemExit) as e:
+        _main([R.CLASS_OPTION, "record"], stand_in)
+    assert e.value.code == 2 and f"{R.CLASS_OPTION} names a class of a served run's record, and no record is read" in (
+        capsys.readouterr().err)
+
+
 #: rate rule limits the case's record exceeds, where its count stays within its own
 TIGHT = {"alpha": [1, 84], "gamma": 84}
 
@@ -225,7 +334,7 @@ def test_a_record_a_rule_refuses_is_one_and_measured_and_names_only_the_rule(cas
     ({"accept": True, "credited": -0.1}, "below 0"),
     ({"accept": True, "macs": 7}, "MACs of linears, not the record's class.slots"),
     ({"accept": True, "tie": "other"}, "the verdict is about another record than the check's"),
-    ({"counts": 2}, "holds 2"),
+    ({"counts": 2}, f"holds counts of 2 classes, 2,2,2, record: name the one to read with {R.CLASS_OPTION} CLASS"),
 ])
 def test_a_record_that_misstates_is_refused_before_the_check_runs(case, tmp_path, capsys, how, why) -> None:
     with pytest.raises(SystemExit) as e:
@@ -234,10 +343,25 @@ def test_a_record_that_misstates_is_refused_before_the_check_runs(case, tmp_path
     assert e.value.code == 2 and "the record is refused" in err and why in err
 
 
+def test_a_record_with_no_program_is_one_and_says_the_check_did_not_run(case, tmp_path, capsys) -> None:
+    """A record that holds no Program (a serve under the Pearl+ tie writes none) can't be checked: the value is 1,
+    measured, its reading says why, and no check runs, whatever PoUW's accept credits."""
+    args = made(case, tmp_path, accept=True)
+    (tmp_path / "run" / "program.json").unlink()
+    rec = _main(args, tmp_path / "no-such-check")["record"]
+    lines = _record(capsys.readouterr().out.splitlines())
+    assert (rec["block"]["value"], rec["block"]["mark"]) == (1, "measured") and rec["cost"] is None
+    assert rec["block"]["reading"].startswith(R.NO_PROGRAM) and rec["pouw"]["verdict"] == "accept"
+    assert all("complies" not in v for v in rec["check"].values()) and rec["files"]["program_bytes"] is None
+    assert lines[0].startswith("FROM RUN made's RECORD: 1 (measured), the record holds no Program")
+    assert f"  check     {R.CHECK}: not run, {R.NO_PROGRAM}" in lines
+    assert {r["reading"] for r in rec["periods"]} == {"no Program, the check not run"}
+
+
 @pytest.mark.parametrize(("gone", "what"), [
-    ("run/program.json", "Program"), ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
+    ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
     ("out/record/verdicts.json", "compose verdicts"), ("out/inference-only-policy.json", "policy"),
-    ("out/inference-only-limits.json", "rate rule's limits"), ("out/block-counts-0.json", "count's limits"),
+    ("out/inference-only-limits.json", "rate rule's limits"), (f"out/block-counts-{TAG}.json", "count's limits"),
 ])
 def test_a_file_the_run_did_not_write_is_named(case, tmp_path, capsys, gone, what) -> None:
     """Each file is named as one the run did not write, with its path: none has a default."""
@@ -245,15 +369,93 @@ def test_a_file_the_run_did_not_write_is_named(case, tmp_path, capsys, gone, wha
     (tmp_path / gone).unlink()
     with pytest.raises(SystemExit):
         _main(args, tmp_path / "no-such-check")
-    assert f"the run wrote no {what} ({tmp_path / gone.replace('block-counts-0', 'block-counts-*')})" in capsys.readouterr().err
+    assert f"the run wrote no {what} ({tmp_path / gone.replace(TAG, '*')})" in capsys.readouterr().err
 
 
-def test_served_takes_the_files_it_names_and_they_take_it(case, stand_in, tmp_path, capsys) -> None:
+def test_the_files_named_apart_take_served_and_come_all_three_or_none(case, stand_in, tmp_path, capsys) -> None:
     args = made(case, tmp_path)
     for drop in (["--served", args[1]], args[2:4]):
         with pytest.raises(SystemExit):
             _main([x for x in args if x not in drop], stand_in)
-        assert "--served OUT takes --program, --circuit and --log" in capsys.readouterr().err
+        assert "--program, --circuit and --log take --served RUN, and come all three or none" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_served_alone_reads_the_run_directorys_registered_files(case, stand_in, tmp_path, capsys, accept) -> None:
+    """``--served RUN`` alone, the run's directory or its out/, reads the files the run registered from out/'s
+    `REGISTERED`, its log one record a line, and gives what the same files named apart give; the first lines say the
+    number is a measurement and not an audit, and which record was read."""
+    named = _main(made(case, tmp_path / "a", accept=accept), stand_in)["record"]
+    made(case, tmp_path / "b", accept=accept, registered=True)
+    for served in (tmp_path / "b", tmp_path / "b" / "out"):
+        capsys.readouterr()
+        got = _main(["--served", str(served)], stand_in)["record"]
+        lines = capsys.readouterr().out.splitlines()
+        assert lines[1] == f"{report.MEASUREMENT} The served run's record read: {tmp_path / 'b' / 'out'}"
+        keys = ("run", "check", "pouw", "block", "files")
+        assert {x: got[x] for x in keys} == {x: named[x] for x in keys}
+        assert got["files"]["log_records"] == 3 and got["pouw"]["verdict"] == ("accept" if accept else "missing")
+
+
+def test_a_run_that_registered_no_files_where_served_reads_them_is_named(case, tmp_path, capsys) -> None:
+    made(case, tmp_path, registered=True)
+    (tmp_path / "out" / R.REGISTERED["log"]).unlink()
+    with pytest.raises(SystemExit):
+        _main(["--served", str(tmp_path)], tmp_path / "no-such-check")
+    assert f"the run wrote no registration log ({tmp_path / 'out' / R.REGISTERED['log']})" in capsys.readouterr().err
+
+
+def test_a_weight_left_unregistered_is_refused_by_the_count(case, stand_in, tmp_path, capsys) -> None:
+    """The log's first record without the smallest parameter the record reads: the count refuses the record, and so
+    does the rate rule, and the value is 1, measured, whatever PoUW's accept credits."""
+    rec = _main(made(case, tmp_path, accept=True, tie=None, unregister=True), stand_in)["record"]
+    assert {line: rec["check"][line]["complies"] for line in R.PUBLIC} == {"check": False, "count": False}
+    assert (rec["block"]["value"], rec["block"]["mark"]) == (1, "measured")
+    assert rec["block"]["reading"].startswith("the check refused the record (both rules)")
+
+
+def test_the_data_file_names_the_served_run_of_record_or_none(tmp_path) -> None:
+    """Absent, empty or with no `record`, the data file names no run; a path is the repository's root's or absolute;
+    any other key or a record that isn't a path is refused."""
+    f = tmp_path / "of_record.toml"
+    assert R.of_record(f) is None
+    for text, want in (("", None), ("# none\n", None), ('record = "runs/a"\n', P.ROOT / "runs/a"),
+                       (f'record = "{tmp_path}"\n', tmp_path)):
+        f.write_text(text)
+        assert R.of_record(f) == want
+    for text, why in (('record = 3\n', "a path, not 3"), ('record = ""\n', "a path"), ('run = "a"\n', "its one key"),
+                      ("record = [", "not TOML")):
+        f.write_text(text)
+        with pytest.raises(R.Refused, match=why):
+            R.of_record(f)
+
+
+def test_the_command_reads_the_run_the_data_file_names(case, stand_in, tmp_path, monkeypatch, capsys) -> None:
+    """With no --served, the record the data file names is read as --served would read it; --served names another."""
+    made(case, tmp_path / "of-record", registered=True)
+    f = tmp_path / "of_record.toml"
+    f.write_text(f'record = "{tmp_path / "of-record"}"\n')
+    monkeypatch.setattr(R, "OF_RECORD", f)
+    assert _main([], stand_in)["record"]["run"] == RUN
+    assert f"read: {tmp_path / 'of-record' / 'out'}" in capsys.readouterr().out
+    made(case, tmp_path / "other", registered=True)
+    _main(["--served", str(tmp_path / "other")], stand_in)
+    assert f"read: {tmp_path / 'other' / 'out'}" in capsys.readouterr().out
+    f.write_text("")
+    assert _main([], stand_in)["record"] is None
+
+
+def test_with_no_lake_the_command_says_in_one_line_what_it_needs(case, tmp_path, monkeypatch, capsys) -> None:
+    """Where the check would be built here and `lake` isn't on PATH, the command exits 1 before any work with one line
+    naming elan and the toolchain, for a served record and for the built class alike."""
+    monkeypatch.setattr(B.shutil, "which", lambda name: None)
+    toolchain = (B.PACKAGE / "lean-toolchain").read_text().strip()
+    for argv in (["--stated-only", *made(case, tmp_path)], []):
+        with pytest.raises(SystemExit) as e:
+            report.main(argv, commit=lambda: None)
+        out, err = capsys.readouterr()
+        assert e.value.code == 1 and out == ""
+        assert err.count("\n") == 1 and "`lake` isn't on PATH" in err and "elan" in err and toolchain in err
 
 
 def test_the_record_class_under_the_tie_is_its_own_kinds(tmp_path) -> None:
