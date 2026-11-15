@@ -6,6 +6,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 import Mathlib.Algebra.BigOperators.Group.List.Basic
 import Mathlib.Algebra.Order.BigOperators.Group.List
 import Mathlib.Data.List.Perm.Subperm
+import all Lean.Data.Json.Basic
 
 /-!
 # A printed JSON value's length
@@ -57,7 +58,9 @@ theorem escC_size_le (c : Char) : (escC c).utf8ByteSize ≤ 18 := by
     omega
 
 theorem join_escC_size_le : ∀ l : List Char, (String.join (l.map escC)).utf8ByteSize ≤ 18 * l.length
-  | [] => by decide +kernel
+  | [] => by
+    rw [List.map_nil, String.join_nil, String.utf8ByteSize_empty]
+    exact Nat.zero_le _
   | c :: l => by
     rw [List.map_cons, String.join_cons, String.utf8ByteSize_append, List.length_cons]
     have h1 := escC_size_le c
@@ -161,7 +164,6 @@ theorem jszL_eq : ∀ l : List Json, jszL l = (l.map fun j => jsz j + 1).sum
   | [] => rfl
   | j :: js => by
     rw [jszL, jszL_eq js, List.map_cons, List.sum_cons]
-    all_goals omega
 
 theorem jszF_model : ∀ t : Impl String (fun _ => Json),
     jszF t = (t.toListModel.map fun e => 18 * e.1.length + 4 + jsz e.2).sum
@@ -176,10 +178,9 @@ theorem jszF_model : ∀ t : Impl String (fun _ => Json),
 theorem jsz_arr (a : Array Json) : jsz (.arr a) = (a.toList.map fun j => jsz j + 1).sum + 2 := by
   obtain ⟨l⟩ := a
   rw [jsz, jszL_eq]
-  all_goals rfl
 
 /-- A sublist up to order of a list weighs at most what the list does. -/
-theorem sum_le_of_subperm {α : Type} (f : α → ℕ) {l₁ l₂ : List α} (h : l₁ <+~ l₂) :
+theorem sum_le_of_subperm {α : Type} (f : α → ℕ) {l₁ l₂ : List α} (h : List.Subperm l₁ l₂) :
     (l₁.map f).sum ≤ (l₂.map f).sum := by
   obtain ⟨l, hp, hs⟩ := h
   rw [← (hp.map f).sum_eq]
@@ -194,8 +195,9 @@ theorem jsz_mkObj_le {l : List (String × Json)} (hd : Distinct l) :
   have e0 : ∀ m : Std.TreeMap.Raw String Json, jsz (.obj m) = jszF m.inner.inner + 2 := fun ⟨⟨t⟩⟩ => by
     rw [jsz]
     all_goals rfl
-  have e1 : jsz (Json.mkObj l) = jszF (Std.TreeMap.Raw.ofList l compare).inner.inner + 2 :=
-    e0 (Std.TreeMap.Raw.ofList l compare)
+  have e1 : jsz (Json.mkObj l) = jszF (Std.TreeMap.Raw.ofList l compare).inner.inner + 2 := by
+    unfold Json.mkObj
+    exact e0 (Std.TreeMap.Raw.ofList l compare)
   have e2 : Std.TreeMap.Raw.toList (Std.TreeMap.Raw.ofList l compare) =
       (Std.TreeMap.Raw.ofList l compare).inner.inner.toListModel.map fun e => (e.1, e.2) := by
     show Impl.Const.toList (Std.TreeMap.Raw.ofList l compare).inner.inner = _
