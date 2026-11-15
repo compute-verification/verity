@@ -7,11 +7,7 @@ calls `runner.sample(hidden_states, input_batch, grammar_output)` (lm_head GEMM,
 are wrapped (pattern `capture.py:679-720`); the observer mode is entered separately in each, with phase "forward"
 (the runner's own input-preparation dispatcher calls / Triton kernels before the model's root forward carry phase
 "other" when module hooks are on) and phase "sample".  Dummy / profile runs and empty steps are passed through.
-Opt-in (`ObserverConfig.draft`, off by default): `sample_tokens` calls the speculator's `propose` after `sample` returns,
-outside both; with `draft` the step is held open after `sample`, `runner.speculator.propose` is observed as its phase
-"draft" and the step closes after it (or at the next `execute_model` or uninstall when no propose came), and the
-speculator model's parameters and buffers are roots named under `drafter.` (a tensor it shares with the model stays the
-model's root).  Its events are buffered in the step like the rest, so they precede the step's `SampleEnd`.
+The speculator's `propose`, after `sample`, is observed only under the opt-in draft phase (`capture_draft`).
 
 Log order requires `StepStart` (whose facts are known only after input preparation) before the step's dispatch
 events, and `SampleEnd` needs the sampled ids: the step's events are **buffered in memory**; the tiny per-step
@@ -55,7 +51,8 @@ import torch
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.observe import triton_adapter
+from verity_vllm.observe import capture_draft, triton_adapter
+from verity_vllm.observe.capture_draft import DRAFTER_PREFIX
 from verity_vllm.observe.capture_types import ObserverConfig, _Step
 from verity_vllm.observe.events import (
     Event,
@@ -89,9 +86,6 @@ from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
 __all__ = ["Capture", "ObserverConfig"]
-
-#: the drafter's roots and KV caches are named under this prefix (`ObserverConfig.draft`)
-DRAFTER_PREFIX = "drafter."
 
 
 class Capture:
@@ -158,11 +152,7 @@ class Capture:
         model, cfg = self.model, self.cfg
         if self.header is not None:
             self._write(self.header)
-        if cfg.draft and cfg.mode == "record":
-            self.drafter = getattr(getattr(self.runner, "speculator", None), "model", None)
-            if not isinstance(self.drafter, torch.nn.Module):
-                self.drafter = None
-                self._write(Note("draft phase asked for, but the runner has no speculator with a model: not observed", {}))
+        self.drafter = capture_draft.drafter_of(self)
         self._install_roots()
         self._install_external_buffers()
         if cfg.mode == "record":
@@ -180,7 +170,7 @@ class Capture:
     def uninstall(self) -> None:
         if not self.installed:
             return
-        self._close_awaiting_draft()
+        capture_draft.close_awaiting(self)
         self._finalize_pending()
         self._hooks.uninstall()
         if self.namer is not None:
@@ -293,7 +283,7 @@ class Capture:
         orig_execute, orig_sample = runner.execute_model, runner.sample
 
         def execute_model(scheduler_output, *a, **kw):
-            self._close_awaiting_draft()
+            capture_draft.close_awaiting(self)
             dummy = bool(kw.get("dummy_run", False)) or (len(a) >= 2 and bool(a[1]))
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_execute(scheduler_output, *a, **kw)
@@ -327,21 +317,7 @@ class Capture:
         self._hooks.patch(runner, "sample", sample)
 
         if self.drafter is not None:
-            speculator = runner.speculator
-            orig_propose = speculator.propose
-
-            def propose(*a, **kw):
-                st = self._cur
-                if st is None or not st.awaiting_draft:
-                    return orig_propose(*a, **kw)
-                t0 = time.perf_counter()
-                try:
-                    return self._run_observed(lambda: orig_propose(*a, **kw), phase="draft")
-                finally:
-                    st.draft_s = time.perf_counter() - t0
-                    self._close_step(st)
-
-            self._hooks.patch(speculator, "propose", propose)
+            capture_draft.patch_propose(self)
 
         # the logits tensor is the return value of model.compute_logits (V2 runner: sample() -> compute_logits ->
         # sampler); record its ViewDesc only (no tensor reference is kept)
@@ -516,11 +492,6 @@ class Capture:
         self._pending = st
         self.step_index += 1
         # non-snapshot steps: the deferred write happens at the next execute_model; keep the buffer
-
-    def _close_awaiting_draft(self) -> None:
-        st = self._cur
-        if st is not None and st.awaiting_draft:
-            self._close_step(st)
 
     def _end_timing_only(self, st: _Step) -> None:
         """The overhead ladder's rungs (a)/(b): no facts, no events; only the per-step timing."""
