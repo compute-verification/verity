@@ -17,7 +17,8 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
   `tests/X/`, the inner `tests/` with it; the pyproject needs no row.
 - **A suite whose pyproject builds a distribution**: no row can split a file, so `split` moves the pytest and test tables
   to a virtual member `NAME-tests` in `X/tests/` (testpaths `.`, the lists it writes from the suite's directory without
-  `tests/`, `pythonpath` from there), first, as a commit of its own; the files map then moves it with the tests. Its
+  `tests/`, `pythonpath` from there), first, as a commit of its own; `exports`, what the distribution's dependents key on,
+  stays, and a suite whose inputs replace its dependencies (`inputs_only`) or that `exports` narrows reads `X` by name; the files map then moves it with the tests. Its
   `conftest.py` beside the pyproject (the vLLM adapter's) is the suite's and goes into `X/tests/` too: pytest reads none
   above the suite's directory. A dependency group the distribution keeps for its own tests is the member's too.
 - **Every other suite's pyproject**: the suites map moves it to `tests/X/pyproject.toml` (`testpaths` `tests` to `.`,
@@ -42,7 +43,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
-from layout import _strip_suite_relative  # noqa: E402
+from layout import _add_inputs, _strip_suite_relative  # noqa: E402
 #: the top-level directories whose tests move under the root's `tests/`
 AREAS = ("verity", "adapters", "benchmarks", "tools", "infra")
 #: the root's directory that mirrors the tree by path (`tools/check/suites.py`'s `MIRROR`)
@@ -212,6 +213,21 @@ def _from_tests(body: str) -> str:
     return re.sub(r'^(pythonpath\s*=\s*\[)([^\]]*)\]', entry, body, flags=re.M)
 
 
+def _exports(body: str) -> tuple[str, str] | None:
+    """(`exports` with the comment lines above it, the table without them) of a `[tool.verity.tests]` table, or None: what its
+    dependents key on (`suites.py`'s `shipped`) is the distribution's, and stays in its pyproject."""
+    lines = body.splitlines(keepends=True)
+    start = next((i for i, x in enumerate(lines) if re.match(r"^exports\s*=\s*\[", x)), None)
+    if start is None:
+        return None
+    end = start
+    while "]" not in lines[end].split("#", 1)[0]:
+        end += 1
+    while start > 1 and lines[start - 1].startswith("#"):
+        start -= 1
+    return "".join(lines[start:end + 1]).rstrip("\n"), "".join(lines[:start] + lines[end + 1:])
+
+
 def split(t: Tree, d: str) -> dict[str, str]:
     """The files `split` writes for the distribution at `d`: its pyproject without the suite's tables, the member's in
     `d/tests/`, the root's with the member; and the conftest beside it moved in. {path: text, or None to delete}."""
@@ -220,6 +236,9 @@ def split(t: Tree, d: str) -> dict[str, str]:
     name, project = data["project"]["name"], data["project"]
     keep, moved = [], []
     for table, body in _tables(text):
+        if table == "tool.verity.tests" and (kept := _exports(body)):
+            keep.append("[tool.verity.tests]\n" + kept[0] + "\n")
+            body = kept[1]
         (moved if table and table.startswith(SUITE_TABLES) else keep).append(body)
     keep_text = "".join(keep).rstrip("\n") + "\n"
     extras = sorted(project.get("optional-dependencies", {}))
@@ -236,6 +255,9 @@ def split(t: Tree, d: str) -> dict[str, str]:
         head.append(f"[tool.uv.sources]\n{name} = {{ workspace = true }}\n\n")
     body = "".join(_from_tests(b) if b.startswith("[tool.pytest") else b for b in moved)
     member = "".join(head) + _strip_suite_relative(body, "tests/").rstrip("\n") + "\n"
+    tests = data.get("tool", {}).get("verity", {}).get("tests", {})
+    if tests.get("inputs_only") or "exports" in tests:
+        member = _add_inputs(member, [d], first=True)
     out = {f"{d}/pyproject.toml": keep_text, f"{d}/tests/pyproject.toml": member}
     rootp = t.read("pyproject.toml")
     if f"{d}/tests" not in t.members:

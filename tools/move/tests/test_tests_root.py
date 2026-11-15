@@ -30,7 +30,8 @@ TREE = {
     "adapters/dist/pyproject.toml": '[project]\nname = "dist"\nversion = "0"\nrequires-python = ">=3.12"\n\n'
                                     '[project.optional-dependencies]\nx = []\n\n[build-system]\nrequires = ["hatchling"]\n'
                                     'build-backend = "hatchling.build"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
-                                    'pythonpath = ["."]\n\n[tool.verity.tests]\nuntraced = ["tests/test_d.py"]\n',
+                                    'pythonpath = ["."]\n\n[tool.verity.tests]\nuntraced = ["tests/test_d.py"]\n'
+                                    '# what its dependents read\nexports = ["adapters/dist/dist"]\n',
     "adapters/dist/conftest.py": "OUTER = 1\n",
     "adapters/dist/dist/__init__.py": "",
     "adapters/dist/tests/__init__.py": "",
@@ -75,15 +76,19 @@ def test_the_inventory_names_each_tests_directory_with_its_suite_and_what_the_ru
 
 def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once(tmp_path):
     """The member depends on the distribution with its extras, its lists are written from its new directory, the root
-    lists it beside the distribution, and the conftest beside the pyproject joins the one in tests/. A rerun splits none."""
+    lists it beside the distribution, and the conftest beside the pyproject joins the one in tests/. What dependents key
+    on (`exports`) stays the distribution's, and the member, which no longer holds it, reads it by name. A rerun splits
+    none."""
     r = repo(tmp_path)
     assert TR.run_split(TR.Tree(r), []) == ["adapters/dist"]
     member = tomllib.loads((r / "adapters/dist/tests/pyproject.toml").read_text())
     assert member["project"]["name"] == "dist-tests" and member["project"]["dependencies"] == ["dist[x]"]
     assert member["tool"]["uv"] == {"package": False, "sources": {"dist": {"workspace": True}}}
     assert member["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": [".."]}
-    assert member["tool"]["verity"]["tests"]["untraced"] == ["test_d.py"]
-    assert "tool" not in tomllib.loads((r / "adapters/dist/pyproject.toml").read_text())
+    assert member["tool"]["verity"]["tests"] == {"untraced": ["test_d.py"], "inputs": ["adapters/dist"]}
+    dist = (r / "adapters/dist/pyproject.toml").read_text()
+    assert tomllib.loads(dist)["tool"] == {"verity": {"tests": {"exports": ["adapters/dist/dist"]}}}
+    assert "# what its dependents read\nexports" in dist
     members = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]
     assert members == ["adapters/dist", "adapters/dist/tests", "tools/plain"]
     assert not (r / "adapters/dist/conftest.py").exists()
