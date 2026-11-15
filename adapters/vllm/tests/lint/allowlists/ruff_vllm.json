@@ -198,7 +198,6 @@
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "I001", "symbol": "committer", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serve_tie.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "SIM118", "symbol": "window_values", "detail": "Use `key in dict` instead of `key in dict.keys()`", "count": 3},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "T201", "symbol": "after_commit", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "T201", "symbol": "readers", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/slice_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
