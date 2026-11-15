@@ -26,7 +26,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import audit
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, rows_domain
 
 HERE = Path(__file__).resolve().parent
-POUW = HERE.parent
+POUW = HERE.parents[2] / "benchmarks" / "pouw"
 KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 R = load("pearl_c_sm90/run.py")
 host = HH.host

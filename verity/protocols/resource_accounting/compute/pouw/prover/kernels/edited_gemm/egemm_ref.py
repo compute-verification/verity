@@ -49,7 +49,7 @@ mix32, tile_receipts = _derive.mix32, _derive.tile_receipts
 fref = _load("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
 
 RF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"   # the r9 reference's sha256
-_rf_path = HERE.parents[2] / "verifier" / "receipts" / "tests" / "fixtures" / "receipt_folds_r9.py"
+_rf_path = HERE.parents[7] / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "receipts" / "fixtures" / "receipt_folds_r9.py"
 if hashlib.sha256(_rf_path.read_bytes()).hexdigest() != RF_SHA256:
     sys.exit(f"{_rf_path} is not the pinned r9 reference (sha256 {RF_SHA256}): restore it from git, don't edit it")
 rf = _load("receipt_folds_r9", _rf_path)

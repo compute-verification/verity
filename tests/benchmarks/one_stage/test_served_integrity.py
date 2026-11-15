@@ -35,7 +35,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as I  # noqa: E402
 from served_verdicts import check_answer, epsilon  # noqa: E402
 

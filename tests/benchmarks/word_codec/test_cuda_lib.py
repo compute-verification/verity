@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "word_codec"))
 sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
 
 import cuda_lib  # noqa: E402

@@ -22,7 +22,7 @@ from verity.protocols.resource_accounting.network.prover import scan_zk as sz
 from verity.protocols.resource_accounting.network.verifier import load_check as LK, relay_check as RC, network_attester_rows as WR
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
 import auditor as A  # noqa: E402
 
 

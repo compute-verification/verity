@@ -23,13 +23,13 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_siblings", HERE.parent / "siblings.py")
+spec = importlib.util.spec_from_file_location("lean_siblings", HERE.parents[3] / "tools" / "verity" / "lean" / "siblings.py")
 S = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(S)
 
 
 def _cli():
-    spec = importlib.util.spec_from_file_location("verity_cli_for_siblings", HERE.parents[1] / "cli" / "verity_cli" / "__init__.py")
+    spec = importlib.util.spec_from_file_location("verity_cli_for_siblings", HERE.parents[3] / "tools" / "verity" / "cli" / "verity_cli" / "__init__.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m

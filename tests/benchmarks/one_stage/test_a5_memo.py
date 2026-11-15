@@ -19,7 +19,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 
 HERE = (Path(__file__).resolve().parent)
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
 

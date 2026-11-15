@@ -5,7 +5,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-MOVE = Path(__file__).resolve().parents[1]
+MOVE = Path(__file__).resolve().parents[3] / "tools" / "move"
 sys.path.insert(0, str(MOVE))
 spec = importlib.util.spec_from_file_location("layout_case_for_tests", MOVE / "layout_case.py")
 C = importlib.util.module_from_spec(spec)

@@ -31,9 +31,9 @@ def _load(name, path):
     return mod
 
 
-RV = _load("enc_replay_vectors", HERE.parent / "replay_vectors.py")
+RV = _load("enc_replay_vectors", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "replay_vectors.py")
 RP = RV.RP
-CV = _load("enc_code_v1", HERE.parent / "code_v1.py")
+CV = _load("enc_code_v1", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "code_v1.py")
 
 
 @pytest.fixture(scope="module")

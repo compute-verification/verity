@@ -19,7 +19,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import weights a
 from verity.circuits import codec
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
 import auditor as A  # noqa: E402
 import models as M  # noqa: E402
 from test_auditor_periods import CIRCUIT, PIN, T0, admin, checked, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401

@@ -27,7 +27,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[8]
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "attester" / "live_verifier"))
 sys.path.insert(0, str(ROOT))
 
 from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
@@ -402,7 +402,7 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
     """The host runs its units with its own python3 (`-I`), where neither `verity` nor any other package is installed:
     each import the run, the replay and the publish make resolves within the pinned tree."""
-    p = subprocess.run([sys.executable, "-I", "-S", "-c", f"import runpy, sys; sys.path.insert(0, {str(HERE.parent)!r}); "
+    p = subprocess.run([sys.executable, "-I", "-S", "-c", f"import runpy, sys; sys.path.insert(0, {str(HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "attester" / "live_verifier")!r}); "
                         f"import host; {code}"], capture_output=True, text=True, cwd=tmp_path)
     assert p.returncode == 0, p.stderr[-2000:]
     assert "site-packages" not in p.stdout

@@ -47,7 +47,7 @@ import pytest
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "two_stage"))
 import guard as G  # noqa: E402
 
 EXE = of(__file__).VERITY_TWO_STAGE_GUARD

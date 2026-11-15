@@ -86,7 +86,7 @@ def undeclared(pkg: Path, inputs: list[str]) -> list[str]:
     root: those outside the suite's directory and ``inputs``.  The suite declares no `[project]`, so no dependency's
     directory is among what the guard allows."""
     root = pkg.parents[DEPTH - 1]
-    allowed = [PYPROJECT.parent.relative_to(ROOT).as_posix(), *inputs]
+    allowed = [(PYPROJECT.parents[7] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier").relative_to(ROOT).as_posix(), *inputs]
     files = [Path(os.path.normpath(pkg / f)).relative_to(root).as_posix() for f in trusted(pkg)]
     return [f for f in files if not any(f == p or f.startswith(p.rstrip("/") + "/") for p in allowed)]
 

@@ -13,7 +13,7 @@ from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_tie as ST
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import served_tie_window as STW  # noqa: E402
 
 FIXTURE = HERE.parents[2] / "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json"

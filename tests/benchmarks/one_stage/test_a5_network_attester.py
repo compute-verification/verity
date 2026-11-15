@@ -26,7 +26,7 @@ from verity.commitments.periods import rows as SR
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
+sys.path.insert(0, str(HERE.parents[1] / "tests" / "benchmarks" / "network_traces"))
 import a5_network_attester as AW  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
 from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws  # noqa: E402

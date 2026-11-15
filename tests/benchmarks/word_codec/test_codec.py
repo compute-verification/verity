@@ -14,7 +14,7 @@ import pytest
 from verity.protocols.resource_accounting.memory.poub.verifier.codec import Field, rho, rho_inv
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "word_codec"))
 
 import codec as C  # noqa: E402
 import twin as T  # noqa: E402
@@ -33,7 +33,7 @@ def test_constants():
 
 
 def test_kernel_constants_match():
-    src = (HERE.parent / "wc.cu").read_text()
+    src = (HERE.parents[2] / "benchmarks" / "word_codec" / "wc.cu").read_text()
     assert "constexpr int TASK_TILES = 16;" in src and "constexpr int LANES = 32;" in src
     assert re.search(r"__launch_bounds__\(GEMM_WARPS \* 32\)", src)
 

@@ -31,7 +31,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, r
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
 import auditor as A  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -345,14 +345,14 @@ def publish(tmp_path: Path, lines: list[bytes], log: Path) -> subprocess.Complet
     (tmp_path / "host-ledger").write_bytes(b"".join(ln + b"\n" for ln in lines))
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "LEDGER": str(tmp_path / "host-ledger"),
            "PUBLISHED": str(log), "VY_CHALLENGER_STATE": str(tmp_path / "state")}
-    return subprocess.run(["bash", str(HERE.parent / "publish.sh"), "research@10.0.0.1"], env=env, capture_output=True,
+    return subprocess.run(["bash", str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "publish.sh"), "research@10.0.0.1"], env=env, capture_output=True,
                           text=True)
 
 
 def test_publish_reads_the_hosts_address_from_the_environment_and_ends_at_once_without_it(tmp_path):
     """With no DEST the gate is research@ the address the environment holds; with neither, a pass and a loop end at
     once naming the variable, before anything is asked of the host or kept."""
-    script, bin_dir, asked = str(HERE.parent / "publish.sh"), tmp_path / "bin", tmp_path / "asked"
+    script, bin_dir, asked = str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "publish.sh"), tmp_path / "bin", tmp_path / "asked"
     bin_dir.mkdir()
     (bin_dir / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {asked}\nexit 9\n')
     (bin_dir / "ssh").chmod(0o755)

@@ -41,7 +41,7 @@ from typing import Any
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-VE = HERE.parents[1]                         # benchmarks/vllm_encoded
+VE = HERE.parents[3] / "benchmarks" / "vllm_encoded"                         # benchmarks/vllm_encoded
 sys.path.insert(0, str(VE.parent / "word_codec"))
 sys.path.insert(0, str((VE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py").parent))
 

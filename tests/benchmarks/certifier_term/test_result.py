@@ -32,7 +32,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "certifier_term"))
 
 import run as R  # noqa: E402
 from verity.protocols.registration.verifier import registration  # noqa: E402
@@ -133,7 +133,7 @@ def test_what_the_command_prints_is_the_calculators_to_the_character(tmp_path, c
     # as `verity bench` runs it, with the result written beside
     monkeypatch.setattr(sys, "argv", ["run.py", "--json", *GIVEN, "--out", str(tmp_path / "main")])
     with pytest.raises(SystemExit) as done:
-        runpy.run_path(str(HERE.parent / "run.py"), run_name="__main__")
+        runpy.run_path(str(HERE.parents[2] / "benchmarks" / "certifier_term" / "run.py"), run_name="__main__")
     assert done.value.code == 0 and json.loads(capsys.readouterr().out) == document(capsys, *GIVEN)
     assert list(result(tmp_path / "main")) == list(result(tmp_path / "1"))
 

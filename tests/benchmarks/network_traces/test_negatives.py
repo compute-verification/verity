@@ -528,7 +528,7 @@ def test_frame_on_a_network_attester_run_reads_its_data_cells_row_and_refuses_th
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
-    sys.path.insert(0, str(HERE / "tests"))
+    sys.path.insert(0, str(HERE.parents[1] / "tests" / "benchmarks" / "network_traces"))
     from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws
 
     run, key = tmp_path / "run", tmp_path / "key"

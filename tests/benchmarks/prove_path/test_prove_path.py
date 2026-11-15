@@ -64,11 +64,11 @@ from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = (Path(__file__).resolve().parent)
 VLLM = HERE.parents[2] / "adapters" / "vllm"
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import prove_path as PP  # noqa: E402
 import records_audit as RA  # noqa: E402
 
-sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a5 as A5  # noqa: E402
 
 PROMPTS = (5, 3)

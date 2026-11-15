@@ -50,7 +50,7 @@ def test_the_service_pyproject_pins_what_the_suite_tests_and_declares_no_push_su
     one, so nothing would consume the topic through it, and if a later build did, a second consumer group would route
     every post twice beside the drain's."""
     service = tomllib.loads((SERVICE / "pyproject.toml").read_text())
-    suite = tomllib.loads((SUITE / "pyproject.toml").read_text())["project"]
+    suite = tomllib.loads((SUITE.parents[1] / "tests" / "infra" / "slack-events" / "pyproject.toml").read_text())["project"]
     pins = service["project"]["dependencies"]
     assert pins == suite["dependencies"] and all("==" in p for p in pins)
     assert not any(p.startswith(("upstash", "redis")) for p in pins)

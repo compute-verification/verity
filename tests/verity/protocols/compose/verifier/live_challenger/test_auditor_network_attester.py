@@ -26,7 +26,7 @@ import pytest
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
 import auditor as A  # noqa: E402
 
 T0 = datetime(2026, 10, 24, 11, 0, 0, tzinfo=UTC)

@@ -43,8 +43,8 @@ OTHER_STORE = "other-store"
 
 def _committed(T) -> p2_prover.Store:
     """The committed `C*` (`fixtures/p2-store.json`), registered for P2 on its PoUS setup at `T`'s node."""
-    doc = json.loads((BANDWIDTH / "tests/fixtures/p2-store.json").read_text())
-    data = (BANDWIDTH / "tests/fixtures/p2-c-star.bin").read_bytes()
+    doc = json.loads((BANDWIDTH.parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "fixtures" / "p2-store.json").read_text())
+    data = (BANDWIDTH.parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "fixtures" / "p2-c-star.bin").read_bytes()
     blocks = [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)]
     m = doc["params"]
     params = P2.P2Params(m["w"], m["c0"], m["blocks_per_segment"], m["segments"], m["expander"])
@@ -104,7 +104,7 @@ def build(tmp: Path) -> None:
     """Fill `reference.POUS` and `reference.BANDWIDTH` with their cases, the memory challenger's session logs in
     `tmp`."""
     M = R.module("mc_cases", ROOT / "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/mc_cases.py")
-    T = R.module("p2_party_sessions", BANDWIDTH / "lean/tests/test_p2_party.py")
+    T = R.module("p2_party_sessions", BANDWIDTH.parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean" / "test_p2_party.py")
     signer = M.deployed_signer()
     store = _committed(T)
 

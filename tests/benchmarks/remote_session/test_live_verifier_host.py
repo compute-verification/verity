@@ -15,7 +15,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[3]
 LIVE = ROOT / "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py"
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "remote_session"))
 
 import auditor_line  # noqa: E402
 
@@ -24,7 +24,7 @@ def test_the_provers_tunnel_client_asks_no_pty_and_the_challengers_forces_one():
     """ssh ends a session whose forced pty (`-tt`) the server refuses (OpenSSH 9.6, checked against a real sshd), so the
     prover's key, whose client is run.sh's `ssh -T`, has no `pty`, and the challenger's keeps it only while serve.py
     forces one; infra's packaging test holds the keys `setup.sh` writes to the same."""
-    verifier_host = (HERE.parent / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
+    verifier_host = (HERE.parents[2] / "benchmarks" / "remote_session" / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
     assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
     serve = (ROOT / "verity/protocols/compose/verifier/live_challenger/serve.py").read_text()
     assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
@@ -48,7 +48,7 @@ def test_auditor_line_reads_the_out_a_host_run_leaves(tmp_path):
     cheaper tests of `auditor_line` can't show is that the out/ a host run leaves, from a real paced session, is one it
     reads, its registration and its session's verdict as the run's record says."""
     o = tmp_path / "out"
-    p = subprocess.run([sys.executable, str(LIVE.parent / "tests" / "stub_verifier.py"), "--out", str(o),
+    p = subprocess.run([sys.executable, str(LIVE.parents[7] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "attester" / "live_verifier" / "stub_verifier.py"), "--out", str(o),
                         "--transcript", str(tmp_path / "transcript.jsonl"), "--registry", str(tmp_path / "registry.json"),
                         "--port", "0"], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr[-2000:]

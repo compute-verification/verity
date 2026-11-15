@@ -40,19 +40,19 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 ROOT = Path(__file__).resolve().parents[7]
 PKG = ROOT / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
-_spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
+_spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG.parents[7] / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "pouw_rounds_cases.py")
 rounds_cases = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rounds_cases)
 sys.modules["pouw_rounds_cases"] = rounds_cases
-_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
+_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG.parents[7] / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "pouw_pass_cases.py")
 passes = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(passes)
 sys.modules["pouw_pass_cases"] = passes
-_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
+_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG.parents[7] / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "pouw_check_cases.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
 sys.modules["pouw_check_cases"] = vectors
-_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
+_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG.parents[7] / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "pouw_opening_cases.py")
 openings = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(openings)
 

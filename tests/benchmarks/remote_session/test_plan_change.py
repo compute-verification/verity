@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "remote_session"))
 sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
