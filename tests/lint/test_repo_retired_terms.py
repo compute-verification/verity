@@ -138,10 +138,17 @@ LIVE_CAPS = ("verity/protocols/resource_accounting/compute/pouw/prover/circuit/l
              "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_live.py",
              "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_window.py",
              "tests/verity/protocols/resource_accounting/compute/pouw/verifier/window_vectors.py")
+
+
+def _vllm(path: str) -> str:
+    """The vLLM adapter's file at ``path`` as it names it: its tests (``tests/...``) are at ``tests/adapters/vllm/tests``."""
+    return f"tests/adapters/vllm/{path}" if path.startswith("tests/") else f"adapters/vllm/{path}"
+
+
 #: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the continuation
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap
-REQUEST_CAPS = tuple(f"adapters/vllm/{p}" for p in (
+REQUEST_CAPS = tuple(_vllm(p) for p in (
     "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/lifting/lifted_compose.py",
     "verity_vllm/program/workload.py", "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
     "tests/program/test_continuation.py", "tests/program/test_lifted_request.py",
@@ -151,7 +158,7 @@ REQUEST_CAPS = tuple(f"adapters/vllm/{p}" for p in (
     "tests/program/test_lifted_tiny_padrev.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
-SOFTCAP_CAPS = tuple(f"adapters/vllm/{p}" for p in (
+SOFTCAP_CAPS = tuple(_vllm(p) for p in (
     "verity_vllm/program/frontend/targets.py", "verity_vllm/program/frontend/rules/vocab.py",
     "verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
     "verity_vllm/program/frontend/rules/vllm_bindings/observations.py", "verity_vllm/program/predict/build.py",
@@ -180,6 +187,7 @@ OWN_CAPS = {
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
     "verity/protocols/resource_accounting/compute/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port's tests",
     "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
     "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
     "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
@@ -225,7 +233,7 @@ OWN_NAMES = {
         (r"row[\s_]+of[\s_]+record",
          "vLLM's workload of record: GLOSSARY.md's row of \"row\" for a workload keeps \"row of record\" "
          "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
-         tuple(f"adapters/vllm/{p}" for p in (
+         tuple(_vllm(p) for p in (
              "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
              "tests/pipeline/test_row_chain.py", "tests/program/test_compact.py", "verity_vllm/config.py",
              "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
@@ -876,13 +884,14 @@ def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() 
     pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
     pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
     window = "verity/protocols/resource_accounting/compute/pouw/verifier/"
-    for path in ("tests/test_pouw_window.py", "tests/window_vectors.py"):
-        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of LIVE_CAPS with it"
-        assert said(session + pearls, window + path) == pearl
-    for path in ("window.py", "lean/window/PouwWindow/Inputs.lean", "lean/window/PouwWindow/Difftest.lean",
-                 "lean/window/README.md", "lean/window/tests/test_difftest.py"):
-        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of OWN_CAPS with it"
-        assert said(session + pearls, window + path) == [(2, "CAP"), (3, "CAP"), *pearl]
+    for path in ("test_pouw_window.py", "window_vectors.py"):
+        assert Path(ROOT, "tests", window, path).is_file(), f"tests/{window}{path} is gone: move its line of LIVE_CAPS with it"
+        assert said(session + pearls, f"tests/{window}{path}") == pearl
+    for path in (*(window + p for p in ("window.py", "lean/window/PouwWindow/Inputs.lean",
+                                        "lean/window/PouwWindow/Difftest.lean", "lean/window/README.md")),
+                 f"tests/{window}lean/window/test_difftest.py"):
+        assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
+        assert said(session + pearls, path) == [(2, "CAP"), (3, "CAP"), *pearl]
     assert said(session + pearls, window + "credit.py") == [(1, "cap"), (1, "cap"), (1, "cap"), (1, "Cap"), (2, "CAP"),
                                                             (3, "CAP"), *pearl]
 
