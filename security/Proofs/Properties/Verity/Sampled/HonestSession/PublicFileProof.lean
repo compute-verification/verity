@@ -346,6 +346,57 @@ fwd_def drawnPF drawn_pf (c : Flock.Circuit) (sSha sCls s3' s4' s5 : String)
   block [canonUtf8]
   shallow []
 
+/-! ## Instantiating the drawn walk at the concrete file. -/
+
+/-- The new header the draw builds over the concrete file: the loaded `hdrJ` with the sample's `unit_draw`, one instance,
+population one, and the drawn unit's entry `UEJmine`. -/
+def drawHdrJ : Json :=
+  (((((hdrF (hexOf circuitSha) (hexOf classSha)).setObjVal! "unit_draw" draw₀).setObjVal! "instances"
+      (Lean.toJson (1 : Nat))).setObjVal! "population" (Lean.toJson (1 : Nat))).setObjVal! "units" UEJmine)
+
+theorem intJ_drawHdr : IntJ drawHdrJ = true := by kernel_rfl
+def s5d : String := (canonUtf8 drawHdrJ).toOption.getD ""
+theorem hcud : canonUtf8 drawHdrJ = .ok s5d := canonUtf8_eq intJ_drawHdr
+
+/-- The drawn walk's `canonUtf8` hypothesis at any circuit with the file's fields: its new header's `units` entry is the
+concrete `UEJmine` (`ue_eq`), so its canonicalisation is the concrete `hcud`. -/
+theorem hcuGen (c : Flock.Circuit) (hg : c.g = 1) (hupv : c.upv = 1) (hcls : c.classSha = classSha) :
+    canonUtf8 (((((hdrF (hexOf circuitSha) (hexOf classSha)).setObjVal! "unit_draw" draw₀).setObjVal! "instances"
+        (Lean.toJson (1 : Nat))).setObjVal! "population" (Lean.toJson (1 : Nat))).setObjVal!
+        "units" (HmRow.unitsEntry c #[0])) = .ok s5d := by
+  rw [ue_eq c hg hupv hcls]; exact hcud
+
+/-- The drawn walk at any circuit carrying the file's fields, over the concrete loaded value. -/
+theorem drawnRowGen (c : Flock.Circuit) (hsha : c.sha = circuitSha) (hcls : c.classSha = classSha)
+    (hports : c.ports = #[yPort]) (hg : c.g = 1) (hupv : c.upv = 1) (hout : c.outWords = 0) :
+    HmRow.drawn c (pubPF c (hexOf circuitSha) (hexOf classSha) s3 s4) draw₀
+      = .ok (drawnPF c (hexOf circuitSha) (hexOf classSha) s3 s4 s5d) :=
+  drawn_pf c (hexOf circuitSha) (hexOf classSha) s3 s4 s5d hports hg hupv hout
+    (by rw [hcls]; exact classSha_ne) (hcuGen c hg hupv hcls)
+
+/-- The drawn walk at the hidden-output circuit `{cH with outPorts := #[]}` over `Vout`. -/
+theorem drawnRowOut (hC : CircuitFileFacts) :
+    HmRow.drawn { cH with outPorts := #[] } Vout draw₀
+      = .ok (drawnPF { cH with outPorts := #[] } (hexOf circuitSha) (hexOf classSha) s3 s4 s5d) :=
+  drawnRowGen { cH with outPorts := #[] } hC.cH_sha hC.cH_classSha hC.cH_ports hC.cH_g hC.cH_upv rfl
+
+/-- The sampled statement's public value: the drawn value over `Vout`. Explicit: one instance (`n = 1`), the one drawn
+unit's indices `#[0]`, and the sha folded as `Sha512.hash (s5d.toUTF8 ++ …)` (the new header's `publicDigest`). -/
+noncomputable def Wdrawn : Flock.Public :=
+  drawnPF { cH with outPorts := #[] } (hexOf circuitSha) (hexOf classSha) s3 s4 s5d
+
+/-- The drawn load as an equation with an explicit value, beside the field (the setup piece reads `pubD`'s indices, `n`
+and sha from here). -/
+theorem drawnRaw (hC : CircuitFileFacts) : HmIn.drawn cH {} pubI draw₀ = .ok Wdrawn := by
+  rw [pubI_eq hC]; exact drawnRowOut hC
+
+theorem pubD_eq (hC : CircuitFileFacts) : pubD = Wdrawn := by
+  unfold pubD; rw [drawnRaw hC]; rfl
+
+/-- Field `drawn_ok`, proved as stated. -/
+theorem drawn_ok_pf (hC : CircuitFileFacts) : HmIn.drawn cH {} pubI draw₀ = .ok pubD := by
+  rw [pubD_eq hC]; exact drawnRaw hC
+
 /-- `HmIn.checkOwn` over no public input port, no own recomputation: the match `(none, isEmpty = true)` returns, whatever
 the population value. -/
 theorem checkOwn_ok_pf : HmIn.checkOwn {} pubI none = .ok () := rfl
