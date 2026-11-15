@@ -17,29 +17,13 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from verity.circuits.defs import (
-    Coll,
-    CompositeDefinition,
-    PrimitiveDefinition,
-    bind,
-    composite,
-)
-from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
-from verity.circuits.ops.gemm import Gemm as GemmV2
-from verity.circuits.ops.gemm import GemmCoordinate as GemmCoordinateV2
+
+from verity.circuits.defs import Coll, CompositeDefinition, PrimitiveDefinition, bind, composite
+from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, RecordType, Tuple
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
 from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.ops.scalar import BitNot
-from verity.circuits.refs import (
-    Affine,
-    Explicit,
-    array_of,
-    concat,
-    strided_view,
-    tuple_of,
-)
-from verity.circuits.refs import Coll as _Coll
-from verity.circuits.types import Array, RecordType, Tuple
-
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import A16, BF16, BIT, F32, I32
 
