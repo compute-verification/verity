@@ -106,7 +106,7 @@ verdict_excludes = ["verity/protocols/compose/device/", "verity/protocols/accoun
 # first. Each is written character for character as in `lowrisk_excludes`, and the parse refuses any other, one in
 # `verdict_excludes` and a duplicate. Together they free no file under a `verifier/` or `device/` directory, of a trusted
 # place or the soundness path (tests/import_order.toml), no Lean, lock or Lake file, nothing under tools/research/,
-# tools/move/, tools/verity/check/ or tools/verity/lean/, and none of the code an auditor's host runs outside a `device/`
+# tools/move/, tools/verity/check/ or tools/verity/lean/, and none of the code an auditor's device runs outside a `device/`
 # directory (tests/test_lowrisk_excludes.py): benchmarks/one_stage/, benchmarks/network_traces/ and
 # benchmarks/remote_session/auditor_line.py stay on the whole check with the devices, and tools/move/, which the loop runs
 # and certifies moves against, with tools/research/. The quick tier runs the root's suite on every
