@@ -2103,8 +2103,9 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     apart = {"_open": whole,                                                 # the lock the walk starts from: `policy` in `audit`
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
-             "packages": whole,                                              # the file's name, among a directory's
-             "controls_of": whole}                                           # a control's copy of a fixture
+                 "packages": whole,                                              # the file's name, among a directory's
+                 "controls_of": whole,                                           # a control's copy of a fixture
+                 "moves_refused": whole}                                         # refuses a moves file, before any step
     for name, got in by_path.items():
         if name not in apart:
             reads.setdefault(name, set()).update(A.JUDGED if got is None else got)
@@ -2680,7 +2681,7 @@ def test_a_guarantee_moved_onto_an_untouched_one_is_refused_and_the_lock_kept_on
     build()
     before, moves = (pkg / A.POLICY).read_text(), tmp_path / "moves.json"
     moves.write_text(json.dumps({"Control.A": "Control.X"}))
-    clash = "Control.A.t, Control.X.t all land on Control.X.t"
+    clash = "Control.A.t, Control.X.t all land on Control.X.t in guarantees"
     with pytest.raises(SystemExit):
         A.main([str(pkg), "--update", "--moved", str(moves), "--no-runs", "--out", str(tmp_path / "main"), "--repo", str(tmp_path)])
     assert clash in capsys.readouterr().err and (pkg / A.POLICY).read_text() == before and not (tmp_path / "main").exists()
@@ -3520,8 +3521,7 @@ def test_a_map_that_cannot_tell_declarations_apart_compares_nothing_under_the_ol
 
 def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
     """Both ways take the longest prefix, so an entry under another's new name reads back whatever its old name; what is
-    refused is a name moved to itself, one new name for two old ones, a lock name the two ways don't return, and two lock
-    names that land on one new name."""
+    refused is a name moved to itself, one new name for two old ones, and a lock name the two ways don't return."""
     moved = {"A": "X", "A.b": "Y"}
     assert [A.renamed(n, moved) for n in ("A", "A.b.c", "A.d", "Ab.c", "Z")] == ["X", "Y.c", "X.d", "Ab.c", "Z"]
     assert [A.unrenamed(n, moved) for n in ("X", "Y.c", "X.d", "X.b", "Z")] == ["A", "A.b.c", "A.d", "A.b", "Z"]
@@ -3531,7 +3531,6 @@ def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
     assert A.move_errors({"A": "X", "B": "X.y"}, ["A.y.z", "A.w", "B.v", "Q"]) == [
         "A.y.z moves to X.y.z, which maps back to B.z: give A.y.z an entry of its own"]
     assert A.move_errors({"A": "X", "B": "X.y", "A.y.z": "X.y.z"}, ["A.y.z", "A.w", "B.v"]) == []
-    assert A.move_errors({"A": "X"}, ["A.t", "X.t", "X.u"]) == ["A.t, X.t all land on X.t"]
 
 
 def test_the_nested_moves_of_a_structure_and_its_field_read_back_but_their_shadows_do_not():
@@ -3552,17 +3551,18 @@ def test_the_nested_moves_of_a_structure_and_its_field_read_back_but_their_shado
             assert A.renamed(A.unrenamed(n, moves), moves) == forth, case
 
 
-def test_a_move_map_and_lock_names_it_accepts_come_back_and_stay_apart():
-    """A property over seeded random maps and names (two-letter alphabet, names of up to four parts): whenever
-    `move_errors` accepts a map and a lock's names, each name the map moves maps forward and back to itself (a name it
-    leaves alone stays where it is, as in a lock already recorded under the new names) and no two names land on one new
-    name; whenever it refuses them, it refuses each pair and names it: a name with the other old name its new name maps
-    back to, or the names that land together.  The draws hold nested entries whose old names nest otherwise, names that
-    don't come back (shadows) and names that land together, each refused alone in some draw, so a rule without either
-    check accepts a draw this rejects."""
+def test_a_move_map_and_lock_it_accepts_come_back_and_keep_each_sections_names_apart():
+    """A property over seeded random maps and locks (two-letter alphabet, names of up to four parts; twelve guarantees and
+    up to six witness lines, which may stand under a guarantee's new name): whenever `move_refusals` accepts a map and a
+    lock, every name of the lock the map moves maps forward and back to itself and no two names of one section land on
+    one new name; whenever it refuses them, it refuses each such name or pair and names it: a name with the other old name
+    its new name maps back to, or the names that land together and their section.  The draws hold nested entries whose
+    old names nest otherwise, names that don't come back (shadows) and names of one section that land together, each
+    refused alone in some draw, so a rule without either check accepts a draw this rejects; and accepted locks where a
+    guarantee's record meets a witness line on one new name, as the landing's pass had them."""
     rng, parts = random.Random(20261115), ["a", "b"]
     universe = [".".join(p) for k in range(1, 5) for p in itertools.product(parts, repeat=k)]
-    otherwise = shadows = together = only_shadows = only_together = accepted = 0
+    otherwise = shadows = together = only_shadows = only_together = accepted = met = 0
     for _ in range(400):
         moved: dict[str, str] = {}
         for _ in range(rng.randint(1, 4)):
@@ -3571,26 +3571,60 @@ def test_a_move_map_and_lock_names_it_accepts_come_back_and_stay_apart():
             continue
         otherwise += any(n2 != n and n2.startswith(n + ".") and o2 != o + n2[len(n):]
                          for o, n in moved.items() for o2, n2 in moved.items())
-        names = rng.sample(universe, 12)
-        fwd = {n: A.renamed(n, moved) for n in names}
-        stray = {n: b for n, m in fwd.items() if m != n and (b := A.unrenamed(m, moved)) != n}
-        lands: dict[str, list[str]] = {}
-        for n in sorted(names):
-            lands.setdefault(fwd[n], []).append(n)
-        crowded = {m: ns for m, ns in lands.items() if len(ns) > 1}
-        errs = A.move_errors(moved, names)
-        if not errs:
+        guarantees = rng.sample(universe, 12)
+        lines = rng.sample([A.renamed(n, moved) for n in guarantees] + universe, rng.randint(0, 6))
+        lock = {"guarantees": {n: {} for n in guarantees}, "unwitnessed": {n: "00" for n in lines}}
+        names = set(guarantees) | set(lines)
+        stray = {n: b for n in names if (m := A.renamed(n, moved)) != n and (b := A.unrenamed(m, moved)) != n}
+        crowded = []
+        for section, keys in (("guarantees", guarantees), ("unwitnessed", lines)):
+            lands: dict[str, list[str]] = {}
+            for n in sorted(set(keys)):
+                lands.setdefault(A.renamed(n, moved), []).append(n)
+            crowded += [f"{', '.join(ns)} all land on {m} in {section}" for m, ns in lands.items() if len(ns) > 1]
+        refusals = A.move_refusals(moved, lock)
+        if not refusals:
             accepted += 1
-            assert all(A.unrenamed(m, moved) == n for n, m in fwd.items() if m != n), moved
-            assert len(set(fwd.values())) == len(names), moved
+            assert all(A.unrenamed(A.renamed(n, moved), moved) == n for n in names if A.renamed(n, moved) != n), moved
+            for keys in (guarantees, lines):
+                assert len({A.renamed(n, moved) for n in keys}) == len(set(keys)), moved
+            met += bool({A.renamed(n, moved) for n in guarantees if A.renamed(n, moved) != n} & set(lines))
             continue
-        assert sorted(errs) == sorted(
-            [f"{n} moves to {fwd[n]}, which maps back to {b}: give {n} an entry of its own" for n, b in stray.items()]
-            + [f"{', '.join(ns)} all land on {m}" for m, ns in crowded.items()]), moved
+        assert sorted(e for _, e in refusals) == sorted(
+            [f"{n} moves to {A.renamed(n, moved)}, which maps back to {b}: give {n} an entry of its own"
+             for n, b in stray.items()] + crowded), moved
+        assert {c for c, _ in refusals} <= {"moved.round-trip", "moved.collision"}, moved
         shadows, together = shadows + len(stray), together + len(crowded)
         only_shadows, only_together = only_shadows + (not crowded), only_together + (not stray)
-    assert otherwise >= 20 and shadows >= 20 and together >= 20 and accepted >= 20
+    assert otherwise >= 20 and shadows >= 20 and together >= 20 and accepted >= 20 and met >= 5
     assert only_shadows >= 5 and only_together >= 5
+
+
+def test_names_of_one_section_that_land_together_are_refused_and_a_record_meeting_its_own_lines_is_not():
+    """The collision is per section: two keys of one map `--moved` re-keys, or two names of `deployed`, that land on one
+    new name are refused, the section named.  The landing's shape passes: a guarantee's record still under its old name in
+    `guarantees`, its hand-kept lines (witnesses, unwitnessed, shape, deployed, trust_gap) already under the new one, and
+    the pass keeps every one of them under the new name."""
+    moved = {"P.A": "P.X"}
+    landing = {"guarantees": {"P.A.t": {"owner": "@lean"}}, "deployed": ["P.X.t"], "trust_gap": {"P.X.t": ["P.H"]},
+               "witnesses": {"P.X.t": {"honest": ["P.X.t_h"], "nontrivial": "P.X.t_n"}}, "unwitnessed": {"P.X.u": "00"},
+               "shape": {"inline": {"P.X.t": {"P.Fits n": WHY}}}, "ids": {"P.X.t": "id"}}
+    assert A.move_refusals(moved, landing) == []
+    kept = A.renamed_current(landing, moved)
+    assert kept["guarantees"] == {"P.X.t": {"owner": "@lean"}} and kept["deployed"] == ["P.X.t"]
+    assert kept["trust_gap"] == {"P.X.t": ["P.H"]} and set(kept["witnesses"]) == {"P.X.t"} and kept["ids"] == {"P.X.t": "id"}
+    for section, lock in (("guarantees", {"guarantees": {"P.A.t": {}, "P.X.t": {}}}),
+                          ("deployed", {"deployed": ["P.A.t", "P.X.t"]}),
+                          ("ids", {"ids": {"P.A.t": "1", "P.X.t": "2"}}),
+                          ("trust_gap", {"trust_gap": {"P.A.t": [], "P.X.t": []}}),
+                          ("witnesses", {"witnesses": {"P.A.t": {}, "P.X.t": {}}}),
+                          ("unwitnessed", {"unwitnessed": {"P.A.t": "00", "P.X.t": "00"}}),
+                          ("witnesses_assumed", {"witnesses_assumed": {"P.A.t": "why", "P.X.t": "why"}}),
+                          ("trust.extra", {"trust": {"extra": {"P.A.t": {}, "P.X.t": {}}}}),
+                          ("trust.extra.P.g", {"trust": {"extra": {"P.g": {"P.A.t": "why", "P.X.t": "why"}}}}),
+                          ("shape.inline", {"shape": {"inline": {"P.A.t": {}, "P.X.t": {}}}})):
+        assert A.move_refusals(moved, lock) == [("moved.collision", f"P.A.t, P.X.t all land on P.X.t in {section}")], section
+    assert A.move_refusals(moved, {"open": {"P.A.t": {}, "P.X.t": {}}, "domain": {"P.A.t": {}, "P.X.t": {}}}) == []
 
 
 def test_a_moves_file_that_gives_one_name_two_new_names_is_refused(tmp_path):
@@ -3629,7 +3663,7 @@ def test_moves_refused_against_a_lock_are_refused_before_anything_is_written(tmp
     A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.A.t", "Control.X.t",
                                                                                             "Control.Y.z.t")}})
     before, f = (pkg / A.POLICY).read_text(), tmp_path / "moves.json"
-    for moves, said in (({"Control.A": "Control.X"}, "Control.A.t, Control.X.t all land on Control.X.t"),
+    for moves, said in (({"Control.A": "Control.X"}, "Control.A.t, Control.X.t all land on Control.X.t in guarantees"),
                         ({"Control.Y": "Control.Q", "Control.B": "Control.Q.z"},
                          "Control.Y.z.t moves to Control.Q.z.t, which maps back to Control.B.t: give Control.Y.z.t an "
                          "entry of its own"),
