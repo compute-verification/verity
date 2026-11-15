@@ -172,7 +172,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
         (report.METRIC, doc["value"], doc["unit"], "modeled")]
     # the goal's target, which a value of 1 misses
     assert [(m["target"], m["verdict"]) for m in result["measurements"]] == [(1000, "misses")] and report.TARGET == 1000
-    assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
+    assert lines[1] == report.MEASUREMENT and lines[3] == "AS SERVED: 1" and "outside the circuit" in lines[5]
+    assert "Not checked here" in lines[7]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
     assert f"{' '.join(B.EXECUTABLE)} ({B.RULE}): complies: false, k failed" in out
@@ -308,7 +309,7 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
     doc = report.main(["--stated-only", "--uncredited-share", "0.2315%"], commit=lambda: None)
     out = capsys.readouterr().out
     lines = out.splitlines()
-    assert json.loads(lines[-1]) == doc and doc["value"] == 1 and lines[2] == "AS SERVED: 1"
+    assert json.loads(lines[-1]) == doc and doc["value"] == 1 and lines[3] == "AS SERVED: 1"
     assert out.index("AS SERVED: 1") < out.index("Over a monitoring period") < out.index(report.TIED_LABEL)
     assert "RESTS ON NO PoUW VERDICT" in report.TIED_LABEL and "NOT SERVED" in report.TIED_LABEL
     assert "s = 0.2315% of a block's work was typed on the command line (--uncredited-share)" in out

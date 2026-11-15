@@ -71,6 +71,10 @@ OUTPUTS = "the outputs of the linears"
 #: `policy.stated` gives that part
 KINDS = {"linears": OUTPUTS, "scan_state": "the scan state row"}
 NO_TIE = "nothing ties the PoUW verdict to the record the check read"
+#: why the check doesn't run on a record with no Program: the circuit record and the registration name the Program by
+#: its digest and its templates by their ids, and the check reads each template's Definition from the Program's text
+NO_PROGRAM = ("the record holds no Program, which the check reads each template's Definition from (the circuit record "
+              "and the registration name it only by its digest), so the check can't run on it")
 NO_KINDS = ("the record's policy states k as one number, with no k by kind (k_by_kind), so the linears' outputs the tie "
             "takes out of k can't be read from it: it was written before its writer (benchmarks/one_stage/"
             "inference_only.py) stated one, and there is no figure for the tied class")
@@ -146,11 +150,12 @@ def log_records(files: Files) -> list[Any]:
 
 def read(files: Files) -> dict[str, Any]:
     """The record's files (`OUT_FILES`): its verdicts, its policy, and the limits each rule is judged against, the count's
-    `(c, k, n)` the policy's own. A file that isn't there is named as one the run did not write."""
+    `(c, k, n)` the policy's own, and whether it holds its Program (`program`). A file that isn't there is named as one
+    the run did not write, but the Program, without which the check can't run (`NO_PROGRAM`)."""
     counts = sorted(files.out.glob(OUT_FILES["count"]))
     if len(counts) > 1:
         raise Refused(f"{files.out}: a record holds one {OUT_FILES['count']}, the count's limits; it holds {len(counts)}")
-    named = {"Program": files.program, "circuit record": files.circuit,
+    named = {"circuit record": files.circuit,
              **{("registration log" if p.suffix == ".jsonl" else f"record {k} of a registration log"): p
                 for k, p in enumerate(files.logs)},
              "compose verdicts": files.out / OUT_FILES["verdicts"], "policy": files.out / OUT_FILES["policy"],
@@ -177,7 +182,8 @@ def read(files: Files) -> dict[str, Any]:
         raise Refused(f"{OUT_FILES['policy']}: theta_macs is not linears + 2 × (attention + lm_head)")
     if [count.get(x) for x in "ckn"] != [policy[x] for x in "ckn"]:
         raise Refused(f"{counts[0].name}: the count's limits {[count.get(x) for x in 'ckn']} are not the policy's c, k, n")
-    return {"run": verdicts.get("run"), "verdicts": verdicts, "policy": policy, "limits": limits, "count": counts[0]}
+    return {"run": verdicts.get("run"), "verdicts": verdicts, "policy": policy, "limits": limits, "count": counts[0],
+            "program": files.program.is_file()}
 
 
 def previous(files: Files) -> Any:

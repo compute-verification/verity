@@ -303,21 +303,26 @@ def _said(v: Mapping[str, Any]) -> str:
 
 def served_record(files: R.Files, clock: Callable[[], float], exe: Path | None) -> dict[str, Any]:
     """Run ``files``'s record (`record.py`): the check's public verdicts and cost, PoUW's share and tie, and the value
-    with its reading and mark. A value of 1 (the check refused, or no PoUW accept of record) is measured; one block's
-    limit under the tie is partial; each period's is modeled."""
+    with its reading and mark. A value of 1 (the check refused or couldn't run, or no PoUW accept of record) is measured;
+    one block's limit under the tie is partial; each period's is modeled."""
     got = R.read(files)
     run, pol = got["run"], got["policy"]
     pouw = R.share(got["verdicts"], pol, R.previous(files))
-    with tempfile.TemporaryDirectory() as d:
-        said = R.checked(files, got, Path(d), clock, exe)
+    said = {x: {} for x in R.PUBLIC} | {"seconds": None, "cost": None}
+    if got["program"]:
+        with tempfile.TemporaryDirectory() as d:
+            said = R.checked(files, got, Path(d), clock, exe)
     doc = {"run": run, "model": pol["serve"]["model"],
            "class": [pol["class"][x] for x in ("slots", "prompt", "outputs")], **{x: pol[x] for x in "ckn"},
-           "files": {"program_bytes": files.program.stat().st_size, "circuit_bytes": files.circuit.stat().st_size,
-                     "log_records": len(files.logs)},
+           "files": {"program_bytes": files.program.stat().st_size if got["program"] else None,
+                     "circuit_bytes": files.circuit.stat().st_size, "log_records": len(R.log_records(files))},
            "check": {x: {"rule": rule, "public_form": fn, **said[x]} for x, (rule, fn) in R.PUBLIC.items()},
            "seconds": said["seconds"], "cost": said["cost"], "pouw": pouw, "tied": None, "tied_why": None}
     of_record = "c, n, the work, the check's accept, PoUW's accept and s are the record's"
-    if refused := [rule for x, (rule, _) in R.PUBLIC.items() if said[x].get("complies") is not True]:
+    if not got["program"]:
+        one = {"value": 1, "mark": "measured", "reading": f"{R.NO_PROGRAM} ({files.program}), so nothing shows its "
+               "blocks within c, k and n", "inputs": "the record's files", "short": "no Program, the check not run"}
+    elif refused := [rule for x, (rule, _) in R.PUBLIC.items() if said[x].get("complies") is not True]:
         which = "both rules" if len(refused) == 2 else refused[0]
         one = {"value": 1, "mark": "measured", "reading": f"the check refused the record ({which}), so nothing shows its "
                "blocks within c, k and n", "inputs": "the check's verdicts, the record's", "short": f"{which} refused"}
@@ -379,20 +384,25 @@ def record_lines(d: Mapping[str, Any]) -> list[str]:
     and the tie."""
     one, pouw, cost = d["block"], d["pouw"], d["cost"]
     value = "none" if one["value"] is None else f"{_n(one['value'])} ({one['mark']})"
-    f, ck, case = d["files"], cost["check"], cost["case"]
+    f = d["files"]
+    program = "no Program" if f["program_bytes"] is None else f"a Program of {f['program_bytes']:,} bytes"
     out = [f"FROM RUN {d['run']}'s RECORD: {value}, {one['reading']}",
-           f"  {d['model']}, class {','.join(map(str, d['class']))}: a Program of {f['program_bytes']:,} bytes, a circuit "
-           f"record of {f['circuit_bytes']:,} bytes and a registration log of {f['log_records']} records",
-           f"  check     {R.CHECK}, in its public form only:",
-           *(f"              {x['rule']} ({x['public_form']}): {_said(x)}" for x in d["check"].values()),
-           f"            the count against the record's c = {d['c']:,}, k = {d['k']:,}, n = {d['n']:,}",
-           f"  cost      in the clear, at the record's size: the check {ck['wall_s']:,.1f} s wall, {ck['cpu_s']:,.1f} s CPU, "
-           f"{ck['peak_mib']:,.0f} MiB peak, on a case of {case['bytes']:,} bytes (by its own clock: read at "
-           f"{d['seconds']['read']} s, the rate rule's verdict at {d['seconds']['check']} s, the count's at "
-           f"{d['seconds']['count']} s); writing the case ({R.SCRIPT.name}) {case['wall_s']:,.1f} s wall, "
-           f"{case['peak_mib']:,.0f} MiB peak",
-           f"  PoUW      of record by {pouw['field']} = {pouw['verdict']!r}"
-           + (f", from {pouw['answer_from']}" if pouw["answer_from"] else "")]
+           f"  {d['model']}, class {','.join(map(str, d['class']))}: {program}, a circuit "
+           f"record of {f['circuit_bytes']:,} bytes and a registration log of {f['log_records']} records"]
+    if cost is None:
+        out.append(f"  check     {R.CHECK}: not run, {R.NO_PROGRAM}")
+    else:
+        ck, case = cost["check"], cost["case"]
+        out += [f"  check     {R.CHECK}, in its public form only:",
+                *(f"              {x['rule']} ({x['public_form']}): {_said(x)}" for x in d["check"].values()),
+                f"            the count against the record's c = {d['c']:,}, k = {d['k']:,}, n = {d['n']:,}",
+                f"  cost      in the clear, at the record's size: the check {ck['wall_s']:,.1f} s wall, "
+                f"{ck['cpu_s']:,.1f} s CPU, {ck['peak_mib']:,.0f} MiB peak, on a case of {case['bytes']:,} bytes (by its "
+                f"own clock: read at {d['seconds']['read']} s, the rate rule's verdict at {d['seconds']['check']} s, the "
+                f"count's at {d['seconds']['count']} s); writing the case ({R.SCRIPT.name}) {case['wall_s']:,.1f} s wall, "
+                f"{case['peak_mib']:,.0f} MiB peak"]
+    out.append(f"  PoUW      of record by {pouw['field']} = {pouw['verdict']!r}"
+               + (f", from {pouw['answer_from']}" if pouw["answer_from"] else ""))
     if pouw["C"] is None:
         out += ["            no accept of record" + (" (a development accept counts as none)" if pouw["development"]
                                                       else "") + f": {pouw['why'][:400]}",

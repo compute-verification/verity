@@ -256,8 +256,23 @@ def test_a_record_that_misstates_is_refused_before_the_check_runs(case, tmp_path
     assert e.value.code == 2 and "the record is refused" in err and why in err
 
 
+def test_a_record_with_no_program_is_one_and_says_the_check_did_not_run(case, tmp_path, capsys) -> None:
+    """A record that holds no Program (a serve under the Pearl+ tie writes none) can't be checked: the value is 1,
+    measured, its reading says why, and no check runs, whatever PoUW's accept credits."""
+    args = made(case, tmp_path, accept=True)
+    (tmp_path / "run" / "program.json").unlink()
+    rec = _main(args, tmp_path / "no-such-check")["record"]
+    lines = _record(capsys.readouterr().out.splitlines())
+    assert (rec["block"]["value"], rec["block"]["mark"]) == (1, "measured") and rec["cost"] is None
+    assert rec["block"]["reading"].startswith(R.NO_PROGRAM) and rec["pouw"]["verdict"] == "accept"
+    assert all("complies" not in v for v in rec["check"].values()) and rec["files"]["program_bytes"] is None
+    assert lines[0].startswith("FROM RUN made's RECORD: 1 (measured), the record holds no Program")
+    assert f"  check     {R.CHECK}: not run, {R.NO_PROGRAM}" in lines
+    assert {r["reading"] for r in rec["periods"]} == {"no Program, the check not run"}
+
+
 @pytest.mark.parametrize(("gone", "what"), [
-    ("run/program.json", "Program"), ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
+    ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
     ("out/record/verdicts.json", "compose verdicts"), ("out/inference-only-policy.json", "policy"),
     ("out/inference-only-limits.json", "rate rule's limits"), ("out/block-counts-0.json", "count's limits"),
 ])
@@ -290,9 +305,9 @@ def test_served_alone_reads_the_run_directorys_registered_files(case, stand_in, 
         got = _main(["--served", str(served)], stand_in)["record"]
         lines = capsys.readouterr().out.splitlines()
         assert lines[1] == f"{report.MEASUREMENT} The served run's record read: {tmp_path / 'b' / 'out'}"
-        assert {x: got[x] for x in ("run", "check", "pouw", "block")} == {x: named[x] for x in ("run", "check", "pouw",
-                                                                                             "block")}
-        assert got["files"]["log_records"] == 1 and got["pouw"]["verdict"] == ("accept" if accept else "missing")
+        keys = ("run", "check", "pouw", "block", "files")
+        assert {x: got[x] for x in keys} == {x: named[x] for x in keys}
+        assert got["files"]["log_records"] == 3 and got["pouw"]["verdict"] == ("accept" if accept else "missing")
 
 
 def test_a_run_that_registered_no_files_where_served_reads_them_is_named(case, tmp_path, capsys) -> None:

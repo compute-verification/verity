@@ -20,7 +20,9 @@ record credits, and why the number is 1 where it is: the check refused the recor
 of record. The run's `out/` holds `record/verdicts.json`, `inference-only-policy.json`, `inference-only-limits.json`,
 one `block-counts-*.json`, and the files the run registered: `registered/program.json`, `registered/circuit.json` and
 `registered/log.jsonl`, the registration log one record a line, its first first and the run's own last. `--program P
---circuit C --log L0 L1 ...` name those three apart instead (a log a record a file, or one `.jsonl` file).
+--circuit C --log L0 L1 ...` name those three apart instead (a log a record a file, or one `.jsonl` file). A record
+with no Program can't be checked, since the circuit record and the registration name the Program only by its digest
+and the check reads each template's Definition from its text: the command says so, runs no check, and its number is 1.
 
 The check is Lean, built from this tree with `lake build` the first time it runs, and nothing else is fetched: it
 needs `lake`, which elan (https://github.com/leanprover/elan) installs with the toolchain that
