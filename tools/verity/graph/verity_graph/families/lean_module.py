@@ -118,13 +118,19 @@ def options(table: dict, prefix: str = "") -> dict:
     return out
 
 
+def auditor() -> tuple[str, str]:
+    """The auditor's directory and its fixtures' (`check.FIXTURES`, the controls' packages), whose Lake packages have no task."""
+    return la.LEAN_TOOL, (c := la.lean_check()).FIXTURES.relative_to(c.ROOT).as_posix() + "/"
+
+
 def packages(root: Path, files: list[str]) -> dict[str, Package]:
-    """{directory: package} for each Lake package of the tree but the auditor's fixtures."""
+    """{directory: package} for each Lake package of the tree but the auditor's (`auditor`)."""
     root = root.resolve()
     out: dict[str, Package] = {}
+    tool = auditor()
     for f in files:
         d, _, base = f.rpartition("/")
-        if base not in ("lakefile.toml", "lakefile.lean") or f.startswith(la.LEAN_TOOL):
+        if base not in ("lakefile.toml", "lakefile.lean") or f.startswith(tool):
             continue
         if base == "lakefile.lean":
             raise GraphError(f"{f}: Lean modules are listed from lakefile.toml only (module_keys.package); write it as one")
