@@ -10,9 +10,10 @@ nodes at any N where v1 unrolls every square.
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, array_of, coll_concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.prims import const
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16, F32
@@ -179,7 +180,7 @@ def _lane_partials(B, vec, block: int):
     """Thread t's vector partials t, t + BLOCK, ... added left to right: the first ``q`` of every thread's as one batch
     of sums in order, then the ``rem`` threads holding one more vector add it, one batch."""
     V = len(vec)
-    if V <= block:
+    if block >= V:
         return vec
     q, rem = divmod(V, block)
     lanes = _sums_in_order(B, Coll(Array(block, Array(q, F32)), strided_view(vec, 0, q, 1, block, block * q)), q)

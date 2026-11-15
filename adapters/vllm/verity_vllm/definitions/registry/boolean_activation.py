@@ -20,14 +20,22 @@ No word Definition calls a MUFU (`TanhF32Rn_v1` is the libdevice `tanhf` stand-i
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from verity.circuits import boolean as BL
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.types import Array
-from verity.circuits.silicon import fp
-from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ZERO,
+    and_reduce,
+    const_bits,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import dense as D
 from verity_vllm.definitions.registry import prims as P
 
@@ -92,7 +100,7 @@ def _tanh_word(x: int) -> int:
     return P.f32_to_bf16_rn_bits(D.tanh_f32_bits(P.bf16_to_f32_bits(x)), NAN_F2FP)
 
 
-@lru_cache(maxsize=None)
+@cache
 def tanh_table() -> tuple[int, ...]:
     """``tanh_bf16(x) & 0x7FFF`` for every x >= 0 on tanh's band (tanh is odd), at index ``m | (e mod 16) << 7``; 0 off it."""
     out = [0] * (1 << 11)

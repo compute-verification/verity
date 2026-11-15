@@ -27,10 +27,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops.scalar import BitAnd, I32Add, I32Eq, U32Hi16
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.definitions.registry import stop_check as SC
 from verity_vllm.definitions.registry.prims import BIT, I32, Bf16ToF32

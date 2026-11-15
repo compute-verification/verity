@@ -581,6 +581,7 @@ def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_wha
     from verity.circuits import REGISTRY, Program, bind, decode_program, encode_program
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition
+
     from verity_vllm.definitions.registry.io_shell import TokenFeed
 
     feed = bind(TokenFeed, NP=2, FIRST=True)

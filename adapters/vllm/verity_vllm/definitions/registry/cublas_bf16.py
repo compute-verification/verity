@@ -82,7 +82,8 @@ Under cuda.matmul.allow_tf32 an f32 torch.mm on sm_120 at the rotation codecs' s
 """
 from __future__ import annotations
 
-from typing import Any, Callable, NamedTuple, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, NamedTuple
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import const_bits
@@ -97,6 +98,7 @@ from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, array_of, broadcast, concat
 from verity.circuits.types import Array, Type
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import mhc as MHC
 

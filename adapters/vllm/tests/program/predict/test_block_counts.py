@@ -21,11 +21,11 @@ import pytest
 from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import REGISTRY
+from verity.circuits.ops.boolean.versions import gate_table
 from verity.circuits.population import population_program
 from verity.commitments.periods import interface as IF
-from verity.circuits.ops.boolean.versions import gate_table
-import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField

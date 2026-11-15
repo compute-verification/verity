@@ -49,7 +49,8 @@ and gives 1.0 where m > 1. ``_foreach_mul_(grads, coef)`` is `boolean_dense.Bf16
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, sub

@@ -105,14 +105,14 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity_vllm.definitions.numerics import derived_rows as DR
-from verity_vllm.definitions.registry import tp_allreduce as T
-from verity_vllm.definitions.registry import tp_allreduce_check as K
-from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.config import RowEngine
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import tp_allreduce as T
+from verity_vllm.definitions.registry import tp_allreduce_check as K
+from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v3"

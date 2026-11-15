@@ -7,6 +7,7 @@ from typing import Any
 def _cuda_rmsnorm_roots() -> list[Any]:
     """Both kernels at every block size served for hidden widths 6144 and 7168."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import cuda_rmsnorm as C
 
     return [

@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, self_check
-from verity_vllm.definitions.numerics import flashmla_twin as T
+
 from verity_vllm.definitions.numerics import flashmla_dsv32_twin as TV
+from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry import flashmla_dsv32 as V
 
@@ -319,8 +319,9 @@ def test_the_twin_is_the_reference(target):
 
 
 def test_the_twin_claims_only_the_hopper_step():
-    from verity_vllm.definitions.numerics import kernel_registry as KR
     from verity.circuits.ops.prims import AmpereBF16TcDot16
+
+    from verity_vllm.definitions.numerics import kernel_registry as KR
 
     assert KR.covers(bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **HEAD), T.KERNEL) is None
     assert KR.covers(bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **{**HEAD, "DOT": AmpereBF16TcDot16}),
@@ -345,7 +346,7 @@ def test_glm53_statics():
     S = V.FLASHMLA_GLM53
     assert (S["NH"], S["DN"], S["DR"], S["QT"], S["BN"], S["SCALE"]) == (8, 512, 64, 128, 64, 0.0625)
     assert S["DN"] + 4 * (S["DN"] // S["QT"]) + 2 * S["DR"] == 656
-    assert V.GLM53_TOPK == 32 * S["BN"]
+    assert 32 * S["BN"] == V.GLM53_TOPK
     assert F.scale_log2_bits(S["SCALE"]) == T.scale_log2(S["SCALE"])
     dec = bind(V.FlashMlaV32Decode, **{**S, "SPLITS": TV.step_splits(14, topk=V.GLM53_TOPK)})
     assert dec.out_leaves == 8 * 512

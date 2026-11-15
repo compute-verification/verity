@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import array_of
-from verity_vllm.definitions.numerics.mhc_twin import tf32_num_split
-
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
 from verity_torch.frontend.rules.common import call_args, known, shape
+from verity_torch.frontend.strided_views import _tensor_type
+
+from verity_vllm.definitions.numerics.mhc_twin import tf32_num_split
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,
@@ -39,7 +40,6 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (
     _value,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity_torch.frontend.strided_views import _tensor_type
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 

@@ -104,6 +104,7 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
 
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import bits as BS
+
     from verity_vllm.definitions.registry import mla as M
 
     G = M.GLM47_FLASH
@@ -113,7 +114,7 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
         op = case.get("op", "decode")
         if op == "decode" and case["splits"] == 1:
             for b, T in enumerate(case["seqlens"]):
-                if (tmin is None or T >= tmin) and (tmax is None or T <= tmax):
+                if (tmin is None or tmin <= T) and (tmax is None or tmax >= T):
                     by_t[T].append((i, b))
         elif op == "bmm":
             def run(i=i, case=case):

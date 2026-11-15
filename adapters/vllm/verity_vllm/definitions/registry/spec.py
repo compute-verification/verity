@@ -26,11 +26,33 @@ Naming: static parameters in CAPITALS; `Coll` arguments in lower case; composite
 from __future__ import annotations
 
 from verity.circuits.defs import Coll, bind, composite
-from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.circuits.refs import (
+    Affine,
+    Explicit,
+    array_of,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.refs import Coll as _Coll
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.b1 import (Attention, DotBf16, Embedding, Final, LayerPost, LayerPre, ZERO16, ZERO32, _lane, scale_log2_bits, const, kv_type,
-                 weights_type)
+from verity_vllm.definitions.registry.b1 import (
+    ZERO16,
+    ZERO32,
+    Attention,
+    DotBf16,
+    Embedding,
+    Final,
+    LayerPost,
+    LayerPre,
+    _lane,
+    const,
+    kv_type,
+    scale_log2_bits,
+    weights_type,
+)
 from verity_vllm.definitions.registry.prims import A16, BF16, F32, I32
 
 # Qwen/Qwen2.5-0.5B as the draft model: the same registered functions as B1 with a different static configuration.

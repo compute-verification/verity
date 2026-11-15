@@ -68,14 +68,14 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import dsv4_decode_indices_twin as T
-from verity_vllm.definitions.registry import dsv4_decode_indices as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.definitions.numerics import dsv4_decode_indices_twin as T
+from verity_vllm.definitions.registry import dsv4_decode_indices as R
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-index-row-capture/v1"
@@ -238,7 +238,7 @@ def selection() -> dict[str, Any]:
                            "sources": sources(Path(vllm.__file__).parent)}
     rec["checks"] = {"attn_cls": cls is F.DeepseekV4FlashMLAAttention, "backend": cls.backend_cls is SM.DeepseekV4FlashMLABackend,
                      "row": F.compute_global_topk_indices_and_lens is CU.compute_global_topk_indices_and_lens,
-                     "block_size": rec["block_sizes"] == [KERNEL_BLOCK] and KERNEL_BLOCK // RATIO == R.DSV4_DECODE_INDICES["c4"]["BS"],
+                     "block_size": rec["block_sizes"] == [KERNEL_BLOCK] and R.DSV4_DECODE_INDICES["c4"]["BS"] == KERNEL_BLOCK // RATIO,
                      "triton": rec["triton"] == TRITON, "sources": rec["sources"]["ok"]}
     rec["ok"] = all(rec["checks"].values())
     return rec

@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import BlackwellNvf4OmmaDot64
+
     from verity_vllm.definitions.registry import nvfp4
 
     return [

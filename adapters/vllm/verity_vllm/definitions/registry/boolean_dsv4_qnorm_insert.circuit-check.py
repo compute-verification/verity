@@ -2,7 +2,8 @@
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `targets.MAX_GATES` (a head is 120,000 to 160,000 ANDs, the insert of one head and its pad 380,000), so `select` keeps a
     family's smallest whatever is listed."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsv4_qnorm_insert as BQ
 
     return [

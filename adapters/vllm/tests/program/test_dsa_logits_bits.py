@@ -18,6 +18,7 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean.versions import boolean_version
+
 from verity_vllm.definitions.registry import boolean_dsa as BD
 from verity_vllm.definitions.registry import dsa as D
 

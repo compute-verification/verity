@@ -2,7 +2,8 @@
 `circuit_check.targets`' forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -12,6 +13,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `targets.MAX_GATES`, so checked when named) and the served c128a length (width 8192).  The served c128a row is
     `Dsv4ShortContextTopK_v2{8192,128}`, 4096 Calls of the slot and the length."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsv4_decode_metadata as BX
 
     return [

@@ -130,9 +130,6 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.ops.boolean.versions import boolean_version
-from verity_vllm.definitions.numerics import marlin_moe_rows as MR
-from verity_vllm.definitions.numerics.derived_rows import f2fp_bf16
-from verity_vllm.definitions.registry import marlin_moe as MM
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -144,6 +141,9 @@ from tests.properties.glm53_block_fp8_capture_gpu import (
     _u16,
     _u32,
 )
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.numerics.derived_rows import f2fp_bf16
+from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"

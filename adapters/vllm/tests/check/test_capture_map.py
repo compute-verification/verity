@@ -16,12 +16,12 @@ from pathlib import Path
 
 import pytest
 import torch
-from verity_vllm.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit import identity as ID
+from verity_vllm.definitions.registry import catalog
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES
 

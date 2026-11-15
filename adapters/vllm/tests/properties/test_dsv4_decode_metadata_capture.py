@@ -14,10 +14,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin as T
 
 from tests import fake_vllm
 from tests.properties import dsv4_decode_metadata_capture_gpu as X
+from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin as T
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 SMALL = {"swa": "swa-4096", "c128a": "c128-4096"}

@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     whole insert (16 heads padded to 64, `dsv4_qnorm_insert.DSV4_INSERT`), and the indexer's head and token (64 heads of 128,
     `DSV4_INDEXER`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
 
     S, X = Q.DSV4_INSERT, Q.DSV4_INDEXER

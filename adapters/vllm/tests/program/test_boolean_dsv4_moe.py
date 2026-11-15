@@ -23,6 +23,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
 from verity_vllm.definitions.registry import dsv4_moe as D
 

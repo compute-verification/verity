@@ -30,7 +30,7 @@ Public: `topp_split_row(x_in_f32, p, S, F, R, cfg) -> (x_out_f32, stats[S,4], pa
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 
 import numpy as np
 
@@ -43,14 +43,14 @@ STEP_BLOCK = 2048
 MASK_BLOCK = 8192
 
 
-@lru_cache(maxsize=None)
+@cache
 def _fa():
     from verity_vllm.definitions.numerics import fa2_model as FA
     from verity_vllm.definitions.numerics import fa2_relation as FAR
     return FA, FAR.tables()
 
 
-@lru_cache(maxsize=None)
+@cache
 def _rm():
     from verity_vllm.definitions.numerics import rms_relation as RR
     from verity_vllm.definitions.numerics import rms_triton_model as RM
@@ -85,7 +85,7 @@ class Cfg:
                                 #   0 | 1 | "lane" (1-D lane-half) are diagnostic alternatives.
 
     @classmethod
-    def for_vocab(cls, V: int, S: int) -> "Cfg":
+    def for_vocab(cls, V: int, S: int) -> Cfg:
         spt = spt_for(V, S)
         return cls(spt_stats=spt, spt_x=spt)
 
@@ -116,7 +116,9 @@ def tl_log(x: np.ndarray, cfg: Cfg) -> np.ndarray:
     x = np.asarray(x, dtype=f32)
     if cfg.log_impl == "np":
         return np.log(x).astype(f32)
-    from verity_vllm.definitions.registry.sampling import nv_logf as _nv_logf_word   # (lazy: sampling.py imports this module)
+    from verity_vllm.definitions.registry.sampling import (
+        nv_logf as _nv_logf_word,  # (lazy: sampling.py imports this module)
+    )
     w = x.ravel().view(np.uint32)
     out = np.array([_nv_logf_word(int(v)) for v in w], dtype=np.uint32).view(f32)
     return out.reshape(x.shape)

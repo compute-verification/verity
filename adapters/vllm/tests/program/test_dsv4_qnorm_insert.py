@@ -29,12 +29,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import versions as SW
-from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as T
 from verity.circuits.ops.mufu import RsqrtApprox
-from verity_vllm.definitions.registry import boolean_dsv4_qnorm_insert as BQ
-from verity_vllm.definitions.registry import dsa as D
-from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
-from verity_vllm.definitions.registry import flashmla as F
 
 from tests.program.test_dsa import _bf16 as _bf16_words
 from tests.program.test_dsa import (
@@ -48,6 +43,11 @@ from tests.program.test_dsa import (
 )
 from tests.program.test_fp8_moe import _bf16 as _rn_bf16
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
+from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as T
+from verity_vllm.definitions.registry import boolean_dsv4_qnorm_insert as BQ
+from verity_vllm.definitions.registry import dsa as D
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
+from verity_vllm.definitions.registry import flashmla as F
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF
 NAN = 0x7FC00000

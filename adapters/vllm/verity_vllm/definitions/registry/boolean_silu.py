@@ -30,14 +30,25 @@ Definition.
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from verity.circuits import boolean as BL
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.types import Array
-from verity.circuits.silicon import fp
-from verity.circuits.boolean.forms import NOT, ONE, ZERO, OR, add, and_reduce, const_bits, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import act, b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.boolean_activation import band
@@ -55,7 +66,7 @@ BAND_LO = 118
 BAND_HI = (129, 133)
 
 
-@lru_cache(maxsize=None)
+@cache
 def band_table() -> tuple[int, ...]:
     """``silu_bf16(g) & 0x7FFF`` for every g on the band, at index ``m | (e mod 16) << 7 | sign << 11``; 0 off it."""
     out = [0] * (1 << 12)
@@ -98,7 +109,7 @@ def silu_mul(C, g, u):
     return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(s), fp.bf16_to_f32(u)), NAN_TORCH)
 
 
-@lru_cache(maxsize=None)
+@cache
 def expf_band_table() -> tuple[int, ...]:
     """`band_table` of `SiluMulBf16_v2`: on the band only the gates whose ``expf(-g)`` overflows differ, each 0 (``g / inf``)."""
     out = [0] * (1 << 12)

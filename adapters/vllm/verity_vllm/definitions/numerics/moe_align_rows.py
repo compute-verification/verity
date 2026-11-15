@@ -5,7 +5,8 @@ as the Definitions' `I32Add` and `I32Div` do.  The row kernels register from `ro
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -34,7 +35,7 @@ def moe_align_ranks(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[
     e, k, i = (_i32(ops[g], P) for g in range(3))
     before = (e[None, :] == e[:, None]) & ((k[None, :] < k[:, None]) | ((k[None, :] == k[:, None]) & (i[None, :] < i[:, None])))
     rank = before.sum(axis=1)
-    start = (0 <= e) & (e < E) & (rank % BM == 0)
+    start = (e >= 0) & (e < E) & (rank % BM == 0)
     return {"0": _word(rank), "1": _word(start)}
 
 
@@ -70,6 +71,7 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds: a moe block of 2 and of 4 over 8 and 12 pairs."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import marlin_moe as MM
     return {
         "MoeAlignRanks_v1": [bind(MM.MoeAlignRanks, E=3, P=8, BM=2), bind(MM.MoeAlignRanks, E=4, P=12, BM=4)],

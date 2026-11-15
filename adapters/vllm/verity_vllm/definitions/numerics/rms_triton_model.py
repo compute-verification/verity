@@ -130,7 +130,7 @@ class RmsTables:
     rsq: np.ndarray | None = None  # (2^24,) u32: hw rsqrt.approx.ftz of 1.m and of 2*1.m (MUFU.RSQ, the CUDA kernel)
 
     @staticmethod
-    def load(directory: str | Path) -> "RmsTables":
+    def load(directory: str | Path) -> RmsTables:
         d = Path(directory)
         sq, s1 = _load_delta(d / "mufu_sqrt_delta_int8.xz", 2 * TABLE_N, SQRT_T0)
         rc, s2 = _load_delta(d / "mufu_rcp_delta_int8.xz", TABLE_N, RCP_R0)

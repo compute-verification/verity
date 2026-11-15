@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `router_kernel` picks (block to 1,024 tokens, warp past them), which verity-vllm's `test_moe_fp8_served` holds to the
     compiler's choice."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import moe as M
 
     return [(f"MoeRouterSigmoidBias_v1/served-{k}", lambda k=k: bind(M.MoeRouterSigmoidBias, E=256, TOPK=8, SCALE=2.5, KERNEL=k))
@@ -22,6 +24,7 @@ def _boolean_roots() -> list[Any]:
     (256 experts, 8 slots, the routed scaling factor 2.5), where serving picks the warp kernel at more than 1,024 tokens and the
     block kernel at fewer (`moe.router_kernel`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import moe as M
 
     return [

@@ -58,11 +58,12 @@ negated, as the decode's block does.  `FLASHMLA_PREFILL_DSV4` holds DeepSeek-V4-
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite, primitive
-from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.fp32 import F32DivV2
 from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.numerics import flashmla_prefill_twin
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry.prims import BF16, BIT, I32

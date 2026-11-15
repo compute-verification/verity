@@ -76,6 +76,7 @@ from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BIT, BitNot, BitOr, I32Add, I32Le, SelectI32
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_indexer as IX
@@ -308,7 +309,7 @@ def c128a_row(B, S, T, local, slot, past_slot, length, position, slot_mapping, b
     inside = Coll(Array(nb, Array(S.BS, T.I32)), concat([xs[j].refs for j in range(nb * S.BS)]))
     bn = Coll(Array(nb, T.I32), concat([blocks[b].refs for b in range(nb)]))
     outs = list(B.batch(bind(slot, BS=S.BS), inside, bn, axes=(0, 0)))
-    if S.W > nb * S.BS:
+    if nb * S.BS < S.W:
         rest = Coll(Array(S.W - nb * S.BS, T.I32), concat([xs[j].refs for j in range(nb * S.BS, S.W)]))
         outs += list(B.batch(bind(past_slot, BS=S.BS), rest, axes=(0,)))
     n = B.call(bind(length, W=S.W), Coll(Array(S.W, T.LIVE), concat([s[1].refs for s in outs])), slot_mapping)

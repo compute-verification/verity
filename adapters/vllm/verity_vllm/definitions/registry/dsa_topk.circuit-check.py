@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's sparse MLA reads past INDEX_TOPK keys: its latent rows (W = KV_LORA + QK_ROPE = 576 bf16 words) a row's Waksman
 #: settings route to its top 2,048, over every key count from the first row past INDEX_TOPK to the longest served row, checked at
@@ -23,6 +24,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     Waksman read at small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaWaksmanSwap_v1`,
     `DsaWaksmanPick_v1` and both `Xor3x*`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk
 
     return [

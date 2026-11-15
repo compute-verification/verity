@@ -13,11 +13,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_fa2_train_bwd as BX
 from verity_vllm.definitions.registry import fa2_train_bwd as W
 from verity_vllm.definitions.registry import prims as P

@@ -7,12 +7,12 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.export_compat import default_fp8_linear_leaf
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 K, N = 128, 2
 HOPPER = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False)

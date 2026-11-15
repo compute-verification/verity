@@ -22,6 +22,7 @@ def _boolean_gather_roots() -> list[Any]:
     partial chunk and 25 chunk words of each 25,152-word V-chunk, and the two-word XOR with the fill. The V-chunks' whole
     chunks are V = 1100's, and the gathers themselves, 2.4M gates a V-chunk, are held to their word by the same tests."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_gather as BGA
 
     return [

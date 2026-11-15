@@ -23,11 +23,21 @@ before `max * scale`, and a first block has no rescale), so it is `AttnBlockFirs
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.circuits.ops.prims import ZERO32, const
-from verity_vllm.definitions.registry import fa2_check_inf as F2, prims as P
+from verity.circuits.refs import (
+    Affine,
+    Explicit,
+    array_of,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.types import Array, Tuple
+
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import ZERO16, _lane, scale_log2_bits
 from verity_vllm.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
 from verity_vllm.definitions.registry.prims import A16, BF16, F32

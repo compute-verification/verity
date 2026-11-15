@@ -26,15 +26,16 @@ request (`verity/circuits/evaluate`'s difftest).
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from verity.circuits.boolean import table as BT
-from verity.circuits.evaluation import RegisteredTable
 from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import PrimitiveDefinition, composite
-from verity.circuits.types import Array, Value
+from verity.circuits.evaluation import RegisteredTable
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
+from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.registry import dense
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -90,7 +91,7 @@ def table_read(index_bits: int, entry_words: int) -> PrimitiveDefinition:
 register_lazy_family(r"^TableRead(\d+)x(\d+)_v1$", lambda m: table_read(int(m[1]), int(m[2])))
 
 
-@lru_cache(maxsize=None)
+@cache
 def gelu_tanh_bf16_words() -> tuple[int, ...]:
     """The registered `gelu_tanh_bf16`: `dense.gelu_tanh_bf16_bits(g)` for every bf16 word g, in index order."""
     return tuple(dense.gelu_tanh_bf16_bits(g) for g in range(1 << 16))

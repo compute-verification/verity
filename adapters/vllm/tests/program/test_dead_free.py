@@ -13,16 +13,17 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
 from verity.commitments.periods import interface as IF
+from verity_flock import circuit as FC
+from verity_flock import class_statement as CS
+from verity_flock import ir_lower as IL
+from verity_flock.gf2 import Circuit
+
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.definitions.registry import fa2_check_inf as F2
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_words as TW
-from verity_flock import circuit as FC
-from verity_flock import class_statement as CS
-from verity_flock import ir_lower as IL
-from verity_flock.gf2 import Circuit
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1

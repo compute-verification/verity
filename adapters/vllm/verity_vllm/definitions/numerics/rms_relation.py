@@ -27,10 +27,17 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.ops import mufu
+
 from verity_vllm.definitions.numerics import rms_triton_model as RM
-from verity_vllm.definitions.numerics.fa2_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
+from verity_vllm.definitions.numerics.fa2_relation import (
+    GemmRelationError,
+    _arg_cols,
+    _const,
+    _extra,
+    _node_of,
+    _words,
+)
 
 MODEL_VERSION = "rmsnorm-triton-sm89-bf16.v1"
 CUDA_MODEL_VERSION = "rmsnorm-cuda-sm89-bf16.v1"

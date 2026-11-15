@@ -3,8 +3,8 @@ wide fan-in one (count, width) run per parameter of one width, iterated as the l
 whose list would be 2 GB)."""
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator, Sequence
 from itertools import chain, repeat
-from typing import Iterable, Iterator, Sequence
 
 from verity.circuits.layout import WIDE_FAN_IN
 from verity.circuits.types import Type

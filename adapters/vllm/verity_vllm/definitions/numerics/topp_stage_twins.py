@@ -8,9 +8,9 @@ The select chunks' carries (positions, tie counts, best and index) are read off 
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import evaluate_batch, kernels
+
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR
 from verity_vllm.definitions.registry import topp_keep_builder as K
@@ -237,7 +237,7 @@ def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, split
     keep, counts = np.zeros(V, bool), {}
     for S in K.SPLIT_COUNTS:
         k, counts[S] = _pipeline(E, T.Geo(V, S), x, p, outs)
-        if S == int(splits):
+        if int(splits) == S:
             keep = vals(k).astype(bool)
     xs = vals(x)
     masked = np.where(keep, xs, np.uint64(K.NEG_INF))

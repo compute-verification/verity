@@ -11,6 +11,7 @@ def _boolean_roots() -> list[Any]:
     router and its one-field-a-slot form at 8 experts, 2 slots, on both of its kernels, on bits (their word views are
     `registry.moe.MoeRouterSigmoidBias_v1` and `MoeRouterSigmoidBiasSlots_v1`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_moe as BMOE
     from verity_vllm.definitions.registry import moe as M
 

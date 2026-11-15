@@ -60,6 +60,10 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops import fp32, prims
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
+from tests.properties import glm53_block_fp8_capture_gpu as H
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.derived_rows import (
     add_rn,
@@ -68,10 +72,6 @@ from verity_vllm.definitions.numerics.derived_rows import (
     mul_rn,
 )
 from verity_vllm.definitions.registry import fp8 as F
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
-from tests.properties import glm53_block_fp8_capture_gpu as H
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/blackwell-fp8-capture/v1"
@@ -563,7 +563,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
         rec["statics_ok"] = (L["block_shape"] == [Gm, Gm] and L["flags"] == [True, False, False, False, False] and not L["bias"]
                              and L["mul_routed_weight"] == (kind == "w2") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and L["KB"] == 32 and not L["SWAP"] and L["config"] == H.BATCH_INVARIANT_CONFIG
-                             and K == (HIDDEN if kind == "w13" else inter) and N == (2 * inter if kind == "w13" else HIDDEN))
+                             and (HIDDEN if kind == "w13" else inter) == K and (2 * inter if kind == "w13" else HIDDEN) == N)
         rec["operands_ok"] = bool(fed)
         launches.append(rec)
         sel = torch.as_tensor(used, device="cuda")

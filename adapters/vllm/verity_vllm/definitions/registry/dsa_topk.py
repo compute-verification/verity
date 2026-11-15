@@ -65,8 +65,16 @@ from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
-from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16, SelectI32
+from verity_vllm.definitions.registry.prims import (
+    BF16,
+    BIT,
+    F32,
+    I32,
+    SelectBf16,
+    SelectI32,
+)
 
 M32 = 0xFFFFFFFF
 
@@ -140,7 +148,7 @@ def _sub_live(n: int, k: int) -> tuple[int, int, list[int]]:
     return min(h, c), k2, [j for j in range(h - (n % 2 == 0)) if 2 * j < k]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def waksman_switches(n: int, k: int) -> int:
     """The settings bits of a network of n rows with outputs 0..k-1 live."""
     if n <= 2:

@@ -22,11 +22,11 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests.program import test_dsa as G
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_indexer as I
 from verity_vllm.definitions.registry import prims as P
-
-from tests.program import test_dsa as G
 
 SIGN, INF, M32, NAN_PTX = G.SIGN, G.INF, G.M32, G.NAN_PTX
 ABS, NEG_INF = 0x7FFFFFFF, G.NEG_INF

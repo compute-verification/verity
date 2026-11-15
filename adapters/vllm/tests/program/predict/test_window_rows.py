@@ -20,13 +20,12 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import io_shell as IO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -41,6 +40,7 @@ from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import scan_state as SS

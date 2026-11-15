@@ -32,13 +32,13 @@ import subprocess
 import sys
 
 import pytest
+import verity.circuits
+
 from verity_vllm.program.frontend.target_profile import (
     ArtifactIdentity,
     TargetProfile,
     reuse_mismatches,
 )
-
-import verity.circuits
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # adapters/vllm
 #: the directory `verity` was imported from, unresolved: the repository's root, or the one directory the tree's declared path puts first

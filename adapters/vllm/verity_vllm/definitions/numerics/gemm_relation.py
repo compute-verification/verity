@@ -70,7 +70,6 @@ from typing import Any
 
 import numpy as np
 
-
 from verity_vllm.definitions.numerics import cpu_model as CM
 from verity_vllm.definitions.numerics import kernel_zoo as Z
 from verity_vllm.definitions.numerics.mma import AMPERE_BF16, TCModel, tc_dot_chain
@@ -367,7 +366,7 @@ def coverage(node: Any, opened_inputs: Mapping[str, Any]) -> dict[str, Any]:
     # the arithmetic of one column of a single-chain kernel is the same chain.
     n_declared = _const(n, opened_inputs, "N")
     slice_note = ""
-    if n_declared is not None and int(n_declared) != N and N < int(n_declared):
+    if n_declared is not None and int(n_declared) != N and int(n_declared) > N:
         slice_note = f"; opened a {N}-row block of the N={int(n_declared)} weight"
         N = int(n_declared)
     bi = any(m in impl for m in BI_KERNEL_MARKERS) or (rop in BI_RUNTIME_OPS and not impl) or rop == "verity.bi_mm"

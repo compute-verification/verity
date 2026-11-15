@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     one pair and over a full C4 row's nine (over `targets.MAX_GATES`: the twin's bindings stand for the family) are checked by
     id."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import flashmla_prefill as P
 
     S = P.FLASHMLA_PREFILL_DSV4

@@ -37,6 +37,7 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import ZERO16, const, kv_type, weights_type
@@ -125,7 +126,7 @@ def ServeV3(B, S, prompt, weights):
     C, LP, D_MAX = S.C, S.LP, S.D_MAX
     if "EOS_ID" not in C:
         raise ValueError("Serve_v3 requires the extended configuration record C₃ (with \"EOS_ID\"; spec §2)")
-    if not (1 <= D_MAX and LP + D_MAX <= C["MAX_POS"]):
+    if not (D_MAX >= 1 and C["MAX_POS"] >= LP + D_MAX):
         raise ValueError(f"Serve_v3 validity (spec §2): 1 <= D_MAX and LP + D_MAX <= MAX_POS "
                          f"(got LP={LP}, D_MAX={D_MAX}, MAX_POS={C['MAX_POS']})")
     NL = C["NL"]

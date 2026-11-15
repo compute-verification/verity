@@ -10,22 +10,22 @@ import types
 
 import numpy as np
 import pytest
+from verity.circuits import word as W_
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import word as W_
-from verity_vllm.definitions.numerics import fp8_twins
-from verity_vllm.definitions.registry import fp8
 
 from tests.check.test_sampled_replay_fp8 import INTER, G, H, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
 from verity_vllm.acquire import plan
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import coverage
+from verity_vllm.definitions.numerics import fp8_twins
+from verity_vllm.definitions.registry import fp8
 from verity_vllm.pipeline import manifest as M
+from verity_vllm.query import program_view as PV
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query import program_view as PV
 
 GU, DN = "model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"
 

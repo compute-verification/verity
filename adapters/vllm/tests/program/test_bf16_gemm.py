@@ -28,13 +28,13 @@ from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as P
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean.versions import boolean_version
+
 from verity_vllm.definitions.registry import bf16_gemm_check as C
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import cublas_gemv as GV
 from verity_vllm.definitions.registry import ll_bf16 as LL
 from verity_vllm.definitions.registry import mla
 from verity_vllm.definitions.registry import mla_check as MK
-
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 
 U16, U32 = np.uint16, np.uint32
@@ -470,6 +470,7 @@ def test_the_cublas_and_ll_bf16_conformance_cite_the_one_h200_capture_record() -
     """Both registries' Definitions are established by the same `glm53_bf16_gemm_capture` record the BatchedGemm_v1 evaluator cites,
     and the FMA the words decided is the one the gate's Program binds by default."""
     from verity.circuits.defs import conformance_label
+
     from verity_vllm.definitions.numerics.batched_gemm_rows import PROVENANCE
 
     cite = (PROVENANCE["record"][:16], PROVENANCE["art"]["record"])

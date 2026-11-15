@@ -28,7 +28,6 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import Strided, runs
@@ -111,7 +110,7 @@ def made_up(fn: Any, prompt: Sequence[int], rng: np.random.Generator) -> dict[st
 
 # ---- the Program's values
 
-def _embedding_shard(v: "Values", node: Any, t: int) -> np.ndarray:
+def _embedding_shard(v: Values, node: Any, t: int) -> np.ndarray:
     S = node.fn.bindings
     VS, H, START = int(S["VS"]), int(S["H"]), int(S["START"])
     tok = int(v.leaves(v.arg(node, 0, t))[0])
@@ -136,7 +135,7 @@ def _embedding_shard_small() -> tuple[Any, list[np.ndarray], np.ndarray]:
 
 
 #: an unlowered family's NumPy transcription, a member at a time, for one whose reference evaluator can't take its operands
-NATIVE: dict[str, Callable[["Values", Any, int], np.ndarray]] = {"EmbeddingShard": _embedding_shard}
+NATIVE: dict[str, Callable[[Values, Any, int], np.ndarray]] = {"EmbeddingShard": _embedding_shard}
 
 
 def native_selftest() -> dict[str, Any]:
@@ -287,9 +286,10 @@ class Tables:
         got = self.held.get(name)
         if got is not None:
             return got
-        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-        from verity_vllm.pipeline import expert_rows as XR
         from verity.protocols.accounting.pouw.prover.serving import registered_commit
+        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+        from verity_vllm.pipeline import expert_rows as XR
 
         t = self.by[name]
         m = _TABLE.match(t.param)

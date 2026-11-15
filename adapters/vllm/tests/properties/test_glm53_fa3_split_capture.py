@@ -13,13 +13,13 @@ from typing import Any
 
 import numpy as np
 import pytest
+
+from tests import fake_vllm
+from tests.properties import glm53_fa3_split_capture_gpu as X
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as W
-
-from tests import fake_vllm
-from tests.properties import glm53_fa3_split_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 

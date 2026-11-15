@@ -3,16 +3,16 @@ the twins (`kernels.twins`) and the replay driver read them.  The primitives are
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 
-@lru_cache(maxsize=None)
+@cache
 def fa2_twin():
     from verity_vllm.definitions.numerics import fa2_model, fa2_relation
     return fa2_model, fa2_relation.tables()
 
 
-@lru_cache(maxsize=None)
+@cache
 def rms_twin():
     from verity_vllm.definitions.numerics import rms_relation, rms_triton_model
     return rms_triton_model, rms_relation.tables("cuda")

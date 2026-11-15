@@ -29,12 +29,19 @@ The same tree over f32 words (`F32GtStrict_v1`'s order, `scalar.f32_key`: 33-bit
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean.scalar import (
+    bf16_gt_strict,
+    bf16_key,
+    f32_key,
+    gt_u,
+    select,
+)
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.circuits.boolean import trace as TR
-from verity.circuits.boolean.forms import ONE, OR, ZERO, NOT, add
-from verity.circuits.ops.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
+
 from verity_vllm.definitions.registry import b1
 
 __all__ = ["ArgmaxLeaf", "ArgmaxMerge", "ArgmaxStep", "F32ArgmaxLeaf", "F32ArgmaxMerge", "F32ArgmaxStage", "G", "GB", "TokenSelect",
@@ -191,7 +198,7 @@ def _stage_sig(word, kw: int):
         n = levels(S.V)
         if not 0 <= S.L < len(n) - 1:
             raise ValueError(f"the tree over V={S.V} has stages 0..{len(n) - 2}, not L={S.L}")
-        final = S.L == len(n) - 2
+        final = len(n) - 2 == S.L
         ins = word if S.L == 0 else candidate(GB * S.L, kw)
         return (("c", Array(n[S.L], ins)),), (I32 if final else Array(n[S.L + 1], candidate(GB * (S.L + 1), kw)))
     return sig
@@ -202,7 +209,7 @@ def _stage(name: str, leaf: CompositeDefinition, merge: CompositeDefinition, wor
 
     def body(B, S, c):
         n = levels(S.V)
-        N, final = n[S.L], int(S.L == len(n) - 2)
+        N, final = n[S.L], int(len(n) - 2 == S.L)
         T = c.type.elem
 
         def member(g: int, first: int):

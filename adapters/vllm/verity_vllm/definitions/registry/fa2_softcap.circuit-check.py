@@ -10,6 +10,7 @@ def _boolean_roots() -> list[Any]:
     heads on one KV head, D = 16, one block of 16 under Check_inf), and one head over 17 keys in blocks of 16 at MASKED_FROM 0
     and 1, which reach the second block with and without Check_inf."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_softcap as FS
     from verity_vllm.definitions.registry import prims as P
 

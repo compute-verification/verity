@@ -18,15 +18,15 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops.boolean import versions as SW
+
+from tests.program import mla_inputs as MC
+from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
+from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX
 from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as W
-
-from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
-from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
-from tests.program import mla_inputs as MC
 
 GLM = M.SPARSE_MLA_GLM53
 U32 = np.uint32

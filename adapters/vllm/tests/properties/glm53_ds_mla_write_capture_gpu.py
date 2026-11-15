@@ -262,7 +262,9 @@ def corners(rows: np.ndarray) -> dict[str, int]:
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity_vllm.definitions.registry import dsa_ds_mla as M, dsa_norm as DN
+
+    from verity_vllm.definitions.registry import dsa_ds_mla as M
+    from verity_vllm.definitions.registry import dsa_norm as DN
     from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
 
     row_fn = bind(M.DsaLatentRowDsMla, KVL=KVL, R=R, TILE=TILE, EPS=EPS)

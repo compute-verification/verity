@@ -2,7 +2,8 @@
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
     from verity.commitments.gates.embedding import read
+
     from verity_vllm.definitions.registry import boolean_fp8_moe
 
     return [

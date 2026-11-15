@@ -47,10 +47,12 @@ from __future__ import annotations
 import types
 
 from verity.circuits.defs import CompositeDefinition, bind, composite
-from verity.circuits.refs import Coll as _Coll, concat, tuple_of
-from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
 from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.refs import concat, tuple_of
+from verity.circuits.types import Array, RecordType, Tuple, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import hopper as H

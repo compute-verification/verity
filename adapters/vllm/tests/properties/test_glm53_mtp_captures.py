@@ -14,12 +14,12 @@ import types
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import dsa_norm_rows as NR
-from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from tests.properties import glm53_mtp_eh_norm_capture_gpu as EN
 from tests.properties import glm53_mtp_eh_proj_capture_gpu as EP
 from tests.properties import glm53_mtp_indexer_logits_capture_gpu as IL
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 CAPTURES = {"glm53_mtp_eh_norm_capture": EN, "glm53_mtp_eh_proj_capture": EP, "glm53_mtp_indexer_logits_capture": IL}

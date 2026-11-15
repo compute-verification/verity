@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     and over the 4 at position 3, the ratio-128 column over 8 warps of 16, each kernel's RMSNorm and row at head 512, one group
     of 64, the rotary group, and both compressors' rows."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsv4_compressor as C
 
     S = C.DSV4_COMPRESSOR

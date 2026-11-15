@@ -31,7 +31,15 @@ from verity.commitments.periods import interface as IF
 
 from . import node_window_join as NJ
 from .build import Unexpressible
-from .node_window import _GRAIN, STAND_IN, Free, Lowering, NodeWindow, _Free, node_window
+from .node_window import (
+    _GRAIN,
+    STAND_IN,
+    Free,
+    Lowering,
+    NodeWindow,
+    _Free,
+    node_window,
+)
 from .node_window import PROMPT as PROGRAM_PROMPT
 from .window_builder import Grain
 

@@ -48,9 +48,19 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import sparse_mla as M
-from verity_vllm.definitions.registry.boolean_attention import (BF16, F32, AttnDotStep, AttnDotStepA, Fa3InvSum, _Bits, _scale_row,
-                                                            _softmax, _step_row)
+from verity_vllm.definitions.registry.boolean_attention import (
+    BF16,
+    F32,
+    AttnDotStep,
+    AttnDotStepA,
+    Fa3InvSum,
+    _Bits,
+    _scale_row,
+    _softmax,
+    _step_row,
+)
 from verity_vllm.definitions.registry.boolean_dsa import flat, replay
 
 BITS = dict(max=BA.F32Max, guard=BA.GuardNegInfZero, ex2=BM.MufuEx2Ftz, mul=BA.F32MulFtz, sub=BA.F32SubFtz, fmasub=BA.F32FmaSubFtz,

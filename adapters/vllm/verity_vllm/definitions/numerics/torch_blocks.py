@@ -6,7 +6,8 @@ Their tests hold each block to its model word for word. `MODELS` are the same mo
 the statics, then each argument's words with the call's members first (`program_walk.Model`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 

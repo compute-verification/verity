@@ -14,13 +14,15 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.registry import glibc_pow_data as D, host_f64 as H, torch_optim as TO
+
+from verity_vllm.definitions.registry import glibc_pow_data as D
+from verity_vllm.definitions.registry import host_f64 as H
+from verity_vllm.definitions.registry import torch_optim as TO
 
 U32, U64 = np.uint32, np.uint64
 M64 = (1 << 64) - 1
@@ -364,7 +366,7 @@ def ref_out(lr, b1, b2, eps, wd, bc1, s2, ok1, ok2) -> tuple[list[int], bool]:
     words, refused = list(words), list(refused)
     if wd == 0:
         words[0], refused[0] = TO.ONE, False
-    ok = bool(ok1 and ok2 and 0.0 <= lr and 0.0 <= eps and 0.0 <= wd and bc1 != 0 and not any(refused))
+    ok = bool(ok1 and ok2 and lr >= 0.0 and eps >= 0.0 and wd >= 0.0 and bc1 != 0 and not any(refused))
     return words, ok
 
 

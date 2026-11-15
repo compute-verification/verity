@@ -13,6 +13,7 @@ def _boolean_roots() -> list[Any]:
     elements at WORLD 4, down the TP4 capture's chain and down another, and its coordinate at WORLD 8 down the PCI order (the
     coordinate combine a TP8 window wires under batch invariance, `tp_combine.coordinate_binding`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_tp_allreduce as BA
     from verity_vllm.definitions.registry import tp_allreduce as TA
 

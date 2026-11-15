@@ -22,6 +22,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_tp_allreduce as BA
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_check as K

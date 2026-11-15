@@ -63,7 +63,16 @@ from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, broadcast, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.definitions.registry.dsa_topk import M32, DsaWaksmanPick, DsaWaksmanSwap, Xor3x16, check_statics, topk_key, topk_set
+
+from verity_vllm.definitions.registry.dsa_topk import (
+    M32,
+    DsaWaksmanPick,
+    DsaWaksmanSwap,
+    Xor3x16,
+    check_statics,
+    topk_key,
+    topk_set,
+)
 from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16
 
 _CONF = ("model-untested: dsa_topk's tie rule (`topk_set`), which dsa_topk's module docstring reads from the served kernel and "
@@ -114,7 +123,7 @@ def _refuse_net(b: dict) -> str | None:
     return None
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def butterfly_plan(N: int, K: int) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
     """Per stage t, (its swaps, its picks), each the switches' lower positions p (the upper is p + 2^t) in settings order: the
     module docstring's pruned inverse butterfly of N rows with K live outputs."""
@@ -130,7 +139,7 @@ def butterfly_plan(N: int, K: int) -> tuple[tuple[tuple[int, ...], tuple[int, ..
     return tuple(plan)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def butterfly_switches(N: int, K: int) -> int:
     return sum(len(s) + len(p) for s, p in butterfly_plan(N, K))
 

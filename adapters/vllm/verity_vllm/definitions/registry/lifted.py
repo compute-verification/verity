@@ -53,12 +53,32 @@ no payload-only width rule (no `validate_width_lifted`, no `n_max`).  `LAG`: `la
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
-from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, BodyNode, PrimitiveDefinition, SpecializedDefinition, bind,
-                    composite)
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
+from verity.circuits.defs import (
+    REGISTRY,
+    BodyNode,
+    Builder,
+    CompositeDefinition,
+    FunctionDefinition,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+    bind,
+    composite,
+)
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    Refs,
+    Strided,
+    concat,
+    tuple_of,
+)
 from verity.circuits.types import Array, RecordType, Tuple, Type, Value
+
 from verity_vllm.definitions.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names
@@ -1352,7 +1372,7 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
         raise ValueError("LServe_v1 requires a non-empty declared EOS set")
     for e in eos_ids:
         check_boundary(32, e, what="eos id", prescribed=True)
-    if not (1 <= STEPS and LP + STEPS <= C["MAX_POS"]):
+    if not (STEPS >= 1 and C["MAX_POS"] >= LP + STEPS):
         raise ValueError(f"LServe_v1 validity: 1 <= STEPS and LP + STEPS <= MAX_POS (got LP={LP}, STEPS={STEPS}, MAX_POS={C['MAX_POS']})")
     check_lag(lag)
     return eos_ids
@@ -1759,7 +1779,7 @@ def replay_body(B: Builder, body, args: Sequence[Coll]) -> Coll:
     return Coll(body.ret_type, _remap(body.ret, args, k0))
 
 
-def as_program(fn: SpecializedDefinition, **kw) -> "Program":
+def as_program(fn: SpecializedDefinition, **kw) -> Program:
     """`Program(fn)` for any complete specialization, INCLUDING body-only ones (a decoded `WorkloadRequest_v1` component or a
     `Lifted[decoded]`): those get a same-id definition whose python body is the identity replay of the set body, so the root lowers,
     evaluates and digests exactly as the body says (the spec id — hence `program_fn` in the digest — is unchanged)."""
@@ -2023,7 +2043,7 @@ def lifted_request(C: dict, prompt_len: int, cap: int, eos: Sequence[int], *, la
     fed a served length is refused by name (the unlifted `WorkloadProgram` rule, kept verbatim)."""
     if cap < 1:
         raise ValueError(f"max_tokens = {cap}: a request declares at least one sampling event")
-    if T is not None and T != cap - 1:
+    if T is not None and cap - 1 != T:
         raise ValueError(f"T={T} is not cap-1={cap - 1}: the Program must be built from the declared cap, never from a served length")
     return lserve(C, prompt_len, cap - 1, eos, lag=lag, gemm=gemm, attention=attention, norm=norm) if cap > 1 else \
         _prefill_only(C, prompt_len, eos, gemm=gemm, attention=attention, norm=norm)

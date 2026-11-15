@@ -43,9 +43,20 @@ from types import SimpleNamespace
 
 from verity.circuits.defs import composite
 from verity.circuits.ops.prims import const
-from verity.circuits.ops.scalar import U16, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectI32, U32Hi16
+from verity.circuits.ops.scalar import (
+    U16,
+    BitAnd,
+    BitNot,
+    BitOr,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectI32,
+    U32Hi16,
+)
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.prims import I32
@@ -106,7 +117,7 @@ def reference(ids: Sequence[int], max_tokens: int, stops: Sequence[int], prompt_
     cap = 1 if cap <= 0 else cap
     s = next((i + 1 for i, x in enumerate(ids) if x & M32 in stop_set), T + 1)
     n = s if s <= cap else cap
-    if not (1 <= mt and n <= T):
+    if not (mt >= 1 and n <= T):
         return T, 0
     return n, 1 if s <= cap else 2 if mt <= n else 3
 

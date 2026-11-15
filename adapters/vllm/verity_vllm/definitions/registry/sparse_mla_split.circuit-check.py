@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's sparse MLA decode at its served statics, over every key count its DSA top-k selects (at most 2,048) and every split
 #: count serving takes, checked at these spots (`circuit_check.ranges`; ``circuit-check --as-call --ranges SparseMlaSplit_v1``)
@@ -23,6 +24,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import sparse_mla_split
 
     glm = sparse_mla_split.M.SPARSE_MLA_GLM53

@@ -17,6 +17,7 @@ from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
+
 from verity_vllm.definitions.registry import boolean_activation as BA
 from verity_vllm.definitions.registry import dense as D
 
