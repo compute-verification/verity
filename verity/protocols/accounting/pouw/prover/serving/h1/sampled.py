@@ -139,7 +139,7 @@ Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, st
 
 
 class Stager(Protocol):
-    """A statement staged on a circuit, which ``stage`` takes from its caller (``benchmarks/pouw/h1_prove/stagers.py``'s,
+    """A statement staged on a circuit, which ``stage`` takes from its caller (``verity/protocols/accounting/pouw/prover/lowering/stagers.py``'s,
     on Flock's Python, which verity does not import): the circuit's ports, those the rows fill, its pin (SHA-512), each
     instance's outputs (None: the lowering's), and `stage`, which writes a set's inst.bin and pub.bin to `out_dir`."""
     ports: Sequence[Any]

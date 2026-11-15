@@ -4556,6 +4556,13 @@
       "paths": {
         "verity/protocols/proofs/spot/verifier/lean/tests/fixtures/inner-trees-served/": "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/h1_prove/h1unit.py": "verity/protocols/accounting/pouw/prover/lowering/h1unit.py",
+        "benchmarks/pouw/h1_prove/stagers.py": "verity/protocols/accounting/pouw/prover/lowering/stagers.py",
+        "benchmarks/pouw/tests/test_h1_pin.py": "verity/protocols/accounting/pouw/prover/tests/test_h1_pin.py"
+      }
     }
   ]
 }

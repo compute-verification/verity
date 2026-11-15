@@ -51,7 +51,7 @@
     {"file": "benchmarks/pouw/filler/score.py", "count": 14},
     {"file": "benchmarks/pouw/fp_exact/fp_exact.py", "count": 1},
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 1},
-    {"file": "benchmarks/pouw/h1_prove/h1unit.py", "count": 2},
+    {"file": "verity/protocols/accounting/pouw/prover/lowering/h1unit.py", "count": 2},
     {"file": "benchmarks/pouw/h1_prove/stage.py", "count": 1},
     {"file": "benchmarks/pouw/harness/ieee_pin.py", "count": 7},
     {"file": "verity/protocols/accounting/pouw/prover/sass_gate.py", "count": 4},
