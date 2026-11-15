@@ -39,7 +39,7 @@ NAME = "repo_env_reads"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: the integration's own settings rule holds it
-LEFT_OUT = ("adapters/vllm/",)
+LEFT_OUT = ("adapters/vllm/", "tests/adapters/vllm/")
 #: a settings registry's module name: reads belong there
 REGISTRY = "settings.py"
 TEMPLATE = "tools/config/verity_config/settings.py"
