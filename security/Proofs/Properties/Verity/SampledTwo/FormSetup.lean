@@ -18,7 +18,7 @@ import all Init.Data.String.Defs
 `SessionCoins.verified_at` (`FormVerdicts.lean`) gives the session the form's check set up for template `t`
 (`Spot.OneStageZk.setupAt`) and Flock's masked verdict on it. `SessionCoins.VerdictsAt` (`FormRecords.lean`) asks for
 that verdict at the session the template's statement sets up as Flock's verifier reads it (`FlockDeploy.setupOf`).
-This module shows the two sessions are one, and proves `VerdictsAt` from what is left.
+This module shows the two sessions are one where they read one list of tables.
 
 * **The statement's fields** (`memberFields_stmtRaw`): `SessionMsgs.stmtRaw`'s fields are a member's
   (`MemberChecks.MemberFields`), by definition.
@@ -43,11 +43,11 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
 * **The session retains rounds** (`setupAt_retains`), as the circuit statement's tags do, so a session the masked
   verdict accepts has messages (`SessionLive.sessionMsgs_of_verify`): its record reads as a live session and each
   recorded round kept its bytes.
-* **`VerdictsAt`** (`verdictsAt_of`), at the table `Flock.Tags.circuit.table`, and so `MsgsOfRecords`
-  (`msgsOfRecords_form`).
 
-What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`) and
-`StmtsCount`, each a named hypothesis here:
+**Not established here**: `VerdictsAt`. The form sets each session up at the pinned tables its member's circuit looks up
+(`Spot.OneStageZk.ownTables`), and the statement reads every pinned table the blobs hold (`Spot.OneStageZk.tablesOf`),
+so `stmtRaw_decode` and the form's session meet only where the two lists are one. What `VerdictsAt` takes beside the
+join's fields (`HeldOfAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`) and `StmtsCount`:
 
 * `StmtsPrint`: each member's partition object's objects are well-formed trees, and its registered reads are
   printable. Nothing the setup checks holds them to that; the parameters' reader does, and `stmtsPrint_of`
@@ -314,91 +314,5 @@ theorem stmtsFit_of (C : CaseOf) (Good : Verity.Exchange → Prop) : StmtsFit C 
     have h := hget i (hlen ▸ hi) hi
     rw [List.getElem_range] at h
     exact StmtBytes.stmtAtCase_lt hf hck h
-
-/-- **`VerdictsAt`, at the table `Flock.Tags.circuit.table`**: on an accepted play, the statement the statements'
-message states for template `t` is the template's session statement on the case (`SessionMsgs.stmtAt_stmtsMsg`),
-which sets up one table with the template's count of rounds (`reps_of_scope`). The check verified the session at the
-member's files (`verified_at`), which are that statement's fields (`stmtAtCase_of_member`), so the session the
-statement sets up is the one the check verified (`setupOf_of_fields`), of one table, `Flock.Tags.circuit.table`
-(`setupAt_oneTable`), under SHA-512 digests (`setupAt_sha512`). It retains rounds (`setupAt_retains`), so the session
-the verdict accepted has messages (`SessionLive.sessionMsgs_of_verify`). -/
-theorem verdictsAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
-    {Good : Verity.Exchange → Prop}
-    (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
-    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hcount : StmtsCount A C Good)
-    (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) :
-    VerdictsAt A C Good fun _ => Flock.Tags.circuit.table := by
-  intro o k hacc hgood hk t ht
-  have hacc₀ := hacc
-  obtain ⟨k', hk', hon⟩ := hacc₀
-  obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
-  obtain ⟨_, inp, -, hin, -, it, _, hit, -⟩ := input_of_accepts hon
-  have hi : inputOn C o = some inp := by
-    show (C o).bind inputOfCase = some inp
-    rw [hk]
-    exact hin
-  obtain ⟨m₂, hm₂, -⟩ := hst o inp it hacc hi hit
-  have hmsg : SessionMsgs.stmtsMsg k = some m₂ := by
-    have h := hS o
-    rw [hk] at h
-    exact h.symm.trans hm₂
-  obtain ⟨p, e, xs, hf, hxs, -⟩ := SessionMsgs.stmtsOf_stmtsMsg hmsg
-  have hte : t < e.stmts.size := by
-    rw [hcount o k p e hacc hgood hk hf]
-    exact ht
-  obtain ⟨hl, hb⟩ := hfit o k p e xs hacc hgood hk hf hxs
-  have hx := SessionMsgs.stmtAt_stmtsMsg A.h hmsg hf hxs hl hb hte
-  obtain ⟨s', spec', st, hset', hk₀, -⟩ :=
-    reps_of_scope (twoHolds_at hof hacc hi hit) (hrounds o m₂ hacc hm₂) (hscope o m₂ hacc hm₂) ht
-  obtain ⟨fs, hfs⟩ := SessionMsgs.filesAt_of_stmt hx hf
-  obtain ⟨m, circuitB, pubB, rd, tables, record, spec, tabs, ⟨p0, o0⟩, proofs, hpl, hm, hc, hp, hrd, htab, hrec,
-    hsetup, hfiles, hzk, hfw, hfd⟩ := verified_at hacc hk hf hfs
-  have hxw := stmtAtCase_of_member hf hm hfs hrec hc hp
-  obtain ⟨hgp, hgr⟩ := hprint o k p e hacc hgood hk hf t m hm
-  have hdec := stmtRaw_decode hfw hfd
-  obtain ⟨si, sts, hset, htabs⟩ :=
-    setupOf_of_fields hpl
-      (memberFields_stmtRaw m circuitB pubB k.blobs (SessionMsgs.sampleBytes record)
-        (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8))
-      (readsBack_stmtRaw hgp hgr hsetup) hdec hrd hsetup
-  have hxe : SpotFlock.stmtAt A.h m₂ t =
-      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
-        (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode :=
-    Option.some.inj (hx.symm.trans hxw)
-  have hset₂ : FlockDeploy.setupOf true (SpotFlock.stmtAt A.h m₂ t) = some (si, spec, sts) := by
-    rw [hxe]
-    exact hset
-  have hsame : (s', spec', #[st]) = (si, spec, sts) := Option.some.inj (hset'.symm.trans hset₂)
-  have hrest : (spec', #[st]) = (spec, sts) := congrArg Prod.snd hsame
-  have hspec : spec' = spec := congrArg Prod.fst hrest
-  have hsts : #[st] = sts := congrArg Prod.snd hrest
-  rw [hspec] at hset' hk₀
-  rw [← hsts] at htabs
-  rw [htabs] at hzk
-  have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
-  have hh : (Flock.Witness.zkTags
-      (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs)).hiddenOutputs = true :=
-    (Verity.Sampled.statement_zkTags htag _ _).1
-  have hrows : (Flock.Witness.zkTags
-      (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs)).hm96Rows = true := rfl
-  have hret : (Flock.Witness.zkTags
-      (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs)).retainRounds = true := rfl
-  have hparts : SessionMsgs.SessionParts k t (SpotFlock.stmtAt A.h m₂ t) s' spec #[st] record proofs :=
-    ⟨p, e, fs, hf, hfs, hrec, hx, hset', hfiles⟩
-  have htab : spec.tables = #[Flock.Tags.circuit.table] := setupAt_oneTable hh rfl hsetup
-  obtain ⟨ms, hms⟩ := SessionLive.sessionMsgs_of_verify (SpotFlock.stmtAt A.h m₂ t) hzk htab
-    (setupAt_retains hh hret rfl hsetup)
-  exact ⟨_, s', spec, st, record, proofs, ms, hparts, hzk, setupAt_sha512 hh hrows rfl hsetup, htab, hk₀, hms⟩
-
-/-- **`MsgsOfRecords` at the form's reading**, at the table `Flock.Tags.circuit.table`: `msgsOfRecords_of` at
-`verdictsAt_of`, where the reading's statements and messages are the case's. -/
-theorem msgsOfRecords_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
-    {Good : Verity.Exchange → Prop}
-    (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
-    (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
-    (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)
-    (hcount : StmtsCount A C Good) (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) :
-    MsgsOfRecords A C S Good fun _ => Flock.Tags.circuit.table :=
-  msgsOfRecords_of hM (verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit)
 
 end Verity.SampledTwo.SessionCoins

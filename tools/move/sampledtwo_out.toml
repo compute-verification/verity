@@ -8,6 +8,7 @@
 branch = "cursor/proofs-placer-memberchecks-5cc2"
 commit = "9b7c5a1b4d076e014a947dfe43c32f9e7988f4b4"
 files = [
+  "security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean",
   "security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean",
 ]
 
@@ -31,3 +32,7 @@ files = [
   "memberStatement_tables", "accepted_tables", "tablesHeldAt_of_accept", "refsAtOr_of_files", "heldOfAtOr_of_files",
 ]
 "security/Proofs/Properties/Verity/SampledTwo/FormStmts.lean" = ["stmtAtFixed_of"]
+"security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean" = ["stmtAt_raw", "stmtAt_record", "sampleAtFixed_of_coins"]
+"security/Proofs/Properties/Verity/SampledTwo/FormSetup.lean" = ["verdictsAt_of", "msgsOfRecords_form"]
+"security/Proofs/Properties/Verity/SampledTwo/FormMember.lean" = ["memberAtFixed_of_coins"]
+"security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean" = ["sessionMsgs_form"]

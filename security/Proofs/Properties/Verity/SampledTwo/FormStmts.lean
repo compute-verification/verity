@@ -21,16 +21,13 @@ each the blob under one digest on either play's blobs: one file, or two blobs th
 pinned tables with one list of names are one list, or two blobs that collide (`tables_same`). A collision is the pair
 `Messages.blobsAlt` returns (`Messages.blobsAlt_of`).
 
-**Not established here**: `StmtAtFixed` itself. The statement reads every pinned table the blobs hold
+**Not established here**: `StmtAtFixed`. The statement reads every pinned table the blobs hold
 (`Spot.OneStageZk.tablesOf`), and the per-member form hands each member only the tables its circuit looks up
 (`Spot.OneStageZk.ownTables`), so no accepted play fixes which pinned tables its blobs hold. `MemberAtFixed` and
-`SampleAtFixed` are hypotheses. Each is a theorem where one pair of stage
-coins carries the bytes both plays' samples read (`StageCoinsOne`): `SampleAtFixed` in
-`FormDraw.lean` (`sampleAtFixed_of_coins`), the model's check holding each session's sample to the verifier's own at
-the stage coins (`SpotFlock.sample_of_stmtOk`), and `MemberAtFixed` in `FormMember.lean` (`memberAtFixed_of_coins`),
-the model's check holding each statement's public file to its template's part and the form's check holding each
-member's public file to the member's units. `FormBytes.lean` gives the pair of stage coins from the coins the log
-shows (`playCoinsOne_of_shown`).
+`SampleAtFixed` are not shown either: `FormDraw.lean` and `FormMember.lean` hold their pieces, the model's check holding
+each session's sample to the verifier's own at the stage coins (`SpotFlock.sample_of_stmtOk`) and each statement's
+public file to its template's part, and the form's check holding each member's public file to the member's units.
+`FormBytes.lean` gives the pair of stage coins from the coins the log shows (`playCoinsOne_of_shown`).
 -/
 
 @[expose] public section
