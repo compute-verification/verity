@@ -24,7 +24,7 @@ Beside the order:
     scalar references (``STDLIB_ONLY``) no dependency;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
     imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
-    a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
+    a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network attester, in its Python, its Lean
     packages or its analysis (``SPOT_NOT_CERTIFIER``);  a module the tree imports from the repository's root as
     ``benchmarks.network_traces.NAME`` is imported by its bare name nowhere (``ONE_NAME``).
 
@@ -95,7 +95,7 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
 NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "verity/circuits/ops",
                 "verity/circuits/word.py")
-#: and the network certifier's load relay, whose `generate` lays a weight's generation rows with numpy
+#: and the network attester's load relay, whose `generate` lays a weight's generation rows with numpy
 #: (Mon 16 Nov 6 PM PST, network-accounting, whether `load_relay` keeps numpy)
 NUMPY_USERS += ("verity/protocols/resource_accounting/network/attester/load_relay.py",)
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
@@ -108,7 +108,7 @@ NO_DATE_OR_REASON = ("verity/protocols/compose/verifier/live_challenger", "verit
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
 HELD_AS_VERITY = ("verity/protocols/compose/verifier/live_challenger", "verity/protocols/resource_accounting/memory/poub/attester/live_verifier",
                   "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts")
-#: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
+#: SPOT[Flock] stands on its own, and the network attester is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
 #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
 #: and its analysis (Security's Flock and Spot areas and the sampling claims); then the certifier's modules and Lean
@@ -364,7 +364,7 @@ def _spot_python_offenders() -> list[str]:
 
 
 def test_spot_never_imports_the_network_certifier_in_python() -> None:
-    """SPOT[Flock]'s Python imports none of the network certifier.  The listing puts the certifier's row
+    """SPOT[Flock]'s Python imports none of the network attester.  The listing puts the certifier's row
     (``CERTIFIER_ROW``) after SPOT's (``SPOT_ROW``) and lists no tie out of the rows up to SPOT's into
     a later one, so nothing SPOT's Python loads, directly or through another file, is the certifier's; and no
     file of ``SPOT_TREES``, Flock's and their tests among them, imports one of ``CERTIFIER_MODULES``."""
@@ -439,7 +439,7 @@ def _load_tool(name: str, path: Path) -> Any:
 
 
 def test_spot_never_imports_the_network_certifier_in_lean() -> None:
-    """SPOT[Flock]'s Lean imports none of the network certifier's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
+    """SPOT[Flock]'s Lean imports none of the network attester's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
     require no certifier package by path, directly or through another, and no module of those packages or of its analysis
     (``SPOT_SECURITY``) imports a certifier module, directly or through any other module."""
     pkgs = sorted(p for p in _lake_closure(SPOT_LEAN) if _covered(p, CERTIFIER_LEAN))

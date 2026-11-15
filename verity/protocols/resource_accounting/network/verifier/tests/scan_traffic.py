@@ -1,6 +1,6 @@
-"""Network-certifier-form id requests and their responses served through the network certifier's own ingress and egress,
+"""Network-certifier-form id requests and their responses served through the network attester's own ingress and egress,
 both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
-cross-check of the network certifier, and `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s). It imports no test framework, so a
+cross-check of the network attester, and `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s). It imports no test framework, so a
 node's bare venv runs it."""
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from verity.protocols.resource_accounting.network.verifier.grid import Certifier
 
 @dataclass(frozen=True)
 class Served:
-    """Both links served through the network certifier: the ingress and egress records its grids closed (one an
+    """Both links served through the network attester: the ingress and egress records its grids closed (one an
     execution phase), each connection's admission bucket and response ids (ordinal q = k + 1), and the network
-    certifier's `fails` frames and the `fails` records its grid closed."""
+    attester's `fails` frames and the `fails` records its grid closed."""
 
     params: W.NetworkCertifierParams
     ingress: tuple[BlockGrid, ...]
@@ -35,7 +35,7 @@ class Served:
         return {k + 1: xs for k, xs in enumerate(self.responses)}
 
     def rows(self) -> tuple[list[bytes], list[bytes]]:
-        """The network certifier's registered ingress and egress rows, bucket by bucket (`network_certifier_rows.window_rows`)."""
+        """The network attester's registered ingress and egress rows, bucket by bucket (`network_certifier_rows.window_rows`)."""
         return tuple([x for rec in recs for x in WR.window_rows(rec, self.params)]  # type: ignore[return-value]
                      for recs in (self.ingress, self.egress))
 
@@ -44,8 +44,8 @@ def serve(params: W.NetworkCertifierParams, requests: Sequence[bytes], arrivals:
           responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
-    there by its egress; a connection of `late` gets no byte from its server, so the network certifier fails it late at
-    its first egress cell), and the network certifier ticks both links and `fails` for `windows` execution phases as
+    there by its egress; a connection of `late` gets no byte from its server, so the network attester fails it late at
+    its first egress cell), and the network attester ticks both links and `fails` for `windows` execution phases as
     `NetworkCertifier._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
     `_egress` until its own `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload

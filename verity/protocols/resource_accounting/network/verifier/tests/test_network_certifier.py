@@ -1,4 +1,4 @@
-"""The active network certifier (`network_certifier`): driven tick by tick on a `VirtualClock`, its clients in-memory connections
+"""The active network attester (`network_certifier`): driven tick by tick on a `VirtualClock`, its clients in-memory connections
 speaking cells and its server an in-memory one whose bytes the test schedules, it releases honest traffic exactly on its
 schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that window's records from
 `publish`), passes both directions' bytes unchanged (the server's copy of a request adding only its place in the release
@@ -171,7 +171,7 @@ class Client:
 
 
 class SocketClient(Client):
-    """A client whose connection's network certifier end is a socket, the one a paced network certifier's pacer writes
+    """A client whose connection's network attester end is a socket, the one a paced network attester's pacer writes
     to, and whose other end the test reads (`received`) once the run is over."""
 
     def __init__(self, network_certifier: NetworkCertifier, data: bytes | tuple[bytes, bool]) -> None:
@@ -211,8 +211,8 @@ def settled(network_certifier: NetworkCertifier, server: Server) -> bool:
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
                 params: NetworkCertifierParams = PARAMS, client: type[Client] = Client, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the network certifier read it, then tick, and with `paced` wait for the pacer to report the bucket's
-    release, for `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the network certifier's
+    due and the network attester read it, then tick, and with `paced` wait for the pacer to report the bucket's
+    release, for `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the network attester's
     `publish`, `release` and `paced`."""
     clock = VirtualClock(-TAU / 2)
     network_certifier = NetworkCertifier(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
@@ -470,7 +470,7 @@ def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boun
 def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
     """Unless a caller injects them, the clock is the host's raw clock and each wait is against that clock. Here the
     raw clock is a count the test moves and each wait ends half its length early, then on its time: every clock
-    read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network certifier's own clock, and every tick runs at
+    read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network attester's own clock, and every tick runs at
     its boundary or after it, inside the slack. On that clock it is paced, and its pacer, here a stand-in with no
     process, is started on the raw clock too."""
     now, asked, waits, started = [-0.35], [], [], []
@@ -562,7 +562,7 @@ def test_a_paced_network_certifiers_pacer_writes_each_client_its_cells_and_a_buc
 
 
 def test_an_unpaced_network_certifier_on_a_clock_of_the_hosts_is_refused():
-    """The network certifier's own clock is the host's raw one, so the rule that a device on the host's clock is paced
+    """The network attester's own clock is the host's raw one, so the rule that a device on the host's clock is paced
     holds on it: with no `paced`, the default clock, the raw clock and the steered clock are each refused, and only an
     injected clock runs unpaced."""
     for host in ({}, *({"clock": clock} for clock in pacer.CLOCKS.values())):
@@ -574,7 +574,7 @@ def test_an_unpaced_network_certifier_on_a_clock_of_the_hosts_is_refused():
 
 
 def test_a_network_certifier_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
-    """Only a network certifier on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
+    """Only a network attester on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
     A release the pacer reports on time and written faults nothing; one it reports unwritten, a connection's socket
     not yet the pacer's so that its cells are on no wire, faults the three grids' window `monitor-unavailable`, as a
     bucket it got late does."""
@@ -704,7 +704,7 @@ def test_the_id_form_releases_no_cell_smaller_than_an_event():
 
 def test_the_audit_refuses_an_egress_cell_out_of_the_id_form():
     """A record whose egress holds a `DATA` cell `io_tie.parse_cell` doesn't read is refused in the id form, which the
-    network certifier never sends, and read as any bytes in the bytes form."""
+    network attester never sends, and read as any bytes in the bytes form."""
     network_certifier, _, _ = run([[(0, id_answer([1, 2])), (0, EOF)]], {1: [cells(request(5), GB)]}, params=GATED)
     ingress, (record,), fails = records(network_certifier)
     t, j = next((t, j) for t, row in enumerate(record.grid) for j, f in enumerate(row)
@@ -725,7 +725,7 @@ CAPPED = dataclasses.replace(GATED, max_tokens_cap=4)
 
 
 def id_req(max_tokens: int) -> bytes:
-    """An id request in the network certifier's cells (offset 0), of two cells at GB."""
+    """An id request in the network attester's cells (offset 0), of two cells at GB."""
     return IDF.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
 
 
@@ -767,7 +767,7 @@ def refused(request_bytes: bytes) -> None:
 
 
 def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_clamped():
-    """cap + 1 is refused (cap): the network certifier never rewrites the field to the cap, it sends nothing."""
+    """cap + 1 is refused (cap): the network attester never rewrites the field to the cap, it sends nothing."""
     refused(id_req(5))
     refused(id_req((1 << 32) - 1))
 
@@ -785,7 +785,7 @@ def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_response_limit_
 
 
 def malformed_requests() -> dict[str, bytes]:
-    """Requests whose `max_tokens` the network certifier can't read as `id_form.id_request` writes one."""
+    """Requests whose `max_tokens` the network attester can't read as `id_form.id_request` writes one."""
     good, at = id_req(4), IDF.MAX_TOKENS_AT
     field = lambda f: good[:at] + f + good[at + IDF.ID_DIGITS:]  # noqa: E731
     return {
@@ -874,7 +874,7 @@ def test_over_capacity_queues_fifo_then_refuses():
 
 
 def test_a_window_with_a_refusal_goes_to_withhold_whole():
-    """The network certifier certifies no record of a window in which it refused a connection (traffic past its Program
+    """The network attester certifies no record of a window in which it refused a connection (traffic past its Program
     slots): of two windows, the second's refusal, just before its second bucket, gives its three records to `withhold`
     in place of `publish`, and the first's three are published."""
     T = PARAMS.window
@@ -958,7 +958,7 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
     """Two requests admitted in one bucket, the first two buckets long and the second one, so their `END`s are
     released in the other order: each reaches the server once, whole, at its `END`'s release, with
     `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, the network
-    certifier's run id and `x-verity-release-bucket: a`, the bucket of that `END`; a client's own release headers are
+    attester's run id and `x-verity-release-bucket: a`, the bucket of that `END`; a client's own release headers are
     dropped there, while the cells, the records and the audit hold the client's bytes as sent, which the audit
     accepts."""
     reqs = [http(b'{"prompt":"%s"}' % (b"a" * 112), b"x-verity-release-bucket: 0\r\n"),
@@ -988,7 +988,7 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
 
 def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server_gets_nothing():
     """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
-    next request's N is 0. Each network certifier samples its own run id."""
+    next request's N is 0. Each network attester samples its own run id."""
     slow = (cell(DATA, 0, b"a" * P, B), False)
     network_certifier, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
     log = {e["ordinal"]: e for e in network_certifier.log}
@@ -1004,7 +1004,7 @@ def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server
 
 class Ordered(Server):
     """`Server` whose connections' writes and the watermark stream's go in one list, `events`, in the order the network
-    certifier made them: ("request", connection, bytes) and ("watermark", bytes), with ("bucket", t) where bucket t
+    attester made them: ("request", connection, bytes) and ("watermark", bytes), with ("bucket", t) where bucket t
     became due. Its `watermark` connect opens once bucket `opens` is due (at once without it), or is refused, and its
     transport reports `buffered` bytes unwritten."""
 
@@ -1134,7 +1134,7 @@ def positions(events: list[tuple], run_id: bytes) -> dict[tuple[str, int], int]:
 
 
 def test_the_watermark_closes_each_bucket_after_its_releases_and_only_advances():
-    """On one stream the network certifier sends its head, then one line `t n` a tick, t = 0 … the run's last bucket,
+    """On one stream the network attester sends its head, then one line `t n` a tick, t = 0 … the run's last bucket,
     then the terminating chunk: bucket t closed with n `END`s released through it, so the releases of buckets ≤ t are
     exactly N < n, as the signed ingress records' `END` cells say, and t steps by 1 and n never decreases. Each request
     reaches the server at its bucket's tick or later, never before, and before its bucket's line: a request whose server

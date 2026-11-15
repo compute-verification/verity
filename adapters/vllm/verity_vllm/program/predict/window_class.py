@@ -59,7 +59,7 @@ class WindowClass:
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slots are lane-major: slot ``nb · j + b`` is boundary b's lane j
     (nb = slots / lanes boundaries), anchored at bucket ``every · b``, and the window is ``buckets`` = every · nb buckets. Its
-    `scan` is the network certifier's scan class its slots are."""
+    `scan` is the network attester's scan class its slots are."""
     slots: int
     prompt: int
     outputs: int
@@ -98,11 +98,11 @@ class WindowClass:
 
     @property
     def scan(self) -> Any:
-        """The network certifier's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
+        """The network attester's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
         return SS.scan_class(self.lanes, self.outputs, self.every, self.prompt)
 
 
-#: the class of record, the network certifier's envelope at these fixed slots:
+#: the class of record, the network attester's envelope at these fixed slots:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)

@@ -1,9 +1,9 @@
-"""The network certifier's coin link (D7 of `security/Definitions/Certifier/Guarantees.lean`, "The coins"): the one
+"""The network attester's coin link (D7 of `security/Definitions/Certifier/Guarantees.lean`, "The coins"): the one
 path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
 own grids.
 
 The challenger (`spot.remote`, served by `verity/protocols/compose/verifier/live_challenger/serve.py`) and this link run on one auditor
-device (`trusted-device`), the device that runs the server's network certifier. The link takes each connection from the
+device (`trusted-device`), the device that runs the server's network attester. The link takes each connection from the
 prover's side (the prover's client, on the server), opens one to the challenger for it, and carries `remote`'s frames
 both ways, one connection at a time, in the challenger's order:
 
@@ -16,7 +16,7 @@ both ways, one connection at a time, in the challenger's order:
   bucket's tick, and so do a direction's end and a connection's close, so what either side sees of the other's timing is
   the grid's occupancy, T·log2(r + 1) bits an execution phase (the K charge's unit). Nothing the prover does moves a
   tick or slows the link: a prover that doesn't take what a tick releases fails the link closed, so there is no flow
-  control from inside. The ticks read one clock, the network certifier's (`pacer.raw_clock`, this host's raw monotonic
+  control from inside. The ticks read one clock, the network attester's (`pacer.raw_clock`, this host's raw monotonic
   one), which the challenger's release log reads too; a tick whose wait ends early waits again, so none runs before
   its time on that clock.
 - **Content (RP5).** Each challenger frame answers the prover's oldest unanswered frame (`remote.serve` answers in order).

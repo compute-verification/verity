@@ -1,4 +1,4 @@
-"""What the network certifier's device needs of the party runtime (`verity.runtime`, `verity.party`) that the runtime
+"""What the network attester's device needs of the party runtime (`verity.runtime`, `verity.party`) that the runtime
 does not give: seven types, one for each question to the runtime's owner, each the call the device would make.
 
 None is implemented. The runtime's owner gives each, or refuses it and the device keeps doing that part in its own

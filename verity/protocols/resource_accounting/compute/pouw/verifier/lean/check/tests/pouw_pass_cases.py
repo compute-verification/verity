@@ -6,7 +6,7 @@ verifier's `core_check.LIVE` inputs or null), `core_check.live_salt_twin`'s, ``{
 
 A pass case is an honest pass (a small workload, its weights' roots, an execution phase's coins committed under one of
 `core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, a
-certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW execution phase its context
+certified pass under a stream and a prover, salted by the network attester's reveal for the PoUW execution phase its context
 names, over the weights' root the certifier recorded with the stream and the prover before it sampled that salt, or a live
 Pearl-C pass of salt execution phase k over its weights' root W, salted by a salt-only challenger session the auditor's ledger
 reserves, opens on the execution phase's root `salt.epoch_open_root(W, k)` and ends complete), then one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A live-salt case is a live
@@ -177,7 +177,7 @@ def _live_manifest(rng: random.Random) -> dict:
 
 def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
     """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay),
-    ``beacon`` (a recorded pass's), ``certified`` (salted by the network certifier's reveal for its PoUW execution phase, which
+    ``beacon`` (a recorded pass's), ``certified`` (salted by the network attester's reveal for its PoUW execution phase, which
     the verifier holds) or ``live`` (a live Pearl-C pass's, `honest_live`: its salt coin from a salt-only session of the
     auditor's challenger opened on its salt execution phase's root, which the verifier holds as `core_check.LIVE`), as a case with
     its manifest and the challenger beside it."""

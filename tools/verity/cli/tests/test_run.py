@@ -73,7 +73,7 @@ def channel(cfg, source, to):
     return next(c for c in cfg["channel"] if (c["from"], c["to"]) == (source, to))
 
 
-#: a pin the toy's onsite configuration accepts: the network certifier's key for the certifier's sessions
+#: a pin the toy's onsite configuration accepts: the network attester's key for the certifier's sessions
 PIN = {"party": "network-certifier", "protocol": "certifier", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
 
 
@@ -186,7 +186,7 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash with neither the network certifier's bound on a response's tokens nor its lengths
+#: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
 UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
                     "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")

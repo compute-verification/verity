@@ -1,4 +1,4 @@
-"""The wipe's half of the check that holds its count to the network certifier's (`MemoryChallenger.WipeCount`):
+"""The wipe's half of the check that holds its count to the network attester's (`MemoryChallenger.WipeCount`):
 `wipe-count-test serve` against `wipe_protocol_case.counted_test_answer` (`wipe_period.outcome_counted` behind the
 Lean's decoders) on sampled sessions, with a start mark and with none, as they ran, under one adversarial edit, unsigned
 or under params of another server, each with a sampled egress in its evidence; one wipe with a start mark and a count,

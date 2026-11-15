@@ -1,4 +1,4 @@
-"""The network certifier over a period (`NetworkCheck.Period`, `verity/certifier/v0`, `network-period serve`) against its
+"""The network attester over a period (`NetworkCheck.Period`, `verity/certifier/v0`, `network-period serve`) against its
 Python mirror, through the difftest harness's `ProtocolPort`.
 
 The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) checks a period in the core interface's
@@ -140,7 +140,7 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """An execution phase missing one of its records' certificates, one the network certifier left uncertified for
+    """An execution phase missing one of its records' certificates, one the network attester left uncertified for
     refusing a connection (traffic past its Program slots), a registration not under a listed key, the scan's answer
     for another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another
     response cap or none), scans at two δ, a scan answered over
@@ -482,7 +482,7 @@ def test_a_keys_later_session_is_the_one_after_its_entry_listed_before_it(server
 
 def test_a_start_its_session_did_not_certify_is_refused_by_name(server, monkeypatch):
     """A period shows one signed start for each listed entry, each its session's certified start as the
-    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the link's
+    network attester's own verifier reads it. A shown start that is no egress certificate of window 0 under the link's
     start name, that names a key other than its entry's, that names another schedule's digest than the period's, whose
     base, ordinal and schedule do not open the digest it signs, or whose signature does not verify under its entry's key
     in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
@@ -565,7 +565,7 @@ def test_a_bad_response_cap_is_refused(server):
 
 def test_a_schedule_with_connection_rows_is_refused_by_name(server):
     """A schedule with lengths rows, of either form, with content rows or without, and with request words, is one
-    the network certifier builds (`NetworkCertifierParams`), and the period check reads it and refuses it by name at the
+    the network attester builds (`NetworkCertifierParams`), and the period check reads it and refuses it by name at the
     parameters, Lean as the
     mirror: the check reads no connection rows' registration, so it accepts no period under one. The check refuses
     it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, with no
@@ -1505,7 +1505,7 @@ def test_a_samples_bound_is_its_stratas_own_summed():
 
 def test_the_rows_forms_cells_are_the_schedules(server):
     """The rows form's `cells` are the schedule's own (`Schedule.rowsCells`, `NetworkCertifierParams.rows_cells`): `egress_cells`
-    for each of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules
+    for each of the `lanes · m · window` connections the network attester can carry, so an accepted period's schedules
     and cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no
     cells, one connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the
     mirror alike; and a schedule of 4 lanes over a link's 32-bucket execution phase, 5 egress cells a connection,

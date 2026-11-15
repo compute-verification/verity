@@ -55,7 +55,7 @@ ones, and for a request the window leaves with outputs to keep, its edge (`build
 terminator and no finish reason: its ids end where its shape does, at ``output_len``, which its length rule
 (`RequestUnit.stop`: `StopCheck_v1` over `StopRule_v1`) checks against the ids (no stop token before the last output, which
 is a stop token or the length limit's); a finish reason is the advice's, eos or length held by the same rule to the ids and the limit,
-and abort the client's. The egress record (the network certifier's, per request) is n ``DATA`` cells, the token ids in
+and abort the client's. The egress record (the network attester's, per request) is n ``DATA`` cells, the token ids in
 order, then one ``END`` at cell n, and ``PAD`` elsewhere; it sends no finish reason. Its ``DATA`` cells are the Program's
 ids, and its ``END`` sits at ``output_len``.
 """

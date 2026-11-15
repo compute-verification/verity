@@ -8,7 +8,7 @@ directory its files go to, ``window_s``, and a true value for each change), ever
   by a thread of its own to ``ids.PID.jsonl``: what a replay of a pass is given and compared with where the client that
   sent it keeps neither (vLLM's own);
 - ``to_length``: each request decoded to its ``max_tokens`` (`to_length`), as vLLM decodes one sent with
-  ``ignore_eos``, for requests that come through the network certifier, whose id request has no such field;
+  ``ignore_eos``, for requests that come through the network attester, whose id request has no such field;
 - ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);

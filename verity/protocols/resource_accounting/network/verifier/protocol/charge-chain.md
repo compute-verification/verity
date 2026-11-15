@@ -207,7 +207,7 @@ and the window difftest holds them to it: the certifier program's `NetworkCertif
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 
-**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its
+**The slice.** The compile slice's class runs inside the pool bound with the network attester's ingress, so its
 windows send no order entries, and v1's windows send no hits. A session where the pool's eviction changed a hit is
 outside the class: the slice's cache never evicts, so its rows aren't the served ones and ``rows`` refuses. Such a
 session needs a pool slice (`CompileSlice_v4` on, `verity_vllm.compiler.compile_slice_v4`), and no pool slice charges

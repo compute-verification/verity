@@ -1,7 +1,7 @@
 """A party's signed period roots and its liveness records: how an auditor device's signatures reach the verifier only
 through the prover's zero-knowledge proofs.
 
-An auditor party (a memory challenger, a network certifier) on a device holds a lower HSS key the device's identity
+An auditor party (a memory challenger, a network attester) on a device holds a lower HSS key the device's identity
 certified for it in the deployment (`verity.commitments.crypto.lms.Identity.issue`, `PartyKey`). Over one certification period it
 commits every execution phase's records, each a byte string, as the leaves of one frame-v3-sha512 tree (`root`):
 
@@ -29,7 +29,7 @@ of it, under no-state-rollback. `Period.block` signs the block's liveness record
 so every record a closed period holds is in a block whose liveness record is out.
 
 A party key signs period roots and liveness records only. What a party signs per challenge outside its periods (the
-network certifier's reveals) is no record of a period: it stays under the party's own key, and no statement about a
+network attester's reveals) is no record of a period: it stays under the party's own key, and no statement about a
 period reads it as the device's.
 
 Stdlib only, as a core unit with no ml edge is: the tree is written out here, and its test holds it to

@@ -21,7 +21,7 @@ Verity itself knows nothing of vLLM.
   `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/served_run/placement.toml` names. It runs
   the Build of record, then the endpoint with `--seal` under a GPU lease, and a load. Then comes SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
-  Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network certifier follow where each has its piece,
+  Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network attester follow where each has its piece,
   and it ends with one record of every verdict. The launcher's header gives each step, and
   `adapters/vllm/tools/served_run/README.md` says what the run establishes.
 - **`verity-vllm COMMAND`** (`verity_vllm/pipeline/cli.py`, or `python -m verity_vllm.pipeline.cli`): every tool here is a

@@ -7,7 +7,7 @@ from typing import Any
 
 def _network_response_tie_roots() -> list[Any]:
     """The response tie's two proof blocks (`verity.protocols.resource_accounting.network.prover.response_tie`: a response row of the
-    network certifier's content rows computed from the egress row, the end row and, in a stop class, the stop word)
+    network attester's content rows computed from the egress row, the end row and, in a stop class, the stop word)
     at a row of 16 ids, a stop class's and a no-stop class's; at a stop class's row of 1,024 ids; and at the two
     sizes whose gates those lack: a no-stop class's row of 2 ids, the smallest, whose count has one bit below O's
     so one half of the comparison reads none, and a stop class's of 4,096, the largest, where the stop word has no

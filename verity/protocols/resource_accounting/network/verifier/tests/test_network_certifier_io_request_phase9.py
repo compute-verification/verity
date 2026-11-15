@@ -1,4 +1,4 @@
-"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the network certifier's own
+"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the network attester's own
 ingress: what a bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its
 buckets.
 
@@ -11,7 +11,7 @@ buckets.
   c. Open here: the prompt id values are tied to nothing (the ingress-ids tie, `io_ids`, holds them to the Commit's
      `c00.input/ids`).
   d. Changed: the ordinal is read. Each cell's header carries its connection's ordinal, and a lane's cells must be on
-     the lane's q, the network certifier's release order[i] + 1.
+     the lane's q, the network attester's release order[i] + 1.
   e. The proof block reads neither the response's length nor the user: `max_tokens` is parsed as a field and not
   compared.
 """

@@ -12,7 +12,7 @@
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as the gate's ``fetch``
   writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
   files; it proves nothing about what the gate ran.
-* **certs** (``--warden-run``): the network certifier's own offline check rerun on its witness, and the public
+* **certs** (``--warden-run``): the network attester's own offline check rerun on its witness, and the public
   ``certificates.jsonl`` held to the certified lines (`network_certifier_chain.checked`). ``--deployed`` refuses a key that
   isn't LMS at `lms.DEPLOYED`. Which execution phases were certified or refused, and how many problems the check
   found, are the step's private side (`network_certifier_chain.WITNESS_KEYS`), written to ``--witness`` and never to ``--out``.
@@ -22,16 +22,16 @@
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
   summary is `n2_zk.py prove`'s (Selection All: every execution phase's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
-  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic network certifier run until its ``--warden-run``
-  takes the gate's network certifier rows, accepted only when every round's verdict is the one scan_zk expects and no
+  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic network attester run until its ``--warden-run``
+  takes the gate's network attester rows, accepted only when every round's verdict is the one scan_zk expects and no
   witness piece reached the verifier (`scan_step`). A scan whose honest round's registration names a tied value (its
   ``rests_on_period_check``, the slot entries ``prog``) is ``accepted on the period check`` (`RESTS`), never a bare
   accept: its acceptance rests on the network period check, which refuses scan_zk's stand-in block, and so does the
-  report's. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a network certifier
+  report's. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a network attester
   run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
   its ``scope``), and its verdict is ``scan accepted``, ``scan accepted on the period check`` or ``scan refused``: N2
   isn't required, and the rest is held as before. On the certifier-only path (``--job``'s ``path``,
-  `CERTIFIER_ONLY`) there are no network certifier rows: the scan isn't
+  `CERTIFIER_ONLY`) there are no network attester rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
   that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
@@ -40,23 +40,23 @@
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
   ``certifier.case.json`` beside it or ``--period-case``) held to its case's commitment (`period_binding`), the
   reason is `ROWS_FORM`.
-* **The network certifier path** (``--job``'s ``path``, `NETWORK_CERTIFIER`): every step reads an active network certifier's own
+* **The network attester path** (``--job``'s ``path``, `NETWORK_CERTIFIER`): every step reads an active network attester's own
   run (the gate's ``warden-rehearse``, or `network_certifier_serve.py`'s directory; `network_certifier_chain`) and no certifier rehearsal's,
-  whose input is refused by name (`network_certifier_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
+  whose input is refused by name (`network_certifier_chain.PROXY`). ``certs --warden-run`` reruns the network attester's own
   offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
-  (`network_certifier_chain.certificates`; no clock certificate: the network certifier signs none). That check requires the
+  (`network_certifier_chain.certificates`; no clock certificate: the network attester signs none). That check requires the
   session's certified start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
-  the endpoint's own advice to the certified I/O read off the network certifier's cells (`network_certifier_endpoint`); where the
+  the endpoint's own advice to the certified I/O read off the network attester's cells (`network_certifier_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
-  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
+  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network attester link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
-  --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_network_certifier`), every one is
+  --warden-run`'s. Each is held to the network attester run the certificates step read (`on_network_certifier`), every one is
   required, and the report names what the path stands on (`NETWORK_CERTIFIER_STUBBED`, or `NETWORK_CERTIFIER_SERVED_STUBBED` on the served node's
   endpoint report).
 * **leak**: K per monitoring period (week, month, year) on the certifier's gate run, pooled at δ = 1% and 10⁻⁶ and in the
   per-period form, each beside its share of one copy of the weights (`leak`), computed by `leak_bounds`' scaling by
   links: one link at the run's rate, and as many of it summed as the census's reference datacenter and the world
-  have machines. The network certifier's term at a scope's own load is `verity bench certifier_term`.
+  have machines. The network attester's term at a scope's own load is `verity bench certifier_term`.
 """
 from __future__ import annotations
 
@@ -121,10 +121,10 @@ STUBBED = (
     "network certifier's own cells as one device, so there are no network certifier rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
-#: the network certifier path (``--job``'s ``path``): every step reads an active network certifier's own run
+#: the network attester path (``--job``'s ``path``): every step reads an active network attester's own run
 #: (`network_certifier_chain`)
 NETWORK_CERTIFIER = "warden"
-#: what a report on the network certifier path stands on that isn't the chain's own
+#: what a report on the network attester path stands on that isn't the chain's own
 NETWORK_CERTIFIER_STUBBED = (
     "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear at the auditor, "
     "and the output tie to the Commit's port isn't proved",
@@ -249,7 +249,7 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
 def network_certifier_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its
+    """The endpoint's own advice for a network attester run (`served_endpoint`), on the certified I/O read off its
     cells (`network_certifier_chain.io`)."""
     from benchmarks.network_traces import network_certifier_chain as WC
 
@@ -257,11 +257,11 @@ def network_certifier_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
 
 
 def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for the network certifier run of ``dep`` (its ``deployment.json``), as network-e2e's
+    """The endpoint's own advice for the network attester run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
-    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network certifier's bucket unless an index is there,
-    then ``chain.served_advice`` on the certified I/O ``io`` (`network_certifier_chain.io`'s) over the network certifier's
-    execution phases, with the model's EOS ids ``eos`` (a network certifier run records none)."""
+    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network attester's bucket unless an index is there,
+    then ``chain.served_advice`` on the certified I/O ``io`` (`network_certifier_chain.io`'s) over the network attester's
+    execution phases, with the model's EOS ids ``eos`` (a network attester run records none)."""
     import subprocess
 
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
@@ -287,7 +287,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
 
 
 def network_certifier_endpoint_step(e: dict | None) -> dict:
-    """`network_certifier_endpoint`'s report: accepted when the network certifier's certified I/O reads whole off its cells and the
+    """`network_certifier_endpoint`'s report: accepted when the network attester's certified I/O reads whole off its cells and the
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
@@ -327,9 +327,9 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_network_certifier(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A network-certifier-path step held to the network certifier run the certificates step read (``run_id``): refused
-    by name (`network_certifier_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run),
-    and when it is another network certifier run's."""
+    """A network-certifier-path step held to the network attester run the certificates step read (``run_id``): refused
+    by name (`network_certifier_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network attester run),
+    and when it is another network attester run's."""
     from benchmarks.network_traces.network_certifier_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
@@ -687,7 +687,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "no carry across windows: each window's terms stand alone"]}
 
 
-# --- leak: K per monitoring period, on the network certifier run ------------------------------------------------------
+# --- leak: K per monitoring period, on the network attester run ------------------------------------------------------
 
 #: what a monitoring period's count runs over, each machine one link at the run's rate: one link
 #: (`leak_bounds.per_link`), and as many of it as the census's reference datacenter and the world have machines
@@ -696,7 +696,7 @@ SCOPES = ("link", "datacenter", "world")
 
 
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
-    """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
+    """K, the bits the network attester's accepted transcripts can carry about the secret, per monitoring period on
     its gate run ``run`` (a fetched copy: its ``request.json``, ``end.json`` and ``deployment.json``), for the scan's class
     (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds`' scaling by links (`SCOPES`): one link
     certifying the run's own request rate (`leak_bounds.per_link`), and as many identical links summed

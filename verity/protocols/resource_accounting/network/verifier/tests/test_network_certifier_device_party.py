@@ -1,4 +1,4 @@
-"""The network certifier's device as a party (`device_party`): its declared sends are exactly the manifest's, each part of
+"""The network attester's device as a party (`device_party`): its declared sends are exactly the manifest's, each part of
 its life not yet written raises `NotImplementedError` naming its goal, what it hands out encodes on the manifest's
 channels, and its turns run a session to its end once those parts answer."""
 

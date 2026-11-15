@@ -13,7 +13,7 @@ id):
   Its workers are the inference server and the proof server on one machine, proving behind the ZK server, whose pin the
   verifier holds. Its verifier composes each block's audit with the composite's other subprotocols.
 
-The network certifier is a layer of its own. It stamps each request's release order and bucket at ingress, and SPOT reads
+The network attester is a layer of its own. It stamps each request's release order and bucket at ingress, and SPOT reads
 that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`); they compose only above both.
 
 ~~~text
@@ -45,7 +45,7 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
 - SPOT[Flock]'s:
   - the inference server's ``serve(block) -> bytes``, execution phase ``block`` served and its docket, and
     ``replay(block) -> bytes``, the block's replay inputs, which only the proof server reads: every value its proof
-    blocks read, each a proof block's output, a certified input (the network certifier's stamp among them), a registered
+    blocks read, each a proof block's output, a certified input (the network attester's stamp among them), a registered
     value or advice charged at its width, with the salts that open their commitments. A value the served hardware
     decides that no block computes is never a free witness among them: serving makes it canonical, or it is advice;
   - the proof server's ``prove(block, replay, sample, address) -> bytes``: the sample's proof blocks replayed and proved,

@@ -28,7 +28,7 @@ SPOT[Flock] on its own has three roles (`parties.SPOT_PROTOCOL`):
 - the **verifier**: the challenger's live coins and signed log, and the Lean verifier.
 
 The replay inputs are every value the sampled proof blocks read, with the salts that open their commitments. Each value
-is a proof block's output, a certified input (the network certifier's stamp among them), a registered value (weights,
+is a proof block's output, a certified input (the network attester's stamp among them), a registered value (weights,
 configs, Definitions) or advice charged at its width. A value the served hardware decides that no block computes (an
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
@@ -40,7 +40,7 @@ blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
 network certification, in the remote and onsite configurations) wrap SPOT[Flock] in the recursion layer and the ZK server
-(`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
+(`parties.PROTOCOL`). The network attester is a layer of its own: it stamps each request's release order and bucket at
 ingress, and SPOT[Flock] reads that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`),
 and they compose only above both.
 
@@ -244,9 +244,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`. Under them
     a logged coin's sample misses a set fixed before it at most as the sampling design allows (`SampleAfterRecorded`, proved).
-    None mentions a network certifier.
+    None mentions a network attester.
 
-  Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
+  Onsite, the challenger rests on two more premises about where it runs, which the network attester's spec and
   ACCEL's cite by name:
   - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`security/Definitions/Pouw/Assumptions/Dither.lean`,
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee

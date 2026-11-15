@@ -1,7 +1,7 @@
 """``--admit tick`` (`serve_admit.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
-lines, as the network certifier's own code writes them (`line`), and the releases they name lost; `tick_plugin` under
+lines, as the network attester's own code writes them (`line`), and the releases they name lost; `tick_plugin` under
 vLLM's own server (`TickFeed`, `FeedReader` and the plugin's engine-core loop); and serve-openai's ``--admit tick`` over
 HTTP."""
 from __future__ import annotations
@@ -37,7 +37,7 @@ RUN = "ab"
 
 
 def line(t: int, n: int, lost: Sequence[int] = ()) -> bytes:
-    """Tick t's watermark line as the network certifier writes it (`release.watermark_chunk`), taken out of its chunk as
+    """Tick t's watermark line as the network attester writes it (`release.watermark_chunk`), taken out of its chunk as
     serve-openai's watermark route takes it out: the size on the first line, that many bytes, then the chunk's CRLF."""
     size, _, rest = REL.watermark_chunk(t, n, lost).partition(b"\r\n")
     k = int(size.split(b";", 1)[0], 16)
@@ -108,7 +108,7 @@ def plan(n: int = 40, seed: int = 7) -> tuple[list[float], list[int]]:
 def simulate(seed: int, *, gated: bool = True, n: int = 40, lost: Sequence[int] = (), arrive: Sequence[int] = ()) -> list[list[str]]:
     """Serve `plan` in simulated physical time: request i is released at rel[i] (its bucket ⌊rel/τ_b⌋), the release record
     reaches the gate up to 20 ms later and the request the engine up to 250 ms later, watermark line t, as the network
-    certifier writes it (`line`), up to 60 ms after its bucket closes, and each step takes 20 to 50 ms, all sampled from
+    attester writes it (`line`), up to 60 ms after its bucket closes, and each step takes 20 to 50 ms, all sampled from
     ``seed``. Each bucket's line names its releases in ``lost``; of those, only the ones in ``arrive`` send their release
     record and their request, the bytes that arrive all the same. Without the gate each request is added when it reaches
     the engine. Returns the scheduled steps."""
@@ -229,7 +229,7 @@ class Gated:
             self.gate.take({"run": run, "t": len(self.gate.lines) if run == self.gate.run else 0, "n": n})
 
     def mark(self, n: int, lost: Sequence[int] = ()) -> None:
-        """The watermark's next line as the network certifier writes it (`line`), through the stream's reader: its bucket
+        """The watermark's next line as the network attester writes it (`line`), through the stream's reader: its bucket
         has closed with ``n`` releases through it, ``lost`` the ones of that bucket lost on the way."""
         assert self.watermark.feed(line(len(self.gate.lines), n, lost))
 
@@ -498,7 +498,7 @@ def test_watermark_lines_as_the_certifier_sends_them():
 
 
 def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_the_watermark():
-    """Each refused line is one the network certifier's writer built, read after the line ``2 5``, with one thing
+    """Each refused line is one the network attester's writer built, read after the line ``2 5``, with one thing
     changed in its bytes where the writer itself refuses to build it: a lost release must be one of the line's own
     bucket (at least 5, below its n), named once, in rising order."""
     last, good = (2, 5), line(3, 9, [6, 8])
@@ -611,7 +611,7 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
 
 def test_tick_feed_refuses_a_runs_second_watermark_and_a_clients(tmp_path, monkeypatch):
     """A run's watermark stream, whole, then POSTs to its route that aren't one: the run's second, a stream from bucket
-    0 that names release 0 lost, and a client's, which carries the release the network certifier put on it. Each is
+    0 that names release 0 lost, and a client's, which carries the release the network attester put on it. Each is
     answered 400 and none of its body reaches the feed, so the gate reads no line of theirs; the client's is its
     release's request, fed as passed."""
     for k, v in config(tmp_path).items():
@@ -818,7 +818,7 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
 
 
 def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(plugin, tmp_path):
-    """The watermark as the network certifier writes it, through the middleware and the feed file to the engine core's
+    """The watermark as the network attester writes it, through the middleware and the feed file to the engine core's
     gate. Release 0's request is in the engine core before its line names it lost and release 2's comes after it:
     neither reaches the scheduler, and the abort vLLM sends when such a request's connection closes finds nothing."""
     sched = plugin()
@@ -945,7 +945,7 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
 
 
 def test_under_vllms_server_a_request_after_its_lost_line_is_refused_until_the_watermark_breaks(tmp_path, monkeypatch):
-    """The network certifier's stream stays open. Its line names releases 0 and 1 lost while release 1's request is
+    """The network attester's stream stays open. Its line names releases 0 and 1 lost while release 1's request is
     still sending its body, and before release 0's comes. Each is refused with the sentence serve-openai's frontend
     says, release 0's each time it comes, and reaches neither the server nor the feed. Then a line the reader refuses
     breaks the stream: the gate is open and adds every request at once, so the middleware forgets the run's lost
@@ -1169,7 +1169,7 @@ def test_serve_openai_admits_at_the_tick_over_http():
 
 
 def test_serve_openai_skips_a_lost_release_over_http():
-    """The watermark stream as the network certifier sends it (`release.watermark_head`, `watermark_chunk`), its chunks
+    """The watermark stream as the network attester sends it (`release.watermark_head`, `watermark_chunk`), its chunks
     taken apart by the server's own route. Release 0's request is held when its bucket's line names it lost: it is
     answered with that and never added, and release 1 is admitted at the bucket's close. Release 2's request comes
     after the line that names it lost, and is refused before it reaches the engine."""
@@ -1206,8 +1206,8 @@ def test_serve_openai_skips_a_lost_release_over_http():
 
 def test_serve_openai_refuses_a_runs_second_watermark_and_a_clients_over_http():
     """Beside the run's own watermark stream, two POSTs to the watermark's route, each a whole stream whose one line
-    names releases 0 and 1 lost: one names the run as the network certifier's head does, and one is that stream as a
-    client sends it through the network certifier, which puts release 0 on it (`release.with_release`). Each is
+    names releases 0 and 1 lost: one names the run as the network attester's head does, and one is that stream as a
+    client sends it through the network attester, which puts release 0 on it (`release.with_release`). Each is
     answered 400 and none of it read: release 1's request, which comes once its bucket has closed, is admitted and
     served, and the gate has seen no line but the run's own. The client's POST is release 0's request, which the gate is
     told won't come."""
@@ -1240,7 +1240,7 @@ def test_serve_openai_refuses_a_runs_second_watermark_and_a_clients_over_http():
     assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 1, "lost": 0, "watermarks": 1, "runs": 1}
 
 
-#: first lines, each with whether it is a request's: the network certifier's rule (`release.with_release`)
+#: first lines, each with whether it is a request's: the network attester's rule (`release.with_release`)
 REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1.0", True), (b"get /v1/models?x=1 HTTP/1.1", True),
                  (b"POST /verity/watermark HTTP/1.1 x", False), (b"POST /verity/watermark HTTP/1.1 ", False),
                  (b"POST /verity/watermark  HTTP/1.1", False), (b"POST  /verity/watermark HTTP/1.1", False),
@@ -1254,7 +1254,7 @@ REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1
 
 def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does():
     """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
-    certifier puts its release on a request that begins with the line, and None where the certifier passes the bytes on
+    attester puts its release on a request that begins with the line, and None where the certifier passes the bytes on
     as the client wrote them."""
     for line, is_one in REQUEST_LINES:
         sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
@@ -1264,7 +1264,7 @@ def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does(
 
 
 def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_release_over_http():
-    """Two requests of a client's whose first line has a byte after its version, so the network certifier passes each on
+    """Two requests of a client's whose first line has a byte after its version, so the network attester passes each on
     as the client wrote it (`release.with_release`): a whole watermark stream for the run, whose one line names releases
     0 and 1 lost, and a completion (its body not JSON, so no server serves it) that names itself the run's release 0.
     Each is answered 400 for its line. The gate reads no line of the first, and the frontend no release of the second:
@@ -1307,7 +1307,7 @@ def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_r
 
 def test_serve_openai_names_a_header_as_the_network_certifier_does():
     """A request with a client's own release headers, one byte before each one's name or between the name and its
-    colon, on which the network certifier then puts its release (`release.with_release`), dropping those of the
+    colon, on which the network attester then puts its release (`release.with_release`), dropping those of the
     client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
     once): the frontend has read the certifier's release of it, not the client's. Then each of the 256 bytes in each
     place: whichever fields the certifier kept, the server's headers (`hd.header_fields`) give the certifier's

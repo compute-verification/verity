@@ -1,4 +1,4 @@
-"""PoUW's read of the network certifier's salt (`verity.protocols.resource_accounting.compute.pouw.verifier.salt`) against a certifier as PoUW
+"""PoUW's read of the network attester's salt (`verity.protocols.resource_accounting.compute.pouw.verifier.salt`) against a certifier as PoUW
 reads it (`certified_salt.Certifier`: the salts it sampled and the records the prover made before them, by PoUW execution
 phase): the salt's form, the record's and the prover id's are pinned; a context names its PoUW execution phase; `revealed`
 gives PoUW execution phase p's salt on p's registration and fails closed when it is unregistered, refused by the certifier
@@ -190,7 +190,7 @@ def test_a_context_names_its_pouw_window():
 
 def test_revealed_fails_closed():
     """`revealed` gives PoUW execution phase p's salt whole on p's registration, and refuses (`Unrevealed`) an execution
-    phase that is unregistered: no registration, another execution phase's, the network certifier's own provenance, a
+    phase that is unregistered: no registration, another execution phase's, the network attester's own provenance, a
     context that names no execution phase, an execution phase with another key. It refuses one the certifier refuses,
     (``doesn't reveal``, a salt it never sampled), and so does `committed` one it holds no record for; and one whose salt
     is missing: what the certifier gives isn't 64 bytes. The certifier's own refusals (early, late, revealed already) are

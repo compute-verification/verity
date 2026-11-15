@@ -39,7 +39,7 @@ file opens the unit's rows under the registered execution phase root, through it
 
 `pass_epoch` is the rule on the pass an execution phase is received from (`served_commit.Challenger.pass_epoch`, which calls it):
 its manifest re-starts its execution phase under the challenger's own coin commitment, and the execution phase's context names it.  In a
-certified execution phase, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
+certified execution phase, whose verifier holds the network attester's reveal for it (`salt.revealed`), the pass's salt must be
 `salt.pouw_salt` of that reveal and the PoUW execution phase the context names, and its weights those the certifier recorded
 before it sampled that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
 challenger runs it before it asks the certifier for one, since the certifier reveals an execution phase once.  A live Pearl-C
@@ -953,7 +953,7 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
 MANIFEST_SCHEMA = domains.VLLM_PEARL_C_RUN
 #: a pass recorded before the execution phase's coins, salted from a beacon: only a replay of a recorded pass reads it
 MANIFEST_RECORDED = domains.VLLM_PEARL_C_RUN_V1
-#: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW execution phase's reveal: only a certified execution phase's
+#: a pass salted by the network attester, `salt.pouw_salt` of its PoUW execution phase's reveal: only a certified execution phase's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
 MANIFEST_CERTIFIED = domains.VLLM_PEARL_C_RUN_CERTIFIED
 #: the e2e-service passes' coin commitment, whose binding and weights' root are the first 32 bytes
