@@ -4,7 +4,7 @@ Each window's step units are Programs a registered compiler made from the advice
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
 and each window's docket binds the compiler's digest and that commitment's root, before any coin. The prover commits each
 window over the compiler's Programs from its sealed bundle. The verifier, handed the commitment's opening (the named gap: the
-advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
+advice is opened to the verifier until the compile slice's proof block exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`verity/protocols/proofs/spot/prover/audit/window_audit.py`'s
 `audit`): register, select on the auditor's challenger's coins (committed to the docket before any is read), Flock `--zk` behind the Lean
 ZK server on the sampled proof blocks, Lean's verdicts, and the outcome, which the Lean verifier's `Run.run` must agree with. It

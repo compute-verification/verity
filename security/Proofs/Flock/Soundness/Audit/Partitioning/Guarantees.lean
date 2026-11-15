@@ -38,10 +38,10 @@ on the leak, not leaks an adversary achieves.
 **Two-stage**, with `ψ = detectionRisk N k p`:
 
 * `RiskConcave`: for `k ≥ 2` and `p ≤ 1/2`, the increments of `ψ` do not increase.
-* `Concentration`: so for wrong proof blocks spread over replay units with `m_i` each, `∑_i ψ(m_i)` is smallest when
-  they fill whole replay units, with at most one partial: the prover's least detectable placement concentrates.
+* `Concentration`: so for wrong proof blocks spread over replay blocks with `m_i` each, `∑_i ψ(m_i)` is smallest when
+  they fill whole replay blocks, with at most one partial: the prover's least detectable placement concentrates.
 * `NestedEscape`: `ψ` is the nested sampling design's detection risk. Under `nested`, a wrong set with `m_i` wrong proof blocks in
-  replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`, which for `p < 1` is
+  replay block `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`, which for `p < 1` is
   `exp(−∑_i ψ(m_i))`.
 -/
 
@@ -164,23 +164,23 @@ def RiskConcave : Prop :=
   ∀ (N k m : ℕ) (p : ℝ), 2 ≤ k → 0 ≤ p → p ≤ 1 / 2 →
     detectionRisk N k p (m + 2) - detectionRisk N k p (m + 1) ≤ detectionRisk N k p (m + 1) - detectionRisk N k p m
 
-/-- **Concentration.** For `k ≥ 2` and `p ≤ 1/2`, wrong proof blocks spread over `R` replay units of `N`, `m i` in
-replay unit `i`, have a total detection risk at least that of the same number `M = ∑_i m i` packed into `⌊M/N⌋` full
-replay units and one holding `M mod N`. -/
+/-- **Concentration.** For `k ≥ 2` and `p ≤ 1/2`, wrong proof blocks spread over `R` replay blocks of `N`, `m i` in
+replay block `i`, have a total detection risk at least that of the same number `M = ∑_i m i` packed into `⌊M/N⌋` full
+replay blocks and one holding `M mod N`. -/
 def Concentration : Prop :=
   ∀ (N k R : ℕ) (p : ℝ), 2 ≤ k → k ≤ N → 0 ≤ p → p ≤ 1 / 2 → ∀ m : Fin R → ℕ, (∀ i, m i ≤ N) →
     (((∑ i, m i) / N : ℕ) : ℝ) * detectionRisk N k p N + detectionRisk N k p ((∑ i, m i) % N) ≤
       ∑ i, detectionRisk N k p (m i)
 
 /-- **The nested sampling design's missProb.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof blocks with
-`m_i = incorrectIn B i` of them in replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
-replay unit escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
+`m_i = incorrectIn B i` of them in replay block `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
+replay block escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
 `ψ = detectionRisk N k p`.
 
 Under `nested` every commitment comes before the one nested sample, so `nested` is a one-stage sampling design over the proof blocks.
-The two-stage design commits a sampled replay unit's interior after the first stage, and its acceptance probability at
+The two-stage design commits a sampled replay block's interior after the first stage, and its acceptance probability at
 the footprint (`Claims.Sampling.Design.Two.Pa`) is `E_S ∏_{i ∈ S} C(N − m_i, k)/C(N, k)` over the first stage's sample
-`S`, with `m_i` replay unit `i`'s footprint. A Bernoulli(`p`) first stage samples the replay units independently, so that
+`S`, with `m_i` replay block `i`'s footprint. A Bernoulli(`p`) first stage samples the replay blocks independently, so that
 is this product at the footprints. -/
 def NestedEscape : Prop :=
   ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
