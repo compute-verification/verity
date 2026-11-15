@@ -24,7 +24,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 
-from verity.protocols.pouw.verifier.serving import PassCommitment
+from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 
 from verity_vllm.protocols.pouw.lead.feed import Call, Shape
 

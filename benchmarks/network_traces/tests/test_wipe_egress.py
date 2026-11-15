@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parents[1]

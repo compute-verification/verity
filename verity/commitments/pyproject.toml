@@ -9,7 +9,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # whose layout is slots._layout_json's.
 inputs = ["verity", "verity/circuits", "verity/circuits/kernels", "verity/claims", "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py",
           "adapters/vllm/verity_vllm/check", "verity/commitments/hm96/PROTOCOL.md",
-          "verity/protocols/poub/verifier", "verity/commitments/tests/fixtures/commit-slots-v1.json"]
+          "verity/protocols/accounting/poub/verifier", "verity/commitments/tests/fixtures/commit-slots-v1.json"]
 parallel = true
 worker_gb = 8
 

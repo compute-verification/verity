@@ -14,8 +14,8 @@ import threading
 from typing import Any
 
 import pytest
-from verity.protocols.certifier.verifier import io_tie as IT
-from verity.protocols.certifier.verifier import release as REL
+from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.verifier import release as REL
 
 from tests.pipeline import test_serve_openai as served
 from verity_vllm.config import UsageError

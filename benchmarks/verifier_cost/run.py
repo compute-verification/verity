@@ -33,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-NCI = ROOT / "verity/protocols/inference_only/verifier/nci/lean"
+NCI = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
 EXE = NCI / ".lake/build/bin/nci-check"
 SCHEMA = "verity/verifier-cost/v1"
 
@@ -192,7 +192,7 @@ def measure(args) -> int:
     return 0
 
 
-PIECES = ROOT / "verity/protocols/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"
+PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 
@@ -224,7 +224,7 @@ def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
 
 
 def partition(args) -> int:
-    from verity.protocols.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits import partition_object as PO
 
     out = Path(args.out)

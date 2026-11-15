@@ -9,8 +9,8 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.protocols.spot.device import challenger
-from verity.protocols.spot.prover.optimize import Cell
+from verity.protocols.proofs.spot.device import challenger
+from verity.protocols.proofs.spot.prover.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():

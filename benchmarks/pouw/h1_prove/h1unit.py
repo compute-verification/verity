@@ -74,18 +74,18 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 if TYPE_CHECKING:
     from verity.circuits.partition_object import TemplatePartition
     from verity.circuits.program import Program
-    from verity.protocols.pouw.prover.circuit.h1tile import Layout
+    from verity.protocols.accounting.pouw.prover.circuit.h1tile import Layout
     from verity_flock.circuit import Port
     from verity_flock.class_statement import UnitStager
 
@@ -464,7 +464,7 @@ class Shape:
 
     @cached_property
     def layout(self) -> Layout:
-        from verity.protocols.pouw.prover.circuit import h1tile as H
+        from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
         return H.Layout(self.r, self.c, self.k)
 
     @property
@@ -503,7 +503,7 @@ class Shape:
 
     def unit(self) -> Any:
         """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
-        from verity.protocols.pouw.prover.circuit import h1tile as H
+        from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
@@ -620,7 +620,7 @@ def path(lv: Sequence[Sequence[bytes]], index: int) -> list[str]:
 
 
 def verify(dom: CommitmentDomain, root: bytes, index: int, bc: bytes, sibs: list[str]) -> bool:
-    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
     return CC.verify_path(dom, root, index, leaves_one(dom, index, bc), [bytes.fromhex(s) for s in sibs])
 
 

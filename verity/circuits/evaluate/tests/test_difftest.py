@@ -54,7 +54,7 @@ import verity_difftest as DT
 from hypothesis import strategies as st
 from verity_difftest import settings
 
-from verity.protocols.pouw.prover.circuit import words as W
+from verity.protocols.accounting.pouw.prover.circuit import words as W
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits import partition_object as PO
@@ -1917,7 +1917,7 @@ def test_activations_on_their_grids(server):
                       "TanhF32Rn_v1": len(TANH_SWEEP), "GeluTanhMulBf16_v1": gu, "GeluErfBf16_v1": 65536}, counts
 
 
-CAPTURED = Path(__file__).resolve().parents[4] / "verity/protocols/flock/prover/tests/data/captured-101/slices"
+CAPTURED = Path(__file__).resolve().parents[4] / "verity/protocols/proofs/flock/prover/tests/data/captured-101/slices"
 
 
 def _u16(path: Path) -> list[int]:

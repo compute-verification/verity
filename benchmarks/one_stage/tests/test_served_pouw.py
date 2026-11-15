@@ -37,7 +37,7 @@ def test_the_pouw_command_proves_then_writes_the_piece_and_the_period_case(tmp_p
     shutil.copy(HERE.parent / "served_pouw.sh", one)
     (tree / ".venv" / "bin").mkdir(parents=True)
     (tree / ".venv" / "bin" / "python").symlink_to(sys.executable)
-    (tree / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "check").mkdir(parents=True)
+    (tree / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "check").mkdir(parents=True)
     h1 = tree / "benchmarks" / "pouw" / "h1_prove"
     for name, body in (("live.sh", 'mkdir -p "$RESEARCH_RUN_DIR/out/live" && echo "{}" > "$RESEARCH_RUN_DIR/out/live/live-evidence.json"'),
                        ("drawn.sh", 'mkdir -p "$3/drawn" && echo "[]" > "$3/drawn/statements.json"')):
@@ -70,7 +70,7 @@ def test_the_pouw_command_proves_then_writes_the_piece_and_the_period_case(tmp_p
     q = d / "private" / "pouw"
     st, le = q / "drawn" / "statements.json", q / "live" / "out" / "live" / "live-evidence.json"
     ev = ["--statements", str(st), "--live-evidence", str(le)]
-    exe = tree / "verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-period"
+    exe = tree / "verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-period"
     got = [json.loads(x) for x in calls.read_text().splitlines()]
     memo = Path(got[2]["argv"][got[2]["argv"].index("--lean-answers") + 1])
     assert [(c["tool"], c["argv"]) for c in got] == [

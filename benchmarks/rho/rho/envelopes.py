@@ -277,7 +277,7 @@ RATIO_BITS = clog2(10 ** 7)
 #: ASCII characters but `"` and `\`, a quote and spaces
 NAME_BITS = clog2(sum(93 ** k for k in range(63)))
 #: the bits of a warden-form id request besides its prompt ids that the ingress scan leaves free, each field's
-#: (`verity/protocols/certifier/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
+#: (`verity/protocols/accounting/certifier/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
 REQUEST_HEAD = {
     "connection ordinal": 32,     # the cell header's u32, which `ingress_scan.step` checks only above the last
     "content-length": 32,         # a u32, free while the request is unfinished
@@ -306,7 +306,7 @@ class Certifier:
         requestBits = Σ REQUEST_HEAD + (K0 + (C − 1) K) IDB,   K0 = ⌊(B − 9 − 367) / 11⌋,   K = ⌊(B − 9) / 11⌋
 
     bits: the head's fields the ingress scan leaves free (`REQUEST_HEAD`), then `K0` prompt ids in its first cell after
-    the head and `K` in each other cell (the grammar of `verity/protocols/certifier/verifier/io_request.py`, which
+    the head and `K` in each other cell (the grammar of `verity/protocols/accounting/certifier/verifier/io_request.py`, which
     `ingress_scan.py` scans). A bucket adds `lanes ⌈log₂(r + 2)⌉` bits, each lane's block absent or `d ≤ r` data cells
     then padding. A slot is held `D + 1` buckets from its admission, so a link-window of `T = window_buckets` buckets
     holds at most `lanes ⌈T / (D + 1)⌉` requests, and

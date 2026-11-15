@@ -58,10 +58,10 @@ import pool_ram as PR
 import stream as ST
 from pool_ram import RP
 
-from verity.protocols.certifier.verifier.head_check import ands
+from verity.protocols.accounting.certifier.verifier.head_check import ands
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.gates import block_key as BK
-from verity.protocols.certifier.prover import cache_step_v3 as V3, compile_slice_v6 as V6
+from verity.protocols.accounting.certifier.prover import cache_step_v3 as V3, compile_slice_v6 as V6
 
 MUL = 2187
 SHA_BLOCK = 58120

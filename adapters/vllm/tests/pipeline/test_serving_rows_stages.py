@@ -34,7 +34,7 @@ from verity.definitions.registry import sampling as SA
 from verity.definitions.registry import sampling_rows as SR
 from verity.definitions.registry import topp_keep_builder as K
 from verity.definitions.registry import topp_stages as T
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
 
 from verity_vllm.check.replay.index import SAMPLER_OP

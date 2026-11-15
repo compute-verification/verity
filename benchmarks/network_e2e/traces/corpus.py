@@ -150,7 +150,7 @@ CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"e
 TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
            for name, c in CUT.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.protocols.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: active warden (`verity.protocols.accounting.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
@@ -549,7 +549,7 @@ def warden_modules():
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.protocols.certifier.verifier import warden
+    from verity.protocols.accounting.certifier.verifier import warden
 
     import warden_serve
     return warden, warden_serve

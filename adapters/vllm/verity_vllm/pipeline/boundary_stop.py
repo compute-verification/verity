@@ -38,8 +38,8 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.commitments.windows import rows as CS
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.one_stage import served as RS
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,

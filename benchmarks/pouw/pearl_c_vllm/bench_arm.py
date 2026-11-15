@@ -47,14 +47,14 @@ class _Coins:
     """`e2e.Coins`, trimmed: one epoch's challenger, each coin opened once."""
 
     def __init__(self, epoch: int) -> None:
-        from verity.protocols.pouw.verifier import verifier
-        from verity.protocols.pouw.verifier.coins import Challenger
+        from verity.protocols.accounting.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
         self.challenger, self.opened = Challenger(epoch, verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes) -> Any:
-        from verity.protocols.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 
         if label in self.opened:
             if self.opened[label].after != after:
@@ -143,8 +143,8 @@ class LiveDraw:
         self.gate, self.peer, self.lane, self.at, self.period = ChallengerGate(gate, run), peer, lane, at, period
 
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
-        from verity.protocols.pouw.verifier import window as Wd
-        from verity.protocols.spot.device.challenger import CoinError
+        from verity.protocols.accounting.pouw.verifier import window as Wd
+        from verity.protocols.proofs.spot.device.challenger import CoinError
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
         lines = self.gate.ledger()
@@ -241,8 +241,8 @@ class PearlCArm:
         return max(leaf_default, pow2(tiles)), max(rows_default, pow2(rows))
 
     def ready(self, target: Any) -> None:
-        from verity.protocols.pouw.verifier.audit import weights_root
-        from verity.protocols.pouw.verifier.salt import epoch_open_root
+        from verity.protocols.accounting.pouw.verifier.audit import weights_root
+        from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack

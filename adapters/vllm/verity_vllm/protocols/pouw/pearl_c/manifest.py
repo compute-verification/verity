@@ -4,12 +4,12 @@ execution phase's coins or, for a pass recorded before them, from its beacon.
 """
 from __future__ import annotations
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier.audit import Epoch, Workload
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.verifier.window import LIVE_SCHEME
-from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
 

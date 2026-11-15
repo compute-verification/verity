@@ -298,14 +298,14 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     than every PR touching Lean."""
     from research.landing import lean_errors
 
-    flock = "verity/protocols/flock/verifier"
+    flock = "verity/protocols/proofs/flock/verifier"
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
            "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -621,7 +621,7 @@ def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agr
     the base, and none for a root."""
     asked, changed = [], [False]
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/protocols/flock/prover/"]} if changed[0] else {}))
+        {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if changed[0] else {}))
     h = Harness(world, monkeypatch)
     h.q._clone()
     base, sha = _main(world), world.change({"f.txt": "1\n"})

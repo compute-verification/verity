@@ -22,9 +22,9 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Shape as Unit  # noqa: E402
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 
 

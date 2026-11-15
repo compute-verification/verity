@@ -11,7 +11,7 @@ import os
 import h1unit as U
 import pytest
 
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 
 
 @pytest.mark.slow

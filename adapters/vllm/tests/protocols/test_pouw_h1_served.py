@@ -37,17 +37,17 @@ from verity.circuits.types import Array, RecordType, Value
 from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import h1zy as Z
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_experts as X

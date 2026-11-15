@@ -64,7 +64,7 @@ def capture(a) -> int:
     import bench_arm as BA
     import e2e
     import torch
-    from verity.protocols.pouw.verifier.audit import weights_root
+    from verity.protocols.accounting.pouw.verifier.audit import weights_root
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
@@ -114,7 +114,7 @@ def capture(a) -> int:
 
 def volunteer(a) -> int:
     import volunteer_pass as VP
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -134,7 +134,7 @@ def volunteer(a) -> int:
 
 def verify(a) -> int:
     import verify_run as VR
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -282,7 +282,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
 
 
 def full(a) -> int:
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
     p.add_argument("--model", choices=("glm53", "llama32_1b"), default="glm53", help="capture: whose in-domain linears")
     p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear of --model)")
-    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.protocols.pouw.verifier.serving.SCHEDULES)")
+    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.protocols.accounting.pouw.verifier.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
     p.add_argument("--draws", type=int, help="verify: tiles drawn a pass (default verify_run's DRAWS)")

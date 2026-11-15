@@ -21,9 +21,9 @@ from typing import Any, ClassVar
 import numpy as np
 from verity.commitments import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     Epoch,
     Workload,
@@ -33,10 +33,10 @@ from verity.protocols.pouw.verifier.audit import (
     salt_of,
     weights_root,
 )
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-from verity.protocols.pouw.verifier.protocol import DomainError
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024

@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 import torch
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
 
 from tests.engine.test_int8_zy import LLAMA, _configs, _cuda_call, _rows
 from verity_vllm.engine import int8_exact as E

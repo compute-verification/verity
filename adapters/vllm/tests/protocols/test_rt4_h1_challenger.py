@@ -39,12 +39,12 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.commitments.crypto import lms
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import LiveCommitment, record_message
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, record_message
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T

@@ -106,9 +106,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.certifier.verifier import calibration
-from verity.protocols.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.certifier.verifier import calibration
+from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols import reporting
 
 #: the monitoring periods' seconds, by name
@@ -744,7 +744,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "syncs": Input(chosen["n_delta"].default * chosen["n_rho"].default if syncs is None else syncs, "sync",
                        "assumed",
                        "N2's #Σ_sync, the most a calibration chooses by default: "
-                       "verity/protocols/certifier/verifier/calibration.py choose_sync_set's n_delta x n_rho"
+                       "verity/protocols/accounting/certifier/verifier/calibration.py choose_sync_set's n_delta x n_rho"
                        if syncs is None else "N2's #Σ_sync, given (--syncs)"),
         "failure_rate": Input(failure_rate, "failure/connection", "assumed",
                               "none measured: the share of connections that fail, which the rows with the lengths "

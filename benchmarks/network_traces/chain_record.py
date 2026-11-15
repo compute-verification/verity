@@ -179,7 +179,7 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
     Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
-    from verity.protocols.spot.verifier.profile import Stratified
+    from verity.protocols.proofs.spot.verifier.profile import Stratified
 
     return Stratified.uniform(n, k).count_bound(delta)
 
@@ -221,7 +221,7 @@ def custody(gates: Path) -> dict:
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
     from verity.commitments.crypto import lms
-    from verity.protocols.certifier.verifier import lean_audit
+    from verity.protocols.accounting.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
@@ -293,7 +293,7 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
     `NetworkCheck.TransferBlocks.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
     window where the two differ refused whole)."""
     import certifier_serve as cs
-    from verity.protocols.certifier.verifier import lean_audit
+    from verity.protocols.accounting.certifier.verifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -815,8 +815,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.protocols.certifier.prover import ingress_scan as IS
-    from verity.protocols.certifier.verifier import warden as W
+    from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+    from verity.protocols.accounting.certifier.verifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
@@ -970,7 +970,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
     from verity.commitments.identity import tagged_sha512
 
     try:

@@ -20,7 +20,7 @@ from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
 from verity.circuits.ops import gemm
-from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
+from verity.protocols.proofs.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
                                                     Stratum, Subset, Work, WorkStratum, neg_log_escape, work_k)
 
 
@@ -667,7 +667,7 @@ AT_ONCE = [[(3348 * 10 ** 18, 6_974_586, 262_144.0)], [(10 ** 19, 300, 3.0), (10
 def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypatch):
     """With `HARM_WHOLE` out of reach every block left is taken by itself: the same bound to the floats' resolution
     (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
-    from verity.protocols.spot.verifier import profile
+    from verity.protocols.proofs.spot.verifier import profile
 
     law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
     harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}

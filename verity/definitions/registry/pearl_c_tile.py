@@ -14,7 +14,7 @@ version.
 The device's chain is `verity.definitions.registry.pearl_c_forming`'s `PearlCChain_v1{K,DOT,G}`, the one Definition of it, which
 each word calls.
 
-**The order** is `verity.protocols.pouw.verifier.schemes.pearl_c_u`'s, op for op.  A′, B̃ are the formed E4M3 operands (K codes
+**The order** is `verity.protocols.accounting.pouw.verifier.schemes.pearl_c_u`'s, op for op.  A′, B̃ are the formed E4M3 operands (K codes
 each) and P_A,i, P_B,j the peel's 64 BF16 factors of row i and column j; every word is FP32 unless named.
 
 ~~~text
@@ -40,9 +40,9 @@ BF16 store rounds to nearest even (NaN 0x7FFF, F2FP's).  The vLLM integration ta
 (the rest are zero filler rows), and adds a bias in BF16 after it, torch's ``y + bias`` (Bf16Add_v1, NaN 0x7FC0); ``BIAS``
 is that add.  α is `pearl_c.s5_stats`' (the rows' FP32 words), which `Pc8RowA` and `Pc8RowB` compute and don't output.
 
-`verity.protocols.pouw.verifier.circuit.pc8`'s `Pc8Tile` is the same function as TileRead at the same device: core can't read
+`verity.protocols.accounting.pouw.verifier.circuit.pc8`'s `Pc8Tile` is the same function as TileRead at the same device: core can't read
 this registry, nor this registry core, so the two are separate bodies, and core's tests hold them equal and to `pearl_c_u`
-(``verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py``).
+(``verity/protocols/accounting/pouw/verifier/tests/test_pearl_c_tile.py``).
 """
 from __future__ import annotations
 
@@ -60,10 +60,10 @@ __all__ = ["PearlCTileRead", "PearlCTileReadCell", "PearlCTileReadCellV2", "Pear
 E4M3, BF16, F32 = Value(8), Value(16), Value(32)
 SLICE, PEEL, K16 = 32, 64, 16
 ONE_BITS = 0x3F800000
-CONFORMANCE = ("protocol-defined; equal to verity.protocols.pouw.verifier.schemes.pearl_c_u, the pin of the Hopper kernel's gate "
-               "problem, on its vectors (verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py)")
+CONFORMANCE = ("protocol-defined; equal to verity.protocols.accounting.pouw.verifier.schemes.pearl_c_u, the pin of the Hopper kernel's gate "
+               "problem, on its vectors (verity/protocols/accounting/pouw/verifier/tests/test_pearl_c_tile.py)")
 UNSCALE_CONFORMANCE = ("protocol-defined; the Pearl-C kernels' store_y, the order their check fixtures' glue_y states "
-                       "(verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py)")
+                       "(verity/protocols/accounting/pouw/verifier/tests/test_pearl_c_tile.py)")
 
 
 def _refuse(b: dict) -> str | None:

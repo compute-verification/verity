@@ -27,8 +27,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -49,7 +49,7 @@ LENGTHS = (5, 4, 3)
 #: sampled span s's two keys: span 0's key 5 and span 2's key 4 are past their lengths, so each opens a fill row
 TOKS = ((1, 5), (0, 4))
 #: core's history-read vector: a table of 5 rows of 4 words at 8 leaves, and the supplied value its reads take
-VECTOR = Path(__file__).resolve().parents[4] / "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json"
+VECTOR = Path(__file__).resolve().parents[4] / "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json"
 
 
 def _block():

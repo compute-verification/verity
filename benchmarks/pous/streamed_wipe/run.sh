@@ -39,7 +39,7 @@ FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
 "$NVCC" "${FLAGS[@]}" labels.cu -o "$S/wipelabels" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kernel spills"; exit 3; fi
 sha256sum labels.cu "$ROOT/verity/circuits/kernels/sha512.cuh" bench.py "$S/wipelabels" >> "$O/build.txt"
-(cd "$ROOT/verity/protocols/pous/device/lean" && lake build streamed-wipe-verdict) >> "$O/build.txt" 2>&1 \
+(cd "$ROOT/verity/protocols/accounting/pous/device/lean" && lake build streamed-wipe-verdict) >> "$O/build.txt" 2>&1 \
   || { tail -30 "$O/build.txt"; echo "REFUSED: the Lean verdict doesn't build"; exit 3; }
 
 rc=0

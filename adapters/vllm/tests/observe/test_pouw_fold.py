@@ -18,7 +18,7 @@ import random
 import numpy as np
 import pytest
 import torch
-from verity.protocols.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
 from tests.program import test_pouw_lowering as LW
 from verity_vllm import protocols as PO

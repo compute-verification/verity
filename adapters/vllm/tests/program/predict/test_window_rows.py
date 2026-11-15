@@ -21,12 +21,12 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.windows import interface as IF
 from verity.definitions.registry import io_shell as IO
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.certifier.verifier import warden as W
-from verity.protocols.certifier.verifier.active import id_request
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (

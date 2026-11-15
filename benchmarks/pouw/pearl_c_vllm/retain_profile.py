@@ -245,7 +245,7 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
     if args.seed is not None:
         import random
 
-        from verity.protocols.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier import verifier
         from verity_vllm.protocols.pouw import pearl_c as PPD
         draw = random.Random(args.seed)
         verifier.coins = draw.randbytes

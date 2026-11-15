@@ -6,10 +6,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.spot.device.challenger import LiveRecord
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import handle
 from verity_vllm.protocols.pouw import h1 as PH

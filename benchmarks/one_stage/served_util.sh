@@ -91,7 +91,7 @@ if [ "${1:-}" != leased ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
-    (cd "$TREE/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
+    (cd "$TREE/verity/protocols/accounting/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
     lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi

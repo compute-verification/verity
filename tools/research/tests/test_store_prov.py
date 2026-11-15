@@ -302,9 +302,9 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"verity/protocols/flock/prover/agreement/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
+    moves = [{"verity/protocols/proofs/flock/prover/agreement/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
-    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.protocols.flock.prover.agreement.tool"]
+    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.protocols.proofs.flock.prover.agreement.tool"]
     assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
     assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.verity.check.tool", moves) == []
@@ -354,9 +354,9 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
     repo = tmp_path / "repo"
     (repo / "tools/agree").mkdir(parents=True)
     (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
-                                              "command=['true'], merge_requires={'agreement': ['verity/protocols/flock/prover/']})\n")
-    (repo / "verity/protocols/flock/prover").mkdir(parents=True)
-    (repo / "verity/protocols/flock/prover/a.py").write_text("x = 1\n")
+                                              "command=['true'], merge_requires={'agreement': ['verity/protocols/proofs/flock/prover/']})\n")
+    (repo / "verity/protocols/proofs/flock/prover").mkdir(parents=True)
+    (repo / "verity/protocols/proofs/flock/prover/a.py").write_text("x = 1\n")
     git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
     git("init", "-q")
     git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
@@ -365,7 +365,7 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
 
     assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
     assert merge.declaration(repo, "agree").name == "agree"
-    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/protocols/flock/prover/"]}
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/protocols/proofs/flock/prover/"]}
     (repo / "tools/agree/tool.py").unlink()
     with pytest.raises(json.JSONDecodeError):
         tools_registry.locate("agree", repo)
@@ -378,19 +378,19 @@ def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatc
     from research import merge, remote
 
     moves = tmp_path / "moves.json"
-    moves.write_text(json.dumps({"moves": [{"paths": {"verity/protocols/flock/prover/agreement/tool.py": "tools/agree/tool.py"}}]}))
+    moves.write_text(json.dumps({"moves": [{"paths": {"verity/protocols/proofs/flock/prover/agreement/tool.py": "tools/agree/tool.py"}}]}))
     monkeypatch.setattr(tools_registry, "MOVES", moves)
     monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
     decl = ("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', command=['true'], "
             "preflight=['echo', '{tag}'], after_land=['echo', 'landed'])\n")
-    for tree, rel in (("old", "verity/protocols/flock/prover/agreement/tool.py"), ("new", "tools/agree/tool.py")):
+    for tree, rel in (("old", "verity/protocols/proofs/flock/prover/agreement/tool.py"), ("new", "tools/agree/tool.py")):
         (tmp_path / tree / rel).parent.mkdir(parents=True)
         (tmp_path / tree / rel).write_text(decl.replace("{tag}", tree))
     (tmp_path / "none").mkdir()
 
     old, new, none = tmp_path / "old", tmp_path / "new", tmp_path / "none"
     assert tools_registry.locate("agree", new) == ("tools.agree.tool", "AGREE")
-    assert tools_registry.locate("agree", old) == ("verity.protocols.flock.prover.agreement.tool", "AGREE")
+    assert tools_registry.locate("agree", old) == ("verity.protocols.proofs.flock.prover.agreement.tool", "AGREE")
     assert tools_registry.locate("agree", none) is None
     assert tools_registry.load("agree", old).name == "agree" and tools_registry.load("agree", old).spec == "tools.agree.tool:AGREE"
     assert remote.tool_preflight(["--tool", "agree"], old) == ["echo", "old"]

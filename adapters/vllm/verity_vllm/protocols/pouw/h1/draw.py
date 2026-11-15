@@ -9,10 +9,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import (
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (
     ChallengerKey,
     CoinError,
     LiveCommitment,

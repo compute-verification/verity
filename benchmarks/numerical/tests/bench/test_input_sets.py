@@ -19,7 +19,7 @@ from verity_flock import synthetic as SY
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 
-DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "flock" / "prover" / "tests" / "data" / "captured-101"
+DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover" / "tests" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
 CENSUS = Path(__file__).resolve().parents[3] / "census"

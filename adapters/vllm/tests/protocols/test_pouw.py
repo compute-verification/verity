@@ -1,5 +1,5 @@
 """The PoUW adapter (`protocol_options.pouw`): refusals, weights committed before any wrapper, the int7 linear served
-exactly, the executor's tiles equal to `verity.protocols.pouw.verifier`'s reference bit for bit, the weight read from the layer it is handed
+exactly, the executor's tiles equal to `verity.protocols.accounting.pouw.verifier`'s reference bit for bit, the weight read from the layer it is handed
 (so POUS's decoded weight is what the GEMM uses), and an uninstall that leaves the model as it was.
 
 CPU only, on numpy stand-ins for a linear layer; the hook site is the same ``quant_method.apply`` vLLM's ``LinearBase``
@@ -15,10 +15,10 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.prover import circuit
-from verity.protocols.pouw.prover.schemes import SCHEMES, get, pearl_c
-from verity.protocols.pouw.verifier import registration
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.prover import circuit
+from verity.protocols.accounting.pouw.prover.schemes import SCHEMES, get, pearl_c
+from verity.protocols.accounting.pouw.verifier import registration
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
     Epoch,
@@ -28,14 +28,14 @@ from verity.protocols.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.pouw.verifier.coins import (
+from verity.protocols.accounting.pouw.verifier.coins import (
     Challenger,
     CoinCommitment,
     CoinOpening,
     coin_reason,
 )
-from verity.protocols.pouw.verifier.protocol import Context as UnitContext
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile
+from verity.protocols.accounting.pouw.verifier.protocol import Context as UnitContext
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile
 
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks

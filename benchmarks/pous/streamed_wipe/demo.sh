@@ -21,7 +21,7 @@
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.protocols.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
+#                        there, e.g. 'python -m verity.protocols.accounting.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
@@ -179,13 +179,13 @@ EOF
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
-  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/pous/verifier/wipe_stream.c -o "$S/wipe_stream-check"
+  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/verifier/wipe_stream.c -o "$S/wipe_stream-check"
   TOOLS={}
   if [ "$LEAN" = 1 ] && [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
   elif [ "$LEAN" = 1 ]; then
-    L=verity/protocols/pous/device/lean
+    L=verity/protocols/accounting/pous/device/lean
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
     (cd "$L" && lake build wipe-protocol) > "$O/lake-build.log" 2>&1 \
@@ -240,7 +240,7 @@ if [ "$DEMO_STORE" = cuda ]; then
   case "$DEMO_GPU:$NAME" in any:*|*:*"$DEMO_GPU"*) ;; *) echo "REFUSED: the GPU is '$NAME', not an $DEMO_GPU"; exit 3 ;; esac
 fi
 rc=0
-uv run --no-sync python -m verity.protocols.pous.verifier.wipe_period --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
+uv run --no-sync python -m verity.protocols.accounting.pous.verifier.wipe_period --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
   --expect "$DEMO_EXPECT" > "$O/summary.json" || rc=$?
 cat "$O/summary.json"
 exit $rc

@@ -2,7 +2,7 @@
 
 Pearl-C4 is Pearl-C on FP4 operands that carry one scale a scale group (`pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`). This
 directory holds its device kernels for the RTX PRO 6000 (`pearl_c4.cu`, sm_120a), the check that every buffer they write
-is the scalar reference's (`verity.protocols.pouw.prover.schemes.pearl_c4`), and the reference replay of what a device
+is the scalar reference's (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`), and the reference replay of what a device
 ran. Its timing is self-timing for development; a number of record is the GPU harness's (`../harness/`).
 
 ## The device check, `run.sh`

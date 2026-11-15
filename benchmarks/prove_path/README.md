@@ -16,7 +16,7 @@ store, since their bundles and requests hold request values. The docstrings say 
 
 A declared run's audit (`a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.protocols.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity.protocols.accounting.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
 1. **Registration binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's
@@ -131,11 +131,11 @@ history would discharge, and doesn't discharge them yet.
   and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
   states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
-  `wrong_units` function in `verity/protocols/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
+  `wrong_units` function in `verity/protocols/proofs/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
-  in `verity/protocols/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  in `verity/protocols/proofs/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 

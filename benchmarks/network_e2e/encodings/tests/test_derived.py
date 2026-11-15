@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 
 HERE = Path(__file__).parent
 

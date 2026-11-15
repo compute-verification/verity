@@ -17,7 +17,7 @@ import pytest
 from verity.periods import block_count
 from verity.protocols.reporting import PERIODS
 from verity_e2e_demo import block_record as R
-from verity.protocols.poub.verifier import ledger
+from verity.protocols.accounting.poub.verifier import ledger
 
 FIXTURES = Path(__file__).parent / "fixtures"
 #: the census's deployments, which the block record's reference deployment is held to here (the record itself is public

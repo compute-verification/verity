@@ -44,8 +44,8 @@ import pytest
 
 import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
-from verity.protocols.poub.verifier import codec
-from verity.protocols.poub.verifier.memory_map import Header, Replay, Step
+from verity.protocols.accounting.poub.verifier import codec
+from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
 from verity.circuits import requirement as R
 from verity.circuits.census import census, step_ends, step_of
 from verity.circuits.program import REGISTRATION, Program, is_input

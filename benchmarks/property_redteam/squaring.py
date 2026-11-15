@@ -73,7 +73,7 @@ from gates import (
     proven,
 )
 
-from verity.protocols.poub.verifier import codec
+from verity.protocols.accounting.poub.verifier import codec
 
 F = codec.P1024
 P = F.p

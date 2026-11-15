@@ -465,10 +465,10 @@ def _commit(*enabled):
 
 
 def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.protocols.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
+    """`verity.protocols.accounting.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
     proofs nothing changes."""
-    from verity.protocols.pouw.prover import circuit
+    from verity.protocols.accounting.pouw.prover import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
@@ -537,7 +537,7 @@ def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_s
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():
-    from verity.protocols.pouw.verifier.protocol import DomainError
+    from verity.protocols.accounting.pouw.verifier.protocol import DomainError
     t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
     assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
     assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
@@ -549,10 +549,10 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
 def test_without_its_circuit_registry_pouw_stays_refused_beside_spot(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
-    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.pouw.verifier.not_a_circuit_registry")
+    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry")
     got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
     assert got[-1] == _refused_beside_spot("ncp-v2")
-    assert got[0].startswith("pouw: its circuit registry verity.protocols.pouw.verifier.not_a_circuit_registry is not installed")
+    assert got[0].startswith("pouw: its circuit registry verity.protocols.accounting.pouw.verifier.not_a_circuit_registry is not installed")
     with pytest.raises(PO.Refused, match="is not installed"):
         PO.traced_as("pouw:ncp-v2", 16, 64, 16)
 

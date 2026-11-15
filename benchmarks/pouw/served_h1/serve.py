@@ -114,7 +114,7 @@ if TYPE_CHECKING:
 
     import torch
 
-    from verity.protocols.spot.device.challenger import LiveCommitment
+    from verity.protocols.proofs.spot.device.challenger import LiveCommitment
     from verity_vllm.protocols.pouw.h1.receipts import Cubin
 
 HERE = Path(__file__).resolve().parent
@@ -447,8 +447,8 @@ def run(a: argparse.Namespace) -> dict:
                                                                        RC.noise_blocks_cpu(probe, 40)))})
 
     from tests.engine import int8_exact_gpu as G
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity_vllm import protocols as PO
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
@@ -528,9 +528,9 @@ def run(a: argparse.Namespace) -> dict:
     pending: list[tuple] = []
     round_log: list[dict] = []
     if live:
-        from verity.protocols.pouw.verifier import window as Wd
-        from verity.protocols.pouw.prover.circuit import h1tile as HT
-        from verity.protocols.spot.device import challenger as Ch
+        from verity.protocols.accounting.pouw.verifier import window as Wd
+        from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+        from verity.protocols.proofs.spot.device import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds
 

@@ -13,9 +13,9 @@ import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF
-from verity.protocols.pouw.verifier import credit
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
+from verity.protocols.accounting.pouw.verifier import credit
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (

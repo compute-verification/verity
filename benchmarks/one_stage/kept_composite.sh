@@ -30,7 +30,7 @@ if [ -z "$PY" ]; then
   (uv venv -q "$W/venv" && VIRTUAL_ENV=$W/venv uv pip install -q numpy) > "$OUT/venv.log" 2>&1 || { say "VENV failed"; exit 3; }
   PY=$W/venv/bin/python
 fi
-export PYTHONPATH=$TREE:$TREE/benchmarks/numerical/python:$TREE/tools/difftest/python:$TREE/verity/protocols/flock/prover/python
+export PYTHONPATH=$TREE:$TREE/benchmarks/numerical/python:$TREE/tools/difftest/python:$TREE/verity/protocols/proofs/flock/prover/python
 say "TREE $(git -C "$TREE" rev-parse HEAD 2>/dev/null || echo '?') SRC $1 window $K"
 build() {  # DIR TARGET
   local t0=$SECONDS
@@ -41,13 +41,13 @@ build() {  # DIR TARGET
 }
 build verity/protocols/compose/verifier/remote remote || exit 3
 build verity/protocols/compose/verifier/onsite onsite || exit 3
-build verity/protocols/pouw/verifier/lean/check pouw-check || exit 3
-build verity/protocols/pouw/verifier/lean/check pouw-period || exit 3
-build verity/protocols/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
+build verity/protocols/accounting/pouw/verifier/lean/check pouw-check || exit 3
+build verity/protocols/accounting/pouw/verifier/lean/check pouw-period || exit 3
+build verity/protocols/proofs/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
 B=.lake/build/bin
 REMOTE=$TREE/verity/protocols/compose/verifier/remote/$B/remote ONSITE=$TREE/verity/protocols/compose/verifier/onsite/$B/onsite
-POUW=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-period
-V2=$TREE/verity/protocols/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
+POUW=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/$B/pouw-period
+V2=$TREE/verity/protocols/proofs/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
 P=$W/cases
 log() { "$@" 2>&1 | tee -a "$OUT/kept_composite.txt"; return "${PIPESTATUS[0]}"; }
 log "$PY" benchmarks/one_stage/pouw_piece.py v1 --serve-run "$SRC/serve" --window "$K" --out "$P/remote/pouw" --exe "$POUW"

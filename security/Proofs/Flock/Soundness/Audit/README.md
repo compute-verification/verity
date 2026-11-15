@@ -96,7 +96,7 @@ game whose sampling design is fixed at its registration, which `keyedExecutionPh
 `docs/sampling-strategies.md` §4): `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of
 $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$; `stratified_escape`, the product of hypergeometrics
 $\prod_s \binom{n_s - m_s}{k_s}/\binom{n_s}{k_s}$ with $m_s = |B \cap U_s|$, which is what
-`verity.protocols.spot.verifier.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole stratum**:
+`verity.protocols.proofs.spot.verifier.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole stratum**:
 with $k_s \ge 1$, a set containing $U_s$ has miss probability 0; `audit_whole_stratum` and
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum
 is incorrect with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
@@ -224,7 +224,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
-  `verity.protocols.spot.verifier.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+  `verity.protocols.proofs.spot.verifier.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different traces that both have an incorrect proof block, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`

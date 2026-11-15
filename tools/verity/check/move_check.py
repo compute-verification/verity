@@ -16,7 +16,7 @@ Every path git sees changed must be one of:
   `benchmarks/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
   (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
   moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
-  name (`verity.protocols.flock.prover.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
+  name (`verity.protocols.proofs.flock.prover.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
   past the change, or a `from a import x, \\` (`rules`'s `continued`); in a heredoc, or in a string literal
@@ -80,7 +80,7 @@ Every path git sees changed must be one of:
 - on a line none of these explains, what the move's own path map says beyond the renames (`Rows`): the map each commit of
   the range names (`Layout-move: tools/move/NAME.toml`, `tools/move/stage.py`'s line), read as BASE has it. A reference to
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
-  the directory is now below the row's): the directory itself (`verity/protocols/flock/prover/`, also as a pathlib chain or a quoted
+  the directory is now below the row's): the directory itself (`verity/protocols/proofs/flock/prover/`, also as a pathlib chain or a quoted
   relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
   follows only its own move. In a `*.py` file an anchor that names the directory (`Path(__file__).parents[1]`) may be
   recounted to name, from where the file now is, where the row sends it. On such a line a moved path, or such a
@@ -115,7 +115,7 @@ Anything else is refused, with what differed and its first offending hunk. Exit 
 git error.
 
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
-whole subtree in BASE moved there file by file. When only `verity/protocols/pous` moved, `protocols -> security_proofs` is never
+whole subtree in BASE moved there file by file. When only `verity/protocols/accounting/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
 below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
 path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path
@@ -1116,7 +1116,7 @@ class Rows:
 
     `[tokens]`: where a reference to a directory the map splits goes. A row counts only where the range bears it out: a
     directory of BASE that didn't move whole, part of it now below the row's directory; two maps that disagree on a
-    directory name it nowhere. It reads the directory itself (`verity/protocols/flock/prover/`, `verity/protocols/flock/prover/*.patch`) and a path
+    directory name it nowhere. It reads the directory itself (`verity/protocols/proofs/flock/prover/`, `verity/protocols/proofs/flock/prover/*.patch`) and a path
     below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move.
 
     `[split]`: for one file (by its path at BASE) and one such directory, the part the file means by it (`{ to = "..." }`),

@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 
 from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _put, _zeros
 from verity_vllm.protocols.pouw.pearl_c.kernel import _load

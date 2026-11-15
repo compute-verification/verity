@@ -1,7 +1,7 @@
 """The served templates whose word bodies read a MUFU table are served as their Boolean ``_v2`` versions, which compute the table
 in gates: FlashInfer's FP8 linear, a coordinate and its quantisation part (RCP), the MoE router's row and slots form (EX2 and RCP)
 and DSA's indexer query (EX2). Inline, a word body's reads put its net past the GPU prover's 32-bit offsets (``GPU_NNZ_MAX``,
-`verity/protocols/flock/prover/live/src/circuit.rs`: a K = 6144 coordinate's at 9.1e9 nonzeros, the router's at 4.8e10); in lookup slots its
+`verity/protocols/proofs/flock/prover/live/src/circuit.rs`: a K = 6144 coordinate's at 9.1e9 nonzeros, the router's at 4.8e10); in lookup slots its
 last tail stage returns the outputs, a form ``verify --zk`` refuses (`Flock.KsScope`, ``ProvedScope.scopeOkH``). A Boolean
 template is the word template's layout on the same rows, its reads inline, and its staged statement is one flat net that
 ``--zk`` takes (`one_stage.proofs.ks_form_why`)."""
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.definitions import boolean as BB
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW

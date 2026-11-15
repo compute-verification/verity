@@ -25,7 +25,7 @@ from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
 
-REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py"
+REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"

@@ -12,7 +12,7 @@ A run has three parties, each a process (`parties.py`):
 - **The server** is the adversary. It picks a uniform bit for each interval and acts only through when and how it
   writes its own bytes for this interval and the next. The bytes are the same whatever the bit.
 - **The certifier** is the device under test: the network certifier of this checkout or of another (`--tree`), as
-  `verity.protocols.certifier.verifier` has it, writing each interval on its loop (`--paced-ms 0`) or through its
+  `verity.protocols.accounting.certifier.verifier` has it, writing each interval on its loop (`--paced-ms 0`) or through its
   pacer.
 - **The observer** is the client side. It timestamps the first byte of each interval twice: on its own clock once
   its read returns, waiting in the kernel for it (`plain`) or polling without waiting (`spin`), and with the stamp

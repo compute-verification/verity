@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.protocols.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate

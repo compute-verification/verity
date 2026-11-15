@@ -35,7 +35,7 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.spot.verifier import profile
+from verity.protocols.proofs.spot.verifier import profile
 from verity.protocols import reporting
 from verity.circuits import partition_v2
 
@@ -192,7 +192,7 @@ def sourced() -> list[Param]:
 
 def _deltas() -> list[Param]:
     window, report = float(profile.WINDOW_DELTA), [float(d) for d in reporting.DELTAS]
-    core = "verity.protocols.spot.verifier.profile WINDOW_DELTA, the per-window delta"
+    core = "verity.protocols.proofs.spot.verifier.profile WINDOW_DELTA, the per-window delta"
     credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
     return [
         Param("regime.remote.window_delta_coin", window, status="derived",

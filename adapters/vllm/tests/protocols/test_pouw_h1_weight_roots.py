@@ -7,7 +7,7 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
     commit_rows,

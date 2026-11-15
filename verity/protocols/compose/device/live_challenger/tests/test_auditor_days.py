@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.spot.device import challenger as C
+from verity.protocols.proofs.spot.device import challenger as C
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent

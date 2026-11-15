@@ -2,7 +2,7 @@
 
 Pearl-C's device kernels for sm_120a (`pearl_c_sm120.cu`: the served variant `sm120`, G = 4, and `sm120-unpromoted`),
 with hashing format -h3, SHA-512 throughout. `run.py` checks every buffer the kernels write against the CPU reference
-(`verity.protocols.pouw.prover.schemes.pearl_c`) before it times anything. Its timing is diagnostic, phase by phase; a
+(`verity.protocols.accounting.pouw.prover.schemes.pearl_c`) before it times anything. Its timing is diagnostic, phase by phase; a
 number of record is the GPU harness's (`../harness/`), and the served one is `../pearl_c_vllm/`'s.
 
 ## The runner, `run.py`

@@ -85,17 +85,17 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import h1zy as Z
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.verifier.one_stage import produced as PR
-from verity.protocols.spot.verifier.one_stage import proofs as PF
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1 import challenger as PHC

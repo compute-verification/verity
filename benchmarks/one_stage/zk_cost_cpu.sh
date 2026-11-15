@@ -29,21 +29,21 @@ PY=$REPO/.venv/bin/python
 
 log "zk-cost-cpu: source $(git rev-parse HEAD), builds in $W"
 TU=$W/tmpl-unit
-{ (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall flock-read-tmpl) && if [ -n "${ZK_UNITS:-}" ]; then
-    mkdir -p "$TU" && (cd verity/protocols/flock/verifier && tar --exclude=.lake -cf - .) | tar -xf - -C "$TU" \
-      && cp verity/protocols/flock/prover/tests/lean/TmplUnit.lean "$TU/" \
+{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall flock-read-tmpl) && if [ -n "${ZK_UNITS:-}" ]; then
+    mkdir -p "$TU" && (cd verity/protocols/proofs/flock/verifier && tar --exclude=.lake -cf - .) | tar -xf - -C "$TU" \
+      && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean "$TU/" \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$TU/lakefile.toml" \
       && (cd "$TU" && lake build flock-tmpl-unit); fi; } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
-export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
 # node (prove_path/run.sh)

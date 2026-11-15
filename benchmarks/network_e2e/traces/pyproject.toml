@@ -23,13 +23,13 @@ inputs = [
     # `CUT`'s traces load the carried pool's cut (tests/test_tick_corpus.py takes each trace's VERITY_CUT through it)
     "adapters/vllm/verity_vllm/pipeline/cut_plugin.py",
     "adapters/vllm/verity_vllm/settings.py",
-    # `verity.protocols.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
+    # `verity.protocols.accounting.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
     # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
-    "verity/protocols/certifier/verifier/__init__.py",
-    "verity/protocols/certifier/verifier/release.py",
-          "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py"]
+    "verity/protocols/accounting/certifier/verifier/__init__.py",
+    "verity/protocols/accounting/certifier/verifier/release.py",
+          "verity/protocols/__init__.py", "verity/protocols/accounting/certifier/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

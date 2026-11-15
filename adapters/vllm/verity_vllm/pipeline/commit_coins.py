@@ -37,9 +37,9 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import CoinError, LiveOpening, live_reason
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import CoinError, LiveOpening, live_reason
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW

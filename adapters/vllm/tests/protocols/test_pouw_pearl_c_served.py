@@ -32,13 +32,13 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments.crypto import lms
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import Workload, salt_of, weights_root
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import Workload, salt_of, weights_root
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
 
 from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO

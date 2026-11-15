@@ -26,13 +26,13 @@ else:
 
 from torch import nn
 from verity.circuits.codec import canonical_json
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from tests.check import opened as O
 from tests.protocols import challenger_host as CH

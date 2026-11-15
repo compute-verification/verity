@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.verifier import weights as Wt
 
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 

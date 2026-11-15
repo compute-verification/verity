@@ -23,7 +23,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from verity.protocols.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier import active
 
 POUW = Path(__file__).resolve().parents[1]
 #: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the package the environment installs,

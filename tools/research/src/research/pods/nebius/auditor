@@ -2,5 +2,5 @@
 # auditor's own service and nothing else, no pool, lane or prover job. Each line below would be one command a `research run` here
 # may be, exactly, as shlex splits it, and there is none: on vy-challenger-1 the challenger runs only as `auditor`, from infra's
 # pinned tree, through vy-challenger-gate (verity/protocols/compose/device/live_challenger/auditor.py, RT4-INT-18), and on vy-auditor-1 the verifier
-# the same way through vy-verifier-gate (verity/protocols/poub/device/live_verifier/host.py, INF-179). research.remote's launcher refuses every run,
+# the same way through vy-verifier-gate (verity/protocols/accounting/poub/device/live_verifier/host.py, INF-179). research.remote's launcher refuses every run,
 # and vy-auditor-only.timer (slot_only.py --auditor) stops one launched from an older tree.

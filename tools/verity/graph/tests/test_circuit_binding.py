@@ -41,7 +41,7 @@ def _core_roots(): ...
 def _registered(): ...
 TEMPLATE_PARAMS = {"rope-head": {}}
 '''
-X, FLOCK = "verity/ml/x.circuit-check.py", "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py"
+X, FLOCK = "verity/ml/x.circuit-check.py", "verity/protocols/proofs/flock/prover/python/verity_flock/rec.circuit-check.py"
 BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
             "_core_roots": (F.TARGETS, "_core_roots"), "_kernel_roots": (F.TARGETS, "_kernel_roots"),
             **{f"verity.ml.x.circuit-check#{e}": (X, e) for e in (
@@ -64,8 +64,8 @@ TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "adapt
        "verity/ml/x.circuit-check.json": "{}\n", "verity/ml/pkg/__init__.py": "",
        "verity/ml/pkg/__init__.circuit-check.py": NEVER_RUN + "def _p_roots(): ...\n",
        "verity/ns/y.circuit-check.py": NEVER_RUN + "def _y_roots(): ...\n",
-       "verity/protocols/flock/prover/python/verity_flock/__init__.py": "",
-       "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
+       "verity/protocols/proofs/flock/prover/python/verity_flock/__init__.py": "",
+       "verity/protocols/proofs/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
        "stacks/s/pk/__init__.py": "", "stacks/s/pk/__init__.circuit-check.py": NEVER_RUN + "def _q_roots(): ...\n",
        "stacks/s/pk/in/__init__.py": "", "stacks/s/pk/in/w.circuit-check.py": NEVER_RUN + "def _w_roots(): ...\n",

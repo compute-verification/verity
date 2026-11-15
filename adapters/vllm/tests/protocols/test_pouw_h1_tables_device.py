@@ -22,8 +22,8 @@ else:
 
 from verity.commitments.limits import VerificationLimits
 from verity.commitments.merkle import Commitment, verify_opening
-from verity.protocols.pouw.verifier.audit import HM96, rows_domain
-from verity.protocols.pouw.verifier.protocol import tagged
+from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols.pouw import h1 as PH

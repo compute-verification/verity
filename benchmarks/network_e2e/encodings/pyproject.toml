@@ -16,21 +16,21 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# derived.py builds and charges advice v0 with the certifier's I1 (verity.protocols.certifier.verifier.advice), which reads
+# derived.py builds and charges advice v0 with the certifier's I1 (verity.protocols.accounting.certifier.verifier.advice), which reads
 # the package inits on the way; cache_vectors.py runs the certifier's CacheStep_v1 (`cache_step`, through `head_check`
 # and the circuits it imports) and writes the certifier's difftest vectors, which a test reads back; test_arith_vectors
 # holds the certifier's arith_encode vectors to what this directory's coders code now.
 inputs = ["verity/__init__.py", "verity/errors.py", 
-          "verity/protocols/certifier", 
-          "verity/protocols/certifier/prover", "verity/circuits", "verity/commitments",
+          "verity/protocols/accounting/certifier", 
+          "verity/protocols/accounting/certifier/prover", "verity/circuits", "verity/commitments",
           "verity/commitments/crypto",
           # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports sampled proofs'
           # produced and registered row helpers
-          "verity/protocols/spot/verifier/__init__.py",
-          "verity/protocols/spot/verifier/one_stage/__init__.py",
-          "verity/protocols/spot/verifier/one_stage/partition.py",
-          "verity/protocols/spot/verifier/one_stage/produced.py",
-          "verity/protocols/spot/verifier/one_stage/registered.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
           # test_pool_row and test_pool_cut export the carried pool's row with the integration's exporter
           # (`engine.pool_row`), which refuses with the integration's `Refused`
           "adapters/vllm/verity_vllm/engine/pool_row.py", "adapters/vllm/verity_vllm/errors.py",
@@ -41,7 +41,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
           # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
           "adapters/vllm/verity_vllm/pipeline/advice_code",
-          "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "verity/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
           # the certifier's `head_check` counts a Definition's ANDs with the census (`census.BooleanWork`), and the
           # advice code's codec imports it (`window_code`, the certifier's `window_charge`, `arith_encode`):

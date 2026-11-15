@@ -130,8 +130,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier import service as SV
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import service as SV
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -682,7 +682,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
     header entries, the registered roots, ``salts_of`` and ``strings_of`` (`rows.commit`'s: a history writer's rows its
     table's), each member's index entries and the history tables' declarations (`history_rows.declarations`))."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     if on != (histories is not None):
         raise ValueError("a window commits history tables exactly when its partition file says \"histories\": true, into the "

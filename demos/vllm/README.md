@@ -6,13 +6,13 @@ what an auditor with no devices at the site establishes about a datacenter servi
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
-- **integrity**, by sampled proofs' one-stage audit (`verity/protocols/spot/`): every value the serving
+- **integrity**, by sampled proofs' one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
-- **work**, by proof of useful work (PoUW, `verity/protocols/pouw/verifier/`), on the served model itself: the endpoint
+- **work**, by proof of useful work (PoUW, `verity/protocols/accounting/pouw/verifier/`), on the served model itself: the endpoint
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
-- **the inference-only policy** (`verity/protocols/inference_only/verifier/nci/`): the registered circuit divides into inference
+- **the inference-only policy** (`verity/protocols/policy/inference_only/verifier/nci/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
   declared division yet.
 

@@ -93,7 +93,7 @@ inputs = [
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
     "adapters/vllm/verity_vllm/protocols/spot.py",
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
-    "verity/protocols/pouw/prover/kernels/pouw_cuda",
+    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
@@ -136,7 +136,7 @@ inputs = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_bench.py"]
-paths = ["verity/protocols/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",

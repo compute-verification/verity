@@ -32,7 +32,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.certifier.prover import ingress_scan as IS  # noqa: E402
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
 RHO = HERE.parents[1] / "benchmarks" / "rho" / "data"
