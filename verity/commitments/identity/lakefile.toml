@@ -10,12 +10,12 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../../protocols/flock/verifier"
+name = "core_base"
+path = "../../circuits/base"
 
 [[require]]
 name = "verity_difftest"
-path = "../../difftest/lean"
+path = "../../circuits/difftest"
 
 [[lean_lib]]
 name = "Identity"

@@ -5,7 +5,8 @@ real row's seed and line key (`seeds_a`, pl_seeds).  At real row counts on both 
 and of two), with partial CTAs, a tree of one leaf and trees past one pl_levels launch's PL_LEVELS, every output is poisoned
 (0xA5) before each chain ("pl", and "h3": hash_h3.cuh's launches), and each chain's bytes are held to Pearl-C -h3's Python
 (`pearl_c.row_digest`, A's `audit.HM96` tree under the unit's index, `pearl_c.row_seed` with `pearl_c.line_key`,
-`pearl_c.unit_seed_a`), so to each other; the no-write control, the poison with no launch, fails every comparison."""
+`pearl_c.unit_seed_a`), so to each other; the no-write control, the poison with no launch, fails every comparison.  So does
+A's commitment split over each chain's launches (`run.Pipeline.FUSED_GENERIC`, with E_A's lines)."""
 
 from __future__ import annotations
 
@@ -48,17 +49,33 @@ PL = {f"pl_{kind}_{R.PL_VARIANT}" for kind in ("leaves", "levels", "seed_a", "se
 H3 = {"hm_leaves", "s512_frame_leaves", "s512_nodes", "s512_tree_small", "s512_seeds"}
 
 
-@pytest.fixture(scope="module")
-def host(tmp_path_factory):
+def build(directory: Path) -> ctypes.CDLL:
+    """hash_prefill_host.cpp built into `directory` for pearl_c_sm90.cu's variants, with its `pd_run`."""
     gxx = shutil.which("g++")
     if not gxx:
         pytest.skip("no g++ for the host build of hash_prefill.cuh")
-    lib = tmp_path_factory.mktemp("hash-prefill-host") / "hash_prefill_host.so"
+    lib = directory / "hash_prefill_host.so"
     subprocess.run([gxx, "-O2", "-std=c++20", "-pthread", "-shared", "-fPIC", "-Wno-unknown-pragmas", f"-DPD_VARIANT_LIST(X)={PD_LIST}",
                     "-o", str(lib), str(KERNEL / "hash_prefill_host.cpp")], check=True)
     cdll = ctypes.CDLL(str(lib))
     cdll.pd_run.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
-    return HD.Host(cdll)
+    return cdll
+
+
+class Host(HD.Host):
+    """`HD.Host` with the GEMMs' tensor maps stubbed, so a whole Pipeline's buffers construct: no host launch reads a map."""
+
+    def tmap(self, ptr: int, depth: int, rows: int, box_rows: int = R.BM) -> bytes:
+        return bytes(128)
+
+    def ck(self, f: str, *a) -> None:
+        if f != "cuMemcpyHtoD_v2":
+            super().ck(f, *a)
+
+
+@pytest.fixture(scope="module")
+def host(tmp_path_factory):
+    return Host(build(tmp_path_factory.mktemp("hash-prefill-host")))
 
 
 def test_the_cubin_builds_the_variant_run_py_launches():
@@ -120,3 +137,72 @@ def test_both_chains_write_pearl_c_h3s_bytes_and_the_no_write_control_fails(host
         levels = [(grid, i) for name, grid, _, _, i in host.log if name.startswith("pl_levels_")]
         assert len(levels) == -(-depth // R.PL_LEVELS) and sum(i[2] for _, i in levels) == depth
         assert all(grid == i[0] >> i[2] for grid, i in levels)
+
+
+@pytest.mark.parametrize("form", ["serial", "split", "split-nofill"])
+@pytest.mark.parametrize("mr", [40, 64, 300])
+@pytest.mark.parametrize("chain", R.CHAINS)
+def test_a_split_commitment_writes_the_unsplit_steps_bytes_under_each_chain(host, chain, mr, form):
+    """Past pd, A's commitment unsplit under `chain` (A's pads, its commit steps, then the forming's E_A lines) or `split_a`'s
+    two steps over the same launches (`run.Pipeline.FUSED_GENERIC`): ``rows_a``, the pads, row digests, each real row's
+    seed and line key and the real rows' E_A lines, keyed per row and reading no line_a, then ``tree_seed_a``, A's level 0,
+    levels and seed_A with line_a, and with `fillers` every row's E_A line again.  Each output holds Pearl-C -h3's bytes;
+    without `fillers` the padding rows' E_A lines keep the poison; the no-write control fails every output."""
+    k, n, idx = 256, 64, 9
+    m = R.cdiv(mr, R.BM_D) * R.BM_D
+    split, fillers = form != "serial", form != "split-nofill"
+    rng = np.random.default_rng(1000 + mr)
+    a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(mr)]
+    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    dom_a = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96)
+    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+            "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
+    sizes, outs = R.Pipeline.sizes(m, n, k, mr), (*R.CHAIN_OUTPUTS, "ea_codes")
+    bufs = {name: host.alloc(size) for name, size in sizes.items()}
+    keys = {name: host.put(v) for name, v in keys.items()}
+    xa = host.put(b"".join(a_rows) + bytes(4 * k * (m - mr)))
+    pipe = R.Pipeline(host, m, n, k, "h100", keys, xa, 0, bufs=bufs, m_real=mr, chain=chain, split_a=split, fillers=fillers)
+    assert pipe.pd is None and pipe.pl == (chain == "pl")
+    by = {name: (phase, step) for name, phase, step in pipe.steps()}
+    commit = [x for x in by if by[x][0] == "commit"]
+    if split:
+        assert pipe.FUSED == {**R.Pipeline.FUSED, **R.Pipeline.FUSED_GENERIC} and commit == ["rows_a", "tree_seed_a"]
+        assert not {x for f in commit for x in pipe.FUSED[f]} & set(by)
+        names = tuple(commit)
+    else:
+        assert "FUSED" not in vars(pipe) and commit == ["rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"]
+        assert by["lines_ea"][0] == "forming" and ("pad_a" in by) == (R.pow2(mr) > mr)
+        names = ("pad_a",) * ("pad_a" in by) + tuple(commit) + ("lines_ea",)
+
+    digests = [C.row_digest(r) for r in a_rows]
+    tree_a = HD.levels(dom_a, a_rows, ROW_SCHEMA, salt_key, idx)
+    seeds = [C.row_seed(salt, d, root_b, idx, r, "h3") for r, d in enumerate(digests)]
+    seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3")
+    want = {"rowdig_a": b"".join(digests), "tree_a": tree_a, "seed_a": bytes(seed_a), "line_a": C.line_key(seed_a),
+            "seeds_a": b"".join(seeds), "lkeys_a": b"".join(C.line_key(s) for s in seeds),
+            "ea_codes": b"".join(bytes(C.sample_line(C.S512Seed(seeds[t]), 0, 0, 0) if t < mr else
+                                       C.sample_line(C.S512Seed(seed_a), 0, 0, t)) for t in range(m))}
+    assert set(want) == set(outs) and all(len(want[x]) == sizes[x] for x in want)
+    for launch in (False, True):
+        for x in want:
+            host.array(bufs[x])[:] = R.POISON
+        host.log.clear()
+        if launch:
+            for x in names:
+                by[x][1]()
+        got = {x: host.read(bufs[x], len(want[x])) == want[x] for x in want}
+        if not launch:
+            assert got == dict.fromkeys(want, False), "the no-write control passed"
+            continue
+        if not fillers:
+            ea = host.read(bufs["ea_codes"], len(want["ea_codes"]))
+            got["ea_codes"] = ea[:32 * mr] == want["ea_codes"][:32 * mr] and set(ea[32 * mr:]) <= {R.POISON}
+        assert got == dict.fromkeys(want, True), (chain, mr, form, got)
+    log = [name for name, *_ in host.log]
+    lines = [i for name, *_, i in host.log if name == "lines"]
+    if split:
+        level0 = log.index(f"pl_leaves_{R.PL_VARIANT}" if chain == "pl" else "hm_leaves")
+        assert lines[0] == (0, 0, mr, R.NORM_256, mr) and log.index("lines") < level0
+        assert lines[1:] == [(0, 0, m, R.NORM_256, mr)] * (fillers and mr < m)
+    else:
+        assert lines == [(0, 0, m, R.NORM_256, mr)]

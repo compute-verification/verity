@@ -11,11 +11,11 @@ import os
 
 import numpy as np
 import pytest
-
-from tests.program.test_topp_splits_operand import _bits, _eval, _u32, _u32s
 from verity.circuits.defs import bind
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import topp_split as TS
+
+from tests.program.test_topp_splits_operand import _bits, _eval, _u32, _u32s
 
 f32 = np.float32
 RECORD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "topp_split_fixture", "fstoch01_rows.npz")
@@ -25,7 +25,8 @@ def test_the_operand_changes_the_result_where_the_geometry_matters():
     """S is not decorative: the same row masks differently under two split counts (the tie quota is per split)."""
     p = 0.95
     z = np.load(RECORD)
-    meta = json.load(open(RECORD + ".json"))
+    with open(RECORD + ".json") as fh:
+        meta = json.load(fh)
     key = "step37_row4"
     bf = (z[key + "_bf16_logits_bits"].astype(np.uint32) << 16).view(f32)
     x = TS.tl_div(bf, f32(meta[key]["device"]["temperature"]), TS.Cfg())
@@ -38,7 +39,8 @@ def test_the_operand_changes_the_result_where_the_geometry_matters():
 @pytest.mark.parametrize("key", ["step37_row4", "step82_row3", "step92_row3"])
 def test_fstoch01_record_rows_are_bit_exact_through_the_operand_form(key):
     z = np.load(RECORD)
-    meta = json.load(open(RECORD + ".json"))
+    with open(RECORD + ".json") as fh:
+        meta = json.load(fh)
     d = meta[key]["device"]
     S, V = int(meta[key]["S"]), int(meta[key]["V"])
     assert S == 16 and V == 128256

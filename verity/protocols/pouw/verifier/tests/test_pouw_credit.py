@@ -30,8 +30,8 @@ from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.circuits import codec
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.gemm import S8_K_LIMIT
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.gemm import S8_K_LIMIT
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):
@@ -520,7 +520,10 @@ def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
     `layout_of`'s refusal there."""
     assert (Cr.TILE_K_STEP, Cr.TILE_K_LIMIT) == (32, S8_K_LIMIT) == (32, 1 << 17)
     pad = "pad its linears' A and B rows with zero codes to K = {}".format
-    lay_of = lambda k: ((("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0)))
+
+    def lay_of(k):
+        return (("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0))
+
     for k, fix in ((64, None), (4096, None), ((1 << 17) - 512, None), (1 << 17, SPLIT), ((1 << 17) + 512, SPLIT),
                    (48, pad(64)), (100, pad(128))):
         linears, calls = lay_of(k)

@@ -7,8 +7,8 @@ at each weight size, per scope) and a path, the steps in order, each adding one 
 its status (measured, modeled or assumed), its basis (`cards.BASES`: the served cut measured, the served cut at card
 prices, or a design not served) and the surface case that prices it in each series. A step whose case no
 surface has is pending: it has no number yet, and the steps after it leave it out. A lever off the path (`off`, with
-its owner, or none) is drawn in grey beside the step it would follow. A term no step's total includes (`unpriced`) is
-drawn as a named line at its share of serving compute (`total`), or as an arrow while it has none; one whose status is
+its owner, or none) is sampled in grey beside the step it would follow. A term no step's total includes (`unpriced`) is
+sampled as a named line at its share of serving compute (`total`), or as an arrow while it has none; one whose status is
 `charged` is stated in the caption as a condition every total holds under. The bound at `GOAL` is interpolated on
 log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count binds. The
 caption calls the first step today's measured system only when its basis is `served-measured`, names where the path
@@ -69,11 +69,7 @@ PATH = {"design": "every step prices the per-expert MoE cut (Figure 1's (A′)),
              "prover's peak is about 33 GiB (its H200 run is pending)"},
     {"label": "the dense types' host witness 3.5x lower", "status": "assumed", "basis": "design",
      "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
-], "off": [
-    {"label": "hashing cut 4x", "status": "assumed", "basis": "design", "owner": None,
-     "after": "the dense types' host witness 3.5x lower", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
-     "note": "in-proof hashing at a half share of the marginal, cut 4x"},
-], "unpriced": [
+], "off": [], "unpriced": [
     {"label": "compile-slice proving: under 1% with prefix caching off or hits charged (modeled)", "status": "modeled",
      "note": "the network audit proves every window's compile slice, never sampled, so its share adds to every step's "
              "total"},
@@ -213,7 +209,7 @@ def caption(out: dict) -> str:
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
-    """Draw the figure into `outdir` as figure5.png and .svg; returns their paths."""
+    """Sample the figure into `outdir` as figure5.png and .svg; returns their paths."""
     import matplotlib
 
     matplotlib.use("Agg")

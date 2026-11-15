@@ -1,7 +1,7 @@
 module
 
-public import Flock.Hash
-public import Flock.Draw
+public import Base.Hash
+public import Commitments.Draw
 
 /-!
 # `verity.ml.randomness` v2, as a Lean spec

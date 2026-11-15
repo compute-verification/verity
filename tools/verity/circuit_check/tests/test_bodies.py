@@ -22,7 +22,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate as reference
 from verity.circuits.evaluation.reference import signature_of
 from verity.circuits.layout import WIDE_FAN_IN
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 

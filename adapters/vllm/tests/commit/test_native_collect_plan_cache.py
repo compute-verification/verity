@@ -16,24 +16,27 @@ the step recorded, so the bytes, layout and digests are those of a committer wit
 """
 from __future__ import annotations
 
-import functools
 import gc
 import hashlib
 import pickle
 import types
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.commit import step_rows as R  # noqa: E402
-from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
-from verity_vllm.commit.committer import native_host as nh  # noqa: E402
-from verity_vllm.commit.committer.pinned_pool import PinnedPool  # noqa: E402
+from verity_vllm.commit import step_rows as R
+from verity_vllm.commit.committer import native_collect as NC
+from verity_vllm.commit.committer import native_host as nh
+from verity_vllm.commit.committer.pinned_pool import PinnedPool
 
 RUN_ID = "plan-cache"
-PD, GEO = hashlib.sha256(b"program").digest(), hashlib.sha256(b"geo").digest()
+PD, GEO = hashlib.sha512(b"program").digest(), hashlib.sha512(b"geo").digest()
 DTYPES = (torch.int32, torch.bfloat16, torch.float32)
 LAYERS, H, BN = 2, 512, 16                                     # a step is about 17 KiB: five rows, three windows and a pad window
 WINDOW_MB, SLOTS = str(2 * R.ROW_BYTES / (1 << 20)), 4         # two rows a window, four slots
@@ -356,6 +359,7 @@ class _Runner:
 
     def execute_model(self, scheduler_output, *a, **kw):
         com = self.committer
+        assert com is not None
         for name, t in self.tensors:
             com._acquire(name, t, com._cur)
 
@@ -367,7 +371,7 @@ class _Sched:
         self.req_ids = [f"r{i}" for i in range(len(kv))]
         self.num_scheduled_tokens = dict.fromkeys(self.req_ids, 1)
         self.total_num_scheduled_tokens = len(kv)
-        self.scheduled_new_reqs = []
+        self.scheduled_new_reqs: list[Any] = []
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
@@ -403,7 +407,7 @@ def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
     """One decode step's acquired tensors: token ids, per layer the qkv output, a hidden plane sized by every request's KV blocks
     (as the attention tap's) and the MLP output, then logits and sampled ids. The values are a function of the geometry."""
     ntok, seed = len(kv), sum(kv)
-    shapes = [("model.embed_tokens/in", torch.int32, (ntok,))]
+    shapes: list[tuple[str, Any, tuple[int, ...]]] = [("model.embed_tokens/in", torch.int32, (ntok,))]
     for layer in range(LAYERS):
         shapes += [(f"model.layers.{layer}.self_attn.qkv_proj", torch.bfloat16, (ntok, 3 * H)),
                    (f"fa2.m1/L{layer}/acc", torch.float32, (sum(-(-k // BN) for k in kv), 4)),
@@ -448,15 +452,9 @@ def run(com: NC.NativeCollectCommitter, sched: list[tuple[int, ...]]):
     return rc, keys
 
 
-@functools.cache
-def _offline() -> nh.NativeHostCommitter:
-    return nh.NativeHostCommitter(None, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, retain_values=False, gpu_tree=True)
-
-
 def one_block_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> bytes:
     """The step committed with no cache: the tensors packed at 4-byte alignment into one stream, zero-padded to a row, its rows in
     `step_rows`' tree under the step's salt key, the layout counted in rows."""
-    ref = _offline()
     stream, metas, first_leaf = bytearray(), [], 0
     for i, (name, t) in enumerate(tensors):
         raw = t.contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
@@ -469,9 +467,9 @@ def one_block_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes
         first_leaf += n_leaves
     stream.extend(b"\0" * (-len(stream) % R.ROW_BYTES))
     rows = [bytes(stream[o:o + R.ROW_BYTES]) for o in range(0, len(stream), R.ROW_BYTES)]
-    ctx = ref._ctx_digest(step)
+    ctx = R.ctx_digest(RUN_ID, step)
     tree_root = R.levels(R.domain(PD, ctx, GEO, len(rows)), rows, ks, 8 * R.ROW_BYTES)[-1][0]
-    return R.step_root(PD, ctx, GEO, ref.layout_digest(metas), len(rows), tree_root)
+    return R.step_root(PD, ctx, GEO, R.layout_digest(metas), len(rows), tree_root)
 
 
 def reference(sched: list[tuple[int, ...]], keys: dict[int, bytes]) -> list[bytes]:

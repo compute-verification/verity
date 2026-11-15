@@ -1,12 +1,13 @@
 // hash_decode.cuh and the hash_h3.cuh / hash_fast.cuh kernels built for the host (tests/test_pearl_c_hash_decode.py):
 // the CUDA builtins they use, and
-// `pd_run`, which runs a 1-D grid's CTAs in order, a CTA's threads as host threads under one barrier (__syncthreads), a
-// barrier per warp (__syncwarp) and the named barriers (pd_bar_sync / pd_bar_arrive, each made at its first use with its
-// thread count).  Buffers are host memory: Args' pointers are host addresses.
+// `pd_run`, which runs a 1-D grid's CTAs in order, a CTA's threads under one barrier (__syncthreads), a barrier per warp
+// (__syncwarp) and the named barriers (pd_bar_sync / pd_bar_arrive, each made at its first use with its thread count).
+// A CTA's threads are contexts on the caller's thread (`pearl_c/host_threads.h`), so a barrier is a context switch, and a
+// CTA whose threads all wait at barriers no thread reaches is reported (pd_run returns 2) instead of hanging.  Buffers are
+// host memory: Args' pointers are host addresses.
 //   g++ -O2 -std=c++20 -pthread -shared -fPIC -o hash_decode_host.so hash_decode_host.cpp
 #include <algorithm>
 #include <atomic>
-#include <barrier>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -14,9 +15,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
-#include <mutex>
-#include <thread>
 #include <vector>
+
+#include "../pearl_c/host_threads.h"
 
 using std::min;
 #define PD_HOST
@@ -28,21 +29,35 @@ using std::min;
 #define __launch_bounds__(...)
 #define __shared__ static
 struct Dim3 { unsigned x = 0, y = 1, z = 1; };
-static Dim3 blockIdx, blockDim;
-static thread_local Dim3 threadIdx;
-static std::barrier<>* g_barrier;
-static std::vector<std::unique_ptr<std::barrier<>>> g_warps;
-static void __syncthreads() { g_barrier->arrive_and_wait(); }
-static void __syncwarp() { g_warps[threadIdx.x / 32]->arrive_and_wait(); }
-static std::mutex g_named_mu;
-static std::unique_ptr<std::barrier<>> g_named[16];
-static std::barrier<>& pd_named(int id, int n) {
-  std::lock_guard<std::mutex> lock(g_named_mu);
-  if (!g_named[id]) g_named[id] = std::make_unique<std::barrier<>>(n);
+static Dim3 blockIdx, blockDim, threadIdx;
+struct Barrier {
+  int n, arrived = 0;
+  unsigned gen = 0;
+  explicit Barrier(int n) : n(n) {}
+  void arrive() {
+    host_threads::progress++;
+    if (++arrived == n) {
+      arrived = 0;
+      gen++;
+    }
+  }
+  void arrive_and_wait() {
+    const unsigned g = gen;
+    arrive();
+    while (gen == g) host_threads::yield();
+  }
+};
+static Barrier* g_barrier;
+static std::vector<Barrier> g_warps;
+static std::unique_ptr<Barrier> g_named[16];
+static Barrier& pd_named(int id, int n) {
+  if (!g_named[id]) g_named[id] = std::make_unique<Barrier>(n);
   return *g_named[id];
 }
+static void __syncthreads() { g_barrier->arrive_and_wait(); }
+static void __syncwarp() { g_warps[threadIdx.x / 32].arrive_and_wait(); }
 static void pd_bar_sync(int id, int n) { pd_named(id, n).arrive_and_wait(); }
-static void pd_bar_arrive(int id, int n) { (void)pd_named(id, n).arrive(); }
+static void pd_bar_arrive(int id, int n) { pd_named(id, n).arrive(); }
 static void __threadfence() { std::atomic_thread_fence(std::memory_order_seq_cst); }
 static void __trap() { std::fprintf(stderr, "__trap\n"); std::abort(); }
 static long long clock64() {   // monotonic, so the stamps' order is checked on the host
@@ -123,22 +138,23 @@ extern "C" int pd_run(const char* name, int grid, int block, const Args* a) {
   const Kernel* k = nullptr;
   for (const auto& x : KERNELS)
     if (!std::strcmp(x.name, name)) k = &x;
-  if (!k || block % 32) return 1;
+  if (!k || block % 32 || block > 1024) return 1;
   blockDim.x = (unsigned)block;
+  struct Launch { const Kernel* k; const Args* a; } launch{k, a};
   for (int b = 0; b < grid; b++) {
     blockIdx.x = (unsigned)b;
-    std::barrier<> bar(block);
+    Barrier bar(block);
     g_barrier = &bar;
-    g_warps.clear();
-    for (int w = 0; w < block / 32; w++) g_warps.push_back(std::make_unique<std::barrier<>>(32));
-    std::vector<std::thread> ts;
-    for (int t = 0; t < block; t++)
-      ts.emplace_back([k, a, t] {
-        threadIdx.x = (unsigned)t;
-        k->fn(*a);
-      });
-    for (auto& t : ts) t.join();
+    g_warps.assign(block / 32, Barrier(32));
+    const int rc = host_threads::run(block, &threadIdx.x, [](void* l) {
+      static_cast<Launch*>(l)->k->fn(*static_cast<Launch*>(l)->a);
+    }, &launch);
     for (auto& n : g_named) n.reset();
+    if (rc) {
+      std::fprintf(stderr, "pd_run: %s's CTA %d: %s\n", name, b,
+                   rc == 2 ? "its threads wait at barriers no thread reaches" : "no stacks for its threads");
+      return rc;
+    }
   }
   return 0;
 }

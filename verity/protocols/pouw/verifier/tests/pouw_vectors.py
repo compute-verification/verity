@@ -10,8 +10,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.pouw.prover.schemes import ncp
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 OUT = Path(__file__).with_name("vectors") / "ncp.json"
 P_KS = (1088, 2048, 4096, 11008)

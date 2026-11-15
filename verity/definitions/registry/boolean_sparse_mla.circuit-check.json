@@ -1,8 +1,70 @@
 {
  "definitions": {
+  "SparseMlaDotStepB_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 49,
+   "type": "6510559f69be476c4ccf3f1b4136838ade7f083c2029ee2bc7580b359231e06c999ed8d12df7da51355e3b0a0d57b5e3fbfc2e544f1f18d97207da44923c9467"
+  },
+  "SparseMlaDotStep_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 6304,
+   "type": "6aa59ddc2ba623db1bb2d4e4881d74ede79f1aaab83ba0413aac45eda481e50155fbdb4d2f4b9a509c0cc451206c86d09e9ac20551064b47b49a1b50b9dfb7ca"
+  },
   "SparseMlaHeadEnd_v2{DV=16,INV=Fa3InvSum_v2}": {
    "and": 43823,
    "type": "248c4cb736dbe4644b5ff5e11539943152d56ddf878db25569c35bebc2e04004ee7b6ef45c81707177e68e89d0021c78dc62154b397b1ca84ce5c6cc41c42e32"
+  },
+  "SparseMlaHeadValues_v2{NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,G=4}": {
+   "and": 10317,
+   "type": "27fb3244cb3c631e2948b4fe07668da04070c95f50fd0911dcc04332187807397cb2dea2f3e4ec3a39babc5a25f40dfc9130d3171f4e3f390ed28101458043eb"
+  }
+ },
+ "digests": {
+  "SparseMlaHeadBlock_v3{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "134807af8d7ac4d562d9446f64398ff4ead5b82e517a50456386f22ebe1442af69d6bf50b1ef60abbd630c7414683c682a1fc5b558ecff12cde628141e97882e"
+  },
+  "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "7ac8897bf3574c9bdb2abef58de38d7ab1426e88540a24b52fd5cd4e6349e31292d185f417fc40b9624acffbb5a98d4a34677e49b73f362c1bca8bf4d84e7636"
+  },
+  "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "72b0a9d998e4d189dfde437b990c2d4b855692237bd0b9e2c057716a6ff1c4b77048ab694ba2b20b8179f015928c967305a116eda0db6ab74921a05edb5435d4"
+  },
+  "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "0bf69ff4363950f7ccb8b04562a667948570b08c4e145cdcf573eb46332eda3f9b17cf1340140fca358230be6d1fc61cc6b19b0439446dcf66cd21c23ae5b6cb"
+  },
+  "SparseMlaHeadEnd_v2{DV=64,INV=Fa3InvSum_v2}": {
+   "sha512": "c05cafe97cca6ae42e1dc9aa8a329d505c70dc934423a3c2c8ab9dda00f64c6cf6acb9f428eb47caca0a9552e2b3cd4b2bfedeaf80bb1c85f6370c8101ff8ab0"
+  },
+  "SparseMlaHeadScores_v2{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "b839bcb2cc6ca38d01eb07c0ca6d6ee210fc3ee02a6f1cce577a0e687d7c74f76a94cd13d37f944113ffa5f0732e23504b55d584caf49056130cb14a1bbd8cda"
+  },
+  "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "fdd2515e33abbc025e29ba8301fa1e894c24195b73f90ec4cef0ced3a01d191d0bf7a46a436c498cbc95e784551dc96450575fdffabf80a1ecd07fdc7ed859d5"
+  },
+  "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "21b25aa462177714aea96751a1165692c9b98cdd1d2b87f3c91534025db87310e405517874b459ca020d5c9a18e59f59c6f92604ec977a6fb01a7cde0d65d0e2"
+  },
+  "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "723897e4ff2005df5dbed1d6769f225d71d11a80a833205c57ca0020357fba797d8fad350729445c3b01b475063f1eba90e76cbb5a5b8a07f3f738b2e8aa1e2e"
+  },
+  "SparseMlaHeadValues_v2{NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,G=8}": {
+   "sha512": "12cb05bbfdb4b47d3ca5d9fd5e5172576468dd0f3fd1ec61ff8aff9db716a96dc257798d9ec873017cc35573289cb4dbd334218afe8af9a143151d2e4d697950"
+  },
+  "SparseMlaHeadValues_v2{NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=64}": {
+   "sha512": "778f85f19b4bc15e9f1bc2fbb2c3118c19520fadbe2867787fadbd1bb198840d1155880f76aacad3d050bab3e37fa4a8c740621499057d34417ae2343688c21b"
+  },
+  "SparseMlaHeadValues_v2{NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=128}": {
+   "sha512": "b75130057de26e6f265a96a5cdc8407266f7d73fb99ce34c644f66571664d039f969bf66840c1a3deaf26130d6dfb737ca9254fb37c31562ec9bbc0714e5914c"
+  },
+  "SparseMlaHeadValues_v2{NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=32}": {
+   "sha512": "f7ec4a9d074c388af71f0a5bb26021615c863f3db6761761bfbd7a0a5cdc49ec8e4e508e67d08d57f0465bc5804fb32f646875c5e620862bb4faef261966a599"
+  },
+  "SparseMlaHeadValues_v2{NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=64}": {
+   "sha512": "b21fa4fdc6a91f9a997e3bea008a68441f337ad8ca80dd918fe0eb65387272caf14f5d6c78c83f6f7f9051263277a1ec2cced3d7fe5746405e9c41a97f31246b"
+  },
+  "SparseMlaHeadValues_v2{NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=128}": {
+   "sha512": "56d988130a6a6e11e2434943e822208d5980d675438471d87aa04a7497b173a3e11fcac6d26cd0287cd597a105d343868827d8d43ffa4ed711aaabf2e4f438ce"
+  },
+  "SparseMlaHeadValues_v2{NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=64}": {
+   "sha512": "89b338a490d93b55d2cecb0c8e68ddd55b160bf2fa4d4bce065b145d73c41dab578e0b86efcd890ba447440dc16c294cf5d1d022403c0d12ef2749cae6d96c40"
   }
  }
 }

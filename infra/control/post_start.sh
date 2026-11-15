@@ -22,16 +22,21 @@ packages() {
     | gpg --dearmor > "$PPA_KEY" || return 1
   echo "deb [signed-by=$PPA_KEY] https://ppa.launchpadcontent.net/git-core/ppa/ubuntu jammy main" \
     > /etc/apt/sources.list.d/git-core-ppa.list
-  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync sqlite3 git postgresql-client
+  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync sqlite3 git postgresql-client sudo
 }
 # One apt at a time: two at once lose the dpkg lock. The trust store must not hold emSign ECC Root CA - G3 or Comodo AAA, and a
 # reset restores the image's, so ca-certificates and NSS are upgraded every boot.
 (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --only-upgrade ca-certificates "libnss3*" > /dev/null
  for try in 1 2 3; do
-   command -v rsync > /dev/null && command -v sqlite3 > /dev/null && command -v psql > /dev/null && git_ok && break
+   command -v rsync > /dev/null && command -v sqlite3 > /dev/null && command -v psql > /dev/null && command -v sudo > /dev/null \
+     && git_ok && break
    echo "$(date -u +%FT%TZ) packages, try $try"; packages; sleep 20
  done
  git_ok && echo "$(date -u +%FT%TZ) $(git version)" || echo "$(date -u +%FT%TZ) GIT-TOO-OLD: $(git version); drive refuses to merge"
+ # The door (door_setup.sh): the gated account, its sudo rule (hence sudo above) and root's keys are on the container disk, and
+ # the image's /start.sh gives root the pod's PUBLIC_KEY again at every start, so each boot makes them again from
+ # /data/boot/door, once it holds the keys, and locks root again if it was locked.
+ [ ! -s /data/boot/door/gate-keys ] || { /data/infra/vy-control-setup; echo "$(date -u +%FT%TZ) vy-control-setup rc=$?"; }
  setsid -f /data/infra/drive.sh > /dev/null 2>&1 < /dev/null) >> /data/boot/packages.log 2>&1 &
 (cd /workspace/guard-src && PYTHONPATH=tools/research/src RESEARCH_MACHINES_D=/workspace/steward/research-notes/machines.d LC_ALL=C.UTF-8 \
   setsid -f python3 -m research pods guard --supervise --budgets /workspace/steward/research-notes \

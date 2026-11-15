@@ -83,7 +83,7 @@ struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
   int lg = 0, lq = 0;
   DEV APL(uint8_t* smem, const Maps* m) : E(smem, m, 128, 128, 256, 8, TAIL, 1) {}
   // FUSE: the lane's V_u words of 32-row block blk (uedit's fragment order, 8 words a lane), read at every atom: held in
-  // registers across the tile they spill at the 128-register cap
+  // registers across the tile they spill at the 128-register limit
   DEV void set_uf(const uint32_t* Uf, int blk, int lane) {
     lg = lane >> 2; lq = lane & 3;
     uf = reinterpret_cast<const uint4*>(Uf) + (size_t)blk * 64 + 2 * lane;

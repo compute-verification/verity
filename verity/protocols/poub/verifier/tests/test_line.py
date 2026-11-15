@@ -131,9 +131,9 @@ def test_the_line_refuses_inputs_it_has_no_line_of(change, why):
     (3, dict(passes=0, hbm=0, weights=0), "group 3 has no pass"),
     (3, dict(last_ns=29), "group 3's last root came before its coin"),
     (3, dict(released_ns=15, last_ns=40), "group 3's coin left before group 2's"),
-    (2, dict(least=990), "group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every pass "
-                         "to read every registered block, since a block a pass leaves out can be absent across it with "
-                         "neither a wrong read nor a rebuild"),
+    (2, dict(least=990), ("group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every pass "
+                          "to read every registered block, since a block a pass leaves out can be absent across it with "
+                          "neither a wrong read nor a rebuild")),
     (2, dict(hbm=1999), "group 2's 2 passes read 1999 registered blocks in all, not 2000"),
     (2, dict(weights=2001, hbm=1999, host=1), "group 2's passes read more weights than HBM, which holds them"),
 ])

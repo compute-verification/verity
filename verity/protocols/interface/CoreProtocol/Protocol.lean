@@ -14,7 +14,7 @@ parameters, runs the check, and turns every decoding failure into a rejection, s
 -/
 module
 
-public import Flock.Canon
+public import Base.Canon
 public import Lean.Data.Json.Parser
 
 @[expose] public section

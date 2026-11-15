@@ -1,4 +1,4 @@
-"""The word-granular production P v1.1 at the k the MVP uses.
+"""The word-granular P v1.1 at the k the MVP uses.
 
 Its repairs guarantee clause 1 of the rejection rule and no cycle of π² inside a step.  The rule's other two clauses and
 λ₃ ≥ 16 (the edge connectivity of the step multigraph, which gives MinRank 16 under the MinRank argument's hypotheses)

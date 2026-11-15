@@ -293,8 +293,8 @@ theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
   exact ⟨hl, hD, F, hF, a, ha, free, hfree, hacc⟩
 
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
-on the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`: `ksLinOn_rLeakChecked`'s argument
-at `rLeakCarried_of`. -/
+on the trace's run except with probability `εchk` (`CheckedWitness` at `traceRun`), at `κ + εchk`:
+`ksLinOn_rLeakChecked`'s argument at `rLeakCarried_of`. -/
 theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
@@ -302,7 +302,7 @@ theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
     (εchk : Msg → ℝ) (Dj : ℕ)
     (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
       (fun _ => 1) (Bext H D.V D.E)) :
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
       (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
       D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) := by
   intro x hx Ω _ _ P
@@ -321,7 +321,7 @@ theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
         by_cases hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
             (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
         · exact absurd (rLeakCarried_of H D lay k reg valid prow nrow hopen Dj hx.1 hs hP hRel hdisj hv) hng
-        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, hv⟩
+        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, _, Set.mem_singleton _, hv⟩
       · exact Or.inl ⟨hacc, hR⟩
   · beta_reduce
     ring
@@ -368,18 +368,6 @@ theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
     (nrow s) rin δ op Dj
 
 /-! ### The period -/
-
-/-- **Prefix stability across runs**: run `i`'s operator reads only the runs before it, so two observation sequences
-that agree on those runs give it one input, whatever run `i` and the runs after it saw. -/
-theorem runsBefore_congr {m : ℕ} {α : Type} {o o' : Fin m → α} {i : Fin m}
-    (h : ∀ j : Fin m, j.val < i.val → o j = o' j) : runsBefore o i = runsBefore o' i := by
-  apply List.ext_getElem
-  · simp [runsBefore]
-  · intro j h1 h2
-    have hj : j < i.val :=
-      lt_of_lt_of_le h1 (by simp only [runsBefore, List.length_take]; exact min_le_left _ _)
-    simp only [runsBefore, List.getElem_take, List.getElem_ofFn]
-    exact h ⟨j, lt_trans hj i.isLt⟩ hj
 
 /-- **The count over a carried pool, at one family of incorrect sets**: the period's observations meeting the carried
 good event at the sets `F i` number at most
@@ -534,7 +522,7 @@ theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → Bounda
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (hWn : ∀ z ω i, W z ω i ⊆ range (n i)) (Fmax : ℕ) (ω : Fin m → Ω) :
     {z | z ∈ Zs ∧ PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op chains genesis Fmax (W z ω)
         (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
@@ -683,11 +671,11 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (had : PeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : PeriodEscapes Zs acc W q e)
-    (hleak : PeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
+    (had : MonitoringPeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hleak : MonitoringPeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ) :
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
@@ -709,7 +697,7 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
       obtain ⟨-, -, -, -, _, -, _, -, -, hp, -, -⟩ := h i
       simp only [List.map_nil] at hp
       simp [poolOpen, ← hp]
-    have hleak' : PeriodLeaksCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) Zs acc W
+    have hleak' : MonitoringPeriodLeaksCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) Zs acc W
         (fun _ _ _ => []) (fun _ _ _ => []) (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e' := by
       intro z hz i
       refine le_trans (Pr_mono fun ω hω => ?_) (hleak z hz i)

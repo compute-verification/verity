@@ -33,7 +33,11 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
+
+#: what a test outside this harness may read; the harness's own modules read the rest of the module
+__all__ = ["StoreUnavailable", "fetch", "reachable"]
 
 ART_RE = re.compile(r"\bart:[0-9a-f]{64}\b")
 FIXTURE_KIND = "fixture/v1"
@@ -121,11 +125,14 @@ def reachable(*, need_remote: bool = True) -> bool:
         return False
 
 
-def fetch(artifact_id: str, to: Path | None = None) -> Path:
-    """Materialise `artifact_id`'s payload (tree -> a directory, file -> the file) and return its path (the store's cache unless `to`)."""
+def fetch(artifact_id: str, to: Path | None = None, *, paths: Sequence[str] = ()) -> Path:
+    """Materialise `artifact_id`'s payload (tree -> a directory, file -> the file) and return its path (the store's cache unless `to`).
+    With `paths`, only the files of a tree artifact that match one of these globs (the CLI's `--path`), in the artifact's own layout."""
     if not ART_RE.fullmatch(artifact_id):
         raise ValueError(f"not an artifact id: {artifact_id!r}")
     args = ["fetch", artifact_id] + (["--to", str(to)] if to else [])
+    for glob in paths:
+        args += ["--path", glob]
     p = _cli(*args)
     path = p.stdout.strip().splitlines()[-1].strip() if p.stdout.strip() else ""
     if not path or not Path(path).exists():
@@ -173,11 +180,6 @@ def snapshot(name: str, members: list[str], note: str | None = None) -> str:
     return ids[-1]
 
 
-def push(artifact_ids: list[str]) -> subprocess.CompletedProcess:
-    """`research data push ART...` (preserve on the remote; needs credentials in the environment).  Returns the completed process."""
-    return _cli("push", *artifact_ids, check=False)
-
-
 # ---- attempts (Phase 5a: a stage is an Attempt publishing typed artifacts) ---------------------------------------------------------------------
 
 ATTEMPT_RE = re.compile(r"\br[0-9]{8}-[0-9]{6}-[0-9a-f]{4}\b")
@@ -222,7 +224,7 @@ def attempt_outputs(run_id: str, kinds: tuple[str, ...] | None = None) -> dict[s
 def fetch_attempt(run_ids: list[str] | str, to: Path, kinds: tuple[str, ...] = ROW_KINDS) -> Path:
     """Materialise the row-dir account files of one or more attempts (the union of their `kinds` output trees, relative paths kept:
     `build_summary.json`, `match/...`, `commit/...`, `global_match.json`, ...) under `to`, so the harness can read them like a v1 row
-    dir.  Each stage's `execution-evidence/v1` (the cumulative `timeline.jsonl`, `stages.txt`, `admission.json`, ...) goes under
+    dir.  Each stage's `execution-evidence/v1` (the cumulative `stages.txt`) goes under
     `evidence/<stage>/` -- the stages' copies legitimately differ.  Any other file two attempts both carry must be identical (the
     later attempt's copy is compared, never overwrites silently).  Returns `to`; `to/ATTEMPTS.json` records what came from where."""
     ids = [run_ids] if isinstance(run_ids, str) else list(run_ids)

@@ -18,11 +18,19 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
+from verity.definitions.registry import b1
+
 from verity_vllm.correspondence.runtime import (
-    JSON_SCHEMA, NAMESPACE, SCHEMA, ArgSpan, RuntimeCorrespondence, correspondence_digest, load_correspondence, validate_document,
+    JSON_SCHEMA,
+    NAMESPACE,
+    SCHEMA,
+    ArgSpan,
+    RuntimeCorrespondence,
+    correspondence_digest,
+    load_correspondence,
+    validate_document,
 )
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
@@ -47,7 +55,6 @@ def _tp_rank_program(rank=(2, 0), n=3):
 
 
 def _serve_program(**over):
-    from verity.definitions.registry import b1
     C = dict(b1.B0_CONFIG)
     C.update(NL=2, V=64, MAX_POS=64)
     C.update(over)
@@ -187,7 +194,8 @@ def test_without_correspondence_the_program_is_unchanged(dead_free):
 def test_without_correspondence_rank_and_session_are_refused():
     tp.ensure_ops()
     args = (tp._meta(3, tp.H), tp._meta(3, tp.Q), tp._meta(3, tp.Q), tp._meta(3, tp.H))
-    for kw in ({"rank": (2, 0)}, {"session": []}):
+    refused: tuple[dict[str, object], ...] = ({"rank": (2, 0)}, {"session": []})
+    for kw in refused:
         with pytest.raises(ValueError, match="correspondence=True"):
             derive_report(tp.Model(), args, **tp.PROF, rules=vllm_ruleset(), name="TpSite", correspondence=False, **kw)
 
@@ -218,7 +226,7 @@ def test_tp_rank_coordinate_and_collective_occurrence_are_explicit_integers():
     assert table.rank is not None and (table.rank.world, table.rank.rank) == (2, 1)
     coll = table.collective_calls()
     assert len(coll) == 9                         # 2 all_gather sites x 3 rows + 1 all_reduce site x 3 rows
-    kinds = {}
+    kinds: dict[str, set[int]] = {}
     for k in coll:
         rec = table.record(k)
         assert rec.rank is not None and (rec.rank.world, rec.rank.rank) == (2, 1)
@@ -255,8 +263,8 @@ def test_reader_lookups_owning_module_return_slot_arg_slot():
     assert isinstance(table, RuntimeCorrespondence)
     assert table.modules() == ["layers.0.o_proj", "layers.0.self_attn", "layers.0.self_attn.qkv_proj"]
     assert table.calls_of_module("layers.0.self_attn.qkv_proj") == [0, 1, 2]
-    assert table.calls_under("layers.0.self_attn") == [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    assert table.calls_under("") == list(range(15))
+    assert table.calls_of_module("layers.0.self_attn") == [3, 4, 5, 6, 7, 8]
+    assert len(table) == 15
     # Call 1 = row 1 of the qkv projection: owning module, its return slot inside the fx node's output, its arguments
     assert table.owning_module(1) == "layers.0.self_attn.qkv_proj"
     r = table.return_slot(1, 0)

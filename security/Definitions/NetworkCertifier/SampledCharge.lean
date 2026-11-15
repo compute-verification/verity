@@ -41,7 +41,7 @@ holding values at the incorrect proof blocks' committed gates (`RAcc`, `Definiti
 values are the prover's to choose, and so is which proof blocks are faulty, so the leak bound of a sampled audit
 charges, beyond the inputs the circuit reads besides the ingress, the incorrect proof blocks' committed bits (`faultyBits`)
 and the choice of incorrect set among the ones `RAcc δ` allows (`faultySets`). The sequences it counts are
-`AccSeqsSampled`.
+`AccSeqsSampled`. Over a monitoring period a window's operator reads the windows before it, `runsBefore`.
 -/
 
 @[expose] public section
@@ -113,5 +113,8 @@ def RLeak (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option
     ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
       Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o → o.length = k s → (∀ y ∈ o, y.jitter < Dj) →
         o ∈ AccSeqsSampled s.prog P s.design (lay s) (k s) (As s (traceVal s.prog (w.val H Cm s))) δ op Dj
+
+/-- The observations of the runs before run `i`, in order. -/
+def runsBefore {m : ℕ} {α : Type} (o : Fin m → α) (i : Fin m) : List α := (List.ofFn o).take i.val
 
 end NetTiming

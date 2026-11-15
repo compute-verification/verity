@@ -8,25 +8,25 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import contextlib
 import copy
 import json
-import sys
-import types
 
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import dsv4_flashmla_capture_gpu as X
 from verity.definitions.numerics import flashmla_prefill_twin as PT
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.registry import flashmla as F
 from verity.definitions.registry import flashmla_prefill as P
-from verity_vllm.properties.record import REGISTRY, digest_of
 
+from tests import fake_vllm
+from tests.properties import dsv4_flashmla_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 FLIP = (6, 3, 100)
 PFLIP, WFLIP = (2, 5, 300), (1, 3, 77)
 DECODE = [c for p, c in X.CASES if p == "decode"]
 PREFILL = [c for p, c in X.CASES if p == "prefill"]
+#: the layers with an extra cache (every one but "swa"): (page block, index width, index buffer width)
+EXTRA = {k: v for k, v in X.LAYERS.items() if v is not None}
 
 
 @pytest.fixture(scope="module")
@@ -68,7 +68,7 @@ def test_the_statics_are_dsv4s() -> None:
     assert (X.NH, X.H_Q, X.DN, X.DR, X.D, X.QT, X.BN) == (16, 64, 448, 64, 512, 64, 64)
     assert X.SCALE == 512 ** -0.5 == F.FLASHMLA_DSV4["SCALE"] and X.WINDOW == 128 and X.C4_TOPK == 1024
     assert X.page_bytes(64) == 37440 and X.page_bytes(2) == 1728 and T.num_sm_parts(X.H_Q) == 132
-    assert DECODE == list(X.CASE_LAYERS) and PREFILL == list(X.PREFILL_CASE_LAYERS) and len(X.EDGE_SINKS) == X.NH
+    assert list(X.CASE_LAYERS) == DECODE and list(X.PREFILL_CASE_LAYERS) == PREFILL and len(X.EDGE_SINKS) == X.NH
 
 
 def test_the_prefill_statics_are_dsv4s() -> None:
@@ -79,8 +79,8 @@ def test_the_prefill_statics_are_dsv4s() -> None:
     assert [X.prefill_width(k) for k in ("swa", "c4", "c128", "c128l")] == [128, 1152, 256, 8320]
     assert [X.prefill_pairs(n) for n in (0, 1, 64, 65, 128, 129, 513, 1088, 1152)] == [1, 1, 1, 1, 1, 2, 5, 9, 9]
     assert [X.prefill_pairs(n) for n in (2112, 2176, 4224, 8202, 8320)] == [17, 17, 33, 65, 65]
-    assert all(X.PREFILL_LAYERS[k][1] == X.LAYERS[k][0] for k in ("c4", "c128", "c128l"))
-    assert X.PREFILL_LAYERS["c4"][2] == X.C4_TOPK and X.PREFILL_LAYERS["c128l"][2] == X.LAYERS["c128l"][1] == 8192
+    assert all(X.PREFILL_LAYERS[k][1] == EXTRA[k][0] for k in ("c4", "c128", "c128l"))
+    assert X.PREFILL_LAYERS["c4"][2] == X.C4_TOPK and X.PREFILL_LAYERS["c128l"][2] == EXTRA["c128l"][1] == 8192
     n = np.array([kc + w for _, kc, w in X.PREFILL_LENS["c4"]])
     assert sorted({X.prefill_pairs(int(v)) for v in n}) == list(range(1, X.prefill_pairs(X.prefill_width("c4")) + 1))
     assert set((-(-n // X.BN) % 2).tolist()) == {0, 1} and n.max() == X.prefill_width("c4")
@@ -216,7 +216,7 @@ def test_every_case_plans_and_hands_each_token_its_rows(case: str, quick: bool) 
             assert np.all(idx[:x["NW"]][s:] == -1) and np.all(idx[x["NW"]:][e:] == -1)
             assert np.all(o["swa_idx"][t] < (X.CACHE_BLOCKS["swa"] - 1) * X.SWA_PBS)
             if w:
-                assert np.all(o["extra_buf"][t, :w] < (X.CACHE_BLOCKS[o["layer"]] - 1) * X.LAYERS[o["layer"]][0])
+                assert np.all(o["extra_buf"][t, :w] < (X.CACHE_BLOCKS[o["layer"]] - 1) * EXTRA[o["layer"]][0])
         nope, scale, rope = X.gather_rows(o["swa_cache"], idx[:x["NW"]], X.SWA_PBS)
         assert np.array_equal(x["nope"][:x["NW"]], nope) and np.array_equal(x["rope"][:x["NW"]], rope)
 
@@ -257,11 +257,11 @@ def test_the_batch_cases_are_vllms_batches() -> None:
             lens, pos = X.case_lens(case, quick), X.case_positions(case, quick)
             graph = min(g for g in X.GRAPH_SIZES if g >= real) if real <= 512 else None
             assert len(pos) == real and len(lens) == (graph if pads else real) and (pads == 0 or graph != real)
-            assert lens[:real] == tuple(X.token_lens(layer, p) for p in pos) and 0 <= min(pos) and max(pos) <= X.MAX_POS
+            assert lens[:real] == tuple(X.token_lens(layer, p) for p in pos) and min(pos) >= 0 and max(pos) <= X.MAX_POS
             assert lens[real:] == ((0, None if layer == "swa" else 0),) * pads
             if layer == "c128l":
                 top = (max(pos) + 1) // 128
-                assert min(max(1 << (top - 1).bit_length(), 128), (X.MAX_POS + 1) // 128) == X.LAYERS[layer][1] == 8192
+                assert min(max(1 << (top - 1).bit_length(), 128), (X.MAX_POS + 1) // 128) == EXTRA[layer][1] == 8192
         assert X.case_lens("long24", quick)[:17] == X.case_lens("long17", quick)
         pos = np.array(X.case_positions("mtp", quick))
         assert np.array_equal(pos[1::2], pos[::2] + 1)
@@ -279,7 +279,7 @@ def test_every_batch_to_vllms_default_plans_into_the_definitions(layer: str) -> 
     padded to their CUDA graph: every request's SPLITS tile its blocks and bind `FlashMlaDecodeHead_v1` and `FlashMlaCombine_v1`,
     and none has more than 127 splits, the most one token alone reaches (`max`)."""
     rng = np.random.default_rng(len(layer))
-    w = X.LAYERS[layer][1] if layer != "swa" else 0
+    w = EXTRA[layer][1] if layer != "swa" else 0
     for b in (1, 2, 17, 24, 100, 160, 161, 256, 500, 512, 513, 1024, 2048):
         lens = [X.token_lens(layer, int(p)) for p in np.exp2(rng.uniform(0, 20, b)).astype(np.int64) - 1]
         lens += [(0, None if layer == "swa" else 0)] * ((min(g for g in X.GRAPH_SIZES if g >= b) if b <= 512 else b) - b)
@@ -330,7 +330,7 @@ def test_the_reference_job_is_the_registered_definition(swa) -> None:
 
 
 def test_the_jobs_reference_the_extreme_tokens() -> None:
-    ns = np.cumsum([0, 1, 3, 2, 1, 5, 2])
+    ns: np.ndarray = np.cumsum([0, 1, 3, 2, 1, 5, 2])
     refs = lambda case, quick: [j["token"] for j in X.case_jobs(case, {}, ns, quick) if j["kind"] == "ref"]  # noqa: E731
     assert refs("c4", False) == [0, 4] and refs("c4", True) == [0] and refs("edge", False) == list(range(6))
     assert [j["tokens"] for j in X.case_jobs("c4", {}, ns, False) if j["kind"] == "twin"] == [[0, 4], [4, 6]]
@@ -484,11 +484,10 @@ def test_main_end_to_end_on_stubbed_launches(swa, pswa, tmp_path, monkeypatch, c
     and not in the H200's first hour."""
     ns, good, bad = swa
     plens, pgood, _, _ = pswa
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
@@ -519,7 +518,5 @@ def test_main_end_to_end_on_stubbed_launches(swa, pswa, tmp_path, monkeypatch, c
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_flashmla_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

@@ -1,20 +1,28 @@
 """A sampled H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
-read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt value is the tree the window registered
-(`held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's operands at its place
-(`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each statement's rows, salts and
-``--registered`` reads on credit's own file (`leaf_statement`)."""
+read (`split_row`, `split_record`, `receipt_words`), the check that a rebuilt value is the tree the window registered
+(`held`), that a statement's every port is a registered read (`complete`) and that its outputs are the rows the window
+registered (`outputs_held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's
+operands at its place (`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each
+statement's rows, salts and ``--registered`` reads on credit's own file (`leaf_statement`)."""
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+
 from verity_vllm.errors import Refused
+from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import served as SV
+
+__all__ = ["LEAF_NAMES", "LEAF_OUT_ROWS", "LEAF_PROGRAM", "held", "leaf_rows", "leaf_statement", "operands", "partials",
+           "receipt_value", "receipt_words", "split_record", "split_row"]
 
 M32 = (1 << 32) - 1
 #: a lanes-form K's lane and combine statements' names, as `pouw_h1_circuits` lowers them
@@ -49,6 +57,34 @@ def held(reg: G.Registered, entry: dict, what: str) -> G.Registered:
                       f"{reg.root.hex()[:16]}... domain {reg.domain.domain_id.hex()[:16]}..., registered "
                       f"{entry['root'][:16]}... domain {entry['domain'][:16]}...)")
     return reg
+
+
+def complete(ports: Sequence[str], reg: dict, call: int) -> None:
+    """Every port of call `call`'s statement (`ports`: its circuit's, each input row and output row) is a port of
+    credit's ``--registered`` file `reg`, as the Lean verifier requires of every statement it is handed with
+    ``--registered`` (`Flock.Registered.checkComplete`, a premise of the accounting soundness proofs); else Refused,
+    naming the first port that is not. o0, the unit's receipt, is one only where the window registers the call's
+    receipt table (`credit.registered_file`)."""
+    missing = [p for p in ports if p not in reg["ports"]]
+    if not missing:
+        return
+    why = (f"call {call}'s statement's port {missing[0]} is no port of credit's registered reads, so the Lean verifier "
+           "refuses it (registered reads (complete))")
+    if missing[0] == CR.RECEIPT_PORT:
+        why += (f": o0 is the unit's receipt, which credit reads at the call's receipt table receipt@{call} only when "
+                "the window registers it: serve the window with its receipts (serve-openai --h1-receipts)")
+    raise Refused(why)
+
+
+def outputs_held(z: dict, outs: dict) -> None:
+    """Each output row the statement opens at a registered value (o0 at the call's receipt table) is the row the
+    window registered there, unit by unit; else Refused: its proof would open at no registered root."""
+    for p, rows in outs.items():
+        if f"r_{p}" in z:
+            bad = np.flatnonzero((np.asarray(rows, np.uint16) != np.asarray(z[f"w_{p}"], np.uint16)).any(axis=1))
+            if bad.size:
+                raise Refused(f"unit {int(z['units'][bad[0]])}: its {p} is not row {int(z[f'r_{p}'][bad[0]])} of "
+                              f"{z[f'v_{p}'][bad[0]]}, which the window registered")
 
 
 def leaf_rows(kind: str, k: int, tile: Sequence[int]) -> list[tuple]:
@@ -105,7 +141,6 @@ def lane_operands(x: dict, ln: int) -> tuple[list, list, list, list]:
 
 def partials(x: dict) -> np.ndarray:
     """The leaf's partials, a row a lane: `h1zy.lane_partial` of each lane's rows, its u16 words."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
     out = []
     for ln in range(LL.lanes(*x["tile"])):
         a, b, _sa, _sw = lane_operands(x, ln)
@@ -117,9 +152,6 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
-    from verity_vllm.protocols.pouw.h1 import registered as NR
-    from verity_vllm.protocols.pouw.h1 import served as SV
     sizes = [size for size, _w in CR.call_work(win["layout"])]
     rows = []
     for u in range(sum(sizes[:call]), sum(sizes[:call + 1])):
@@ -132,8 +164,9 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
 
 def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> int:
     """The statement's ok on its rows, the word reference's (`h1zy.lane_reference`, `h1zy.combine_reference`)."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
     if kind == LL.LANE:
+        if ln is None:
+            raise TypeError("a lane's statement names its lane")
         a, b, sa, sw = lane_operands(x, ln)
         return Z.lane_reference(a, b, sa, sw, x["admit"], x["zy"], u32_words(rows[LL.PARTIALS][0]), x["salt"],
                                 x["position"], x["roots"], ln, x["tile"])

@@ -10,10 +10,9 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.definitions.registry import sampling as SP
-from verity.definitions.registry import sampling_twins
 from verity.definitions.registry import sampling_rows as SR
+from verity.definitions.registry import sampling_twins
 
 
 def _tables_ok() -> bool:
@@ -184,7 +183,7 @@ def test_nv_log1pf_exhaustive_over_every_fp32_word_the_rn_model_and_the_true_rz_
     diff_words, e_lane = [], []
     for lo, hi in ((0x00000001, 0x7F800000), (0x80000001, 0xBF800000), (0xBF800000, 0xFF800001)):
         for start in range(lo, hi, CH):
-            w = np.arange(start, min(start + CH, hi), dtype=np.int64).astype(np.uint32)
+            w: np.ndarray = np.arange(start, min(start + CH, hi), dtype=np.int64).astype(np.uint32)
             l1, l2 = SR.nv_log1pf(w), SR.nv_log1pf_v1_model(w)
             d = l1 != l2
             if d.any():
@@ -201,12 +200,12 @@ def test_nv_log1pf_exhaustive_over_every_fp32_word_the_rn_model_and_the_true_rz_
 def test_nv_logf_and_nv_log1pf_are_word_equal_to_the_libdevice_transcriptions_on_every_non_nan_word():
     a = _words(40000, 3)
     vl, vl1, vl2 = SR.nv_logf(a), SR.nv_log1pf(a), SR.nv_log1pf_v1_model(a)
-    for x, l, l1, l2 in zip(a.tolist(), vl.tolist(), vl1.tolist(), vl2.tolist()):
+    for x, lg, l1, l2 in zip(a.tolist(), vl.tolist(), vl1.tolist(), vl2.tolist()):
         rl, rl1, rl2 = SP.nv_logf(x), SP.nv_log1pf(x), sampling_twins.nv_log1pf_v1_model(x)
         if _is_nan(x):
-            assert _is_nan(l) == _is_nan(rl) and _is_nan(l1) == _is_nan(rl1)   # NaN payloads are not modelled (unreachable in the chain)
+            assert _is_nan(lg) == _is_nan(rl) and _is_nan(l1) == _is_nan(rl1)   # NaN payloads are not modelled (unreachable in the chain)
         else:
-            assert l == rl, ("nv_logf", hex(x), hex(l), hex(rl))
+            assert lg == rl, ("nv_logf", hex(x), hex(lg), hex(rl))
             assert l1 == rl1, ("nv_log1pf", hex(x), hex(l1), hex(rl1))
             assert l2 == rl2, ("nv_log1pf v1 model", hex(x), hex(l2), hex(rl2))
 
@@ -335,8 +334,9 @@ def _cases(V: int, n: int, seed: int):
 @needs_tables
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
-    from verity_vllm.properties.admission import evaluate_spec
     from verity.definitions.registry import sampling_topp_difftest as D
+
+    from verity_vllm.properties.admission import evaluate_spec
     V = 1024
     for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
         words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),
@@ -351,10 +351,12 @@ def test_the_select_is_the_strict_first_maximum_scan_nan_never_wins_and_a_nan_la
     x = np.array([f32b(1.0), f32b(3.0), f32b(3.0), f32b(2.0)], dtype=np.uint32)
     tok, y = SR.gumbel_select_row(x, 0, 0, 0)                                    # temp 0: no noise, first max
     assert tok == 1 and (y == x).all()
-    x_nan = x.copy(); x_nan[1] = 0x7FC00000
+    x_nan = x.copy()
+    x_nan[1] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan, 0, 0, 0)[0] == 2                          # the NaN lane never wins
-    x_nan0 = x.copy(); x_nan0[0] = 0x7FC00000
+    x_nan0 = x.copy()
+    x_nan0[0] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan0, 0, 0, 0)[0] == 0                         # nothing is > NaN: the scan keeps lane 0
-    neg = np.full(4, SP.NEG_INF_BITS, dtype=np.uint32)
+    neg: np.ndarray = np.full(4, SP.NEG_INF_BITS, dtype=np.uint32)
     assert SR.gumbel_select_row(neg, 0, 0, 0)[0] == 0                            # all -inf: lane 0
     assert (SR.topp_mask_row(x, f32b(0.9), 3) == SP.NEG_INF_BITS).all()           # S outside the split counts keeps no lane, as the primitive

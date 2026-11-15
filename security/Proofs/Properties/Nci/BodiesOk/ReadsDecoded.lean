@@ -64,7 +64,7 @@ theorem retParts_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   intro d hd
-  obtain ⟨hc, -, -, ps, hps, hnn⟩ := hok d hd
+  obtain ⟨hc, -, -, ps, hps, hnn, -⟩ := hok d hd
   refine ⟨fun hp => by rw [(hc.1 hp).1]; rfl, fun _ => ?_⟩
   have hparts : (P.defs[d]!).body.ret.parts = ps := by rw [hps]; exact (Walk.ofParts_spec ps).1
   exact ⟨by rw [hparts]; exact hps,

@@ -1,7 +1,7 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.LinkWindows`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
+certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkTransferBlocks` v5, one per end),
 which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
 names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
 verifier reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs
@@ -64,6 +64,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import and_reduce
 from verity.circuits.boolean.trace import part as _part
+from verity.circuits.census import BooleanWork, NoBooleanWork
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
@@ -513,33 +514,30 @@ def evaluate(*insts: Instance) -> list[int]:
     return [int(b) for b in evaluate_bits(insts[0].unit, *args).reshape(-1).tolist()]
 
 
-def _times(nd) -> int:
-    return 1 if nd.form in ("primitive", "call") else nd.n
+def _ands(work: BooleanWork, fn) -> int:
+    got = work.of(fn)
+    if isinstance(got, str):
+        raise NoBooleanWork({fn.id: f"it reaches {got}, which is not a Boolean gate, a constant bit or an input"})
+    return sum(a for _g, a in got.values())
 
 
-def ands(fn, memo: dict | None = None) -> int:
-    """A Boolean Definition's AND gates, an n-input AND counted as n − 1."""
-    memo = {} if memo is None else memo
-    if fn.id not in memo:
-        if isinstance(fn, PrimitiveDefinition):
-            kind = BL.gate_kind(fn)
-            memo[fn.id] = kind[1] - 1 if kind is not None and kind[0] == "and" else 0
-        else:
-            memo[fn.id] = sum(_times(nd) * ands(nd.fn, memo) for nd in fn.body.nodes)
-    return memo[fn.id]
+def ands(fn) -> int:
+    """A Boolean Definition's AND gates: the ANDs of its Boolean work as its census counts it (`census.BooleanWork`),
+    every facet's."""
+    return _ands(BooleanWork(), fn)
 
 
 _GROUPS = {"NetworkHidingRead": "opening", "NetworkHeadFields": "fields", "NetworkHeadCounts": "counts",
            "NetworkRecordDigest": "signed", "NetworkSignedDigest": "signed"}
 
 
-def size(target, memo: dict | None = None) -> dict:
+def size(target) -> dict:
     """The head check's ANDs, in total and by part: the opening, the fields, the counts, the signed digest (the record
     digest and its salted digest) and the rest (the final AND)."""
-    memo = {} if memo is None else memo
+    work = BooleanWork()
     out = dict.fromkeys(("opening", "fields", "counts", "signed", "other"), 0)
     for nd in target.body.nodes:
-        out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += _times(nd) * ands(nd.fn, memo)
+        out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += nd.n * _ands(work, nd.fn)
     out["ands"] = sum(out.values())
     return out
 

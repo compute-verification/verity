@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import verity
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.protocols.certifier.verifier import advice as ADV, head_check as HC, io_request as Q, service as SVC, \
@@ -394,7 +395,7 @@ def test_an_unpinned_size_class_is_refused(tmp_path):
 def test_only_the_tie_service_builds_an_ingress_tie_verdict():
     """Nothing in `verity` but the tie service, which builds `IoTieVerdict` from the stream's outcomes of record,
     constructs one (the tests' stand-ins aside)."""
-    root = Path(TS.__file__).resolve().parents[3]
+    root = Path(verity.__file__).resolve().parent
     builders = set()
     for path in root.rglob("*.py"):
         if "tests" in path.relative_to(root).parts or "IoTieVerdict" not in path.read_text():

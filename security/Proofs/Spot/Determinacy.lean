@@ -32,17 +32,17 @@ theorem wellFounded_dep [Finite U] (h : P.Acyclic) : WellFounded P.Dep := by
 theorem covered_of_singleAssignment (h : P.SingleAssignment) : P.Covered :=
   fun s hs => ((h s).2 hs).exists
 
-theorem correct_of_not_mem_wrong [Fintype U] {V : Type} {f : P.Fns V} {σ : S → V} {u : U}
-    (h : u ∉ P.wrong f σ) : P.Correct f σ u := by
+theorem correct_of_not_mem_incorrect [Fintype U] {V : Type} {f : P.Fns V} {σ : S → V} {u : U}
+    (h : u ∉ P.incorrect f σ) : P.Correct f σ u := by
   classical
   by_contra hc
-  exact h (by simp [wrong, hc])
+  exact h (by simp [incorrect, hc])
 
-theorem wrong_eq_empty [Fintype U] {V : Type} {f : P.Fns V} {σ : S → V} (h : ∀ u, P.Correct f σ u) :
-    P.wrong f σ = ∅ := by
+theorem incorrect_eq_empty [Fintype U] {V : Type} {f : P.Fns V} {σ : S → V} (h : ∀ u, P.Correct f σ u) :
+    P.incorrect f σ = ∅ := by
   classical
   ext u
-  simp [wrong, h u]
+  simp [incorrect, h u]
 
 /-- A correct unit's writes are its function of its reads; equal reads give equal writes. -/
 theorem write_eq_of_reads {V : Type} {f : P.Fns V} {σ τ : S → V} {u : U} (hσ : P.Correct f σ u)
@@ -58,7 +58,7 @@ theorem write_eq_of_reads {V : Type} {f : P.Fns V} {σ τ : S → V} {u : U} (h�
 /-- **Robust determinacy**: an assignment is determined by its inputs and the writes of a set containing its incorrect
 proof blocks. -/
 theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
-    {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.wrong f σ ⊆ B) (hτ : P.wrong f τ ⊆ B)
+    {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) : σ = τ := by
   have key : ∀ u, ∀ s ∈ P.writes u, σ s = τ s := by
     intro u
@@ -66,8 +66,8 @@ theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f
     | _ u ih =>
       by_cases huB : u ∈ B
       · exact hB u huB
-      · refine P.write_eq_of_reads (P.correct_of_not_mem_wrong fun h => huB (hσ h))
-          (P.correct_of_not_mem_wrong fun h => huB (hτ h)) ?_
+      · refine P.write_eq_of_reads (P.correct_of_not_mem_incorrect fun h => huB (hσ h))
+          (P.correct_of_not_mem_incorrect fun h => huB (hτ h)) ?_
         intro r hr
         by_cases hri : r ∈ P.input
         · exact hin r hri
@@ -82,7 +82,7 @@ theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f
 /-- **Determinacy**: with no incorrect proof block, an assignment is determined by its inputs. -/
 theorem eq_of_correct [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {σ τ : S → V}
     (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : ∀ u, P.Correct f σ u) (hτ : ∀ u, P.Correct f τ u) : σ = τ :=
-  P.eq_of_writes hc ha f (B := ∅) hin (by simp [P.wrong_eq_empty hσ]) (by simp [P.wrong_eq_empty hτ])
+  P.eq_of_writes hc ha f (B := ∅) hin (by simp [P.incorrect_eq_empty hσ]) (by simp [P.incorrect_eq_empty hτ])
     (by simp)
 
 theorem mem_down [Fintype U] {B : Finset U} {v : U} :
@@ -93,15 +93,15 @@ theorem mem_down [Fintype U] {B : Finset U} {v : U} :
 /-- **The cone**: assignments that hold the same inputs and whose incorrect proof blocks lie in `B` agree on every slot that a
 unit outside `B`'s downstream cone writes. -/
 theorem eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
-    {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.wrong f σ ⊆ B) (hτ : P.wrong f τ ⊆ B) :
+    {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B) :
     ∀ v, v ∉ P.down B → ∀ s ∈ P.writes v, σ s = τ s := by
   intro v
   induction v using (P.wellFounded_dep ha).induction with
   | _ v ih =>
     intro hv
     have hvB : v ∉ B := fun h => hv ((P.mem_down).2 ⟨v, h, Relation.ReflTransGen.refl⟩)
-    refine P.write_eq_of_reads (P.correct_of_not_mem_wrong fun h => hvB (hσ h))
-      (P.correct_of_not_mem_wrong fun h => hvB (hτ h)) ?_
+    refine P.write_eq_of_reads (P.correct_of_not_mem_incorrect fun h => hvB (hσ h))
+      (P.correct_of_not_mem_incorrect fun h => hvB (hτ h)) ?_
     intro r hr
     by_cases hri : r ∈ P.input
     · exact hin r hri
@@ -187,8 +187,8 @@ the honest one (every unit correct, the same inputs) on every slot written by a 
 downstream cone. -/
 theorem eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest σ : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = a s) :
-    ∀ v, v ∉ P.down (P.wrong f σ) → ∀ s ∈ P.writes v, σ s = honest s :=
+    ∀ v, v ∉ P.down (P.incorrect f σ) → ∀ s ∈ P.writes v, σ s = honest s :=
   P.eq_off_down (P.covered_of_singleAssignment h.1) h.2 f (fun s hs => (hσ s hs).trans (hh s hs).symm) le_rfl
-    (by simp [P.wrong_eq_empty hc])
+    (by simp [P.incorrect_eq_empty hc])
 
 end Population.Dataflow

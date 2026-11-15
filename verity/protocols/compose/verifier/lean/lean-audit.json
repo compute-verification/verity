@@ -1,0 +1,35 @@
+{
+ "format": 1,
+ "roots": ["CoreComposition"],
+ "layers": {
+  "CoreComposition.Product": {
+   "imports": ["CoreProtocol.Protocol", "Base.Hash"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
+  },
+  "CoreComposition.Stubs": {
+   "imports": ["CoreProtocol.Example"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
+  },
+  "CoreComposition.Blobs": {
+   "imports": ["CoreComposition.Registered", "CoreProtocol.Blobs", "CoreComposition.Same"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
+  },
+  "CoreComposition.Same": {
+   "imports": ["CoreComposition.Product"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
+  },
+  "CoreComposition.Tie": {
+   "imports": ["CoreComposition.Blobs"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
+ }
+}

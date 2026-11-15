@@ -116,7 +116,8 @@ theorem checkBlobsAt_trees {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   · cases h

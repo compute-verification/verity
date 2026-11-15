@@ -22,8 +22,8 @@ from verity.protocols.pouw.verifier import coins as EC
 
 # the sample keys are the clear audit's, a reference tool (verity/protocols/pouw/clear) imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-import clear_audit as CA  # noqa: E402
-import clear_work as CW  # noqa: E402
+import clear_audit as CA
+import clear_work as CW
 
 OUT = Path(__file__).with_name("vectors") / "epoch_coins_v1.json"
 #: (case, the challenger's seed, execution phase)
@@ -37,17 +37,17 @@ def label(case: str, part: str) -> bytes:
 def case_vector(case: str, seed: bytes, epoch: int) -> dict:
     ch = E.challenger(seed, epoch)
     weights, transcript, records = label(case, "weights"), label(case, "transcript"), label(case, "records")
-    salt_coin, draw_coin = ch.open("salt", weights), ch.open("draw", transcript)
+    salt_coin, sample_coin = ch.open("salt", weights), ch.open("draw", transcript)
     salt = au.salt_of(ch.commitment, salt_coin.coin, weights)
     return {
         "case": case, "seed": seed.hex(), "epoch": epoch, "commitment": ch.commitment.to_json(),
-        "values": {o.label: EC.leaf_value(o.coin, o.salt).hex() for o in (salt_coin, draw_coin)},
-        "openings": [salt_coin.to_json(), draw_coin.to_json()],
+        "values": {o.label: EC.leaf_value(o.coin, o.salt).hex() for o in (salt_coin, sample_coin)},
+        "openings": [salt_coin.to_json(), sample_coin.to_json()],
         "weights_root": weights.hex(), "salt": salt.hex(),
         "transcript_root": transcript.hex(),
-        "audit_key": derive(draw_coin.coin, CA.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
+        "audit_key": derive(sample_coin.coin, CA.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
         "records_root": records.hex(),
-        "pearl_c_draw_key": CW.draw_key(draw_coin.coin, transcript, records, salt).value.hex(),
+        "pearl_c_draw_key": CW.draw_key(sample_coin.coin, transcript, records, salt).value.hex(),
     }
 
 

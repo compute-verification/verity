@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
+import types
 from pathlib import Path
 
 import pytest
@@ -55,7 +57,7 @@ elif args[0] == "prove":
     die = int(os.environ.get("FAKE_PROVE_DIES_AFTER", "-1"))
     for n, raw in enumerate(sys.stdin):
         if n == die:
-            sys.exit(4)
+            sys.exit(int(os.environ.get("FAKE_PROVE_EXIT", "4")))
         j = json.loads(raw)
         host, port = j["verifier"].rsplit(":", 1)
         f = socket.create_connection((host, int(port))).makefile("rw")
@@ -71,7 +73,7 @@ elif args[0] == "prove":
 
 @pytest.fixture
 def binary(tmp_path, monkeypatch):
-    for k in ("FAKE_SERVE_DIES", "FAKE_PROVE_DIES_AFTER"):
+    for k in ("FAKE_SERVE_DIES", "FAKE_PROVE_DIES_AFTER", "FAKE_PROVE_EXIT"):
         monkeypatch.delenv(k, raising=False)
     b = tmp_path / "flock-circuit"
     b.write_text(FAKE.format(python=sys.executable))
@@ -85,8 +87,11 @@ def statement(tmp_path: Path, pin: str) -> Statement:
                      public=d / "pub-4.bin")
 
 
-def draw(units: list[int]) -> dict:
+def sample(units: list[int]) -> dict:
     return {"law": "subset", "population": 4, "k": len(units), "units": units}
+
+
+draw = sample  # the name the other tests call it by
 
 
 def record(s) -> dict:
@@ -180,6 +185,40 @@ def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeyp
     assert pools("lone-unset", None, devices=[5]) == {None}
 
 
+def test_verifiers_on_their_own_cpus_and_the_provers_on_the_rest(binary, tmp_path, monkeypatch, node):
+    """``FC_VERIFIER_CPUS`` in the server's environment runs every verifier on those CPUs and every prover on the server's
+    others (`taskset -c`, here a stand-in that logs each placement and runs the command), the provers splitting the threads
+    of their own CPUs; unset, no process is placed and the provers split every CPU, as before. A list that isn't one, names
+    a CPU outside the server's affinity, or leaves the provers none is refused before any process starts."""
+    log = tmp_path / "taskset.log"
+    fake = tmp_path / "taskset"
+    fake.write_text('#!/bin/sh\n[ "$1" = -c ] || exit 9\nprintf "%s %s\\n" "$2" "$4" >> "$FAKE_TASKSET_LOG"\nshift 2\n'
+                    'exec "$@"\n')
+    fake.chmod(0o755)
+    monkeypatch.setattr(PS, "TASKSET", str(fake))
+    monkeypatch.setenv("FAKE_TASKSET_LOG", str(log))
+    for k in ("RAYON_NUM_THREADS", "FC_VERIFIER_CPUS"):
+        monkeypatch.delenv(k, raising=False)
+    pins = ["88" * 64, "99" * 64]
+
+    def run(name: str, **kw) -> tuple[str | None, set[str | None]]:
+        with ProofServer(binary, tmp_path / name, devices=[0], provers=2, **kw) as ps:
+            sessions = [ps.submit(statement(tmp_path, pins[i % 2]), draw([i % 4]), f"s{i}") for i in range(4)]
+            got = [s.result() for s in sessions]
+        assert all(s.accepted for s in got)
+        return ps.verifier_cpus, {record(s)["proved"]["threads"] for s in got}
+
+    assert run("placed", env={"FC_VERIFIER_CPUS": "10,11"}) == ("10-11", {"5"})
+    assert sorted(set(log.read_text().splitlines())) == ["0-9 prove", "10-11 serve"]
+    log.unlink()
+    assert run("unplaced") == (None, {"6"})
+    assert not log.exists()
+    for bad, why in [("10-", "not a CPU list"), ("11-12", "CPUs 12 are outside"), ("0-11", "none is left for the provers")]:
+        with pytest.raises(ValueError, match=why):
+            ProofServer(binary, tmp_path / "refused", env={"FC_VERIFIER_CPUS": bad})
+    assert not log.exists()
+
+
 def test_a_cgroup_quota_bounds_the_threads_the_provers_split(binary, tmp_path, monkeypatch, node):
     """With ``RAYON_NUM_THREADS`` unset, the provers split rayon's default pool, Rust's `available_parallelism`: the
     affinity, at most the least whole-CPU quota of the process's cgroup or any above it, and at least one. The quota is v2's
@@ -218,19 +257,46 @@ def test_one_cpu_prover_without_devices(binary, tmp_path):
     assert s.device is None and "--gpu" not in record(s)["proved"]["argv"] and set(ps.exits) >= {"prover-cpu"}
 
 
-def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
-    """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
-    and the next session meets a new prover and verifier on their first lines."""
-    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
-    pin = "ff" * 64
+def test_the_wide_leaf_is_carried_by_both_sides_or_by_neither(binary, tmp_path):
+    """A session's prover and verifier name one statement version: `--wide-leaf` on both command lines of a wide server,
+    and on neither of any other's."""
+    for wide in (True, False):
+        with ProofServer(binary, tmp_path / f"ps-{wide}", wide_leaf=wide) as ps:
+            r = record(ps.submit(statement(tmp_path, "ab" * 64), sample([1]), "s").result())
+        sides = (r["argv"], r["proved"]["argv"])
+        assert [a.count("--wide-leaf") for a in sides] == [int(wide)] * 2 and all("--zk" in a for a in sides)
+        assert [a[0] for a in sides] == ["serve", "prove"]
+
+
+def test_the_callers_challenger_flags_end_every_verifiers_line_and_no_provers(binary, tmp_path):
+    """``tree_from``: the flags of the challenger session the caller holds end the verifier's command line and reach no
+    prover's, on either statement version; the server starts no challenger of its own, and refuses to be given both."""
+    flags = ["--tree-from", "127.0.0.1:9", "--tree-secret-file", str(tmp_path / "secret")]
+    for wide in (True, False):
+        with ProofServer(binary, tmp_path / f"ps-{wide}", verify_ahead=0, wide_leaf=wide, tree_from=flags) as ps:
+            r = record(ps.submit(statement(tmp_path, "ab" * 64), draw([1]), "s").result())
+        sides = (r["argv"], r["proved"]["argv"])
+        assert sides[0][-len(flags):] == flags and not set(flags) & set(sides[1])
+        assert [a.count("--wide-leaf") for a in sides] == [int(wide)] * 2 and all("--zk" in a for a in sides)
+        assert ps.challengers == {}
+    with pytest.raises(ValueError, match="not both"):
+        ProofServer(binary, tmp_path / "both", challenger=True, tree_from=flags)
+
+
+def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(binary, tmp_path):
+    """A templated statement's verifier loads its circuit with the unit (`--tmpl-unit`) and the prover's line names it
+    (``tmpl_unit``); a flat statement on the same server names none."""
+    tmpl, flat = "66" * 64, "77" * 64
+    st = statement(tmp_path, tmpl)
+    st = Statement(st.pin, st.circuit, st.tables, st.instances, st.public, tmpl_unit=st.circuit.parent / "unit.placed")
     with ProofServer(binary, tmp_path / "ps") as ps:
-        first = ps.submit(statement(tmp_path, pin), draw([0]), "s0").result()
-        with pytest.raises(ProofServerError, match="prover-cpu exited"):
-            ps.submit(statement(tmp_path, pin), draw([1]), "s1").result()
-        last = ps.submit(statement(tmp_path, pin), draw([2]), "s2").result()
-    assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
-    v = f"verifier-{pin[:16]}"
-    assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
+        got = [ps.submit(x, draw([i]), f"s{i}").result() for i, x in enumerate((st, statement(tmp_path, flat), st))]
+    for s in got:
+        r = record(s)
+        if s.pin == tmpl:
+            assert r["argv"][r["argv"].index("--tmpl-unit") + 1] == str(st.tmpl_unit) == r["proved"]["line"]["tmpl_unit"]
+        else:
+            assert "--tmpl-unit" not in r["argv"] and "tmpl_unit" not in r["proved"]["line"]
 
 
 def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkeypatch):
@@ -242,6 +308,74 @@ def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkey
     ps.close()
     with pytest.raises(ProofServerError, match="closed"):
         ps.submit(statement(tmp_path, "11" * 64), draw([0]), "s1")
+
+
+def test_a_provers_exit_fails_its_sessions_before_the_server_retires_their_verifier(binary, tmp_path, monkeypatch):
+    """A session its prover left unrecorded has failed on the prover's exit before the server does anything to the
+    session's verifier: before the thread that retires the verifier starts, and so before the server ends the verifier's
+    queue or terminates it. The verifier's own exit, which is the server's doing, is then never the reason the session
+    carries. Stand-ins record at each of the three steps whether the session has failed. The prover ends with status 0 (a
+    session is done on its records, never on its prover's exit status), and the server is closed as soon as the session
+    fails: its close has joined the retiring thread."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
+    st = statement(tmp_path, "ab" * 64)
+    seen: list[tuple[str, bool]] = []
+
+    def note(step: str, then=lambda: None):
+        seen.append((step, ps._sessions["s1"]._error is not None))
+        return then()
+
+    class Retiring(threading.Thread):
+        def start(self) -> None:
+            if self.name.startswith("retire-"):
+                note("retire")
+            super().start()
+
+    spy = types.ModuleType("threading")
+    vars(spy).update(vars(threading), Thread=Retiring)
+    monkeypatch.setattr(PS, "threading", spy)
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(st, {"units": [0]}, "s0").result()
+        (v,) = ps._verifiers.values()
+        monkeypatch.setattr(v, "end", lambda end=v.end: note("end", end))
+        monkeypatch.setattr(v.p, "terminate", lambda terminate=v.p.terminate: note("terminate", terminate))
+        left = ps.submit(st, {"units": [1]}, "s1")
+        with pytest.raises(ProofServerError) as e:
+            left.result()
+    assert seen == [("retire", True), ("end", True), ("terminate", True)], "False: the session had not failed at that step"
+    assert "prover-cpu exited" in str(e.value) and left.live is None and ps.exits["prover-cpu"] == 0
+    assert first.accepted and [t.is_alive() for t in ps._retiring] == [False]
+
+
+def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
+    """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
+    and the next session meets a new prover and verifier on their first lines."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    pin = "ff" * 64
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(statement(tmp_path, pin), {"units": [0]}, "s0").result()
+        with pytest.raises(ProofServerError, match="prover-cpu exited"):
+            ps.submit(statement(tmp_path, pin), {"units": [1]}, "s1").result()
+        last = ps.submit(statement(tmp_path, pin), {"units": [2]}, "s2").result()
+    assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
+    v = f"verifier-{pin[:16]}"
+    assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
+
+
+def test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session(binary, tmp_path, monkeypatch):
+    """A session is done on its records and never on its prover's exit status: a prover that ends with status 0 and no
+    ``LIVE`` record for a line it was handed fails that line's session, as one that ends with any other status does. The
+    server is closed as soon as the session fails, and its close finds the verifier's retiring thread started."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
+    st = statement(tmp_path, "ee" * 64)
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(st, {"units": [0]}, "s0").result()
+        left = ps.submit(st, {"units": [1]}, "s1")
+        with pytest.raises(ProofServerError, match=r"prover-cpu exited \(rc 0\) before its records"):
+            left.result()
+    assert first.accepted and left.live is None and ps.exits["prover-cpu"] == 0
 
 
 def test_each_verifier_on_its_own_challenger_audited_at_close(binary, tmp_path, monkeypatch):

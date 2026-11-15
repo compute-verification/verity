@@ -27,6 +27,8 @@ class Attribution:
 def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     """Attribute every fold instance to its request: the fold's meta channel, else the rows of its engine step."""
     B, steps = run.fold, run.steps
+    if B.oracle_rows is None:
+        raise ValueError(f"{run.oracle_dir}: the view passed as the fold has no instances.jsonl rows")
     n_in = B.n_input_nodes
     # the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
     # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  The request-owned inputs are the prompts
@@ -78,7 +80,7 @@ def requests_observed(run: MatchRun, att: Attribution, g_ids: list[str]) -> dict
     steps with its rows."""
     res, steps, G, B = run.res, run.steps, run.declared, run.fold
     per_req, unattributed, shared_idx, shared_gi = att.per_req, att.unattributed, att.shared_idx, att.shared_gi
-    c = NamedCheck(res, "G2", "requests_observed: every declared request has rows + output events + instances; 0 unattributed; no undeclared request")
+    c = NamedCheck(res, "requests_observed", "every declared request has rows + output events + instances; 0 unattributed; no undeclared request")
     present: dict[str, list[int]] = collections.defaultdict(list)
     for s in sorted(steps):
         for rid in {r for r, _ in steps[s]["rows"]}:

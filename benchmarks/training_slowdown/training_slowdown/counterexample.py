@@ -1,6 +1,6 @@
 """Counterexamples to update hardness (T1): a family shows that some steps' updated weights rebuild from θ in few bits.
 
-A family is a directory a program writes during its run (`Family`, through `Harness.family`):
+A family is a directory a run writes as it trains (`Family`, through `Harness.family`):
 
 - `family.json`: its name, its decoder (a `codecs.Plan` spec from the shared library), `uniform` (one rule for every
   step it declares) and the declared steps;
@@ -34,7 +34,7 @@ SAMPLE_FINAL = 20
 
 
 class Family:
-    """The writer a program uses: `put(step, E_t)` for each step it declares."""
+    """A family's writer: `put(step, E_t)` for each step it declares."""
 
     def __init__(self, root: Path, name: str, plan: Plan, uniform: bool):
         self.dir = Path(root) / name

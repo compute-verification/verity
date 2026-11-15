@@ -19,11 +19,14 @@ leaf (`tests/program/test_serve3_authored.py`).  Needs torch; the tests skip wit
 """
 
 import torch
-
-from verity.definitions.registry import b1
-from verity.definitions.registry import pad_prims  # noqa: F401  — registers BitAnd_v1/BitNot_v1 for `ops.<name>` resolution
+from verity.circuits.types import Array
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.registry import (
+    b1,
+    pad_prims,  # noqa: F401  — registers BitAnd_v1/BitNot_v1 for `ops.<name>` resolution
+)
 from verity.definitions.registry.prims import BF16, BIT, I32
-from verity.circuits.types import Array, Tuple as TupleT
+
 from tests.program.b1_authored import FinalV2, _forward_positions_v2
 from verity_vllm.program.frontend.schemas import Arr, Dep, Tup
 from verity_vllm.program.frontend.torch_frontend import batch, function, ops

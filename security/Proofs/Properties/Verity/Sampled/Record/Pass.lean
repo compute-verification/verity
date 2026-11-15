@@ -6,30 +6,30 @@ public import Proofs.Properties.Spot.Credited
 public import Proofs.Flock.Claims.Sampling.Select.Prefix
 
 /-!
-# v2's acceptance keeps the run's draw file
+# v2's acceptance keeps the run's sample file
 
-Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed, the draw
-file round keeps the run's draw file (`pass_of_accepts`, `drawOk`). First, the run's draw file proves the units the draw
-rounds' coins draw (`units_of_accepts`, `units_of_pass`, `drawOk`'s first half):
+Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed, the sample
+file round keeps the run's sample file (`pass_of_accepts`, `drawOk`). First, the run's sample file proves the units the sample
+rounds' coins sample (`units_of_accepts`, `units_of_pass`, `drawOk`'s first half):
 
-* **v2 credits its one session with the coins' draw** (`Properties.Spot.Credited.unitsAt_of_checkBlobsAt`): at
-  the public file's load and the session record's draw, `Units.unitsAt` is the units `ξ` draws under the verifier's law
+* **v2 credits its one session with the coins' sample** (`Properties.Spot.Credited.unitsAt_of_checkBlobsAt`): at
+  the public file's load and the session record's sample, `Units.unitsAt` is the units `ξ` samples under the verifier's law
   as derived over the registered population;
 * **the registered population is `A`'s** (`Properties.Spot.Credited.population_of_checkBlobsAt`): v2 holds the
   registration to the public file, which is `A`'s (`Names`), and `A`'s load of it counts `A`'s population;
-* **that draw is the record's** (`drawnFrom_eq`, `Properties.Spot.SecurityProofs.drawUnits_append`): under the
-  law `lawAt` reads over `A`'s population (`SetsUp`'s), v2's draw from `ξ` is `drawn`'s from any bytes `ξ` begins, the
-  draw rounds' coins' among them;
-* **the session record's draw is the run's draw file** (`Shows`' first half), so `provedOf` reads at the run's draw file
+* **that sample is the record's** (`drawnFrom_eq`, `Properties.Spot.SecurityProofs.drawUnits_append`): under the
+  sampling design `lawAt` reads over `A`'s population (`SetsUp`'s), v2's sample from `ξ` is `drawn`'s from any bytes `ξ` begins, the
+  sample rounds' coins' among them;
+* **the session record's sample is the run's sample file** (`Shows`' first half), so `provedOf` reads at the run's sample file
   what `unitsAt` reads.
 
 Second, its session has the statement's numbers (`numsOk`, through `numsOk_of_refOk`): v2 sets the session up at the
-run's draw file, at one table whose unit count is the draw's proved units (`shape_sess`,
-`FlockSoundness.Discharge.Layout.drawn_spec`), which are its drawn units alone (`proved_of_drawLaw`), as many as the
-units v2 credits (`unitsAt_size`), the `A.kd` units the coins draw (`drawUnits_of_accepts`, `drawn_length`).
+run's sample file, at one table whose unit count is the sample's proved units (`shape_sess`,
+`FlockSoundness.Discharge.Layout.drawn_spec`), which are its sampled proof blocks alone (`proved_of_drawLaw`), as many as the
+units v2 credits (`unitsAt_size`), the `A.kd` units the coins sample (`drawUnits_of_accepts`, `drawn_length`).
 
-What it takes beside v2's acceptance: `ξ` is the first bytes of the draw rounds' coins' (`LiveCoins`' first half), and
-the run's draw file and `o`'s partition object and registered file are each under `2^64` bytes, the lengths of the
+What it takes beside v2's acceptance: `ξ` is the first bytes of the sample rounds' coins' (`LiveCoins`' first half), and
+the run's sample file and `o`'s partition object and registered file are each under `2^64` bytes, the lengths of the
 session's statement v2 reads only as the JSON they parse to (`fits_of_accepts`).
 -/
 
@@ -42,9 +42,9 @@ open Claims (Seen Prover Transcript run coinSeq)
 open FlockDeploy (Coin)
 open Verity.Recursive.BaseSetup (bind_ok)
 
-/-- **v2's draw under `lawAt`'s law**: where the verifier's law derives `lawJ` and `lawAt` reads the law `L` over `n`
-units, v2's draw over `n` units (`Spot.OneStage.drawnFrom`), where it draws, is `Spot.Draw.drawUnits`'s
-under `L`: it refuses a Bernoulli `L` (`Spot.OneStage.coveredDesign`) and draws under any other. -/
+/-- **v2's sample under `lawAt`'s law**: where the verifier's law derives `lawJ` and `lawAt` reads the sampling design `L` over `n`
+units, v2's sample over `n` units (`Spot.OneStage.drawnFrom`), where it samples, is `Spot.Draw.drawUnits`'s
+under `L`: it refuses a Bernoulli `L` (`Spot.OneStage.coveredDesign`) and samples under any other. -/
 theorem drawnFrom_eq {v : _root_.Spot.Registration.Verifier} {lawJ : Json} {n : ℕ} {L : Flock.Draw.Law}
     (src : ByteArray) {r : Array ℕ × ℕ}
     (hder : _root_.Spot.Draw.derive v.program v.query v.law v.workTable = .ok lawJ)
@@ -70,16 +70,16 @@ theorem drawnFrom_eq {v : _root_.Spot.Registration.Verifier} {lawJ : Json} {n : 
     cases h
   all_goals intro h; exact h
 
-/-- **v2's acceptance keeps the run's draw file's units**: where v2 accepts evidence it parsed at the coins `ξ`, reading
+/-- **v2's acceptance keeps the run's sample file's units**: where v2 accepts evidence it parsed at the coins `ξ`, reading
 `A`'s and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`) and `ξ` the
-first bytes of the coins `cs`', at a run that reaches the draw file round and whose draw file the blobs show (`Shows`),
-the draw file proves the units `cs` draw, ascending. -/
+first bytes of the coins `cs`', at a run that reaches the sample file round and whose sample file the blobs show (`Shows`),
+the sample file proves the units `cs` sample, ascending. -/
 theorem units_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {cs : List Coin} (hξ : ∃ t, drawBytes cs = ξ ++ t) {v : Seen} (hlen : DRAW_ROUNDS < v.msgs.length)
     (hshow : Shows A o ev bs v) :
     provedOf A (drawOf v) = some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) := by
@@ -109,17 +109,17 @@ theorem units_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
   rw [hJ, hdr, Array.toArray_toList]
   exact hu
 
-/-- **v2's draw ends at the coins `cs`**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s and `o`'s
-inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), `A`'s draw from any bytes `ξ`
+/-- **v2's sample ends at the coins `cs`**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s and `o`'s
+inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), `A`'s sample from any bytes `ξ`
 begins ends. -/
 theorem drawUnits_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {cs : List Coin} (hξ : ∃ t, drawBytes cs = ξ ++ t) :
-    ∃ u rd, _root_.Spot.Draw.drawUnits A.law A.n (drawBytes cs) = .ok (u, rd) := by
+    ∃ u rd, _root_.Spot.Draw.drawUnits A.design A.n (drawBytes cs) = .ok (u, rd) := by
   obtain ⟨s, pubB, B, record, law, n, units, read, hs, hpB, hB, hr, hder, hn', hd, hc⟩ :=
     _root_.Properties.Spot.Credited.unitsAt_of_checkBlobsAt he hacc
   have hpb : pubB = A.I.publicFile := Except.ok.inj (hpB.symm.trans hn.pub)
@@ -133,7 +133,7 @@ theorem drawUnits_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sp
   rw [← ht] at hd'
   exact ⟨_, _, hd'⟩
 
-/-- The draw rounds' coins begin with `ξ` where the run's first `DRAW_ROUNDS` coins do (`LiveCoins`' first half). -/
+/-- The sample rounds' coins begin with `ξ` where the run's first `DRAW_ROUNDS` coins do (`LiveCoins`' first half). -/
 theorem prefix_of_live (A : Live) (o : Own) {ξ : ByteArray} {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin ((V A o).k (xOf A o)) → Coin)
     (h : ∃ t, drawBytes (((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map
@@ -146,16 +146,16 @@ theorem prefix_of_live (A : Live) (o : Own) {ξ : ByteArray} {Ω : Type} (P : Pr
   unfold coinsAt
   rw [← List.map_take, List.take_range, Nat.min_eq_left (Nat.le_of_lt h64)]
 
-/-- **v2's acceptance keeps the run's draw file's units, at the run**: where v2 accepts evidence it parsed at the coins
+/-- **v2's acceptance keeps the run's sample file's units, at the run**: where v2 accepts evidence it parsed at the coins
 `ξ`, reading `A`'s and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`),
-at a run whose draw file the blobs show (`Shows`) and whose draw rounds' coins begin with `ξ` (`LiveCoins`' first
-half), the run's draw file proves the units the draw rounds' coins draw, ascending: `drawOk`'s first half. -/
+at a run whose sample file the blobs show (`Shows`) and whose sample rounds' coins begin with `ξ` (`LiveCoins`' first
+half), the run's sample file proves the units the sample rounds' coins sample, ascending: `drawOk`'s first half. -/
 theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
@@ -168,14 +168,14 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneS
     simp only [Transcript.seen]
   exact units_of_accepts A o he hacc hn hlaw (prefix_of_live A o P ω r hlive.1) (by rw [hsm]; exact h64) hshow
 
-/-- **v2's acceptance makes the run's draw file a reference draw file** (`RefOk`): at `pass_of_accepts`'s hypotheses,
+/-- **v2's acceptance makes the run's sample file a reference sample file** (`RefOk`): at `pass_of_accepts`'s hypotheses,
 its session sets up one table of `A.kd` units. -/
 theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
@@ -223,11 +223,11 @@ theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
     List.size_toArray]
   exact drawn_length A hdu
 
-/-- **v2's acceptance keeps the run's draw file**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s
-and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose draw
-file the blobs show (`Shows`) and whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half), where the run's
-draw file and `o`'s partition object and registered file are each under `2^64` bytes, the draw file round keeps the
-run's draw file (`drawOk`): it proves the units the draw rounds' coins draw, its session sets up one table of `A.kd`
+/-- **v2's acceptance keeps the run's sample file**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s
+and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose sample
+file the blobs show (`Shows`) and whose sample rounds' coins begin with `ξ` (`LiveCoins`' first half), where the run's
+sample file and `o`'s partition object and registered file are each under `2^64` bytes, the sample file round keeps the
+run's sample file (`drawOk`): it proves the units the sample rounds' coins sample, its session sets up one table of `A.kd`
 units (`refOk_of_accepts`), so it has the statement's numbers, and its session's statement fits its length words
 (`fits_of_accepts`). -/
 theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneStageZk.Params}
@@ -235,7 +235,7 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.On
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen

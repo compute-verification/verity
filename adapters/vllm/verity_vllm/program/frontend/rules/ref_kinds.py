@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from verity.circuits.defs import Builder, CompositeDefinition
 from verity.circuits.refs import Coll
-from verity.definitions.registry import prims as P
 from verity.circuits.types import Array, Value
+from verity.definitions.registry import prims as P
 
 F32 = Value(32)
 BF16 = Value(16)

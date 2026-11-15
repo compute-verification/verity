@@ -5,15 +5,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
-from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity.circuits.evaluation import evaluate
+from verity.circuits import word as W
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import fp8
 from verity.definitions.registry import prims as P
+
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions import word as W
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 K, N = 32, 4
 DOT = BlackwellE4m3QmmaDot32

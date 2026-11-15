@@ -13,6 +13,8 @@ from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
 
+__all__ = ["manifest_epoch", "session_head"]
+
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt execution phase's
 #: execution phase root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's
 #: secret
@@ -34,7 +36,7 @@ def manifest_schema(man: dict, recorded: bool = False) -> str:
     if schema == CC.MANIFEST_RECORDED and not recorded:
         raise DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded pass "
                           "reads it")
-    if schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
+    if not isinstance(schema, str) or schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise DomainError(f"schema {schema!r}, not {CC.MANIFEST_SCHEMA}" + (f" or {CC.MANIFEST_RECORDED}" if recorded else ""))
     return schema
 

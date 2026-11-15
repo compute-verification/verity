@@ -4,16 +4,35 @@ from __future__ import annotations
 
 from collections import deque
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.protocols.remote_bandwidth.binder import (  # noqa: E402
-    Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
+from verity.protocols.poub.verifier import audit, codec, memory_map
+from verity.protocols.poub.verifier import receipts as rb
+
+from verity_vllm.protocols.remote_bandwidth.binder import (
+    KERNEL_BLOCK_SIZES,
+    Binder,
+    Every,
+    Inbox,
+    PagedBacking,
+    TorchBacking,
+    page_layout,
+    storage_bytes,
 )
-from verity_vllm.protocols.remote_bandwidth.interface import Append  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.interface import Append, WindowRecord
+from verity_vllm.protocols.remote_bandwidth.registry import (
+    NodeMemory,
+    RemoteBandwidthReceipt,
+    chain,
+)
+from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 
@@ -81,7 +100,7 @@ def runner(shared: bool = False, interleaved: bool = False):
     else:
         caches = [torch.zeros(2, PAGES, SLOTS, HEADS, DIM, dtype=torch.bfloat16) for _ in range(3)]
     return SimpleNamespace(model=model, kv_caches=caches, cache_config=SimpleNamespace(block_size=SLOTS),
-                           _kernel_block_sizes=[SLOTS])
+                           kernel_block_sizes=[SLOTS])
 
 
 def test_a_layer_of_a_shared_storage_reads_as_its_own_pages():
@@ -110,18 +129,32 @@ def test_registration_from_a_runner(shared, interleaved):
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
-def test_a_registered_tensor_moved_or_reshaped_since_registration_is_named():
-    """`Binder.moved`: an in-place reader holds each registered tensor's device address, so a parameter whose data
-    is reallocated, or a KV cache the runner rebinds, is named; one left where it was is not."""
-    s, r = NodeMemory(), runner()
-    b = Binder(s, block_bytes=1024)
-    b.on_load(r)
+@pytest.mark.parametrize("name", KERNEL_BLOCK_SIZES)
+def test_a_kernel_block_size_other_than_the_managers_is_refused(name):
+    """Under either runner's name for them.  vLLM gives a cache group whose backend doesn't take the manager's block size
+    a kernel block size that divides it, and the pages registered here are the manager's; the same runner with the
+    manager's size under that name registers."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    del r.kernel_block_sizes
+    setattr(r, name, [SLOTS, SLOTS // 2])
+    with pytest.raises(NotImplementedError, match=rf"kernel block sizes \[{SLOTS}, {SLOTS // 2}\] other than the manager's {SLOTS}$"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
+    setattr(r, name, [SLOTS])
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    assert b.moved() == []
-    w = r.model[0].weight
-    w.data = w.data.clone()
-    r.kv_caches[2] = r.kv_caches[2].clone()
-    assert b.moved() == ["0.weight", "kv[2]"]
+    assert b.stats()["bytes_by_kind"]["kv"] == 3 * 2 * PAGES * 2048
+
+
+@pytest.mark.parametrize("named", [{}, {"kernel_block_sizes": None}, {"_kernel_block_sizes": []}])
+def test_a_runner_that_names_no_kernel_block_sizes_is_refused(named):
+    """A runner with neither name, or with one that holds no size, is refused, by a message that says both names: it is
+    never taken to use the manager's block size."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    del r.kernel_block_sizes
+    vars(r).update(named)
+    with pytest.raises(RuntimeError, match=r"names no kernel block sizes \(kernel_block_sizes or _kernel_block_sizes\)"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
 
 
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
@@ -179,7 +212,6 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
 
 
 def memory_map_lines(m) -> list:
-    from verity.protocols.poub.verifier import memory_map
     return list(memory_map.parse(m.text().splitlines(keepends=True))[1])
 
 
@@ -221,8 +253,8 @@ EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNames
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
-    from verity_vllm.protocols.remote_bandwidth.registry import chain
-    s, recs = NodeMemory(), []
+    s = NodeMemory()
+    recs: list[WindowRecord] = []
     sigma = [bytes([t]) * 32 for t in range(3)]
     b = Binder(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
                reader=lambda segments: b"\x01" * 64)
@@ -242,15 +274,18 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
 def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_registration():
     """The verifier's message ends the window at the next pass's start, however many passes it held; chal_0's window
     chains from the registration digest the binder was given."""
-    from verity.protocols.poub.verifier import receipts as rb
-    s, recs, inbox = NodeMemory(), [], Inbox()
+    s, inbox = NodeMemory(), Inbox()
+    recs: list[WindowRecord] = []
     digest = bytes(range(64))
     b = Binder(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
                reader=lambda segments: b"\x02" * 64)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    step = lambda: b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
+    def step() -> None:
+        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
     step()
     assert s._open_pass.seed is None
     sigma = [bytes([t + 7]) * 32 for t in range(2)]
@@ -274,8 +309,6 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     that (a finished request's, in `update_from_output`) frees its appended blocks at the same step, whose line closes
     when the next step opens, and leaves its untouched filler resident; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
     same."""
-    from verity.protocols.poub.verifier import codec, memory_map
-
     s = NodeMemory()
     b = Binder(s, passes=passes)
     r = runner()
@@ -283,7 +316,10 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     m = s.record_memory_map(registration=bytes(range(64)))
-    open_step = lambda: s._open_pass and s._open_pass.step
+
+    def open_step():
+        return s._open_pass and s._open_pass.step
+
     page = Block(1)
     page.ref_cnt = 1
     s.kv_alloc([1, 2])
@@ -310,12 +346,8 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     """Each receipt bound to the tile output before its block (`NoiseTiles`, PoUW's stub), under the driver's own
     receipt: the pass's root is the driver's `Prover`'s over the same blocks, and an opening, made after the next pass,
     verifies with the tile's z."""
-    from verity.protocols.poub.verifier import audit
-    from verity.protocols.poub.verifier import receipts as rb
-    from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt
-    from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
-
-    s, recs, tiles = NodeMemory(salt_key=bytes(32)), [], audit.NoiseTiles()
+    s, tiles = NodeMemory(salt_key=bytes(32)), audit.NoiseTiles()
+    recs: list[WindowRecord] = []
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
     assert isinstance(b.receipt, RemoteBandwidthReceipt)
     r = runner()

@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.pipeline import global_program as gp
 from tests.pipeline.test_global_program_regress import _derived_dir, _manifest
+from verity_vllm.pipeline import global_program as gp
 from verity_vllm.pipeline import layout as BP
 
 

@@ -34,6 +34,9 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+#: what ../opcode_probe/sm89/census.py reads, and the command
+__all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main"]
+
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
 REF = "imma_s8_m16n8k32"
 NOISE = 0.02
@@ -271,7 +274,7 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         rows = {}
         # JI3e is sm_120's; on another target its loads say nothing
         for row, (am, ao) in (JI3E.items() if arch == 120 else ()):
-            def load(p, am=am, ao=ao):
+            def load(p: dict, am: float = am, ao: float = ao) -> float:
                 return (am + ao * p["ops_per_mma"]) / p["cycles_per_mma"]
             w = max(pts, key=load)
             rows[row] = {"load": load(w), "at": f"{w['mode']} R={w['R']}", "over": load(w) > 1 - NOISE}
@@ -295,13 +298,16 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
 
 
 def render(summary: dict) -> str:
-    lines = ["| form | SASS | slots | alone SMSP-cycles a MMA | words/SM/clk | a (issue-cycles a MMA) | a: IADD3+FFMA / "
-             "IADD3 | a a slot | vs IMMA s8 k32 | worst JI3e_0 / _1 / _2 load |",
+    lines = [("| form | SASS | slots | alone SMSP-cycles a MMA | words/SM/clk | a (issue-cycles a MMA) | a: IADD3+FFMA / "
+              "IADD3 | a a slot | vs IMMA s8 k32 | worst JI3e_0 / _1 / _2 load |"),
              "|---|---|---|---|---|---|---|---|---|---|"]
+
+    def f(v: float | None, d: int = 3) -> str:
+        return "–" if v is None else f"{v:.{d}f}"
+
     for form, s in summary.items():
         if form == "lane_op_alone":
             continue
-        f = lambda v, d=3: "–" if v is None else f"{v:.{d}f}"
         lines.append(f"| {form} | {', '.join(s['mma_ops'])} | {s['slots']:.0f} | {f(s['alone_smsp_cycles_per_mma'], 2)} | "
                      f"{f(s.get('words_per_sm_clk'), 2)} | {f(s['a'])} | "
                      + " / ".join(f(v) for v in s.get("a_by_lane", {}).values()) + " | "

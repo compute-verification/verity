@@ -4,8 +4,10 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "a replay re-runs its replay block's whole batch from the block's edge state in the served batch layout, at 0.97-1.02x serving's busy GPU-seconds (measured on Moonlight at 1x H200 and on GLM-5.3 at TP8, mid-traffic); GLM-5.3 replays bit-exact at TP8 with the deterministic DSA top-k, so a sampled request costs its replay block's whole batch unless kernels are batch-invariant",
+ "source": "a replay re-runs its replay block's whole batch from the block's edge state in the served batch layout; the factor is Moonlight's at 1x H200, mid-traffic: three replays at 0.97x, 1.02x and 1.00x serving's busy GPU-seconds over the same steps; GLM-5.3's busy GPU-seconds are not measured: at TP8, mid-traffic, its replay of 226 served steps (329 requests, 50,517 tokens) took 42.4 s against 49.9 s served, 0.85x in wall seconds on the same eight GPUs, bit-exact with the deterministic DSA top-k, so a sampled request costs its replay block's whole batch unless kernels are batch-invariant",
  "runs": [
+  "r20261107-072949-42ae",
+  "r20261107-094339-06fd",
   "r20261107-125416-f460"
  ],
  "owner": "@proofs",

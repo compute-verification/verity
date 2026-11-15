@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 #: an instruction line: its address, an optional guard predicate, the dotted opcode and its operands up to the `;`
@@ -33,7 +34,7 @@ def family(arch: str) -> str:
     return f"sm_{m.group(1)}" if m else arch
 
 
-def count(lines, source: str, only: str | None = None) -> dict:
+def count(lines: Iterable[str], source: str, only: str | None = None) -> dict:
     """Each architecture's functions, instructions and dotted opcodes in a listing; with `only`, that architecture's
     sections alone (cuobjdump's `-arch` filter may also pass a sibling's)."""
     archs: dict[str, dict] = {}

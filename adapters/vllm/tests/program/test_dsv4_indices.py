@@ -7,7 +7,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
@@ -118,7 +117,7 @@ def test_the_ratio_128_prefill_row_is_the_short_context_fill(K):
                          ids=["ratio-3", "ratio-1", "topk-0", "window-0", "narrow", "wide"])
 def test_bad_statics_are_refused_by_name(kw):
     with pytest.raises(ValueError, match="Dsv4CombineTopkSwa"):
-        bind(X.Dsv4CombineTopkSwa, **kw).body
+        _ = bind(X.Dsv4CombineTopkSwa, **kw).body
 
 
 # --- the Boolean Definition ---------------------------------------------------------------------------------------------------------

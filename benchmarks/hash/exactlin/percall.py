@@ -6,7 +6,7 @@ sums don't depend on the tile, and the epilogue is the same per element.  The re
 its reduction configs are this process's own: the op changes Inductor's metadata around it (tiling scores, byte estimates,
 a buffer made in place), which keys Inductor's autotune cache, so the arm times its reductions afresh, and the fused add +
 RMSNorm + int8 quant kernel's two configs (R0_BLOCK 4096 and 1024, a near tie) sum in another order.  Its tokens equal
-stock's where both processes pick alike (sbench gates them; `percall_diag.py` pins the picks).
+stock's where both processes pick alike (sbench gates them).
 `CALLS` counts the op's calls by (M, N), so a run shows which M the heuristic saw."""
 from __future__ import annotations
 

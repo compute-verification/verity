@@ -8,7 +8,7 @@ imported its module.  A reader of Definitions beyond the registry names their pa
 from __future__ import annotations
 
 #: the packages `load` imports, by scope
-SCOPES = {"registry": "verity.definitions.registry", "ops": "verity.definitions.ops"}
+SCOPES = {"registry": "verity.definitions.registry", "ops": "verity.circuits.ops"}
 _LOADED: dict[str, list[str]] = {}
 
 

@@ -42,13 +42,14 @@ def summarize(d: str, rc: int) -> dict:
     """The pre-P5 `commit_summary.json` derivation (READER; nothing writes this file any more).  Every field is read from
     `<d>/commit.log` (first line: the commit_delta command line), `<d>/commit/summary.json` and `<d>/commit/runs.jsonl`."""
     S = f"{d}/commit/summary.json"
-    s = json.load(open(S)) if os.path.exists(S) else {}
+    s = resolver.read_json(S) if os.path.exists(S) else {}
     runs = []
     if os.path.exists(f"{d}/commit/runs.jsonl"):
-        runs = [json.loads(l) for l in open(f"{d}/commit/runs.jsonl") if l.strip()]
+        with open(f"{d}/commit/runs.jsonl") as f:
+            runs = [json.loads(line) for line in f if line.strip()]
     ctl = [r for r in runs if r.get("arm") == "control" or r.get("committer") in (None, "control")]
     trt = [r for r in runs if r not in ctl]
-    out = {"rc": rc, "summary_keys": list(s)[:40], "n_runs": len(runs), "n_control": len(ctl), "n_treatment": len(trt),
+    out: dict = {"rc": rc, "summary_keys": list(s)[:40], "n_runs": len(runs), "n_control": len(ctl), "n_treatment": len(trt),
            "delta_wall_mean": s.get("delta_wall_mean"), "delta_wall": s.get("delta_wall"),
            "openings": [_g(r, "openings_verified", "openings_ok") for r in trt], "tokens_equal": [_g(r, "tokens_equal", "tokens_equal_ref") for r in trt],
            "backlog": [_g(r, "backlog_max", "backlog") for r in trt], "run_root": [(_g(r, "run_root", "root") or (r.get("commit") or {}).get("run_root") or "")[:16] for r in trt],
@@ -57,7 +58,8 @@ def summarize(d: str, rc: int) -> dict:
            "treatment_keys": list(trt[0])[:60] if trt else []}
     cmd = None
     if os.path.exists(f"{d}/commit.log"):
-        first = open(f"{d}/commit.log", encoding="utf-8", errors="replace").readline().strip()
+        with open(f"{d}/commit.log", encoding="utf-8", errors="replace") as f:
+            first = f.readline().strip()
         if first.startswith("$ "):
             cmd = first[2:]
     out["cmd"] = cmd
@@ -84,7 +86,7 @@ def summarize(d: str, rc: int) -> dict:
         for k, v in re.findall(r"--engine-arg\s+([A-Za-z_]+)=([^\s]+)", cmd):
             try:
                 es[k] = json.loads(v)
-            except Exception:
+            except ValueError:
                 es[k] = v
         m = re.search(r"--max-num-seqs\s+(\d+)", cmd)
         if m:
@@ -144,11 +146,11 @@ def expected(row: resolver.Row) -> dict:
 def actual(row: resolver.Row) -> dict:
     croot = row.candidate_root()
     if croot is not None and (croot / "commit_summary.json").is_file():       # a pre-P5 candidate record
-        v = json.load(open(croot / "commit" / "verdict.json")) if (croot / "commit" / "verdict.json").is_file() else None
-        return dict(_lift(json.load(open(croot / "commit_summary.json")), v), source="candidate")
+        v = resolver.read_json(croot / "commit" / "verdict.json") if (croot / "commit" / "verdict.json").is_file() else None
+        return dict(_lift(resolver.read_json(croot / "commit_summary.json"), v), source="candidate")
     if croot is not None and (croot / "commit" / "summary.json").is_file():   # a post-flip candidate: no summary file; read its evidence
-        vr = json.load(open(croot / "verdict.json")) if (croot / "verdict.json").is_file() else {}
-        v = json.load(open(croot / "commit" / "verdict.json")) if (croot / "commit" / "verdict.json").is_file() else None
+        vr = resolver.read_json(croot / "verdict.json") if (croot / "verdict.json").is_file() else {}
+        v = resolver.read_json(croot / "commit" / "verdict.json") if (croot / "commit" / "verdict.json").is_file() else None
         return dict(_lift(summarize(str(croot), _rc(vr)), v), source="candidate")
     if _post_flip(row):                                     # a post-flip reference row: the same reader over its own evidence
         row_dir = row.path("commit/summary.json").parents[1]

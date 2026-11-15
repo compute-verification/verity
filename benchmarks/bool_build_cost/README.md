@@ -8,7 +8,7 @@ calls them). For each of the two, word and Boolean (`--ir`), it measures:
   workload's does. It records the bytes the Program digest hashes (`codec.descriptor_size`), the digest, and the largest Definitions
   and families.
 - `rules`: the `Q_word_v1{16,32}` proof-block rule of every Definition under them, scheduled as the manifest's prefetch schedules them
-  (`verity.definitions.word.prefetch`, by depth, largest first), timed per Definition in its worker. It records the verdict and
+  (`verity.circuits.word.prefetch`, by depth, largest first), timed per Definition in its worker. It records the verdict and
   a digest of each rule.
 
 The root body of a workload's Program, with its KV-cache references, is not in this Program. `rules-<ir>.jsonl` gets one line per
@@ -22,3 +22,9 @@ uv run benchmarks/bool_build_cost/run.py --workload qwen3-06b --jobs 16 --out DI
 ~~~
 
 `--t 1,52,65` keeps only the attention specializations of those key lengths. `--part descriptor` is light enough for a VM.
+
+## Interface
+
+- **Provides:** `run.py`, a command, and the result it writes under `--out`.
+- **Loaded by:** nothing.
+- **Loads:** `verity.circuits`, `verity.definitions`, and the vLLM integration's `verity_vllm.query.program_view`.

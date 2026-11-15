@@ -79,10 +79,10 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
 @pytest.mark.slow
 def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(catalog):
-    """The guard does not visit an operation (`verity.definitions.circuits.operations`), so a table an operation reached would be hidden: every
+    """The guard does not visit an operation (`verity.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
-    from verity.definitions.circuits import constants as K
-    from verity.definitions.circuits import operations as O
+    from verity.circuits import constants as K
+    from verity.circuits import operations as O
 
     suite = catalog.suite
     ops = [fn for fid in suite if catalog.reached[fid][0] in O.OPERATIONS and O.is_operation(fn := suite[fid])]
@@ -298,7 +298,7 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
     `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
     an id neither knows still raises."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     real = W.specialization
 
@@ -590,8 +590,8 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
 def _wide_gemm():
     """`Gemm_v2` at K=32, N=64, with an input budget its weight's 2,048 leaves are over and 32 vectors of its x fit in."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
-    from verity.definitions.ops import prims as P
+    from verity.circuits.ops import gemm as G
+    from verity.circuits.ops import prims as P
 
     return bind(G.Gemm, K=32, N=64, DOT=P.AmpereBF16TcDot16), dataclasses.replace(OPTS, input_budget=1024, vectors=40)
 
@@ -651,7 +651,7 @@ def _wide_experts(E: int):
     """`MoeExpertFp8Gemm_v1` over E experts at the sidecar's small statics, with an input budget its expert stack's E N K leaves
     are over and 8 vectors of its other parameters fit in."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity.definitions.registry import fp8_moe_experts as X
 
     return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
@@ -1021,7 +1021,7 @@ def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
     from verity.circuits.partition import CutVerdict
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     real = W.units
 
@@ -1043,7 +1043,7 @@ def test_the_partition_cuts_a_call_once(monkeypatch):
     `word.Graph` of it, and the record and failures of cutting it twice; a Definition cut member by member (`word.separable`) is
     cut whole once, by `partition` alone."""
     from verity.circuits.types import Value
-    from verity.definitions import word as W
+    from verity.circuits import word as W
     from verity.definitions.registry import prims as P
 
     real_rule, cuts = W.unit_rule, []
@@ -1390,13 +1390,13 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
 
 
 def test_a_boolean_constant_is_checked_on_its_one_instance():
-    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.definitions.ops.boolean.scalar.const_word`) takes no operands: its lowering
+    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
     and its word view each compare its one vector, every bit, so a constant one bit off its word constant is named."""
     from verity.circuits import boolean as BL
     from verity.circuits.boolean.forms import const_bits
     from verity.circuits.boolean.trace import definition
-    from verity.definitions.ops import prims as MP
-    from verity.definitions.ops.boolean import scalar as BS
+    from verity.circuits.ops import prims as MP
+    from verity.circuits.ops.boolean import scalar as BS
     from verity.circuits.types import Array
 
     e = CK.check_definition(BS.const_word(32, 0x3727C5AC), OPTS, pins=PINS)
@@ -1630,7 +1630,7 @@ def _whole_boolean(name, build):
     from verity.circuits.boolean.trace import definition
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity.definitions.ops.boolean import scalar as SB
+    from verity.circuits.ops.boolean import scalar as SB
 
     t = resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
     F = CK.Findings()
@@ -1718,7 +1718,7 @@ print(json.dumps(rep["cache"]))
 
 
 def test_a_check_that_raised_or_read_another_trees_module_is_not_stored(tmp_path):
-    """A check that raised is no verdict (T11: an ImportError from a tree a concurrent run was rewriting, replayed on the next
+    """A check that raised is no verdict (such as an ImportError from a tree a concurrent run was rewriting, replayed on the next
     tree); a module imported from outside the tree is a read no key holds, so that result and later ones are not stored."""
     import subprocess
     import sys
@@ -1775,9 +1775,11 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
     CC._MEMO.clear()
 
 
-def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
-    """Two checks on one node that store the same entry don't share its temporary file, where the second's rename would find
-    it gone (FileNotFoundError) and fail the whole check."""
+@pytest.mark.parametrize("racing", ["record", "entry"])
+def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch, racing):
+    """Two checks on one node that store the same entry, and so the same read records, don't share a temporary file, where the
+    second's rename would find it gone (FileNotFoundError) and fail the whole check: the other writer stores it whole between
+    the first's write of a read record, or of the entry, and its rename."""
     import subprocess
 
     from circuit_check import cache as CC
@@ -1790,16 +1792,45 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
     CC._MEMO.clear()
     replace, inner = os.replace, []
 
-    def racing(src, dst):
-        if not inner:                                                   # the other writer stores the same entry in between
+    def other(src, dst):
+        if not inner and (CC.READS in Path(dst).parts) == (racing == "record"):
             inner.append(None)
             inner[0] = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
         replace(src, dst)
 
-    monkeypatch.setattr(CC.os, "replace", racing)
+    monkeypatch.setattr(CC.os, "replace", other)
     eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
     assert eid and inner == [eid]
-    assert [p.name for p in (tmp_path / "cache").rglob("*") if p.is_file()] == [f"{eid}.json"]
+    assert [p.name for p in (tmp_path / "cache").glob("*/*/*.json")] == [f"{eid}.json"]
+    assert [p for p in (tmp_path / "cache").rglob("*") if p.is_file() and p.suffix != ".json"] == []
+    CC._RECORDS.clear()
+    assert CC.read(next((tmp_path / "cache").glob("*/*/*.json")))["reads"] == CC._digests(tmp_path, got)
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
+def test_an_entry_in_the_old_form_is_a_miss(tmp_path):
+    """Every key holds the cache's schema (`cache.key`), so an entry stored in the old form, its reads whole in it, is under
+    another key and never looked up; one under a key of the new form anyway is a miss, not a failure, and the run stores the
+    entry again."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt"], "dirs": [], "probes": [], "libs": []}
+    k, rep = {"version": "v", "request": {}}, {"failures": [], "warnings": []}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    assert CC.key({"target": ["definition", "X_v1"]})["schema"] == CC.SCHEMA
+    old = CC._dir(tmp_path / "cache", k) / "old.json"
+    old.parent.mkdir(parents=True)
+    old.write_text(json.dumps({"key": k, "reads": CC._digests(tmp_path, got), "report": rep}))
+    assert CC.lookup(tmp_path / "cache", k, tmp_path) is None and CC.recorded(tmp_path / "cache", k, tmp_path) is None
+    assert f"{old}: KeyError: 'own'; counted as no entry" in CC.unread()
+    eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
+    assert CC.lookup(tmp_path / "cache", k, tmp_path) == (rep, eid)
     CC._VISIBLE.clear()
     CC._MEMO.clear()
 

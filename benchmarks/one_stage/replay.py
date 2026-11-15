@@ -507,11 +507,15 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
            schemas: dict | None = None) -> dict:
     """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
-    when given."""
+    when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
+    function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
+    registered."""
     return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
-            **({"outputs": outputs} if outputs is not None else {}), **({"schemas": schemas} if schemas is not None else {})}
+            **({"parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]} if registered is not None else {}),
+            **({"outputs": outputs} if outputs is not None else {}),
+            **({"row_schemas": schemas} if schemas is not None else {})}
 
 
 def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None) -> dict:
@@ -578,7 +582,7 @@ def python(c: Case) -> dict:
         R.PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-                    schemas=p.get("schemas")).codes
+                    schemas=p.get("row_schemas")).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:
@@ -1993,7 +1997,7 @@ def a6(run: Run) -> Iterator[Case]:
     domain over its member's set (A6's row layout: x row-seg, w and o0 row-v2), and the leaf layer the SHA-512 of the
     map from member to its public file's SHA-512."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as OG
+    from verity.circuits.ops import gemm as OG
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     base = "out/a6"
     a = run.json(f"{base}/audit.json")
@@ -2122,7 +2126,7 @@ def a7(run: Run) -> Iterator[Case]:
     (`check3/`) is outside (`A7_CHECK3`)."""
     from types import SimpleNamespace
 
-    from verity.definitions.circuits import requirement_units as RU
+    from verity.circuits import requirement_units as RU
     from verity.circuits.defs import bind
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     base, tag = "out/a7", "verity/flock-circuit/binding/v2"

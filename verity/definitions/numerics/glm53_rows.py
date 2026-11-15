@@ -288,7 +288,7 @@ _EXPERT_ARG = {"MoeExpertFp8Gemm_v1": 2, "MoeExpertFp8GemmW_v1": 2}
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds (the served statics are too wide for the reference)."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.definitions.registry import b1, boolean_rope, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
     from verity.definitions.registry import ll_bf16, moe, sparse_mla_split
     hop = hopper.HopperBF16WgmmaDot16

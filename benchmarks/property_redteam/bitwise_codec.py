@@ -16,13 +16,13 @@ payload byte is registered, so its table reads pay nothing.
 
 The circuit computes the codec with the field's arithmetic built from those gates (ripple-carry adders, the
 conditional subtraction of `p`, double-and-add products, square-and-multiply for `ρ`'s exponent), and every word's tweak
-from word 1's, `t_i = i·t_1 mod p` (`Draw.tweak`: `t_i = τ·i mod p`, so `t_1 = τ`). It reads the coin slots
+from word 1's, `t_i = i·t_1 mod p` (`Sample.tweak`: `t_i = τ·i mod p`, so `t_1 = τ`). It reads the coin slots
 `(const, r, l)`, `(mask, l)` and `(tweak, 1, l)` once: `8·(k + 2)·n/8` units for the whole block, whatever its number
 of words. At p1024 and `k = 3` that is 5,120 units, so `EncodeChainHardness p1024 3 B E ε`'s conclusion
 `q·E·(n − 1) ≤ budgeted·(n − 1)` fails at every `q > 5120/E`, for every `B` (there is no budgeted gate) and every
 `ε < 1` (it is right on every sample). The stacking property then capped no MAC (`Property` capped rounding,
 compare-select, gather and fold units; property/v1's census reads its MACs as informational), so these circuits also
-satisfied it at any caps that allowed the key's gather units.
+satisfied it at any bounds that allowed the key's gather units.
 
 The cost has moved to MACs: one a gate-level AND. A field product here is ≈ 17n² of them (measured: 36,214 MACs a
 word at n = 8 and 336,688 at n = 16, three rounds), so at p1024 a word, ≈ 3 · 2,040 products (`(p+1)/4`'s 1,021
@@ -30,7 +30,7 @@ squarings and 1,018 multiplications a root), is ≈ 1.1·10^11 MACs (modeled fro
 
 **Nonlinear units.** The model's only free operations are now linear maps whose coefficients are fixed before the
 coins, so every product of two values that both depend on run or coin data is a data product, one unit whatever its
-operands' ranges (`dataProducts`, `nonlinear`), and `Property` caps the data products per certified byte read. Every
+operands' ranges (`dataProducts`, `nonlinear`), and `Property` bounds the data products per certified byte read. Every
 AND here on two run-time bits is a data product, so the block costs its key's 40 units and 36,152 data products a word
 at n = 8 (`Builder.nonlinear_units`), and a squaring ≈ 17n² of them; `EncodeChainHardness` is replaced by
 `SquaringFloor` and `ChainSum`, priced in nonlinear units (`test_bitwise_codec.py`).
@@ -185,9 +185,9 @@ def encode_block(n: int, c: int, rounds: int, words: list[int]) -> tuple[Builder
 
     def read(slot: tuple, binding: str) -> list[int]:
         out = []
-        for l in range(L):
-            g = b.inp(slot + (l,), 0, 255, binding=binding)
-            slots[slot + (l,)] = g
+        for ell in range(L):
+            g = b.inp(slot + (ell,), 0, 255, binding=binding)
+            slots[slot + (ell,)] = g
             out += B.byte_bits(g)
         return out
 
@@ -202,19 +202,19 @@ def encode_block(n: int, c: int, rounds: int, words: list[int]) -> tuple[Builder
             if r:
                 x = F.sigma(x, mask)
             x = F.rho(F.add_mod(F.add_mod(x, cs[r]), t))
-        outs[i] = [B.value(x[8 * l:8 * l + 8], 1 if l == 0 else 0) for l in range(L)]
+        outs[i] = [B.value(x[8 * ell:8 * ell + 8], 1 if ell == 0 else 0) for ell in range(L)]
     return b, outs, slots
 
 
-def draw_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, payload: dict[int, int]) -> dict:
+def sample_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, payload: dict[int, int]) -> dict:
     """The slot values of a sample `(cs, mask, τ)` with payload words `payload` (`Slot.value`)."""
     p, L = (1 << n) - c, n // 8
     x: dict = {}
-    for l in range(L):
-        x[("mask", l)] = mask >> (8 * l) & 255
-        x[("tweak", 1, l)] = tau % p >> (8 * l) & 255
+    for ell in range(L):
+        x[("mask", ell)] = mask >> (8 * ell) & 255
+        x[("tweak", 1, ell)] = tau % p >> (8 * ell) & 255
         for r, cr in enumerate(cs):
-            x[("const", r, l)] = cr >> (8 * l) & 255
+            x[("const", r, ell)] = cr >> (8 * ell) & 255
         for i, m in payload.items():
-            x[("payload", i, l)] = m >> (8 * l) & 255
+            x[("payload", i, ell)] = m >> (8 * ell) & 255
     return x

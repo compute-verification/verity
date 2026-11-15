@@ -26,7 +26,7 @@ lottery    uint256LE(J) <= τ·h·w·k   (`Lottery`, ``verity/protocols/pouw/cle
 
 **Devices.**  ``b200`` (Pearl's: accumulation groups of 32 exact products plus the FP32 carry, 25 fractional bits below
 the group's largest exponent, truncated, δ = 1/2, W = 25) is ported exactly.  ``ada`` is our extension for the RTX 4090,
-not in Pearl's whitelist: its matmul is Verity's pinned ``sm89.mma.m16n8k32.e4m3`` model (`verity.definitions.silicon`, groups (16, 16),
+not in Pearl's whitelist: its matmul is Verity's pinned ``sm89.mma.m16n8k32.e4m3`` model (`verity.circuits.silicon`, groups (16, 16),
 a 14-bit adder), δ = 1 and W = 13 as for Pearl's H100, and its census reads one magnitude per cell, as for B200.  Pearl's
 ``h100`` (a reset-and-promote replay over 128-product windows) is not ported.
 
@@ -57,7 +57,7 @@ from fractions import Fraction
 from functools import lru_cache
 
 from verity.commitments.crypto.blake3 import blake3, keyed
-from verity.definitions.silicon import models as tc_models
+from verity.circuits.silicon import models as tc_models
 
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 
@@ -616,7 +616,7 @@ def p_a(m: int) -> bytes:
 class PearlKW:
     """Pearl's certificate-v4 FP8 scheme on one device: ``ada`` for the RTX 4090 (the default), or Pearl's ``h100``, ``b200``."""
 
-    def __init__(self, device: str = "ada"):
+    def __init__(self, device: str = "ada") -> None:
         self.device = DEVICES[device]
         self.name = NAME
         #: the frame hash of the protocol's trees that replace Pearl's (`HASH_ID`): SHA-256, since its tile digests are
@@ -688,14 +688,14 @@ class PearlKW:
             if dead > EPS_IDLE * len(side.clean) * k:
                 return False
         for side in (ops.a, ops.b):
-            if any(dev.delta * bf16_to_f32(a) * bf16_to_f32(l) < SIGMA_MIN for a, l in zip(side.alpha, side.l2)):
+            if any(dev.delta * bf16_to_f32(a) * bf16_to_f32(l2) < SIGMA_MIN for a, l2 in zip(side.alpha, side.l2)):
                 return False
         try:
             self._replay(ops)
         except Reject:
             return False
-        lam_a = [[lam(dev, a, x, l) for x in row] for row, a, l in zip(ops.a.clean, ops.a.alpha, ops.a.l2)]
-        lam_b = [[lam(dev, a, x, l) for x in row] for row, a, l in zip(ops.b.clean, ops.b.alpha, ops.b.l2)]
+        lam_a = [[lam(dev, a, x, l2) for x in row] for row, a, l2 in zip(ops.a.clean, ops.a.alpha, ops.a.l2)]
+        lam_b = [[lam(dev, a, x, l2) for x in row] for row, a, l2 in zip(ops.b.clean, ops.b.alpha, ops.b.l2)]
         skippable = 0
         for i, la in enumerate(lam_a):
             for j, lb in enumerate(lam_b):
@@ -727,3 +727,10 @@ class PearlKW:
                 row.append((checked[i][j] - al * be2 * an - be * al2 * nbv - be * be2 * nn) / (al * al2))
             out.append(row)
         return out
+
+
+__all__ = ["ADA", "B200", "Built", "Device", "H100", "LANES", "NOISE_NORM", "Ops", "PATTERN", "PearlKW", "R", "Reject",
+           "SIGMA_MIN", "TILE", "WINDOW", "bf16_div", "bf16_fma", "bf16_mul", "bf16_of_fraction", "bf16_to_f32",
+           "budget", "device_dot", "exact_norms", "extract", "f32", "f32_bits", "f32_of_bits", "f32_to_bf16",
+           "f32_to_fp8", "fp10_row", "fp8_to_f32", "grid_exponent", "hash_labelled", "lam", "noisy_quantize",
+           "open_row", "parse_row", "replay", "sample_line", "skip"]

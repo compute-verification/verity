@@ -25,15 +25,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import Program, bind
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import composite
-from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity.definitions.registry import b1, lifted as L, moe, prims as P
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.prims import BF16, F32, I32
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1, moe
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.prims import BF16, F32, I32
 
 E, TOPK, VPT, K, N = 4, 2, 2, 16, 16
 BOT16, BOT32 = L.enc_bot(16), L.enc_bot(32)

@@ -77,7 +77,7 @@ def test_commit_ports_is_pinned(chunk: int, workers: int) -> None:
 
 
 def test_salts_are_rfc8439s_chacha20() -> None:
-    """A port's salts are RFC 8439's ChaCha20 stream under the window's key with the port's index as the nonce (12 bytes LE),
+    """Under a test's salt key a port's salts are RFC 8439's ChaCha20 stream with the port's index as the nonce (12 bytes LE),
     row i at offset 192 i: section 2.3.2's block 1, and the ``cryptography`` package's stream."""
     nonce = int.from_bytes(bytes.fromhex("000000090000004a00000000"), "little")
     assert SR.salts(KEY, nonce, 1)[64:128].hex() == (

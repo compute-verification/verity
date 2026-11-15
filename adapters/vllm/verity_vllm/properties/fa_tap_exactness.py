@@ -46,16 +46,25 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import numpy as np
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+from verity.definitions.registry import b1, dense, prims
 
-from verity_vllm.acquire.sources.hidden_source import KBLOCK_M, fa2_kblock_n, fa2_swapped, fa3_tile
+from verity_vllm.acquire.sources.hidden_source import (
+    KBLOCK_M,
+    fa2_kblock_n,
+    fa2_swapped,
+    fa3_tile,
+)
 from verity_vllm.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
-from verity_vllm.properties.record import digest_of, seal as seal_record
+from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import seal as seal_record
 
-
-SCHEMA = "verity-vllm/fa-tap-exactness/v1"
+SCHEMA = REGISTRY["fa_tap_exactness"].schema
 RECORD = "fa_tap_exactness.json"
 PAGE = 16
 #: an f32 NaN payload no tap word takes (the kernels write finite, -inf and +0 words)
@@ -193,7 +202,7 @@ def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, i
     w = np.zeros(layout.padded_words(), dtype=bool)
     S, P = w[o["S"]:o["P"]].reshape(HB, M, N), w[o["P"]:o["RP"]].reshape(HB, M, N)
     RP, ROW = w[o["RP"]:o["ROW"]].reshape(HB, M, N // 2), w[o["ROW"]:o["O"]].reshape(HB, M, NB, 8)
-    O, FIN = w[o["O"]:o["FIN"]].reshape(HB, M, NB, D), w[o["FIN"]:o["FIN"] + HB * M * 4].reshape(HB, M, 4)
+    OUT, FIN = w[o["O"]:o["FIN"]].reshape(HB, M, NB, D), w[o["FIN"]:o["FIN"] + HB * M * 4].reshape(HB, M, 4)
     MS = w[o["MS"]:o["total"]].reshape(HB, M, NB) if layout.ms and src & SRC_BITS["MS"] else None
     for slab, r, nbm in rows:
         cols = nbm * layout.BN
@@ -206,7 +215,7 @@ def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, i
         if src & SRC_BITS["ROW"]:
             ROW[slab, r, :nbm, [0, 1, 2, 4, 5, 6, 7] + ([ROW_GUARD_FIELD] if row3 else [])] = True
         if src & SRC_BITS["O"]:
-            O[slab, r, :nbm, :] = True
+            OUT[slab, r, :nbm, :] = True
         if src & SRC_BITS["FIN"]:
             FIN[slab, r, :] = True
         if MS is not None:
@@ -232,9 +241,6 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 
 def ir_guard(m: int) -> int:
     """The circuit's `GuardNegInfZero_v1(m)` by the reference evaluator."""
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.registry import prims
-
     return int(evaluate(prims.GuardNegInfZero, int(m))[0])
 
 
@@ -242,8 +248,6 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
     """ROW word 3 of a guarded-max build at every visited (slab, row, block): the circuit's `GuardNegInfZero_v1` of the entry's row_max (word 0)
     at every block after the row's first (the kernel visits blocks n_block_max - 1 .. 0), 0 at the first.  All words by the twin, and
     `ir_sample` of them (every distinct special row_max among them) by the reference evaluator."""
-    from verity.definitions.numerics.derived_rows import guard_neg_inf_zero
-
     R = _row_plane(np.asarray(words, dtype=np.uint32), layout)
     later: list[tuple[int, int, int]] = []
     first: list[tuple[int, int, int]] = []
@@ -274,17 +278,12 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
 def scale_log2_bits(c: dict[str, Any], D: int) -> int:
     """The f32 bits of the kernel's `scale_softmax_log2` for case `c` at head dim `D`, the circuit's constant: softmax_scale * log2(e), or
     softcap * log2(e) with a softcap."""
-    from verity.definitions.registry import b1, dense
-
     return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1.scale_log2_bits(D)
 
 
 def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
     """The circuit's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.registry import prims
-
     return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])
 
 
@@ -294,8 +293,6 @@ def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, 
     row_max (word 0, the running max after the block).  With `masked_from` (FA3 under `check-inf-per-iteration`) the guard applies only at
     blocks >= the row's value, as `AttnBlock_v4{CHECK}`.  All words by the twin, `ir_sample` of them (every distinct special row_max among
     them) by the reference evaluator; mismatches whose row_max is -inf are counted apart."""
-    from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
-
     w = np.asarray(words, dtype=np.uint32)
     R, o = _row_plane(w, layout), layout.offsets
     MS = w[o["MS"]:o["total"]].reshape(layout.HB, layout.M, layout.NB)

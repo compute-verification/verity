@@ -14,7 +14,7 @@ windows on one store.
 The model keeps the restriction proved by `RateAuditTensorSketchRank`: device memory, on-chip state, the side link and
 rebuilding deliver sectors whole and verbatim. A precomputed sketch table is not a device of this type.
 
-A session's devices may also be told an `a`-bit summary of what the prover chose (`SketchSummarySession`): one
+A session's devices may also be told an `a`-bit summary of what the prover chose (`SketchSummaryRun`): one
 session for each value of the summary, a pass told `s` running the devices and the pick of session `s`. A prover that
 steers its passes' layout knows the summary it steered by, and its devices may follow it.
 -/
@@ -101,38 +101,38 @@ def reads (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore N m)
 end SketchDeployedWindow
 
 /-- A causal session of `n` deployed sketch windows on one shared store. -/
-structure SketchDeployedSession (n P N m ρ h S L q ks G d : ℕ) where
+structure SketchDeployedRun (n P N m ρ h S L q ks G d : ℕ) where
   window : (w : Fin n) → ({v : Fin n // v < w} → SketchWindowCoins P N m ρ h ks G d) →
     SketchDeployedWindow P N m ρ h S L q ks G
 
-namespace SketchDeployedSession
+namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
 /-- Window `w` at the session's coins. -/
-def win (A : SketchDeployedSession n P N m ρ h S L q ks G d) (w : Fin n)
+def win (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin n)
     (ω : Fin n → SketchWindowCoins P N m ρ h ks G d) : SketchDeployedWindow P N m ρ h S L q ks G :=
   A.window w (fun v => ω v.1)
 
-end SketchDeployedSession
+end SketchDeployedRun
 
 /-- **A session whose devices are told an `a`-bit summary**: a deployed session for each value `s` of the summary
 (`session s`). A pass told `s` runs the devices and the pick of `session s`, so its device may follow everything the
-summary carries. With `a = 0` it is one `SketchDeployedSession`. -/
-structure SketchSummarySession (a n P N m ρ h S L q ks G d : ℕ) where
-  session : Bits a → SketchDeployedSession n P N m ρ h S L q ks G d
+summary carries. With `a = 0` it is one `SketchDeployedRun`. -/
+structure SketchSummaryRun (a n P N m ρ h S L q ks G d : ℕ) where
+  session : Bits a → SketchDeployedRun n P N m ρ h S L q ks G d
 
-namespace SketchSummarySession
+namespace SketchSummaryRun
 
 variable {a n P N m ρ h S L q ks G d : ℕ}
 
 /-- Window `w` at the session's coins `ω`, with pass `j` told `s j`: each pass runs the device and the pick of its
 summary's session. -/
-def win (A : SketchSummarySession a n P N m ρ h S L q ks G d) (w : Fin n)
+def win (A : SketchSummaryRun a n P N m ρ h S L q ks G d) (w : Fin n)
     (ω : Fin n → SketchWindowCoins P N m ρ h ks G d) (s : Fin P → Bits a) : SketchDeployedWindow P N m ρ h S L q ks G :=
   ⟨fun j => ((A.session (s j)).win w ω).device j, fun j => ((A.session (s j)).win w ω).pick j⟩
 
-end SketchSummarySession
+end SketchSummaryRun
 
 /-- The non-sampling shortfall of one pass, as a share of its `N·m·256` stored bits. -/
 noncomputable def gammaSketch (N m ρ S L X : ℕ) : ℝ :=

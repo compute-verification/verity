@@ -5,11 +5,15 @@
 Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says what failed and how to fix it:
 
   secrets     every name the role needs (`SECRETS`) and every name this VM injects ($CLOUD_AGENT_INJECTED_SECRET_NAMES) is set;
-              a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named
+              a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named. On a VM that
+              injects secrets, an ok notes when no tmux server holds them, or the one that does has no kept session
+              (`secret_hint.server`), with the one command that starts that session: a note, never a finding of its own
   github      `gh auth status` exits 0
   git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
               accepts the credential git pushes with
-  notes-push  the same for the notes clone, through `notes_sync.remote_target` (RESEARCH_NOTES_TOKEN's helper when it is set)
+  notes-push  the same for the notes clone, through `notes_sync.remote_target`; it names the credential (`notes_sync.token_source`:
+              the GitHub broker's token on a Cursor agent, RESEARCH_NOTES_TOKEN where the broker gives none), and says when a
+              RESEARCH_NOTES_TOKEN set on an agent is no longer needed
   store       the evidence store's remote answers a HEAD of an absent key with "absent"; a 400, 401 or 403 is a refused credential
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
@@ -127,11 +131,13 @@ def needs(role: str) -> list[tuple[str, ...]]:
 
 
 def check_secrets(role: str) -> Check:
-    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n]
+    # the notes go through the GitHub broker: a VM that still injects the notes token needn't have it in its shell
+    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
     want = needs(role)
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
     missing = ["|".join(alts) for alts in want if not any(os.environ.get(n) for n in alts)]
+    held, kept = secret_hint.server() or (injected, True)       # nothing asked of a tmux server: nothing to say of one
     lost = [m for m in missing if any(n in injected for n in m.split("|"))]
     unset = [m for m in missing if m not in lost]
     if missing:
@@ -141,11 +147,23 @@ def check_secrets(role: str) -> Check:
                          f"server has {'it' if len(lost) == 1 else 'them'}: {secret_hint.FRESH_SHELL} (`tmux new-session`, then "
                          "`research doctor` there); if that shell lacks them too, the VM lost its secrets (an exec-daemon restart) "
                          "and a new agent VM gets them at boot")
+            if held is None:
+                fixes.append("no tmux server runs on this VM to take a lost secret back from: a shell that still has them starts "
+                             f"the kept session with `{secret_hint.START_KEPT}`")
         if unset:
             fixes.append(f"{', '.join(unset)}: add {'it' if len(unset) == 1 else 'them'} in {DASHBOARD}; a new agent VM gets them")
         return Check("secrets", FINDING, f"not set here: {', '.join(missing)}", "; ".join(fixes))
     took = [n for n in secret_hint.RECOVERED if os.environ.get(n)]
     detail = f"the {len(needs(role))} names the {role} role needs" + (f" and the {len(injected)} this VM injects" if injected else "") + " are set"
+    once = f"run `{secret_hint.START_KEPT}` once, from a shell that has the secrets, to start the session this VM keeps"
+    if held is None:
+        detail += f"; note: no tmux server holds them, so a shell that loses one has nowhere to take it back from: {once}, and a server with it"
+    elif not kept:
+        detail += (f"; note: the tmux server that holds them has no `{secret_hint.KEPT_SESSION}` session and ends with its last one, its "
+                   f"copy of them with it: {once}")
+    if lacks := [n for n in injected if held is not None and n not in held]:
+        detail += (f"; the tmux server lacks {len(lacks)} of them ({', '.join(lacks[:4])}{f' and {len(lacks) - 4} more' if len(lacks) > 4 else ''}), "
+                   "which a shell that loses them can't take back")
     if took:
         shown = ", ".join(took[:4]) + (f" and {len(took) - 4} more" if len(took) > 4 else "")
         detail += (f"; {len(took)} taken back from the tmux server because this shell had lost them ({shown}): run tools other than "
@@ -233,13 +251,15 @@ def check_notes_push() -> Check:
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
     opts, where = notes_sync.remote_target(root)
-    fix = ("the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access"
-           if os.environ.get(notes_sync.SOURCE_ENV) == "broker"
-           else f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): unset it to use the GitHub broker's token, or put a new "
-                f"one in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
-           else "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
-                f"{notes_sync.TOKEN_ENV}")
-    return push_probe("notes-push", root, opts, where, fix)
+    source, said = notes_sync.token_source()
+    fix = {"broker": "the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access",
+           "env": f"{notes_sync.TOKEN_ENV} was refused (expired or revoked), and the GitHub broker gave no token to use instead "
+                  f"({notes_sync.broker_why()}): on a Cursor agent run this again in a minute, since the broker's token needs no "
+                  "secret; where there is no Cursor identity, set a new one",
+           None: "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
+                 f"{notes_sync.TOKEN_ENV}"}[source]
+    c = push_probe("notes-push", root, opts, where, fix)
+    return Check(c.name, c.status, f"{c.detail}; the credential is {said}", c.fix)
 
 
 def check_store() -> Check:
@@ -280,8 +300,8 @@ def check_slack() -> Check:
     return Check("slack", OK, f"auth.test is ok ({api.via})")
 
 
-#: (what ssh says, what it means), the first that matches. No host-key failure: `research`'s ssh sets StrictHostKeyChecking=no
-#: (runpod.ssh_command), so ssh warns of a changed key and still connects with the research key.
+#: (what ssh says, what it means), the first that matches. No host-key failure: `research`'s ssh to an ssh machine checks no
+#: host key (runpod.ssh_command), so ssh warns of a changed key and still connects with the research key.
 SSH_FAILURES = (
     (re.compile(r"Permission denied|Too many authentication failures", re.I), "refused the key"),
     (re.compile(r"Could not resolve|timed out|Connection refused|No route to host|Network is unreachable|closed by remote|reset by peer",

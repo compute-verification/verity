@@ -59,3 +59,37 @@ def test_a_templated_stage_reaches_both_sides_and_the_verifier(tmp_path, monkeyp
     want = TMPL if templated else a0.STATEMENT_ID
     assert argv["verify"][argv["verify"].index("--statement") + 1] == want
     assert a0.firewall_env(st)["FC_FIREWALL_STATEMENT"] == want
+
+
+#: a stand-in for flock-tmpl-unit: appends its argv to ``calls`` and writes the placed unit at ``--out``
+PLACE = '''#!{python}
+import json, pathlib, sys
+args = sys.argv[1:]
+with open({calls!r}, "a") as f:
+    f.write(json.dumps(args) + "\\n")
+pathlib.Path(args[args.index("--out") + 1]).write_text("ORDER\\n")
+'''
+
+
+def test_templated_places_a_templated_statements_unit_once_and_passes_a_flat_one(tmp_path):
+    """`a0.templated`: a templated statement's template section and layout mode go beside it for flock-tmpl-unit, once, and
+    its placed unit and statement are what a session and the verifier read; a flat statement adds neither, and a templated
+    one without flock-tmpl-unit is refused."""
+    from types import SimpleNamespace
+
+    from verity_flock import circuit as FC
+
+    calls, bin_ = tmp_path / "calls.jsonl", tmp_path / "flock-tmpl-unit"
+    bin_.write_text(PLACE.format(python=sys.executable, calls=str(calls)))
+    bin_.chmod(0o755)
+    st = SimpleNamespace(meta={"statement": TMPL, "layout": "iv/hybrid/4"},
+                         text=f"{FC.TMPL_FORMAT} v1\nMETA {{}}\n{FC.TMPL_SECTION} 2\ndef a\nend\nUNIT\n")
+    d = tmp_path / "stage"
+    assert a0.templated(SimpleNamespace(meta={"statement": a0.STATEMENT_ID}, text=""), d, None) == {}
+    with pytest.raises(SystemExit, match="--tmpl-unit-bin"):
+        a0.templated(st, d, None)
+    for _ in range(2):
+        assert a0.templated(st, d, str(bin_)) == {"statement": TMPL, "tmpl_unit": d / "unit.placed"}
+    assert (d / "unit.tmpl").read_text() == "def a\nend\n" and (d / "unit.layout").read_text() == "iv/hybrid/4"
+    assert [json.loads(x) for x in calls.read_text().splitlines()] == [
+        [str(d / "unit.tmpl"), "--layout", "iv/hybrid/4", "--out", str(d / "unit.placed")]]

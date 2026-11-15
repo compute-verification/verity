@@ -15,16 +15,16 @@ Messages here are whole words, so a message's byte length is a multiple of 8.
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 
 from . import words as W
 
-Half = Union[Coll, int]
+Half = Coll | int
 Pair = tuple[Half, Half]
 M32 = W.M32
 

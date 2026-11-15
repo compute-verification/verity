@@ -13,15 +13,15 @@ import re
 from collections import Counter
 
 import pytest
-
 from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
+from tests.program.predict.test_dsa_long_rows import _canonical
+from tests.program.predict.test_node import _first_layers
+from tests.program.predict.test_predict import GLM53, _row_phi
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible, _Launch
 from verity_vllm.program.predict.phi import Phi
-from tests.program.predict.test_dsa_long_rows import _canonical
-from tests.program.predict.test_node import _first_layers
-from tests.program.predict.test_predict import GLM53, _row_phi
 
 TOPK, NH, LAYERS, INDEXERS = 16, 8, 4, 3
 

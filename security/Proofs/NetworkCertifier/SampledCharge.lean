@@ -249,6 +249,59 @@ theorem encard_biUnion_le {α ι : Type} [DecidableEq ι] (s : Finset ι) (f : �
     rw [Finset.set_biUnion_insert, Finset.sum_insert hi]
     exact (Set.encard_union_le _ _).trans (add_le_add le_rfl ih)
 
+/-- **Prefix stability across runs**: run `i`'s operator reads only the runs before it, so two observation sequences
+that agree on those runs give it one input, whatever run `i` and the runs after it saw. -/
+theorem runsBefore_congr {m : ℕ} {α : Type} {o o' : Fin m → α} {i : Fin m}
+    (h : ∀ j : Fin m, j.val < i.val → o j = o' j) : runsBefore o i = runsBefore o' i := by
+  apply List.ext_getElem
+  · simp [runsBefore]
+  · intro j h1 h2
+    have hj : j < i.val :=
+      lt_of_lt_of_le h1 (by simp only [runsBefore, List.length_take]; exact min_le_left _ _)
+    simp only [runsBefore, List.getElem_take, List.getElem_ofFn]
+    exact h ⟨j, lt_trans hj i.isLt⟩ hj
+
+/-- **A chained count.** Tuples whose `i`-th entry lies in a set `A i (runsBefore o i)` that the entries before `i`
+fix, of at most `c i` elements whatever they are, number at most `∏ i, c i`: coding each entry by its place in its set
+is injective, by induction over the entries, since two tuples with one code that agree before `i` have one set at `i`
+(`runsBefore_congr`). -/
+theorem encard_chain_le {α : Type} {m : ℕ} (A : Fin m → List α → Set α) (c : Fin m → ℕ)
+    (hc : ∀ i l, (A i l).encard ≤ (c i : ℕ∞)) :
+    {o : Fin m → α | ∀ i, o i ∈ A i (runsBefore o i)}.encard ≤ ((∏ i, c i : ℕ) : ℕ∞) := by
+  classical
+  have hcode : ∀ (s : Set α) (n : ℕ), s.encard ≤ (n : ℕ∞) →
+      ∃ f : α → ℕ, Set.InjOn f s ∧ ∀ a ∈ s, f a < n := by
+    intro s n hs
+    obtain ⟨f, hf, hinj⟩ := (Set.finite_of_encard_le_coe hs).exists_injOn_of_encard_le
+      (t := (↑(range n) : Set ℕ)) (by rw [Set.encard_coe_eq_coe_finsetCard, card_range]; exact hs)
+    exact ⟨f, hinj, fun a ha => mem_range.1 (hf ha)⟩
+  choose! code hinj hlt using hcode
+  let f : (Fin m → α) → Fin m → ℕ := fun o i => code (A i (runsBefore o i)) (c i) (o i)
+  have hfinj : Set.InjOn f {o : Fin m → α | ∀ i, o i ∈ A i (runsBefore o i)} := by
+    intro o ho o' ho' hff
+    have key : ∀ n, ∀ i : Fin m, i.val < n → o i = o' i := by
+      intro n
+      induction n with
+      | zero => intro i hi; omega
+      | succ n ih =>
+        intro i hi
+        have hrb : runsBefore o i = runsBefore o' i := runsBefore_congr fun j hj => ih j (by omega)
+        have h1 : code (A i (runsBefore o i)) (c i) (o i) = code (A i (runsBefore o' i)) (c i) (o' i) :=
+          congrFun hff i
+        rw [← hrb] at h1
+        exact hinj _ _ (hc i _) (ho i) (by rw [hrb]; exact ho' i) h1
+    exact funext fun i => key (i.val + 1) i (Nat.lt_succ_self _)
+  have hmaps : f '' {o : Fin m → α | ∀ i, o i ∈ A i (runsBefore o i)} ⊆
+      Set.pi Set.univ fun i => (↑(range (c i)) : Set ℕ) := by
+    rintro _ ⟨o, ho, rfl⟩ i _
+    exact mem_coe.2 (mem_range.2 (hlt _ _ (hc i _) _ (ho i)))
+  calc {o : Fin m → α | ∀ i, o i ∈ A i (runsBefore o i)}.encard
+      = (f '' {o : Fin m → α | ∀ i, o i ∈ A i (runsBefore o i)}).encard := hfinj.encard_image.symm
+    _ ≤ (Set.pi Set.univ fun i => (↑(range (c i)) : Set ℕ)).encard := Set.encard_le_encard hmaps
+    _ = ∏ i, ((↑(range (c i)) : Set ℕ)).encard := Set.encard_pi_eq_prod_encard
+    _ = ∏ i, (c i : ℕ∞) := by simp only [Set.encard_coe_eq_coe_finsetCard, card_range]
+    _ = _ := (Nat.cast_prod _ _).symm
+
 /-- **One incorrect set's count.** The sequences accepted with the incorrect set `F` number at most
 `#As · 2^(faultyBits F) · D^n`: each maps injectively to its inputs besides the ingress, the bit at which `holdAll` holds
 each committed gate of `F`'s units, and its jitter code. -/

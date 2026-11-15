@@ -274,12 +274,28 @@ namespace Gen
 
 variable [S : ZkSetup]
 
+/-- **`k ≥ 8` and the relation splits, or the verifier accepts no run**, at every statement at SHA-512, where the
+relation splits by table wherever the verifier accepts some run: `zk_of_oneWait`'s premise, with the `k` range
+discharged (`k_range_zk`). -/
+theorem zk_kSplits (rel : Readable.Parsed → Readable.Relation)
+    (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x) (x : Claims.Msg) :
+    (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
+  (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr
+
 /-- **The deployed masked (`--zk`) verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged,
 where the relation splits by table wherever the verifier accepts some run. -/
 theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
     (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
-  zk_of_oneWait sha512 rel (fun x => (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
+  zk_of_oneWait sha512 rel (zk_kSplits rel hsp) h
+
+/-- **The deployed masked (`--zk`) verifier at SHA-512 with `E^rep` truncated at `K₀ > 0`: KS from one wait's bound**
+at the instance, with the `k` range discharged, where the relation splits by table wherever the verifier accepts some
+run (`zk_of_oneWait_at`). -/
+theorem zk_of_oneWait_sha512_at (rel : Readable.Parsed → Readable.Relation) {K₀ : ℕ} (hK₀ : 0 < K₀)
+    (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
+    (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZkAt K₀ rel) :=
+  zk_of_oneWait_at sha512 rel hK₀ (zk_kSplits rel hsp) h
 
 end Gen
 

@@ -54,9 +54,25 @@ marked modeled.
 
 from __future__ import annotations
 
-from typing import Callable
+import argparse
+import json
+import random
+from collections.abc import Callable
 
-from gates import S8, S32_MAX, S32_MIN, U8, Builder, Iv, clog2, iv_add, iv_scale, operand_bits, proven
+from gates import (
+    S8,
+    S32_MAX,
+    S32_MIN,
+    U8,
+    Builder,
+    Iv,
+    clog2,
+    iv_add,
+    iv_scale,
+    operand_bits,
+    proven,
+)
+
 from verity.protocols.poub.verifier import codec
 
 F = codec.P1024
@@ -224,9 +240,9 @@ def _carry_pass(b: Builder, f: list[int], start: int, stop: int, w: int, merge: 
 
 
 def _greedy_pass(b: Builder, f: list[int], start: int, stop: int, carry: int | None = None, carry_hi: int = 0,
-                 cap: int = 128) -> tuple[list[int], int, list[int]]:
+                 limit: int = 128) -> tuple[list[int], int, list[int]]:
     """One merged carry pass whose group widths are greedy: each group takes columns while `T`'s bits plus the extra
-    columns' bits stay `≤ cap` (OperandBits). Starts from `carry` (default 0). Returns the limbs, the final carry gate
+    columns' bits stay `≤ limit` (OperandBits). Starts from `carry` (default 0). Returns the limbs, the final carry gate
     and the group widths."""
     out = list(f)
     if carry is None:
@@ -235,7 +251,7 @@ def _greedy_pass(b: Builder, f: list[int], start: int, stop: int, carry: int | N
     while base < stop:
         bits = clog2(carry_hi + _fhi(b, f[base]) + 1)
         g = 1
-        while base + g < stop and bits + clog2(_fhi(b, f[base + g]) + 1) <= cap:
+        while base + g < stop and bits + clog2(_fhi(b, f[base + g]) + 1) <= limit:
             bits += clog2(_fhi(b, f[base + g]) + 1)
             g += 1
         carry, carry_hi = _emit_group(b, out, base, carry, carry_hi, f[base:base + g], merge=True)
@@ -317,7 +333,7 @@ def seam_square(b: Builder, a: list[int]) -> tuple[list[int], int]:
 
 
 def _within_s32(iv: Iv) -> bool:
-    return S32_MIN <= iv[0] and iv[1] <= S32_MAX
+    return iv[0] >= S32_MIN and iv[1] <= S32_MAX
 
 
 def _iv_bits(iv: Iv) -> int:
@@ -334,14 +350,14 @@ def _carry_iv(x: Iv, w: int, signed: bool) -> Iv:
 Plan = tuple[tuple[tuple[int, int], ...], ...]
 
 
-def group_plan(cols: list[Iv], signed: bool = False, cap: int = 128, merge: bool = True,
+def group_plan(cols: list[Iv], signed: bool = False, limit: int = 128, merge: bool = True,
                start: int = 0) -> tuple[int, Plan]:
     """The fewest carry groups one pass can cover the 128 folded columns with, given their derived intervals `cols`: a
     lower bound on `seam_square`'s family, whose units are 128 byte gates plus one carry gate a group.
 
     A group over limbs `[m, m + w)` reads `T = c + o_0` (its carry in merged into its first operand by a free affine
     within s32) and operands `o_1 …`, each a column `f_p` or, with `merge`, an adjacent pair `f_p + 256·f_{p+1}` (a free
-    affine within s32); its carry gate reads them all, so their declared bits sum to at most `cap` (OperandBits). The
+    affine within s32); its carry gate reads them all, so their declared bits sum to at most `limit` (OperandBits). The
     pass starts at limb `start` with carry in 0 (the seam: its group's bytes, emitted last, read the wrapped carry too,
     which only adds bits, so this relaxes it) and runs cyclically: a carry out of limb 127 enters limb 0 times
     `DELTA` (`256^128 ≡ DELTA`), and no group straddles that fold. Exact over the family by memoized search on
@@ -375,7 +391,7 @@ def group_plan(cols: list[Iv], signed: bool = False, cap: int = 128, merge: bool
                     if not _within_s32(t):
                         continue
                     nb = _iv_bits(t)
-                if bits + nb <= cap:
+                if bits + nb <= limit:
                     extend(i + span, (*ops, (order[i], span)), bits + nb, iv_add(x, iv_scale(256 ** (i - m), iv)))
 
         extend(m, (), 0, c)
@@ -400,7 +416,7 @@ def group_plan(cols: list[Iv], signed: bool = False, cap: int = 128, merge: bool
         return memo[key]
 
     res = best(0, (0, 0))
-    assert res is not None, "no plan fits the cap"
+    assert res is not None, "no plan fits the limit"
     return res
 
 
@@ -501,10 +517,6 @@ def measure(name: str, inputs: list[int]) -> dict:
 
 
 def main() -> None:
-    import argparse
-    import json
-    import random
-
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True, help="the JSON file to write")
     ap.add_argument("--inputs", type=int, default=64, help="random inputs each construction is evaluated on")
@@ -525,14 +537,14 @@ def main() -> None:
     for name, fmt in (("u8", U8), ("s8", S8)):
         cols = column_intervals(fmt)
         for merge in (False, True):
-            def fewest(cap: int) -> tuple[int, int]:
-                return min((group_plan(cols, fmt == S8, cap, merge, s)[0], s) for s in range(N_LIMBS))
+            def fewest(limit: int, cols: list[Iv] = cols, signed: bool = fmt == S8, merge: bool = merge) -> tuple[int, int]:
+                return min((group_plan(cols, signed, limit, merge, s)[0], s) for s in range(N_LIMBS))
             groups, start = fewest(128)
-            cap = 128
-            while fewest(cap)[0] >= groups:
-                cap += 1
+            limit = 128
+            while fewest(limit)[0] >= groups:
+                limit += 1
             plans[f"{name}{'_merge' if merge else ''}"] = {
-                "groups": groups, "units": N_LIMBS + groups, "seam_limb": start, "cap_for_one_fewer": cap,
+                "groups": groups, "units": N_LIMBS + groups, "seam_limb": start, "cap_for_one_fewer": limit,
                 "column_bits": [_iv_bits(iv) for iv in cols]}
     best = rows["seam_square"]["fixed_units"]
     result = {

@@ -28,14 +28,21 @@ kernel's outputs, so the Program's check of the committed values is the same und
 from __future__ import annotations
 
 import contextlib
+import importlib
 import json
 import types
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.oracle_witness import MEMBERS, digest, schedule_file, witness_file
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
+from verity_vllm.acquire.sources.oracle_witness import (
+    MEMBERS,
+    digest,
+    schedule_file,
+    witness_file,
+)
 from verity_vllm.engine import hooks
 from verity_vllm.query.manifest.bind import Port
 
@@ -176,8 +183,6 @@ class MoeAlignSource:
         self.stats.update(schedule_replayed=0, schedule_routing_differs=0, schedule_missing=0, schedule_routing_differs_first=[])
 
     def install(self) -> None:
-        import importlib
-
         if self.replay is not None:          # each run counts its own calls (a Commit's warm-up runs other requests)
             self._count_replays()
 

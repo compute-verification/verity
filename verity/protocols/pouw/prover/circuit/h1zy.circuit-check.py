@@ -30,7 +30,7 @@ def _pouw_roots() -> list[Any]:
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
     `PouwAndBit` and `PouwMuxBit` are catalog roots (static-free)."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.protocols.pouw.prover.circuit import h1tile as H
     from verity.protocols.pouw.prover.circuit import h1zy as Z
 

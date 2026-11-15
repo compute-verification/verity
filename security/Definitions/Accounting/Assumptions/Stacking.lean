@@ -108,7 +108,7 @@ them: their keys never change, so a carrier of one built at any time still helps
 its own block and free copies, and the stock of such carriers grows without decay. -/
 def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
     (A : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y →
-      RateSketch.SketchDeployedSession n P N 128 ρ 512 S Lk q 16 G 2773)
+      RateSketch.SketchDeployedRun n P N 128 ρ 512 S Lk q 16 G 2773)
     (store : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → RateSketch.SketchStore N 128)
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → Fin N ↪ Fin T × Fin M)
     (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
@@ -126,7 +126,7 @@ def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
 /-- **A pass's layout reads the codec and the append coins only through the `a`-bit summary its devices are told.**
 At every prefix `c` of the session's coins, the layout `layout c y` is `slot c` of the summary `steer c y`: it takes at
 most `2^a` values as the codec and the append coins `y` vary, and the pass's devices, told `steer c y`
-(`RateSketch.SketchSummarySession`), know the layout they run on.
+(`RateSketch.SketchSummaryRun`), know the layout they run on.
 
 **Why it should hold.** The layout is the memory map's schedule: which blocks are resident and planned when the pass's
 step begins. The memory map makes it a function of the served steps (frees at the values' last structural reader,
@@ -139,9 +139,9 @@ block is written and freed, and each pass's step), and that schedule is within t
 committed before the session's first coin (`audit.Params.schedule_cap`), which is what it credits
 (`audit.Ledger.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
 published after the coins, whose length can follow them. A layout the check accepts at cap `a` at every coin is
-`SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, under
-`Properties.RemoteAudit.ScheduleLayoutGap`: the model's layout is the verifier's positions of the plan the pass
-sent), and a layout that follows a
+`SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, at the verifier's own layout,
+`Properties.RemoteAudit.sessionLayout`: its positions of the plan the pass sent, where it checks each opened block),
+and a layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
 schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds
 (arrivals, lengths, prefix-cache hits and preemptions, and every run input that moves them), and more: the whole

@@ -62,3 +62,37 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaButterflyRowsPad_v2", lambda: bind(BM.DsaButterflyRowsPadV2, T=6, N=9, K=8, W=3, E=16)),
         ("DsaButterflyRowsPad_v2-long", lambda: bind(BM.DsaButterflyRowsPadV2, T=9, N=16, K=8, W=3, E=16)),
     ]
+
+
+def _ties_calls_roots() -> list[Any]:
+    """The ties with their prefix count as Calls (`DsaRadixTies_v2`, reaching `DsaCountSum_v1`, `DsaCountSplit_v1` and
+    `DsaRadixTie_v1` at each width): over the 20 keys of the mask above, a row length no power of two, and over 16; and at the
+    long row's served statics, TOPK 2,048 over a block of 16,384 keys and over the longest row a unit masks whole, 40,960,
+    each held to its digest pin."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [bind(BM.DsaRadixTiesV2, N=n, TOPK=k) for n, k in ((20, 16), (16, 8), (16384, 2048), (40960, 2048))]
+
+
+def _tags_count_roots() -> list[Any]:
+    """The tags and the count as one tree of counts (`DsaButterflyTagsCount_v1`), at rows of a power of two, off one and past
+    one, with K below the row, at it and a power of two: reaching `DsaButterflyTag_v1` with and without a count."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [bind(BM.DsaButterflyTagsCount, N=n, K=k) for n, k in ((8, 4), (6, 4), (13, 13), (37, 9))]
+
+
+def _select_calls_roots() -> list[Any]:
+    """The radix select's pass and valid bits as Calls: `DsaRadixPass_v2` over the 20 keys of the mask above (under a chunk of
+    its count), over two chunks and a rest (reaching `DsaRadixPassCount_v1` at both, `DsaCountSum_v1` over the chunks,
+    `DsaRadixPassLeft_v1` and `DsaRadixPassKey_v1`) and at the longest row a unit masks whole, 40,960 keys at TOPK 2,048, held
+    to its digest pin; `DsaRowValid_v2` at row lengths no power of two (reaching `DsaRowValidRoot_v1`, `DsaRowValidStep_v1`
+    and `DsaRowValidLast_v1`) and at the served ones, the merge's 2,048 slots, a block's 16,384 keys and the whole row's
+    40,960."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [*(bind(BM.DsaRadixPassV2, N=n, TOPK=k) for n, k in ((20, 16), (600, 512), (40960, 2048))),
+            *(bind(BM.DsaRowValidV2, N=n) for n in (13, 20, 2048, 16384, 40960))]

@@ -1,4 +1,4 @@
-"""census/v1 and the requirement (`verity.definitions.circuits.census`, `.requirement`) of a real row's Programs: Llama-3.2-1B B1 256/32
+"""census/v1 and the requirement (`verity.circuits.census`, `.requirement`) of a real row's Programs: Llama-3.2-1B B1 256/32
 greedy on rtxpro6000 (cov-k05-7), its step (the traced Build `test_predict` pins) and its request Program (a prefill of 256 rows,
 then 31 decode steps), each step ending at a sampling event; the census path held to the explicit expansion on `TINY`'s; and
 the served MACs by precision of those rows and of GLM-5.3's served constructions on their stand-ins
@@ -16,21 +16,36 @@ import json
 from functools import lru_cache
 
 import pytest
-
-from tests.program.predict.test_predict import FIX, TINY, _phi
-from tests.program import test_derive_neutrality as GLM
-from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.definitions.circuits.census import PRODUCTS, SILICON, NoBooleanWork, census, family, step_ends
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.program import Program, is_input
-from verity.definitions.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
-from verity_vllm.program.predict.build import build_program, model_shape
 from verity.definitions.boolean import boolean_version, lift
-from verity.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
+from verity.circuits.census import (
+    PRODUCTS,
+    SILICON,
+    NoBooleanWork,
+    census,
+    family,
+    step_ends,
+)
+from verity.circuits.requirement import (
+    census_gates,
+    census_schedule,
+    from_census,
+    upper_bound,
+)
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
+from verity.definitions.registry import b1, b1_tp2
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import tp_allreduce as TA
+
+from tests.program import test_derive_neutrality as GLM
+from tests.program.predict.test_predict import FIX, TINY, _phi
+from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.model_shape import model_shape
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
@@ -156,7 +171,7 @@ def _times(n: int, g: dict[str, int]) -> dict[str, int]:
     return {k: n * v for k, v in g.items()}
 
 
-def _calls(program) -> dict[str, object]:
+def _calls(program) -> dict:
     return {descriptor_id(nd.fn): nd.fn for nd in program.root.body.nodes if not is_input(nd.fn)}
 
 

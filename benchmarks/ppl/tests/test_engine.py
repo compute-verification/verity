@@ -1,5 +1,7 @@
 import math
+import sys
 import types
+import weakref
 
 import numpy as np
 import pytest
@@ -147,6 +149,34 @@ def test_linear_variants_pass_their_gates(llama, ids, calib):
         assert abs(ppl(r["nll"][f"{a.name}/s0"]) / bf - 1) < 0.1, a.name
 
 
+def test_a_layer_is_released_before_the_next_is_made(llama, ids, calib, monkeypatch):
+    """One layer at a time: when the engine makes the next layer, and when it reaches the head, neither a GPTQ arm's
+    calibration pass nor an arm's stream holds a layer made before. A collector or a stream's last `Run` that kept its
+    layer would keep that layer's weights, cache and Hessians on the device while the next one loads."""
+    made: list[weakref.ref] = []
+    held: list[list[bool]] = []
+
+    def survivors():
+        held.append([layer() is not None for layer in made])
+
+    def make_layer(*a, make=engine.make_layer, **kw):
+        survivors()
+        layer = make(*a, **kw)
+        made.append(weakref.ref(layer))
+        return layer
+
+    def head(*a, head=engine.head, **kw):
+        survivors()
+        return head(*a, **kw)
+
+    monkeypatch.setattr(engine, "make_layer", make_layer)
+    monkeypatch.setattr(engine, "head", head)
+    gptq = spec.parse({"linear": [{"step": "int8", "weight_top": 63, "gptq": True}]}, "gptq")
+    evaluate(llama, ids[:2], [gptq], seeds=(0,), calib=calib)
+    assert len(made) > 1 and len(held) > len(made)
+    assert not any(any(alive) for alive in held), held
+
+
 def test_seeds(llama, ids, calib):
     r = evaluate(llama, ids[:4], ["int8-linears", "adopted-linears"], seeds=(0, 1), calib=calib)
     assert set(r["nll"]) == {"bf16/s0", "int8-linears/s0", "adopted-linears/s0", "adopted-linears/s1"}
@@ -215,6 +245,13 @@ def test_hf_parity(llama, qwen, ids):
         r = evaluate(snap, ids[:4], [], hf_check=True)
         g = r["gates"]["hf_reference"]
         assert g["checked"] == M.Config.read(snap).layers and g["failed"] == 0, g
+
+
+def test_without_transformers_the_hf_reference_gate_is_skipped_by_name(llama, ids, monkeypatch):
+    """Where `transformers` does not import, no layer is compared and the gate says why, so `run.py eval` fails the run."""
+    monkeypatch.setitem(sys.modules, "transformers", None)
+    g = evaluate(llama, ids[:4], [], hf_check=True)["gates"]["hf_reference"]
+    assert g == {"checked": 0, "failed": 0, "first_failure": None, "skipped": "transformers is not importable"}
 
 
 def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):

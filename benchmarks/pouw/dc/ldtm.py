@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -133,7 +134,7 @@ def streams(out: Path) -> dict[str, dict]:
     return res
 
 
-def priced(s: dict):
+def priced(s: dict) -> Iterator[tuple[str, dict]]:
     """A read stream's points that set the price: at least two loads, the point still issue-saturated (the single-load
     restructure and the load-path-bound points above it are dropped; the docstring says why)."""
     if not s["read"]:

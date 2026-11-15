@@ -4,17 +4,11 @@ compute what they claim. The costs are the round-4 result against `EncodeChainHa
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
 
+import free_codec as FC
+import gates as G
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import free_codec as FC  # noqa: E402
-import gates as G  # noqa: E402
-import squaring as S  # noqa: E402
+import squaring as S
 
 # security/Proofs/Accounting/Gates.lean's `codecRows` (6b, at d6df95f24a): (n, c, cs, K, τ, i, m, encodeWord).
 CODEC_ROWS = [
@@ -72,7 +66,7 @@ def test_the_free_squaring_costs_nothing_at_p1024_and_chains():
     assert fixed_once == 6014 and b.fixed_units == 2 * fixed_once
     # Renormalization ⟨1024, 105⟩ d₀ = 4, c = 0, t = 64 at ε = 2^−40 (Guarantees/Gates.lean): its conclusion
     # ε·2^(8·128) ≤ 2^(8·(budgeted + d₀ + c)) fails for this circuit, whose inputs are a's bytes (coin) and outputs u8.
-    assert not 2 ** (8 * S.N_LIMBS) <= 2 ** 40 * 2 ** (8 * (b.lean_units + 4))
+    assert not 2 ** 40 * 2 ** (8 * (b.lean_units + 4)) >= 2 ** (8 * S.N_LIMBS)
     for x in (rng.randrange(S.P), S.P - 1, 0):
         vals, window, hold = b.evaluate(dict(enumerate(S.limbs(x))))
         assert window and hold and vals[c1] == 0 and vals[c2] == 0
@@ -204,9 +198,9 @@ def test_the_whole_codec_word_is_free_at_6bs_fields():
         if key not in builds:
             builds[key] = FC.free_encode_word(n, c, len(cs))
         b, out, slots = builds[key]
-        vals, window, hold = b.evaluate(FC.draw_inputs(n, c, cs, K, tau, i, m))
+        vals, window, hold = b.evaluate(FC.sample_inputs(n, c, cs, K, tau, i, m))
         assert window and hold
-        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
+        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * ell) & 255 for ell in range(n // 8)]
     for b, out, slots in builds.values():
         assert "budgeted" not in b.kinds
         assert "run" not in b.bindings.values()
@@ -217,7 +211,7 @@ def test_the_whole_codec_word_is_free_at_6bs_fields():
         assert {b.bindings[i] for i, slot in b.slots.items() if slot[0] == "payload"} == {"registered"}
 
 
-def test_the_free_codec_word_is_right_on_every_draw_tried():
+def test_the_free_codec_word_is_right_on_every_sample_tried():
     rng = random.Random(3)
     n, c, k = 16, 17, 3
     p = (1 << n) - c
@@ -226,6 +220,6 @@ def test_the_free_codec_word_is_right_on_every_draw_tried():
         cs = [rng.randrange(p) for _ in range(k)]
         K, tau, i, m = rng.randrange(1 << n), rng.randrange(1, p), rng.randrange(1 << 20), rng.randrange(1 << n)
         y = FC.encode_word_ref(p, cs, K, tau * i % p, m)
-        vals, window, hold = b.evaluate(FC.draw_inputs(n, c, cs, K, tau, i, m))
+        vals, window, hold = b.evaluate(FC.sample_inputs(n, c, cs, K, tau, i, m))
         assert window and hold
-        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
+        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * ell) & 255 for ell in range(n // 8)]

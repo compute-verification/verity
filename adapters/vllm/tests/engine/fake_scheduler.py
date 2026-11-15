@@ -8,7 +8,8 @@ scripted output reaches `eos`) or at `max_tokens`.  `preempt_at` = {step: reques
 its computed tokens are dropped and it waits again, resumed from position 0.  The model runner's order is Model Runner V2's
 `sort_batch_req_ids` (decodes first, then by chunk length, stably).  `prefix_block` = B turns prefix caching on: a request
 admitted (first, or resumed) starts at the longest whole-block prefix of its tokens that some request, itself included, has
-computed, short of its last token.
+computed, short of its last token.  `resend_resumed` schedules as vLLM 0.34 does: a resumed request is sent again in full,
+among the new requests, and the cached requests name none as resumed.
 """
 from __future__ import annotations
 
@@ -48,12 +49,14 @@ def runner_order(nst: dict[str, int]) -> list[str]:
 
 class FakeScheduler:
     def __init__(self, budget: int = 16, max_seqs: int = 4, preempt_at: dict[int, str] | None = None,
-                 prefix_block: int | None = None) -> None:
+                 prefix_block: int | None = None, resend_resumed: bool = False) -> None:
         self.requests: dict[str, FakeRequest] = {}
         self.waiting: list[str] = []
         self.running: list[str] = []
+        self.finished_req_ids: frozenset[str] = frozenset()     # vLLM frees these at its next schedule: none, each is freed as it ends
         self.budget, self.max_seqs = budget, max_seqs
         self.preempt_at = dict(preempt_at or {})
+        self.resend_resumed = resend_resumed
         self.step = 0
         self.scheduler_config = SimpleNamespace(max_num_batched_tokens=budget, max_num_seqs=max_seqs, enable_chunked_prefill=True,
                                                 policy="fcfs", async_scheduling=False)
@@ -98,14 +101,15 @@ class FakeScheduler:
             nst[rid], left = n, left - n
             self.running.append(rid)
             q.status = "running"
-            (cached if rid in self._seen else new).append(rid)
+            again = rid in self._seen and not (self.resend_resumed and rid in self._resumed)
+            (cached if again else new).append(rid)
         resumed = set(cached) & self._resumed
         so = SimpleNamespace(
             scheduled_new_reqs=[SimpleNamespace(req_id=r, num_computed_tokens=self.requests[r].num_computed_tokens) for r in new],
             scheduled_cached_reqs=SimpleNamespace(req_ids=cached, num_computed_tokens=[self.requests[r].num_computed_tokens for r in cached],
-                                                  resumed_req_ids=resumed),
+                                                  **({} if self.resend_resumed else {"resumed_req_ids": resumed})),
             num_scheduled_tokens=nst, total_num_scheduled_tokens=sum(nst.values()), preempted_req_ids=preempted)
-        self._resumed -= set(cached)
+        self._resumed -= set(nst)
         self._seen |= set(nst)
         for rid, n in nst.items():
             q = self.requests[rid]
@@ -154,8 +158,8 @@ class FakeScheduler:
     def finish_requests(self, request_ids: Any, finished_status: Any) -> list[FakeRequest]:
         done = []
         for rid in ([request_ids] if isinstance(request_ids, str) else request_ids):
-            q = self.requests[rid]
-            if q.status in ("waiting", "running"):
+            q = self.requests.get(rid)                  # an id it never saw is skipped, as vLLM's skips it
+            if q is not None and q.status in ("waiting", "running"):
                 q.status = "aborted"
                 (self.running if rid in self.running else self.waiting).remove(rid)
                 done.append(q)

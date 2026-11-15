@@ -25,12 +25,17 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `expert_tables` -- the committer's registration of a TP rank's per-expert tables (`verity-vllm/expert-tables/v1`): each
   table's entry and salt nonce, as the verifier's pins and a window's committer read it; its `of` refuses an unknown field
   and `dump` writes it back.
+* `boundary_tables` -- a two-stage window's two private messages between its boundary commitment and rank 0: a class's
+  assignment of its spans' slots (`verity-vllm/boundary-tables/assign/v1`) and rank 0's history tables' entries
+  (`verity-vllm/boundary-tables/roots/v1`); each `of` refuses an unknown field and `dump` writes it back.
 * `inference_blocks` -- the inference-block table's public statement (`verity-vllm/inference-blocks/v1`): its budgets, padded
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.
 * `logits_capture` -- what a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`): each
   sampled request's logits rows, tokens and steps, as `pipeline.interior_rows.captured` reads a token select's span; its
   `of` refuses an unknown field and `dump` writes it.
+* `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
+  nothing else: its readers read it as the dict it is.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.

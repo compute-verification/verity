@@ -99,11 +99,11 @@ PIECES: dict[str, Callable] = {
     "RopeOutAdd_v1": _rope_out_add,
     "SiluMulBf16_v1": _silu_mul,
     "AmpereBF16TcDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:])),
-    # verity.definitions.silicon.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
+    # verity.circuits.silicon.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
 PIECES.update(tail_pieces.PIECES)
-PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.definitions.ops.prims) for the same total function
+PIECES["AmpereBF16TcDot16_v2"] = PIECES["AmpereBF16TcDot16_v1"]  # core's id (verity.circuits.ops.prims) for the same total function
 # the Boolean core's gates (verity.circuits.boolean): an n-input And is n - 1 ANDs, Xor and Not are free
 PIECES["Not_v1"] = lambda C, a: [a[0].inv()]
 GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C, [b[0] for b in x])],
@@ -115,7 +115,7 @@ def _boolean_ops() -> None:
     import importlib
     import pkgutil
 
-    from verity.definitions.ops import boolean as OB
+    from verity.circuits.ops import boolean as OB
 
     for m in pkgutil.iter_modules(OB.__path__):
         importlib.import_module(f"{OB.__name__}.{m.name}")
@@ -125,7 +125,7 @@ def _boolean_build(key):
     """The ``build`` of a registered Boolean Definition (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. Every module of
-    `verity.definitions.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
+    `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
     limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has no build."""
     from verity.circuits.defs import REGISTRY
 
@@ -599,10 +599,10 @@ def whole(target) -> Units:
                  [[("ret", p) for p in range(len(rets))]], sig, gates, args, rets)
 
 
-#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.definitions.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
-#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.definitions.ops.prims): one measured total function.
+#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.circuits.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
+#: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.circuits.ops.prims): one measured total function.
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
-#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): verity.definitions.silicon.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
+#: the FP8 steps -> fp.tc_dot_e4m3's (groups, W, F): verity.circuits.silicon.total_fp8 HOPPER_E4M3_WGMMA_K32 and models.BLACKWELL_SM120_E4M3_M16N8K32
 #: (a GEMM's FP8 coordinate is walked, not unit-lowered)
 TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139), "BlackwellE4m3QmmaDot32_v1": ((32,), 26, -133)}
 
@@ -885,7 +885,7 @@ def _decode_count(n: int) -> int:
 @lru_cache(maxsize=None)
 def _library_table(name: str) -> bool:
     """Whether the table ``name`` loads is on core's library list, by the SHA-512 of its raw little-endian words."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     from . import gf2
 
@@ -893,30 +893,47 @@ def _library_table(name: str) -> bool:
     return library.table_label(hashlib.sha512(raw).hexdigest()) == library.LIBRARY
 
 
+def _table_words(table: str, n: int) -> np.ndarray:
+    from . import gf2
+
+    words = np.asarray(gf2.table(table), dtype=np.uint32)
+    assert len(words) == 1 << n
+    return words
+
+
+def table_const_bits(table: str, bits: Sequence[int], words: np.ndarray | None = None) -> dict[int, int]:
+    """Of a read's value ``bits``, those constant over the whole table, with their value, for a library table (a program
+    table's layout shows nothing of its content, so none of its bits is); ``words`` the table's, else read."""
+    if not _library_table(table):
+        return {}
+    if words is None:
+        from . import gf2
+
+        words = np.asarray(gf2.table(table), dtype=np.uint32)
+    out: dict[int, int] = {}
+    for j in bits:
+        col = (words >> np.uint32(j)) & np.uint32(1)
+        if not col.any():
+            out[j] = 0
+        elif col.all():
+            out[j] = 1
+    return out
+
+
 class _Read:
     """A table read ``out = table[idx]`` laid out inline as plain rows of the unit (the one-hot construction of
     :func:`fp.lookup`): the low and high index halves decode to one-hot minterms (each an AND of two half-minterms, recursively),
     row ``(j, h)`` is ``hi_h AND (XOR of the low minterms l with bit j of table[h * 2^lo + l] set)`` (omitted when that XOR is
     empty), and value bit j is the copy row ``(XOR over h of row (j, h)) AND 1``. Only the live value bits get rows, and a
-    library table's bits that are constant over the whole table get none: they are wired to the constant (``const_bits``).
+    library table's bits that are constant over the whole table get none: they are wired to the constant (`table_const_bits`).
     A program table keeps a row for every live bit, so its layout shows nothing of its content. Every row reads earlier rows,
     the index forms or the constant, so the index fixes every row."""
 
     def __init__(self, C: Circuit, g: int, bits: Sequence[int], at: int):
-        from . import gf2
-
         self.table, self.idx, _width = C.lookups[g]
         n = len(self.idx)
-        words = np.asarray(gf2.table(self.table), dtype=np.uint32)
-        assert len(words) == 1 << n
-        self.const_bits: dict[int, int] = {}
-        if _library_table(self.table):
-            for j in bits:
-                col = (words >> np.uint32(j)) & np.uint32(1)
-                if not col.any():
-                    self.const_bits[j] = 0
-                elif col.all():
-                    self.const_bits[j] = 1
+        words = _table_words(self.table, n)
+        self.const_bits = table_const_bits(self.table, bits, words)
         bits = [j for j in bits if j not in self.const_bits]
         self.lo = READ_LO.get(n) or min(range(2, n - 1), key=lambda lb: (1 << lb) + (1 << (n - lb)) * (len(bits) + 1))
         self.hi = n - self.lo

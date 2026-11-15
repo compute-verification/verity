@@ -9,7 +9,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
@@ -120,7 +119,7 @@ def _swa_tokens(st: dict, seed: int) -> list[np.ndarray]:
     span = NB * BS
     positions = sorted({p for p in [*range(SW + 2), BS - 1, BS, BS + 1, 2 * BS - 1, SW + BS - 1, span - SW - 1, span - SW,
                                     span - 2, span - 1] if 0 <= p < span})
-    cols = [[] for _ in range(6)]
+    cols: list[list] = [[] for _ in range(6)]
     for i, pos in enumerate(positions):
         qlen = 1 + i % 4
         qs = int(rng.integers(0, 1 << 20))
@@ -134,7 +133,8 @@ def _swa_tokens(st: dict, seed: int) -> list[np.ndarray]:
 
 
 def _swa_want(st: dict, args) -> np.ndarray:
-    return np.asarray([swa_kernel(*a, st["SW"], st["BS"]) for a in zip(*args)], dtype=np.uint64)
+    rows: list = [swa_kernel(t, qs, qe, seq, blocks, valid, st["SW"], st["BS"]) for t, qs, qe, seq, blocks, valid in zip(*args)]
+    return np.asarray(rows, dtype=np.uint64)
 
 
 def _c128a_tokens(st: dict, seed: int) -> list[np.ndarray]:
@@ -151,7 +151,8 @@ def _c128a_tokens(st: dict, seed: int) -> list[np.ndarray]:
 
 
 def _c128a_want(st: dict, args) -> np.ndarray:
-    return np.asarray([c128a_kernel(*a, st["W"], st["R"], st["BS"]) for a in zip(*args)], dtype=np.uint64)
+    rows: list = [c128a_kernel(position, slot, blocks, st["W"], st["R"], st["BS"]) for position, slot, blocks in zip(*args)]
+    return np.asarray(rows, dtype=np.uint64)
 
 
 def _reference(fn, args) -> np.ndarray:
@@ -350,7 +351,7 @@ def test_the_c128a_twin_is_the_kernel_on_edge_tokens(st):
         "w-not-a-multiple", "c-nb-0", "w-r-past-2^31", "v2-window-bs-5", "v2-slot-bs-6", "v2-len-0"])
 def test_bad_statics_are_refused_by_name(fn, kw, name):
     with pytest.raises(ValueError, match=name):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions ---------------------------------------------------------------------------------------------------------

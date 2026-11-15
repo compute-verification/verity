@@ -4,7 +4,7 @@ limit, and level 0's leaves: ``(w + 4) * 16`` bytes under M1 and ``w * 16`` unde
 unaligned data. ``sha512_leaves.cu`` runs them, built by nvcc where a GPU is present.
 
 And the header's way into a Flock checkout, which needs no GPU: ``cuda_sha512_patch.py``'s first step copies the GPU's one
-SHA-512 (``verity.definitions.kernels.SHA512``) there as ``kernels_sha512.cuh`` and installs ``cuda/sha512.cuh`` beside it, its
+SHA-512 (``verity.circuits.kernels.SHA512``) there as ``kernels_sha512.cuh`` and installs ``cuda/sha512.cuh`` beside it, its
 include of that header pointed at the copy. Only a pod runs the script, with a bare ``python3``, so a move of either header
 that the script doesn't follow fails here first."""
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.definitions.kernels import SHA512
+from verity.circuits.kernels import SHA512
 
 SOURCE = Path(__file__).resolve().with_name("sha512_leaves.cu")
 SCRIPT = Path(__file__).resolve().parents[1] / "cuda_sha512_patch.py"

@@ -54,9 +54,11 @@ property `valid` of the whole run, not of the inputs alone.
   `chk`, and which hold one set of values, only at committed gates of proof blocks of no class sampled `all`, give step `t`
   one egress row. The check's own proof blocks are sampled `all`, so no incorrect set holds their gates.
 * `CheckedWitness`, a scope: an accepted run whose extracted witness has no proof block sampled `all` incorrect has a
-  `valid` trace run, the incorrect proof blocks' committed gates held at the trace's values (`heldAdv`), except with
-  probability `εchk` (`PrCheckMiss`).
-* `PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes` and `PeriodLeaksChecked`: a monitoring period's inputs, as
+  `valid` run, except with probability `εchk` (`PrCheckMiss`). Which run is its parameter `runs`: the run the leak
+  relation it is used with accepts at. `traceRun` is the trace's run, the incorrect proof blocks' committed gates held
+  at the trace's values (`heldAdv`), which `RLeakChecked` accepts at. A check that holds on one run need not hold on
+  another: the two differ wherever they hold a committed gate at different values.
+* `MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes` and `MonitoringPeriodLeaksChecked`: a monitoring period's inputs, as
   `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`.
 -/
 
@@ -105,29 +107,36 @@ def RLeakChecked (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg →
       Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o → o.length = k s → (∀ y ∈ o, y.jitter < Dj) →
         o ∈ AccSeqsChecked s.prog P s.design (lay s) (k s) (As s (traceVal s.prog (w.val H Cm s))) (valid s) δ op Dj
 
+/-- **The trace's run** at the witness `w`: `C` on the trace's committed values, the incorrect proof blocks' committed
+gates held at them (`heldAdv`), `false` where the trace opens nothing. It is the run `RLeakChecked` accepts at, where
+the trace's transfer gates carry the observations. -/
+def traceRun (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition) (w : Wit) :
+    Set (ℕ → Bool) :=
+  {valOver s.prog (traceVal s.prog (w.val H Cm s)) (heldAdv s.prog Pt (faulty H Cm s Pt w) (w.val H Cm s))}
+
 section Claim
 
 open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The check's miss**: `Pr[run = acc ∧ E^{P*}(x) = w]`, `E` the compiled sampled verifier's extractor, at a witness
-`w` whose statement parses and has a partition, whose incorrect set holds no proof block of a class sampled `all`, and
-whose trace run (`C` on the trace's committed values, the incorrect proof blocks' committed gates held at them,
-`heldAdv`) is not `valid`. -/
-noncomputable def PrCheckMiss (H : Msg → Msg) (D : Compiled Coin A) (valid : AuditStatement → (ℕ → Bool) → Prop)
+/-- **The check's miss on the runs `runs`**: `Pr[run = acc ∧ E^{P*}(x) = w]`, `E` the compiled sampled verifier's
+extractor, at a witness `w` whose statement `s` parses and has a partition `Pt`, whose incorrect set holds no proof
+block of a class sampled `all`, and one of whose runs `runs s Pt w` is not `valid`. `runs s Pt w` holds the run the
+check is held to at `w`, or none where that run is not defined. -/
+noncomputable def PrCheckMiss (H : Msg → Msg) (D : Compiled Coin A)
+    (runs : AuditStatement → Partition → Wit → Set (ℕ → Bool)) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) : ℝ :=
   Pr fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x =>
     (run H P D.V x r.1 r.2.1).out = .acc ∧ ∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧
       D.parse x = some s ∧ D.partition s = some Pt ∧ Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt) ∧
-      ¬valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
-        (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
+      ∃ ρ ∈ runs s Pt w, ¬valid s ρ
 
-/-- **The check holds on the trace's run at `x`**, a scope: at every prover, the check misses with probability at most
-`εchk x` (`PrCheckMiss`). -/
-def CheckedWitness (H : Msg → Msg) (D : Compiled Coin A) (valid : AuditStatement → (ℕ → Bool) → Prop)
-    (εchk : Msg → ℝ) (x : Msg) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), PrCheckMiss H D valid x P ≤ εchk x
+/-- **The check holds on the runs `runs` at `x`**, a scope: at every prover, the check misses on them with probability
+at most `εchk x` (`PrCheckMiss`). -/
+def CheckedWitness (H : Msg → Msg) (D : Compiled Coin A) (runs : AuditStatement → Partition → Wit → Set (ℕ → Bool))
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Msg → ℝ) (x : Msg) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), PrCheckMiss H D runs valid x P ≤ εchk x
 
 end Claim
 
@@ -152,7 +161,7 @@ def PooledGoodChecked {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L 
 /-- **The covert sender's channel over a monitoring period**: the schedules in `Ss` give connection `c` at most `cap c`
 cells and the record format holds each (`RecordFormat.fits`); each secret `z ∈ Zs` runs on schedules in `Ss` and is
 decoded from the cells the client receives (`cells`). -/
-def PeriodChannel {m : ℕ} {Ω Conn Cell Srv Ob Z : Type} (f : RecordFormat Conn Cell Ob) (cap : Conn → ℕ)
+def MonitoringPeriodChannel {m : ℕ} {Ω Conn Cell Srv Ob Z : Type} (f : RecordFormat Conn Cell Ob) (cap : Conn → ℕ)
     (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn)
     (srvOf : Z → (Fin m → Ω) → Srv) (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
     (cells : CertifierSchedule Conn × Srv → Conn → List (ℕ × CellView Cell)) : Prop :=
@@ -161,21 +170,21 @@ def PeriodChannel {m : ℕ} {Ω Conn Cell Srv Ob Z : Type} (f : RecordFormat Con
 
 /-- **Each window reads only the earlier windows' coins**: window `i`'s acceptance event `acc z i ω` and incorrect set
 `W z ω i` are one at any two histories that agree before `i`, and the set is among the window's `n i` proof blocks. -/
-def PeriodAdaptive {m : ℕ} {Ω Z : Type} (n : Fin m → ℕ) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+def MonitoringPeriodAdaptive {m : ℕ} {Ω Z : Type} (n : Fin m → ℕ) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) : Prop :=
   (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → acc z i ω = acc z i ω') ∧
     (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i) ∧ ∀ z ω i, W z ω i ⊆ Finset.range (n i)
 
 /-- **The conditional escape**: given the earlier windows' coins, window `i`'s audit accepts with probability at most
 `(1 - q)^|W_i| + e_i`, `q` the design's per-window detection probability. -/
-def PeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+def MonitoringPeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (q : ℝ) (e : Fin m → ℝ) : Prop :=
   ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i
 
 /-- **The leak relation with a valid run at each window's own incorrect set**: window `i`'s audit accepts while its
 observations `obs z ω i` are not accepted with a valid run at `W z ω i` (`LeakAtChecked`) with probability at most
 `e' i`. -/
-def PeriodLeaksChecked {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
+def MonitoringPeriodLeaksChecked {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
     (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)

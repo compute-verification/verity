@@ -28,10 +28,16 @@ import time
 import tomllib
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 from verity.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from verity_vllm.engine.moe_align import Align
 
 HERE = Path(__file__).resolve().parent
 #: the integration's distribution, whose entry points `site` declares
@@ -137,14 +143,14 @@ class Busy:
         self.stream = torch.cuda.Stream()
         self.a = torch.randn(8192, 8192, device=DEV, dtype=torch.bfloat16)
 
-    def __enter__(self):
+    def __enter__(self) -> Busy:
         self.stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(self.stream):
             for _ in range(3):
                 self.a @ self.a
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> None:
         torch.cuda.current_stream().wait_stream(self.stream)
 
 
@@ -164,7 +170,7 @@ def multi_pair_experts(ref: tuple[list[int], list[int], int], block: int, pairs:
     return sum(v > 1 for v in count.values())
 
 
-def check(args) -> None:
+def check(args: argparse.Namespace) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     real = torch.ops._moe_C.moe_align_block_size
@@ -212,7 +218,7 @@ def check(args) -> None:
     (out / f"check.{args.tag}.json").write_text(json.dumps(record, indent=1) + "\n")
 
 
-def compare(args) -> None:
+def compare(args: argparse.Namespace) -> None:
     d = Path(args.out)
     runs = [json.loads(p.read_text()) for p in sorted(d.glob("check.*.json"))]
     by: dict[str, dict] = {}
@@ -258,7 +264,7 @@ def compare(args) -> None:
         raise SystemExit(1)
 
 
-def device_us(fn, iters: int, trials: int = 7) -> float:
+def device_us(fn: Callable[[], object], iters: int, trials: int = 7) -> float:
     """The device's time a call, the median of ``trials`` batches of ``iters`` calls queued behind a sleep (so the
     host's launch time stays off the device's timeline)."""
     for _ in range(3):
@@ -276,7 +282,7 @@ def device_us(fn, iters: int, trials: int = 7) -> float:
     return sorted(t)[len(t) // 2]
 
 
-def host_us(fn, iters: int) -> float:
+def host_us(fn: Callable[[], object], iters: int) -> float:
     """The host's time to issue a call, queued behind a sleep so no call waits on the device."""
     torch.cuda.synchronize()
     torch.cuda._sleep(200_000_000)
@@ -288,7 +294,7 @@ def host_us(fn, iters: int) -> float:
     return (t1 - t0) * 1e6 / iters
 
 
-def variant(spec: str):
+def variant(spec: str) -> Align:
     """``SMALL_MAX:CHUNK:TILE:LONG_TILE:COLS[:slow]`` (``slow``: Triton's own launch on every call), or ``default``."""
     if spec == "default":
         return MA.Align()
@@ -297,15 +303,17 @@ def variant(spec: str):
                     fast_launch=not slow)
 
 
-def timed(fn, iters: int) -> dict:
+def timed(fn: Callable[[], object], iters: int) -> dict:
     try:
         return {"device_us": device_us(fn, iters), "host_us": host_us(fn, iters)}
     except Exception as e:  # noqa: BLE001 - a variant that fails to compile or launch is recorded, not fatal
         return {"error": f"{type(e).__name__}: {e}"[:300]}
 
 
-def time_(args) -> None:
-    from vllm.model_executor.layers.fused_moe.moe_align_block_size import moe_align_block_size as wrapper
+def time_(args: argparse.Namespace) -> None:
+    from vllm.model_executor.layers.fused_moe.moe_align_block_size import (
+        moe_align_block_size as wrapper,
+    )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -354,7 +362,7 @@ def time_(args) -> None:
     print(json.dumps(step, indent=1))
 
 
-def plugin(args) -> None:
+def plugin(args: argparse.Namespace) -> None:
     from vllm.model_executor.layers.fused_moe.experts import marlin_moe
 
     align = MA.installed()
@@ -402,7 +410,7 @@ def plugin(args) -> None:
         raise SystemExit(1)
 
 
-def site(args) -> None:
+def site(args: argparse.Namespace) -> None:
     """A site directory whose dist-info declares the integration's entry points (its pyproject's), so a venv with the
     integration on ``PYTHONPATH`` but not installed loads its vLLM plugins."""
     eps = tomllib.loads(PYPROJECT.read_text())["project"]["entry-points"]

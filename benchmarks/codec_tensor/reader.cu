@@ -13,7 +13,7 @@
 //   node     frame-v3-sha512 node(level, index, L, R), and pad(rank) past the pass's leaves: a thread a node
 //
 // The hm96 leaf after its salt, the frame-v3 leaf, the pad and the node are the GPU's one row commitment (`rc`,
-// verity/definitions/kernels/row_commit.cuh), from the pass's constants kL (rc's leaf and pad templates under the pass's domain
+// verity/circuits/kernels/row_commit.cuh), from the pass's constants kL (rc's leaf and pad templates under the pass's domain
 // and hm96's constants), kNodeTpl (a node's last two blocks), gNib (M_key's nibble table) and kC.node_mid; what is the
 // reader's own is the receipts, the row digest, the salts and which thread hashes what. Positions are at most 2^36,
 // so every leaf, pad and node index is below 2^32.
@@ -25,7 +25,7 @@
 #include <cuda_runtime.h>
 
 #include "sha512.cuh"
-#include "../../verity/definitions/kernels/row_commit.cuh"
+#include "../../verity/circuits/kernels/row_commit.cuh"
 
 namespace rb {
 
@@ -930,14 +930,18 @@ int rb_sketch64_receipts(const void *data, const void *zs, uint64_t j0, uint64_t
                          uint64_t *ys, int ctas, cudaStream_t s) {
   if (!data || !signs || !ys || n < 1 || ctas < 0) return 1;
   const auto k = zs ? sketch64_receipts_kernel<true> : sketch64_receipts_kernel<false>;
-  static bool opted[2];
-  if (!opted[zs != nullptr]) {
+  // The opt-in to more than the default shared memory is a device's, not the process's: a flag a kernel a device.
+  constexpr int DEVICES = 64;
+  static bool opted[2][DEVICES];
+  int dev;
+  if (cudaGetDevice(&dev) || dev < 0 || dev >= DEVICES) return 4;
+  if (!opted[zs != nullptr][dev]) {
     if (cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, SK64R_SMEM)) return 4;
-    opted[zs != nullptr] = true;
+    opted[zs != nullptr][dev] = true;
   }
   if (!ctas) {
-    int dev, sms, per;
-    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
+    int sms, per;
+    if (cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK64R_WARPS, SK64R_SMEM))
       return 4;
     ctas = sms * per;

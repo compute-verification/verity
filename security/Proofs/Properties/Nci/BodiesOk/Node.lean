@@ -35,7 +35,7 @@ callee's parameters, the batch axes and scan `xs` all of length `n`, and the out
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 
 open Flock.Program
-open private buildNode from Flock.Program
+open private buildNode from Circuits.Program
 
 /-- What `buildNode` establishes of a node of form `form` calling `c` with arguments `args`, computing `out`. -/
 def Shape (c : Defn) (form : Form) (args : Array Arg) (out : Ty) (n nxs : ℕ) : Prop :=

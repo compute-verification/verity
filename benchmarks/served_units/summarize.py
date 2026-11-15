@@ -2,9 +2,12 @@
 proof block), from
 what job.sh leaves there: stage.json and the *.time files, the prover's LIVE lines, the selftests' NEG lines and the Lean
 verifier's VERDICT lines. The verifier holds no program for a proof block (`stage.py`: a `UNITS` circuit binds none, and
-from a `PARTS` class's program it would derive only whole activations), so it refuses every session once every check
-before that refusal has passed (`NO_PROGRAM`): the honest run and the selftest build's honest record pass only when
-refused for that alone; every other control passes only when a check rejects it (a forged output word refused)."""
+from a `PARTS` class's program it would derive only whole activations), so it refuses every session once `Zk.verify` and
+every check before that refusal have passed (`NO_PROGRAM`). Each Lean check is held to the verdict it must give
+(`as_expected`): the honest run's and the selftest build's honest record's only when refused for that alone, every other
+check only when a check rejects it (a forged output word refused). A refusal never counts as an acceptance: each proof
+block counts the honest checks Lean accepted (`lean_accepted`) apart from those it refused for `NO_PROGRAM` alone
+(`lean_refused_no_program`), and its `as_expected` says only that every check and control gave the verdict it must."""
 import json
 import statistics
 import sys
@@ -80,8 +83,9 @@ def lean(d: Path) -> dict:
         got = (None if not v or v[0].get("accepted") is None else "ACCEPT" if v[0]["accepted"] else
                "REFUSED" if why.startswith(REFUSED) else "REJECT")
         expect = "REFUSED" if tag in HONEST else "REJECT"
-        ok = got == expect and (tag not in HONEST or why.startswith(NO_PROGRAM))
-        out[tag] = {"expect": expect, "verdict": got, "pass": ok, "why": why[:300] if v else tail(f.with_suffix(".err"), 2),
+        held = got == expect and (tag not in HONEST or why.startswith(NO_PROGRAM))
+        out[tag] = {"expect": expect, "verdict": got, "as_expected": held,
+                    "why": why[:300] if v else tail(f.with_suffix(".err"), 2),
                     "wall_s": t.get("wall_s"), "maxrss_gb": gb(t) if t else None,
                     **({"partition": v[0]["partition"]} if v and v[0].get("partition") else {})}
     return out
@@ -95,13 +99,16 @@ def one(d: Path) -> dict:
                                            "k_log", "unit_log", "circuit_bytes", "circuit_sha512", "twin", "seconds")},
                    stage_maxrss_gb=gb(t), stage_wall_s=(t or {}).get("wall_s"))
     rec.update(zk=session(d), controls=controls(d), lean=lean(d))
+    honest = [rec["lean"][c] for c in HONEST if c in rec["lean"]]
+    rec["lean_accepted"] = sum(v["verdict"] == "ACCEPT" for v in honest)
+    rec["lean_refused_no_program"] = sum(v["verdict"] == "REFUSED" and v["why"].startswith(NO_PROGRAM) for v in honest)
+    honest_held = bool(rec["lean"]) and all(rec["lean"].get(c, {}).get("as_expected") for c in HONEST)
     forged = [c for c in rec["lean"] if c not in HONEST]
-    rec["lean_passes_honest"] = bool(rec["lean"]) and all(rec["lean"].get(c, {}).get("pass") for c in HONEST)
-    # a rejection counts only beside the honest records passing every check under the same flags: a setup error rejects
-    # everything
-    rec["forgeries_refused"] = rec["lean_passes_honest"] and bool(forged) and all(rec["lean"][c]["pass"] for c in forged)
-    rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean_passes_honest"] and rec["forgeries_refused"]
-                           and all(v["pass"] for v in rec["controls"].values()))
+    # a rejection counts only beside the honest records getting through every check before the Program under the same
+    # flags: a setup error rejects everything
+    rec["forgeries_refused"] = honest_held and bool(forged) and all(rec["lean"][c]["as_expected"] for c in forged)
+    rec["as_expected"] = bool(rec["zk"] and rec["zk"].get("accepted") and honest_held and rec["forgeries_refused"]
+                              and all(v["pass"] for v in rec["controls"].values()))
     (d / "summary.json").write_text(json.dumps(rec, indent=1))
     return rec
 
@@ -112,6 +119,7 @@ for r in rows:
     z = r.get("zk") or {}
     print(json.dumps({"unit": r["tag"], "ands": r.get("ands"), "nonzeros": r.get("unit_nnz"), "k_log": r.get("k_log"),
                       "prove_s": z.get("prove_total_s_median"), "peak_gb": z.get("prover_maxrss_gb"),
-                      "proof_bytes": z.get("proof_bytes_total"), "lean_verify": r["lean_passes_honest"],
-                      "forgery_refused": r["forgeries_refused"], "all_pass": r["all_pass"],
+                      "proof_bytes": z.get("proof_bytes_total"), "lean_accepted": r["lean_accepted"],
+                      "lean_refused_no_program": r["lean_refused_no_program"], "forgery_refused": r["forgeries_refused"],
+                      "as_expected": r["as_expected"],
                       "lean": {c: v["verdict"] for c, v in r["lean"].items()}, "error": r.get("stage_error") or z.get("error")}))

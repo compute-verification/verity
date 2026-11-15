@@ -9,14 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.pipeline import predicted
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.predict.phi import Phi
-
-from tests.pipeline import predicted
 
 
 def engine(resolved: bool | None) -> SimpleNamespace:

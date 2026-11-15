@@ -28,15 +28,16 @@ Past the exhaustive sizes, byte fields of L limbs take product families of small
 
 from __future__ import annotations
 
+import argparse
 import itertools
 import json
 import math
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
+from fractions import Fraction
 
 import numpy as np
-
 from gates import Builder, is_charged, op_affine, op_mma, proven
 
 P1024 = 2 ** 1024 - 105  # p1024 (verity.protocols.poub.verifier.codec, Field("p1024", 1024, 105))
@@ -114,7 +115,7 @@ class Field:
         return self.B.bit_length() - 1
 
     @staticmethod
-    def toy(B: int, L: int) -> "Field":
+    def toy(B: int, L: int) -> Field:
         p = B ** L - 1
         while not (p % 4 == 3 and is_prime(p)):
             p -= 1
@@ -150,23 +151,23 @@ def column_sums(d: np.ndarray, L: int, delta: int) -> np.ndarray:
 def carries(s: np.ndarray, y: np.ndarray, B: int, p: int, delta: int) -> np.ndarray:
     """The cyclic carry vector: y_l = s_l + c_{l−1} − B·c_l, with c_{−1} read as δ·c_{L−1}; c_{L−1} = (val s − val y)/p."""
     n, L = s.shape
-    pw = np.array([B ** l for l in range(L)], dtype=np.int64)
+    pw = np.array([B ** ell for ell in range(L)], dtype=np.int64)
     K, r = np.divmod(s @ pw - y @ pw, p)
     assert not r.any()
     c = np.zeros((n, L), dtype=np.int64)
     prev = delta * K
-    for l in range(L):
-        num = s[:, l] + prev - y[:, l]
+    for ell in range(L):
+        num = s[:, ell] + prev - y[:, ell]
         assert not (num % B).any()
-        c[:, l] = num // B
-        prev = c[:, l]
+        c[:, ell] = num // B
+        prev = c[:, ell]
     assert (c[:, L - 1] == K).all()
     return c
 
 
 def table(F: Field) -> Table:
     a = np.arange(F.p, dtype=np.int64)
-    pw = [F.B ** l for l in range(F.L)]
+    pw = [F.B ** ell for ell in range(F.L)]
     d = np.stack([(a // q) % F.B for q in pw], axis=1)
     sq = (a * a) % F.p
     y = np.stack([(sq // q) % F.B for q in pw], axis=1)
@@ -246,8 +247,6 @@ def _egcd(a: int, b: int) -> tuple[int, int, int]:
 
 
 def _det(M: list[list[int]]) -> int:
-    from fractions import Fraction
-
     n = len(M)
     A = [[Fraction(x) for x in r] for r in M]
     det = Fraction(1)
@@ -267,8 +266,6 @@ def _det(M: list[list[int]]) -> int:
 
 
 def _inverse_unimodular(M: list[list[int]]) -> list[list[int]]:
-    from fractions import Fraction
-
     n = len(M)
     A = [[Fraction(x) for x in r] + [Fraction(int(i == j)) for j in range(n)] for i, r in enumerate(M)]
     for i in range(n):
@@ -393,7 +390,7 @@ def search(T: Table, *, lines_bases: int = 200, small_coeff: int = 1, max_rows: 
       and LLL-short rows of the carries' covariance (and of the carries' with the quadratic monomials', ``row+q``);
     * ``beam``: k rows from the pool of the best single rows, extended greedily (`beam` states kept).
     """
-    F, L = T.F, T.F.L
+    L = T.F.L
     mono, _names = monomials(T.digits)
     D = mono.shape[1]
     zero_q = [0] * D
@@ -514,15 +511,15 @@ def build(T: Table, cn: Constraint | None, mono_names: list[tuple[int, ...]]) ->
     fu = (0, B - 1)
     C = Builder()
 
-    dig = [C.inp(l, 0, B - 1, "registered") for l in range(L)]
+    dig = [C.inp(ell, 0, B - 1, "registered") for ell in range(L)]
     zero = C.const(0)
-    A = C.gate(op_affine(0, tuple(B ** l for l in range(L))), dig)
+    A = C.gate(op_affine(0, tuple(B ** ell for ell in range(L))), dig)
     t = []
     for col in range(2 * L - 1):
         pairs = [(i, col - i) for i in range(L) if 0 <= col - i < L]
         t.append(C.gate(op_mma(fu, fu, len(pairs)), [zero] + [dig[i] for i, _ in pairs] + [dig[j] for _, j in pairs]))
-    s = [C.gate(op_affine(0, (1, F.delta)), (t[l], t[l + L])) if l + L < 2 * L - 1 else
-         C.gate(op_affine(0, (1,)), (t[l],)) for l in range(L)]
+    s = [C.gate(op_affine(0, (1, F.delta)), (t[ell], t[ell + L])) if ell + L < 2 * L - 1 else
+         C.gate(op_affine(0, (1,)), (t[ell],)) for ell in range(L)]
 
     k = cn.k if cn else 0
     W = unimodular_completion(cn.psi if cn else [], L)
@@ -554,9 +551,9 @@ def build(T: Table, cn: Constraint | None, mono_names: list[tuple[int, ...]]) ->
         lut = col.copy()
         lo, hi = int(col[good].min()), int(col[good].max())
         w.append(C.budgeted(lambda v, lut=lut: lut[v[0]], [A], lo, hi))
-    c = [C.gate(op_affine(0, tuple(Winv[l])), w) for l in range(L)]
+    c = [C.gate(op_affine(0, tuple(Winv[ell])), w) for ell in range(L)]
     y = [C.gate(op_affine(0, (1, F.delta, -B)), (s[0], c[L - 1], c[0]))] + \
-        [C.gate(op_affine(0, (1, 1, -B)), (s[l], c[l - 1], c[l])) for l in range(1, L)]
+        [C.gate(op_affine(0, (1, 1, -B)), (s[ell], c[ell - 1], c[ell])) for ell in range(1, L)]
     return Built(C, y, dig)
 
 
@@ -569,7 +566,7 @@ def renormalization_witness(T: Table, bc: Built, f: int = 4, w: int = 31) -> dic
     window = np.zeros(F.p, dtype=bool)
     hold = np.zeros(F.p, dtype=bool)
     for a in range(F.p):
-        vs, window[a], hold[a] = bc.C.evaluate({l: int(T.digits[a, l]) for l in range(F.L)})
+        vs, window[a], hold[a] = bc.C.evaluate({ell: int(T.digits[a, ell]) for ell in range(F.L)})
         outs[a] = [vs[i] for i in bc.out]
     good = hold & (outs == T.y).all(axis=1)
     return {"restricted": restricted(f, w, bc.C), "proven_failures": proven(bc.C)[:3], "run_bits": run_bits(bc.C),
@@ -621,26 +618,26 @@ def carry_free_count(F: Field) -> int:
     def folded(m: int) -> int:
         return t[m] + (delta * t[m + L] if m + L < 2 * L - 1 else 0)
 
-    def walk(l: int) -> None:
+    def walk(ell: int) -> None:
         nonlocal count
-        if l == L:
+        if ell == L:
             if sum(folded(m) * B ** m for m in range(L)) < p:
                 count += 1
             return
         for a in range(B):
-            digits[l] = a
-            t[2 * l] += a * a
-            for i in range(l):
-                t[l + i] += 2 * a * digits[i]
+            digits[ell] = a
+            t[2 * ell] += a * a
+            for i in range(ell):
+                t[ell + i] += 2 * a * digits[i]
             good = all(folded(m) < B for m in range(L))
             if good:
-                walk(l + 1)
-            t[2 * l] -= a * a
-            for i in range(l):
-                t[l + i] -= 2 * a * digits[i]
+                walk(ell + 1)
+            t[2 * ell] -= a * a
+            for i in range(ell):
+                t[ell + i] -= 2 * a * digits[i]
             if not good and a > 0:
                 break  # a larger digit only adds to every sum it touches
-        digits[l] = 0
+        digits[ell] = 0
 
     walk(0)
     return count
@@ -666,7 +663,7 @@ def p1024_column_sums(digits: Sequence[int], L: int = 128, delta: int = 105) -> 
     for i, a in nz:
         for j, b in nz:
             t[i + j] += a * b
-    return [t[l] + (delta * t[l + L] if l + L < 2 * L - 1 else 0) for l in range(L)]
+    return [t[ell] + (delta * t[ell + L] if ell + L < 2 * L - 1 else 0) for ell in range(L)]
 
 
 def p1024_family(maxdigit: Sequence[int], p: int = P1024) -> dict:
@@ -676,7 +673,7 @@ def p1024_family(maxdigit: Sequence[int], p: int = P1024) -> dict:
     p1024 unless `p` (just below 256^len(maxdigit)) says otherwise."""
     L = len(maxdigit)
     s = p1024_column_sums(maxdigit, L, 256 ** L - p)
-    exact = max(s) <= 255 and sum(v << (8 * l) for l, v in enumerate(s)) < p
+    exact = max(s) <= 255 and sum(v << (8 * ell) for ell, v in enumerate(s)) < p
     log2 = sum(math.log2(m + 1) for m in maxdigit)
     return {"exact": exact, "max_column": max(s), "log2_size": log2, "log256_size": log2 / 8,
             "eps_log2": log2 - math.log2(p), "formula_d_at_eps": 4 + (math.log2(p) - log2) / 8,
@@ -689,12 +686,12 @@ def p1024_greedy_family(L: int = 128, delta: int = 105) -> list[int]:
     D = [0] * L
     t = [0] * (2 * L - 1)
 
-    def fits(l: int, new: int) -> bool:
-        old = D[l]
-        dt = {2 * l: new * new - old * old}
+    def fits(ell: int, new: int) -> bool:
+        old = D[ell]
+        dt = {2 * ell: new * new - old * old}
         for i in range(L):
-            if i != l and D[i]:
-                dt[l + i] = dt.get(l + i, 0) + 2 * (new - old) * D[i]
+            if i != ell and D[i]:
+                dt[ell + i] = dt.get(ell + i, 0) + 2 * (new - old) * D[i]
         cols: dict[int, int] = {}
         for m, v in dt.items():
             cols[m % L] = cols.get(m % L, 0) + (v if m < L else delta * v)
@@ -702,18 +699,18 @@ def p1024_greedy_family(L: int = 128, delta: int = 105) -> list[int]:
 
     while True:
         best, gain = None, 0.0
-        for l in range(L):
-            g = math.log2(D[l] + 2) - math.log2(D[l] + 1)
-            if g > gain and fits(l, D[l] + 1):
-                best, gain = l, g
+        for ell in range(L):
+            g = math.log2(D[ell] + 2) - math.log2(D[ell] + 1)
+            if g > gain and fits(ell, D[ell] + 1):
+                best, gain = ell, g
         if best is None:
             break
-        l, old, new = best, D[best], D[best] + 1
-        t[2 * l] += new * new - old * old
+        ell, old, new = best, D[best], D[best] + 1
+        t[2 * ell] += new * new - old * old
         for i in range(L):
-            if i != l and D[i]:
-                t[l + i] += 2 * (new - old) * D[i]
-        D[l] = new
+            if i != ell and D[i]:
+                t[ell + i] += 2 * (new - old) * D[i]
+        D[ell] = new
     return D
 
 
@@ -730,7 +727,7 @@ def greedy_series(Ls: Sequence[int] = range(1, 41)) -> list[dict]:
 
 def p1024_sample(n: int, digit_hi: int, positions: int, seed: int) -> np.ndarray:
     rng = random.Random(seed)
-    return np.array([[rng.randint(0, digit_hi) if l < positions else 0 for l in range(128)] for _ in range(n)], dtype=np.int64)
+    return np.array([[rng.randint(0, digit_hi) if ell < positions else 0 for ell in range(128)] for _ in range(n)], dtype=np.int64)
 
 
 def p1024_carry_free_fraction(n: int = 2000, digit_hi: int = 3, positions: int = 64, seed: int = 7) -> dict:
@@ -754,15 +751,15 @@ def p1024_carries(n: int = 4000, seed: int = 11) -> np.ndarray:
     s = column_sums(d, 128, 105)
     c = np.zeros_like(s)
     for i in range(n):
-        vs = sum(int(v) << (8 * l) for l, v in enumerate(s[i]))
+        vs = sum(int(v) << (8 * ell) for ell, v in enumerate(s[i]))
         K, r = divmod(vs - A[i] * A[i] % P1024, P1024)
         assert r == 0
         prev = 105 * K
-        for l in range(128):
-            num = int(s[i, l]) + prev - int(y[i, l])
+        for ell in range(128):
+            num = int(s[i, ell]) + prev - int(y[i, ell])
             assert num % 256 == 0
-            c[i, l] = num // 256
-            prev = int(c[i, l])
+            c[i, ell] = num // 256
+            prev = int(c[i, ell])
     return c
 
 
@@ -771,10 +768,10 @@ def p1024_guess_costs(c: np.ndarray) -> dict:
     whose mode the sample can't resolve), per column, and for the cheapest columns guessed jointly."""
     n = c.shape[0]
     per = []
-    for l in range(c.shape[1]):
-        _v, cnt = np.unique(c[:, l], return_counts=True)
-        sd = float(c[:, l].std())
-        per.append({"l": l, "mode_bits": -math.log2(cnt.max() / n), "gauss_bits": math.log2(sd * math.sqrt(2 * math.pi)) if sd else 0.0})
+    for ell in range(c.shape[1]):
+        _v, cnt = np.unique(c[:, ell], return_counts=True)
+        sd = float(c[:, ell].std())
+        per.append({"l": ell, "mode_bits": -math.log2(cnt.max() / n), "gauss_bits": math.log2(sd * math.sqrt(2 * math.pi)) if sd else 0.0})
     cheapest = sorted(per, key=lambda r: r["gauss_bits"])
     return {"n": n, "cheapest": cheapest[:6], "median_gauss_bits": float(np.median([r["gauss_bits"] for r in per])),
             "min_gauss_bits": cheapest[0]["gauss_bits"]}
@@ -800,8 +797,6 @@ def p1024_top_constraint(n: int = 4000, seed: int = 11) -> dict:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    import argparse
-
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default="renorm.json")
     ap.add_argument("--sizes", default="4:3,4:4,4:5,4:6,4:7,4:8,16:2,16:3,16:4,256:1,256:2")

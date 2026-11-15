@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from contextlib import contextmanager
 
+from verity_vllm.program.frontend import targets as T
+from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
+__all__ = ["launch_batch_declared", "launch_region", "traced_launch_tokens"]
 
 # -- fields observed on the construction host (derived, not declared) --------------------------------------------------------
 #
@@ -50,7 +54,7 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
 _OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
-                   "allreduce_settings": None, "launch_region": None, "batched_form": False}
+                   "allreduce_settings": None, "launch_region": None, "batched_form": False, "dsa_table_reads": False}
 
 
 def clear_observations() -> None:
@@ -61,16 +65,24 @@ def clear_observations() -> None:
     _OBSERVED["allreduce_settings"] = None
     _OBSERVED["launch_region"] = None
     _OBSERVED["batched_form"] = False
+    _OBSERVED["dsa_table_reads"] = False
 
 
-def observe_batched_form(batched: bool) -> None:
+def observe_batched_form(batched: bool, table_reads: bool = False) -> None:
     """Whether the request Program is derived in class G's batched form (the Build's `--batched`, `prune.BATCHED`), which the
-    sparse-attention rules write in its own Definitions (`vllm_dsa.long_row_blocks`, the latent row), as `predict.dsa` does."""
+    sparse-attention rules write in its own Definitions (`vllm_dsa.long_row_blocks`, the latent row), as `predict.dsa` does.
+    `table_reads`: in that form, DSA's rows past TOPK keys read their history by table (the Build's `--dsa-table-reads`,
+    `predict.steps.Registered.dsa_table_reads`): `vllm_dsa`'s index and reads in place of the rows network."""
     _OBSERVED["batched_form"] = bool(batched)
+    _OBSERVED["dsa_table_reads"] = bool(batched and table_reads)
 
 
 def batched_form() -> bool:
     return bool(_OBSERVED.get("batched_form"))
+
+
+def dsa_table_reads() -> bool:
+    return bool(_OBSERVED.get("dsa_table_reads"))
 
 
 def observe_allreduce_settings(settings: dict | None) -> None:
@@ -122,7 +134,6 @@ def traced_launch_tokens(own: int) -> int:
     region = _OBSERVED["launch_region"]
     if region is None:
         return int(own)
-    from verity_vllm.program.frontend import targets as T
     step, rows = region
     return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled",
                            capture_sizes=active_target_profile().graph_capture_sizes())
@@ -131,8 +142,6 @@ def traced_launch_tokens(own: int) -> int:
 def _launch_of(node, read):
     """`read(step, sampled)` at the node's `launch_region` tag.  A node without a tag, or a declaration that does not hold this
     request, is refused: the launch its kernel choice reads is unknown."""
-    from verity_vllm.program.frontend import targets as T
-    from verity_vllm.program.frontend.outcomes import refuse
     tag = node.meta.get("custom") or {}
     if "launch_step" not in tag:
         refuse("numerics_unregistered", node, None, "the request is built under a declared launch batch but this node was traced "
@@ -149,7 +158,6 @@ def launch_tokens_of(node, own: int) -> int:
     declared batch."""
     if not launch_batch_declared():
         return int(own)
-    from verity_vllm.program.frontend import targets as T
     sizes = active_target_profile().graph_capture_sizes()
     return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled, capture_sizes=sizes))
 
@@ -159,7 +167,6 @@ def launch_sequences_of(node) -> list[tuple[int, int]] | None:
     node's `launch_region` tag), for a kernel choice that reads each sequence; None without a declared batch."""
     if not launch_batch_declared():
         return None
-    from verity_vllm.program.frontend import targets as T
     return _launch_of(node, lambda step, _sampled: T.launch_sequences(step, active_launch_context()))
 
 
@@ -168,9 +175,6 @@ def launch_keys_of(node, own: list[int]) -> list[int]:
     without a declared batch.  A batch that does not hold `own` is refused."""
     if not launch_batch_declared():
         return list(own)
-    from collections import Counter
-    from verity_vllm.program.frontend import targets as T
-    from verity_vllm.program.frontend.outcomes import refuse
     keys = _launch_of(node, lambda step, _sampled: T.launch_keys(step, active_launch_context()))
     if Counter(own) - Counter(keys):
         refuse("numerics_unregistered", node, None, f"the declared launch batch's key counts {keys} do not hold this request's {list(own)}",
@@ -214,7 +218,6 @@ def _attn_pins_ok(obs: dict | None, layer_name: str) -> str | None:
     # the FA version pin is the ACTIVE target's effective one (`TargetProfile.effective_flash_attn_version`: the declared knob
     # or the selector's default for the capability), and only a version the target has a registered attention chain for is admitted
     # (`frontend.targets.check_flash_attn_registered`); every other field keeps the FA2 profile's pin.
-    from verity_vllm.program.frontend import targets as T
     tp = active_target_profile()
     try:
         want_fav = T.check_flash_attn_registered(tp)

@@ -12,18 +12,17 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_vllm.program.predict import scan_state as SS
-
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_io_shell as BX
-from verity.definitions.registry import io_shell as X
-from verity.definitions.registry.dead_free import TokenSelectCombineV2
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
+from verity.definitions import boolean as SW
+from verity.definitions.registry import boolean_io_shell as BX
+from verity.definitions.registry import io_shell as X
+from verity.definitions.registry.dead_free import TokenSelectCombineV2
+from verity.protocols.certifier.prover import ingress_scan as IS
+
+from verity_vllm.program.predict import scan_state as SS
 
 MODEL, V = "served-model", 128256
 SMALL = {"MODEL": "m", "LP": 3, "V": 1000}
@@ -58,7 +57,7 @@ def _corrupt(st: dict, body: bytes) -> list[bytes]:
 
 
 def _word(st: dict, bodies: list[bytes]) -> np.ndarray:
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     return np.asarray(evaluate_batch(bind(X.IngressPrompt, **st), arr, kernel="reference"), dtype=np.uint64).reshape(len(bodies), -1)
 
 
@@ -184,13 +183,14 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
     for lp0, lp1 in ((3, 0), (1, 1 << 31), (X.M32, 2)):
         lanes = [(1, lp0, 64, [5, (1 << IDB) - 1, 0, 77]), (0, lp1, 9, [0, 0, 0, 0])]
         x = 0
-        for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
-            x |= occ << o | lp << l | m << mx
+        for (occ, lp, m, ids), o, lp_at, mx, at in zip(lanes, OCC, LP, MAX, IDS):
+            x |= occ << o | lp << lp_at | m << mx
             x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
         words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
         out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
         assert out == [v for occ, lp, m, ids in lanes
-                       for v in _lane(*X.feed_reference([lp, *ids], None, NP), occ, [lp, m])]
+                       for tok, slot in [X.feed_reference([lp, *ids], None, NP)]
+                       for v in _lane(tok, slot, occ, [lp, m])]
         assert out[1] == (lp0 - 1) & X.M32 and out[2:NP + 1] == lanes[0][3][1:] and out[NP + 1] == 0
     assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
     for bad in ({"IDS": (120, 16 * NS - IDB)}, {"IDB": 33}, {"OCC": (3,)}):
@@ -308,7 +308,7 @@ def test_the_boolean_definition_is_its_word(st):
     assert SW.boolean_version(word_of(target)).id == target.id
     bodies = _bodies(st, 12, 1)
     bodies += [c for b in bodies[:2] for c in _corrupt(st, b)]
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     got = np.asarray(evaluate_words(target, arr), dtype=np.uint64).reshape(len(bodies), -1)
     assert np.array_equal(got, _ref(st, bodies))
 
@@ -346,7 +346,7 @@ def _sampled_corrupt(st: dict, body: bytes) -> list[bytes]:
 
 
 def _sampled_word(st: dict, bodies: list[bytes]) -> np.ndarray:
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     return np.asarray(evaluate_words(bind(BX.IngressSampledV1, **st), arr), dtype=np.uint64).reshape(len(bodies), -1)
 
 

@@ -8,12 +8,23 @@ import dataclasses
 import random
 
 import pytest
-
 from pous_fakes import Clock
+
 from verity.protocols.pous.verifier import band, dense
-from verity.protocols.pous.verifier.audit import AUDIT_CAP, DEADLINE_NS, LATE_ROUNDS, UnsignedRounds, challenge_key, run_timed
+from verity.protocols.pous.verifier.audit import (
+    AUDIT_CAP,
+    DEADLINE_NS,
+    LATE_ROUNDS,
+    UnsignedRounds,
+    challenge_key,
+    run_timed,
+)
 from verity.protocols.pous.verifier.codec import encode_segments
-from verity.protocols.pous.verifier.continuous import ContinuousMemoryChallenger, Reply, run_continuous
+from verity.protocols.pous.verifier.continuous import (
+    ContinuousMemoryChallenger,
+    Reply,
+    run_continuous,
+)
 from verity.protocols.pous.verifier.verifier import MerkleTree, VerifierKey
 
 PARAMS = band.BandParams(16, 64, 12, 2)
@@ -207,7 +218,7 @@ def _same_block_twice(vk):
         key = challenge_key(b"audit-%d" % n, vk)
         if key.uniform(PARAMS.blocks, 0) == key.uniform(PARAMS.blocks, 1):
             return b"audit-%d" % n
-    raise AssertionError("no key draws the same block twice in a row")
+    raise AssertionError("no key samples the same block twice in a row")
 
 
 def test_a_stale_answer_is_not_credited_to_the_next_challenge(world):

@@ -11,6 +11,10 @@ import os
 
 import numpy as np
 import pytest
+from verity.circuits import partition_v2 as PV2
+from verity.commitments import advice as AC
+from verity.commitments.windows import interface as IF
+
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import WINDOW, _circuit, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
@@ -19,10 +23,6 @@ from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_builder import WEIGHTS
 from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
-
-from verity.circuits import partition_v2 as PV2
-from verity.commitments import advice as AC
-from verity.commitments.windows import interface as IF
 
 INT8_H200 = {**H200, "int8_exact": "linears"}
 #: the Program digest the header names, as the record gives it (`inference_blocks.program_digest`, about a minute at TINY)

@@ -154,6 +154,7 @@ def pin_writes(src: str, rel: str) -> list[str]:
                 out.append(f"{rel}:{node.lineno} {symbol} os.environ.update(....env())")
         for k in keys:
             if R.is_str(k) and k.value.startswith(PIN_PREFIXES):
+                assert isinstance(node, (ast.stmt, ast.expr)), "a key is collected from an assignment or a call"
                 out.append(f"{rel}:{node.lineno} {symbol} {k.value}")
     return out
 

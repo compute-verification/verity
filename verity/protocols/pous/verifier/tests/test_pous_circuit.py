@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import random
 
 import numpy as np
 import pytest
+import settings
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
@@ -61,7 +61,7 @@ def test_counts_at_the_circuit_check_binding():
     assert EB.compile(bind(P.PousModSquare, W=128, C0=21065)).counts == {"and": 10636, "xor": 27158, "not": 1086}
 
 
-SLOW = pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="minutes at P2's width: VERITY_POUS_SLOW=1")
+SLOW = pytest.mark.skipif(not settings.SLOW, reason="minutes at P2's width: VERITY_POUS_SLOW=1")
 
 
 @SLOW

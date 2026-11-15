@@ -20,7 +20,7 @@ interval a network certifier counts the session's egress over.
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `side_of(period, node, device)` is
-where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the leg's: it starts the
+where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the prover's: it starts the
 side, connects to it, answers from `prover` (`answer`) and adds the connection's two addresses as it saw them. The
 wipe's two parties as the deployment layer runs them are `wipe_parties`.
 """
@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import secrets
 import socket
@@ -38,13 +39,14 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.configuration.deploy.stream import Side
-
+from verity.runtime.stream import Side
 from verity.protocols.pous.device import memory_challenger as mc
+
+from . import period, wipe_stream
 from . import streamed_wipe as sw
-from . import wipe_stream
 
 MODULE = "verity.protocols.pous.verifier.wipe_party"
+logger = logging.getLogger(__name__)
 PREMISE = "trusted-host"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
@@ -74,13 +76,13 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
           reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
-          fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
+          fill: Callable[[bytes, int], Any] | None = None) -> sw.WipeMemoryChallenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` with
     `egress_bits` once it ends. A prover that closes first leaves it unsigned."""
-    c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
-                      params_of(request, reads), signer, log=log, clock=clock)
+    c = sw.WipeMemoryChallenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
+                                params_of(request, reads), signer, log=log, clock=clock)
     try:
         if fill is not None:
             f.flush()
@@ -99,7 +101,8 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
             c.receive(_read(f, sw.LABEL_BYTES * len(idx)))
         f.write(END)
         f.flush()
-    except (ConnectionError, BrokenPipeError):
+    except (ConnectionError, BrokenPipeError) as e:
+        logger.warning("the prover left before the wipe ended, so its session stays unsigned: %s", e)
         return c
     c.close(egress_bits)
     return c
@@ -142,7 +145,7 @@ def utc(unix_ns: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(s)) + f".{ns // 1000:06d}Z"
 
 
-def report(c: sw.Challenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
+def report(c: sw.WipeMemoryChallenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
     """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock."""
     out = {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
            "public_key": public_key.hex(), "reads": len(c.batches),
@@ -225,7 +228,7 @@ def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
 
     def drive(s: socket.socket) -> tuple[int, dict[str, str]]:
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        connection = {k: "%s:%d" % a[:2] for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
+        connection = {k: f"{a[0]}:{a[1]}" for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
         with s.makefile("rwb") as f:
             return answer(f, prover, stop_after), connection
 
@@ -234,8 +237,6 @@ def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    from . import period  # noqa: PLC0415  (its challenger key, made once in the device directory)
-
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")

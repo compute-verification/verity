@@ -79,22 +79,29 @@ def main(o: Path) -> None:
     for sh, b in bench.items():
         a = b["arms"]
         pl, pq = a.get("plain", {}).get("ms"), a.get("plainq", {}).get("ms")
+
+        def g(arm: str, base: str, cold: bool, sh: str = sh) -> float | None:
+            return il.get((sh, arm, base, cold), {}).get("ratio")
+
         for k in [n for n in a if kind(n) or n == "e_plain"]:
             ew, ef = a.get(f"edited:{k}", {}).get("ms"), a.get(f"editedf:{k}", {}).get("ms")
-            g = lambda arm, base, cold: il.get((sh, arm, base, cold), {}).get("ratio")  # noqa: E731
             print(f"| {sh} | {k} | {kind(k) or 'none'} | {f(a[k]['ms'] / pl if pl else None)} | {f(g(k, 'plain', False))} | "
                   f"{f(g(k, 'plain', True))} | {f(ew / pl if ew and pl else None)} | {f(g(f'edited:{k}', 'plain', False))} | "
                   f"{f(ef / pq if ef and pq else None)} | {f(g(f'editedf:{k}', 'plainq', False))} | "
                   f"{f(g(f'editedf:{k}', 'plainq', True))} |")
     a = bench.get("o_proj", {}).get("arms", {})
-    g = lambda n: a.get(n, {}).get("ms")  # noqa: E731
-    if g("plain") and g("e_plain"):
+
+    def ms(n: str) -> float | None:
+        return a.get(n, {}).get("ms")
+
+    if ms("plain") and ms("e_plain"):
         print("\n## o_proj by part (hot items, ms)\n")
-        print(f"- mainloop + 2-atom tail against cuBLASLt (e_plain - plain): {g('e_plain') - g('plain'):+.4f}")
+        print(f"- mainloop + 2-atom tail against cuBLASLt (e_plain - plain): {ms('e_plain') - ms('plain'):+.4f}")
         for v in [n for n in a if kind(n)]:
-            print(f"- receipts in {v} ({kind(v)}; {v} - e_plain): {g(v) - g('e_plain'):+.4f}")
-        if g("qdither") and g("qplain") and g("wedit"):
-            print(f"- wedit {g('wedit'):.4f}; qdither - qplain {g('qdither') - g('qplain'):+.4f}; qwe {f(g('qwe'), 4)}")
+            print(f"- receipts in {v} ({kind(v)}; {v} - e_plain): {ms(v) - ms('e_plain'):+.4f}")
+        if ms("qdither") and ms("qplain") and ms("wedit"):
+            print(f"- wedit {ms('wedit'):.4f}; qdither - qplain {ms('qdither') - ms('qplain'):+.4f}; "
+                  f"qwe {f(ms('qwe'), 4)}")
     leftover = [r for k, r in il.items() if k[0] not in bench]
     for r in leftover:
         print(f"- IL {shape(r)} {r['il']} / {r['base']}: {r['ratio']:.4f}")

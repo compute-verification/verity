@@ -976,7 +976,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     for (uint64_t n : zc_nonces) W.u64(n);
     CKI(phase(3));
     // z's transpose for the lincheck, made once the zerocheck has freed its tables (nothing between the witness and here writes
-    // z), and queued after the phase's stamp so that it runs while the lincheck's first coins are drawn
+    // z), and queued after the phase's stamp so that it runs while the lincheck's first coins are flipped
     CK(ffi_malloc(&d_zlin, (size_t)len * 16));
     chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
     CK(cudaGetLastError());

@@ -15,7 +15,8 @@ What committing values costs under each commitment scheme, on the host and on th
 - `table_read_commit.py`: the same committer over one decode step's DSA table reads (each read's opened row, salt, path and
   output row, per layer) at a batch of long-row requests: GB/s alone, beside a decode-shaped GEMM loop, and the CPU twin's;
   and the committer's history tables those reads open (creation, appends, paths) as `history.HistoryTable`, the device
-  tables' CPU twin and on the GPU.
+  tables' CPU twin and on the GPU. Its arms run the cheapest first (`--arms` picks some), and `table_read_commit.json` is
+  rewritten after each one with the arms still to run, so a run that is stopped keeps what it measured.
 
 `tool.py` declares the first three as research tools (`commit_cost`, `hiding_leaf_cost`, `serving_commit_cost`), so their runs
 are keyed by their parameters:
@@ -31,4 +32,5 @@ There is no `run.py` or `run.sh`, so `verity bench commitments` does not apply. 
 `$RESEARCH_RUN_DIR`.
 
 Status: in use. The suite (`tests/`) runs `commit_cost.py`, `hiding_leaf_cost.py` and `step_root_cost.py` small, holds their
-roots to the references' and their results to the result schema, and loads the `commit_cost` tool by name.
+roots to the references' and their results to the result schema, and loads the `commit_cost` tool by name; it stops
+`table_read_commit.py` after one arm and reads that arm's result from disk.

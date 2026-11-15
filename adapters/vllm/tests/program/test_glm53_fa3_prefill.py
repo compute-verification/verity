@@ -10,15 +10,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fa2_relation, fa3_model
 from verity.definitions.registry import attention_vocab, b1, hopper
 from verity.definitions.registry import fa3_check_inf as F3
+
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 CMAP = Path(__file__).resolve().parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -113,7 +113,7 @@ def test_the_kernels_fully_masked_leading_blocks_are_neutral():
 def test_the_twin_refuses_a_tile_hdim_256_does_not_run():
     rng = np.random.default_rng(1)
     q, kc = _bf16(rng, (1, D)), _bf16(rng, (8, 1, D))
-    one = np.ones(1, np.int32)
+    one: np.ndarray = np.ones(1, np.int32)
     for d, bn in ((256, 128), (128, 80)):
         with pytest.raises(ValueError, match="hdim 256 runs kBlockN 80 only"):
             fa3_model.attention_rows(q[:, :d], kc[..., :d], kc[..., :d], 0 * one, 8 * one, one, d ** -0.5, fa2_relation.tables(), kblock_n=bn)

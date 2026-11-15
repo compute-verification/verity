@@ -8,6 +8,8 @@ Recomputed independently of the device, per format (int8, E4M3's integer grid): 
 arm's product against A B^T, and the receipts (duo, TB4C at 32 and 64) over the masked product's running sums.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
@@ -15,13 +17,17 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from ref import key_mul, key_xor, mix32, rot_of, rotl, tbc_receipts  # noqa: E402
+from ref import key_mul, key_xor, mix32, rot_of, rotl, tbc_receipts
+
+#: what the later kernels' references import
+__all__ = ["decode", "duo_receipts", "words"]
 
 RANKS = [8, 16, 32, 64, 128]
 FMTS = ["i8", "e4"]
 
 
-def e4m3_table():
+def e4m3_table() -> np.ndarray:
+    """The value of each E4M3 byte (NaN at 0x7F and 0xFF)."""
     t = np.zeros(256, dtype=np.float64)
     for b in range(256):
         s, e, m = b >> 7, (b >> 3) & 15, b & 7
@@ -33,7 +39,8 @@ def e4m3_table():
 E4 = e4m3_table()
 
 
-def decode(fmt, raw):
+def decode(fmt: str, raw: np.ndarray) -> np.ndarray | None:
+    """The integers a dump's bytes hold in format ``fmt``; None when an E4M3 byte is NaN or not an integer."""
     if fmt == "i8":
         return raw.view(np.int8).astype(np.int64)
     v = E4[raw]
@@ -42,11 +49,12 @@ def decode(fmt, raw):
     return v.astype(np.int64)
 
 
-def fdiv(a, b):
+def fdiv(a: np.ndarray, b: int) -> np.ndarray:
+    """Floor division, as the kernel's digits take it."""
     return np.floor_divide(a, b)
 
 
-def digits(fmt, y, L):
+def digits(fmt: str, y: np.ndarray, L: int) -> tuple[list[np.ndarray], list[int], bool]:
     """The kernel's digits of y (rows x r) in L limbs and their weights, and whether anything is left over."""
     ds, ws = [], []
     if fmt == "i8":
@@ -61,8 +69,8 @@ def digits(fmt, y, L):
         d = y - 16 * fdiv(y + 8, 16)
         q = (y - d) // 16
         ds.append(d), ws.append(1)
-        for l in range(1, L):
-            if l == 1:
+        for limb in range(1, L):
+            if limb == 1:
                 d = q - 16 * fdiv(q + 8, 16)
                 q = (q - d) // 16
                 ws.append(16)
@@ -74,14 +82,17 @@ def digits(fmt, y, L):
     return ds, ws, bool((q != 0).any())
 
 
-def full_masks(rows, k, seed, fmt):
+def full_masks(rows: int, k: int, seed: int, fmt: str) -> np.ndarray:
+    """The full-rank mask of a rows x k operand, hashed as the kernel hashes it: one byte of mix32(seed ^ mix32(word)) an
+    element, within half the format's grid."""
     word = (np.arange(rows, dtype=np.uint64)[:, None] * (k // 4) + np.arange(k // 4, dtype=np.uint64)[None, :])
     h = mix32(np.uint32(seed) ^ mix32((word & 0xFFFFFFFF).astype(np.uint32)))
     hb = np.stack([(h >> np.uint32(8 * i)) & np.uint32(0xFF) for i in range(4)], axis=-1).reshape(rows, k).astype(np.int64)
     return (hb & 0x7F) - 64 if fmt == "i8" else (hb & 0xF) - 8
 
 
-def duo_receipts(seed, Ts, rs, TM, BN, WM, NCT, tiles_m, tiles_n):
+def duo_receipts(seed: int, Ts: list[np.ndarray], rs: int, TM: int, BN: int, WM: int, NCT: int, tiles_m: int,
+                 tiles_n: int) -> np.ndarray:
     """ref.py's duo over the boundary words Ts (one every rs columns), [tile, ctid, 8]."""
     KA = np.array([[key_mul(ln, t) for t in range(16)] for ln in range(2)], dtype=np.uint32)
     KK = np.array([[key_xor(ln, t) for t in range(16)] for ln in range(2)], dtype=np.uint32)
@@ -112,7 +123,8 @@ def duo_receipts(seed, Ts, rs, TM, BN, WM, NCT, tiles_m, tiles_n):
         return y ^ rotl(z, 16)
 
 
-def words(fmt, T):
+def words(fmt: str, T: np.ndarray) -> np.ndarray:
+    """The u32 words the kernel's accumulator holds for the sums T: int32's bits, or float32's for E4M3."""
     if fmt == "i8":
         assert np.abs(T).max() < 2**31
         return (T & 0xFFFFFFFF).astype(np.uint32)
@@ -211,11 +223,11 @@ def main(d: Path, receipts: bool) -> int:
             XA = np.zeros((m, Kc), dtype=np.int64)
             XB = np.zeros((n, Kc), dtype=np.int64)
             XA[:, :k], XB[:, :k] = At, Bt
-            for l in range(L):
-                XA[:, k + l * r : k + (l + 1) * r] = -wts[l] * U
-                XA[:, k + (L + l) * r : k + (L + l + 1) * r] = -dQ[l]
-                XB[:, k + l * r : k + (l + 1) * r] = dP[l]
-                XB[:, k + (L + l) * r : k + (L + l + 1) * r] = wts[l] * W
+            for i in range(L):
+                XA[:, k + i * r : k + (i + 1) * r] = -wts[i] * U
+                XA[:, k + (L + i) * r : k + (L + i + 1) * r] = -dQ[i]
+                XB[:, k + i * r : k + (i + 1) * r] = dP[i]
+                XB[:, k + (L + i) * r : k + (L + i + 1) * r] = wts[i] * W
             # the masked operands within the grid's bound; the tail's digits within it too, its weights exact in the format
             tail = np.concatenate([XA[:, k:], XB[:, k:]], axis=0)
             exact = np.abs(tail) <= lim

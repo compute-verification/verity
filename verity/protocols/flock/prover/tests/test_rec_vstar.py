@@ -1,7 +1,7 @@
 """The reference for V*'s hashing (`verity_flock.rec_vstar`): query positions from coins (`Flock.Ligerito`), openings with
 plain SHA-512 leaves (and rec-step2's salted ``hm96-sha512/v1`` ones) climbing to a top's node, each top opening the salted
 commitment the challenger received or refused by name, and how the challenger's record yields each level's query round. The
-pod job (``../pod/85-rec-reprice.sh``) runs `check` over a real inner session."""
+pod job (``pod/85-rec-reprice.sh``) runs `check` over a real inner session."""
 from __future__ import annotations
 
 import hashlib

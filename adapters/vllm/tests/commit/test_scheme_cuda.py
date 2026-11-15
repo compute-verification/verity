@@ -95,7 +95,7 @@ def test_fa2_tap_thread_leaf(tmp_path: Path) -> None:
             p = subprocess.run(cmd, capture_output=True, text=True)
             assert p.returncode == 0, p.stderr[-3000:]
             libs[mask] = ctypes.CDLL(str(so))
-        words = np.frombuffer(H(tv["words"]), dtype="<u4")
+        words: np.ndarray = np.frombuffer(H(tv["words"]), dtype="<u4")
         assert words.size % 16 == 0
         leaf = (ctypes.c_uint8 * 32)()
         tag = f["launch_tag"] - (1 << 32) if f["launch_tag"] >= (1 << 31) else f["launch_tag"]

@@ -6,7 +6,7 @@ verifier's record has h in a round of its own after z_partial's coinless one on 
 the fixture, `fixtures/inner_claims.json`, split as public comb + h). The stacked table's stream, as candidate 3's
 opening-only prover sends it (``flock-circuit stacked``), is held to `rec_live.schedule_for`'s, and the relay runs each
 rep's sparse phase (`rec_sparse.prove`) on the challenger's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
-full fold (``InnerFold.lean --hide``) is the pod's (``../pod/88-rec-c3-inner.sh``, `check_fold`)."""
+full fold (``InnerFold.lean --hide``) is the pod's (``pod/88-rec-c3-inner.sh``, `check_fold`)."""
 from __future__ import annotations
 
 import json
@@ -23,8 +23,8 @@ from types import SimpleNamespace
 import pytest
 from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops.boolean import gf2k as G
-from verity.definitions.ops.boolean.gf2k import mul
+from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean.gf2k import mul
 from verity.circuits.types import Value
 from verity.commitments import coin_tree as CT
 from verity_flock import circuit as FC

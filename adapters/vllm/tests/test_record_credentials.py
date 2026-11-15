@@ -24,7 +24,6 @@ SITES = {
     ("pipeline/tp/commit.py", "main"): "the TP Commit record (versions.json's env)",
     ("pipeline/tp/match.py", "_engine_main"): "the TP Match record (topology.json's env)",
     ("pipeline/tp/rank_worker.py", "_tp_facts"): "each rank's nccl_env, in both TP records' ranks",
-    ("pipeline/hot.py", "env_identity"): "the hot worker's key (KEY.json, and what `hot key` prints)",
     ("pipeline/row.py", "effective_config"): "the row's effective_config.json (engine_env), which drops a credential",
 }
 KEY, TOKEN = "dummy-not-a-real-key", "dummy-not-a-real-token"

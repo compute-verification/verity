@@ -10,8 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "tools" / "verity" / "check" / "check.py"
 
 
-def opt_in() -> dict[str, tuple[str, tuple[str, ...]]]:
-    """check.py's `OPT_IN`, read from its source: a literal, so the table needs no import of check."""
+def opt_in() -> dict[str, dict[str, tuple[str, ...]]]:
+    """check.py's `OPT_IN` (suite -> variable -> tests), read from its source: a literal, so the table needs no import of
+    check."""
     [value] = [n.value for n in ast.parse(CHECK.read_text()).body
                if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == ["OPT_IN"]]
     return ast.literal_eval(value)
@@ -36,7 +37,7 @@ def test_every_opt_in_test_a_cold_check_names_is_in_its_suite_and_marked_by_its_
     table = opt_in()
     assert table, "check.py's OPT_IN is empty"
     wrong = []
-    for suite, (var, tests) in table.items():
+    for suite, var, tests in ((suite, var, tests) for suite, by_var in table.items() for var, tests in by_var.items()):
         for test in tests:
             file, _, name = test.partition("::")
             seen = marks(ROOT / suite / file, name)

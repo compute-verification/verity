@@ -29,7 +29,7 @@ is at least its `N` tiles' bits (`credit_ge`), and the session's credit is at le
   (`T = 1 + n·P·(N+2)`, `M = 1`): page block `b` is append `1 + b` (`kvAddr`), and the pass's layout (`passLayout`)
   puts its request's pages `0 … N−1` at its `N` tiles. A page joins the window of its request (`joined`) and is read
   only there, so the lifetime cap holds at every `L ≥ 1`.
-* **The devices** (`honestSession`): every pass device is the honest one of `RateAudit/SketchHonest.lean` (nothing on
+* **The devices** (`honestRun`): every pass device is the honest one of `RateAudit/SketchHonest.lean` (nothing on
   chip, the stream over the link, every sector read once, every tile tagged, nothing rebuilt), with one grinding
   candidate and a `0`-bit summary. So the hash budget holds at `N ≤ q_r·τ`, `CircuitCarriers` with no carrier, and
   `SteeredLayout` because the layout reads no coin.
@@ -547,7 +547,7 @@ theorem deadlines {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
     (placement n P N τ val).Deadlines (passBind n P N) τ := by
   intro d
   refine ⟨fun w w' hw => ?_, fun w j j' hj => ?_⟩
-  · simp only [Requirement.Placement.windowTicks]
+  · simp only [Requirement.Placement.executionPhaseTicks]
     rw [Finset.disjoint_biUnion_left]
     intro j _
     rw [Finset.disjoint_biUnion_right]
@@ -589,13 +589,13 @@ def honestDev (N ρ S Lk q : ℕ) (hL : ρ * 256 ≤ Lk) (hq : N ≤ q) :
     exact ⟨by rw [h4]; exact hL, h2.le.trans hq⟩
 
 /-- Every pass runs the honest device, with one grinding candidate and a `0`-bit summary. -/
-def honestSession (n P N ρ S Lk q : ℕ) (hL : ρ * 256 ≤ Lk) (hq : N ≤ q) :
-    RateSketch.SketchSummarySession 0 n P N 128 ρ 512 S Lk q 16 1 2773 :=
+def honestRun (n P N ρ S Lk q : ℕ) (hL : ρ * 256 ≤ Lk) (hq : N ≤ q) :
+    RateSketch.SketchSummaryRun 0 n P N 128 ρ 512 S Lk q 16 1 2773 :=
   ⟨fun _ => ⟨fun _ _ => ⟨fun _ _ _ => honestDev N ρ S Lk q hL hq, fun _ _ _ _ _ => 0⟩⟩⟩
 
 theorem hashBudget {n P N ρ S Lk q qt : ℕ} (hL : ρ * 256 ≤ Lk) (hq : N ≤ q) (hqt : N ≤ qt) :
     ∀ s w η j pre, Assumptions.SketchHashBudget
-      ((((honestSession n P N ρ S Lk q hL hq).session s).window w η).device j pre) qt := by
+      ((((honestRun n P N ρ S Lk q hL hq).session s).window w η).device j pre) qt := by
   intro s w η j pre σ Os D
   rw [Fin.sum_univ_one]
   exact (RateSketch.Completeness.chip_eq (h := 512) RateSketch.sketch σ (Os 0) D).2.1.le.trans hqt
@@ -633,7 +633,7 @@ theorem circuitCarriers {n P N ρ S Lk q X L B εnum εden T M : ℕ} {ι Y : Ty
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Y → Fin N ↪ Fin T × Fin M)
     (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 1 2773) → Fin T → ℕ)
     (Wc : Gates.IntDag ι) (Aud : Gates.Audit) :
-    Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S Lk q hL hq).session (steer c y)) store layout
+    Assumptions.CircuitCarriers (fun c y => (honestRun n P N ρ S Lk q hL hq).session (steer c y)) store layout
       joined X L B εnum εden Wc Aud := by
   intro _ c g y
   refine ⟨noCarrier N, ∅, fun R O => ?_, Finset.empty_subset _, by simp,
@@ -704,8 +704,8 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     (val : ℕ → ℕ → ℕ) (hval : ∀ r i, val r i < 2 ^ tw)
     (hL : 0 < L) (hlink : ρ * 256 ≤ Lr * τ) (hq : N ≤ q) (hqr : N ≤ qr * τ) :
     (∀ s w η j pre, Assumptions.SketchHashBudget
-      ((((honestSession n P N ρ S (Lr * τ) q hlink hq).session s).window w η).device j pre) (qr * τ)) ∧
-    Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S (Lr * τ) q hlink hq).session
+      ((((honestRun n P N ρ S (Lr * τ) q hlink hq).session s).window w η).device j pre) (qr * τ)) ∧
+    Assumptions.CircuitCarriers (fun c y => (honestRun n P N ρ S (Lr * τ) q hlink hq).session
         (steer0 n P N ρ Ω Ca c y))
       (RateSketch.steeredStore enc choose (passLayout n P N ρ Ω Ca)) (passLayout n P N ρ Ω Ca)
       (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.IntDag Unit) (aud n P N) ∧
@@ -750,7 +750,7 @@ theorem applies (hG : Guarantees.RegisteredCircuitRequirement) (n P N ρ S q Xr 
     let Aud := aud n P N
     let layout := passLayout n P N ρ Ω Ca
     let steer := steer0 n P N ρ Ω Ca
-    let A := honestSession n P N ρ S (Lr * τ) q hlink hq
+    let A := honestRun n P N ρ S (Lr * τ) q hlink hq
     let W := wiring N
     let p := fun _ : RateSketch.StackedCoins Ω Ca T n P N ρ G => placement n P N τ val
     let ℓ := fun _ : RateSketch.StackedCoins Ω Ca T n P N ρ G => kvLayout n P N
@@ -845,7 +845,7 @@ theorem sum_ge {n P c : ℕ} (f : Fin n → Fin P → ℕ) (h : ∀ w j, c ≤ f
 /-! ## Where `G` bounds something
 
 The run credits the whole store, so `G`'s session threshold `Σ credit − (0.0015 + γ)·n·P·N·32768` is positive while
-`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`window_pos`). The carriers' share of `γ` is
+`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`executionPhase_pos`). The carriers' share of `γ` is
 linear in the life `L`: `C/(N·32768) ≤ (8·L·R + 1)/(N·32768) + 128·L·P·c/E` (`carrier_le`), `R` a window's run-input
 bytes and `c` the caps' total. At the reference inputs (`P = 984` passes a 60 s window, `E = 364,497`, 100 KB/s of run
 inputs, the pass's other resources `γ₀ ≤ 0.835%`, here `N ≥ 2^24` tiles) both thresholds are positive up to `L = 6` for
@@ -863,12 +863,12 @@ def credit (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
       ((Requirement.reads (wiring N) e t \ Requirement.creditedReads (wiring N) e (kvLayout n P N) t).image
         kvGrp).card * 32768)
 
-theorem credit_session {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
+theorem credit_run {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
     n * P * N * 32768 ≤ ∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) := by
   rw [Nat.mul_assoc (n * P)]
   exact sum_ge _ fun w j => credit_ge val w j
 
-theorem credit_window {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) :
+theorem credit_executionPhase {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) :
     P * N * 32768 ≤ ∑ j : Fin P, credit n P N τ val (passBind n P N w j) := by
   calc P * N * 32768 = ∑ _j : Fin P, N * 32768 := by
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
@@ -882,7 +882,7 @@ theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (h
       ((∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
   have h1 : ((n * P * N * 32768 : ℕ) : ℝ) ≤
       ((∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) :=
-    Nat.cast_le.2 (credit_session val)
+    Nat.cast_le.2 (credit_run val)
   rw [show ((n * P * N * 32768 : ℕ) : ℝ) = (n : ℝ) * P * N * 32768 by norm_cast] at h1
   have h2 : (0 : ℝ) < n * P * N * 32768 := by positivity
   calc (0.0015 + γ) * (n * P * N * 32768) < 1 * (n * P * N * 32768) := mul_lt_mul_of_pos_right hγ h2
@@ -890,11 +890,11 @@ theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (h
     _ ≤ _ := h1
 
 /-- **Each window's threshold is positive at the honest run** while `0.01 + γ < 1`. -/
-theorem window_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : Fin n) (hP : 0 < P) (hN : 0 < N)
+theorem executionPhase_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : Fin n) (hP : 0 < P) (hN : 0 < N)
     (hγ : 0.01 + γ < 1) :
     (0.01 + γ) * (P * N * 32768) < ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
   have h1 : ((P * N * 32768 : ℕ) : ℝ) ≤ ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) :=
-    Nat.cast_le.2 (credit_window val w)
+    Nat.cast_le.2 (credit_executionPhase val w)
   rw [show ((P * N * 32768 : ℕ) : ℝ) = (P : ℝ) * N * 32768 by norm_cast] at h1
   have h2 : (0 : ℝ) < P * N * 32768 := by positivity
   calc (0.01 + γ) * (P * N * 32768) < 1 * (P * N * 32768) := mul_lt_mul_of_pos_right hγ h2

@@ -217,8 +217,9 @@ only). **The whole-unit luck at `p₀`**: in the ideal game split at the receipt
 of its words whose fold the run skips, fixed before the round's coins) lies in `[0, 1]`, and at every round, whatever
 the past, a round with a positive unfolded share keeps the honest committed value with probability at most `p₀`
 (`ReceiptGame.WholeLuck`). A unit whose fold is skipped commits a value for its receipt that no word it folded
-determines, so its check passes only on a guess. The headlines take it at `½`. The whole-unit guess bound `2^-64` for a
-64-bit fold state was proposed and isn't granted until an attack on its value fails, and none has been made. It fails if
+determines, so its check passes only on a guess. The headlines take it at `½`. The whole-unit guess bound `2^-64`, one
+set's checkpoint (two 32-bit receipt words of the tile's `2·(K/32 + m)`), was proposed and isn't granted until an attack
+on its value fails, and none has been made; no statement reads it. It fails if
 the cheater's view pins the fold state without the fold: a state that a computed word, or a coin read before the skip,
 determines. -/
 def WholeLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) (Uf : Unfolded Ω S) : Prop :=

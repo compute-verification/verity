@@ -14,22 +14,24 @@ public import Flock.With.SetupEq
 # `SampledKSLiveV5`'s file preconditions, read off acceptance (`SampledKSLiveV5Accepted`)
 
 `SampledKSLiveV5R`, V5's bound under the roots guard, takes four things of the files and the registration as
-hypotheses: `Bridge.RowsOk`, `Registered.dupName = none`, `RootFixesDomainL` at the public file's leaf map, and
+hypotheses: `Bridge.RowsOk`, `PortRoots.dupId = false`, `RootFixesDomainL` at the public file's leaf map, and
 `Bridge.PopMatches`. The verifiers refuse every file and registration that fails them: `verify --zk` runs `Flock.PortRoots.checkOf` and then
 `Flock.KsScope.checkOf` last in its verdict (`Main.verifyCmd`), on the circuit `ProvedScope.circuitOf` reads, and the
 sampled-proofs run refuses the registration (`Spot.Run.run`, `population-order`, `Spot.Slots.popOk`).
 
 `PortRoots` reads the public file as `HmOut.loadPublic` loads it, without the circuit's public input words, while V5
 reads it over them (`HmIn.loadPublic`). Both are `HmRow.loadPublic` at one circuit's ports with other output ports, and
-the population, its `b ‖ c` and its tables don't read the output ports (`loadPublic_agree`), so the roots `PortRoots`
-checks are V5's. The checks read the committed circuit, a templated statement's carrying its template, and V5 the
-statement circuit it unrolls to, which has its ports, public input ports and public file (`Hidden.Committed.unrolled_eq`).
+the population, its `b ‖ c`, its tables and its header don't read the output ports (`loadPublic_agree`), so the
+domains and roots `PortRoots` checks are V5's. The checks read the committed circuit, a templated statement's carrying
+its template, and V5 the statement circuit it unrolls to, which has its ports, public input ports and public file
+(`Hidden.Committed.unrolled_eq`).
 
-* `loadPublic_core`: what a load returns of the population, its `b ‖ c` and its tables, as functions of the file and the
-  circuit's ports; `loadPublic_agree`, `loadPublic_inOut`: two loads at one circuit's ports agree on them.
-* `v5Files_of_checks`: `PortRoots.checkOf` and `KsScope.checkOf` passing at a circuit give `dupName = none` and
-  `RootFixesDomainL` there (at a file without shared rows, at the public file's population: `pub.n = n`);
-  `v5Files_of_checksStmt`: at the statement circuit of a descriptor `Flock.Desc.parseStmt` reads, flat or templated.
+* `loadPublic_core`: what a load returns of the population, its `b ‖ c`, its tables and its header, as functions of the
+  file and the circuit's ports; `loadPublic_agree`, `loadPublic_inOut`: two loads at one circuit's ports agree on them.
+* `v5Files_of_checks`: `PortRoots.checkOf` passing at a circuit gives `dupId = false` and `RootFixesDomainL` there, with
+  or without shared rows, at the public file's population (`pub.n = n`), and `idsSized_of_checks` every published
+  domain 64 bytes; `v5Files_of_checksStmt`, `idsSized_of_checksStmt`: at the statement circuit of a descriptor
+  `Flock.Desc.parseStmt` reads, flat or templated.
 * `SampledKSLiveV5Accepted`: `SampledKSLiveV5R` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
   and without the four hypotheses, under the sampling design the verifier samples under from the registration (`Bridge.DrawsUnder`),
   no Bernoulli law, and at `δ` the sampling design's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
@@ -61,7 +63,8 @@ theorem loadPublic_core (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit
       HmRow.sharedRows tags c hd = .ok counts ∧
       pop.digests = bcsOf f nl ((counts.map (·.foldl (· + ·) 0)).getD (pop.n * c.ports.size)) ∧
       pop.tables = counts.map
-        (tablesOf f nl ((counts.map (·.foldl (· + ·) 0)).getD (pop.n * c.ports.size)) pop.n c.ports.size) := by
+        (tablesOf f nl ((counts.map (·.foldl (· + ·) 0)).getD (pop.n * c.ports.size)) pop.n c.ports.size) ∧
+      pop.header = hd := by
   unfold HmRow.loadPublicWith at hp
   simp (config := { zeta := false }) only [Hashes.ofSha512, monadLift_self] at hp
   cases hnl : findByte f 10 with
@@ -137,22 +140,22 @@ theorem loadPublic_core (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit
   simp (config := { zeta := false }) only [jp7] at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨_, -, hp⟩ := hh)
   cases hp
-  exact ⟨nl, _, counts, rfl, hhd, hn, hcounts, rfl, htab⟩
+  exact ⟨nl, _, counts, rfl, hhd, hn, hcounts, rfl, htab, rfl⟩
 
 theorem sharedRows_ports {tags : Tags} {c₁ c₂ : Circuit} (hports : c₁.ports = c₂.ports) (hd : Lean.Json) :
     HmRow.sharedRows tags c₁ hd = HmRow.sharedRows tags c₂ hd := by
   unfold HmRow.sharedRows
   rw [hports]
 
-/-- **Two loads at one circuit's ports agree on the population, its `b ‖ c` and its tables**, whatever their output
-ports. -/
+/-- **Two loads at one circuit's ports agree on the population, its `b ‖ c`, its tables and its header**, whatever their
+output ports. -/
 theorem loadPublic_agree {tags : Tags} {c₁ c₂ : Circuit} {f : ByteArray} {p₁ p₂ : Public}
     (hports : c₁.ports = c₂.ports) (h₁ : HmRow.loadPublic tags c₁ f = .ok p₁)
     (h₂ : HmRow.loadPublic tags c₂ f = .ok p₂) :
-    p₁.n = p₂.n ∧ p₁.digests = p₂.digests ∧ p₁.tables = p₂.tables := by
+    p₁.n = p₂.n ∧ p₁.digests = p₂.digests ∧ p₁.tables = p₂.tables ∧ p₁.header = p₂.header := by
   rw [← Flock.With.loadPublicWith_std] at h₁ h₂
-  obtain ⟨nl₁, hd₁, cs₁, hnl₁, hhd₁, hn₁, hc₁, hb₁, ht₁⟩ := loadPublic_core _ _ _ _ _ h₁
-  obtain ⟨nl₂, hd₂, cs₂, hnl₂, hhd₂, hn₂, hc₂, hb₂, ht₂⟩ := loadPublic_core _ _ _ _ _ h₂
+  obtain ⟨nl₁, hd₁, cs₁, hnl₁, hhd₁, hn₁, hc₁, hb₁, ht₁, hh₁⟩ := loadPublic_core _ _ _ _ _ h₁
+  obtain ⟨nl₂, hd₂, cs₂, hnl₂, hhd₂, hn₂, hc₂, hb₂, ht₂, hh₂⟩ := loadPublic_core _ _ _ _ _ h₂
   rw [hnl₁] at hnl₂
   cases hnl₂
   rw [hhd₁] at hhd₂
@@ -161,71 +164,85 @@ theorem loadPublic_agree {tags : Tags} {c₁ c₂ : Circuit} {f : ByteArray} {p�
   have hn : p₁.n = p₂.n := Except.ok.inj hn₂
   rw [sharedRows_ports hports.symm, hc₁] at hc₂
   cases hc₂
-  refine ⟨hn, ?_, ?_⟩
+  refine ⟨hn, ?_, ?_, hh₁.trans hh₂.symm⟩
   · rw [hb₁, hb₂, hn, hports]
   · rw [ht₁, ht₂, hn, hports]
 
-/-- **`HmIn.loadPublic` and `HmOut.loadPublic` agree on the population, its `b ‖ c` and its tables.** -/
+/-- **`HmIn.loadPublic` and `HmOut.loadPublic` agree on the population, its `b ‖ c`, its tables and its header.** -/
 theorem loadPublic_inOut {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : ByteArray} {pub pubO : Public}
     (h : HmIn.loadPublic tags c pi pf = .ok pub) (hO : HmOut.loadPublic tags c pf = .ok pubO) :
-    pubO.n = pub.n ∧ pubO.digests = pub.digests ∧ pubO.tables = pub.tables :=
+    pubO.n = pub.n ∧ pubO.digests = pub.digests ∧ pubO.tables = pub.tables ∧ pubO.header = pub.header :=
   loadPublic_agree (c₁ := { c with outPorts := #[] }) (c₂ := FlockSoundness.Discharge.Hidden.inRows c pi) rfl
     (FlockSoundness.Discharge.Hidden.loadPublic_nil hO) (FlockSoundness.Discharge.Hidden.loadPublic_inRows h)
 
-/-- **The leaf map reads the public file's `b ‖ c` and tables only.** -/
+/-- **A port's published domain reads the public file's header only.** -/
+theorem idOf_congr {c : Flock.Circuit} {p p' : Flock.Public} (hh : p.header = p'.header) :
+    Flock.PortRoots.idOf c p = Flock.PortRoots.idOf c p' := by
+  funext q
+  simp only [Flock.PortRoots.idOf, Flock.Public.fv3Bytes, Flock.Public.frameV3, hh]
+
+/-- **The leaf map reads the public file's `b ‖ c`, tables and header only.** -/
 theorem LeafMap.ofPublic_congr {c : Flock.Circuit} {p p' : Flock.Public} (nl : ℕ) (hd : p.digests = p'.digests)
-    (ht : p.tables = p'.tables) : LeafMap.ofPublic c p nl = LeafMap.ofPublic c p' nl := by
+    (ht : p.tables = p'.tables) (hh : p.header = p'.header) : LeafMap.ofPublic c p nl = LeafMap.ofPublic c p' nl := by
   have hdig : ∀ u q np, p.digest u q np = p'.digest u q np := by
     intro u q np
     simp only [Flock.Public.digest, hd, ht]
+  have hdom : domOf c p = domOf c p' := idOf_congr hh
   cases h : p'.tables with
   | none =>
     rw [LeafMap.ofPublic_none nl (ht.trans h), LeafMap.ofPublic_none nl h]
-    simp only [LeafMap.ident, hdig]
+    simp only [LeafMap.ident, hdig, hdom]
   | some t =>
     rw [LeafMap.ofPublic_some nl (ht.trans h), LeafMap.ofPublic_some nl h]
-    simp only [LeafMap.ofTables, hd]
+    simp only [LeafMap.ofTables, hd, hdom]
 
-/-- **`verify --zk`'s files checks give V5's file hypotheses at the circuit they check**: when `PortRoots.checkOf` and
-`KsScope.checkOf` pass at `c`, it names each port once and `RootFixesDomainL` holds at the public file's leaf map over
-its public input ports, at its population `n`. -/
-theorem v5Files_of_checks {tags : Tags} {pf : ByteArray} {count : ℕ} {draw : Option Lean.Json} {c : Circuit}
-    {pi : HmIn.Ports} {pub : Public} {n : ℕ} (hpi : HmIn.parse c = .ok pi)
+/-- **`verify --zk`'s files check gives V5's file hypotheses at the circuit it checks**: when `PortRoots.checkOf` passes
+at `c`, the ports' published domains are pairwise distinct and `RootFixesDomainL` holds at the public file's leaf map
+over its public input ports, at its population `n`, with or without shared rows. -/
+theorem v5Files_of_checks {tags : Tags} {pf : ByteArray} {c : Circuit} {pi : HmIn.Ports} {pub : Public} {n : ℕ}
     (hpub : HmIn.loadPublic tags c pi pf = .ok pub) (hn : pub.n = n)
-    (hck : Flock.PortRoots.checkOf (.ok c) tags pf = .ok ())
-    (hks : Flock.KsScope.checkOf (.ok c) tags pf count draw = .ok ()) :
-    Flock.Registered.dupName c = none ∧ RootFixesDomainL c (LeafMap.ofPublic c pub n) := by
+    (hck : Flock.PortRoots.checkOf (.ok c) tags pf = .ok ()) :
+    Flock.PortRoots.dupId c pub = false ∧ RootFixesDomainL c (LeafMap.ofPublic c pub n) := by
   obtain ⟨pubO, hO⟩ := Flock.PortRoots.checkOf_load hck
-  obtain ⟨_, hdup, hcoll⟩ := Flock.PortRoots.checkOf_ok hck hO
-  obtain ⟨hnO, hdO, htO⟩ := loadPublic_inOut hpub hO
-  refine ⟨hdup, ?_⟩
-  cases hpt : pub.tables with
-  | none =>
-    rw [LeafMap.ofPublic_congr n hdO.symm htO.symm, LeafMap.ofPublic_none n (htO.trans hpt),
-      rootFixesDomainL_ident, ← hn, ← hnO]
-    exact fixes_of_collides_false hcoll
-  | some t =>
-    obtain ⟨pi', pub', _, hpi', hpub', _, hall⟩ := v5Files_of_check hks hO (htO.trans hpt)
-    rw [hpi] at hpi'
-    cases hpi'
-    rw [hpub] at hpub'
-    cases hpub'
-    exact hall n
+  obtain ⟨_, _, _, hdup, hcoll⟩ := Flock.PortRoots.loadedWhy_none (Flock.PortRoots.checkOf_loaded hck hO).2.2
+  obtain ⟨hnO, hdO, htO, hhO⟩ := loadPublic_inOut hpub hO
+  have hid : Flock.PortRoots.idOf c pubO = Flock.PortRoots.idOf c pub := idOf_congr hhO
+  refine ⟨?_, ?_⟩
+  · unfold Flock.PortRoots.dupId at hdup ⊢
+    rw [← hid]
+    exact hdup
+  · rw [LeafMap.ofPublic_congr n hdO.symm htO.symm hhO.symm, ← hn, ← hnO]
+    exact fixesL_of_collidesPub_false hcoll
+
+/-- **`verify --zk`'s files check gives every published domain 64 bytes at the circuit it checks**: when
+`PortRoots.checkOf` passes at `c`, each port's domain (`domOf`, the public file's published `frame_v3.domain_ids` entry)
+is 64 bytes, the width of a frame-v3 tree's domain id (`PortRoots.idsSized`). -/
+theorem idsSized_of_checks {tags : Tags} {pf : ByteArray} {c : Circuit} {pi : HmIn.Ports} {pub : Public}
+    (hpub : HmIn.loadPublic tags c pi pf = .ok pub) (hck : Flock.PortRoots.checkOf (.ok c) tags pf = .ok ()) :
+    ∀ q, q < c.ports.size → (domOf c pub q).size = 64 := by
+  obtain ⟨pubO, hO⟩ := Flock.PortRoots.checkOf_load hck
+  obtain ⟨_, _, hsz, _, _⟩ := Flock.PortRoots.loadedWhy_none (Flock.PortRoots.checkOf_loaded hck hO).2.2
+  obtain ⟨_, _, _, hhO⟩ := loadPublic_inOut hpub hO
+  intro q hq
+  have hid : Flock.PortRoots.idOf c pubO q = Flock.PortRoots.idOf c pub q := congrFun (idOf_congr hhO) q
+  show (Flock.PortRoots.idOf c pub q).size = 64
+  rw [← hid]
+  exact Flock.PortRoots.idOf_size_of_idsSized hsz hq
 
 /-- **`verify --zk`'s files checks give V5's file hypotheses at the statement circuit**, flat or templated: at a
 descriptor `Flock.Desc.parseStmt` reads, when `PortRoots.checkOf` and `KsScope.checkOf` pass at the circuit
 `ProvedScope.circuitOf` reads (the committed one: a templated statement's carries its template), the statement circuit
-`D.unroll` names each port once and `RootFixesDomainL` holds at the public file's leaf map over its public input ports, at
-its population `n`. Both hold at the committed circuit (`v5Files_of_checks`), and the statement circuit is it with other
-nets (`Hidden.Committed.unrolled_eq`), which neither reads, with its public input ports and public file
-(`Hidden.parseIn_commit`, `Hidden.loadPublicIn_commit`). -/
+`D.unroll`'s published domains are pairwise distinct and `RootFixesDomainL` holds at the public file's leaf map over its
+public input ports, at its population `n`. Both hold at the committed circuit (`v5Files_of_checks`), and the statement
+circuit is it with other nets (`Hidden.Committed.unrolled_eq`), which neither reads, with its public file
+(`Hidden.loadPublicIn_commit`). -/
 theorem v5Files_of_checksStmt {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
     {draw : Option Lean.Json} {D : Flock.Desc} {pi : HmIn.Ports} {pub : Public} {n : ℕ} (hty : tags.typed = false)
-    (hD : Flock.Desc.parseStmt tags cf tables = .ok D) (hpi : HmIn.parse D.unroll = .ok pi)
+    (hD : Flock.Desc.parseStmt tags cf tables = .ok D)
     (hpub : HmIn.loadPublic tags D.unroll pi pf = .ok pub) (hn : pub.n = n)
     (hck : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags cf tables) tags pf = .ok ())
     (hks : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf tags cf tables) tags pf count draw = .ok ()) :
-    Flock.Registered.dupName D.unroll = none ∧ RootFixesDomainL D.unroll (LeafMap.ofPublic D.unroll pub n) := by
+    Flock.PortRoots.dupId D.unroll pub = false ∧ RootFixesDomainL D.unroll (LeafMap.ofPublic D.unroll pub n) := by
   have hh : tags.hiddenOutputs = true := by
     have ht : Flock.KsScope.tagsWhy tags = none := by
       unfold Flock.KsScope.checkOf at hks
@@ -235,10 +252,27 @@ theorem v5Files_of_checksStmt {tags : Tags} {cf pf : ByteArray} {tables : List (
     exact (Flock.KsScope.tagsWhy_none ht).2.1
   obtain ⟨cs, hcs, he⟩ := FlockSoundness.commit_of_parseStmt hty (Flock.Desc.parseStmt_stmt hD)
   have hC := FlockSoundness.Discharge.Hidden.committed_of_commit hcs
-  rw [Flock.ProvedScope.circuitOf_hidden hh, hcs] at hck hks
-  rw [he, FlockSoundness.Discharge.Hidden.parseIn_commit hty hC] at hpi
+  rw [Flock.ProvedScope.circuitOf_hidden hh, hcs] at hck
   rw [he, FlockSoundness.Discharge.Hidden.loadPublicIn_commit hty hC] at hpub
-  have hcs' := v5Files_of_checks hpi hpub hn hck hks
+  have hcs' := v5Files_of_checks hpub hn hck
+  obtain ⟨nets, hu⟩ := hC.unrolled_eq hty
+  rw [he, hu]
+  exact hcs'
+
+/-- **`verify --zk`'s files check gives every published domain 64 bytes at the statement circuit**, flat or templated:
+at a descriptor `Flock.Desc.parseStmt` reads under hidden outputs, when `PortRoots.checkOf` passes at the circuit
+`ProvedScope.circuitOf` reads, each port of the statement circuit `D.unroll` has a 64-byte domain (`domOf`), as at the
+committed circuit (`idsSized_of_checks`), whose ports and public file the statement circuit has. -/
+theorem idsSized_of_checksStmt {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {D : Flock.Desc}
+    {pi : HmIn.Ports} {pub : Public} (hty : tags.typed = false) (hh : tags.hiddenOutputs = true)
+    (hD : Flock.Desc.parseStmt tags cf tables = .ok D) (hpub : HmIn.loadPublic tags D.unroll pi pf = .ok pub)
+    (hck : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags cf tables) tags pf = .ok ()) :
+    ∀ q, q < D.unroll.ports.size → (domOf D.unroll pub q).size = 64 := by
+  obtain ⟨cs, hcs, he⟩ := FlockSoundness.commit_of_parseStmt hty (Flock.Desc.parseStmt_stmt hD)
+  have hC := FlockSoundness.Discharge.Hidden.committed_of_commit hcs
+  rw [Flock.ProvedScope.circuitOf_hidden hh, hcs] at hck
+  rw [he, FlockSoundness.Discharge.Hidden.loadPublicIn_commit hty hC] at hpub
+  have hcs' := idsSized_of_checks hpub hck
   obtain ⟨nets, hu⟩ := hC.unrolled_eq hty
   rw [he, hu]
   exact hcs'
@@ -252,11 +286,11 @@ open scoped ENNReal
 open Classical in
 /-- **`SampledKSLiveV5R` with its file preconditions read off acceptance**: its bound on the event that
 `verify --zk` at `own` accepts the transcript and the files (`LiveAcceptsKSP`: their ports row/v1, row/v2 or row-seg/v1
-rows of distinct names, no two registered roots one root under different domains, and the form, shared rows included,
-`KsScope` admits), the sampled-proofs run passes the registration's population (`RunPopOk`: the descriptor `desc` and
+rows of distinct published domains, no two registered roots one root under different domains, and the form, shared rows
+included, `KsScope` admits), the sampled-proofs run passes the registration's population (`RunPopOk`: the descriptor `desc` and
 the query `qr` give the game's `n` units in order), and the claims relation fails, under the sampling design the verifier samples
 under from the registration (`Bridge.DrawsUnder`), no Bernoulli law (`Bridge.NotBernoulli`), at `δ` that sampling design's own miss
-of `B`, as in `SampledKSLiveV5`. It has none of `SampledKSLiveV5R`'s hypotheses `RowsOk`, `dupName = none`, `RootFixesDomainL` and
+of `B`, as in `SampledKSLiveV5`. It has none of `SampledKSLiveV5R`'s hypotheses `RowsOk`, `dupId = false`, `RootFixesDomainL` and
 `PopMatches`; the game's `n` is the public file's population (`pub.n = n`). It reads the circuit file as
 `SampledKSLiveV5R` does, flat or templated (`Flock.Desc.parseStmt`), and `verify --zk`'s checks at the circuit they read
 (`ProvedScope.circuitOf`'s, a templated statement's carrying its template), which give `SampledKSLiveV5R`'s hypotheses at
@@ -347,7 +381,7 @@ theorem sampledKSLiveV5Accepted_of (h : SampledKSLiveV5R) : SampledKSLiveV5Accep
         I.publicFile count draw = .ok ()) ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨⟨hck, _, _, hks⟩, p, hp, hpo⟩ := hc
-    obtain ⟨hdup, hroots⟩ := v5Files_of_checksStmt ((zkTags_typed I).trans ht) hD hpi hpub hn hck hks
+    obtain ⟨hdup, hroots⟩ := v5Files_of_checksStmt ((zkTags_typed I).trans ht) hD hpub hn hck hks
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
       (h n Reg I own ht D hD hU pi hpi pub hpub hscope
         (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr (Bridge.popMatches_of_popOk hp hpo) lj tb law kd hlaw hb
@@ -356,7 +390,7 @@ theorem sampledKSLiveV5Accepted_of (h : SampledKSLiveV5R) : SampledKSLiveV5Accep
       ((prob_false _ τ).le.trans zero_le)
 
 /-- **The sampled audit's knowledge soundness at public inputs, on the event that the verifiers accept the files**:
-no hypothesis on the files' rows, names or roots, or on the registration's population order. -/
+no hypothesis on the files' rows, domains or roots, or on the registration's population order. -/
 theorem sampledKSLiveV5Accepted : SampledKSLiveV5Accepted :=
   sampledKSLiveV5Accepted_of sampledKSLiveV5R
 

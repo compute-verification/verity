@@ -86,7 +86,7 @@ def normalise_tree(tree: str | os.PathLike[str] | None) -> str:
 def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
     """The code the integration executes, by content: the canonical sha256 of the manifest {repo path: sha256} of the repository at
     `root` over `research_tools.CLOSURE` (the integration plus Verity core), the files the store records as the research Tools' closure.
-    The one code identity: the hot Commit worker's key and the TP Commit's tree of record.  Raises FileNotFoundError when `root` holds
+    The one code identity: the TP Commit's tree of record.  Raises FileNotFoundError when `root` holds
     no file under one of the closure's directories, the integration or a directory of core (not a repository root: a manifest
     missing one would be a key that ignores it)."""
     from verity_vllm.pipeline.research_tools import VLLM_BUILD
@@ -146,7 +146,7 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
         core = tuple(os.path.dirname(d) for d in run_store("research.pythonpath", "source_identity.resolve").package_dirs(root, "verity"))
     except LookupError:
         core = ()                   # not a workspace: no entry to expect (the verdict is check()'s, on repo_root)
-    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.definitions.silicon, verity_sp1.proofs
+    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.circuits.silicon, verity_sp1.proofs
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
     for name in PACKAGES:

@@ -20,19 +20,28 @@ from typing import Any
 
 import pytest
 import torch
+from verity.definitions.registry.dsa_topk import waksman_switches
 
 from tests.acquire import glm53_model as G
-from tests.acquire.glm53_model import CMAP, INDEXER, L, SPARSE, STEPS, glm_model, metadata, run_step
+from tests.acquire.glm53_model import (
+    CMAP,
+    INDEXER,
+    SPARSE,
+    STEPS,
+    L,
+    glm_model,
+    metadata,
+    run_step,
+)
 from tests.acquire.test_route_source import Run, map_names
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
-from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 from verity_vllm.program.predict import dsa as D
+from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.query.manifest.format import RUN_FAMILY
-from verity.definitions.registry.dsa_topk import waksman_switches
 
 NORM_ROPE = G.fused_norm_rope
 OTHERS = ("module_hook", "sampler", "allreduce_norm")
@@ -339,7 +348,7 @@ def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_st
 @pytest.mark.slow
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
     on = bruns[True]
-    layouts = {}
+    layouts: dict[int, list[TensorMeta]] = {}
     for k, recs in on.rec.items():
         layouts[k], off = [], 0
         for j, (name, t) in enumerate(recs):
@@ -475,6 +484,7 @@ def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step()
     """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
     committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""
     import torch
+
     from verity_vllm.acquire.sources import attention_source as AS
     got = []
     src = object.__new__(AS.AttentionSource)

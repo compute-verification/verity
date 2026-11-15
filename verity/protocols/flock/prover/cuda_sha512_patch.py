@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """SHA-512 Merkle trees with hm96-sha512/v1 leaves on the device for verity/flock-circuit: install verity/protocols/flock/prover/cuda/sha512.cuh into a Flock b684b12
-checkout, with the GPU's one SHA-512 (verity/definitions/kernels/sha512.cuh) beside it as kernels_sha512.cuh, and widen every Merkle
+checkout, with the GPU's one SHA-512 (verity/circuits/kernels/sha512.cuh) beside it as kernels_sha512.cuh, and widen every Merkle
 node from 32 to 64 bytes (FLOCK_HB): the tree kernels, the node gathers and cap copies, the proof writer, and the tree
 allocations and cap observations of the chunk and circuit provers and the Ligerito levels, whose salts the device copies
 beside level 0's folds.
@@ -19,7 +19,7 @@ if "FLOCK_HB" in (g / "merkle_open.hpp").read_text():
 # The GPU's one SHA-512 and the header that includes it, each by its path from the repository's root, and that header's
 # include line, whatever its way there: this runs under a bare python3, which can't import verity for the paths.
 KERNELS_SHA = re.compile(r'#include "\.\./[\w./-]*/sha512\.cuh"\n')
-shutil.copy(pathlib.Path(__file__).resolve().parents[4] / "verity/definitions/kernels/sha512.cuh", g / "kernels_sha512.cuh")
+shutil.copy(pathlib.Path(__file__).resolve().parents[4] / "verity/circuits/kernels/sha512.cuh", g / "kernels_sha512.cuh")
 s = (pathlib.Path(__file__).resolve().parents[4] / "verity/protocols/flock/prover/cuda/sha512.cuh").read_text()
 found = KERNELS_SHA.findall(s)
 assert len(found) == 1, f"cuda/sha512.cuh: {KERNELS_SHA.pattern!r} occurs {len(found)} times, expected 1"

@@ -11,14 +11,14 @@
 //! what the prover computes, the same values the rows define.
 //!
 //! [`LookupNet::build_v2`] is `table/v2`, the mirror of the verifier's `Lookup.buildV2` (the one specification), held to
-//! its vectors (`verity/protocols/flock/agreement/lookup_v2_vectors.json`) by [`LookupNet::rows_digest`]: product rows only for the
+//! its vectors (`verity/protocols/flock/prover/agreement/lookup_v2_vectors.json`) by [`LookupNet::rows_digest`]: product rows only for the
 //! `k` = [`width`] output bits, and each output bit `k <= j < bits` its constant.
 
 use sha2::{Digest, Sha256, Sha512};
 
 use crate::ir_block::{Group, IrUnitNet, RowRead, RowWrite, Rows};
 
-/// The library (core's `verity.definitions.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
+/// The library (core's `verity.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
 /// index bits, value bits. A table is `library` exactly when its SHA-512 is listed, and `program` otherwise.
 pub const LIBRARY: [(&str, &str, usize, usize); 6] = [
     ("rsq", "39f7b912bc25b913618d926725a18974af9eb246f6f36ce06ef63ffdb293d80bc222623c6d182d2c23e16f5ada2b8db9e7e6a53b3e42046763f7794ac3cef378", 24, 31),
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn v2_reproduces_the_verifiers_vectors() {
         let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../../../..");
-        let Ok(text) = std::fs::read_to_string(repo.join("verity/protocols/flock/agreement/lookup_v2_vectors.json")) else {
+        let Ok(text) = std::fs::read_to_string(repo.join("verity/protocols/flock/prover/agreement/lookup_v2_vectors.json")) else {
             return;
         };
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();

@@ -37,7 +37,9 @@ def _w_install(worker) -> dict[str, Any]:
 
     import torch
     from vllm.distributed import get_tensor_model_parallel_rank
-    from vllm.model_executor.layers.vocab_parallel_embedding import VocabParallelEmbedding
+    from vllm.model_executor.layers.vocab_parallel_embedding import (
+        VocabParallelEmbedding,
+    )
 
     from verity_vllm.acquire.sources.vocab_range_source import VocabRangeSource
     from verity_vllm.engine import hooks

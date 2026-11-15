@@ -1,5 +1,13 @@
 {
  "definitions": {
+  "StopRule16_v2{T=4,NSTOP=1}": {
+   "and": 468,
+   "type": "6ae26f428e51c563f0d3d2718b20440f7fbfc8d00f9a4563772ce558ca52b0ab063e253b06bfe6b5e9fd9ccfd86fa8eba268932a283e59b3e61774832f4617b2"
+  },
+  "StopRule16_v2{T=5,NSTOP=2}": {
+   "and": 662,
+   "type": "6d5bc7ff6f00a3538f85974adea078938fc54d5f35d4c663ac38f8278d9574535072fe7cad3738f6f9b41b0aa2d4b9ac1d7e2ef0516e2b2c2a4625660ab530c7"
+  },
   "StopRule_v2{T=32,NSTOP=3}": {
    "and": 3547,
    "type": "5ba1f61ff26627947ea467917b86c1ff0eb99a6ace055efefe371018f1e0ef044c87184ed8dd49e81f487b70daf985f00eb44fb7b562caeb61f0046d5addaa68"
@@ -11,6 +19,11 @@
   "StopRule_v2{T=5,NSTOP=2}": {
    "and": 676,
    "type": "96f861731df188e6f047dc0cb6f18e7c2d5e43f7cf84058232c6fdd3689a15ead585c7772a8b4ec5fc44099f26d7c336dfc02ed7c96a222112ca1189932327d7"
+  }
+ },
+ "digests": {
+  "StopRule16_v2{T=1024,NSTOP=3}": {
+   "sha512": "feb609355e576c13abac9f46fcdef0dc88d58c4c449e3fff70b6ed2e76ce21c592aab504eca853684c135dadd3110d95e9f38d8951d53dc85c79d8af0ab79132"
   }
  }
 }

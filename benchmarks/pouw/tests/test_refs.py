@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
+import arm as A
+import bench as H
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
-import arm as A  # noqa: E402
-import bench as H  # noqa: E402
-import refs as RF  # noqa: E402
+import refs as RF
 
 
 def _square(x: int) -> tuple[int, int]:

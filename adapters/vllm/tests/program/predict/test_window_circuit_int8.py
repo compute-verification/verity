@@ -14,8 +14,20 @@ import json
 import re
 
 import pytest
+from verity.commitments.windows import interface as IF
+
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, KEY, ROPE, SCAN_PIN, WINDOW, _alone, _checkpoint, _label, held
+from tests.program.predict.test_window_circuit import (
+    CLASS,
+    KEY,
+    ROPE,
+    SCAN_PIN,
+    WINDOW,
+    _alone,
+    _checkpoint,
+    _label,
+    held,
+)
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_builder as WB
@@ -25,8 +37,6 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_circuit import Grain, window_circuit
-
-from verity.commitments.windows import interface as IF
 
 #: 512 weight words a slice, so an s8 slice at K = 64 is one of TINY's 16-word heads
 GRAIN = Grain(gemm_words=512, rows=256, select=64)

@@ -26,23 +26,45 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from verity.circuits.codec import canonical_json, descriptor_size
-from verity.circuits.defs import REGISTRY
-from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg, workload_file
-from verity_vllm.pipeline import layout as build_paths
-from verity_vllm.program import prefix_plan as PP, workload as W
-from verity_vllm.records.workload import Workload, WorkloadSampling
+
+# published as `global_program.REGISTRY`: the registry with every registry module loaded (the loop below)
+from verity.circuits.defs import REGISTRY as REGISTRY
 from verity.definitions.registry.catalog import load as _load_registry
+
+from verity_vllm.check.match.batch_decomp import derived_shape
+from verity_vllm.config import (
+    RowEngine,
+    done_source_refusal,
+    option,
+    row_execution,
+    workload_arg,
+    workload_file,
+)
+from verity_vllm.pipeline import layout as build_paths
+from verity_vllm.pipeline.components import (  # noqa: F401
+    component_of,
+    component_provenance,
+    follow_components,
+    load_component,
+    load_desc,
+    recorded_component_digest,
+    registration_refusal,
+    wrapper_params,
+)
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program import workload as W
+from verity_vllm.records.workload import Workload, WorkloadSampling
+
+__all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_id_of", "stop_rule", "workload_target"]
 
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
     print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
-
-from verity_vllm.check.match.batch_decomp import derived_shape
-from verity_vllm.pipeline.components import (component_of, component_provenance, follow_components, load_component, load_desc,  # noqa: F401
-                                             recorded_component_digest, registration_refusal, wrapper_params)
 
 
 def request_id_of(index: int) -> str:
@@ -64,8 +86,8 @@ def manifest_requests(w: Workload) -> list[dict]:
         out.append({"request_id": request_id_of(i), "workload_request_id": r.request_id, "index": i, "prompt_len": r.prompt_length,
                     "cap": r.max_tokens, "arrive_step": r.arrive_step or 0})
     doc = w.dump()
-    for r, p in zip(out, PP.plan(doc) if out and PP.prefix_caching(doc) else ()):   # a warm request's cached rows and their producers
-        r["cached"], r["producers"] = p["cached"], [request_id_of(q) for q in p["producers"]]
+    for row, p in zip(out, PP.plan(doc) if out and PP.prefix_caching(doc) else ()):   # a warm request's cached rows and their producers
+        row["cached"], row["producers"] = p["cached"], [request_id_of(q) for q in p["producers"]]
     return out
 
 
@@ -82,8 +104,7 @@ def execution_of_workload(w: Workload) -> str:
     sweep = w.sweep or {}
     if ex := sweep.get("execution"):
         return str(ex)
-    rid = str(sweep.get("row_id") or "")
-    return rid.rsplit("__", 1)[-1] if "__" in rid else ""
+    return row_execution(str(sweep.get("row_id") or "")) or ""
 
 
 # engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
@@ -120,7 +141,7 @@ def compilation_facts(block: dict | None) -> dict:
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
 
 
-def workload_target(target: dict | None):
+def workload_target(target: Mapping[str, Any] | None):
     """The row's declared TargetProfile as GP-01 reads it: its declared `target` block (the row file's `engine.target`, the ONE
     declared target source; the row driver passes the same block to derive_step as --target and every GPU stage builds its engine for it)
     over the default profile.  A GP-01 compose has no GPU, so cc / SMs are whatever the block says (they do not enter the lag); an unknown
@@ -142,8 +163,9 @@ def component_declared_target(d: str) -> dict | None:
     if not os.path.exists(p):
         return None
     try:
-        t = json.load(open(p)).get("target")
-    except Exception:  # noqa: BLE001
+        with open(p) as f:
+            t = json.load(f).get("target")
+    except (OSError, ValueError, RecursionError, AttributeError):   # unreadable, not JSON, nested past the parser, or no object: it carries none
         return None
     return t.get("declared") if isinstance(t, dict) and isinstance(t.get("declared"), dict) else None
 
@@ -206,8 +228,9 @@ def component_spec_histogram(d: str) -> dict | None:
     if not os.path.exists(p):
         return None
     try:
-        h = json.load(open(p)).get("spec_histogram")
-    except Exception:  # noqa: BLE001
+        with open(p) as f:
+            h = json.load(f).get("spec_histogram")
+    except (OSError, ValueError, RecursionError, AttributeError):   # unreadable, not JSON, nested past the parser, or no object: it carries none
         return None
     return h if isinstance(h, dict) else None
 
@@ -308,8 +331,8 @@ def modelled_engine(execution: str, comps: dict) -> tuple[dict, str | None]:
         facts.append(f)
     if not facts or any(not f or "cudagraph_mode" not in f for f in facts):
         return ({**base, "enforce_eager": False, "compilation": None},
-                f"components declare the compiled execution {ex!r} but no compilation facts (applicability.engine / applicability.compilation with "
-                f"cudagraph_mode, compilation_mode|mode, capture_sizes, backend): the Program cannot state the compiled execution it models")
+                (f"components declare the compiled execution {ex!r} but no compilation facts (applicability.engine / applicability.compilation with "
+                 f"cudagraph_mode, compilation_mode|mode, capture_sizes, backend): the Program cannot state the compiled execution it models"))
     if declared.get("enforce_eager") is True:
         return ({**base, "enforce_eager": False, "compilation": None},
                 f"components declare the compiled execution {ex!r} but an engine block with enforce_eager true")
@@ -324,8 +347,10 @@ def component_applicability(d: str) -> dict:
     for name in ("result.json", "artifact.json"):
         p = os.path.join(d, name)
         if os.path.exists(p):
-            j = json.load(open(p))
-            a = j.get("applicability") or (j.get("artifact") or {}).get("applicability") or {}
+            with open(p) as f:
+                j = json.load(f)
+            artifact = j.get("artifact")   # a derive's record states the block at its top, an artifact's file under `artifact`
+            a = j.get("applicability") or (artifact.get("applicability") if artifact else None)
             if a:
                 return a
     return {}
@@ -363,22 +388,6 @@ def workload_applicability(w: Workload, comps: dict) -> dict:
             "refusal": refusal}
 
 
-def component_sampling(d: str) -> dict:
-    """derive_step's `sampling` block for a component dir (result.json `sampling`, else the construction manifest's structural input)."""
-    for name, path in (("result.json", ("sampling",)), ("construction_manifest.json", ("structural_inputs", "sampling"))):
-        p = os.path.join(d, name)
-        if os.path.exists(p):
-            try:
-                j = json.load(open(p))
-            except Exception:  # noqa: BLE001
-                continue
-            for k in path:
-                j = (j or {}).get(k)
-            if j:
-                return j
-    return {}
-
-
 def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     """The workload Program's declaration of the top-p split geometry: every launch runs at the registered split count S =
     `topp_geometry.registered_splits(num_SMs)` whatever the live batch (`engine.topp_pin`), num_SMs the components' agreed target
@@ -386,13 +395,16 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     TokenSelect's launch S to it (`check.match.sampler_geometry.sampler_geometry_check`).  Declared for a stochastic sampler only (None
     for greedy); a stochastic sampler without an agreed num_SMs, or whose components declare another S, is a named refusal.  Not part
     of the Program digest (a declaration beside `applicability`, like `stop_rule`).  ``reqs`` is unused: S reads no request."""
-    comps = app.get("components") or {}
-    samp = comps.get("sampler") if isinstance(comps.get("sampler"), dict) else {}
+    comps = app.get("components")   # the components' agreed facts; a declaration without them declares no sampler
+    samp = comps.get("sampler") if comps else None
+    if not isinstance(samp, dict):
+        samp = {}
     if (samp.get("kind") or "greedy") != "stochastic":
         return None
-    nsm = comps.get("num_sms")
+    nsm = comps.get("num_sms") if comps else None
     if nsm is None:
-        nsm = (samp.get("geometry") or {}).get("num_sms") if isinstance(samp.get("geometry"), dict) else None
+        geometry = samp.get("geometry")
+        nsm = geometry.get("num_sms") if isinstance(geometry, dict) else None
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
@@ -418,7 +430,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     Not part of the Program digest (a declaration beside `applicability`); a Program without it makes GM-01 FAIL CLOSED on any
     request that stopped early.  `sampling`: the workload record's sampling parameters (`Workload.sampling`), None for none."""
     ids: set[int] = set(int(x) for x in (eos_token_ids or []))
-    sources: dict[str, list[int]] = {}
+    sources: dict[str, list[int] | str] = {}
     if eos_token_ids:
         sources["--eos-token-ids"] = sorted(ids)
     # the manifest's sampling parameters may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
@@ -428,7 +440,8 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
             p = os.path.join(checkpoint_dir, fn)
             if os.path.exists(p):
                 try:
-                    v = json.load(open(p)).get("eos_token_id")
+                    with open(p) as f:
+                        v = json.load(f).get("eos_token_id")
                 except Exception as e:  # noqa: BLE001
                     sources[fn] = f"unreadable: {e!r}"[:120]
                     continue
@@ -442,7 +455,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     if sampling is not None and sampling.eos_token_ids is not None:
         ms = sorted(set(sampling.eos_token_ids))
         sources["manifest.sampling.eos_token_ids"] = ms
-        ck = sorted({v for k, v in sources.items() if k in ("config.json", "generation_config.json") and isinstance(v, list) for v in v})
+        ck = sorted({x for k, v in sources.items() if k in ("config.json", "generation_config.json") and isinstance(v, list) for x in v})
         if ck and set(ck) != set(ms):
             return {"schema": "verity/workload-program/v1/stop-rule", "eos_token_ids": None, "source": sources, "checkpoint_dir": checkpoint_dir,
                     "refusal": f"manifest sampling.eos_token_ids {ms} != the pinned checkpoint's eos_token_id set {ck}: the manifest was pinned "
@@ -481,14 +494,16 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
             per[key] = None
             continue
         try:
-            rec = json.load(open(p))
+            with open(p) as f:
+                rec = json.load(f)
         except Exception as e:  # noqa: BLE001
             return {"refusal": f"component {key}: weights_of_record.json unreadable ({e})", "components": per, "per_rank": None}
         tp = rec.get("tp") if isinstance(rec.get("tp"), dict) else {}
         rank = int(tp.get("rank") or 0)
+        unresolved, checkpoint = rec.get("unresolved"), rec.get("checkpoint")   # a complete walk lists none; an older record names no checkpoint
         ent = {"root_of_record": rec.get("root_of_record"), "program_digest": rec.get("program_digest"), "tp": {"world": int(tp.get("world") or 1), "rank": rank},
                "complete": bool(rec.get("complete")), "n_pinned": rec.get("n_pinned"), "n_fields": rec.get("n_fields"),
-               "unresolved": rec.get("unresolved") or [], "schema": rec.get("schema"), "checkpoint_dir": (rec.get("checkpoint") or {}).get("dir")}
+               "unresolved": unresolved if unresolved else [], "schema": rec.get("schema"), "checkpoint_dir": checkpoint.get("dir") if checkpoint else None}
         per[key] = ent
         rd = c.get("recorded_digest")
         # a record without program_digest cannot be tied to the component (the stale check could never fire): refused
@@ -535,7 +550,8 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
 
 
 def _refused(out: str, res: dict) -> dict:
-    json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
+    with open(os.path.join(out, "workload_program.json"), "w") as f:
+        json.dump(res, f, indent=1)
     return res
 
 
@@ -671,9 +687,9 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["layout"] = build_paths.layout_block(artifact_root, workload_path, art["inputs"]["derived"])
     art["cost"] = {"component_secs": comp_secs, "compose_secs": round(time.time() - t2, 2), "total_secs": round(time.time() - t0, 2)}
     art["ok"] = True
-    json.dump(art, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-    json.dump(art["address_map"], open(os.path.join(out, "address_map.json"), "w"), indent=1)
-    json.dump(art["chronology"], open(os.path.join(out, "chronology.json"), "w"), indent=1)
+    for name, doc in (("workload_program.json", art), ("address_map.json", art["address_map"]), ("chronology.json", art["chronology"])):
+        with open(os.path.join(out, name), "w") as f:
+            json.dump(doc, f, indent=1)
     return art
 
 
@@ -682,9 +698,9 @@ class Options:
     workload: str = option("--workload", type=workload_arg)
     derived: list[str] = option("--derived", action="append", default=[])
     out: str = option("--out")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id " "become the Program's declared stop rule")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id become the Program's declared stop rule")
     eos_token_ids: str | None = option("--eos-token-ids", default=None, help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
-    artifact_root: str | None = option("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the " "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
+    artifact_root: str | None = option("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
     follow: float | None = option("--follow", type=float, default=None,
                                   help="started beside the derives: load each component as its derive finishes, waiting up to this many seconds")
     follow_done: str | None = option("--follow-done", default=None, help="with --follow: a file whose existence means every derive has ended")
@@ -693,10 +709,12 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
-    early, canon = None, {}
+    early = None
+    canon: dict = {}
     if a.follow:
         reqs = manifest_requests(Workload.load(workload_file(a.workload)))
         early = follow_components(a.derived, {shape_of(r) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
@@ -709,8 +727,14 @@ def main(a: Options) -> int:
         return 4
     print(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
                       "requests": len(res["requests"]), "descriptor_bytes": res["descriptor"]["bytes"], "cost": res["cost"],
-                      "eos_token_ids": (res.get("stop_rule") or {}).get("eos_token_ids"),
-                      "lag": (res.get("lag") or {}).get("value"), "async_scheduling": (res.get("lag") or {}).get("async_scheduling"),
-                      "moe_construction": (res.get("moe_construction") or {}).get("value"),
-                      "moe_block_present": (res.get("moe_construction") or {}).get("moe_block_present")}))
+                      "eos_token_ids": _stated(res, "stop_rule", "eos_token_ids"),
+                      "lag": _stated(res, "lag", "value"), "async_scheduling": _stated(res, "lag", "async_scheduling"),
+                      "moe_construction": _stated(res, "moe_construction", "value"),
+                      "moe_block_present": _stated(res, "moe_construction", "moe_block_present")}))
     return 0
+
+
+def _stated(res: dict, block: str, key: str) -> Any:
+    """A field of one of the build result's optional blocks (`stop_rule`, `lag`, `moe_construction`); None where it has no such block."""
+    doc = res.get(block)
+    return doc.get(key) if doc else None

@@ -7,7 +7,14 @@ import pytest
 
 from verity_vllm.acquire import fa2_plane_classes as FP
 from verity_vllm.acquire.fa2_plane_classes import (
-    AttnLayerDecl, LayoutPolicy, StepSequences, check_step, counts_by_layer, declarations_from_attention_impls, plane_class, uniform_rule,
+    AttnLayerDecl,
+    LayoutPolicy,
+    StepSequences,
+    check_step,
+    counts_by_layer,
+    declarations_from_attention_impls,
+    plane_class,
+    uniform_rule,
 )
 
 NH, KVH, D = 8, 4, 256                      # a GQA shape with a non-legacy tile: names carry `x<BN>x<D>` = x64x256
@@ -281,7 +288,11 @@ def test_attention_impls_of_record_reads_the_build_result(tmp_path):
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
+from verity_vllm.commit.committer.native_host import (  # noqa: E402
+    GPU_CHUNK_BYTES,
+    NativeHostCommitter,
+    TensorMeta,
+)
 
 
 class Attention:  # class names are what `_mro_names` sees

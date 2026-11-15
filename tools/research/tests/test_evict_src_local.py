@@ -111,8 +111,8 @@ def _ignoring(node, ignore: str, artifacts: dict | None = None) -> str:
     paths = [".gitignore"]
     if artifacts is not None:
         (work / "fixtures").mkdir(exist_ok=True)
-        (work / "fixtures" / "artifacts.json").write_text(json.dumps(artifacts))
-        paths.append("fixtures/artifacts.json")
+        (work / "artifacts.json").write_text(json.dumps(artifacts))
+        paths.append("artifacts.json")
     _git(work, "add", *paths)
     _git(work, "commit", "-q", "-m", "ignores")
     d = _git(work, "rev-parse", "HEAD")

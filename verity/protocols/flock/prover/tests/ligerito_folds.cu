@@ -1,6 +1,6 @@
 // cuda/ligerito_folds.cuh against upstream's level-0 folds and messages (cuda-ghash/ligerito_f256.cuh's lf_fold_base_pair,
 // lf_fold_ext_pair, lf_msg_partial and lf_msg_combine, after introduce_glue.cuh's glue over the whole eq table), for
-// test_ligerito_folds.py. lf_check draws A and B (2^log_n base words each), split eq tables at log_n / 2, beta and a coin a
+// test_ligerito_folds.py. lf_check samples A and B (2^log_n base words each), split eq tables at log_n / 2, beta and a coin a
 // fold from seed, runs `folds` folds both ways, the first with the glue when `glue` is set, and counts the words that differ:
 // bad[0] of the folds' outputs, bad[1] of their messages.
 #include <cstdint>

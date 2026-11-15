@@ -180,7 +180,7 @@ def create_leased(ns: Any, *, gate: Callable[[str, float], tuple[str | None, str
 
 def main(argv: list[str]) -> int:
     """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> --max-hours H [...]`
-    | `research pods extend|lease TARGET` | `research pods ssh|sync ...` (connect.py) | any other
+    | `research pods extend|lease TARGET` | `research pods ssh|sync|procs ...` (connect.py) | any other
     verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create);
     create's exit 6 = no budget line lets it (research.pods.budgets.gate)."""
     import argparse
@@ -196,6 +196,10 @@ def main(argv: list[str]) -> int:
         from .connect import main_sync
 
         return main_sync(argv[1:])
+    if argv[:1] == ["procs"]:
+        from .connect import main_procs
+
+        return main_procs(argv[1:])
     if argv[:1] == ["check-part"]:
         ap = argparse.ArgumentParser(prog="research pods check-part")
         ap.add_argument("target", metavar="MACHINE|POD_ID")

@@ -80,12 +80,12 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean.elementwise import specialized
-from verity.definitions.ops.boolean.scalar import gt_u
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.scalar import gt_u
 from verity.circuits.refs import Affine, Coll, Explicit, Strided, broadcast, concat, strided_view, tuple_of
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Tuple
 
 from . import boolean_gather as BGA
@@ -294,7 +294,7 @@ EmbeddingBackwardTied = CompositeDefinition(
                 ("w", Array(_statics(S, "V", 1, M_MAX).V, Array(S.H, BF16)))), Array(S.V, Array(S.H, BF16))), _tied,
     doc="the tied embedding's gradient over M tokens: g (M x H, token-major) through transpose, EmbeddingBackwardEntry_v1 on "
         "each of the V entries, then Bf16AddF2fp_v2 of the LM head's dW w and each entry's row",
-    conformance="exact-model-tested; against numerics.torch_blocks' model (tests/test_torch_embedding.py), whose tied add is "
+    conformance="exact-model-tested; against numerics.torch_blocks' model (verity/definitions/tests/test_torch_embedding.py), whose tied add is "
                 f"the GPU's on every word of {GPU_STEP}: {ON_GPU}",
     refuse=_refuse_all("M", "V", "H"))
 
@@ -669,5 +669,5 @@ EmbeddingBackwardTiedV2 = CompositeDefinition(
         "each feature's column (the sort path above 3072 tokens, else the feature kernel), its outs transposed back, "
         "EmbeddingBackwardRoute_v1 of each id's last token to the id's slot, then Bf16AddF2fp_v2 of the LM head's dW w and "
         "each slot",
-    conformance=f"exact-model-tested; against numerics.torch_blocks' model (tests/test_torch_embedding.py), and {_ON_GPU_V2}",
+    conformance=f"exact-model-tested; against numerics.torch_blocks' model (verity/definitions/tests/test_torch_embedding.py), and {_ON_GPU_V2}",
     refuse=_refuse_all("M", "V", "H"))

@@ -4,7 +4,7 @@ route, one panel per (model, set, context).
     frontier_plot.py eps --out EPS.json                      # core ε and γ of every design under every reading
     frontier_plot.py plot --eps EPS.json --png OUT.png --table OUT.md [--json OUT.json] RESULTS.json...
 
-`eps` runs `machine-model eps --json` (benchmarks/pouw/machine_model) with the decided settings: Π the current vector
+`eps` runs `machine-model eps --json` (benchmarks/machine_model) with the decided settings: Π the current vector
 with UNI on issue at 0.92, the floor credit, operands at the noise's floor, q* = 8 on the
 lane route and 100% checking (the core ε, never mixed with ε_sample). The readings differ only in the table route each
 design's zero-instance words leave open (`READINGS`):

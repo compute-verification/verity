@@ -4,21 +4,26 @@ tensors, the JIT scan on DeepGEMM's generated sources, the bindings, and the ver
 `tests/properties/deepgemm_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
+import contextlib
 import copy
+import json
 import sys
 import types
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import deepgemm_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import deepgemm_twins as T
 from verity.definitions.numerics import derived_rows as R
 from verity.definitions.registry import fp8 as F
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests import fake_vllm
+from tests.properties import deepgemm_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 K, N, GQ = 256, 200, X.GROUP
 NW = 300                                                                    # 3 x 2 weight blocks, the last one partial
@@ -291,8 +296,7 @@ def test_a_job_that_raises_is_an_error_not_a_crash(tmp_path) -> None:
 
 def test_taps_record_every_call_and_restore_the_module(monkeypatch) -> None:
     mod = types.ModuleType("fake_flashinfer")
-    mod.f = lambda x, **kw: (x + 1, x * 2)
-    mod.g = lambda x: x
+    vars(mod).update(f=lambda x, **kw: (x + 1, x * 2), g=lambda x: x)
     monkeypatch.setitem(sys.modules, "fake_flashinfer", mod)
     f = mod.f
     with X.Taps("fake_flashinfer", ("f",)) as tp:
@@ -328,7 +332,9 @@ def _deepgemm_calls(x, layer, out, **change):
 
 def test_equal_is_bit_for_bit() -> None:
     """FlashInfer's row 3 is all NaN: a run equals itself bit for bit though `torch.equal` says it does not."""
-    bf16 = lambda *w: torch.from_numpy(np.array(w, np.uint16).view(np.int16)).view(torch.bfloat16)
+    def bf16(*w):
+        return torch.from_numpy(np.array(w, np.uint16).view(np.int16)).view(torch.bfloat16)
+
     nan = bf16(0x7FC0, 0x3F80, 0xFFC1)
     assert not torch.equal(nan, nan.clone()) and X._equal(nan, nan.clone())
     other = bf16(0x7FC1, 0x3F80, 0xFFC1)
@@ -342,12 +348,15 @@ def test_equal_is_bit_for_bit() -> None:
 def test_the_branch_operands_are_the_layers_and_the_inputs() -> None:
     layer, x, out = _layer(), torch.zeros(4, K, dtype=torch.bfloat16), torch.zeros(4, N, dtype=torch.bfloat16)
     assert X.branch_operands_ok(_deepgemm_calls(x, layer, out), "deepgemm", x, layer, out)
-    for change in ({"quant_kw": {**QUANT_KW, "use_ue8m0": False}}, {"gemm_kw": {}}, {"w": layer.weight.clone()}):
+    changes: tuple[dict[str, Any], ...] = ({"quant_kw": {**QUANT_KW, "use_ue8m0": False}}, {"gemm_kw": {}}, {"w": layer.weight.clone()})
+    for change in changes:
         assert not X.branch_operands_ok(_deepgemm_calls(x, layer, out, **change), "deepgemm", x, layer, out), change
     assert not X.branch_operands_ok(_deepgemm_calls(x, layer, out), "deepgemm", x, layer, torch.ones(4, N, dtype=torch.bfloat16))
     assert not X.branch_operands_ok(_deepgemm_calls(x, layer, out), "deepgemm", x.clone(), layer, out)
-    fi = lambda **kw: [{"op": "flashinfer_fp8_blockscale_gemm", "args": (), "out": out.clone(),
-                        "kw": {"input": x, "weight": layer.weight, "weight_scale": layer.weight_scale_inv, "out_dtype": torch.bfloat16, **kw}}]
+    def fi(**kw):
+        return [{"op": "flashinfer_fp8_blockscale_gemm", "args": (), "out": out.clone(),
+                 "kw": {"input": x, "weight": layer.weight, "weight_scale": layer.weight_scale_inv, "out_dtype": torch.bfloat16, **kw}}]
+
     assert X.branch_operands_ok(fi(), "flashinfer", x, layer, out)
     nan = torch.full((4, N), float("nan"), dtype=torch.bfloat16)
     assert X.branch_operands_ok([{**fi()[0], "out": nan.clone()}], "flashinfer", x, layer, nan)
@@ -381,7 +390,7 @@ def _kernel_cu(impl: str, args: list[str]) -> str:
             f"    auto ptr = reinterpret_cast<void*>(&{impl}<\n        {body}\n    >);\n}};\n")
 
 
-def _jit_cache(root, kernels: dict[str, tuple[str, list[str]]]):
+def _jit_cache(root, kernels: Mapping[str, tuple[str | None, list[str]]]):
     for name, (impl, args) in kernels.items():
         (root / "cache" / name).mkdir(parents=True)
         (root / "cache" / name / "kernel.cu").write_text(_kernel_cu(impl, args) if impl else "// nothing instantiated\n")
@@ -452,7 +461,10 @@ BLOCKS = _zero(weight_blocks=4)
 def _doc(batch_invariant: bool = False) -> dict:
     lin = {"phase": "linear", "model": "dsv4", "case": "wq_b", "deterministic": True, "operands_ok": True, "branch_ok": True}
     branches = ("deepgemm", "deepgemm") if batch_invariant else ("flashinfer", "deepgemm")
-    weights = lambda case: {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
+    def weights(case):
+        return {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
+
+    doc: dict[str, Any]
     doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
            "mufu": {"rcp_ok": True}, "schedule": {"ok": True},
            "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
@@ -524,13 +536,10 @@ ENV = ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_BLOCKSCALE_FP8_GEM
 def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False) -> dict:
     """vLLM's config module and every GPU piece stood in for: the launches are the jobs above, the JIT scan and MUFU probe
     canned; returns what the stubs saw."""
-    import contextlib
-
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in ENV:
         monkeypatch.setenv(k, "")
     seen: dict = {"mufu": [], "jit": [], "linear": []}
@@ -570,8 +579,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main` with the GPU's pieces stood in for and vLLM's config module stubbed: the comparison jobs through the spawned worker
     pool, the per-case verdicts, the sealed record, the printed line and the exit status, so a slip in the orchestration shows here
     and not in the H200's first hour."""
-    import json
-
     seen = _stub_gpu(tmp_path, monkeypatch)
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick"]) == 0
@@ -591,8 +598,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 
 
 def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys) -> None:
-    import json
-
     _stub_gpu(tmp_path, monkeypatch, flip=True)
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick", "--only", "linear,einsum"]) == 1
@@ -603,8 +608,6 @@ def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys)
 
 
 def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
-    import json
-
     _stub_gpu(tmp_path, monkeypatch, gate_ok=False)
     with pytest.raises(SystemExit) as e:
         X.main(["--out", str(tmp_path / "out"), "--scratch", str(tmp_path), "--workers", "1"])
@@ -614,7 +617,5 @@ def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["deepgemm_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

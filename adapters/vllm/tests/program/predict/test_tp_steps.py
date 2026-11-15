@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.tp_steps: a node's advice compiled at every rank of φ.tp's world and composed (`compile_tp`).
 
 The dense toy at TP2 compiles in seconds; GLM-5.3 at TP8, class G's registration, is the opt-in test, with a one-token prompt
-and a two-token one, whose TP window (`pipeline.tp.wires`) places every collective at a grain C-Flock proves: each rank's
+and a two-token one, whose TP window (`pipeline.tp.wires`) places every collective at a grain Flock proves: each rank's
 coordinates gathered into 96-word rows, one combine unit a chunk, and the chunks gathered into the call's row."""
 from __future__ import annotations
 
@@ -14,15 +14,26 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.commitments.windows import interface as I
 
-from tests.pipeline.test_tp_wires import in_order, parts_bits, peer_bits, proof_blocks, sent_at_own_slices
-from tests.program.predict.test_steps import GREEDY, _class_g, _mixed, _registered, _session
+from tests.pipeline.test_tp_wires import (
+    in_order,
+    parts_bits,
+    peer_bits,
+    proof_blocks,
+    sent_at_own_slices,
+)
+from tests.program.predict.test_steps import (
+    GREEDY,
+    _class_g,
+    _mixed,
+    _registered,
+    _session,
+)
 from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program.predict.steps import compile_steps
 from verity_vllm.program.predict.tp_steps import at_rank, compile_tp
-
-from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as I
 
 ROOT = Path(__file__).resolve().parents[3]
 ONCE = {**GREEDY, "max_tokens": 2, "ignore_eos": True}
@@ -50,7 +61,7 @@ def class_g_tp(hf_home: Path, layers: int | None = None) -> dict:
     and a two-token one prefilled in one step, each decoding once: `compile_tp`'s digests and sites, and the TP window of
     both requests' sites: its units by template, its input bits, the bits of every rank's partial wired into what reads
     every rank's and of every combine's operand, the reads of a combine's output left free (by kind, `Sites.unwired` without
-    the request, site, rank and node), the window's own units C-Flock's composer refuses (`proof_blocks`), whether each
+    the request, site, rank and node), the window's own units Flock's composer refuses (`proof_blocks`), whether each
     rank's sent partial is its own segment at every site's slice, and the first wire running backward in the public order
     (None)."""
     advice, ingress = _session([(1, 2, ONCE, [5]), (2, 2, ONCE, [5, 6])], [[(0, 0, 1), (1, 0, 2)], [(0, 1, 1), (1, 2, 1)]])
@@ -87,7 +98,7 @@ def test_class_g_composes_its_eight_ranks_with_stable_digests_and_wires_every_pe
     (embedding and attention all-reduces) and the MoE's fused row, or into each rank's token select (the logits'
     all-gather); each rank's sent partial is its own segment at every site's slice; every wire runs forward in the public
     order; no read of a combine's output is left free, the MoE row's new residual into the next attention all-reduce's
-    chunk units among them; and C-Flock's composer refuses none of the window's own units. `at_rank` of the registration is
+    chunk units among them; and Flock's composer refuses none of the window's own units. `at_rank` of the registration is
     each rank's own, so each rank's digest is `compile_steps`' there. What no cheaper test can: the binding of eight ranks
     of a served model's compiled Programs at the chunk grain, each rank's place among the others read from its Programs,
     and their digests' stability across processes; it compiles GLM-5.3 eight times in each of two processes."""

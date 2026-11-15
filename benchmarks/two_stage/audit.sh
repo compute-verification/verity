@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # The two-stage toy's audit on a CPU node (audit.py): flock-circuit, flock-verify and SPOT's Lean verifier (the
-# stream's draws) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
+# stream's samples) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
 # (never a circuit, a prover file, a private body, or a challenger's key or secret: its *-work/).
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
 #     bash benchmarks/two_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
 #   TWO_ARGS="--n 8 --q 4" passes audit.py more; FLOCK_CHALLENGER=1 gives each session a challenger of its own, audited
-#   at the sessions' end (in Lean too, which builds SPOT's difftest)
+#   at the sessions' end (in Lean too, which builds SPOT's difftest); TWO_GUARD=0 keeps no <case>/guard/ under $OUT, for
+#   a run whose guard nobody reads: the export (guard.py) is nearly all of a run's records, each template's circuit
+#   several times over, and it is what guard_node.py and `guard.py pack` read, so the default keeps it
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/pod HEAD:verity/protocols/flock/agreement HEAD:verity/protocols/flock/tool.py; } | tee "$O/machine.txt"
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/prover/pod HEAD:verity/protocols/flock/prover/agreement HEAD:verity/protocols/flock/prover/tool.py; } | tee "$O/machine.txt"
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
@@ -24,7 +26,7 @@ SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${TWO_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
@@ -39,6 +41,7 @@ UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW
 { git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } > "$O/fetch-main.log" 2>&1 \
   && git rev-list --first-parent refs/remotes/origin/main > "$O/main.txt" || { tail -5 "$O/fetch-main.log"; exit 4; }
+GUARD=(); [ "${TWO_GUARD:-1}" = 0 ] && GUARD=(! -path './guard/*')
 rc=0
 for c in ${TWO_CASES:-honest altered}; do
   flags=(); [ "$c" = altered ] && flags=(--altered)
@@ -48,7 +51,7 @@ for c in ${TWO_CASES:-honest altered}; do
   grep '^TWO ' "$O/$c.log" || tail -20 "$O/$c.log"
   mkdir -p "$O/$c"
   (cd "$W/$c" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' \
-     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' -print0 \
+     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' "${GUARD[@]}" -print0 \
      | xargs -0 -r -I{} cp --parents {} "$O/$c/")
 done
 exit $rc

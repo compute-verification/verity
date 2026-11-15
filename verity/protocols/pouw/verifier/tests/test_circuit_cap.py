@@ -2,7 +2,7 @@
 +0 promotions are `pearl_c_debit.word_debit`'s, its C̃ `pearl_c.chain`'s, and only the exact certificates pass; a tile's
 verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
-and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.definitions.silicon` raises), and neither does
+and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.circuits.silicon` raises), and neither does
 the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
 scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
 h0 is `PearlTileDigest`'s on honest and edge tiles, its units' rows are their ports' words, it computes every value in
@@ -23,19 +23,19 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.definitions.silicon import fp32
 from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
+from verity.circuits.silicon import fp32
 from verity.protocols.pouw.prover.circuit import cap, pc8, plan
 from verity.protocols.pouw.prover.circuit import leaves as L
-from verity.protocols.pouw.verifier.protocol import DomainError, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.pouw.verifier.protocol import DomainError, Shape
 
 FINITE = [c for c in range(256) if c not in (0x7F, 0xFF)]
 SMALL = [c for c in FINITE if c & 0x7F < 0x10]                     # E4M3 subnormals and the smallest normals

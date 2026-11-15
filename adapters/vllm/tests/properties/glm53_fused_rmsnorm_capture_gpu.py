@@ -45,17 +45,23 @@ import shutil
 import sys
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import dsa_norm_rows as NR
+from verity.definitions.registry import dsa_norm as DN
+from verity.definitions.registry.prims import bits_of
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"
@@ -68,7 +74,7 @@ SAMPLE = (0, 1, 7, 19, 1000, 2047, 2048, 3071, 3072, 3135)
 CHUNK = 512
 PER_ALT, BATCH, POOL = 4, 256, 4096
 #: the probe's weights: every bf16 word in [1, 2) (a power of two moves no product across a rounding boundary)
-PROBE_W = np.arange(0x3F80, 0x4000, dtype=np.uint16)
+PROBE_W: np.ndarray = np.arange(0x3F80, 0x4000, dtype=np.uint16)
 TOTALS = ("rows", "words", "mismatch", "reference", "twin_mismatch")
 CASES = ("served", "probe")
 KERNEL = "_fused_norm_rope_kernel"
@@ -121,9 +127,6 @@ def model_r(x: np.ndarray, eps: float, layout: str = "strided", chains: str = "o
     8-element vector added in order (`chains` "one" / "per_vector"), each warp's butterfly, the CTA's two adds ("02_13" =
     (w0 + w2) + (w1 + w3), "01_23" = (w0 + w1) + (w2 + w3)), then `epilogue` "rsqrt" (RsqrtApprox(eps + DivFull(sum, N))) or
     "sqrt" (`RMSNormTriton_v1`'s DivFull(1, MufuSqrtFtz(fma(DivFullRcp(N), sum, eps))))."""
-    from verity.definitions.registry import dsa_norm as DN
-    from verity.definitions.registry.prims import bits_of
-
     R, N = x.shape
     E = N // DN.THREADS
     regs = DN.layout(N) if layout == "strided" else [list(range(E * t, E * t + E)) for t in range(DN.THREADS)]
@@ -204,7 +207,7 @@ def probe(N: int, eps: float, seed: int) -> dict[str, Any]:
     w = weight_row(rng, N)
     pool: list[np.ndarray] = []
     ours: list[np.ndarray] = []
-    free = np.ones(N, dtype=bool)
+    free: np.ndarray = np.ones(N, dtype=bool)
     rows: list[int] = []
     targets: list[dict[str, Any]] = []
     for name, (fn, product) in alternatives(N).items():
@@ -345,10 +348,6 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 
 def bind_check() -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.definitions import boolean as SW
-    from verity.definitions.registry import dsa_norm as DN
-
     out: dict[str, Any] = {}
     for _, N, _, _ in NORMS:
         try:
@@ -369,10 +368,6 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import dsa_norm as DN
-
     (r0, r1), N = job["span"], job["N"]
     a = DS._load(job["paths"])
     x, w, got = np.ascontiguousarray(a["x"][r0:r1]), np.ascontiguousarray(a["w"]), np.ascontiguousarray(a["out"][r0:r1])

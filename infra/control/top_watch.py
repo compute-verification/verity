@@ -37,6 +37,9 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
    LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
    a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
    can't read (`unread`), which the audit skips.
+7. The Goals page as this hour has it, saved as <state dir>/goals/goals-<YYYYMMDDTHHMMZ>.json.gz: the earlier dump `research
+   velocity` compares the page with. The pod holds no Cursor identity, so it reads the page with the site key in <state
+   dir>/goals.key (one line, `events:read`). A dump older than KEEP_S goes. It rings nobody.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -46,6 +49,7 @@ rings nobody and saves no state.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -60,7 +64,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from research import linear, slack
+from research import goals, linear, slack
 
 QUOTE_MAX = 600
 KEEP_S = 14 * 86400
@@ -72,6 +76,7 @@ H200_BUSY_PCT = 10
 REPORT_HOUR_UTC = 15
 LANE_RING_S = 12 * 3600
 AUDIT_LOG = "linear-audit.jsonl"
+GOALS_DIR, GOALS_KEY, GOALS_STAMP = "goals", "goals.key", "goals-%Y%m%dT%H%MZ.json.gz"
 DAY_BEFORE_S = 86400 - 1800             # the line 24 h earlier: the newest one at least this old (passes drift within the hour)
 REPO = "compute-verification/verity"
 OPEN = ("Waiting on Daniel", "Revising")
@@ -444,6 +449,28 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
     once_each(state, f"linear:day:{iso(now)[:10]}", ring, "top", body, None, now)
 
 
+def goals_page(key: Path) -> list[dict]:
+    if not key.is_file():
+        raise RuntimeError(f"no site key at {key}: put one with events:read there (one line, mode 600) and the page is saved each hour")
+    return goals.Route(key=key.read_text().strip()).call()
+
+
+def save_goals(now: float, page: Callable[[], list[dict]], out: Path | None) -> None:
+    """The Goals page as `page` reads it, saved in `out` under its minute (None: a dry run, which saves nothing); the dumps
+    older than KEEP_S go."""
+    dump = gzip.compress(json.dumps(page(), ensure_ascii=False).encode(), mtime=0)
+    if out is None:
+        return
+    out.mkdir(parents=True, exist_ok=True)
+    name = time.strftime(GOALS_STAMP, time.gmtime(now))
+    tmp = out / f"{name}.tmp"
+    tmp.write_bytes(dump)
+    tmp.replace(out / name)
+    for old in out.glob("goals-*.json.gz"):
+        if old.name < time.strftime(GOALS_STAMP, time.gmtime(now - KEEP_S)):
+            old.unlink()
+
+
 def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]]) -> None:
     for name, check in checks.items():
         try:
@@ -469,8 +496,13 @@ def traffic_json() -> dict:
 
 
 def linear_check(state, ring, reg, now, log_path: Path | None) -> None:
+    """The sweep's audit is the one `research msg linear audit` lists: an issue waiting only on landing is no finding in
+    either, so a ring's counts are the ones its command shows."""
+    from research.queue import landing_waiter
+
     lin, owners = linear.Linear(), linear.owners(reg)
-    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now), volume_json, log_path, lambda: lin.unread(sorted(owners)))
+    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now, waiting=landing_waiter()), volume_json, log_path,
+                 lambda: lin.unread(sorted(owners)))
 
 
 def volume_json() -> dict:
@@ -519,7 +551,9 @@ def main(argv: list[str] | None = None) -> int:
                     "rules thread": lambda: rules_thread(state, ring, api, reg, now),
                     "main": lambda: main_stalled(state, ring, now),
                     "h200": lambda: h200s(state, ring, now, fleet_samples),
-                    "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
+                    "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG),
+                    "goals": lambda: save_goals(now, lambda: goals_page(state_path.parent / GOALS_KEY),
+                                                None if ns.dry_run else state_path.parent / GOALS_DIR)})
                 prune(state, now)
             if not ns.dry_run:
                 tmp = state_path.with_suffix(".tmp")

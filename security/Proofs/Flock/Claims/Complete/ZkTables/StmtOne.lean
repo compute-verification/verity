@@ -79,7 +79,7 @@ open Flock Transcript FlockComplete FlockDeploy JsonRT
 open FlockSoundness.Refine
 open Lean (Json)
 
-open private stratumOfJson from Flock.Draw
+open private stratumOfJson from Commitments.Draw
 
 /-! ## The `J` readers' values -/
 

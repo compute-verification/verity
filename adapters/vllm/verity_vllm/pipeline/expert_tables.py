@@ -16,7 +16,8 @@ registered rows are the served bytes; with one, that the registered rows are the
 its weights (`window_weights`).
 
 Outside the integration, this module is the per-expert cut's tables: with the registration, it exports the table layout
-(`table_param`, `table_words`), the record (`ExpertTables`) and a window committer's registration (`committer`)."""
+(`table_param`, `table_words`), the record (`ExpertTables`) and a window committer's registration (`committer`; `of_request`
+reads it as a serving-rows request names it, by its file and its key file)."""
 from __future__ import annotations
 
 import hashlib
@@ -33,18 +34,18 @@ import numpy as np
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.expert_rows import committer, table_param, table_words
+from verity_vllm.pipeline.expert_rows import committer, of_request, table_param, table_words
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
 
-__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "entries", "key_of", "mint_key", "nonces", "program",
-           "register", "served_fields", "table_param", "table_words", "tables_of"]
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "entries", "key_of", "mint_key", "nonces", "of_request",
+           "program", "register", "served_fields", "table_param", "table_words", "tables_of"]
 
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
 TABLES_NONCE = 3 << 61
-#: the nonce scheme `nonces` draws (a table's field's place in the source's weight-field order), which a key's sidecar names
-#: (`mint_key`, `key_of`): a key whose tables were drawn at another scheme's nonces is refused
+#: the nonce scheme `nonces` samples (a table's field's place in the source's weight-field order), which a key's sidecar names
+#: (`mint_key`, `key_of`): a key whose tables were sampled at another scheme's nonces is refused
 NONCES = "field-order"
 BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32": 32}
 
@@ -93,7 +94,7 @@ def nonces(tables: Mapping[str, Sequence[tuple[int, str, str, int]]], order: Seq
 
 
 def _minted(key: bytes) -> dict[str, str]:
-    """What a key's sidecar (``KEY.nonces``) holds: the nonce scheme its tables are drawn at (`NONCES`) and the key it was minted
+    """What a key's sidecar (``KEY.nonces``) holds: the nonce scheme its tables are sampled at (`NONCES`) and the key it was minted
     with, as SHA-512 under a tag, so a sidecar copied beside another key names none."""
     return {"nonces": NONCES, "key": hashlib.sha512(b"verity-vllm expert tables committer key\0" + key).hexdigest()}
 
@@ -114,7 +115,7 @@ def mint_key(path: str) -> bytes:
 def key_of(path: str) -> bytes:
     """The committer's key at ``path``, refused unless `mint_key` minted it for this nonce scheme, as its sidecar says.  Tables
     committed under the key at another scheme's nonces (by hand, or before a nonce was its field's place) can hold a nonce this
-    scheme draws for another table, and then two tables draw one salt."""
+    scheme samples for another table, and then two tables sample one salt."""
     key, side = Path(path).read_bytes(), Path(f"{path}.nonces")
     if not side.is_file() or json.loads(side.read_text()) != _minted(key):
         raise UsageError(f"--key {path}: not minted for {NONCES!r} nonces (no {side.name} beside it naming them and this key): its "

@@ -1,5 +1,6 @@
 module
 
+public import PouwCommit.Bindings
 public import PouwWindow.Rounds
 public import PouwCheck.Inputs
 public import Spot.ChallengerSession
@@ -48,7 +49,7 @@ namespace PouwCheck
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
 open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
-  pinnedSession sessionNamed)
+  pinnedChallengePhase challengePhaseNamed)
 
 def MANIFEST_SCHEMA : String := "verity-vllm/pouw-pearl-c-run/v2"
 def MANIFEST_RECORDED : String := Domains.VLLM_PEARL_C_RUN_V1
@@ -167,12 +168,11 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
 def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
-/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
+/-- `PouwCommit.foldRoots` at `tag`, its first `keep` bytes: `core_check.weights_root`
 (`audit.weights_root`, an execution phase's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
 weights' root a live H1 execution phase's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
-  let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
-  (tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])).extract 0 keep
+  (PouwCommit.foldRoots tag roots).extract 0 keep
 
 /-- A refusal: its code (`coin` or `manifest`) and why. -/
 abbrev R := Except (String × String)
@@ -290,14 +290,14 @@ def NO_RESERVE : String :=
 
 /-- `core_check._salt_session`: the session the salt rules read, the one the auditor's signed v2 ledger opens and ends
 closed for `window` under the pinned challenger key, run from a commit the host's pins log records on main's
-first-parent line (`pinnedSession`), and its files (`sessionNamed`): the ledger's session, its signed commitment and the
+first-parent line (`pinnedChallengePhase`), and its files (`challengePhaseNamed`): the ledger's session, its signed commitment and the
 roots its log shows received. -/
 def saltSession (key ledger pins main window session : Json) : R (Audited × LiveCommitment × Roots) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  (pinnedSession ledger window k pins main >>= fun a => (a, ·) <$> sessionNamed a k session).mapError
+  (pinnedChallengePhase ledger window k pins main >>= fun a => (a, ·) <$> challengePhaseNamed a k session).mapError
     fun e => ("coin", s!"the challenger's session is not trusted: {e}")
 
-/-- `core_check._named`: session `sid`'s entries in the auditor's ledger (which `pinnedSession` has read). -/
+/-- `core_check._named`: session `sid`'s entries in the auditor's ledger (which `pinnedChallengePhase` has read). -/
 def sessionEntries (ledger : Json) (sid : String) : List LedgerEntry :=
   ((match ledger with | .arr ls => ls.toList | _ => []).filterMap ledgerEntry?).filter (·.session == sid)
 

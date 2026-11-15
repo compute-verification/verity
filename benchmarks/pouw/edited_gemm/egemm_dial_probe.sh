@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# The served-GEMM scalar-only fold dial, measured once for correctness and cost a
-# round. PROFILE owns the honest knee sweep; this run does not duplicate it. Run from a pouw-kernels checkout with
-# egemm.scalar-dial.patch applied (EG_ROUNDS added to egemm.cu's XF absorb; the egemm_ref.py mirror added to xin_receipts
-# and xin13_receipts). For each R in EG_R_LIST it builds egemm with -DEG_ROUNDS=R (the XOR-in(13,19) absorb of each
+# The served-GEMM scalar-only fold dial, measured once for correctness and cost a round; it is not a sweep of the dial.
+# egemm.cu has the dial (EG_ROUNDS on its XF absorb). egemm_ref.py does not loop its absorb in xin_receipts and
+# xin13_receipts, so at R > 1 it recomputes the one-round fold, not the device's; R = 1 is the fold of record.
+# For each R in EG_R_LIST it builds egemm with -DEG_ROUNDS=R (the XOR-in(13,19) absorb of each
 # committed word looped R times, no filler MMAs; R=1 byte-identical to the fold of record), dumps the x13_l2o SASS and the
-# ptxas report, then in one gpu-lease: `egemm gate` at a 2-atom (k<=4096) and a 3-atom (k>4096) shape with egemm_ref.py
-# bit-exact under EG_ROUNDS=R (the served product Y against cuBLASLt and the receipt re-derived on the CPU), `egemm bench`
+# ptxas report, then in one gpu-lease: `egemm gate` at a 2-atom (k<=4096) and a 3-atom (k>4096) shape (the served product
+# Y against cuBLASLt on the device) and egemm_ref.py on its dumps (the one-round receipt re-derived on the CPU), `egemm bench`
 # (hot ms a arm) and `egemm il` (x13_l2o vs e_plain) at the prefill shape, and ncu (issue/tensor) for R in EG_NCU_R.
 # Clocks are read, never set.
 set -uo pipefail

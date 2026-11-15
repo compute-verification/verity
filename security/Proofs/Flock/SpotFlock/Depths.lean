@@ -164,10 +164,10 @@ variable (h : Held)
 /-- **A port of a checked unit's one-table session that no registered read is named like has at most `MAX_LEAVES`
 rows**: one per instance, since round 2 lets the header share rows only at ports its statement reads registered, and
 round 2 holds the instance count to `MAX_LEAVES`. -/
-theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : ℕ}
+theorem countOf_le {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
     {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
-    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
+    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁))
     (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts))
     {j : ℕ} (hj : j < sts.size) {q : ℕ} {pop : _root_.Flock.Public} (hq : q < sts[j].c.ports.size)
     (hnr : ∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name)

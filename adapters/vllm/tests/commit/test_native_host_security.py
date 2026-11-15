@@ -30,7 +30,7 @@ def stream(seed: int = 3, steps: int = 3, tensors: int = 4, nbytes: int = 12000)
 
 
 def committer(run_id: str = "run-A", keys_of: NativeHostCommitter | None = None) -> NativeHostCommitter:
-    c = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    c = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=hashlib.sha512(b"program").digest())
     if keys_of is not None:
         c.replay_row_keys = dict(keys_of.row_keys)
     return c

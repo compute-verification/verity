@@ -19,4 +19,4 @@ testpaths = ["tests"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_engine.py"]
 # engine.py reads its variables through settings.py, on verity_config.settings.
-inputs = ["verity/configuration/config/verity_config"]
+inputs = ["tools/config/verity_config"]

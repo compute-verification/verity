@@ -16,7 +16,13 @@ import os
 
 import pytest
 
-from verity_vllm.pipeline.build import SAMPLERS_BOUND, applicability_conditions, run, sampling_policy
+from verity_vllm.pipeline.build import (
+    SAMPLERS_BOUND,
+    applicability_conditions,
+    run,
+    sampler_geometry,
+    sampling_policy,
+)
 
 
 def _sweep_manifest(tmp_path, sampling: str, params: dict, seeds: list[int]):
@@ -104,7 +110,8 @@ def test_top_k_row_is_refused_before_export(tmp_path):
     assert res["unsupported"]["reason"] == "sampler" and res["unsupported"]["phase"] == "applicability"
     assert "top_k" in res["unsupported"]["hint"] and "TopKMask" in res["unsupported"]["detail"]["missing"]
     assert "program" not in res and not os.path.exists(os.path.join(out, "artifact.json"))
-    man = json.load(open(os.path.join(out, "construction_manifest.json")))
+    with open(os.path.join(out, "construction_manifest.json")) as f:
+        man = json.load(f)
     assert man["structural_inputs"]["sampling"]["kind"] == "stochastic" and man["structural_inputs"]["sampling"]["top_k"] == 50
     assert man["ok"] is False and man["unsupported"]["reason"] == "sampler"
 
@@ -121,7 +128,6 @@ def test_unseeded_stochastic_row_is_refused(tmp_path):
 def test_a_session_declaring_another_split_count_is_refused_before_export(tmp_path, splits):
     """A session whose top-p split count isn't the registered one, `registered_splits(num_SMs)`, the S serving pins every launch to,
     is refused by name before export, never rewritten to it: no Program, no artifact."""
-    from verity_vllm.pipeline.build import sampler_geometry
     out = str(tmp_path / "build")
     pol = dict(sampling_policy("stoch-t0.8-p0.95", None), seeded=True, splits=splits)
     ref = sampler_geometry(dict(pol), _l40s(), LP=8, T=4)
@@ -172,13 +178,14 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
     S = registered_splits(num_SMs) = splits_for(1, num_SMs) as a constant of its Program (`sampling["splits"]` the int, no `splits`
     input), for every wrapper shape and the step wrapper alike; the geometry carries nothing of the batch, so every component of every
     workload on the target declares the same (GP-01 agreement by construction)."""
-    from verity_vllm.pipeline.build import sampler_geometry
+    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import registered_policy_splits
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
-    cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
-             dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8), None]
+    cases: list[tuple[int, list[int] | None, list[int] | None] | None] = [  # (n, arrive, caps), or no manifest
+        (1, None, None), (2, [0, 5], [16, 9]), (8, None, None), (8, None, [16] * 4 + [3] * 4),
+        (8, [0, 0, 0, 0, 3, 3, 6, 6], [16] * 8), None]
     geoms = set()
     for c in cases:
         for lp_t in ((8, 15), (8, 9), (None, None)):
@@ -186,7 +193,7 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
                 pol = sampling_policy(None, None)
                 pol.update(kind="stochastic", seeded=True, temperature=0.8, top_p=0.95, top_k=0)
             else:
-                pol = sampling_policy(None, _requests_manifest(tmp_path, c["n"], arrive=c.get("arrive"), caps=c.get("caps")))
+                pol = sampling_policy(None, _requests_manifest(tmp_path, c[0], arrive=c[1], caps=c[2]))
             assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
             assert pol["splits"] == S == registered_splits(num_sms) == splits_for(1, num_sms) and registered_policy_splits(pol) == S
             g = pol["geometry"]
@@ -203,8 +210,6 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
 
 
 def test_geometry_refusals_are_named(tmp_path):
-    from verity_vllm.pipeline.build import sampler_geometry
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     # B > 64: vLLM runs `_topk_topp_kernel`, not the split pipeline
     pol = sampling_policy(None, _requests_manifest(tmp_path, 65))
     ref = sampler_geometry(pol, _l40s(), LP=8, T=15)

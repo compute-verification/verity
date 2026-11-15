@@ -8,14 +8,18 @@ import dataclasses
 import types
 
 import pytest
-
-from verity_vllm.observe.fold import fold as fold_mod
-from verity_vllm.observe.events import RunHeader, StepLink, StepStart, ViewDesc
-from verity_vllm.observe.fold.fold import FoldError, fold
-from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # memory fixture lives there
-from tests.observe.test_fold_synthetic import memory  # noqa: F401
 from verity.circuits.refs import Affine
 from verity.circuits.types import Array, Value
+
+from tests.observe.test_fold_synthetic import (  # memory fixture lives there
+    REQ,
+    memory,  # noqa: F401
+    toy_log,
+    toy_profile,
+)
+from verity_vllm.observe.events import StepLink, StepStart, ViewDesc
+from verity_vllm.observe.fold import fold as fold_mod
+from verity_vllm.observe.fold.fold import FoldError, fold
 
 
 def _rename(x, old: str, new: str):

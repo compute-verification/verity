@@ -258,6 +258,9 @@ class Dev:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
+        """A row-digest launch its kernel can't take is refused here, before the device (`rs_refusal`)."""
+        if name in RS_KERNELS and (why := rs_refusal(name, i)):
+            raise ValueError(why)
         try:
             ARGS.pack_into(self.args, 0, *p, *NO_ARGS[len(p):], *i, *NO_ARGS[len(i):])
         except struct.error:             # an int past its slot's range: its low bits, as ctypes' slots store it
@@ -320,8 +323,10 @@ def cdiv(a: int, b: int) -> int:
 TILE = 64                                        # the leaf's tile
 #: a tree node's bytes: SHA-512's
 NB = 64
-#: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each
+#: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each, and hash_fast.cuh's header tables'
 RS_MAX_SEGS = 128
+#: the row-digest kernels with the slot of `i` that holds k, each held to RS_MAX_SEGS segments by `rs_refusal`
+RS_KERNELS = {"s512_rows": 1, "s512_row_segs": 1, "s512_folds": None}
 #: hash_fast.cuh's blocks: the segment kernels' (RS_FAST_NT, as built) and s512_folds' (RS_FOLD_NT)
 RS_FAST_NT, RS_FOLD_NT = int(os.environ.get("PEARLC_RS_FAST_NT", "128")), 32
 #: their scratch, the segment digests of A's rows, B's and the tiles'
@@ -337,6 +342,41 @@ HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
 #: PD_MAX_ROWS rows and k of at most PD_MAX_K (its 192 threads: two warps of pairs a 32 segments, and two more); its paired
 #: compressions take PD_PAIR_SMEM bytes of dynamic shared memory, and PD_GROUP's tiles PD_G a CTA (hash_decode.cuh's)
 PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851, 979), 256, 64 * 256, 2 * 8 * 3080, 4, 64, 128
+
+
+def rs_fold_counts(name: str, i) -> str | None:
+    """Why s512_folds' segment counts are not counts, None if they are.  An int slot is an int32: a negative count
+    reaches the kernel as its low 32 bits, so it is refused always.  A zero is refused where a unit would fold it:
+    i1 for the units below i2, i3 for the rest of i0 (a caller passes 0 for a count no unit has: the tile leaves' last
+    row block when every block is full)."""
+    units, s, first, rest = i[:4]
+    if s < 0 or rest < 0:
+        return f"{name} takes counts of 1 KiB segments, not i1 = {s}, i3 = {rest} (an int32 slot keeps a negative's low bits)"
+    if not s and min(units, first) > 0 or not rest and units > first:
+        return (f"{name} takes at least one 1 KiB segment a unit, not {s} for the first {min(units, first)} units and "
+                f"{rest} for the other {max(units - first, 0)}")
+    return None
+
+
+def rs_refusal(name: str, i) -> str | None:
+    """Why a launch of one of RS_KERNELS with the ints `i` must not reach the device, None if it may.  The kernels hold no
+    bound of their own: past RS_MAX_SEGS segments a row they write shared memory and read their header tables out of
+    bounds, and can return a wrong digest with no error.  Each takes rows of whole segments (k a positive multiple of
+    256), s512_folds a count of them: never a negative one, whose low 32 bits are what the kernel would read, nor none
+    for units it has (`rs_fold_counts`)."""
+    slot, i = RS_KERNELS[name], (*i, 0, 0, 0, 0)
+    if slot is None:                                         # s512_folds: i1 segments a unit, i3 the rest's
+        if why := rs_fold_counts(name, i):
+            return why
+        segs = max(i[1], i[3])
+    else:
+        k = i[slot]
+        if k <= 0 or k % 256:
+            return f"{name} takes rows of whole 1 KiB segments (k a positive multiple of 256), not k = {k}"
+        segs = k // 256
+    if segs <= RS_MAX_SEGS:
+        return None
+    return f"{name} takes at most {RS_MAX_SEGS} 1 KiB segments a row (k <= {256 * RS_MAX_SEGS}), not {segs}"
 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
@@ -466,8 +506,8 @@ class Pipeline:
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024, not {(m, n, k)}")
-        if 4 * k > RS_MAX_SEGS * 1024:
-            raise ValueError(f"s512_rows takes rows of at most {RS_MAX_SEGS} 1 KiB segments (k <= {RS_MAX_SEGS * 256}), not k = {k}")
+        if why := rs_refusal("s512_rows", (0, k)):
+            raise ValueError(why)
         self.nb, self.weight = NB, weight
         self.row_bytes = 4 * k
         self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
@@ -561,8 +601,11 @@ class Pipeline:
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
         """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
-        s512_row_segs then s512_folds."""
+        s512_row_segs then s512_folds.  A row they can't take (`rs_refusal`: past RS_MAX_SEGS segments, or not whole
+        segments) is refused here, before any launch."""
         d, segs = self.dev, self.k // 256
+        if why := rs_refusal("s512_rows", (count, self.k)):
+            raise ValueError(why)
         if self.sha == "ref" or not scratch:
             d.launch("s512_rows", count, 128, p=(x, out), i=(count, self.k))
             return

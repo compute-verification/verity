@@ -14,6 +14,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "suite_parts.py"
 _spec = importlib.util.spec_from_file_location("suite_parts", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 SP = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("suite_parts", SP)
 _spec.loader.exec_module(SP)

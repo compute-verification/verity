@@ -9,7 +9,6 @@ Self-contained: three fake stage Attempts are published into a temporary LocalSt
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -64,11 +63,11 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
     (d / "evidence").mkdir()
-    (d / "evidence" / "timeline.jsonl").write_text(evidence % stage)
+    (d / "evidence" / "stages.txt").write_text(evidence % stage)
     doc = {"schema": A.OUTPUTS_SCHEMA, "outputs": [
         {"name": {"build": "build", "match": "match", "commit": "verdict"}[stage], "kind": kind, "meta": meta, "tree": f"outputs/{stage}",
          "refs": {k: v for k, v in inputs.items()}},
-        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": stage}, "file": "evidence/timeline.jsonl"},
+        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": stage}, "file": "evidence/stages.txt"},
     ]}
     (d / "outputs.json").write_text(json.dumps(doc))
     return d
@@ -121,7 +120,7 @@ def test_store_io_reads_attempts_and_their_outputs_by_kind(store):
     outs = store_io.attempt_outputs(IDS["match"])
     assert outs["match"]["id"] == store["arts"]["match"] and outs["match"]["kind"] == "vllm-match-record/v1"
     assert outs["match"]["payload"] == {"type": "tree", "name": None} and outs["match"]["meta"]["program_digest"] == PD
-    assert outs["evidence"]["kind"] == "execution-evidence/v1" and outs["evidence"]["payload"] == {"type": "file", "name": "timeline.jsonl"}
+    assert outs["evidence"]["kind"] == "execution-evidence/v1" and outs["evidence"]["payload"] == {"type": "file", "name": "stages.txt"}
     assert set(outs) >= {"match", "evidence"}
     only = store_io.attempt_outputs(IDS["match"], ("vllm-match-record/v1",))
     assert list(only) == ["match"]
@@ -132,9 +131,9 @@ def test_fetch_attempt_unions_the_stage_trees_like_a_row_dir(store, tmp_path):
     to = store_io.fetch_attempt([IDS["build"], IDS["match"], IDS["commit"]], tmp_path / "union")
     rels = sorted(str(p.relative_to(to)) for p in to.rglob("*") if p.is_file())
     assert rels == ["ATTEMPTS.json", "build_request/required_values.json", "build_summary.json", "commit/commit_summary.json",
-                    "commit/commit_verdict.json", "evidence/build/timeline.jsonl", "evidence/commit/timeline.jsonl",
-                    "evidence/match/timeline.jsonl", "global_match.json", "match/instances.jsonl", "match/versions.json"], rels
-    assert (to / "evidence" / "match" / "timeline.jsonl").read_text() == '{"stage": "match"}\n', "each stage's evidence, by stage"
+                    "commit/commit_verdict.json", "evidence/build/stages.txt", "evidence/commit/stages.txt",
+                    "evidence/match/stages.txt", "global_match.json", "match/instances.jsonl", "match/versions.json"], rels
+    assert (to / "evidence" / "match" / "stages.txt").read_text() == '{"stage": "match"}\n', "each stage's evidence, by stage"
     rec = json.loads((to / "ATTEMPTS.json").read_text())
     assert set(rec["attempts"]) == set(IDS.values()) and rec["conflicts"] == []
     # an account file two attempts carry with different bytes is a conflict, named -- never a silent overwrite
@@ -166,6 +165,7 @@ def test_candidate_env_names_attempt_ids_or_a_directory(monkeypatch, tmp_path):
     assert _row().candidate_root() is None and _row().candidate("global_match.json") is None
 
 
+@pytest.mark.slow
 def test_naming_the_commit_attempt_resolves_the_chain_behind_it(store, monkeypatch):
     """`VERITY_REGRESSION_CANDIDATE=<commit attempt>`: its inputs cite the Match and Build artifacts, whose `meta.run_id` (stamped by
     `typed_outputs`) names the attempts that published them -- all three become the row's candidate attempts."""
@@ -186,8 +186,9 @@ def test_row_candidate_is_the_union_of_its_attempts(store, monkeypatch):
     root = row.candidate_root()
     assert root is not None and root == store["tmp"] / "cache" / ROW
     assert row.candidate("global_match.json") == root / "global_match.json"
-    assert json.loads(row.candidate("build_summary.json").read_text())["program_digest"] == PD
-    assert row.candidate("commit/commit_verdict.json").is_file() and row.candidate("nope.json") is None
+    summary, verdict = row.candidate("build_summary.json"), row.candidate("commit/commit_verdict.json")
+    assert summary is not None and json.loads(summary.read_text())["program_digest"] == PD
+    assert verdict is not None and verdict.is_file() and row.candidate("nope.json") is None
     # cached: a second call does not refetch; a different attempt set does
     (root / "sentinel").write_text("x")
     assert row.candidate_root() == root and (root / "sentinel").exists()
@@ -241,9 +242,9 @@ def test_attempt_provenance_names_a_different_configuration_and_a_broken_chain(s
 
 def test_attempt_provenance_does_not_apply_without_attempt_ids(monkeypatch, tmp_path):
     monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
-    assert "no candidate Attempt ids" in AP.applies(_row())
+    assert "no candidate Attempt ids" in (AP.applies(_row()) or "")
     monkeypatch.setenv(resolver.CANDIDATE_ENV, str(tmp_path))
-    assert "no candidate Attempt ids" in AP.applies(_row())
+    assert "no candidate Attempt ids" in (AP.applies(_row()) or "")
 
 
 def test_row_config_grammar_matches_the_tool_declaration():
@@ -253,6 +254,6 @@ def test_row_config_grammar_matches_the_tool_declaration():
     from adapters.vllm.verity_vllm.pipeline import research_tools as RT
     for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad"):
         assert AP.row_config(rid) == RT.row_config(rid), rid
-    assert AP.CONFIG_KEYS == ("row", "model", "revision", "query", *AP.ROW_FIELDS)
+    assert ("row", "model", "revision", "query", *AP.ROW_FIELDS) == AP.CONFIG_KEYS
     assert set(AP.CONFIG_KEYS) <= set(RT.ROW_KEY_PARAMS)
     assert AP.DEFAULT_QUERY == RT.DEFAULT_QUERY

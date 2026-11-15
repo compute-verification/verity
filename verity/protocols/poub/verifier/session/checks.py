@@ -23,8 +23,8 @@ class Checks:
 
     @staticmethod
     def settle(session: audit.AuditRun, t: int, results: list[dict], count: int) -> audit.Verdict:
-        """Window t's verdict from its batches' results in draw order, as `AuditRun.verify` would give it (`malformed`
-        on a window with no draws)."""
+        """Window t's verdict from its batches' results in the order sampled, as `AuditRun.verify` would give it
+        (`malformed` on a window with no samples)."""
         session._live()
         w = session.windows[t]
         if w.draws is None or w.verdict is not None:
@@ -39,20 +39,23 @@ class Checks:
 
     def bounds(self, profiles) -> list[int | float]:
         """Each profile's `bound()`, exact, its stratified sampling design's `count_bound` computed in the workers side by side (a
-        60 s window's 33273 draws from ~6e10 receipts take 25–75 s each in exact arithmetic); a sampling design without strata in
+        60 s window's 33273 samples from ~6e10 receipts take 25–75 s each in exact arithmetic); a sampling design without strata in
         this process."""
-        laws = [p.strata() for p in profiles]
-        futures = [None if law is None else self.pool.submit(_count_bound, law, p.delta)
-                   for p, law in zip(profiles, laws)]
+        designs = [p.strata() for p in profiles]
+        futures = [None if design is None else self.pool.submit(_count_bound, design, p.delta)
+                   for p, design in zip(profiles, designs)]
         return [p.bound() if f is None else f.result() for p, f in zip(profiles, futures)]
 
     def close(self, wait: bool = False) -> None:
         self.pool.shutdown(wait=wait, cancel_futures=True)
 
 
-def _count_bound(law, delta: float) -> int:
-    return law.count_bound(delta)
+def _count_bound(design, delta: float) -> int:
+    return design.count_bound(delta)
 
 
 def _warm() -> int:
     return 0
+
+
+__all__ = ["Checks"]

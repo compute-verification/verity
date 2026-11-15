@@ -2,7 +2,7 @@
 path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
 own grids.
 
-The challenger (`spot.remote`, served by `verity/composite/device/live_challenger/serve.py`) and this link run on one auditor
+The challenger (`spot.remote`, served by `verity/protocols/compose/device/live_challenger/serve.py`) and this link run on one auditor
 host (`trusted-host`), the device that runs the server's network certifier. The link takes each connection from the
 prover's side (the prover's client, on the server), opens one to the challenger for it, and carries `remote`'s frames
 both ways, one connection at a time, in the challenger's order:
@@ -48,7 +48,7 @@ from dataclasses import asdict, dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
 from verity.protocols.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.protocols.spot.device.remote import HEADER, MAX_HEAD
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
@@ -220,7 +220,7 @@ class _Connection:
     tasks: list[asyncio.Task] = field(default_factory=list)
 
 
-def _status(record: Record) -> str | None:
+def _status(record: BlockGrid) -> str | None:
     return None if record.status.complete else record.status.reason.value
 
 
@@ -239,7 +239,7 @@ class CoinLink:
                  connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  slack: float = 0.025, buckets: int | None = None, backlog: int = BACKLOG,
-                 publish: Callable[[Record, GridParams], None] | None = None) -> None:
+                 publish: Callable[[BlockGrid, GridParams], None] | None = None) -> None:
         self.params, self.connect = params, connect
         self.origin, self.clock, self.sleep, self.slack, self.buckets = origin, clock, sleep, slack, buckets
         self.backlog, self.publish = backlog, publish

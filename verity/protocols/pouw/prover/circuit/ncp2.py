@@ -48,9 +48,9 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefin
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
-import verity.definitions.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
-import verity.definitions.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
-from verity.definitions.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
+import verity.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
+from verity.circuits.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
 
 from verity.protocols.pouw.verifier.protocol import DomainError
 from ..schemes.ncp import BETA, admissible_perm, shift_perm, word_perm
@@ -67,7 +67,7 @@ assert BETA == W.BETA
 
 @lru_cache(maxsize=16)
 def perm(kind: str, k: int) -> tuple[int, ...]:
-    """π of `schemes.ncp`'s production P at ``k`` (every sign +1), after its rejection rule."""
+    """π of `schemes.ncp`'s P of ``kind`` at ``k`` (every sign +1), after its rejection rule."""
     pi, sigma = word_perm(k) if kind == "word" else shift_perm(k) if kind == "shift24" else (None, None)
     if pi is None:
         raise ValueError("PERM is 'word' or 'shift24'")

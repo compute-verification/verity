@@ -23,17 +23,39 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
-
 import pous_continuous_model as model
-from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
-                                   UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
+import pytest
+from pous_continuous_model import (
+    ALL_SENT,
+    CLOSED,
+    HIT,
+    LATE,
+    NO_HARD_DEADLINE,
+    NONE_OPEN,
+    NOT_REVEALED,
+    REJECT,
+    UNANSWERED,
+    WITHIN,
+    WRONG,
+    ClockOracle,
+    Record,
+    Refused,
+)
 from pous_fakes import Clock
+
 from verity.protocols.pous.verifier import band
-from verity.protocols.pous.verifier.audit import UnsignedRounds, challenge_key, run_timed
+from verity.protocols.pous.verifier.audit import (
+    UnsignedRounds,
+    challenge_key,
+    run_timed,
+)
 from verity.protocols.pous.verifier.codec import encode_segments
+from verity.protocols.pous.verifier.continuous import (
+    ContinuousMemoryChallenger,
+    Reply,
+    run_continuous,
+)
 from verity.protocols.pous.verifier.verifier import VerifierKey
-from verity.protocols.pous.verifier.continuous import ContinuousMemoryChallenger, Reply, run_continuous
 
 ROOT = Path(__file__).resolve().parents[5]
 MODEL = "security/Definitions/Pous/Model/Continuous.lean"
@@ -343,7 +365,7 @@ def _same_index_twice(vk):
         key = challenge_key(b"same-%d" % n, vk)
         if key.uniform(PARAMS.blocks, 0) == key.uniform(PARAMS.blocks, 1):
             return b"same-%d" % n
-    raise AssertionError("no key draws the same index twice in a row")
+    raise AssertionError("no key samples the same index twice in a row")
 
 
 @pytest.mark.parametrize("kind", KINDS[1:])
@@ -473,50 +495,55 @@ def test_the_drivers_match_lean(world, kind):
     drivers' arrivals. A silent machine sends `run_continuous` nothing, its transport giving up one nanosecond past
     `closes_at`, and the driver closes that round by the clock then, as Lean's at `D_late`; `run_timed` cannot stop
     waiting, so there it answers one unit past its fuel instead."""
+    silent = sum(_driven(world, kind, seed) for seed in range(40))
+    assert silent or kind != "continuous"
+
+
+def _driven(world, kind, seed) -> int:
+    """One seed's script through the driver of `kind`, its verdicts held to Lean's: how many of its answers were silent."""
     blocks, _ = world
     silent = 0
-    for seed in range(40):
-        rng = random.Random(f"driver/{kind}/{seed}")
-        limits = rng.choice(LIMITS)
-        n = rng.randrange(1, 30)
-        h = Harness(world, kind, limits, b"driver-%d" % seed, n, max_misses=rng.randrange(n + 1))
-        lim, hard = h.oracle.limit, h.oracle.late_limit
-        D, Q, D_late, Q_late = _lean_bounds(lim, hard)
-        script = _script(rng, n, D, Q, D_late, Q_late, hard is not None)
-        if kind != "continuous":
-            script = [(d if d is not None else D_late + 1, w, right) for d, w, right in script]
-        mach, f = Scripted(script, blocks), (lambda q: q)
-        v, clock = h.subject.v, h.clock
+    rng = random.Random(f"driver/{kind}/{seed}")
+    limits = rng.choice(LIMITS)
+    n = rng.randrange(1, 30)
+    h = Harness(world, kind, limits, b"driver-%d" % seed, n, max_misses=rng.randrange(n + 1))
+    lim, hard = h.oracle.limit, h.oracle.late_limit
+    D, Q, D_late, Q_late = _lean_bounds(lim, hard)
+    script = _script(rng, n, D, Q, D_late, Q_late, hard is not None)
+    if kind != "continuous":
+        script = [(d if d is not None else D_late + 1, w, right) for d, w, right in script]
+    mach, f = Scripted(script, blocks), (lambda q: q)
+    v, clock = h.subject.v, h.clock
 
-        def respond(i):
-            d, w, right = script[len(h.subject.timed.answers)]
-            clock.now += _elapsed(d, w)
-            return blocks[i if right else (i + 1) % len(blocks)]
+    def respond(i):
+        d, w, right = script[len(h.subject.timed.answers)]
+        clock.now += _elapsed(d, w)
+        return blocks[i if right else (i + 1) % len(blocks)]
 
-        if kind == "continuous":
-            arr = [rng.randrange(10**3) for _ in range(n)]
-            arr = [sum(arr[:j + 1]) for j in range(n)]
-            wire = []
+    if kind == "continuous":
+        arr = [rng.randrange(10**3) for _ in range(n)]
+        arr = [sum(arr[:j + 1]) for j in range(n)]
+        wire = []
 
-            def send(j, i):
-                if script[j][0] is not None:
-                    wire.append(Reply(j, respond(i)))
+        def send(j, i):
+            if script[j][0] is not None:
+                wire.append(Reply(j, respond(i)))
 
-            def receive(until):
-                if wire:
-                    return wire.pop()
-                clock.now = max(clock.now, until + 1)
-                return None
+        def receive(until):
+            if wire:
+                return wire.pop()
+            clock.now = max(clock.now, until + 1)
+            return None
 
-            result = run_continuous(v, send, receive,
-                                    wait=lambda j: setattr(clock, "now", max(clock.now, arr[j] * CALL)))
-            assert all(a.elapsed_ns == hard + 1 for a, (d, _, _) in zip(result.answers, script) if d is None)
-            silent += sum(d is None for d, _, _ in script)
-        else:
-            arr = [0] * n
-            result = run_timed(v, respond)
-        lean = model.cont_records(mach, D, Q, D_late, Q_late, f, blocks, arr.__getitem__, model.cont_start(),
-                                  [h.index(j) for j in range(n)])
-        assert [verdict(a) for a in result.answers] == [r.verdict for r in lean], (seed, limits, script)
-        assert v.accepted == model.cont_accepts(h.subject.max_misses, lean)
-    assert silent or kind != "continuous"
+        result = run_continuous(v, send, receive,
+                                wait=lambda j: setattr(clock, "now", max(clock.now, arr[j] * CALL)))
+        assert all(a.elapsed_ns == hard + 1 for a, (d, _, _) in zip(result.answers, script) if d is None)
+        silent += sum(d is None for d, _, _ in script)
+    else:
+        arr = [0] * n
+        result = run_timed(v, respond)
+    lean = model.cont_records(mach, D, Q, D_late, Q_late, f, blocks, arr.__getitem__, model.cont_start(),
+                              [h.index(j) for j in range(n)])
+    assert [verdict(a) for a in result.answers] == [r.verdict for r in lean], (seed, limits, script)
+    assert v.accepted == model.cont_accepts(h.subject.max_misses, lean)
+    return silent

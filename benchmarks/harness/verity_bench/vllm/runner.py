@@ -202,19 +202,25 @@ def _evaluate_gates(
     return out
 
 
+#: an arm gate's key, true for an arm whose tokens carry each pass's coins, so no two runs of one engine need agree:
+#: Pearl-C's, whose every call's noise is seeded by the install's salt and the call's index across its epoch
+PER_PASS_TOKENS = "per_pass_tokens"
+
+
 def _timed_token_gates(
     arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
-    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str,
+    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str, custom: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     """Every timed rep of an arm with a control must produce the control's tokens in that rep: the greedy gate runs
     before timing, so an arm that computed something else only when timed would pass it. In resident mode an arm
     without a control is gated and timed by one engine, whose timed reps must produce its own gated tokens; in `blocks`
-    mode they are other engines, whose tokens may differ from the gated one's (Pearl-C's carry each install's salt)."""
+    mode they are other engines, whose tokens may differ from the gated one's, and an arm whose own gate says its tokens
+    carry each pass's coins (`PER_PASS_TOKENS`) has no such gate in either mode: its closing gate holds its timed reps."""
 
     out = []
     for arm in arms:
         if not arm.control:
-            if mode != "resident":
+            if mode != "resident" or (custom.get(arm.id) or {}).get(PER_PASS_TOKENS):
                 continue
             for point in points:
                 want = _token_digest(tokens[(arm.id, point.id)])
@@ -628,7 +634,7 @@ def run_benchmark(
         mode = "blocks"
 
     if all(g["passed"] for g in gates):
-        gates += _timed_token_gates(arms, points, samples, tokens, mode)
+        gates += _timed_token_gates(arms, points, samples, tokens, mode, custom)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
                          reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
@@ -704,7 +710,8 @@ def _pass_totals(run: Any) -> dict[str, int]:
 def _pearl_c_gate(run: Any) -> dict[str, Any]:
     """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
     (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
-    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control. Its ``coins`` are the
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control, and each call's index across
+    the epoch, so no two of its own engine's passes need agree either (`PER_PASS_TOKENS`). Its ``coins`` are the
     installed run's: a live challenge phase's (``challenger``, its salt epoch ``pass_index`` and the root its salt coin follows,
     `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
     ``in-process``."""

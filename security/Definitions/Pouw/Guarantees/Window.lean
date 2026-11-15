@@ -7,7 +7,7 @@ public import Definitions.Pouw.Window
 
 C1, a sample that depends on the registration, is already expressed on main: `FlockSoundness.Audit.auditReg`
 (`Proofs/Flock/Soundness/Audit/RegDraw.lean`) and the keyed window's record theorem over it,
-`keyedWindowReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedDraw.lean`), which takes one
+`keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedDraw.lean`), which takes one
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `δ_link(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `δ_link(R, τ)` are in terms of its calls', for a window of `C` calls,
 registered at once, sampled at once by a sampling design that depends on the registration, and proved call by call (`Pouw.Window`).
@@ -44,7 +44,7 @@ decision 101's keyed sample) is retired.
 
 **Discharge table**: which deployed piece discharges each premise.
 * `EscapesWithin Lw L 𝓑 0`: the service's uniform subset after the receipt (`subset:K′`, `service.py`), by
-  `ServiceEscapes`. On the retired keyed sample it was A4, A5 and M1 (`keyedWindow_escape_le`).
+  `ServiceEscapes`. On the retired keyed sample it was A4, A5 and M1 (`keyedExecutionPhase_escape_le`).
 * `CallAnalysis.cover`: each session's tile instances at the public input `t` from the verifier's own sample, the window
   root and domains from the registration (`PUBLIC_PORTS`, `public_inputs`), and the tile's place, rows and roots from
   `X`'s entries under that root (`tile_at`), so a unit's seed inputs are `UnitStmts.seedIn X ⟨σ, t⟩`.
@@ -81,9 +81,11 @@ three more links, each stated:
   are the words `tile_read` reads from the `-h3` leaf at the unit's position) with probability at most `δ_in(R, τ)`.
   The units' statements are the verifier's own (`Check.program`) and the served pass is fixed before the window, so
   the prover picks neither. On main no Program reads the `-h3` leaf (`Pc8TileSide` passes neither `ia` nor `jb` on, its
-  side ports' regions are empty, nothing outside `window.py` calls `tile_read`, and `window_problem` is Python only), so
+  side ports' regions are empty, nothing outside `window.py` calls `tile_read`, and `window_problem` has a Program only
+  for its part on the entry rows, `PouwWindowStatement`, whose proof no verifier requires), so
   `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
-  Program: the outputs' half is that Program's opening of the `-h3` root, the inputs' half Flock's `AnchorsSound`
+  Program the verifier requires: the outputs' half is that Program's opening of the `-h3` root, the inputs' half
+  Flock's `AnchorsSound`
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `WindowDelta`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).

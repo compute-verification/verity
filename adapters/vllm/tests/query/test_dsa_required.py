@@ -10,6 +10,9 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
   ports the source declares."""
 from __future__ import annotations
 
+from verity_vllm.pipeline import manifest as M
+from verity_vllm.query.manifest import format as MF
+
 __models__ = ("zai-org/GLM-5.3",)
 
 import copy
@@ -17,18 +20,18 @@ import json
 from collections import defaultdict
 
 import pytest
+from verity.definitions.registry import hopper
 
 from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.frontend.emit import NAMESPACE
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
-from verity.definitions.registry import hopper
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef
@@ -77,7 +80,8 @@ def _served(P0: ProgramView, doc: dict) -> tuple[ProgramView, dict]:
     w_uv = [c.id for c in P0.calls if c.family == "BatchedGemm_v1" and any(r.call in sparse for r in c.reads)]
     step_nodes = len(MODULE)
     second = next(c.id for c in P0.calls if corr0.name(c.id).node == f"dsa_norm_rope_{step_nodes}")
-    calls, records, new_id, last = [], [], {}, None
+    calls: list[CallView] = []
+    records, new_id, last = [], {}, None
 
     def add(definition: str, name: str, module: str, reads: tuple, elems: int, width: int) -> int:
         cid = len(calls)
@@ -135,7 +139,6 @@ def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
 
 
 def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
-    from verity_vllm.pipeline import manifest as M
     P, corr, _man = glm
     r = request_manifest(P, corr, RES, request_id="r0")
     assert r.unreturned == Population(P, corr).unreturned and r.unreturned
@@ -150,13 +153,18 @@ def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monk
     """`manifest.build` as each rank's check runs it, its `16/32` word check included, over the GLM Program: the check it runs names no
     DSA Call (strict, it raised output-not-committed on the unreturned indexer logits and top-k at the end of every rank's check).  The
     fixture's own stand-ins (o_proj's `Gemm_v1{N=4}`, the argmax) are no registered Definitions, so the check runs unstrict here."""
-    from verity_vllm.pipeline import manifest as M
     P, corr, _man = glm
     (tmp_path / "result.json").write_text(json.dumps(RES))
     monkeypatch.setattr(M, "from_instances", lambda _path: P)
     monkeypatch.setattr(M.Correspondence, "of", classmethod(lambda cls, *_a, **_k: corr))
-    checks, word_check = [], M.word_check
-    monkeypatch.setattr(M, "word_check", lambda *a, **k: checks.append(word_check(*a, **{**k, "strict": False})) or checks[-1])
+    checks: list[dict] = []
+    word_check = M.word_check
+
+    def lax_word_check(*a, **k):
+        checks.append(word_check(*a, **{**k, "strict": False}))
+        return checks[-1]
+
+    monkeypatch.setattr(M, "word_check", lax_word_check)
     man = M.build(str(tmp_path), request_id="r0", word="16/32")
     (wc,) = checks
     assert wc["calls"] and man["complete"] is True
@@ -201,7 +209,6 @@ def test_each_attention_value_binds_from_what_the_capture_map_commits(glm):
 def test_the_wrapper_prefix_of_glm53_rows_is_determined_from_the_attention_paths_parent():
     """GLM-5.3's MLA rows sit under `inner.model.model.layers.N.self_attn` while the implementation is `model.layers.N.self_attn.attn`
     (result.json): the prefix is `inner.model.`, not the `model.` default; a Llama-style Attention row keeps its answer."""
-    from verity_vllm.query.manifest import format as MF
     glm = [{"spec": "EmbeddingShard_v1{V=8,H=4}", "name": "inner.model.model.embed_tokens/embedding[0]"},
            {"spec": "RoPEHeadGptJ_v2{D=64}", "name": "inner.model.model.layers.0.self_attn/dsa_norm_rope/k_pe[0]"}]
     assert MF.wrapper_prefix_of(glm, ["model.layers.0.self_attn.attn"]) == "inner.model."

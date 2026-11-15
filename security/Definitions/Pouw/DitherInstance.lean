@@ -46,7 +46,7 @@ import Mathlib.Topology.Sheaves.Init
   the pooled cards share their stores and resources, so the links between them are free), and the period's other
   devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network certifier), each resource
   at its θ rate;
-* **where a round's coin and words sit in the cards' memory** (`Layout`);
+* **where a round's coin and words sit in the cards' memory** (`RoundPlan`);
 * **`G` is the devices at the card's semantics `x`** (`OnCard`): `G`'s resources are the pooled cards' and the
   others', at their rates; its memory is theirs; its (P1) and (P2) are the machine's at `x`; and every words program
   the cards run is a program of `G` with the run's units as its use, its seconds as its wall time and no import;
@@ -64,7 +64,8 @@ import Mathlib.Topology.Sheaves.Init
   after its block's coins, or a selected block's answer more than `τ_ans` after its check coin. Only selected
   blocks are answered, and an answer may arrive after later blocks' coins. `TimedWorkFits` and `AnswersFit` are
   what that buys: the sampling blocks' commit phases and work within the period's capacity, at any number of
-  blocks, and each selected answer within the period.
+  blocks, and each selected answer within the period;
+* **the headline's conclusion** (`WorkBound`): `FreedSound` at λ = 1 with those two, as one `Prop`.
 
 The card's semantics `x` are not fixed here: the headline holds at every `x` meeting P1 (`Card.Exact`) and P2
 (`Open.ProductForm`, as `Assumptions.AccelProductForm`).
@@ -122,8 +123,8 @@ def Devices.machine {c : Verity.Accel.Card} (D : Devices c) (x : Verity.Accel.Op
 
 /-- **Where a round's coin and words sit in the cards' memory**: the dither coin written into the memory a words
 program starts from (`putDraw`), and the words read from the memory it ends with (`getTr`), as the deployed kernel lays
-them out. A layout moves words; it computes nothing. The headline holds at every layout. -/
-structure Layout (m : Verity.Accel.Machine) (P : RoundProto) where
+them out. A round plan moves words; it computes nothing. The headline holds at every round plan. -/
+structure RoundPlan (m : Verity.Accel.Machine) (P : RoundProto) where
   putDraw : P.Draw → m.Mem → m.Mem
   getTr : m.Mem → P.Tr
 
@@ -157,7 +158,7 @@ premise `Assumptions.ShaRealize`, which is open. A program of `G` cheaper than a
 `SAKSha` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at has the card's
 programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
-    (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
+    (L : RoundPlan (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
     (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ)) ∧
     (∀ h, G.rate (e.symm (.inr h)) = D.oth.rate h) ∧
     G.mem = ((D.machine x).bits : ℝ) + D.oth.mem ∧
@@ -259,7 +260,7 @@ def pubBestSm120 : PubBest Verity.Accel.Sm120.card := ⟨pubMmSm120, pubShaSm120
 /-- **An oracle call costs a public SHA-512 compression on the card**: `G`'s oracle-call step (G3)
 uses, on the card's resources, the units of one compression of one of the public schedules
 `pb.sha`, and nothing of the other devices. A call is one evaluation of a tree input: a leaf's is one compression and
-a node's (two digests) two, so one compression is the floor, and a card resource the schedule uses caps the calls at
+a node's (two digests) two, so one compression is the floor, and a card resource the schedule uses bounds the calls by
 its capacity over the schedule's use of it (WorkSound's `cap_r ≤ Q callUse_r`). Host CPUs that hash are other work's
 devices; their calls are priced there. -/
 def CallsAtPub (G : Accel) {c : Verity.Accel.Card} {D : Devices c} (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res)
@@ -374,6 +375,18 @@ def TimedWorkFits (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict
     (dev : Readings G P nsb Obs) (Pd : Period G) : Prop :=
   ∀ (A : Prover G P nsb) (o : P.Orc) (x : Fin nsb → P.Draw × P.Chk), A.Passes verdict dev o x →
     ∀ r, A.timedUse o x r ≤ Pd.cap r
+
+/-- **The work bound at a verdict**, what the headline concludes of a period under the verdict `verdict` and the
+devices' readings `dev`: freed compute beyond the honest optimum is at most `ε_A W` but with probability `κ_A`, prover
+by prover (`FreedSound` at λ = 1); every accepted period's sampling blocks' commit phases and work fit the period's
+capacity (`TimedWorkFits`); and every accepted period's selected answers ran within the period (`AnswersFit`, at the
+selection `sel`). It is one `Prop`, so that the statement that it fails under a verdict that accepts everything is the
+negation of it. -/
+def WorkBound (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict : Verdict P nsb Obs)
+    (dev : Readings G P nsb Obs) (Pd : Period G) (ε : Prover G P nsb → ℝ) (W : ℝ) (κ : Prover G P nsb → ℝ)
+    (sel : P.Chk → Prop) : Prop :=
+  FreedSound G P nsb verdict dev Pd 1 ε W κ ∧ TimedWorkFits G P nsb verdict dev Pd ∧
+    AnswersFit G P nsb verdict dev sel Pd
 
 end Clock
 

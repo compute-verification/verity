@@ -2,7 +2,7 @@
 ``fc_sha_runs``'s runs and ``fc_rows_words``'s word assembly against ``fc_sha_rows``'s one bit a row, and ``host_copies``'s 1D, 2D
 and 3D copies of the host slots against ``fc_host_slots``'s scatter. Both must give the same words of z, a, b; the device's
 own run (``prover_is_deterministic`` pinned to main's transcripts) covers one statement's layout, these every layout and
-plan the generators draw, and that a slot range's slots in every block take one copy a word kind."""
+plan the generators sample, and that a slot range's slots in every block take one copy a word kind."""
 from __future__ import annotations
 
 import re

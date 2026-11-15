@@ -8,7 +8,7 @@ public import Proofs.Accounting.RateAudit.DeployedSketch
 /-!
 # The deployed verbatim-sketch session with a shared query budget: queries add, grinding does not multiply them
 
-`RemoteSessionConservationSketch`'s receipt term is `n·P·G·(N/2^h + q/2^(8r))`: the unknown-sector query term
+`RemoteRunConservationSketch`'s receipt term is `n·P·G·(N/2^h + q/2^(8r))`: the unknown-sector query term
 `q/2^(8r)` is charged once per grinding candidate, because the model gives each of a pass's `G` candidate devices its
 own cap of `q` oracle queries (`Prover.bounded`), and `pr_unpaid_good_le` unions `Prover.pr_unpaid_rank_le`'s
 per-device `Fin q` union over all `P·G` candidates. When the deployed cap reads `q` as the prover's total hash budget,
@@ -30,11 +30,11 @@ The chain: `card_resample_ground` (the resampling count against its ground set),
 query index's bad data, counted against the data where that index exists), `Prover.card_bad_family_le` (the budgeted
 union over a candidate family's query indices), `Prover.pr_unpaid_rank_family_le` (one pass, all candidates),
 `SketchDeployedWindow.pr_unpaid_good_sum_le` and `pr_unpaid_sum_le` (the window),
-`Accounting.SecurityProofs.RemoteSessionConservationSketchSum` (the session, at every parameter), and
-`Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed` (the deployed guarantee,
-`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
+`Accounting.SecurityProofs.RemoteRunConservationSketchSum` (the session, at every parameter), and
+`Accounting.SecurityProofs.RemoteRunConservationSketchDeployed` (the deployed guarantee,
+`Accounting.Guarantees.RemoteRunConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
 `Accounting.Assumptions.SketchHashBudget`; `budget_of_bounded` shows `qtot = G·q` always satisfies it, so the sum
-form at the worst budget recovers the product form (`RemoteSessionConservationSketchDeployedProduct` in
+form at the worst budget recovers the product form (`RemoteRunConservationSketchDeployedProduct` in
 `DeployedSketch.lean` keeps that bound stated).
 -/
 
@@ -576,18 +576,18 @@ theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks
             pr (fun _ : SketchStore N m × Passes => False) :=
           pr_mono fun _ hx => (hx.1 hr).elim
         _ ≤ (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 end SketchDeployedWindow
 
-namespace SketchDeployedSession
+namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
-/-- Some window's unpaid words on a uniform store, under `RemoteSessionConservationSketchSum`'s hypotheses: at most
+/-- Some window's unpaid words on a uniform store, under `RemoteRunConservationSketchSum`'s hypotheses: at most
 `n·(ε + P·(G·N/2^h + qtot/2^(8r)))`. -/
-theorem pr_unpaid_sum_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (r X qtot : ℕ) (ε : ℝ≥0∞)
+theorem pr_unpaid_sum_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot : ℕ) (ε : ℝ≥0∞)
     (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
     (hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
@@ -610,11 +610,11 @@ theorem pr_unpaid_sum_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (
     SketchDeployedWindow.pr_unpaid_sum_le (A.window w η) r X qtot ε hr32 hRank (hX' w η)
       (fun j ι σ Os D => hq w η j ι σ Os D)
 
-/-- `RemoteSessionConservationSketchSum`'s reading on any store `store ω` sampled before the session's coins, from a
+/-- `RemoteRunConservationSketchSum`'s reading on any store `store ω` sampled before the session's coins, from a
 bound `ε_u` on some window's unpaid words at the slack `S + (L − ρ·256) + X` a pass: the samples' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
 theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
-    (A : SketchDeployedSession n P N m ρ h S L q ks G d) (X : ℕ) (dbar dw : ℝ) (hn : 0 < n) (hP : 0 < P)
+    (A : SketchDeployedRun n P N m ρ h S L q ks G d) (X : ℕ) (dbar dw : ℝ) (hn : 0 < n) (hP : 0 < P)
     (hN : 0 < N) (hm : 0 < m) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
     (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       ∃ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
@@ -659,10 +659,10 @@ theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Sketc
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteSessionConservationSketchDeployed`'s): the
+/-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteRunConservationSketchDeployed`'s): the
 samples' terms are at most `2·2^-40`. -/
 theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N 128)
-    (A : SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N)
+    (A : SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N)
     (εu : ℝ≥0∞) (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
       ∃ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
         ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card * (128 * 256)) ≤ εu) :
@@ -682,7 +682,7 @@ theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
   · exact Rate.Deployed.pooled_deployed n hn
   · exact Rate.Deployed.window_deployed n (by omega)
 
-end SketchDeployedSession
+end SketchDeployedRun
 
 end Accounting.RateSketch
 
@@ -694,7 +694,7 @@ open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class, under the per-pass
-hash budget: the sum form.** `Accounting.Guarantees.RemoteSessionConservationSketch`'s statement with one added named
+hash budget: the sum form.** `Accounting.Guarantees.RemoteRunConservationSketch`'s statement with one added named
 assumption — across each pass's `G` candidate oracles the queries total at most `qtot`
 (`Accounting.Assumptions.SketchHashBudget`) — and the receipt term
 
@@ -703,9 +703,9 @@ assumption — across each pass's `G` candidate oracles the queries total at mos
 in place of `n·P·G·(N/2^h + q/2^(8r))`: queries add across a pass's grinding candidates, and grinding multiplies only
 the tag-guess term. By `Prover.budget_of_bounded` the assumption holds at `qtot = G·q`, where this bound recovers the
 product form. -/
-theorem RemoteSessionConservationSketchSum :
+theorem RemoteRunConservationSketchSum :
     ∀ (n P N m ρ h S L q ks G d r X qtot : ℕ) (ε : ℝ≥0∞)
-      (A : RateSketch.SketchDeployedSession n P N m ρ h S L q ks G d) (dbar dw : ℝ),
+      (A : RateSketch.SketchDeployedRun n P N m ρ h S L q ks G d) (dbar dw : ℝ),
       0 < n → 0 < P → 0 < N → 0 < m → r ≤ 32 → dw ≤ 1 →
       Accounting.Assumptions.SketchRank ks m r ε →
       (∀ w η j ι c E σ R O,
@@ -725,19 +725,19 @@ theorem RemoteSessionConservationSketchSum :
           (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) +
             (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
   intro n P N m ρ h S L q ks G d r X qtot ε A dbar dw hn hP hN hm hr32 hdw hRank hX hq
-  refine (SketchDeployedSession.pr_conservation_of_unpaid id A X dbar dw hn hP hN hm hdw _
-    (SketchDeployedSession.pr_unpaid_sum_le A r X qtot ε hr32 hRank hX hq)).trans (le_of_eq ?_)
+  refine (SketchDeployedRun.pr_conservation_of_unpaid id A X dbar dw hn hP hN hm hdw _
+    (SketchDeployedRun.pr_unpaid_sum_le A r X qtot ε hr32 hRank hX hq)).trans (le_of_eq ?_)
   ring
 
 /-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass hash budget**
-(`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`). `RemoteSessionConservationSketchSum` at 4 KiB
+(`Accounting.Guarantees.RemoteRunConservationSketchDeployed`). `RemoteRunConservationSketchSum` at 4 KiB
 tiles (`m = 128`), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%`,
 `d_w = 1%`. At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`),
 where the product form's `G·q/2^96` alone was `2^14`. -/
-theorem RemoteSessionConservationSketchDeployed :
-    Accounting.Guarantees.RemoteSessionConservationSketchDeployed := by
+theorem RemoteRunConservationSketchDeployed :
+    Accounting.Guarantees.RemoteRunConservationSketchDeployed := by
   intro n P N ρ S L q G X qtot ε A hn hP hN hRank hX hq
-  have h := RemoteSessionConservationSketchSum n P N 128 ρ 512 S L q 16 G 2773 12 X qtot ε A
+  have h := RemoteRunConservationSketchSum n P N 128 ρ 512 S L q 16 G 2773 12 X qtot ε A
     0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX hq
   have h' :
       pr (fun x : RateSketch.SketchStore N 128 ×

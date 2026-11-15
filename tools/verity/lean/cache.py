@@ -31,13 +31,16 @@ has no checked file is built from source, as is every module after a mismatch, w
 hashes don't depend on where a checkout is, so a build published from `/build/verity` restores in any checkout, and one
 published before a layout move renamed the package's directory restores at its new path: where a package has no record
 under its path, the client reads the newest under each path it had before (`moved.py`, from the recorded moves).
+A development machine restores the newest published build that is an ancestor of its `HEAD` (`cache.py get`, after
+`setup.sh`), so a fresh machine compiles none of ArkLib; a missing read credential (the `LEAN_CACHE_*` variables, else
+`~/.config/verity/lean-cache-read.env`) means building from source too.
 
 The publisher signs its uploads directly with the bucket-scoped key, as root, outside the sandbox the build ran in; no
 broader credential sits on the machine to mint a shorter-lived one. Every write is conditional (`If-None-Match: *`). A
 412 or 409 means the object exists: a blob then must be stored with its MD5 as ETag (blobs go up in one part, so it is),
 and a record must be byte-identical, or the package isn't published. The record goes last, so every blob it names exists.
 Integration's own builds never read the cache: `check.py` runs Lake with `LEAN_CACHE=off`, and with `LAKE_ARTIFACT_CACHE=false`
-or, in check's audit and a records run, a local Lake cache that only a passing run on that node writes, restoring a module
+or, in check's audit and a records run, a local Lake cache of what that node's builds compiled in the sandbox, restoring a module
 only under its key (`lean_audit.LakeArtifacts`, `module_keys.py`).
 """
 from __future__ import annotations
@@ -427,9 +430,16 @@ def mapping(name: str) -> bool:
 
 def fetched_deps(d: Path) -> bool:
     """Whether a package's non-path dependencies are in place (`lake` would otherwise clone them first)."""
+    return not unfetched(d)
+
+
+def unfetched(d: Path) -> list[str]:
+    """The non-path dependencies of the package at ``d`` that are not in place, each as Lake names its directory and in
+    its manifest's order, the order Lake clones them in."""
     m = d / "lake-manifest.json"
     deps = [p for p in json.loads(m.read_text()).get("packages", []) if p.get("type") != "path"] if m.is_file() else []
-    return not deps or all((d / ".lake" / "packages" / unescape(p["name"])).is_dir() for p in deps)
+    names = [unescape(p["name"]) for p in deps]
+    return [n for n in names if not (d / ".lake" / "packages" / n).is_dir()]
 
 
 def unescape(name: str) -> str:

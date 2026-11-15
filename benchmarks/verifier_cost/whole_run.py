@@ -1,8 +1,9 @@
 """`whole_run.sh`'s inputs: per SHAPE and N, DIR/run-SHAPE-N.json, the `run` piece's input (`Run.run`, the whole run of one
-registration) for a valid v1 audit under a stratified sampling design of one draw per stratum, on challenger coins with
-their evidence (`test_difftest._from_challenger`), which the run accepts. Its program is a template population of about N
-units (`mixed_population_program`), with N/8 more ports (`test_difftest._many_ports`, a MoE window's shape) and every
-template a stratum:
+registration) for a valid v1 audit under the stratified rate of two in the population (`stratified-rate:2/P` over its P
+units), on challenger coins with their evidence (`test_difftest._from_challenger`), which the run accepts. Its program is a
+template population of about N units (`mixed_population_program`), with N/8 more ports (`test_difftest._many_ports`, a MoE
+window's shape) and every template a stratum, so the sample is one unit of each template, and two of one that holds
+more than half the units, however large N is:
 
   toy  the difftest's PAIR, TRIPLE and QUAD at 1:6:3
   l5   a GLM-5.3 MoE window's seven templates (a router, five EmbeddingRead reads and two expert GEMMs), at the counts a
@@ -56,13 +57,15 @@ def case(shape: str, n: int) -> dict:
     s = T.Setup(mixed_population_program(ms), PO.template_instances_query([t for t, _ in ms]))
     T.PROGRAMS[s.sha512] = s.program
     T.PROGRAMS_TEMPLATES = s.templates
-    law = {"k": len(ms), "law": "stratified"}
-    rec = T.R.record(s.program, s.query, law, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
-                     T.WINDOW, leaf_layer=T.LEAF)
+    law = f"stratified-rate:2/{s.population}"
+    named, table = T.service.params_law(law, s.program, s.query, None)
+    drawn = T.DR.derive(s.program, s.query, named, table)
+    rec = T.R.record(s.program, s.query, named, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
+                     T.WINDOW, leaf_layer=T.LEAF, work_table=table)
     params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": T.LEAF, "log": [], "partition": None,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": T.SCHEME,
               "work_table": None}
-    evidence = {"session_roots": dict(T.ROOTS), "statement": {"instances": len(ms)},
+    evidence = {"session_roots": dict(T.ROOTS), "statement": {"instances": sum(st["k"] for st in drawn["strata"])},
                 "verdicts": {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True},
                              "upstream": {"accepted": True, "of_record": False}}}
     a = T._many_ports(T._json({"evidence": evidence, "params": params, "record": rec}), max(1, s.population // 8))

@@ -5,7 +5,7 @@ import Proofs.Properties.Accounting.Remote.Draw
 import Proofs.Properties.Accounting.Remote.Window
 
 /-!
-# The session link windows a draw (`SessionSamplesRecords`, `AcceptedSamplesOpenable`)
+# The session link windows a draw (`RunSamplesRecords`, `AcceptedSamplesOpenable`)
 
 A run keeps, at any `g ≥ 1`, three facts of every sampled draw and accepted window:
 
@@ -22,7 +22,7 @@ A run keeps, at any `g ≥ 1`, three facts of every sampled draw and accepted wi
   the appends that follow (`checkWindow_grow`).
 
 Under `Inv`'s `sizes` a window's record has its plans as passes, so the draw's lengths and shares are the records'
-(`lengthsOf_sample`, `passCount_sample`): `sessionSamplesRecords`. With `acceptSamplesOpenable` on the openings each window
+(`lengthsOf_sample`, `passCount_sample`): `runSamplesRecords`. With `acceptSamplesOpenable` on the openings each window
 passed with, `acceptedSamplesOpenable`.
 -/
 
@@ -945,7 +945,7 @@ theorem link1_init (params : Params) (reg : Registration) (coins appendCoins : A
 
 /-! ## The link -/
 
-/-- A draw linked at a state the run reached gives `SessionSamplesRecords`' conclusion. -/
+/-- A draw linked at a state the run reached gives `RunSamplesRecords`' conclusion. -/
 theorem link_out {g : Nat} {params : Params} {reg : Registration} {coins : Array ByteArray} {s : State}
     (hI : Inv s) (hp : s.params = params) (hr : s.reg = reg) (hco : s.coins = coins) (hdig : s.digest = reg.digest)
     (hA : AcceptNow s) (c : Nat) (drawn : Array (Nat × Nat))
@@ -982,7 +982,7 @@ theorem link_out {g : Nat} {params : Params} {reg : Registration} {coins : Array
   exact hor
 
 /-- **The session link** windows a draw, at any `g ≥ 1`. -/
-theorem sessionSamplesRecords : SessionSamplesRecords := by
+theorem runSamplesRecords : RunSamplesRecords := by
   intro g params reg coins appendCoins notBeforeNs events rs s h c hg hm hcW hc
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
   · obtain rfl : g = 1 := by omega
@@ -1015,7 +1015,7 @@ window passed with. -/
 theorem acceptedSamplesOpenable : AcceptedSamplesOpenable := by
   intro g params reg coins appendCoins notBeforeNs events rs s h c hg hm hcW hc hall
   obtain ⟨drawn, hdraws, hk⟩ :=
-    sessionSamplesRecords g params reg coins appendCoins notBeforeNs events rs s h c hg hm hcW hc
+    runSamplesRecords g params reg coins appendCoins notBeforeNs events rs s h c hg hm hcW hc
   obtain ⟨L, us, hs, hus⟩ := acceptSamplesOpenable reg s.appends c coins[params.windows + c]! params.samples
     (sampleRecords g s c) drawn hdraws
   refine ⟨L, us, hs, ?_⟩

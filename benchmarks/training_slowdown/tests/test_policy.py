@@ -36,7 +36,8 @@ def test_the_grid_spans_the_reference_shapes_in_decades():
     assert (ref["c"], ref["k"]) == (4096 * w_fwd, 80_000)
     serving = F.Measured((F.Part(1024 * w_fwd, 1024, 1024 * w_fwd, 0.0),), 16, 512 * 16, F.even(0.0), F.even(0.0), 0.0,
                          0.0)
-    assert F.fit_k(serving, ref["c"], w_fwd)[0] <= ref["k"]  # honest serving passes Fit at the reference policy
+    # honest serving passes Fit at the reference policy
+    assert F.at(serving, ref["c"], ref["k"])["parts"][0]["fit"]["compute"]
     assert s["server"]["c"] == pytest.approx(3 * SHAPE["forward_macs_per_token"] * SHAPE["tokens"] * per_mac("gemm/bf16"))
     assert s["server"]["k"] == SHAPE["parameters"] * 80
     g = policy.grid(SHAPE)
@@ -74,7 +75,7 @@ def test_the_stated_shapes_are_the_lf_models_and_its_counted_forward_is_the_sess
     """Every stated shape has its parameters and heads 64 wide, and the 45M reference is the lf model
     (`adapters/vllm/tests/program/train_step_lf.py`) at its s size over the GPT-2 vocabulary padded to 50,304:
     the model's parameters are `parameters`' count, and a token's counted forward MACs at a context are the session's
-    matrices and LM head there, its causal attention and elementwise ops under 0.1% of them."""
+    matrices, LM head and attention there, its elementwise ops under 0.1% of them."""
     for params, sh in policy.SHAPES.items():
         assert policy.parameters(sh) == params and sh["d_model"] // sh["n_head"] == 64, params
     size, ctx = LF.SIZES["s"], 16
@@ -85,4 +86,4 @@ def test_the_stated_shapes_are_the_lf_models_and_its_counted_forward_is_the_sess
     assert sum(p.numel() for p in model.parameters()) == policy.REFERENCE_PARAMS
     forward = flops.forward_macs_per_token(model, ctx, LF.VOCAB)
     macs = policy.session(policy.REFERENCE_PARAMS, ctx, 0)["macs"]
-    assert 0 < forward - (macs["matrices"] + macs["lm_head"]) / ctx < 1e-3 * forward
+    assert 0 < forward - sum(macs.values()) / ctx < 1e-3 * forward

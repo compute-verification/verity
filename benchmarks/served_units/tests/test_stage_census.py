@@ -8,9 +8,11 @@ import json
 import sys
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from conftest import load
+from verity.circuits.types import Array, Value
 
 SILU = "SiluMul_v2{I=256}"
 
@@ -35,6 +37,19 @@ def test_parse(stage):
             stage.parse(bad)
     with pytest.raises(SystemExit, match="gq has no static 'X'"):
         stage.parse("gq:X=1")
+
+
+def test_census_leaves_bits(stage):
+    """1-bit leaves (each of `EmbeddingRead_v1`'s parameters) come as seeded uniform bits, sixteen a u16 word, leaf j the low
+    bit of word j / 16 on, as `unit_ports` concatenates a row's leaves; a count off whole words is refused."""
+    ty = Array(4, Array(16, Value(1)))
+    got = stage.census_leaves(np.random.default_rng(7), ty, 3)
+    assert got.dtype == np.dtype("<u2") and got.shape == (3, 4)
+    assert (got == stage.census_leaves(np.random.default_rng(7), ty, 3)).all()
+    bits = np.unpackbits(got.view(np.uint8), axis=1, bitorder="little")
+    assert (bits == np.random.default_rng(7).integers(0, 2, (3, 64), dtype=np.uint8)).all()
+    with pytest.raises(SystemExit, match=r"24 leaves of \[1\] bits"):
+        stage.census_leaves(np.random.default_rng(7), Array(24, Value(1)), 3)
 
 
 class Stager:

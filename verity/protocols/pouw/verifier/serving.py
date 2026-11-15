@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any
 
 from verity.commitments import domains
@@ -107,9 +107,6 @@ class SchemeId:
             return f"pearl-c-{self.precision}-{self.forming}{suffix}"
         return f"pearl-c-{self.device}-{self.forming}{suffix}" + (f"@{self.prices}" if self.prices else "")
 
-    def with_hashing(self, hashing: str) -> SchemeId:
-        return replace(self, hashing=hashing)
-
 
 def hash_format(scheme: str | SchemeId | Any) -> HashFormat:
     """The hashing format of a scheme: by name, by `SchemeId`, or from a scheme object's ``hashing``."""
@@ -181,9 +178,6 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 
 MANIFEST_SCHEMA = domains.POUW_PASS_MANIFEST
-#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
-#: from a beacon, before the execution phase's coins) only as a replay of a recorded pass
-MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, domains.VLLM_PEARL_C_RUN, domains.VLLM_PEARL_C_RUN_V1)
 
 
 @dataclass(frozen=True)
@@ -347,7 +341,7 @@ def lead_variant(source_sha256: str, binary_sha256: str, loader: str) -> KernelV
 
 
 __all__ = ["DEFERRED", "DEFERRED_A", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS",
-           "LEAD_CONFIG", "LEAD_FOLD_BOUND", "LEAD_SHAPES", "MAIN_PRIORITIES", "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ",
+           "LEAD_CONFIG", "LEAD_FOLD_BOUND", "LEAD_SHAPES", "MAIN_PRIORITIES", "MANIFEST_SCHEMA",
            "MOVABLE", "POUW_V2", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord", "HashFormat", "KernelVariant",
            "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format", "lead_variant",
            "schedule_refusals", "variant_refusals"]

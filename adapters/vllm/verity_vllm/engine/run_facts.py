@@ -5,9 +5,12 @@ and the versions and host documents.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import importlib.metadata as md
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -15,16 +18,21 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity_vllm.engine.build import (Engine, compilation_facts, observed_flash_attn_version, resolved_async_scheduling,
-                                      vllm_has_flashinfer)
+from verity_vllm.engine import engine_profile as prof
+from verity_vllm.engine import handle
+from verity_vllm.engine.build import (
+    Engine,
+    compilation_facts,
+    observed_flash_attn_version,
+    resolved_async_scheduling,
+    vllm_has_flashinfer,
+)
 from verity_vllm.engine.code_identity import generated_kernels_of_this_process
+from verity_vllm.engine.profiles.cases import ACCEPTED
+from verity_vllm.records.schema_ids import PROFILE_FALLBACK_SCHEMA
 
+__all__ = ["model_config_subset", "profile_manifest"]
 
-#: The accepted production record per checkpoint role (its tokens are the reference the runs are compared with).
-ACCEPTED: dict[str, dict[str, str]] = {
-    "B0": {"profile_id": "88e1b098d719", "record": "out/scale/e8/live/V5-N32x16-1req-bex0-inc-sc1"},
-    "B1": {"profile_id": "40f0cebeb670 / c37c3f0b8363", "record": "fixtures/results/B1-40f0cebeb670-20260907T1242Z/production (and B1-c37c3f0b8363-20260907T1328Z; both RTX 4090 eager)"},
-}
 ACCEPTED_PROFILE_ID = ACCEPTED["B0"]["profile_id"]
 ACCEPTED_RECORD = ACCEPTED["B0"]["record"]
 
@@ -33,8 +41,6 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                      sampling: dict) -> tuple[dict, str, dict]:
     """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the production recorder; falls back
     to a sha256 of the engine kwargs + versions when build_manifest cannot run (and says so in the notes)."""
-    from verity_vllm.engine import engine_profile as prof
-
     case = engine.case
     acc = ACCEPTED.get(case, {})
     notes: dict[str, Any] = {"case": case, "accepted_profile_id": acc.get("profile_id"), "accepted_record": acc.get("record")}
@@ -76,6 +82,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         manifest["backends"]["vllm_has_flashinfer"] = vllm_has_flashinfer()     # host fact vLLM keys kernel choices on (nvcc on PATH)
         # the block-scaled FP8 linear kernel the FP8 layers carry (None for a model without FP8 linears): the record attests
         # the kernel whose arithmetic the FP8 Definitions are (CutlassFp8BlockScaledMMKernel), beside the declared `target.fp8_block_gemm`
+        # (the translator's readers are imported here and below, not at the top: they load the core `verity`, which this module does not)
         from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
         fp8k = fp8_block_gemm_kernel_of(engine.model)
         if fp8k is not None:
@@ -89,13 +96,16 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             from verity_vllm.program.frontend.target_profile import int8_exact_of
             manifest["backends"]["int8_exact"] = int8_exact_of(engine.model)
             if "attention" in engine.target.int8_parts:
-                from verity_vllm.program.frontend.kernel_readback import int8_k_scales_of
+                from verity_vllm.program.frontend.kernel_readback import (
+                    int8_k_scales_of,
+                )
                 manifest["backends"]["int8_k_scales"] = int8_k_scales_of(engine.model)
         # the MoE gates' cuteDSL ll_bf16_gemm tier (M <= 16), which leaves no torch op behind: written only when a gate took it, so
         # every record without such a gate keeps its profile id
         if moe_gate_ll_bf16_gemm_of(engine.model):
             manifest["backends"]["moe_gate_ll_bf16_gemm"] = True
-        manifest["engine_kwargs"]["kernel_config"] = dict(engine.kwargs.get("kernel_config") or {})
+        kernel_config = engine.kwargs.get("kernel_config")
+        manifest["engine_kwargs"]["kernel_config"] = dict(kernel_config) if kernel_config else {}
         if engine.target is not None:
             manifest["target"] = engine.target.to_json()
             manifest["engine_kwargs"].update({k: v for k, v in engine.target.engine_args().items()})
@@ -130,13 +140,13 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                 manifest["compilation"]["generated_kernels"]["error"] = gk["error"]
             notes["generated_kernels"] = {k: gk.get(k) for k in ("inductor_cache_dir", "per_process_cache_dir", "pieces", "kernels", "error")}
         pid = prof.profile_id_of(manifest)
-        notes["profile_id_method"] = "profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted " \
-                                     "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), " \
-                                     "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders"
+        notes["profile_id_method"] = ("profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted "
+                                      "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), "
+                                      "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders")
     except Exception as e:  # noqa: BLE001
-        import vllm
         import triton
-        manifest = {"schema": "verity-capture/profile-fallback/v1", "case": case, "engine_kwargs": {k: v for k, v in engine.kwargs.items()
+        import vllm
+        manifest = {"schema": PROFILE_FALLBACK_SCHEMA, "case": case, "engine_kwargs": {k: v for k, v in engine.kwargs.items()
                     if k not in ("model", "tokenizer")}, "engine_flags": dict(engine.env_flags),
                     "python": {"torch": torch.__version__, "cuda": torch.version.cuda, "triton": triton.__version__},
                     "vllm": {"version": vllm.__version__, "wheel_sha256": wheel_sha256, "commit": vllm_commit},
@@ -154,7 +164,7 @@ def moe_gate_ll_bf16_gemm_of(model) -> bool:
 
 
 def model_config_subset(engine: Engine) -> dict:
-    hf = engine.llm.llm_engine.vllm_config.model_config.hf_config
+    hf = handle.engine_of(engine.llm).vllm_config.model_config.hf_config
     keys = ("hidden_size", "num_hidden_layers", "num_attention_heads", "num_key_value_heads", "head_dim", "intermediate_size",
             "vocab_size", "rms_norm_eps", "tie_word_embeddings", "rope_theta", "max_position_embeddings", "torch_dtype",
             "model_type", "architectures", "attention_bias", "mlp_bias", "rope_parameters", "rope_scaling",
@@ -194,10 +204,8 @@ def host_doc() -> dict:
         doc["cpu_quota"] = None if q[0] == "max" else float(q[0]) / float(q[1])
     except (OSError, IndexError, ValueError, ZeroDivisionError):
         pass
-    try:
+    with contextlib.suppress(OSError, ValueError):
         doc["clocksource"] = Path("/sys/devices/system/clocksource/clocksource0/current_clocksource").read_text().strip()
-    except (OSError, ValueError):
-        pass
     n = 20000
     t0 = time.perf_counter()
     for _ in range(n):
@@ -207,8 +215,6 @@ def host_doc() -> dict:
 
 
 def versions_doc(engine: Engine | None = None) -> dict:
-    import importlib.metadata as md
-
     def ver(name: str) -> str | None:
         try:
             return md.version(name)
@@ -219,7 +225,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     import vllm
 
     doc = {"torch": torch.__version__, "cuda": torch.version.cuda, "triton": triton.__version__, "vllm": vllm.__version__,
-           "python": os.sys.version.split()[0], "numpy": np.__version__, "flashinfer": ver("flashinfer-python"),
+           "python": sys.version.split()[0], "numpy": np.__version__, "flashinfer": ver("flashinfer-python"),
            "transformers": ver("transformers")}
     try:
         props = torch.cuda.get_device_properties(0)

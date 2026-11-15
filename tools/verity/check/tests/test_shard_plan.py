@@ -268,7 +268,7 @@ def test_record_sends_an_auto_shard_its_plan_as_the_runs_input_and_refuses_one_w
     monkeypatch.setattr(research.store.local, "LocalStore", lambda: None)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.setattr(subprocess, "run", run)
     steps = "pytest,circuit-check"
     doc = CHECK.auto_plan(({}, {}, {}), 4, deferred=steps, n=2)

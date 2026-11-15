@@ -2,13 +2,14 @@
 name: writing-goals
 description: >
   How a lead writes and keeps its goals in the plan, the one graph Daniel reads on the console's Goals page: what a
-  goal is (something that finishes, with one owner and a date), tags from the fixed list of projects, three tiers (a
-  project in Daniel's words, a piece of one, a step; derived from what waits on what, overridable), what a goal waits on (links to goals and Daniel's asks, never free text), why an off-track goal
-  is off track, and how to write the description so Daniel can skim it (one plain opening sentence, then the shape that
-  fits: landing, research or proof; measured numbers in LaTeX, literals as code, leads as @handle; a lead-in line for
-  every list and no word he has said he doesn't know, refused by the site). Covers `research goals
-  show|set|confirm|done|remove|replace` and the API it calls. Use when writing, updating or confirming a goal, adding a
-  dependency, or rewriting your goals for a sync.
+  goal is (something that finishes, with one owner and a date), how to title it as a headline Daniel reads cold (three
+  to six plain words, no number, none of our own labels), tags from the fixed list of areas, goals and their subgoals
+  (a goal under another is its subgoal), what a goal waits on (links to goals and Daniel's asks, never free text), why
+  an off-track goal is off track, and how to write the description so Daniel can skim it (one plain opening sentence,
+  then the shape that fits: landing, research or proof; measured numbers in LaTeX, literals as code, leads as
+  @handle; a lead-in line for every list and no word he has said he doesn't know, refused by the site). Covers
+  `research goals show|set|confirm|done|remove|replace` and the API it calls. Use when writing, titling, updating or
+  confirming a goal, adding a dependency, or rewriting your goals for a sync.
 ---
 
 # Writing goals
@@ -25,29 +26,48 @@ The page is how Daniel sees what is being done, so it moves when the work does:
   and its PR names that issue and the goal: `research queue open --issue KEY` writes a `Goal <id>` line for each live
   goal KEY's labels name, and `open` and `research queue ready` warn, never refusing, of a body naming no live goal so
   and not saying `Issue: none: REASON`. Work that serves none starts by writing its goal, or asking top.
-- **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours a piece of it.
+- **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours its subgoal.
 
 Once a day top rings the owner of a goal past its due, for a new date or its evidence.
 
 ## A goal
 
-- **Something that finishes, never an ongoing activity** ("Work on demos"). A tier-1 title is a project's name in
-  Daniel's words: "Split the Verity and infra repos", "Security posture finalized". A tier-2 or tier-3 title says what
-  will be true, in at most eight plain words: "A full check finishes within 45 minutes". "X measured" isn't a goal until
-  it names what's delivered: "Second swarm's training results out". A title says what happens, not the mechanism's
-  name or which tool does it: "Each day's serving runs one program fixed in advance", not "One registered circuit per
-  day"; not "Landing converts Lean merges onto the module system", which names the tool and leaves unclear what
-  changes.
+- **Something that finishes, never an ongoing activity** ("Work on demos"). "X measured" isn't a goal until it names
+  what's delivered: "Second swarm's training results out".
+- **A title is a headline.** Daniel reads the page by its titles, and a title he has to open to understand is
+  shorthand. Read yours cold before you save it; top reads every one.
+  1. Short: usually three to six words, never more than about ten. It names the outcome at the level Daniel would
+     say it. What the goal tests, counts or accepts goes in the description, which he clicks through to.
+  2. No numbers on goals. A goal is named by its title, never "goal 5" or "the eleven", in titles or descriptions.
+  3. Plain words and names Daniel uses: demo, benchmark, metrics, proof, exfiltration capacity, GLM-5.3, SPOT, Lean.
+     Not our own labels: slice, layout, overhaul, re-cut, the term, the tight figure, the serve.
+  4. No leading "The" or "A".
+  5. A subgoal doesn't repeat what the goal above it already says, such as the model or the demo.
+  6. No ticket ids, and no lead's handle as the subject ("ci's …").
+
+  His examples, each a title as it was and as it should read:
+
+  | Was | Headline |
+  | --- | --- |
+  | 3 Repository reorganized: one layout, clean slices, public | Repository reorganized and published |
+  | 11 Onsite demo: all four protocols accept | Onsite demo done |
+  | The check reads what the serve registers | Inference-only demo done |
+  | The eleven's numbers live on the console | Console shows core system metrics |
+  | The certifier's term is zero without a failure | Network certification adds no exfiltration capacity unless a connection fails |
+  | ci's slice reads clean | CI code cleaned up for review |
+  | A candidate's check launch registers in three minutes | Check launches within three minutes |
+  | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |
+  | Remote theorem rests on no open proof | Remote demo's soundness fully proved |
+  | The Commit's share of the served step, measured | Commitment overhead measured |
 - **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Other areas that do
-  pieces of it are @handle in its plan; a check the remote demo runs is the demo lead's goal even when proofs writes
+  parts of it are @handle in its plan; a check the remote demo runs is the demo lead's goal even when proofs writes
   it in Lean.
 - **A due date** (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00` when the hour matters).
 - **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`), and the page shows
   who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
-- **Today's step, as a goal of its own.** An open goal due within a week waits on a tier-3 goal due within a day: write
-  the step (`research goals set SUB --tier 3 ...`), then list it among what the parent waits on (`--wait goal:SUB`,
-  repeated for every link, since `--wait` replaces the list). A goal has no separate next-step field, and the site
-  refuses one.
+- **Today's work, as a subgoal.** An open goal due within a week waits on a subgoal due within a day: write it
+  (`research goals set SUB ...`), then list it among what the goal waits on (`--wait goal:SUB`, repeated for every
+  link, since `--wait` replaces the list). A goal has no separate next-step field, and the site refuses one.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither.
@@ -68,21 +88,18 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
     and comms, are real to the leads but below it: their goals take the tag of the area they belong to at his
     level. A kernel the demo serves is `compute-accounting` or `vllm`, and the demo's cost measurements are
     `remote-demo`.
-  - Why a goal matters isn't a tag: it's the tier-1 project above it.
-- **Three tiers**:
-  - Tier 1, a project: about a dozen across the plan, each one Daniel would name himself. Its description opens with
-    the state that finishes it.
-  - Tier 2, a piece of a project: a dated state you can check. The soundness theorem and the H200 accounting are
-    pieces of the remote demo; a full check's time is a piece of "Efficient automated tasks".
-  - Tier 3, a step toward a piece, due within a day.
-- **The tier is derived:** a project waits on its pieces (`--wait goal:ID`), so a goal nothing waits on is tier 1, and
-  one is a tier deeper than the shallowest goal that needs it, down to 3. `--tier N` overrides it; `--no-tier` goes
-  back to the derived one.
-- **Before a goal is tier 1,** ask whether it's a piece of a project already in the plan. If nothing holds it only
-  because an umbrella is missing, add the umbrella or ask its owner to: the security review's fixes, no personal
-  tokens and reviewed landing are pieces of "Security posture finalized". A merge isn't a project; "E2E remote demo on
-  main" is one only while landing is held up.
-- You set your goals' tiers and your lead reviews them; nothing checks them.
+  - Why a goal matters isn't a tag: it's the goal above it.
+- **Goals and subgoals.** Everything is a goal, and a goal under another is its subgoal: the goal waits on it
+  (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier", in a title or a description.
+  - A goal nothing waits on is one of Daniel's own: about a dozen across the plan, each one he would name himself.
+    Its description opens with the state that finishes it.
+  - A subgoal is a dated state you can check: the soundness theorem and the H200 accounting are subgoals of the
+    remote demo.
+  - **Before adding a goal nothing waits on,** ask whether it's a subgoal of one already in the plan. If nothing
+    holds it only because an umbrella is missing, add the umbrella or ask its owner to. A merge isn't a goal of
+    Daniel's.
+  - The page derives how deep a goal sits from what waits on what, down to three levels. The command's `--tier N`,
+    which keeps its old name, overrides that, and `--no-tier` goes back to the derived one.
 
 ## What it waits on
 
@@ -111,9 +128,9 @@ Then the shape that fits the goal:
 - **Research** (a measurement or a result): what's measured so far, with the key numbers and what they're on; the plan
   as a numbered list; then one line on what the numbers rest on (assumptions, unproved theorems, seeds).
 - **Proof** (a theorem in Lean): the statement in plain words, then what's proved and what's left, with other teams'
-  pieces linked as goals.
+  parts linked as goals.
 
-Close with the date only when it says something the due date doesn't: "Due **Fri**. **Wed** would need both pieces
+Close with the date only when it says something the due date doesn't: "Due **Fri**. **Wed** would need both subgoals
 within two days."
 
 Rules:
@@ -144,8 +161,9 @@ Rules:
 - Sub-bullets are welcome: indent them three spaces under their item.
 - Times are Pacific, written like "Mon 10 PM", with no zone and never UTC.
 - No PR numbers, ticket ids, branch names, run ids, agent ids, file paths or code names (a package, module or
-  function: "te_core", "page_rho"). Say what the thing does.
-- Name a lead as @handle (@ci, @proofs): the page sets it as the lead's chip, apart from the project tags and the
+  function: "te_core", "page_rho"). Say what the thing does. No goal by number either ("goal 5", "the eleven"):
+  link it by its title.
+- Name a lead as @handle (@ci, @proofs): the page sets it as the lead's chip, apart from the area tags and the
   software a handle is named after.
 - The site refuses a word Daniel has said he doesn't know, and its refusal says what to write instead. The list is
   `UNKNOWN` in the website repository's goals check (`plain.ts`); when he says he doesn't know a word, tell dashboard,
@@ -190,7 +208,7 @@ Left:
 - the stop leak, about $11$ bits a session, proved from the session's rules:
   [network accounting](#accounting/stop-leak-proved).
 
-Due **Fri**. **Wed** would need both pieces within two days.
+Due **Fri**. **Wed** would need both subgoals within two days.
 ~~~
 
 ## Commands
@@ -201,7 +219,7 @@ research goals set proofs/zero-knowledge --title "Zero knowledge proved for an h
   --due 2026-11-06T18:00-08:00 --status on-track --tag proofs --wait goal:proofs/firewall-checks-provable \
   --description @zk.md
 research goals set ci/fine-grained-check --status off-track --blockers @why.md
-research goals set vllm/partition-on-main --tier 2   # only when the derived tier is wrong
+research goals set vllm/partition-on-main --tier 2   # only when the derived depth is wrong
 research goals confirm ID                        # still true as written
 research goals done ID
 research goals remove ID

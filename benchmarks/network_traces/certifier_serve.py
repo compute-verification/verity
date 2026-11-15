@@ -24,7 +24,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
   PoUW's registration of the window, which opens the window's salt;
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
   window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the
-  deployed key's is H = 20 (the auditor gate's default, `verity/composite/device/live_challenger/auditor.py`).
+  deployed key's is H = 20 (the auditor gate's default, `verity/protocols/compose/device/live_challenger/auditor.py`).
 
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
@@ -297,7 +297,7 @@ NO_N2 = ("no verdict on the advice profile: the egress counts derive from the in
 def load_key(directory: Path, height: int = HEIGHT) -> lms.PrivateKey:
     """The LMS key (N = 64, W = 1) in `directory`, made there first at `height` when absent (above `HEIGHT` in
     `KEYGEN_WORKERS` processes), in the challengers' layout
-    (`verity/composite/device/live_challenger/serve.py`'s `load_key`): `seed` (secret, 0600), `public` (`I ‖ T[1]`), `tree.bin`
+    (`verity/protocols/compose/device/live_challenger/serve.py`'s `load_key`): `seed` (secret, 0600), `public` (`I ‖ T[1]`), `tree.bin`
     (its tree, checked against `public` and `tree.sha512`), its leaf state `state.json`, and `public.json`, the public
     key as a deployment record carries it."""
     import hashlib
@@ -1198,7 +1198,7 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
            "second": lambda c: "a second one of its direction",
            "reused": lambda c: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt was "
                                "reused, under which two windows of one sync sign one digest",
-           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
+           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.TransferBlocks.refusals) and its reference "
                                    "(audit.certificate_refusals) disagree on the window's certificates"}
     kept, refused = {"certificate": [], "clock certificate": []}, []
     for what, c, no in ([("certificate", c, r) for c, r in zip(certificates, held)]

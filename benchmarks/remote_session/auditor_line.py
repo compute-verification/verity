@@ -86,14 +86,16 @@ parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack i
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
 commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
 sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
-total of a record whose ledger didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim
-prf/sha-512), which have no number and are in no total. The line at each T, and the line of record over every T
+total of a record whose ledger didn't charge them). The total leaves out the windows' PRF advantages Σ_t adv_t, which
+nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim prf/sha-512) with no number,
+in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
-**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
-statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
-certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
+from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
+check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
+the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
@@ -180,15 +182,15 @@ the same two readings."""
 LINE_BY = ("lean", "python")
 """Who computes the line (`line_of_record`): the Lean verifier, held exactly to `line.py` on the same inputs, which is
 of record, or `line.py` alone."""
-NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
-                                 "in_total": False}}
-"""`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
-prices and no number here does. Every error records it by name, outside its total."""
+NAMED_TERMS = ledger.NAMED_TERMS
+"""`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which nothing
+prices and the line doesn't assume (the ledger's). Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
-    "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
-    "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span"),
+    "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
+    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
+    "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
@@ -203,12 +205,12 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
-    "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
-    "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
-    "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
-    "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
-    "shared filesystem)")}
+    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
+    "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
+    "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
+    "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
+    "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
 BOUNDARY = "boundary"
@@ -1100,10 +1102,10 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
-                   + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited sessions, "
-                      "beside "
-                      "Σ_t Adv(prf t) (claim prf/sha-512), named and in no total"
+                   + (f", error {ledger.DELTA_FORM}, δ = {row['error']['total']:.3g} "
+                      f"(2^{row['error']['log2']:.2f}): the ledger's δ "
+                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited "
+                      f"sessions; Σ_t adv_t (claim {ledger.PRF_CLAIM}) is named, with no value and in no total"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     out += [f"conditional on {name}: {what}" for name, what in doc["conditional_on"].items()]

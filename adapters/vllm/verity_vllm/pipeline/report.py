@@ -20,6 +20,7 @@ import random
 import re
 import statistics
 import time
+import zlib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -27,8 +28,9 @@ from typing import Any
 from verity_vllm.check import gates as G
 from verity_vllm.check.gates import GateResult, RunArtifacts
 from verity_vllm.config import RowEngine
+from verity_vllm.records.schema_ids import CONFIGURATION_CARD_SCHEMA
 
-CARD_SCHEMA = "verity-gen/card/v1"
+CARD_SCHEMA = CONFIGURATION_CARD_SCHEMA
 
 #: `C` fields the profile derives from others (never read from the HF config).
 DERIVED_FIELDS = ("QKV", "GU", "BN")
@@ -39,8 +41,6 @@ C_FIELDS = ("model", "revision", "H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "
 ENGINE_ARG_KEYS = ("max_num_seqs", "enable_prefix_caching", "enable_chunked_prefill", "dtype", "quantization", "tensor_parallel_size",
                    "enforce_eager", "seed", "max_model_len", "gpu_memory_utilization", "attention_backend", "kv_cache_dtype", "block_size",
                    "vllm_commit")
-PROVENANCE_LISTS = ("protected_files_modified", "existing_primitives_modified", "new_root_classes", "new_allowlist_entries",
-                    "golden_digest_changes", "new_patterns", "new_definitions")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -131,7 +131,7 @@ class ReportCard:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, d: dict) -> "ReportCard":
+    def from_json(cls, d: dict) -> ReportCard:
         known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -175,13 +175,11 @@ def log_header(path: str | Path) -> dict | None:
     if not p.exists():
         return None
     try:
-        op = gzip.open if p.suffix == ".gz" else open
-        with op(p, "rt", encoding="utf-8") as f:  # type: ignore[call-overload]
-            line = f.readline()
-        d = json.loads(line)
-        return d if d.get("$e") == "RunHeader" else None
-    except Exception:  # noqa: BLE001 - informational
+        with gzip.open(p, "rt", encoding="utf-8") if p.suffix == ".gz" else open(p, encoding="utf-8") as f:
+            d = json.loads(f.readline())
+    except (OSError, EOFError, ValueError, zlib.error):    # unreadable, cut short, or a first line that is not JSON
         return None
+    return d if isinstance(d, dict) and d.get("$e") == "RunHeader" else None
 
 
 def workload_summary(path: str | Path | None) -> dict:
@@ -631,7 +629,7 @@ def summarize_md(card: ReportCard) -> str:
         L.append(f"- spend: {card.spend.get('pod_hours')} pod-hours, ${card.spend.get('usd')}")
     failed = [s for s, r in (card.stages or {}).items() if r.get("status") not in ("ok", None)]
     if failed:
-        L.append(f"- stages not ok: " + ", ".join(f"{s} ({card.stages[s].get('status')}, {card.stages[s].get('log')})" for s in failed))
+        L.append("- stages not ok: " + ", ".join(f"{s} ({card.stages[s].get('status')}, {card.stages[s].get('log')})" for s in failed))
     if card.mechanism_notes:
         L.append("- mechanism notes: " + ", ".join(f"`{p}`" for p in card.mechanism_notes))
     if card.notes:
@@ -648,6 +646,6 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-__all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "PROVENANCE_LISTS", "ReportCard", "slug", "dtype_short",
+__all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "ReportCard", "slug", "dtype_short",
            "engine_args_slug", "kappa_short", "config_id_of", "c_with_provenance", "log_header", "workload_summary", "engine_args_of",
            "vu_partition_text", "counts_of", "build_card", "load_card", "write_card", "top_section", "summarize_md", "bootstrap_ci"]

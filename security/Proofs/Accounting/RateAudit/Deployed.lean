@@ -2,7 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Accounting.Guarantees.RateAuditDeployed
-public import Proofs.Accounting.RateAudit.Session
+public import Proofs.Accounting.RateAudit.Run
 
 /-!
 # The remote bandwidth audit as deployed: the proof
@@ -18,7 +18,7 @@ returns the same receipts with the same tier reads, sends what the device sends,
 
 **A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
 `G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
-samples are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
+samples are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_floor_le`), as in `Session.lean`.
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
@@ -456,7 +456,7 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's samples over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
+/-- A session's samples over one store as a causal family over the monitoring period (`Rate.Causal`): any event of the
 openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` sampled
 before the session's coins. -/
 theorem pr_samples_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
@@ -521,7 +521,7 @@ theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store 
   refine pr_samples_map_of_causal store A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
     ∑ w, ((A.win w y).correctAll E (y w).1).card ≤ K) _ (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
-    ((Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, hK⟩ := hω
     refine ⟨fun w t => hmem ω w t (hall w t), ?_⟩
     show ∑ i, d * (Gs i ω).card ≤ d * K
@@ -556,7 +556,7 @@ theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store 
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
   refine pr_samples_map_of_causal store A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
     ∃ w, ((A.win w y).correctAll E (y w).1).card ≤ Kw) _ (fun X _ Gs hG f E hmem hcard => ?_)
-  refine (pr_mono (fun ω hω => ?_)).trans ((Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
+  refine (pr_mono (fun ω hω => ?_)).trans ((Pooled.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, w, hw⟩ := hω
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
@@ -782,8 +782,8 @@ open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **The remote bandwidth audit as deployed: an accepted session conserves its words**
-(`Accounting.Guarantees.RemoteSessionConservation`). -/
-theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservation := by
+(`Accounting.Guarantees.RemoteRunConservation`). -/
+theorem RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF hA
   have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ Deployed.rebuildBits b rounds cRoot F :=
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
@@ -812,10 +812,10 @@ theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservat
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 /-- **The remote bandwidth audit at its deployed parameters**
-(`Accounting.Guarantees.RemoteSessionConservationDeployed`). -/
-theorem RemoteSessionConservationDeployed : Accounting.Guarantees.RemoteSessionConservationDeployed := by
+(`Accounting.Guarantees.RemoteRunConservationDeployed`). -/
+theorem RemoteRunConservationDeployed : Accounting.Guarantees.RemoteRunConservationDeployed := by
   intro n P N ρ S L q r s G lam τ cRoot F cost tier A hn hP hN hc hq hG hW hF hA
-  have h := RemoteSessionConservation n P N 32768 512 ρ S L q r s 2773 G lam τ 3 cRoot F cost tier A 0.0015 0.01
+  have h := RemoteRunConservation n P N 32768 512 ρ S L q r s 2773 G lam τ 3 cRoot F cost tier A 0.0015 0.01
     (by omega) hP hN (by norm_num) (by positivity) (by norm_num) hW hF hA
   refine h.trans (add_le_add ?_ ?_)
   · rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by rw [ENNReal.div_add_div_same]; norm_num]

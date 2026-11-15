@@ -80,3 +80,6 @@ def openings_of(frames: Iterable[bytes]) -> list[audit.Opening]:
             return []
         out.extend(got)
     return out
+
+
+__all__ = ["encode_openings"]

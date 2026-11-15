@@ -1,7 +1,8 @@
 """The Lean verifier of a P2 session, the process `remote-audit-verifier` (`RemoteAudit.Verifier`'s `p2_*`
-requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_party.py` runs it beside `p2.Session`: one request a JSON line on
-its stdin, a line's or a file's bytes right after it, each answered by one line on its stdout, `{"answer": JSON}` or
-`{"error": why}`. The standard library only, so the party runs as the auditor's gate starts it (`python3 -S -E`)."""
+requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_party.py` runs it beside `audit.AuditRun` over the P2 codec:
+one request a JSON line on its stdin, a line's or a file's bytes right after it, each answered by one line on its
+stdout, `{"answer": JSON}` or `{"error": why}`. The standard library only, so the party runs as the auditor's gate
+starts it (`python3 -S -E`)."""
 
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from typing import Any
 
 PACKAGE = Path(__file__).resolve().parent / "lean"
 EXE = "remote-audit-verifier"
-BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/difftest/lean/.lake/harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/circuits/difftest/.lake/harness-build.lock"
 """`verity_difftest.BUILD_LOCK`: Lake builds the package's path requires in place, so a build here and the difftest's
 build of `remote-audit-difftest` take turns."""
 
@@ -94,3 +95,6 @@ class Lean:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+__all__ = ["BUILD_LOCK", "PACKAGE", "build"]

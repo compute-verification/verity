@@ -18,7 +18,7 @@ from verity.circuits.program import Program
 from verity.protocols.certifier.verifier import head_check as HC, service as SVC
 from verity.protocols.certifier.verifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Record, occupancy
+from verity.protocols.certifier.verifier.grid import Certifier, GridParams, BlockGrid, occupancy
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet, run_shaper
 from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import root_ref
@@ -85,10 +85,10 @@ class Run:
                                      clock=self.clock)
         self.previous = None
 
-    def egress(self, record: Record, **kw) -> CertifiedRecord:
+    def egress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, EGRESS, PARAMS, parameters_digest(PARAMS, SYNC_SET), **kw)
 
-    def ingress(self, record: Record, **kw) -> CertifiedRecord:
+    def ingress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, INGRESS, PARAMS, parameters_digest(PARAMS), **kw)
 
     def honest(self, w: int):
@@ -311,8 +311,8 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
     is."""
     lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
-    assert lw.unit.id == "NetworkLinkWindow_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
-    assert declared.unit.id == "NetworkLinkWindow_v5{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
+    assert lw.unit.id == "NetworkTransferBlocks_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
+    assert declared.unit.id == "NetworkTransferBlocks_v5{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
     assert lw.spec.check.program != declared.spec.check.program and lw.spec.check.query != declared.spec.check.query
     defs = codec.encode_program(P.population_program(declared.unit, 1))["definitions"]
     pins = json.loads(HC.PINS.read_text())["digests"]

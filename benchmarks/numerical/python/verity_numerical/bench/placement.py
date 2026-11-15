@@ -48,15 +48,46 @@ import ipaddress
 import json
 import os
 import socket
+import statistics
+import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Mapping
+
+__all__ = [
+    "GATE_RULES",
+    "GATE_SCHEMA",
+    "PEER_ROLES",
+    "PROBE",
+    "RTT_METHOD",
+    "assess",
+    "cpu_list",
+    "cpu_text",
+    "dedicated_cores",
+    "from_job",
+    "from_runpod",
+    "gate",
+    "is_global_net",
+    "is_host_bridge",
+    "is_host_private",
+    "is_hypervisor_vendor",
+    "link_to",
+    "main",
+    "merge",
+    "probe",
+    "read_tasks",
+    "remote_probe",
+    "rtt_target",
+    "separation",
+    "tcp_rtt",
+]
 
 #: What a pair sharing a public IP (a datacenter's egress NAT) must record, on both pods and all different.
 NAT_IDS = ("machine_id", "product_uuid", "boot_id")
 #: The measured prover-verifier round trip a shared-IP pair must reach: well above the 0.03 ms of two containers on one host.
 RTT_FLOOR_MS = 0.1
-#: How many connects :func:`tcp_rtt` makes; the NAT exception needs every one to succeed (red-team-flock-3 R1).
+#: How many connects :func:`tcp_rtt` makes; the NAT exception needs every one to succeed.
 RTT_CONNECTS = 30
 #: The evidence's ``product_uuid`` for a pod whose DMI uuid could not be read (every RunPod container).
 UNREADABLE = "unreadable"
@@ -64,7 +95,7 @@ RTT_METHOD = "tcp-connect: median and minimum of 30 kernel-level TCP connects on
 #: RunPod's global network: a shared-IP pair's only accepted link is ``<verifier pod id>.runpod.internal`` resolving into 10/8.
 RUNPOD_INTERNAL = ".runpod.internal"
 GLOBAL_NET = ipaddress.ip_network("10.0.0.0/8")
-#: ``/sys/class/dmi/id/sys_vendor`` prefixes of hypervisors' guests (red-team-flock-3 S1): a VM's DMI uuid and boot id are its own.
+#: ``/sys/class/dmi/id/sys_vendor`` prefixes of hypervisors' guests: a VM's DMI uuid and boot id are its own.
 HYPERVISOR_VENDORS = ("QEMU", "KVM", "Xen", "VMware", "Microsoft Corporation", "innotek", "Parallels", "Red Hat", "OpenStack",
                       "Amazon EC2", "Google")
 PROBE = "benchmarks/numerical/python/verity_numerical/bench/placement.py"
@@ -126,9 +157,6 @@ def _hypervisor_flag() -> bool | None:
 def tcp_rtt(target: str, n: int = RTT_CONNECTS, timeout: float = 5.0) -> dict[str, Any]:
     """Round trips of ``n`` kernel-level TCP connects to ``target`` (HOST:PORT): ``connect()`` to the SYN-ACK, no payload, each socket
     closed at once.  Median and minimum in ms, the address connected to, and how many failed."""
-    import statistics
-    import time
-
     host, _, port = target.rpartition(":")
     out: dict[str, Any] = {"target": target, "target_ip": None, "n": 0, "failed": 0, "median_ms": None, "min_ms": None,
                            "method": RTT_METHOD}
@@ -220,8 +248,6 @@ def rtt_target(peer: str | None) -> str | None:
 
 def remote_probe(machine: str, peer: str | None = None) -> dict[str, Any]:
     """:func:`probe` run on a pod over ``research pods ssh`` (this file on stdin), so a plan can see its DMI identity and RTT."""
-    import subprocess
-
     args = ["probe", *(["--peer", peer] if peer else []), *(["--rtt", rtt_target(peer)] if rtt_target(peer) else [])]
     r = subprocess.run(["research", "pods", "ssh", machine, "--", "python3", "-", *args], input=Path(__file__).read_text(),
                        capture_output=True, text=True, timeout=300)
@@ -249,12 +275,23 @@ def is_host_bridge(ip: str | None) -> bool:
     return a.is_loopback or a.is_link_local or (a.version == 4 and a in HOST_BRIDGE_NET)
 
 
+def is_global_net(ip: str | None) -> bool:
+    """An address of RunPod's global network (:data:`GLOBAL_NET`)."""
+    if not ip:
+        return False
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a in GLOBAL_NET
+
+
 def is_hypervisor_vendor(vendor: str | None) -> bool:
     return bool(vendor) and any(str(vendor).strip().lower().startswith(v.lower()) for v in HYPERVISOR_VENDORS)
 
 
 def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any]) -> tuple[list[str], dict[str, Any]]:
-    """Why a pair sharing a public IP does not earn the NAT exception (red-team-flock-3 S1-S5), and its
+    """Why a pair sharing a public IP does not earn the NAT exception, and its
     evidence: the machine id and boot id recorded and different, and the DMI uuid too unless both pods are bare metal (where it
     is compared only if read, and the evidence says :data:`UNREADABLE` where it was not); both pods bare metal (no ``hypervisor`` CPU flag, a DMI
     ``sys_vendor`` that is no hypervisor's); the link ``<verifier pod id>.runpod.internal`` resolving into 10/8; the TCP-connect RTT
@@ -280,11 +317,7 @@ def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link:
     host = (link.get("peer") or "").rpartition(":")[0]
     want = f"{verifier.get('pod_id')}{RUNPOD_INTERNAL}" if verifier.get("pod_id") else None
     peer_ip = link.get("peer_ip")
-    try:
-        in_global = peer_ip is not None and ipaddress.ip_address(peer_ip) in GLOBAL_NET
-    except ValueError:
-        in_global = False
-    if not (want and host == want and in_global):
+    if not (want and host == want and is_global_net(peer_ip)):
         out.append(f"{pre}: the link must be RunPod's global network, {want or '<verifier pod id>' + RUNPOD_INTERNAL} resolving into "
                    f"{GLOBAL_NET}; it is {host or '?'} at {peer_ip}")
     rtt = link.get("rtt") or {}

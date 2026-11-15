@@ -51,7 +51,7 @@ the run and bound by the spec's context, and nothing declared at run time sets i
 needs no content check: a head with frames where the profile says 0 fails N2's count check. An end without a profile
 has no such backing, since its occupancy is its record's own.
 
-**The check** is `LinkWindows.unit`, `NetworkLinkWindow` v5{EGRESS, INGRESS}: each end's head check,
+**The check** is `LinkWindows.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}: each end's head check,
 `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a Boolean Definition over its
 end's signed digest (`certificate_digest`: the end's record digest hidden under the certifier's salt), its direction a
 constant of the proof block (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, a
@@ -126,7 +126,7 @@ digest binds both, so the frames are the rest of the grid, and N2 says nothing o
 grid to the Program's.
 
 **A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
-and the run-time syncs, so no profile fixes them before the run. Its proof block is `NetworkServedLinkWindow` v4{EGRESS,
+and the run-time syncs, so no profile fixes them before the run. Its proof block is `NetworkServedTransferBlocks` v4{EGRESS,
 INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCounts_v1` and its pinned circuit digest
 (`served.gate`, pinned in `served.circuit-check.json`), which holds the egress head's
 counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
@@ -141,7 +141,7 @@ schedule's parameters digest (`warden.WardenParams.digest`, which its deployment
 cells, r for each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifier runs no shaper clock, so a window
-declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
+declares no sync and the charge is 0. Its proof block is the plain one, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, each
 head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
 digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
 records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
@@ -159,7 +159,7 @@ When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `a
 reference: an execution phase where the two differ rejects, and the verdict says `"by": "lean"` and carries the
 reference's accept bit (`reference`), never a violation's kind.
 
-**The verdict of record is the Lean's** on every kind of link: `NetworkCheck.LinkWindow.verdict`
+**The verdict of record is the Lean's** on every kind of link: `NetworkCheck.TransferBlocks.verdict`
 (`verity/protocols/certifier/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
@@ -176,7 +176,7 @@ Lean takes as an input rather than checks:
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
 ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
 through both to the verdict it recorded, and the properties of the Lean's verdict are
-`security/Properties/NetworkCertifier/Check/LinkWindow.lean`.
+`security/Properties/NetworkCertifier/Check/TransferBlocks.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered proof block whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
@@ -224,7 +224,7 @@ from verity.protocols.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.spot.verifier.one_stage.verdict import Verdict
 
 #: Whose verdict on an execution phase's proof is the record's, by kind of link (`LinkWindows.kind`): the Lean's
-#: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
+#: (``"lean"``, `NetworkCheck.TransferBlocks`) or this module's (``"python"``). Both run on every proof either way. Setting a
 #: kind to ``"python"`` is the one line that switches it back.
 OF_RECORD = {"plain": "lean", "served": "lean", "warden": "lean"}
 
@@ -330,14 +330,14 @@ def _units(check, served) -> tuple[CompositeDefinition, CompositeDefinition]:
         return _outputs(B, oks + [B.call(served(*S_.SERVED), ingress, egress, args[-1])], deadline)
 
     return (CompositeDefinition(
-        "NetworkLinkWindow", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
+        "NetworkTransferBlocks", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
         doc="the proof block of network accounting: one link-window, both directions, over the two certificates' signed "
             "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
             "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
         CompositeDefinition(
-        "NetworkServedLinkWindow", 4, ("EGRESS", "INGRESS", "SERVED"),
+        "NetworkServedTransferBlocks", 4, ("EGRESS", "INGRESS", "SERVED"),
         lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
-        doc="the proof block of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on a served link: `NetworkTransferBlocks`'s checks, and the egress "
             "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
             "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False))
 
@@ -973,7 +973,7 @@ class LinkWindows:
     def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                   delivered: Delivered, findings: Sequence[Finding] | None,
                   sessions: Sequence[str]) -> dict[str, Any] | None:
-        """`verify`'s inputs as `NetworkCheck.LinkWindow.caseOf` reads them: the verifier's own structure (the Program's
+        """`verify`'s inputs as `NetworkCheck.TransferBlocks.caseOf` reads them: the verifier's own structure (the Program's
         and partition's digests, the gate ids), the registration, the sample, the findings of its own run of Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
@@ -1028,7 +1028,7 @@ class LinkWindows:
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                      delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
                      server: LA.Server | None = None) -> dict[str, Any] | None:
-        """The Lean's verdict on the link-window (`NetworkCheck.LinkWindow.verdict`, `network-records verdicts`'
+        """The Lean's verdict on the link-window (`NetworkCheck.TransferBlocks.verdict`, `network-records verdicts`'
         ``link-window``): its accept bit, digest and public outputs; None where `lean_case` has no case or the Lean
         refuses it. The Lean not built or not running raises."""
         case = self.lean_case(draw, certificates, syncs, delivered, findings, sessions)
@@ -1057,7 +1057,7 @@ class LinkWindows:
         in-the-clear check's accept bit (`clear`), which decides nothing. Raises `ValueError` on a link with no egress
         occupancy, served or warden profile.
 
-        The Lean (`NetworkCheck.LinkWindow`, `lean_verdict`) decides the same on every call beside this Python, and
+        The Lean (`NetworkCheck.TransferBlocks`, `lean_verdict`) decides the same on every call beside this Python, and
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
         differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the execution phase is
         rejected, with deadline 0."""

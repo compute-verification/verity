@@ -7,8 +7,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity_vllm.program.frontend.export_compat import default_fp8_linear_leaf
 from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.export_compat import default_fp8_linear_leaf
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_iface import iface

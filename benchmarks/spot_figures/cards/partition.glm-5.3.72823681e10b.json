@@ -1,0 +1,1442 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "partition",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": true,
+ "source": "GLM-5.3's sparse-attention rows (the row family SparseMlaSplit_v1 of the served circuit's census, every rank, one request of 256 prompt tokens and 32 steps) partitioned by benchmarks/one_stage/block_census.py at tree d012feea83: each head's key block its scores unit (SparseMlaHeadScores_v1: the block's running max, sums and bf16 probabilities) and its values units on 64 columns (SparseMlaHeadValues_v1, each reading the scores unit's probabilities), a split's end on each column block, the combine of each column block of the splits, and a head's end; a key block stays whole where a unit of it fits no proof block. Units a token are the census's counts over 287 tokens; output bits, input bits and MACs from each Definition; ANDs the estimator's upper bound on the word form; k_log the block Flock's range rule stages each at (benchmarks/one_stage/m1_families.block). None of these types is measured by the proof_overhead card, so Figure 1 prices them by their k_log. The Definitions are on main and circuit-checked; the vLLM adapter's serving of them is in review; nothing is measured or served. Each unit commits its own row of the block's keys and no unit writes that row, so nothing holds two units' keys equal: the strata are a cost model's, not a bound under the guarantees.",
+ "runs": [
+  "r20261111-195905-146c"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "name": "head-scores-values",
+  "label": "modeled, key rows not held equal: each sparse-attention head's key block proved as its scores unit and its values units on 64 columns; Definitions on main and circuit-checked, the serving change in review; not measured or served, and not a bound until one unit writes the key rows",
+  "replaces": [
+   "SparseMlaSplit_v1"
+  ],
+  "strata": [
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 6679.191637630662,
+    "macs": 36864,
+    "out_bits": 1216,
+    "in_bits": 599200,
+    "ands": 19413383,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 53433.533101045294,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 68640,
+    "ands": 2269440,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2226.397212543554,
+    "macs": 36864,
+    "out_bits": 1184,
+    "in_bits": 599040,
+    "ands": 19390404,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 17811.17770034843,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 66560,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaCombine_v1{NSPLIT=5,DV=64,INV={\"fn\":\"Fa3InvSum_v1\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 4313.644599303136,
+    "macs": 0,
+    "out_bits": 1024,
+    "in_bits": 10400,
+    "ands": 1560795,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadEnd_v1{DV=64,INV={\"fn\":\"Fa3InvSum_v1\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 34370.006968641115,
+    "macs": 0,
+    "out_bits": 1024,
+    "in_bits": 2176,
+    "ands": 169842,
+    "k_log": 21
+   },
+   {
+    "block": "SparseMlaSplitEnd_v1{DV=64,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 21568.22299651568,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 2208,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 36288,
+    "out_bits": 1168,
+    "in_bits": 589824,
+    "ands": 19087406,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 35712,
+    "out_bits": 1152,
+    "in_bits": 580608,
+    "ands": 18784408,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 35136,
+    "out_bits": 1136,
+    "in_bits": 571392,
+    "ands": 18481410,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 34560,
+    "out_bits": 1120,
+    "in_bits": 562176,
+    "ands": 18178412,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 33984,
+    "out_bits": 1104,
+    "in_bits": 552960,
+    "ands": 17875414,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 33408,
+    "out_bits": 1088,
+    "in_bits": 543744,
+    "ands": 17572416,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 32832,
+    "out_bits": 1072,
+    "in_bits": 534528,
+    "ands": 17269418,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 32256,
+    "out_bits": 1056,
+    "in_bits": 525312,
+    "ands": 16966420,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 50960,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 52000,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 53040,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 54080,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 55120,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 56160,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 57200,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 58240,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 59280,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 60320,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 61360,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 62400,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 63440,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 64480,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 4096,
+    "out_bits": 2048,
+    "in_bits": 65520,
+    "ands": 2107648,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 31680,
+    "out_bits": 1040,
+    "in_bits": 516096,
+    "ands": 16663422,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 31104,
+    "out_bits": 1024,
+    "in_bits": 506880,
+    "ands": 16360424,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 30528,
+    "out_bits": 1008,
+    "in_bits": 497664,
+    "ands": 16057426,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 29952,
+    "out_bits": 992,
+    "in_bits": 488448,
+    "ands": 15754428,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 29376,
+    "out_bits": 976,
+    "in_bits": 479232,
+    "ands": 15451430,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 28800,
+    "out_bits": 960,
+    "in_bits": 470016,
+    "ands": 15148432,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 28224,
+    "out_bits": 944,
+    "in_bits": 460800,
+    "ands": 14845434,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 27648,
+    "out_bits": 928,
+    "in_bits": 451584,
+    "ands": 14542436,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 27072,
+    "out_bits": 912,
+    "in_bits": 442368,
+    "ands": 14239438,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 26496,
+    "out_bits": 896,
+    "in_bits": 433152,
+    "ands": 13936440,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 25920,
+    "out_bits": 880,
+    "in_bits": 423936,
+    "ands": 13633442,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 25344,
+    "out_bits": 864,
+    "in_bits": 414720,
+    "ands": 13330444,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 24768,
+    "out_bits": 848,
+    "in_bits": 405504,
+    "ands": 13027446,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 24192,
+    "out_bits": 832,
+    "in_bits": 396288,
+    "ands": 12724448,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 34320,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 35360,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 36400,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 37440,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 38480,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 39520,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 40560,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 41600,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 42640,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 43680,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 44720,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 45760,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 46800,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 47840,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 48880,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 3072,
+    "out_bits": 2048,
+    "in_bits": 49920,
+    "ands": 1580736,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 23616,
+    "out_bits": 816,
+    "in_bits": 387072,
+    "ands": 12421450,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 23040,
+    "out_bits": 800,
+    "in_bits": 377856,
+    "ands": 12118452,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 22464,
+    "out_bits": 784,
+    "in_bits": 368640,
+    "ands": 11815454,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 17856,
+    "out_bits": 656,
+    "in_bits": 294912,
+    "ands": 9391470,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 21888,
+    "out_bits": 768,
+    "in_bits": 359424,
+    "ands": 11512456,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 17280,
+    "out_bits": 640,
+    "in_bits": 285696,
+    "ands": 9088472,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 21312,
+    "out_bits": 752,
+    "in_bits": 350208,
+    "ands": 11209458,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 16704,
+    "out_bits": 624,
+    "in_bits": 276480,
+    "ands": 8785474,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 20736,
+    "out_bits": 736,
+    "in_bits": 340992,
+    "ands": 10906460,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 20160,
+    "out_bits": 720,
+    "in_bits": 331776,
+    "ands": 10603462,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 16128,
+    "out_bits": 608,
+    "in_bits": 267264,
+    "ands": 8482476,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 17680,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 18720,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 19760,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 20800,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 21840,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 22880,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 23920,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 24960,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 26000,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 27040,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 28080,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 29120,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 30160,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 31200,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 32240,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 19584,
+    "out_bits": 704,
+    "in_bits": 322560,
+    "ands": 10300464,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 15552,
+    "out_bits": 592,
+    "in_bits": 258048,
+    "ands": 8179478,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 19008,
+    "out_bits": 688,
+    "in_bits": 313344,
+    "ands": 9997466,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 14976,
+    "out_bits": 576,
+    "in_bits": 248832,
+    "ands": 7876480,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 18432,
+    "out_bits": 672,
+    "in_bits": 304128,
+    "ands": 9694468,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 14400,
+    "out_bits": 560,
+    "in_bits": 239616,
+    "ands": 7573482,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 13824,
+    "out_bits": 544,
+    "in_bits": 230400,
+    "ands": 7270484,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 13248,
+    "out_bits": 528,
+    "in_bits": 221184,
+    "ands": 6967486,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 2048,
+    "out_bits": 2048,
+    "in_bits": 33280,
+    "ands": 1053824,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 12672,
+    "out_bits": 512,
+    "in_bits": 211968,
+    "ands": 6664488,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 12096,
+    "out_bits": 496,
+    "in_bits": 202752,
+    "ands": 6361490,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 11520,
+    "out_bits": 480,
+    "in_bits": 193536,
+    "ands": 6058492,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 10944,
+    "out_bits": 464,
+    "in_bits": 184320,
+    "ands": 5755494,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 10368,
+    "out_bits": 448,
+    "in_bits": 175104,
+    "ands": 5452496,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 9792,
+    "out_bits": 432,
+    "in_bits": 165888,
+    "ands": 5149498,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 9216,
+    "out_bits": 416,
+    "in_bits": 156672,
+    "ands": 4846500,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 8640,
+    "out_bits": 400,
+    "in_bits": 147456,
+    "ands": 4543502,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 8064,
+    "out_bits": 384,
+    "in_bits": 138240,
+    "ands": 4240504,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 10400,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 11440,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 12480,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 13520,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 14560,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 15600,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 695.7491289198606,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 16640,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 7488,
+    "out_bits": 368,
+    "in_bits": 129024,
+    "ands": 3937506,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 6912,
+    "out_bits": 352,
+    "in_bits": 119808,
+    "ands": 3634508,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 1040,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 2080,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 3120,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 4160,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 5200,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 6240,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 7280,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 8320,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadValues_v1{NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 556.5993031358885,
+    "macs": 1024,
+    "out_bits": 2048,
+    "in_bits": 9360,
+    "ands": 526912,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 6336,
+    "out_bits": 336,
+    "in_bits": 110592,
+    "ands": 3331510,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 5760,
+    "out_bits": 320,
+    "in_bits": 101376,
+    "ands": 3028512,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 5184,
+    "out_bits": 304,
+    "in_bits": 92160,
+    "ands": 2725514,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 4608,
+    "out_bits": 288,
+    "in_bits": 82944,
+    "ands": 2422516,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 4032,
+    "out_bits": 272,
+    "in_bits": 73728,
+    "ands": 2119518,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=9,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 107008,
+    "out_bits": 65536,
+    "in_bits": 156672,
+    "ands": 66221536,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=8,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 102400,
+    "out_bits": 65536,
+    "in_bits": 147456,
+    "ands": 63797552,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=7,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 97792,
+    "out_bits": 65536,
+    "in_bits": 138240,
+    "ands": 61373568,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=6,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 93184,
+    "out_bits": 65536,
+    "in_bits": 129024,
+    "ands": 58957136,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 3456,
+    "out_bits": 256,
+    "in_bits": 64512,
+    "ands": 1817464,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=5,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 88576,
+    "out_bits": 65536,
+    "in_bits": 119808,
+    "ands": 56533152,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=4,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 83968,
+    "out_bits": 65536,
+    "in_bits": 110592,
+    "ands": 54116720,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=3,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 79360,
+    "out_bits": 65536,
+    "in_bits": 101376,
+    "ands": 51692736,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=2,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 74752,
+    "out_bits": 65536,
+    "in_bits": 92160,
+    "ands": 49276304,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 2880,
+    "out_bits": 240,
+    "in_bits": 55296,
+    "ands": 1514466,
+    "k_log": 24
+   },
+   {
+    "block": "SparseMlaSplit_v1{T=1,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2.1742160278745644,
+    "macs": 70144,
+    "out_bits": 65536,
+    "in_bits": 82944,
+    "ands": 46852320,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 2304,
+    "out_bits": 224,
+    "in_bits": 46080,
+    "ands": 1212412,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 1728,
+    "out_bits": 208,
+    "in_bits": 36864,
+    "ands": 909414,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 1152,
+    "out_bits": 192,
+    "in_bits": 27648,
+    "ands": 607360,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 576,
+    "out_bits": 176,
+    "in_bits": 18432,
+    "ands": 304362,
+    "k_log": 23
+   }
+  ]
+ },
+ "art": "art:72823681e10b20564bccdb69bbb85d36ed3e19f3a40187e71ed6bd81cbdcfb8c"
+}

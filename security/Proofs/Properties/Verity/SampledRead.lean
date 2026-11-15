@@ -1,7 +1,7 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
--- `Ledger` realizes the match equations `mvcgen` splits `sessionNamed` with; realizing them here too clashes wherever
+-- `Ledger` realizes the match equations `mvcgen` splits `challengePhaseNamed` with; realizing them here too clashes wherever
 -- both modules are imported.
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 public import Proofs.Properties.Verity.SampledDraw
@@ -85,43 +85,43 @@ theorem logStr (j : Json) (s : String)
 
 set_option maxHeartbeats 1000000 in
 theorem sessionOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Roots × String}
-    (h : sessionOf key record log close = .ok r) :
+    (h : challengePhaseOf key record log close = .ok r) :
     ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧ releasedRootsOf r.1 lines = .ok r.2.1 := by
   refine of_triple (Q := fun r => ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧
     releasedRootsOf r.1 lines = .ok r.2.1) ?_ h
   clear h
-  mvcgen [sessionOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_spec, closeMessage_spec,
+  mvcgen [challengePhaseOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_spec, closeMessage_spec,
     mapM_ok_spec, releasedRootsOf_spec]
   exact ⟨_, _, rfl, mapM_str (fun j s h => logStr j s h) ‹_›, ‹_›⟩
 
 theorem sessionOf_spec (key : ChallengerKey) (record log close : Json) :
-    ⦃⌜True⌝⦄ sessionOf key record log close ⦃⇓? r => ⌜sessionOf key record log close = .ok r⌝⦄ := ok_spec _
+    ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? r => ⌜challengePhaseOf key record log close = .ok r⌝⦄ := ok_spec _
 
 theorem hellos_spec {α β : Type} (f : α → Flock.V β) (l : List α) : ⦃⌜True⌝⦄ l.mapM f ⦃⇓? _ => ⌜True⌝⦄ :=
   except_spec _
 
 set_option maxHeartbeats 1000000 in
 theorem sessionNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
-    (h : sessionNamed a key session = .ok r) :
-    ∃ sid, sessionOf key (Spot.getD session "record") (Spot.getD session "log")
+    (h : challengePhaseNamed a key session = .ok r) :
+    ∃ sid, challengePhaseOf key (Spot.getD session "record") (Spot.getD session "log")
       (Spot.getD session "close") = .ok (r.1, r.2, sid) := by
-  refine of_triple (Q := fun r => ∃ sid, sessionOf key (Spot.getD session "record")
+  refine of_triple (Q := fun r => ∃ sid, challengePhaseOf key (Spot.getD session "record")
     (Spot.getD session "log") (Spot.getD session "close") = .ok (r.1, r.2, sid)) ?_ h
   clear h
-  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, hellos_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, hellos_spec]
   all_goals exact ⟨_, ‹_›⟩
 
 theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
-    {r : LiveCommitment × Roots} (h : trustedSessionOf ledger window key pins main session = .ok r) :
-    ∃ a, sessionNamed a key session = .ok r := by
-  unfold trustedSessionOf at h
+    {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
+    ∃ a, challengePhaseNamed a key session = .ok r := by
+  unfold trustedChallengePhaseOf at h
   rw [bind_ok] at h
   obtain ⟨a, -, h⟩ := h
   exact ⟨a, h⟩
 
 theorem trustedSessionOf_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
-    ⦃⌜True⌝⦄ trustedSessionOf ledger window key pins main session
-      ⦃⇓? r => ⌜trustedSessionOf ledger window key pins main session = .ok r⌝⦄ := ok_spec _
+    ⦃⌜True⌝⦄ trustedChallengePhaseOf ledger window key pins main session
+      ⦃⇓? r => ⌜trustedChallengePhaseOf ledger window key pins main session = .ok r⌝⦄ := ok_spec _
 
 theorem challengerStream_spec (c : LiveCommitment) (segment : Json) (after : ByteArray)
     (roots : Option (List ByteArray)) :
@@ -133,11 +133,11 @@ def look (roots : Roots) (label : String) : List ByteArray := ((roots.find? (·.
 
 theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : drawCoins key w label after coins = .ok ξ) :
-    ∃ cm roots, trustedSessionOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+    ∃ cm roots, trustedChallengePhaseOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
         (Spot.getD coins "pins") (Spot.getD coins "main") (Spot.getD coins "session") =
           .ok (cm, roots) ∧
       challengerStream cm (Spot.getD coins "segment") after (some (look roots label)) = .ok ξ := by
-  refine of_triple (Q := fun ξ => ∃ cm roots, trustedSessionOf (Spot.getD coins "ledger")
+  refine of_triple (Q := fun ξ => ∃ cm roots, trustedChallengePhaseOf (Spot.getD coins "ledger")
     (Json.mkObj [("root", Json.str w)]) key (Spot.getD coins "pins") (Spot.getD coins "main")
       (Spot.getD coins "session") = .ok (cm, roots) ∧
     challengerStream cm (Spot.getD coins "segment") after (some (look roots label)) = .ok ξ) ?_ h
@@ -818,11 +818,11 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The session's law is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
-units, ran under `A.law`. -/
+units, ran under `A.design`. -/
 theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray}
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
-    (hn : A.n = n) : A.law = L := by
+    (hn : A.n = n) : A.design = L := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
   obtain ⟨p', hp', -, -, hlaw, -⟩ := hA.params
   rw [← hθ] at hp'
@@ -868,7 +868,8 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {bs : Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
   · cases h
@@ -1245,7 +1246,8 @@ theorem trees_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
   · cases h

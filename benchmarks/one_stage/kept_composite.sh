@@ -12,7 +12,7 @@
 #    evidence (POUW_STATEMENTS, POUW_LIVE, files on this node), its REFERENCE line credit's own verdict;
 #  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer;
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
-#    own answer.json (the wipe's, PoUS's once served_case.sh has written its case), entered as kept, onsite only.
+#    own answer.json (the wipe's), entered as kept, onsite only.
 # composite.py then composes and checks each product; $OUT/remote and $OUT/onsite get only its public output (verdict
 # lines, commitments, params digests), and $OUT/kept_composite.txt every line printed here.
 set -uo pipefail
@@ -30,7 +30,7 @@ if [ -z "$PY" ]; then
   (uv venv -q "$W/venv" && VIRTUAL_ENV=$W/venv uv pip install -q numpy) > "$OUT/venv.log" 2>&1 || { say "VENV failed"; exit 3; }
   PY=$W/venv/bin/python
 fi
-export PYTHONPATH=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/difftest/python:$TREE/verity/protocols/flock/prover/python
+export PYTHONPATH=$TREE:$TREE/benchmarks/numerical/python:$TREE/tools/difftest/python:$TREE/verity/protocols/flock/prover/python
 say "TREE $(git -C "$TREE" rev-parse HEAD 2>/dev/null || echo '?') SRC $1 window $K"
 build() {  # DIR TARGET
   local t0=$SECONDS
@@ -39,13 +39,13 @@ build() {  # DIR TARGET
   say "BUILD $2 (in $1): exit $rc in $((SECONDS - t0)) s"
   return $rc
 }
-build verity/protocols/remote/verifier remote || exit 3
-build verity/protocols/onsite/verifier onsite || exit 3
+build verity/protocols/compose/verifier/remote remote || exit 3
+build verity/protocols/compose/verifier/onsite onsite || exit 3
 build verity/protocols/pouw/verifier/lean/check pouw-check || exit 3
 build verity/protocols/pouw/verifier/lean/check pouw-period || exit 3
 build verity/protocols/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
 B=.lake/build/bin
-REMOTE=$TREE/verity/protocols/remote/verifier/$B/remote ONSITE=$TREE/verity/protocols/onsite/verifier/$B/onsite
+REMOTE=$TREE/verity/protocols/compose/verifier/remote/$B/remote ONSITE=$TREE/verity/protocols/compose/verifier/onsite/$B/onsite
 POUW=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-period
 V2=$TREE/verity/protocols/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
 P=$W/cases

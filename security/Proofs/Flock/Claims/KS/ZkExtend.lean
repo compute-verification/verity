@@ -58,6 +58,8 @@ rate is at least `1/2` (`zk_reg`, `Claims.GS.reg_of_rate`), and the indices' `n 
 * `FlockDeploy.KS.zk_width`, `FlockDeploy.KS.zk_extendJ`: `ExtendJ` at `deployZk rel`, at every relation.
 * `FlockDeploy.KS.zk_KS_untrim`: so `Flock.KS` at the untrimmed masked instance at SHA-512 at the deployed relation
   holds with no premise (`zk_KS_untrim_of_extendJ`).
+* `FlockDeploy.KS.zk_KS_untrim_at`: and with `E^rep` truncated at any `K₀ > 0` (`FlockDeploy.deployZkAt`), from one
+  wait's bound at the instance (`zk_oneWait_untrim`), which reads no truncation.
 -/
 
 @[expose] public section
@@ -169,10 +171,21 @@ namespace Gen
 
 variable [S : ZkSetup]
 
+/-- **One wait's bound at the untrimmed masked instance**, at SHA-512 at the deployed relation, with no premise:
+`zk_oneWait_untrim_of_extendJ` with `ExtendJ` (`zk_extendJ`). -/
+theorem zk_oneWait_untrim : Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
+  zk_oneWait_untrim_of_extendJ (zk_extendJ Readable.relation)
+
 /-- **Masked knowledge soundness at the untrimmed instance**, at SHA-512 at the deployed relation, with no premise:
 `zk_KS_untrim_of_extendJ` with `ExtendJ` (`zk_extendJ`). -/
 theorem zk_KS_untrim : Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   zk_KS_untrim_of_extendJ (zk_extendJ Readable.relation)
+
+/-- **Masked knowledge soundness at the untrimmed instance with `E^rep` truncated at `K₀ > 0`**, at SHA-512 at the
+deployed relation, with no other premise: one wait's bound at the instance (`zk_oneWait_untrim`), which reads no
+truncation, at `deployZkAt K₀` (`zk_of_oneWait_sha512_at`). -/
+theorem zk_KS_untrim_at {K₀ : ℕ} (hK₀ : 0 < K₀) : Claims.Flock.KS sha512 (deployZkAt K₀ Readable.relation) :=
+  zk_of_oneWait_sha512_at Readable.relation hK₀ zk_splits zk_oneWait_untrim
 
 end Gen
 
@@ -180,5 +193,10 @@ end Gen
 `zk_KS_untrim_of_extendJ` with `ExtendJ` (`zk_extendJ`). -/
 theorem zk_KS_untrim : Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   Gen.zk_KS_untrim (S := S₀)
+
+/-- **Masked knowledge soundness at the untrimmed instance with `E^rep` truncated at `K₀ > 0`**, at SHA-512 at the
+deployed relation, with no other premise (`Gen.zk_KS_untrim_at`). -/
+theorem zk_KS_untrim_at {K₀ : ℕ} (hK₀ : 0 < K₀) : Claims.Flock.KS sha512 (deployZkAt K₀ Readable.relation) :=
+  Gen.zk_KS_untrim_at (S := S₀) hK₀
 
 end FlockDeploy.KS

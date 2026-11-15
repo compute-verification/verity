@@ -1,6 +1,6 @@
 """``cuda/ring_switch.cuh``'s tensor-core ring switch against its split kernels, word for word: the fold's 128 sums
 (``chunk_ring_fold_rows_bmma`` against ``chunk_ring_fold_rows_split``) and every combined row (``chunk_ring_combine_basis_bmma``
-against ``chunk_ring_combine_basis_split``), on drawn witnesses, eq halves and weights, with the eq split at the prover's
+against ``chunk_ring_combine_basis_split``), on sampled witnesses, eq halves and weights, with the eq split at the prover's
 d / 2 and away from it, from the smallest split each kernel takes to the fold's blocks sharing their b's across row ranges.
 ``ring_switch.cu`` runs them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash``
 (``VERITY_ML_FLOCK_CUDA_GHASH``) where a GPU of sm_80 or later is present."""
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 
 SOURCE = Path(__file__).resolve().with_name("ring_switch.cu")
 #: (log2 of the rows, log2 of the eq's low half): the combine from k = 4 (an MMA tile's 16 rows), the fold from k = 8 (one

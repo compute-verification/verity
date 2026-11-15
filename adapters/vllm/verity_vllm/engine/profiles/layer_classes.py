@@ -18,6 +18,7 @@ SAMPLER = "Sampler"
 RMS_NORM, GEMMA_RMS_NORM, LAYER_NORM = "RMSNorm", "GemmaRMSNorm", "LayerNorm"
 SILU_AND_MUL, GELU_AND_MUL = "SiluAndMul", "GeluAndMul"
 ROTARY, ATTENTION, EMBEDDING, LOGITS = "RotaryEmbedding", "Attention", "VocabParallelEmbedding", "LogitsProcessor"
+LM_HEAD = "ParallelLMHead"
 LINEAR_BASE, COLUMN_LINEAR, ROW_LINEAR = "LinearBase", "ColumnParallelLinear", "RowParallelLinear"
 #: The norms and the gated activations, each a family the step bound gives one width.
 NORMS = frozenset({RMS_NORM, GEMMA_RMS_NORM, LAYER_NORM})

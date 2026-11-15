@@ -23,8 +23,8 @@ rows' digests hashed (`PoolColl`). Serving picks the restarts, so their pattern 
 patterns serving may pick where every audit accepts (`Cs`), and a restart a public rule makes after a refused run costs
 nothing. The escape is bounded by `(1 - q)^Fmax` itself, which is at most `δ` at `Fmax ≥ ln(1/δ)/q`.
 
-It is conditional as `PooledLeakAccepted` is: its inputs are named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
-`PeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
+It is conditional as `PooledLeakAccepted` is: its inputs are named (`MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`,
+`MonitoringPeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
 an opening is one found from two witnesses. At the empty pool, with no opening or closing gate and one pattern that
 restarts no run, it bounds windows that each hold a pool of their own.
 -/
@@ -43,10 +43,11 @@ open Claims.SamplingGeneric (Arg Compiled)
 its opening gates `prow`, inputs of its circuit (`OpensAtInputs`), and leaves a row at its closing gates `nrow`, at every
 compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds:
 
-* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness`),
-  `Pr[acc ∧ ¬RLeakCarried δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation sequence of
-  length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is accepted with a
-  valid run from the trace's values at `prow`, leaving the trace run's values at `nrow`, both read off the witness;
+* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness` at
+  `traceRun`), `Pr[acc ∧ ¬RLeakCarried δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation
+  sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is
+  accepted with a valid run from the trace's values at `prow`, leaving the trace run's values at `nrow`, both read off
+  the witness;
 * on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ` and every opened row `rin`, the
   sequences accepted from `rin` (`AccSeqsCarried`) number at most
   `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
@@ -57,7 +58,7 @@ def SampledLeakCarried : Prop :=
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow) (εchk : Claims.Msg → ℝ) (Dj : ℕ),
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
         (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
         D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
       ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
@@ -78,9 +79,9 @@ at a restart), serving's choice at each secret and sample of the coins, which wh
 registered finite set `Cs` (`ResetsIn`) and have the runs open the root of the row the rule names (`CarriedRoots`, at the
 `sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-host`, its one run giving
 the cells the client receives and its record of them, the runs' observations; a covert sender's channel
-(`PeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`PeriodAdaptive`), the
-conditional escape (`PeriodEscapes`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,
-`rout` (`PeriodLeaksCarried`):
+(`MonitoringPeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`MonitoringPeriodAdaptive`), the
+conditional escape (`MonitoringPeriodEscapes`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,
+`rout` (`MonitoringPeriodLeaksCarried`):
 
 * for every secret, every audit accepts and the good event at the picked pattern fails (`PooledGoodCarried`) with
   probability at most `(1 - q)^Fmax + Σ e + Σ e' + Σ_i Pr[PoolColl i]`, `PoolColl i` a collision of `G` among the
@@ -108,17 +109,17 @@ def PooledLeakCarried : Prop :=
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (Cs : Finset ((Fin m → Bool) × (Fin m → Hash.Row))) (chains : Z → (Fin m → Ω) → Fin m → Bool)
     (genesis : Z → (Fin m → Ω) → Fin m → Hash.Row) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (hcs : ResetsIn Zs acc Cs chains genesis)
     (hroot : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) →
       CarriedRoots G lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω))
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (had : PeriodAdaptive n acc W) (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (e e' : Fin m → ℝ)
+    (had : MonitoringPeriodAdaptive n acc W) (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (e e' : Fin m → ℝ)
     (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : PeriodEscapes Zs acc W q e)
-    (hleak : PeriodLeaksCarried lay k reg valid prow nrow Dj sw Pw ρ op Zs acc W rin rout
+    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hleak : MonitoringPeriodLeaksCarried lay k reg valid prow nrow Dj sw Pw ρ op Zs acc W rin rout
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ),
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧

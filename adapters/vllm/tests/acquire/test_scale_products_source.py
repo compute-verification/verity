@@ -7,21 +7,25 @@ from __future__ import annotations
 
 import random
 import types
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+from verity.definitions.registry import fp8
 
 from tests.acquire.test_vocab_range_source import Recorder
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
 from tests.query.test_scale_products import fp8_program
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
-from verity.definitions.registry import fp8
 from verity_vllm.query import scale_products as SP
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.sources import scale_products_source as S  # noqa: E402
-from verity_vllm.acquire.sources import taps  # noqa: E402
+from verity_vllm.acquire.sources import scale_products_source as S
+from verity_vllm.acquire.sources import taps
 
 K, N, G = 256, 384, 128
 KB, NB = K // G, N // G
@@ -30,14 +34,14 @@ XS = [[0x7FC00001, 0x00000001], [0xFFC00000, 0x7F800000], [0x3C000000, 0x3B12492
 WS = [[0x7FA00000, 0x00400000], [0x80000000, 0x5F800000], [0x3B124925, 0xFFFFFFFF]]
 
 
-def _f32(words) -> "torch.Tensor":
+def _f32(words) -> torch.Tensor:
     return torch.from_numpy(np.asarray(words, dtype=np.uint32).view(np.int32)).view(torch.float32)
 
 
 def _ir(xs: list[int], ws: list[list[int]]) -> list[int]:
-    from verity.circuits.evaluation.reference import standalone_call
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
 
     prog, call = standalone_call(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     t: dict[int, int] = {}
@@ -63,7 +67,11 @@ def test_the_source_commits_only_inside_the_site_during_a_step():
     com = Recorder()
     src = S.ScaleProductsSource(com, _model(), {"down_proj": {"n_blocks": NB, "k_blocks": KB}})
     launches = []
-    fn = src._wrap(lambda *a: launches.append(a) or None)
+
+    def launch(*a):
+        launches.append(a)
+
+    fn = src._wrap(launch)
     rng = random.Random(0x5CA1E)
     xs = _f32([[rng.randrange(100, 127) << 23 | rng.getrandbits(23) for _ in range(KB)] for _ in range(2)])
     ws = _f32([[rng.randrange(100, 127) << 23 | rng.getrandbits(23) for _ in range(KB)] for _ in range(NB)]).t()

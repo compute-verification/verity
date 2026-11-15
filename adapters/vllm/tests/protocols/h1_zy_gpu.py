@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+
 from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import registered_device as D
 from verity_vllm.protocols.pouw.h1 import tables_device as TD
@@ -109,8 +110,9 @@ def main() -> int:
         print(f"{name:8s} {units:7d} records  equal {row['equal']}  kernels {k['apart']:8.2f} -> {k['together']:8.2f} ms  "
               f"wall {1e3 * w['apart']:8.2f} -> {1e3 * w['together']:8.2f} ms", flush=True)
     equal = all(c["equal"] for c in calls)
-    step = {arm: {"kernel_ms": a.layers * sum(c["kernel_ms"][arm] for c in calls),
-                  "wall_s": a.layers * sum(c["wall_median_s"][arm] for c in calls)} for arm in ("apart", "together")}
+    step: dict[str, Any] = {
+        arm: {"kernel_ms": a.layers * sum(c["kernel_ms"][arm] for c in calls),
+              "wall_s": a.layers * sum(c["wall_median_s"][arm] for c in calls)} for arm in ("apart", "together")}
     step["saved"] = {k: step["apart"][k] - step["together"][k] for k in ("kernel_ms", "wall_s")}
     step["records"] = a.layers * sum(c["units"] for c in calls)
     step["record_bytes"] = step["records"] * ZR.ZY_BYTES

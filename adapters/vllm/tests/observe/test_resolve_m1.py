@@ -7,8 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (
+    PROFILE,
+    C,
+    check_header,
+)
 from verity_vllm.observe.fold.resolve_log import resolve_log
-from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import C, PROFILE, check_header
 
 LOG = Path(__file__).resolve().parents[2] / "data" / "logs" / "m1.jsonl.gz"
 

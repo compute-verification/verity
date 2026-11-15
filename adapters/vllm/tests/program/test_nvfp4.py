@@ -6,17 +6,17 @@ import struct
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
-from verity.definitions.ops.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
-from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4
-from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.registry import nvfp4 as N4
+from verity.circuits.evaluation import evaluate
+from verity.circuits import word as W
 from verity.definitions.numerics import nvfp4_twins
+from verity.circuits.ops.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
+from verity.definitions.registry import nvfp4 as N4
 from verity.definitions.registry import prims as P
+from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4
+
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions import word as W
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 DOT = BlackwellNvf4OmmaDot64
 ONE = 0x3F800000

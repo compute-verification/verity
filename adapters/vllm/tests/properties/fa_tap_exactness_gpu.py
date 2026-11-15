@@ -35,12 +35,39 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.registry import attention_vocab, hopper
+from verity.definitions.registry import fa3_check_inf as F3
 
-from verity_vllm.properties.fa_tap_exactness import (CONSTRUCTIONS, FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_ms,
-                                                check_row3, decode_shaped, decode_tile, expected_written, geometry, masked_digest,
-                                                masked_from, negative_ok, negatives, prefill_cases, scale_log2_bits, seal, verify_record,
-                                                visited_rows)
 from verity_vllm.commit.hidden_stream import StreamLayout
+from verity_vllm.properties.fa_tap_exactness import (
+    CONSTRUCTIONS,
+    FILL,
+    INSTALLED,
+    PAGE,
+    QUICK,
+    RECORD,
+    SCHEMA,
+    case_ok,
+    cases,
+    check_ms,
+    check_row3,
+    decode_shaped,
+    decode_tile,
+    expected_written,
+    geometry,
+    masked_digest,
+    masked_from,
+    negative_ok,
+    negatives,
+    prefill_cases,
+    scale_log2_bits,
+    seal,
+    verify_record,
+    visited_rows,
+)
 
 
 def _sha256(path: str) -> str:
@@ -159,13 +186,6 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
     the reference evaluator (`AttentionHead_v4`, gate by gate).  `decode`: each row against the decode-shaped Definition instead, the
     one-row decode's tile (`decode_tile`) and `MASKED_FROM` (its row 0's).  Mismatched rows are counted, those of a token whose every score
     is special (`SPECIAL`) apart, with the fewest keys a mismatched row sees."""
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fa3_check_inf as F3
-    from verity.definitions.registry import attention_vocab
-    from verity.definitions.registry import hopper
-
     q, k, v, o = _words(t["q"]), _words(t["k"]), _words(t["v"]), _words(out)
     bt = t["block_table"].cpu().numpy()
     H, Hk = c["H"], c["Hk"]
@@ -205,9 +225,9 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
                 rec["special_mismatch_rows"] += int(tok + r in special)
                 rec["min_T_mismatch"] = T if rec["min_T_mismatch"] is None else min(rec["min_T_mismatch"], T)
             if bad.size and "first_mismatch" not in rec:
-                h = int(bad[0])
-                rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "masked_from": mf,
-                                         "ir": [int(x) for x in want[h][:4]], "kernel": [int(x) for x in o[tok + r, h][:4]]}
+                hb = int(bad[0])
+                rec["first_mismatch"] = {"token": tok + r, "head": hb, "T": T, "masked_from": mf,
+                                         "ir": [int(x) for x in want[hb][:4]], "kernel": [int(x) for x in o[tok + r, hb][:4]]}
         tok += sq
     return rec
 

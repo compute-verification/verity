@@ -1,17 +1,19 @@
 """The readers of a template's units on rows it is a part of or a coordinate of (`serving_rows`' ``coord`` layout and its packed
-``part`` layout, `serving_templates.COORDS` and ``PARTS``).  `serving_rows.read` reads such a member through :func:`read_coord` or
-:func:`read_part`, with its own readers of a row's argument groups (``slices``, `serving_rows._slices`) and of packed words
-(``packed``, `serving_rows._packed`).  A part's intermediate (``("mid", name)``: FlashInfer's q and s) is a value serving never
-stores: the readers compute it with its twin (``MIDS``), the coordinates' reader holds the twin of the row's output on it to the
-served output, and the window wires each unit's row of it to the output row of the part unit that returned it (:func:`wire`,
-`verity.commitments.windows.wiring`), so a sampled coordinate's q and s are the committed outputs of its row's quantisation."""
+``part`` and ``cols`` layouts, `serving_templates.COORDS`, ``PARTS`` and ``COLS``).  `serving_rows.read` reads such a member
+through :func:`read_coord`, :func:`read_part` or :func:`read_cols` (a norm's apply blocks), with its own readers of a row's
+argument groups (``slices``, `serving_rows._slices`) and of packed words (``packed``, `serving_rows._packed`).  A part's
+intermediate (``("mid", name)``: FlashInfer's q and s, a norm's scale) is a value serving never stores: the readers compute it
+with its twin (``MIDS``), held to the served outputs (the coordinates' reader holds the twin of the row's output on q and s; a
+norm's twin gives the row's outputs beside its scale), and the window wires each unit's row of it to the output row of the part
+unit that returned it (:func:`wire`, `verity.commitments.windows.wiring`), so a sampled coordinate's q and s are the committed outputs
+of its row's quantisation, and an apply block's scale its row's sum of squares'."""
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -36,18 +38,75 @@ def _flashinfer_y(mid: dict[str, np.ndarray], w: np.ndarray, ws: np.ndarray, G: 
     return scaled_mm_fp8_block_row(mid["q"], mid["s"], w, ws, G=G)[0]
 
 
-#: the intermediates of a ``PARTS`` row family's parts, by the row family: the argument group and element bits they are computed
-#: from, their twin (elements -> each by name), and the twin of the row's output on them, w and ws at G (FlashInfer's linear:
-#: `deepgemm_twins.flashinfer_quant_1x128_row`, then `derived_rows.scaled_mm_fp8_block_row`)
-MIDS = {"FlashInferFp8Linear_v1": (0, 16, _flashinfer_quant, _flashinfer_y)}
+def _vector8_scale(S: dict, x: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
+    from verity.definitions.numerics.cuda_rmsnorm_rows import rms_norm_rows
+
+    got = rms_norm_rows(x[None], w, float(S["EPS"]), int(S["BLOCK"]))
+    return {"scale": got["scale"]}, {0: got["out"][0]}
 
 
-def mids(pi: Any, r: dict, store: Any, weights: Callable, rid: str, arrive: int, slices: Callable) -> dict[str, np.ndarray]:
-    """Row ``r``'s intermediates (``MIDS``) by name, each its elements, from its argument group by their twin."""
+def _fused_vector8_scale(S: dict, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
+    from verity.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
+
+    got = fused_add_rms_norm_rows(x[None], res[None], w, float(S["EPS"]), int(S["BLOCK"]))
+    return {"scale": got["scale"]}, {0: got["out"][0], 1: got["residual"][0]}
+
+
+def _dsa_scale(S: dict, x: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
+    from verity.definitions.numerics.dsa_norm_rows import dsa_rmsnorm_rows
+
+    got = dsa_rmsnorm_rows(x[None], w, float(S["EPS"]))
+    return {"r": got["r"]}, {0: got["out"][0]}
+
+
+def _mnnvl_scale(S: dict, r: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
+    from verity.definitions.registry import tp_allreduce as TA
+    from verity.definitions.registry.tp_allreduce_check import mnnvl_norm_of
+
+    normed, rs = mnnvl_norm_of(r[None], w, TA.strategy(S["SHOT"]), int(S["CLUSTER"]), float(S["EPS"]),
+                              S["FMA"] in (True, "true"))
+    return {"rs": rs}, {0: normed[0]}
+
+
+class Mid(NamedTuple):
+    """A ``PARTS`` row family's intermediates: the row's argument groups and committed outputs (``("arg", g)``, ``("out", j)``) of
+    ``bits``-bit elements their twin reads, the twin (statics, each read's elements -> the intermediates by name, each its
+    elements, and the row's outputs it predicts by member index, held to the served ones as they are read), and the twin of
+    the row's output on them for the coordinates' reader (FlashInfer's linear: w and ws at G)."""
+    reads: tuple[tuple[str, int], ...]
+    twin: Callable[..., tuple[dict[str, np.ndarray], dict[int, np.ndarray]]]
+    y: Callable[..., np.ndarray] | None = None
+    bits: int = 16
+
+
+#: the intermediates of a ``PARTS`` row family's parts, by the row family: FlashInfer's linear's q and s
+#: (`deepgemm_twins.flashinfer_quant_1x128_row`, its y `derived_rows.scaled_mm_fp8_block_row`), and the norms' scales
+#: (`cuda_rmsnorm_rows`, `dsa_norm_rows`, `tp_allreduce_check.mnnvl_norm_of`), each twin's outputs the row's served ones
+MIDS = {"FlashInferFp8Linear_v1": Mid((("arg", 0),), lambda _S, x: (_flashinfer_quant(x), {}), _flashinfer_y),
+        "RMSNormCudaVector8_v1": Mid((("arg", 0), ("arg", 1)), _vector8_scale),
+        "RMSNormFusedCudaVector8_v1": Mid((("arg", 0), ("arg", 1), ("arg", 2)), _fused_vector8_scale),
+        "RMSNormFusedCudaVector8_v3": Mid((("arg", 0), ("arg", 1), ("arg", 2)), _fused_vector8_scale),
+        "DsaRMSNorm_v1": Mid((("arg", 0), ("arg", 1)), _dsa_scale),
+        "AllReduceRmsNormMnnvl_v1": Mid((("out", 1), ("arg", 2)), _mnnvl_scale)}
+
+
+def mids(pi: Any, r: dict, d: dict, store: Any, weights: Callable, rid: str, arrive: int, slices: Callable,
+         packed: Callable) -> dict[str, np.ndarray]:
+    """Row ``r``'s intermediates (``MIDS``) by name, each its elements, by their twin from what it reads; refused when an output
+    the twin predicts is not the row's served one."""
+    from verity.definitions.numerics.ir_rows import f64_statics
     from verity_vllm.query.program_view import spec_base
 
-    g, b, twin, _y = MIDS[spec_base(r["spec"])]
-    return twin(SL.elements(slices(pi, store, weights, rid, arrive, r["args"][g]), b, f"row {r['i']} argument {g}"))
+    mid = MIDS[spec_base(r["spec"])]
+    ins = [SL.elements(slices(pi, store, weights, rid, arrive, r["args"][g]), mid.bits, f"row {r['i']} argument {g}")
+           if src == "arg" else committed(store, rid, arrive, r, d, g, mid.bits, packed).view(f"<u{mid.bits // 8}")
+           for src, g in mid.reads]
+    got, outs = mid.twin(f64_statics(d["statics"]), *ins)
+    for j, want in outs.items():
+        if not np.array_equal(np.asarray(want, dtype=np.uint16).reshape(-1), committed(store, rid, arrive, r, d, j, 16, packed)):
+            raise ValueError(f"row {r['i']} ({d['op_path']}): the twin of its intermediates {sorted(got)} gives its output "
+                             f"{output_name(d, j)} other words than the served ones")
+    return got
 
 
 def output_name(d: dict, j: int | str) -> str:
@@ -105,7 +164,7 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
         *lead, (kw, gw), (ks, gs) = srcs
         if (kw, ks) != ("arg", "arg"):
             raise ValueError(f"row {r['i']} ({d['op_path']}): member {m.key}'s w and ws are {kw} {gw} and {ks} {gs}, not argument groups")
-        mid = mids(pi, r, store, weights, rid, arrive, slices) if any(src == "mid" for src, _g in lead) else {}
+        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(src == "mid" for src, _g in lead) else {}
         ops = [operand(pi, r, d, src, g, b, k, store, weights, rid, arrive, slices, packed, mid) for k, ((src, g), b) in
                enumerate(zip(lead, bits))]
         W = stack(r, pi, rid, arrive, r["args"][gw], bits[len(lead)], E * N * K, "w").reshape(E, N, K)
@@ -123,7 +182,7 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
             raise LookupError(f"row {r['i']} output {member}: {why}")
         y = packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(U, -1)
         if mid:
-            got = MIDS[spec_base(r["spec"])][3](mid, W[0], WS[0], G)
+            got = MIDS[spec_base(r["spec"])].y(mid, W[0], WS[0], G)
             if not np.array_equal(np.asarray(got, dtype=np.uint16).reshape(-1), y.reshape(-1)):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): the twin's output on its intermediates {sorted(mid)} is not "
                                  f"the row's served {member} words")
@@ -169,7 +228,7 @@ def read_part(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
         if len(srcs) + len(mine) != len(tp.packed):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(srcs)} operands and {len(mine)} outputs, not template "
                              f"{tp.id}'s {len(tp.packed)} ports")
-        mid = mids(pi, r, store, weights, rid, arrive, slices) if any(isinstance(j, str) for j in mine) or any(
+        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(isinstance(j, str) for j in mine) or any(
             src == "mid" for src, _g in srcs) else {}
         ops = [operand(pi, r, d, src, g, b, k, store, weights, rid, arrive, slices, packed, mid) for k, ((src, g), b) in
                enumerate(zip(srcs, tp.packed))]
@@ -190,6 +249,64 @@ def read_part(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n}")
     data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
+    return data, entries
+
+
+def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
+              slices: Callable, packed: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
+    """A packed ``COLS`` part's units (the ``cols`` layout: a norm's apply blocks), row by row, then block: on a row it is a part
+    of (`part`), whose `serving_templates.col_span` static is W, the template's axis w and nh = W / w, block j reads columns
+    [jw, jw + w) of each argument group and committed output the part names (W elements of 16 bits each) and its intermediates
+    whole (``MIDS``: the norm's scale, every block's), and returns columns [jw, jw + w) of the outputs it returns.  Every port is
+    its elements' bytes (``Template.packed``).  One index entry per row, the range of its nh units, naming those outputs."""
+    from verity_vllm.pipeline.serving_templates import COLS, col_span
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    tp = template(m.template)
+    fam = spec_base(tp.word)
+    w = int(spec_statics(tp.word)[COLS[fam]])
+    cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
+    entries: list[list[Any]] = []
+    lo = m.base
+    for rid, pi, r, d in rows:
+        arrive = int((arrivals or {}).get(rid, 0))
+        p = part(tp.word, r["spec"])
+        if p is None:
+            raise ValueError(f"row {r['i']} ({d['op_path']}): member {m.key}'s blocks are a part of a row, not of {r['spec']}")
+        W = int(d["statics"][col_span(fam)])
+        if W % w:
+            raise ValueError(f"row {r['i']} ({d['op_path']}): {col_span(fam)}={W} is no whole number of member {m.key}'s "
+                             f"{COLS[fam]}={w} columns")
+        nh = W // w
+        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(src == "mid" for src, _g in p[1]) else {}
+        ports = [*((src, g) for src, g in p[1]), *(("out", j) for j in p[2])]
+        if len(ports) != len(tp.packed):
+            raise ValueError(f"row {r['i']} ({d['op_path']}): {len(ports)} operands and outputs, not template {tp.id}'s "
+                             f"{len(tp.packed)} ports")
+        got = []
+        for (src, g), b, (port, width) in zip(ports, tp.packed, m.rows + m.outs, strict=True):
+            a = operand(pi, r, d, src, g, b, g, store, weights, rid, arrive, slices, packed, mid)
+            if src == "mid":
+                block = np.broadcast_to(a.reshape(1, -1), (nh, a.size))
+            elif b != 16 or a.size != W:
+                raise ValueError(f"row {r['i']} ({d['op_path']}): its {src} {g} is {a.size} words of {b}-bit elements, not the "
+                                 f"{W} 16-bit columns member {m.key}'s blocks divide")
+            else:
+                block = a.reshape(nh, w)
+            got.append(block.shape[1])
+            cols[port].append(block)
+        if got != [n for _, n in m.rows + m.outs]:
+            raise ValueError(f"row {r['i']} ({d['op_path']}): a block's ports of {got} words, not member {m.key}'s "
+                             f"{list(m.rows)} and {list(m.outs)}")
+        layer = _LAYER.search(d["op_path"])
+        entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
+                        ",".join(output_name(d, j) for j in p[2]), int(d["row"]), int(r["i"])])
+        lo += nh
+    if lo - m.base != m.n:
+        raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, "
+                         f"`read_all`)")
+    data = {"rows": {p: np.concatenate(cols[p]).astype(np.uint16, copy=False) for p, _ in m.rows},
+            "outs": {p: np.concatenate(cols[p]).astype(np.uint16, copy=False) for p, _ in m.outs}}
     return data, entries
 
 

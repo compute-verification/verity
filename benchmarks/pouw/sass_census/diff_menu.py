@@ -7,7 +7,8 @@ committed word (NoSum) and a side unit costs at least its per-word vector (SideU
 gives the census class), the uniform datapath (on issue), table routes (by bytes) and priced side units (the pi32 floor).
 
 This reads the device's opcode vocabulary -- the union of what `cuobjdump` emitted across the corpus (`census.json`) and
-NVIDIA's Instruction Set Reference table for the architecture (`data/sass_isa_tables.json`) -- and buckets every opcode:
+NVIDIA's Instruction Set Reference table for the architecture (`sass_isa_tables.json`, in the machine model's
+`data/cover/`) -- and buckets every opcode:
 
   PRICED-LANE     `loads.class_of` gives a census class, or the base is a lane/uniform MAC: priced on the q* lane route.
   PRICED-TENSOR   an MMA form A3 prices: its operand type has a peak in the device's `DS_tensor` row (A3 prices a form by
@@ -40,11 +41,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "facet_break"))
-sys.path.insert(0, str(HERE))
 from loads import class_of  # noqa: E402  the model's own SASS opcode -> census class
 from sass_semantics import classify  # noqa: E402
 
-MM = HERE.parent / "machine_model" / "data"
+MM = Path(__file__).resolve().parents[2] / "machine_model" / "data"
 #: the device census file an architecture family reads its priced kinds from
 DEVICE_CENSUS = {"sm_120": MM / "census" / "DS-120.csv", "sm_100": MM / "devices" / "sm_100" / "census.csv",
                  "sm_90": MM / "devices" / "sm_90" / "census.csv", "sm_80": MM / "devices" / "sm_80" / "census.csv"}
@@ -58,7 +58,7 @@ MMA_KIND_TOKEN = {"IMMA": "IMMA", "HMMA": "HMMA", "QMMA": "QMMA", "OMMA": "OMMA"
                   "HGMMA": "HGMMA", "IGMMA": "IGMMA", "QGMMA": "QGMMA", "OGMMA": "OGMMA", "BGMMA": "BGMMA",
                   "UTCHMMA": "UTCHMMA", "UTCIMMA": "UTCIMMA", "UTCQMMA": "UTCQMMA", "UTCOMMA": "UTCOMMA",
                   "UTCBMMA": "UTCBMMA"}
-#: the cheapest int8/FP word an unpriced form could head, by base opcode (the red-team's "smallest escape")
+#: the cheapest int8/FP word an unpriced form could head, by base opcode: its smallest escape
 ESCAPE = {
     "DMMA": "an int8xint8 product is exact in f64 (|a*b|<2^24), so one DMMA.8 heads 8 exact int8 MACs a warp "
             "instruction; with no f64 tensor peak the sheet prices it at 0. Measured, it runs 64 f64 MACs a SM-clock on "
@@ -145,10 +145,10 @@ def mma_type(op: str) -> str | None:
 
 
 def isa_vocab(family: str) -> dict[str, dict]:
-    p = HERE / "data" / "sass_isa_tables.json"
+    p = MM / "cover" / "sass_isa_tables.json"
     if not p.is_file():
         raise FileNotFoundError(f"{p} is a fetched fixture and isn't here: "
-                                "`uv run research data fetch-fixtures benchmarks/pouw/sass_census/data`")
+                                "`uv run research data fetch-fixtures benchmarks/machine_model/data/cover`")
     t = json.loads(p.read_text())["tables"]
     return t.get(ISA_TABLE.get(family, ""), {})
 
@@ -223,8 +223,8 @@ def diff(family: str, census: dict, with_unused: bool) -> dict:
 
 
 def report(d: dict) -> str:
-    out = [f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
-           f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})",
+    out = [(f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
+            f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})"),
            "buckets: " + ", ".join(f"{b} {n}" for b, n in d["counts"].items())]
     if d["disagreements"]:
         out.append("class_of disagreements (the lane classifier's UNIFORM regex mis-maps these): "

@@ -13,7 +13,9 @@ WEIGHTS_BINDING = RUN
 
 def weights_inputs(weights_tree: dict | None, binding: str = WEIGHTS_BINDING) -> list[str]:
     """The input ids the registered weights are leaves of: one per leaf width of the registered tensors' dtypes."""
-    names = (weights_tree or {}).get("names") or []
+    names = weights_tree.get("names") if weights_tree else None
+    if not names:
+        return [input_prim(16, binding).id]   # no registered tree, or one that names no tensor: the default leaf width alone
     widths = {int(m[0]) for _n, dt, _s, _b in names if (m := re.search(r"\d+", str(dt)))} or {16}
     return sorted(input_prim(w, binding).id for w in widths)
 

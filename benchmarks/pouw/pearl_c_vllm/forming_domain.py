@@ -105,7 +105,7 @@ def check_matmul(job: tuple) -> dict:
     if len(data) != rec["rows"]["bytes"] or len(data) != 2 * m * k:
         raise ValueError(f"{rec['rows']['path']}: {len(data)} bytes; the manifest says {rec['rows']['bytes']} for {m}×{k}")
     rows = np.frombuffer(data, "<u2").reshape(m, k)
-    credited = np.setdiff1d(np.arange(rec["real_rows"]), np.asarray(rec["excluded_a"], dtype=np.int64))
+    credited = np.setdiff1d(np.arange(rec["real_rows"]), np.asarray(rec["excluded_a"] + rec.get("voluntary_a", []), dtype=np.int64))
     out = {"index": rec["index"], "m_cred": int(credited.size), "k": k, "loud": 0, "rows_out": 0, "min_margin": None,
            "min_margin_row": None, "scheme_floor_fail": 0, "halpha_fail": 0, "hn_fail": 0, "fallback": 0, "exact": 0,
            "max_out_per_tile": 0, "sampled": 0}
@@ -177,7 +177,7 @@ def sample_rows(matmuls: list[dict], n: int = SAMPLES) -> list[list[int]]:
     per = max(1, -(-n // len(matmuls)))
     picks = []
     for j, rec in enumerate(matmuls):
-        cred = sorted(set(range(rec["real_rows"])) - set(rec["excluded_a"]))
+        cred = sorted(set(range(rec["real_rows"])) - set(rec["excluded_a"]) - set(rec.get("voluntary_a", ())))
         if j % every or not cred:
             picks.append([])
             continue

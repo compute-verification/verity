@@ -37,7 +37,7 @@ fact beyond those `MovesReach` reads: v2 reads each opening frame's count off th
   `A.mP + A.mP` coins (`Trees.session_counted`, `link_count`, `SetsUp.mPts_eq` at the record's sample).
 * **`CountsReach`** (`ReachesOff.counts`, `countsReach_layout`, `countsReachAt`): at the first stop by
   `link_frameCount`, and at each answered stop by `stop_count`, so the coupling at the deployment off the empty classes
-  at their counts (`couplingTargetAt_counts`) takes `couplingTargetAt`'s premises but its bound on the stops' term.
+  at their counts (`couplingTargetAt_counts`) takes no bound on the stops' term.
 -/
 
 @[expose] public section
@@ -397,8 +397,9 @@ theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ
 attribute [local irreducible] Live.rounds Live.N in
 /-- **The count match at a witness of the joint law's support, at the session's layout**: at the readings and the
 decoders at `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the
-empty classes at their counts, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's
-check read is the device's, is off the empty classes, under `ReachesOff.movesOf`'s premises. The first stop's frame is
+empty classes at their counts, beside a play that the sampled verdict accepts, that misses nowhere, whose log v2's
+check read is the device's and whose blobs sent hold each pinned table at its registered file (`TablesSent`), is off the
+empty classes, under `ReachesOff.movesOf`'s premises. The first stop's frame is
 the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the session stream (`linkFirst_verdict`),
 which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordDraw_firstStop`); each answered
 stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
@@ -418,6 +419,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       (roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
+    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
@@ -430,7 +432,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
   have hP := freshBefore_verdict hA hθ hv hl hN
   have h0r := A.rounds_pos
   obtain ⟨text₀, proofs₀, spec₀, sts₀, hrec₀, -, hs₀, spec', sts', hs', -, hver⟩ :=
-    accepts_sent hA hθ hv (filesOn_play hA hDg hv)
+    accepts_sent hA hθ hv (filesOn_play hA hDg hv ht)
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hs₀.symm.trans hs'))
   obtain ⟨sess₀, hd₀⟩ := zkVerify_decode hver
   obtain ⟨label', after', ξ, lines, lr, trees, Jr, tabsB, hV, hread, hct, h1, hJt, hJ⟩ :=
@@ -495,7 +497,8 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     (fun hlr hy hO' _ hst hk => rep_answers (hlr ▸ hread) hct h1 hJt hy hO' hd₀ hJ h512 hst hk)
 
 /-- **`CountsReach` at the session's layout**: `ReachesOff.counts` at every outcome, at the cut that v2's check read
-the device's log and that v2 samples at `after` (`SampledDigest`), with what it takes of each accepted play the cut holds
+the device's log and each pinned table at its registered file (`TablesSent`) and that v2 samples at `after`
+(`SampledDigest`), with what it takes of each accepted play the cut holds
 of stated for every tape, as `movesReach_layout` takes it. -/
 theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
@@ -515,9 +518,9 @@ theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    CountsReach fieldEnc V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ
-      D M :=
-  fun _ h ⟨hv, hn, hl, hd⟩ => h.counts hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl
+    CountsReach fieldEnc V θ F c k
+      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent after) A rd σ D M :=
+  fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.counts hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
     (hN _ hv hl hd) (hO _ hv hl)
 
 /-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
@@ -533,7 +536,7 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) :
     CountsReach fieldEnc V θ F c k
-      (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
+      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A)) :=
@@ -543,8 +546,8 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
 
 /-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTarget_assembled_at` at the
 deployed device's history and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by
-`movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It takes `couplingTargetAt`'s premises but its
-bound on the stops' term. -/
+`movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's signer at
+`θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (reg : (A : Live) → Option Claims.Msg → A.Reg)

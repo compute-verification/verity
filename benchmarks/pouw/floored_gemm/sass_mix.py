@@ -17,23 +17,24 @@ INSN = re.compile(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)")
 def main(path: str) -> int:
     out: dict[str, Counter] = {}
     cur = None
-    for line in open(path, encoding="utf-8", errors="replace"):
-        f = FUNC.search(line)
-        if f:
-            cur = f.group(1)
-            out[cur] = Counter()
-            continue
-        if cur is None:
-            continue
-        i = INSN.search(line)
-        if i:
-            op = i.group(1)
-            base = op.split(".")[0]
-            out[cur][base] += 1
-            if op.startswith("LEA.HI"):
-                out[cur]["LEA.HI"] += 1
-            if op.startswith("IMMA"):
-                out[cur][op] += 1
+    with open(path, encoding="utf-8", errors="replace") as dump:
+        for line in dump:
+            f = FUNC.search(line)
+            if f:
+                cur = f.group(1)
+                out[cur] = Counter()
+                continue
+            if cur is None:
+                continue
+            i = INSN.search(line)
+            if i:
+                op = i.group(1)
+                base = op.split(".")[0]
+                out[cur][base] += 1
+                if op.startswith("LEA.HI"):
+                    out[cur]["LEA.HI"] += 1
+                if op.startswith("IMMA"):
+                    out[cur][op] += 1
     keep = {"IMMA", "LOP3", "IMAD", "LEA", "LEA.HI", "SHF", "IADD3", "LDSM", "SYNCS", "BAR", "STG", "LDG", "SHFL", "PRMT"}
     res = {k: {o: c for o, c in sorted(v.items()) if o in keep or o.startswith("IMMA")} | {"total": sum(v.values())}
            for k, v in out.items()}

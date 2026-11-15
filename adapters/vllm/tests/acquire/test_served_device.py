@@ -10,13 +10,13 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.pipeline import served_match
-from verity.definitions.registry import bf16_gemm_check as BC
 
 #: a GQA model's attention (query heads, KV heads, head dim) at head dim 64 and the cc 12.0 device's SM count
 HEADS, SMS = (32, 8, 64), 188
@@ -89,7 +89,7 @@ def test_a_device_with_its_cards_compute_capability_and_sm_count_binds() -> None
 def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[int, int], sms: int, card: str, off: str) -> None:
     with pytest.raises(Unmodelled) as e:
         SD.device_of(cc, sms, card=card, max_model_len=4096)
-    assert str(e.value) == f"the device is not its registered card verity/hardware/cards/{card}.toml: {off}"
+    assert str(e.value) == f"the device is not its registered card hardware/cards/{card}.toml: {off}"
 
 
 def test_acquisition_holds_the_engines_device_to_the_card_its_name_registers() -> None:
@@ -112,7 +112,7 @@ def test_a_device_registered_on_no_card_and_not_excepted_is_refused(name: str) -
     with pytest.raises(Unmodelled) as e:
         served_match.device_of(facts)
     assert str(e.value) == (f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD "
-                            f"({sorted(NO_CARD)}): add its card under verity/hardware/cards/ and map it in CARD")
+                            f"({sorted(NO_CARD)}): add its card under hardware/cards/ and map it in CARD")
 
 
 def test_fa2_full_decode_splits_at_the_capture_batch_and_max_model_len() -> None:
@@ -151,3 +151,12 @@ def test_fa2_unswapped_launch_runs_the_split_tile_unsplit() -> None:
     la = SD.fa2_launch([1, 1], NH=8, KVH=8, D=64, sms=SMS, batch=2, max_seqlen_k=600)
     assert la == {"swapped": False, "BN": 256, "NS": 1, "causal": False}
     assert [r["statics"]["MASKED_FROM"] for r in SD.fa2_attention_rows(1, 600, la, NH=8, KVH=8, D=64, dot=fa2_device().dot)] == [2]
+
+
+def test_fa2_swapped_launch_without_max_seqlen_k_is_refused() -> None:
+    """`device_of` binds no FA2 device without max_model_len, so no served launch lacks it; a swapped launch given none is refused
+    by name where the split count would read it, and an unswapped launch, which reads none, is what it is with one."""
+    with pytest.raises(Unmodelled, match="reads max_seqlen_k and the launch has none: a FULL graph's is the device's max_model_len"):
+        SD.fa2_launch([1, 1, 1], NH=32, KVH=8, D=64, sms=SMS, batch=4, max_seqlen_k=None)
+    assert (SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=None)
+            == SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=4096))

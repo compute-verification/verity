@@ -13,13 +13,17 @@ is a collector error.
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import fp8_twins
 
 from verity_vllm.engine import hooks
-from verity.definitions.numerics import fp8_twins
+from verity_vllm.log import init_logger
 from verity_vllm.query import scale_products as SP
+
+logger = init_logger(__name__)
 
 
 def products(torch: Any, a_scales: Any, b_scales: Any) -> Any:
@@ -136,12 +140,12 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
         return required_classes, None
     sites = SP.manifest_sites(manifest)
     if not sites:
-        print("[delta] REFUSE: the scale-products source but the required-value manifest names no scale_products identity (a Program "
-              "without ScaledMmFp8BlockSharedScale Calls)", flush=True)
+        logger.error("[delta] REFUSE: the scale-products source but the required-value manifest names no scale_products identity (a Program "
+                     "without ScaledMmFp8BlockSharedScale Calls)")
         raise SystemExit(3)
     src = ScaleProductsSource(com, model if model is not None else getattr(com, "model", None), sites)
     com.attach_source(src)
-    print(f"[delta] scale-products source attached: {len(sites)} sites -> committer {com.name}", flush=True)
+    logger.info("[delta] scale-products source attached: %d sites -> committer %s", len(sites), com.name)
     if not explicit_classes and SP.FAMILY not in required_classes:
         return (*required_classes, SP.FAMILY), src
     return required_classes, src

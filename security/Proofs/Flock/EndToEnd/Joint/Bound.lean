@@ -135,7 +135,7 @@ theorem JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon := by
         (zcStrat execArith hs512 (planAtZKH (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) ∧
       LinkCRZC execArith hs512 (W t).P (planAtZKH (W t).dj (W t).y₀) (tabAtZKH (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t'
-  have hs : PeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
+  have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
     periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
       (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
   -- some sampling block accepted with a sampled proof block wrong

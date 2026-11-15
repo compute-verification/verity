@@ -1,5 +1,5 @@
 """vLLM's prefix-cache block pool as memory-checked RAM: a window's pool calls as one stream of access slots, each slot one
-read-modify-write of one memory, under offline memory checking (`MemCheck_v1`, `verity.definitions.circuits.boolean.memcheck`).
+read-modify-write of one memory, under offline memory checking (`MemCheck_v1`, `verity.circuits.boolean.memcheck`).
 
     PoolSlot_v1{NB, RW, KW, REFW, TW}
         (carry, start: Value<1>, kind: Array<3, Value<1>>, r: Array<RW, Value<1>>, a: Array<CW, Value<1>>,
@@ -12,8 +12,8 @@ read-modify-write of one memory, under offline memory checking (`MemCheck_v1`, `
          l_en, l_tag, l_a, l_v0, l_v, l_t (NE of each)) -> (ok: Value<1>, head', tail', calls: Array<TW, Value<1>>, P: F)
         F = Array<128, Value<1>>, an element of GF(2^128); NW = bitlen(NB − 1), CW = KW + 1
 
-`CacheStep_v2` (`cache_step_v2`) holds vLLM's pool as a trie in one table, which every call reads and writes whole, so
-its price grows with the table. Here the pool is the five memories vLLM's `BlockPool` is made of, each call a fixed
+A pool held as one table, which every call reads and writes whole, costs each call the whole table. Here the pool is
+the five memories vLLM's `BlockPool` is made of, each call a fixed
 sequence of accesses to them, and a window's calls run in one stream of NS slots that each perform one access: which
 call runs where is private, so every slot can perform any call's access at any position. A window costs NS slots,
 whatever the pool's size. `Stream` is the specification in Python; `benchmarks/mempool/stream.py` holds it to the
@@ -30,7 +30,7 @@ replay's pool (`pool_ram`, itself held to vLLM's `_KV`) after every call, with p
 - RB (3): (r, k) → request r's k-th block, 0 for none.
 - RK (4): (r, k) → the key of request r's k-th block of tokens, read only.
 B's and K's addresses are b, M's a key, RB's and RK's r | k << RW. A key is a block's 128-bit print under the window's
-coin (`verity.definitions.commitments.gates.block_key`), which the caller makes each RK address's initial value.
+coin (`verity.commitments.gates.block_key`), which the caller makes each RK address's initial value.
 
 **The calls** (`Call`), each one record on the bus to `ReplayStep_v1` (seq, kind, r, a, b, x, y), its results x and y:
 - hit (1), r, a = the walk's limit, (num_tokens − 1) // B: `find_longest_cache_hit`, lookups k = 0, 1, … of RK[(r, k)],
@@ -96,7 +96,7 @@ from types import SimpleNamespace
 from typing import Callable, NamedTuple, Sequence
 
 from verity.circuits import boolean as BL
-from verity.definitions.circuits.boolean import memcheck as MC
+from verity.circuits.boolean import memcheck as MC
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.boolean.gf128 import mul, mul_forms
@@ -470,7 +470,7 @@ def bus(S, records: Sequence[tuple[int, ...]], alpha: int) -> int:
 
 
 def size_class(n: int, least: int = 64) -> int:
-    """The public ladder NS and NE are drawn from: the least of 2^k and 3·2^(k−1) (k ≥ 1) that is at least n and
+    """The public ladder NS and NE are sampled from: the least of 2^k and 3·2^(k−1) (k ≥ 1) that is at least n and
     ``least``. A window takes the class its slots (entries) fit, so the class is a function of the window, and it
     reveals at most log2 of the classes up to the pool's bound."""
     c = 2

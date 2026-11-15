@@ -33,14 +33,14 @@ uncaptured.  Each step names the Definitions its batch selects:
     size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
     `Fa3AttentionSplit_v1`.  FA2 splits a decode step `fa2_num_splits` ways (`Attention_v5`, `Fa2AttentionSplit_v1`).
 
-The manifest's identities are compiled.build's: one per (step, request, committed value), the request's rows of the value
+The manifest's identities are one per (step, request, committed value), the request's rows of the value
 (element_range [0, tokens x width); the logits and the sampled id one row per request), `step` request-relative.  program_digest
 is over the Program (every piece's calls with their Definitions and operands, the attention ops, the logits) and the step plans.
 The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the workload's pin.
 
-    verity-vllm served build --inductor-dir DIR --split-graph computation_graph.py --launch-configs launch_configs.json \\
-        --routes routes.json --workload workload.json --capture-sizes 1,2,4,8,16 --max-num-seqs 8 --cc 9.0 --sms 132 --out manifest.json
-    verity-vllm served routes --needs manifest.json --out routes.json          (on the serving GPU: the GEMM routes a Build lacks)
+`verity-vllm served-match` makes the Build in the serving process (`pipeline.served_match`): `build` without routes, `probe_routes`
+on the serving GPU for the GEMM routes that Build lacks, then `build` with them.
+
     verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json
 """
 from __future__ import annotations
@@ -50,7 +50,6 @@ import hashlib
 import json
 import os
 import re
-from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -62,7 +61,6 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
-from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.program.frontend import targets as TG
 from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
 from verity.definitions.registry import inductor as IR
@@ -705,67 +703,3 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
         out[f"{M},{K},{N}"] = json.loads(exact[0])
     return {"device": torch.cuda.get_device_name(), "versions": {"torch": torch.__version__, "cuda": torch.version.cuda},
             "routes": out}
-
-
-# ------------------------------------------------------------------------------------------------------------- the command
-def _ints(s: str) -> list[int]:
-    return [int(x) for x in s.split(",") if x.strip()]
-
-
-@dataclass(frozen=True, kw_only=True)
-class BuildOptions:
-    inductor_dir: str = option("--inductor-dir", help="the serving process's Inductor output code (one directory per wrapper)")
-    split_graph: str = option("--split-graph", help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone)")
-    launch_configs: str = option("--launch-configs", help="ServedCompiledSource.launch_configs() of the serving process (json)")
-    routes: str | None = option("--routes", default=None, help="cuBLAS routes of the serving GPU (`served routes`); without, every GEMM is missing")
-    workload: str = option("--workload", type=workload_arg, help="sweep workload json: the request schedule")
-    steps: int | None = option("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
-    capture_sizes: str = option("--capture-sizes", help="compilation_config.cudagraph_capture_sizes, comma-separated")
-    max_num_seqs: int = option("--max-num-seqs", type=int)
-    cc: str = option("--cc", help="the GPU's compute capability, e.g. 12.0 (served_device: its bindings)")
-    sms: int = option("--sms", type=int, help="the GPU's multiprocessor count (the attention scheduler's)")
-    max_model_len: int | None = option("--max-model-len", type=int, default=None, help="the engine's max_model_len (FA2's full-graph split count)")
-    split_cap: int = option("--split-cap", type=int, default=SPLIT_CAP, help="FA3's static split count under a full graph")
-    backbone: str = option("--backbone", default="model", help="the compiled backbone's module path (the served weights' prefix)")
-    lm_head: str = option("--lm-head", default="lm_head.weight")
-    moe: str | None = option("--moe", default=None, help="the serving process's fused-MoE record (served-match's moe.json)")
-    out: str = option("--out")
-    cmd: str = field(default="build", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class RoutesOptions:
-    needs: str = option("--needs", help="a served Build whose routes_missing to probe")
-    out: str = option("--out")
-    cmd: str = field(default="routes", init=False)
-
-
-COMMANDS = {"build": BuildOptions, "routes": RoutesOptions}
-
-
-def main(a: BuildOptions | RoutesOptions) -> int:
-    if a.cmd == "routes":
-        shapes = json.load(open(a.needs)).get("routes_missing") or []
-        rec = probe_routes(shapes)
-        json.dump(rec, open(a.out, "w"), indent=1)
-        print(f"[served routes] {len(rec['routes'])} routes on {rec['device']} -> {a.out}")
-        return 0
-    wl = json.load(open(a.workload))
-    steps = a.steps or int(wl.get("expected_engine_steps") or 0)
-    if not steps:
-        raise UsageError("--steps (or the workload's expected_engine_steps) is required")
-    try:
-        device = SD.device_of(a.cc.split("."), a.sms, max_model_len=a.max_model_len)
-        m = build(a.inductor_dir, split_graph=a.split_graph, launch_configs=json.load(open(a.launch_configs)),
-                  routes=json.load(open(a.routes)) if a.routes else {}, schedule=C.schedule_of_workload(wl), steps=steps,
-                  capture_sizes=_ints(a.capture_sizes), max_num_seqs=a.max_num_seqs, device=device, split_cap=a.split_cap,
-                  backbone=a.backbone, lm_head=a.lm_head, moe=json.load(open(a.moe)) if a.moe else None)
-    except Unmodelled as e:
-        print(f"[served build] refused: {e}")
-        return 3
-    with open(a.out, "w") as f:
-        json.dump(m, f, indent=1)
-    missing = f" (routes missing: {len(m['routes_missing'])})" if not m["complete"] else ""
-    print(f"[served build] program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} identities {len(m['identities'])} "
-          f"steps {len(m['steps_plan'])} kernels {len(m['program']['kernels'])} complete {m['complete']}{missing} -> {a.out}")
-    return 0 if m["complete"] else 4

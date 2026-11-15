@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm import config
-from verity_vllm.pipeline import advice, cli, commit_plan, hot, research_tools, serve_seal, source_identity
+from verity_vllm.pipeline import advice, cli, commit_plan, research_tools, serve_seal, source_identity
 from verity_vllm.pipeline.row_driver import RESEARCH
 from verity_vllm.pipeline.tp import commit as tp_commit
 
@@ -30,7 +30,6 @@ def no_run_store(monkeypatch):
 ENTRIES = {
     "the Commit": lambda: source_identity.precheck("commit"),
     "the TP Commit's tree of record": tp_commit.tree_of_record,
-    "the hot worker's key": lambda: hot.code_identity(source_identity.TREE),
     "the commit plan's key": lambda: commit_plan.key(SimpleNamespace(workload=None)),
     "the advice digest": advice.registered_compiler,
     "the seal": lambda: serve_seal.seal_of(SimpleNamespace(run_id="r")),

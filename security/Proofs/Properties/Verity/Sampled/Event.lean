@@ -10,7 +10,7 @@ public import Proofs.Flock.Bridge.V5.Accepted
 
 `SampledKSLiveV3` bounds an event of the live audit, that `verify --zk` accepts the files and the transcript
 (`Flock.Bridge.LiveAcceptsScoped`) and the run passes the registration's population (`Flock.Bridge.RunPopOk`), and
-`SampledKSLiveV5` another (`Flock.Bridge.LiveAcceptsKSP`). The verifier of record is one-stage v2
+`SampledKSLiveV5` another (`Flock.Bridge.LiveAcceptsKSP`). The verifier is one-stage v2
 (`Spot.OneStageZk.checkBlobs`), which runs `verify --zk`'s checks on the session's files itself. Where it
 accepts, every outcome whose transcript is the session's record and proof files is in both events:
 
@@ -147,7 +147,8 @@ theorem checkBlobsAt_popHeld {p : _root_.Spot.OneStageZk.Params}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   · cases h

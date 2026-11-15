@@ -2,23 +2,18 @@
 from __future__ import annotations
 
 import contextlib
-import sys
-import types
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.program.frontend import vllm_meta
 
 
 def _stub_vllm(monkeypatch, init):
-    cfg = types.ModuleType("vllm.config")
-    cfg.set_current_vllm_config = lambda _c: contextlib.nullcontext()
-    dist = types.ModuleType("vllm.distributed")
-    dist.init_distributed_environment = init
-    dist.ensure_model_parallel_initialized = lambda *_a: None
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", cfg)
-    monkeypatch.setitem(sys.modules, "vllm.distributed", dist)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.config:set_current_vllm_config", lambda _c: contextlib.nullcontext())
+    fake.set("vllm.distributed:init_distributed_environment", init)
+    fake.set("vllm.distributed:ensure_model_parallel_initialized", lambda *_a: None)
     monkeypatch.setattr(vllm_meta, "_DIST_READY", False)
 
 

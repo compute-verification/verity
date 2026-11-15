@@ -17,15 +17,33 @@ the all-reduce into the RMSNorm after it (`fused_allreduce_rms_norm`) adds one s
 """
 from __future__ import annotations
 
+import hashlib
 import importlib
+import json
+import re
 import time
+from functools import partial
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
-from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives import fused_norm as FN
+from verity_vllm.engine.collectives.collective_sites import (
+    MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES,
+)
+from verity_vllm.engine.collectives.collective_sites import (
+    MOE_COLLECTIVE_MODULES,
+    mid_module_site_census,
+    patch_targets,
+)
+from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
+
+logger = init_logger(__name__)
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -88,7 +106,8 @@ def _metas_by_name(layouts: list) -> dict[str, list]:
 
 
 def _nth(by_name: dict[str, list], name: str, k: int):
-    ms = by_name.get(name) or []
+    found = by_name.get(name)
+    ms = found if found else []
     return ms[k] if k < len(ms) else None
 
 
@@ -129,7 +148,7 @@ class TPPartialSource:
         self.reexec_sites: list[str] = []                                    # the sites the value check's (R) re-executes
         for n, m in model.named_modules():
             cls = type(m).__name__
-            row = cls == "RowParallelLinear" and getattr(m, "reduce_results", True) and int(getattr(m, "tp_size", self.world)) > 1
+            row = cls == LC.ROW_LINEAR and getattr(m, "reduce_results", True) and int(getattr(m, "tp_size", self.world)) > 1
             if row or cls in ("VocabParallelEmbedding", "LogitsProcessor") or (cls in MOE_SITE_CLASSES and _moe_reduces(m, self.world)):
                 self.sites.append((n, cls))
             if row:
@@ -150,7 +169,6 @@ class TPPartialSource:
         # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
         # A call its instance's flags rule out (Qwen3MoeSparseMoeBlock's sequence-parallel all_gather) is no expected partial; it is listed
         # (`mid_sites_ruled_out`, the identity report's `tp_sites_ruled_out`) and its module stays patched, so a call that runs is named.
-        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census
         census = mid_module_site_census(model, self.world)
         self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in census["sites"]}
         self.mid_sites_ruled_out: list[dict[str, Any]] = census["ruled_out"]
@@ -162,7 +180,7 @@ class TPPartialSource:
         self._handles: list = []
         self._hooks = hooks.Hooks()
         self.active = False
-        self.stats = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
         self.far = AllReduceNorm(self, model)
 
     # -- expected population / arena bound -----------------------------------------------------------------------------------
@@ -188,16 +206,13 @@ class TPPartialSource:
         n_moe_out = 0
         for n, m in self.modules:
             cls = type(m).__name__
-            isz = 2
-            try:
-                isz = next(m.parameters()).element_size()
-            except StopIteration:
-                pass
-            if cls == "RowParallelLinear":
+            first = next(m.parameters(), None)
+            isz = first.element_size() if first is not None else 2
+            if cls == LC.ROW_LINEAR:
                 per_token += int(getattr(m, "output_size", 0) or 0) * isz
-            elif cls == "VocabParallelEmbedding":
+            elif cls == LC.EMBEDDING:
                 per_token += int(getattr(m, "embedding_dim", 0) or 0) * isz
-            elif cls == "LogitsProcessor":
+            elif cls == LC.LOGITS:
                 vocab = int(getattr(m, "vocab_size", 0) or getattr(m, "org_vocab_size", 0) or 0)
                 per_seq += -(-vocab // max(1, self.world)) * 2
             elif cls in MOE_SITE_CLASSES:
@@ -247,17 +262,17 @@ class TPPartialSource:
         for modname, attr, kind in SITES:
             try:
                 targets.append((importlib.import_module(modname), attr, kind))
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.info_once("tp partial source: %s does not import here (%s): its %s is not wrapped", modname, repr(e), attr)
                 continue
         if self.mid_sites or self.mid_sites_ruled_out:
-            from verity_vllm.engine.collectives.collective_sites import patch_targets
             targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # the model classes' own imports
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:
             if (id(mod), attr) in done or not hasattr(mod, attr):
                 continue
             done.add((id(mod), attr))
-            self._hooks.wrap(mod, attr, lambda orig, kind=kind: self._wrap(kind, orig))
+            self._hooks.wrap(mod, attr, partial(self._wrap, kind))
         for mod, attr in self.far.targets:
             self._hooks.wrap(mod, attr, self.far.wrap)
         self.active = True
@@ -309,7 +324,7 @@ class TPPartialSource:
         self._occ[(step, member)] = occ + 1
         if self.reference:
             self.ref.setdefault(step, {})[_ref_key(member, occ)] = _bytes(x)   # independent clone of the collective INPUT at the moment it exists
-            if step < self.ref_reexec_steps and self._cur_in is not None and _cls == "RowParallelLinear":
+            if step < self.ref_reexec_steps and self._cur_in is not None and _cls == LC.ROW_LINEAR:
                 self.ref_in.setdefault(step, {})[member] = (name, self._cur_in.detach().clone())
         nb = x.numel() * x.element_size()
         self.stats["launches"] += 1
@@ -426,7 +441,7 @@ class TPPartialSource:
                     res["tap_mismatch"].append((step, member, len(ref)))
                 if member in self.ref_in.get(step, {}):
                     name, x = self.ref_in[step][member]
-                    mod = mods.get(name)
+                    mod: Any = mods.get(name)
                     try:
                         with torch.inference_mode():
                             bias = None if (int(getattr(mod, "tp_rank", 0)) > 0 or getattr(mod, "skip_bias_add", False)) else getattr(mod, "bias", None)
@@ -484,12 +499,7 @@ class TPPartialSource:
         Each MoE align call's committed witness (`<experts>/align.*`, `moe_align_source`) is paired with the capture's
         (`align.rank<r>.jsonl`) by (step, module), exhaustively; a differing one FAILS by name with what it implies
         (`oracle_witness.implied`), and no tensor is exempt from the value compare (`oracle_witness.judge`)."""
-        import json
-        from pathlib import Path
-
         import torch
-
-        from verity_vllm.engine.collectives import fused_norm as FN
 
         t0 = time.perf_counter()
         cap = Path(capture_dir)
@@ -510,15 +520,15 @@ class TPPartialSource:
             res["verdict"], res["why"] = "FAIL", f"no oracle records {recp}"
             return res
         by_step: dict[int, list[dict]] = {}
-        for l in recp.open():
-            if l.strip():
-                x = json.loads(l)
+        for line in recp.open():
+            if line.strip():
+                x = json.loads(line)
                 by_step.setdefault(int(x["step"]), []).append(x)
         recorded: dict[int, dict[str, dict]] = {}
         if (wp := cap / OW.witness_file(self.rank)).exists():
-            for l in wp.open():
-                if l.strip():
-                    x = json.loads(l)
+            for line in wp.open():
+                if line.strip():
+                    x = json.loads(line)
                     w = recorded.setdefault(int(x["step"]), {}).setdefault(x["module"], {"k": int(x["k"]), "sha256": {}})
                     w["sha256"][x["member"]] = x["sha256"]
         received = set(self.received_site_names())
@@ -535,7 +545,10 @@ class TPPartialSource:
             v = torch.load(pt)
             xs = sorted(by_step[step], key=lambda x: int(x["k"]))
             # a truncated / inconsistent oracle (the .pt holds fewer tensors than the jsonl names) is a named verdict, not a crash string
-            n_part, n_out = len(v.get("part") or []), len(v.get("out") or [])
+            part = v.get("part")
+            n_part = len(part) if part else 0
+            out = v.get("out")
+            n_out = len(out) if out else 0
             if n_part < len(xs) or (any(x.get("module") in received for x in xs) and n_out < len(xs)):
                 res["oracle_inconsistent"].append({"step": step, "jsonl_names": len(xs), "pt_part": n_part, "pt_out": n_out})
                 continue
@@ -545,7 +558,7 @@ class TPPartialSource:
             # an all-reduce + norm site's partial is `<norm>/part_rank<r>` while the recorder names the collective's enclosing module (a
             # GLM decoder layer runs two: input_layernorm's and post_attention_layernorm's): such a module's records pair, in call order,
             # with the norm-site partials whose nearest recorded ancestor it is, in commit order, when the two counts agree
-            mods = [x.get("module") for x in xs]
+            mods: list[Any] = [x.get("module") for x in xs]
             under = self._norm_partials_under(self.c._layouts.get(step, []), set(mods))
             dups = sorted({m for m in mods if mods.count(m) > 1 and mods.count(m) != mid_counts.get(m)
                            and len(under.get(m, ())) != mods.count(m)})
@@ -555,7 +568,7 @@ class TPPartialSource:
             seen: set[str] = set()
             occ_of: dict[str, int] = {}
             for k, x in enumerate(xs):
-                mod = x.get("module")
+                mod: Any = x.get("module")
                 j = occ_of.get(mod, 0)
                 occ_of[mod] = j + 1
                 fused = x["kind"] == FN.KIND                   # its recorded part is stack([partial, residual])
@@ -579,7 +592,7 @@ class TPPartialSource:
                         continue
                     seen.add(member)
                     ob = _bytes(oracle_t)
-                    n_diff = 0
+                    n_diff: int | None = 0
                     if committed != ob:
                         n_diff = None
                         if len(committed) == len(ob):
@@ -591,8 +604,8 @@ class TPPartialSource:
                 res["committed_not_in_oracle"].append((step, n))
             self._pair_witnesses(step, by_name, recorded.pop(step, {}), reader, res)
             res["steps_compared"] += 1
-        for step, mods in sorted(recorded.items()):
-            res["witnesses"]["unpaired"] += [{"step": step, "module": m, "in_commit": False, "in_capture": True} for m in sorted(mods)]
+        for step, left in sorted(recorded.items()):
+            res["witnesses"]["unpaired"] += [{"step": step, "module": m, "in_commit": False, "in_capture": True} for m in sorted(left)]
         wit = res["witnesses"]
         res["missing_n"], res["not_in_oracle_n"] = len(res["missing_in_commit"]), len(res["committed_not_in_oracle"])
         res["not_verified_n"], wit["unpaired_n"] = len(res["not_verified"]), len(wit["unpaired"])
@@ -656,7 +669,15 @@ class TPPartialSource:
                               f"on the shard); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
+__all__ = ["TPPartialSource", "late_read_check", "SITES", "COVERS_FAMILIES"]
+
+
+def _layer_of(member: str) -> int:
+    """The decoder layer a committed member's module is in (`...layers.<L>....`); a member of no layer is refused by name."""
+    at = re.search(r"layers\.(\d+)\.", member)
+    if at is None:
+        raise ValueError(f"{member}: a fused-MoE received output of no decoder layer (no 'layers.<L>.' in its name)")
+    return int(at.group(1))
 
 
 def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
@@ -666,9 +687,6 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
     flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal
     to the next norm's /0.  Any equal pair = late read (result False, count named); result True needs > 0 pairs compared and 0
     equal / 0 missing."""
-    import hashlib
-    import re
-
     layouts = getattr(com, "_layouts", {}) or {}
     rd = OpenedReader(com, rc)
     pairs: list[dict] = []
@@ -676,37 +694,37 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
     steps = 0
     for step in sorted(layouts):
         metas = {m.name: m for m in layouts[step]}
-        outs = sorted((int(re.search(r"layers\.(\d+)\.", n).group(1)), n) for n in metas if n.endswith(".mlp.experts/out"))
+        outs = sorted((_layer_of(n), n) for n in metas if n.endswith(".mlp.experts/out"))
         if not outs:
             continue
         steps += 1
-        last = max(L for L, _n in outs)
-        for L, n in outs:
-            nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{L + 1}.input_layernorm/0" if L < last else ".norm/0")
+        last = max(layer for layer, _n in outs)
+        for layer, n in outs:
+            nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{layer + 1}.input_layernorm/0" if layer < last else ".norm/0")
             try:
                 a = _committed(rd, step, metas.get(n))
                 b = _committed(rd, step, metas.get(nxt))
             except OpeningNotVerified as e:
                 not_verified += 1
                 if len(pairs) < 240:
-                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
+                    pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
                 continue
             if a is None or b is None:
                 missing += 1
                 if len(pairs) < 240:
-                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
+                    pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
                 continue
             compared += 1
             eq = a == b
             equal += int(eq)
             if eq or step < 2 or len(pairs) < 96:
-                pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
+                pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
                               "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
     # a dense TP workload (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to compare -- record NOT
     # APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read; on a MoE workload the rule is
     # the MoE one: True only with > 0 pairs compared, 0 equal, 0 missing
     applicable = steps > 0
-    return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(rank), "applicable": applicable,
+    return {"schema": LATE_READ_CHECK_SCHEMA, "rank": int(rank), "applicable": applicable,
             "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),
             "steps": steps, "layers_compared": compared, "equal_pairs": equal, "missing_pairs": missing, "not_verified_pairs": not_verified,
             "value_source": rd.record(), "pairs": pairs[:240],

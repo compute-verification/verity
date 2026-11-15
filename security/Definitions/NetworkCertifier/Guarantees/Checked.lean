@@ -39,10 +39,10 @@ import Mathlib.Topology.Sheaves.Init
 
 `SampledLeakAccepted` with each statement's checked inputs `chk` left out of the count: the free inputs a check on the
 whole run pins (`Definitions.NetworkCertifier.Checked`). Each statement's check pins its checked inputs
-(`CheckedUnique`), and the trace's run is valid except with probability `εchk` (`CheckedWitness`), so a run whose
-observations the bound counts is a valid run, whose checked inputs the rest of the run fixes: they cost no advice bits.
-The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits, rather than at a
-bound the statement takes.
+(`CheckedUnique`), and the trace's run is valid except with probability `εchk` (`CheckedWitness` at `traceRun`), so a
+run whose observations the bound counts is a valid run, whose checked inputs the rest of the run fixes: they cost no
+advice bits. The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits,
+rather than at a bound the statement takes.
 
 A monitoring period's bound with checked inputs is `PooledLeakCarried` (`Guarantees.Carried`), over runs that carry the
 pool; at the empty pool it bounds windows that each hold a pool of their own.
@@ -64,10 +64,10 @@ open Claims.SamplingGeneric (Arg Compiled)
 `D` where `Claims.SamplingGeneric.Compiled.KS` holds, a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`,
 registered inputs `reg`, checked inputs `chk` and each statement's check `valid`:
 
-* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness`),
-  `Pr[acc ∧ ¬RLeakChecked δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation sequence of
-  length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is among the
-  sequences `AccSeqsChecked` counts at the registration's values;
+* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness` at
+  `traceRun`), `Pr[acc ∧ ¬RLeakChecked δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation
+  sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is
+  among the sequences `AccSeqsChecked` counts at the registration's values;
 * on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ`, those sequences number at most
   `2^#(freeInputs \ (reg ∪ chk)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible incorrect
   set. -/
@@ -77,7 +77,7 @@ def SampledLeakChecked : Prop :=
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Claims.Msg → ℝ)
     (Dj : ℕ),
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
         (RLeakChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) valid
           Dj)
         D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) ∧

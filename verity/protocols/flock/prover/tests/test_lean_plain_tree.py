@@ -1,7 +1,7 @@
 """A plain hidden-output session on the keyed coin tree, end to end (`Flock.ProvedScope`, `plain_hidden.py`, `--coins
 tree`, `Flock.CoinTree`): a RoPE d64 statement with hidden outputs whose 32 units read their own rows (no shared rows, no
 registered value), proved by Flock in one loopback session without `--zk` under a subset sample of 16
-(`../pod/91-plain-hidden.sh`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
+(`pod/91-plain-hidden.sh`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
 challenger sampled and opened (`flock-circuit serve --tree-from`, the prover checking each opening).
 
 The session's coins are the ones the challenger's release log shows it sampled and opened. The compiled Lean verifier
@@ -11,7 +11,7 @@ covers at the subset sampling design (`FailClosed.SoundExecH` at its subset samp
 bernoulli sample of the same units (no claim samples by that sampling design). It is the test of a plain session at the subset sampling design on
 the verifier; the `#guard`s of `Flock/Test/PlainHidden.lean` hold the rule itself.
 
-It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
+It is a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
 fails these tests rather than skipping them. Each verify sets up an m = 22 table, so the module is slow. It catches a
 verifier that refuses an honest plain session on the tree, or takes one on coins it doesn't name, which no `--zk`
 fixture can."""

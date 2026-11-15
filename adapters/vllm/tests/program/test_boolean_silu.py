@@ -10,18 +10,16 @@ import json
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
-from verity.definitions.registry import act
-from verity.definitions.registry import b1
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions.registry import act, b1
 from verity.definitions.registry import boolean_silu as BSL
 from verity.definitions.registry import prims as P
 
@@ -42,7 +40,7 @@ _MAGNITUDES = sorted({e << 7 | m for e in _EXP for m in (0, 1, 0x40, 0x7F) if e 
 SPECIALS = np.array([m | s for m in _MAGNITUDES for s in (0, 0x8000)], np.uint16)
 #: the gates -88.5 .. -103.5: bf16 -89 (0xC2B2) is the first whose expf(-g) overflows f32, and from about -103 on `_v1`'s
 #: g * e^g rounds to -0 as well
-OVERFLOW_WINDOW = np.arange(0xC2B1, 0xC2CF + 1, dtype=np.uint16)
+OVERFLOW_WINDOW: np.ndarray = np.arange(0xC2B1, 0xC2CF + 1, dtype=np.uint16)
 
 
 def _word(target, *inputs) -> np.ndarray:
@@ -172,7 +170,7 @@ def test_the_finding_pair() -> None:
 def test_every_gate_word(version: str, u: int) -> None:
     """All 65,536 gate words at an up word: at 1.0 the silu half alone, then signs, zeros, subnormals, the finite maximum, an
     infinity, a NaN, scales that move the product's exponent, and the finding's 16.375."""
-    g = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+    g: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
     _agree(bind(VERSIONS[version][0]), g, np.full(g.shape, u, np.uint16))
 
 
@@ -180,7 +178,7 @@ def test_every_gate_word(version: str, u: int) -> None:
 def test_the_overflow_window_at_every_up_word() -> None:
     """`SiluMulBf16_v4` on the 31 gates of `OVERFLOW_WINDOW` at all 65,536 up words (2,031,616 pairs, the slow word's ~20 s):
     the window is where `_v2` and `_v1` part, and every up word is every scale and special the -0 meets there."""
-    u = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+    u: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
     _agree(bind(BSL.SiluMulBf16Expf), np.repeat(OVERFLOW_WINDOW, len(u)), np.tile(u, len(OVERFLOW_WINDOW)))
 
 

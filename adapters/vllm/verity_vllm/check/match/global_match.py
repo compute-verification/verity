@@ -82,22 +82,41 @@ import os
 import sys
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import compiler_form as CF
-from verity_vllm.config import UsageError, option, workload_arg
-from verity_vllm.check.match import global_match_fast as GMF  # MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
+
+# MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
+from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match.attribution import attribute_instances, requests_observed
 from verity_vllm.check.match.chronology import chronology
-from verity_vllm.check.match.declaration import GP_SCHEMA, from_gprog, mock_global_program, requests_declared, sha256_file
+from verity_vllm.check.match.declaration import (
+    GP_SCHEMA,
+    from_gprog,
+    mock_global_program,
+    relocated_components,
+    requests_declared,
+    sha256_file,
+)
 from verity_vllm.check.match.engine_steps import vu_population, within_step_order
 from verity_vllm.check.match.match_run import MatchRun
 from verity_vllm.check.match.per_request import check_requests
-from verity_vllm.check.match.record import canonicalize_record, read_record, request_aliases
+from verity_vllm.check.match.record import (
+    canonicalize_record,
+    read_record,
+    request_aliases,
+)
+from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.log import init_logger
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
+
+__all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 COMPARATOR = "cb_a.global_match/v1"
 RULES_VERSION = "r14-v1"
@@ -172,18 +191,24 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     log_path = log_path or os.path.join(oracle_dir, "capture", "log.jsonl.gz")
     tokens_path = tokens_path or os.path.join(oracle_dir, "capture", "tokens.json")
-    tokens = json.load(open(tokens_path)) if os.path.exists(tokens_path) else None
+    tokens = None
+    if os.path.exists(tokens_path):
+        with open(tokens_path) as f:
+            tokens = json.load(f)
     rec = read_record(log_path)
     mark("read_record")
+    declared = gp.get("requests")       # a document that is not this checker's declaration (refused below by its schema) may hold none
+    built = gp.get("gprog_artifact")    # what `from_gprog` records of the Build artifact it read; a declaration not read from one has none
+    res: dict[str, Any]
     res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
            "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir, "log": log_path,
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
-                              "workload_digest": gp.get("workload_digest"), "n_requests": len(gp.get("requests") or []),
+                              "workload_digest": gp.get("workload_digest"), "n_requests": len(declared) if declared else 0,
                               # whether this checker recomputed the Build artifact's digest from its descriptor (from_gprog)
-                              "digest_verification": (gp.get("gprog_artifact") or {}).get("digest_verification"),
+                              "digest_verification": built.get("digest_verification") if built else None,
                               # component dirs the Build recorded on another host, resolved beside its artifact (relocate_components); G4
                               # cross-checks every loaded component's digest against the Build's claim, so this is traceability, not trust
-                              "relocated_components": (gp.get("gprog_artifact") or {}).get("relocated_components") or {}},
+                              "relocated_components": relocated_components(gp)},
            "chronology_unit": "engine_step", "request_id_convention": "r<k> (k = manifest position; record UUIDs mapped via workload_request_id)",
            "within_step_criterion": within_step,
            "within_step_note": ("sequence: X-09 instance sequence per request step (r14-v1 verdict)" if within_step == "sequence" else
@@ -198,7 +223,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     G = {r["request_id"]: r for r in gp["requests"]}
 
     # ---------------------------------------------------------------- the fold (meta channel of the record) + canonical request ids
-    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
+    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if g.get("component") and g["component"].get("dir")]
     comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # shapes derived at Match time (--derived)
     B = _loaded.get("oracle")
     if B is None:
@@ -295,11 +320,9 @@ def impl_module(name: str | None = None):
     ~4 min on 8 cores at 13.5 GB for the same verdict.  `MATCH_IMPL=record` still selects the audit checker explicitly."""
     name = (name if name is not None else settings.get(IMPL_ENV) or IMPL_DEFAULT).strip().lower() or IMPL_DEFAULT
     if name == "record":
-        import sys
         return sys.modules[__name__]
     if name == "fast":
-        from verity_vllm.check.match import global_match_fast
-        return global_match_fast
+        return GMF
     raise ValueError(f"{IMPL_ENV}={name!r}: not one of {IMPLS}")
 
 
@@ -315,7 +338,7 @@ def impl_banner(mod, gp: dict | None = None) -> str:
         parts.append(f"compact_args={settings.get(GMF.COMPACT_ENV)}")
     else:
         parts.append("single process, no memo (the audit checker; hours and tens of GB on a batched row -- MATCH_IMPL=fast is the Match of record)")
-    reloc = ((gp or {}).get("gprog_artifact") or {}).get("relocated_components") or {}
+    reloc = relocated_components(gp)
     if reloc:
         parts.append(f"relocated_components={len(reloc)} (Build recorded {next(iter(reloc.values()))['from']!r} ...)")
     return " ".join(parts)
@@ -351,25 +374,25 @@ class Options:
     gprog: str | None = option("--gprog", default=None, help="the Build's workload_program.json (GP-01) -> converted with from_gprog")
     workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (for the mock global Program)")
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
-    log: str | None = option("--log", default=None)
-    tokens: str | None = option("--tokens", default=None)
-    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, " "LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
+    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
     no_x09: bool = option("--no-x09", default=False, action="store_true")
-    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | " "sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
+    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
     no_alternate: bool = option("--no-alternate", default=False, action="store_true", help="do not run/record the other criterion's verdict beside the verdict of record")
     out: str | None = option("--out", default=None)
-    decomp_out: str | None = option("--decomp-out", default=None, help="also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI " "schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json " "without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names " "missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
-    derived: list[str] = option("--derived", action="append", default=[], help="derived request-wrapper dir X-09 may use beside the global Program's " "components (repeatable): the shapes row_pod derived after an exit 4")
+    decomp_out: str | None = option("--decomp-out", default=None, help="also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
+    derived: list[str] = option("--derived", action="append", default=[], help="derived request-wrapper dir X-09 may use beside the global Program's components (repeatable): the shapes row_pod derived after an exit 4")
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     if a.decomp_out and a.no_x09:
         raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")
-    loaded = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document
+    loaded: dict[str, Any] = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document
     if a.global_program:
-        gp = json.load(open(a.global_program))
+        with open(a.global_program) as f:
+            gp = json.load(f)
     elif a.gprog:
         gp = from_gprog(a.gprog, a.workload)
     else:
@@ -377,9 +400,9 @@ def main(a: Options) -> int:
             raise UsageError("--workload is required without --global-program")
         gp = mock_global_program(a.workload, a.component)
     mod = impl_module()   # MATCH_IMPL: fast (default, the Match of record) | record (the audit checker) -- never a silent fallback
-    print(impl_banner(mod, gp), file=sys.stderr, flush=True)   # what is about to run, BEFORE the hours it may take (not after)
-    res = mod.check(gp, a.oracle, a.log, a.tokens, run_x09=not a.no_x09, within_step=a.within_step, record_alternate=not a.no_alternate,
-                    tokens_optional=a.tokens_optional, _loaded=loaded)   #
+    logger.info("%s", impl_banner(mod, gp))   # what is about to run, BEFORE the hours it may take (not after)
+    res = mod.check(gp, a.oracle, run_x09=not a.no_x09, within_step=a.within_step, record_alternate=not a.no_alternate,
+                    tokens_optional=a.tokens_optional, _loaded=loaded)
     res["impl"] = impl_info(mod)
     if (a.decomp_out or a.derived) and isinstance(res.get("x09"), dict) and loaded.get(X09_DOCUMENT) is not None:
         # a document produced under the shared pipeline (P1) states what its X-09 ran over (batch_decomp's own keys) and
@@ -389,25 +412,30 @@ def main(a: Options) -> int:
         res["x09"].update(derived_available=x.get("derived_available"), missing_derived=x.get("missing_derived"), extra_derived=list(a.derived),
                           pipeline={"shared": bool(a.decomp_out), "decomp_out": a.decomp_out, "derived_args": list(a.derived)})
     if a.out:
-        json.dump(res, open(a.out, "w"), indent=1, default=str)
+        with open(a.out, "w") as f:
+            json.dump(res, f, indent=1, default=str)
         gpp = os.path.splitext(a.out)[0] + "_global_program.json"
-        json.dump(gp, open(gpp, "w"), indent=1)
+        with open(gpp, "w") as f:
+            json.dump(gp, f, indent=1)
     rc_x09 = 0
     if a.decomp_out:
         x = loaded.get(X09_DOCUMENT)
-        if x is None or (res.get("x09") or {}).get("verdict") == "ERROR":   # X-09 did not produce a document: no file, loud
-            print(json.dumps({"decomp_out": a.decomp_out, "error": "X-09 produced no document", "x09": res.get("x09")}, default=str), file=sys.stderr)
+        x09 = res.get("x09")   # none when X-09 was not run
+        if x is None or (x09.get("verdict") if x09 else None) == "ERROR":   # X-09 did not produce a document: no file, loud
+            logger.error("%s", json.dumps({"decomp_out": a.decomp_out, "error": "X-09 produced no document", "x09": res.get("x09")}, default=str))
             return 3
-        json.dump(x, open(a.decomp_out, "w"), indent=1, default=str)   # byte-for-byte what cb_a.batch_decomp's CLI writes for this run
+        with open(a.decomp_out, "w") as f:
+            json.dump(x, f, indent=1, default=str)   # byte-for-byte what cb_a.batch_decomp's CLI writes for this run
         rc_x09 = 4 if x.get("verdict") == "MISSING_DERIVED" else 0   # X-09's own PASS/FAIL is read from the document (row_pod's summary), as today
+    alternate = res.get("alternate_verdict")   # none when the other criterion was not run
     brief = {"verdict": res["verdict"], "comparator": res["comparator"], "rules_version": res["rules_version"], "within_step": res.get("within_step_criterion"),
              "impl": res["impl"], "phases": res.get("phases"),
-             "alternate_verdict": {k: (res.get("alternate_verdict") or {}).get(k) for k in ("criterion", "verdict", "failed_checks")},
+             "alternate_verdict": {k: alternate.get(k) if alternate else None for k in ("criterion", "verdict", "failed_checks")},
              "failed_checks": res.get("failed_checks"), "checks": [(k["id"], k["status"]) for k in res["checks"]], "reasons": res.get("reasons", [])[:8],
              "achieved_concurrency": res.get("achieved_concurrency"),
              "requests": [{k: e.get(k) for k in ("request_id", "workload_request_id", "LP", "n_instances", "local_steps", "executed_steps_equal", "eos_truncated",
                                                  "first_step", "output_events", "generated_length")} for e in res["requests"]], "seconds": res["seconds"]}
-    print(json.dumps(brief, indent=1, default=str))
+    logger.info("%s", json.dumps(brief, indent=1, default=str))
     if rc_x09 == 4:   # the shapes X-09 could not compare are not derived yet: row_pod derives them and reruns (the compare stage's exit 4)
         return 4
     return 0 if res["verdict"] == "PASS" else 3

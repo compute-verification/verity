@@ -83,7 +83,8 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let _ ← timed "checkPublic" rec_ (fun r => Service.checkPublic r (Json.str v.scheme) qd values declared)
     (fun c => match c with | .ok c => c.codes.isEmpty | .error _ => false)
   let n := (nat? (getD rec_ "population")).getD 0
-  let some rule' := rule.over n | throw (IO.userError "the rule's rate law refuses the population")
+  let some rule' := rule.over n (Select.strataSizes v.program v.query)
+    | throw (IO.userError "the rule's rate law refuses the population")
   let law ← IO.ofExcept (rule'.lawOver n)
   let v := { v with law }
   let _ ← timed "registration" rec_ (fun r => Registration.check r v) (·.isEmpty)
@@ -98,7 +99,9 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let res ← IO.ofExcept (← timed "resolve" v.program (fun pr => Select.resolve rule pr v.query) isOk)
   let (draw, _, read) ← IO.ofExcept (← timed "select" v.program
     (fun pr => Select.select res pr v.query v.workTable none source) isOk)
-  let _ ← timed "coinsHold" (getD j "coins") (fun c => Run.coinsHold c rec_ v.windowRoot (source.extract 0 read)) id
+  let family := match getD j "family" with | .str f => some f | _ => none
+  let _ ← timed "coinsCode" (getD j "coins")
+    (fun c => Run.coinsCode c rec_ v.windowRoot family (source.extract 0 read)) (·.isNone)
   let _ ← timed "checkDraw" draw (fun d => Draw.checkDraw d (getD rec_ "population") derived) (·.isEmpty)
   let proved := Draw.proved draw
   let _ ← timed "checkVerdicts" verdicts (fun vs => Service.checkVerdicts vs sessions outputs)
@@ -116,7 +119,7 @@ def inputCount (d : Flock.TemplateQuery.Desc) : Nat := Id.run do
   let some root := d.def? d.root | return 0
   return root.nodes.foldl (fun acc x =>
     let tid := d.callees.getD x.fn ""
-    if Flock.TemplateQuery.isInput tid then acc + x.members * d.gates tid else acc) 0
+    if d.isInputNode x then acc + x.members * d.gates tid else acc) 0
 
 def descSteps (j : Json) (unitGates ref popOk : Bool) : IO UInt32 := do
   let p ← IO.ofExcept (← timed "program.parse" (getD j "program")

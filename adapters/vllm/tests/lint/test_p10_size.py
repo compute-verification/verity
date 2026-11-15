@@ -37,6 +37,7 @@ def file_sizes(src: str, rel: str) -> list[R.Violation]:
         out.append(R.Violation(rel, "module", "<module>", "lines", n))
     for node, symbol in R.walk(R.parse_src(src)):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            assert node.end_lineno is not None, "a parsed function has its end line"
             span = node.end_lineno - node.lineno + 1
             if span > FUNCTION_MAX:
                 qual = node.name if symbol == "<module>" else f"{symbol}.{node.name}"

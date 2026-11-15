@@ -59,6 +59,18 @@ def jsonInt? : Json → Option Int
   | .num ⟨m, 0⟩ => some m
   | _ => none
 
+/-- `v == s` for a JSON value `v` read with `.get` (`none` when absent) and a string `s`, by a match the kernel reduces:
+`Lean.Json`'s `BEq` is a `partial def`, opaque to the kernel, so a property of a check that compares with it can't be
+proved. -/
+def fieldIs : Option Json → String → Bool
+  | some (.str t), s => t == s
+  | _, _ => false
+
+example : fieldIs (some (.str "verity")) "verity" = true := by decide
+example : fieldIs (some (.str "verity")) "" = false := by decide
+example : fieldIs (some .null) "" = false := by decide
+example : fieldIs none "" = false := by decide
+
 def field (j : Json) (k : String) : Except String Json :=
   match j with
   | .obj kv => match kv.get? k with

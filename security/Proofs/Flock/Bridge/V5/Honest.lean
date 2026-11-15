@@ -14,7 +14,7 @@ concludes them at the served registered session's files, from the one named prem
 inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files have the served SHA-512 digests, at
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, its public
 input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
-the row layout it needs (`RowsOk`), no two of its ports share a name, every sample size divides into the session's tables,
+the row layout it needs (`RowsOk`), no two of its ports' published domains are one (`PortRoots.dupId`), every sample size divides into the session's tables,
 and the tags are the hidden-output ones at which the statement gives its bound (`TagsOkZHJ`). The registration's
 population (`PopMatches`) is a statement about the registration, not the files, and is no conjunct here; the statement takes no hypothesis on the
 sampling design it samples under (it is `designAt`'s, never a Bernoulli law) or on the registration's roots (its `ecr/sha-512` term at the roots finder pays for them), and the finders' collision resistance
@@ -45,7 +45,7 @@ public inputs (`Bridge.Assumptions.ServedFilesParseV5`), there are inputs `I`, a
 and a public file `pub` at which every hypothesis `SampledKSLiveV5` takes of the files holds: `I`'s files are the served
 ones (their SHA-512 digests), its tags `verity/flock-circuit`'s with one table and no session tables, untyped, the
 circuit file parses to `D`, `pi` parses at `D` and the public file loads over it, `D` is in
-`scopeOkH` with `RowsOk` and no duplicate port name, every sample size is a multiple of the session's tables, and the tags
+`scopeOkH` with `RowsOk` and no duplicate published domain, every sample size is a multiple of the session's tables, and the tags
 are hidden-output ones (`TagsOkZHJ`), the case in which `SampledKSLiveV5` gives its bound. -/
 def SampledKSLiveV5Honest : Prop :=
   Bridge.Assumptions.ServedFilesParseV5 →
@@ -60,7 +60,7 @@ def SampledKSLiveV5Honest : Prop :=
       Flock.HmIn.parse D.unroll = .ok pi ∧
       Flock.HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub ∧
       Discharge.Layout.scopeOkH D.unroll = true ∧ Bridge.RowsOk D.unroll ∧
-      Flock.Registered.dupName D.unroll = none ∧
+      Flock.PortRoots.dupId D.unroll pub = false ∧
       (∀ kd : ℕ, kd % nTab I = 0) ∧ TagsOkZHJ I
 
 end Flock.Guarantees
@@ -70,7 +70,7 @@ open FlockSoundness FlockSoundness.Discharge.ZkExec in
 (`Flock.Guarantees.SampledKSLiveV5Honest`): the verifier's `scopeOkH` is the analysis's (`scopeOkH_eq`), which carries
 `RowsOk` (`rowsOk_of_scopeOkH`), and one table divides every sample size. -/
 theorem Flock.SecurityProofs.SampledKSLiveV5Honest : Flock.Guarantees.SampledKSLiveV5Honest := by
-  rintro ⟨cf, pf, hcf, hpf, D, hD, hsc, hdup, pi, hpi, pub, hpub⟩
+  rintro ⟨cf, pf, hcf, hpf, D, hD, hsc, pi, hpi, pub, hpub, hdup⟩
   have hD' : Flock.Desc.parse (zkTags (Flock.Bridge.servedIV5 cf pf)) cf [] = .ok D := hD
   have hpub' : Flock.HmIn.loadPublic (zkTags (Flock.Bridge.servedIV5 cf pf)) D.unroll pi pf = .ok pub := hpub
   have ht : (Flock.Bridge.servedIV5 cf pf).tags.typed = false := rfl

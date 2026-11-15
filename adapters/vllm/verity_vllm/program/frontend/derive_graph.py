@@ -12,9 +12,10 @@ inputs that are the model's weights (`Program.theta`, the root's `theta` input n
 from __future__ import annotations
 
 import keyword
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import torch
 

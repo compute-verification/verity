@@ -8,7 +8,8 @@
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * past TOPK keys, at the row's class (its keys rounded up to a multiple of TOPK), `DsaTopKMask_v1` marks the row's top-TOPK set
   from its logits, `DsaButterflySettings_v1` computes the concentrator's settings for it, and sparse MLA reads the rows
-  `DsaButterflyRows_v1` routes at them (`DsaButterflyRowsPad_v1` below the class), in ascending index order;
+  `DsaButterflyRows_v1` routes at them (`DsaButterflyRowsPad_v1` below the class), in ascending index order; in the batched form
+  under table reads, `DsaTopKIndex_v1` of the mask and `DsaHistoryReads_v1` at it instead;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -31,12 +32,31 @@ import pytest
 import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
-
 from verity.circuits import codec
 from verity.circuits.defs import bind, composite
+from verity.circuits.evaluation import evaluate
 from verity.circuits.refs import Affine, Coll, concat, runs
 from verity.circuits.types import Array, Value
-from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import (
+    b1,
+    cublas_bf16,
+    dsa,
+    dsa_norm,
+    dsa_topk,
+    dsa_topk_mask,
+    fa3_check_inf,
+    fa3_split,
+    hopper,
+    sparse_mla,
+    sparse_mla_split,
+)
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
+from tests import fake_vllm
+from verity_vllm.program import dsa_table
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -44,15 +64,12 @@ from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
-from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
+from verity_vllm.program.frontend.rules.vocab import (
+    PROFILE_B1_EAGER_V3,
+    PROFILES,
+    Vocabulary,
+)
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, dsa_topk_mask, fa3_check_inf, fa3_split, hopper
-from verity.definitions.registry import sparse_mla
-from verity.definitions.registry import sparse_mla_split
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
@@ -92,7 +109,7 @@ def _unpatched(*a, **k):
 
 
 SITE = types.ModuleType("dsa_site_standin")
-SITE.fused_norm_rope = SITE.fused_q = _unpatched
+SITE.__dict__.update(fused_norm_rope=_unpatched, fused_q=_unpatched)
 
 
 def _bf16(rng, *shape, sd=1.0) -> torch.Tensor:
@@ -166,7 +183,7 @@ class _Layer(nn.Module):
 
     def forward(self, positions, q_c, kv_c, k_pe, q, index_k=None, index_weights=None, index_q=None):
         output = torch.empty((q_c.shape[0], NH * self.v_head_dim), dtype=q_c.dtype, device=q_c.device)
-        if self.indexer is not None:
+        if self.indexer is not None and self.indexer_rope_emb is not None:
             has_indexer, k_w, k_b, k_eps = True, self.indexer.k_norm.weight, self.indexer.k_norm.bias, self.indexer.k_norm.eps
             ics, ss, hs = self.indexer_rope_emb.cos_sin_cache, self.indexer.softmax_scale, self.indexer.n_head ** -0.5
         else:
@@ -277,8 +294,8 @@ def _run(rep, model: _Model, inputs, run: list[int] | None = None) -> list[int]:
 
 def _dense(layer: _Layer, P0: int, T: int) -> bool:
     """vLLM's route for a call of T rows after P0 (`vllm_dsa_dense.takes_dense_mha`): dense MHA for a prefill of at most TOPK keys."""
-    return (layer.prefill_backend is not None and T > vllm_dsa.DECODE_THRESHOLD.get(NH, vllm_dsa.DECODE_THRESHOLD_DEFAULT)
-            and P0 + T <= layer.topk_indices_buffer.shape[-1])
+    return (layer.prefill_backend is not None and vllm_dsa.DECODE_THRESHOLD.get(NH, vllm_dsa.DECODE_THRESHOLD_DEFAULT) < T
+            and layer.topk_indices_buffer.shape[-1] >= P0 + T)
 
 
 def _attention_v4(T: int, row: int, seqlen_q: int, heads: int = NH, splits: int = 1):
@@ -299,7 +316,8 @@ def _reference(model: _Model, inputs, splits: int = 1, orders: dict[int, list[in
     `Attention_v4{T=i+1}` (`AttentionSplit_v1` at ``splits`` > 1) over [q_nope | q_pe roped] and the call's rows 0..i of
     k = [k_nope | k_pe roped] and v, k_nope and v each head's halves of the normed latent (the identity `kv_b_proj`)."""
     qn, rope = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(RoPEHeadGptJV2, D=R)
-    hist = {n: [] for n in NAMES}
+    orders = orders or {}
+    hist: dict[str, list[list[int]]] = {n: [] for n in NAMES}
     out, k = [], 0
     for p0, T in model.steps:
         for layer in model.layers:
@@ -401,7 +419,7 @@ def _cuda_only(hidden_states, router_weight, output_dtype=torch.float32):
 
 
 GATE_SITE = types.ModuleType("ll_bf16_site_standin")
-GATE_SITE.ll_bf16_gemm = _cuda_only
+GATE_SITE.__dict__["ll_bf16_gemm"] = _cuda_only
 
 
 class _Gate(nn.Module):
@@ -486,11 +504,10 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
     """`vllm_meta.attention_impls` reads an MLA layer's FA3 split count from the `flash_attn_varlen_func` its impl's module calls:
     the one-split pin's marker, else None (vLLM's heuristic)."""
     from verity_vllm.program.frontend import vllm_meta as vm
-    attention = types.ModuleType("vllm.model_executor.layers.attention")
+    attention = fake_vllm.install(monkeypatch)["vllm.model_executor.layers.attention"]
     attention.Attention, attention.MLAAttention = type("Attention", (nn.Module,), {}), type("MLAAttention", (nn.Module,), {})
-    monkeypatch.setitem(sys.modules, attention.__name__, attention)
     backend = types.ModuleType("sparse_backend_standin")
-    exec("class Impl:\n    dcp_world_size = 1\n", backend.__dict__)
+    backend.__dict__["Impl"] = type("Impl", (), {"dcp_world_size": 1, "__module__": backend.__name__})
     monkeypatch.setitem(sys.modules, backend.__name__, backend)
     layer = attention.MLAAttention()
     layer.impl, layer.layer_name = backend.Impl(), NAMES[0]
@@ -498,7 +515,7 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
                                                parallel_config=types.SimpleNamespace(tp=8),
                                                attention_config=types.SimpleNamespace(sparse_mla_force_mqa=False))
     model = nn.Sequential(layer)
-    backend.flash_attn_varlen_func = lambda *a, **k: None
+    backend.__dict__["flash_attn_varlen_func"] = lambda *a, **k: None
     assert vm.attention_impls(model)[NAMES[0]]["num_splits"] is None
     backend.flash_attn_varlen_func.verity_sparse_mla_splits = 1
     obs = vm.attention_impls(model)[NAMES[0]]
@@ -513,8 +530,7 @@ def test_the_shims_leave_a_model_without_their_layers_unchanged(monkeypatch):
     with moe_gate_leaf(_Gate(rng, allow=False)), dsa_ops_leaf(_Gate(rng)):
         assert GATE_SITE.ll_bf16_gemm is _cuda_only
     site = types.ModuleType("dsa_forward_site")
-    site.fused_norm_rope = site.fused_q = _unpatched
-    site._Layer = _Layer
+    site.__dict__.update(fused_norm_rope=_unpatched, fused_q=_unpatched, _Layer=_Layer)
     exec("class Attn(_Layer):\n    def forward(self, *a):\n        return fused_norm_rope(*a)\n", site.__dict__)
     monkeypatch.setitem(sys.modules, site.__name__, site)
     layer = site.Attn(NAMES[0], indexer=True, seed=0)
@@ -616,7 +632,7 @@ def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_bloc
     assert _ids(rep).count(bind(_StandinLatentRow, KVL=L, R=R, EPS=EPS).id) == 2 * 5
 
     def rows(Nb: int, N: int) -> str:
-        if N > Nb:
+        if Nb < N:
             return bind(dsa_topk_mask.DsaButterflyRowsPad, T=Nb, N=N, K=2, W=L + R, E=16).id
         return bind(dsa_topk_mask.DsaButterflyRows, N=N, K=2, W=L + R, E=16).id
 
@@ -632,6 +648,38 @@ def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_bloc
     nodes = rep.program.fn.body.nodes
     counted = [n for n in nodes if n.fn.id.startswith("DsaTopKMaskCounted_v1{")]
     assert [nodes[runs(n.args[1].refs)[0][1]].fn.id for n in counted] == [f"Const32[0x{n:08x}]_v1" for n in (3, 4, 5)]
+    orders = {p: sorted(dsa_topk.topk_set(lg, 2)) for p, lg in _index_logits(model, xs).items() if p >= 2}
+    assert _run(rep, model, xs) == _reference(model, xs, orders=orders)
+
+
+@pytest.mark.parametrize("block", [256, 2])
+def test_the_batched_forms_rows_past_topk_read_their_history_by_table(served, monkeypatch, block):
+    """The call above with table reads (`observe_batched_form`'s ``table_reads``, the Build's `--dsa-table-reads`): the indexer
+    layer's block computes `DsaTopKIndex_v1` of each row's counted mask in place of the settings, and each layer reads the row's
+    TOPK history rows at those positions from the block's N_b, `DsaHistoryReads_v1{V=N_b}` without a pad, the IndexShare layer at
+    the indexer layer's index.  The outputs are the reference's, as in the rows network's form."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
+    monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
+    VB.observe_batched_form(True, table_reads=True)
+    model = _model(topk=2, steps=((0, 2), (2, 3)))
+    xs = _inputs(model)
+    rep = _derive(model, xs, profile=BATCHED.name)
+    assert rep.program is not None, rep.unsupported
+    blocks = {256: [(5, [0, 1, 2])], 2: [(4, [0, 1]), (5, [2])]}[block]
+    attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+    select, routed = [], []
+    for Nb, rs in blocks:
+        N = vllm_dsa.long_row_keys(Nb, 2)
+        select += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs) + [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
+        select += [bind(dsa_table.DsaTopKIndex, N=N, TOPK=2).id] * len(rs)
+        routed += [bind(dsa_table.DsaHistoryReads, V=Nb, TOPK=2, H=L + R).id] * len(rs)
+    kept = set(select) | set(routed) | {attn2}
+    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + select + routed + [attn2] * 3 + routed + [attn2] * 3
+    nodes = rep.program.fn.body.nodes
+    assert not [n for n in nodes if n.fn.id.startswith(("DsaButterfly", "Const16[0x0000]"))], "no rows network and no zero pad"
+    index = [k for k, n in enumerate(nodes) if n.fn.id.startswith("DsaTopKIndex_v1{")]
+    reads = [n for n in nodes if n.fn.id.startswith("DsaHistoryReads_v1{")]
+    assert [sorted({x[1] for x in runs(n.args[0].refs) if x[0] == "n"}) for n in reads] == [[k] for k in index] * 2
     orders = {p: sorted(dsa_topk.topk_set(lg, 2)) for p, lg in _index_logits(model, xs).items() if p >= 2}
     assert _run(rep, model, xs) == _reference(model, xs, orders=orders)
 
@@ -742,8 +790,8 @@ def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
 
 @pytest.mark.parametrize("case,needle", [
     ("shared-first", "IndexShare layer 'layers.0.self_attn.attn' reads a top-k no indexer layer selected for positions 0..1"),
-    ("prefill-backend", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank) that reached the top-k MQA "
-                        "op; vLLM serves a prefill by its prefill backend 'FlashAttnMLAPrefill'"),
+    ("prefill-backend", ("a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank) that reached the top-k MQA "
+                         "op; vLLM serves a prefill by its prefill backend 'FlashAttnMLAPrefill'")),
     ("heads", "no observed query heads per rank for 'layers.0.self_attn.attn', the decode threshold its prefill backend"),
     ("impl", "runs 'FlashMLASparseImpl'; SparseMla_v1 states FLASH_ATTN_MLA_SPARSE"),
     ("target", "SparseMla_v1 is FA3 at compute capability 9.0; the target is"),
@@ -751,8 +799,10 @@ def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
 def test_each_attention_precondition_refuses_by_name(case, needle, served, monkeypatch):
     model = _model(order=(False, True) if case == "shared-first" else (True, False))
     monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
-    over = {"prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
-            "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None}, "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
+    overs: dict[str, dict[str, object]] = {"prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
+                                           "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None},
+                                           "impl": {"impl": "FlashMLASparseImpl"}}
+    over = overs.get(case)
     if over:
         VB.observe_attention_impls({n: _observation(**over) for n in NAMES})
     if case == "target":
@@ -921,9 +971,10 @@ def test_a_prefill_fa3_splits_derives_by_attention_split(dense, monkeypatch):
 ])
 def test_each_dense_prefill_precondition_refuses_by_name(case, needle, dense, monkeypatch):
     model = _model(dense=True, topk=1 if case == "past-topk" else TOPK, steps=((0, 1), (1, 2)) if case == "chunked" else STEPS)
-    over = {"backend": {"prefill_backend": "FlashInferPrefillBackend"}, "force-mqa": {"sparse_mla_force_mqa": True},
-            "fa-version": {"prefill_fa_version": 2}, "v-padding": {"prefill_requires_v_padding": True},
-            "prefill-scale": {"prefill_scale": 0.5}, "scale": {"prefill_scale": 0.5}}.get(case)
+    overs: dict[str, dict[str, object]] = {"backend": {"prefill_backend": "FlashInferPrefillBackend"}, "force-mqa": {"sparse_mla_force_mqa": True},
+                                           "fa-version": {"prefill_fa_version": 2}, "v-padding": {"prefill_requires_v_padding": True},
+                                           "prefill-scale": {"prefill_scale": 0.5}, "scale": {"prefill_scale": 0.5}}
+    over = overs.get(case)
     if over:
         VB.observe_attention_impls({n: _dense_observation(**over) for n in NAMES})
     if case == "scale":

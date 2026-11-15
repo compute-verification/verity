@@ -4,6 +4,8 @@ a geometric mean over the Llama-3.1-8B linears, with the gate's verdict for the 
 python3 mtable.py BENCH.jsonl GATE.jsonl > table.md
 """
 
+from __future__ import annotations
+
 import json
 import math
 import re
@@ -12,7 +14,7 @@ import sys
 LLAMA = ["qkv", "o", "gate_up", "down"]
 
 
-def describe(name):
+def describe(name: str) -> tuple[str, str, str, str, str, str]:
     """(construction, format, r, receipt, forming, GEMM) of an arm name."""
     m = re.fullmatch(r"(?:(cg|cduo32|cduo64|ct4c32|ct4c64)_)?(plain|full|fullform|low|lowform|lowsep|lowtc|lowtcform)(\d*)_(i8|e4)", name)
     rc, kind, r, fmt = m.group(1), m.group(2), m.group(3), m.group(4)
@@ -30,17 +32,20 @@ def describe(name):
     return "low rank", fmt, r, receipt, forming, gemm
 
 
-def gate_verdicts(path):
+def gate_verdicts(path: str) -> dict[str, list[bool]]:
+    """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        j = json.loads(line)
-        for key, v in j.items():
-            if isinstance(v, bool) and key not in ("ok", "receipts"):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            j = json.loads(line)
+            for key, v in j.items():
+                if isinstance(v, bool) and key not in ("ok", "receipts"):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
-def arm_gate(name, checks):
+def arm_gate(name: str, checks: dict[str, list[bool]]) -> str:
+    """The gate's verdict for one arm: pass, FAIL or unchecked, over every check the arm rests on, at every gate shape."""
     keys = [key for key in checks if re.fullmatch(rf"(U|R|XA|XB)_{re.escape(name)}(_nonzero)?", key)]
     _, fmt, r, *_ = describe(name)
     if name.startswith(("full", "cg_full", "cduo32_full", "cduo64_full", "ct4c32_full", "ct4c64_full")):
@@ -53,13 +58,15 @@ def arm_gate(name, checks):
     return "pass" if all(all(checks[key]) for key in keys) else "FAIL"
 
 
-def geo(by, shapes, name, fmt, which):
+def geo(by: dict[str, dict], shapes: list[str], name: str, fmt: str, which: list[str]) -> float:
+    """The arm's time over its format's plain GEMM, as a geometric mean over the shapes in ``which`` that timed both
+    (NaN when none did)."""
     xs = [by[s]["arms"][name]["ms"] / by[s]["arms"][f"plain_{fmt}"]["ms"] for s in shapes
           if s in which and name in by[s]["arms"] and f"plain_{fmt}" in by[s]["arms"]]
     return math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")
 
 
-def compact(by, shapes, checks):
+def compact(by: dict[str, dict], shapes: list[str], checks: dict[str, list[bool]]) -> None:
     """1 + gamma, geometric mean over the Llama linears (and 4096^3 in brackets), one row a construction, format and r:
     no receipts (the best of cuBLASLt over the stacked operands and the custom mainloop), and each receipt on the custom
     mainloop; both operands formed on CUDA cores on every call."""
@@ -80,8 +87,10 @@ def compact(by, shapes, checks):
             print(f"| {'full rank' if tag == 'full' else 'low rank'} | {fmt} | {r} | " + " | ".join(cells) + f" | {v} |")
 
 
-def main(bench, gate):
-    rows = [json.loads(line) for line in open(bench)]
+def main(bench: str, gate: str) -> int:
+    """Print the table of one bench file and one gate file."""
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f]
     checks = gate_verdicts(gate)
     shapes = [r["shape"] for r in rows]
     by = {r["shape"]: r for r in rows}

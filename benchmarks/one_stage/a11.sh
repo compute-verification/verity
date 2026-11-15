@@ -29,7 +29,7 @@ case ${A11_MODE:?} in
 kinds)
   PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
   cached flock "$(tree_key verity/protocols/flock/prover/live verity/protocols/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
-  cached lean "$(tree_key verity/protocols/flock/verifier)" build_lean > "$W/lean.dir" &
+  cached lean "$(lean_key)" build_lean > "$W/lean.dir" &
   rc=0
   for d in "$IN"/*.json.gz; do
     n=$(basename "$d" .json.gz)
@@ -48,7 +48,7 @@ audit)
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   TARG=()
   if [ -n "${A11_LAYOUT:-}" ]; then
-    TU=$(cached tmplunit "$(tree_key verity/protocols/flock/verifier verity/protocols/flock/prover/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+    TU=$(cached tmplunit "$(lean_key "$SRC/verity/protocols/flock/prover/tests/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
     [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }
     TARG=(--layout "$A11_LAYOUT" --tmpl-unit-bin "$TU")
   fi

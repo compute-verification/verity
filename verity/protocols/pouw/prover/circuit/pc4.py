@@ -1,6 +1,6 @@
-"""`pearl-c-nvfp4-v0`'s tile check as a Program: Pearl-C4's forming, chain and clean-up (`schemes.pearl_c4`) cut into proof
-blocks, so sampled proofs can establish a sampled tile's checked words (C̃ and U) and its rows' admission without the verifier
-reading a row.
+"""`pearl-c-nvfp4-v0`'s tile check as a Program: Pearl-C4's forming, chain and clean-up (`schemes.pearl_c4`) cut into
+proof blocks, so SPOT can establish a sampled tile's checked words (C̃ and U) and its rows' admission without the
+verifier reading a row.
 
 A weight's side is formed once per job and weight, by `Pc4Weight{K,N}`, whose root body holds the `Pc4RowB` instances.
 One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, scale bytes and P_B rows as committed
@@ -64,10 +64,10 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.partition import CutVerdict
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.definitions.ops.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3ToF32, F2fpBf16, F32ToE2m1Sat, F32ToE4m3Sat,
+from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3ToF32, F2fpBf16, F32ToE2m1Sat, F32ToE4m3Sat,
                              HopperBF16WgmmaDot16, const)
-from verity.definitions.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectBf16, SelectI32
+from verity.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectBf16, SelectI32
 
 from verity.protocols.pouw.verifier.protocol import DomainError
 from ..schemes import pearl_c as C

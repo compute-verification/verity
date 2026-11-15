@@ -39,7 +39,7 @@ import Proofs.Pouw.PeriodJ10R
 # Proof of `H1J10RCheckedCreditPeriodStrata`
 
 At each stratum `s ∈ S`, what `Proofs.Pouw.PeriodJ10R` applies to its one stratum:
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
+`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
 (`pathsAt`). Its joint soundness comes from `StrataSampleIsCoin`'s half that puts stratum `s`'s sampled proof blocks among the
 proof blocks `Credit.window`'s sample demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
 salt being its live coin, read on the view (`saltAt`). Its accepted prefix and live words are the period's
@@ -115,7 +115,7 @@ theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0
 
 /-- **Stratum `s`'s live words on its view** are its `creditLive` at the period's `Credit.window` inputs there. -/
 theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
-    (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (ws : CreditWindows (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) Cd.rounds σ s) n) :
     stratumLive Sc Cd hM σ s Wp ws ((pathsAt C hM σ s n).symm y) = creditLive Sc Cd Wp (creditAt hM σ s ws) y := by
   unfold stratumLive
@@ -130,7 +130,7 @@ theorem prefixLen_symm {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB �
 
 /-! ## One stratum's bound, and the union -/
 
-/-- **Stratum `s`'s bound on the period's coins**: `CircuitCreditPeriod` at stratum `s`'s run, as
+/-- **Stratum `s`'s bound on the period's coins**: `CircuitCreditMonitoringPeriod` at stratum `s`'s run, as
 `Proofs.Pouw.PeriodJ10R` applies it, carried from the view to the period's coins. -/
 theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
@@ -139,7 +139,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C 1 σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (Pl : Play (Coin C (Rest σ s) Cd.rounds σ s) n K T L U)
     (folded : Paths (Coin C (Rest σ s) Cd.rounds σ s) n → ℝ) (ρ δs δbind δks : ℝ)
     (hDraw : StrataSampleIsCoin σ k hk S unitOf ws)
@@ -149,15 +149,15 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (hwmax : ∀ j, stageShare (tileStage Cd (tileCount σ s)) (shareCone Sc Cd (tileCount σ s)) j ≤ 1)
     (hlk : ∀ t : Fin (tileCount σ s), 0 < shareCone Sc Cd (tileCount σ s) t →
       tileLuck Sc Cd (tileCount σ s) t ≤ 7 / 8 ∧ tileLuck0 Sc Cd (tileCount σ s) t ≤ 1 / 2)
-    (hG : Pl.game = periodGame (tileStage Cd (tileCount σ s)) (liveCone Sc Cd (tileCount σ s)) 1 1 (k s) Wp)
-    (hDD : Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd (tileCount σ s) live))
+    (hG : Pl.game = monitoringPeriodGame (tileStage Cd (tileCount σ s)) (liveCone Sc Cd (tileCount σ s)) 1 1 (k s) Wp)
+    (hDD : Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd (tileCount σ s) live))
     (hPre : PrefixOf (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile) Pl.game)
     (hMoved : ∀ w, prob (fun y => (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile).MovedIn y w) ≤ δbind)
     (hServ : TileServiceSound σ s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
       δks)
     (hLucks : SharedNoiseLucks Sc Cd Wp)
     (hUF : UnitFixed Pl (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile)
-      (periodMode Cd Wp (runAt Cd hr hM σ k hk s unitOf ws opened enc place tile))
+      (monitoringPeriodMode Cd Wp (runAt Cd hr hM σ k hk s unitOf ws opened enc place tile))
       (fun _ t => (tileWords Sc Cd (tileCount σ s) t : ℝ)) folded) :
     prob (fun x : Paths (StrataCoin C 1 σ) n => Pl.accepts (pathsAt C hM σ s n x) ∧
       n * (Pl.run (pathsAt C hM σ s n x)).fixed <
@@ -165,7 +165,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
           (j10rRate (k s) ρ) δs) ≤ δs + n * (δbind + δks) := by
   obtain ⟨hMu, hRB, hGs⟩ := hLucks
   have hK0 : 0 < k s := hKd
-  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod Sc Cd hn hN hr (hk s) Wp Pl
+  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr (hk s) Wp Pl
     (tileRun σ k hk s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
       (rightAt hM hr σ s enc place tile))
     folded ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate (k s) ρ) δs δbind δks hS hρ hρN hwmax hlk one_pos one_pos

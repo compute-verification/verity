@@ -8,16 +8,15 @@ from __future__ import annotations
 import json
 
 import pytest
-
+from verity.circuits import query_ast as G
 from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.layout import FunctionCall
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
-from verity.circuits import query_ast as G
-from verity.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.circuits.query import parse, query
+from verity.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.circuits.query_codec import from_json, query_id, to_json
+from verity.definitions.registry import b1
 
 GEMM = 'members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")'
 ATTN = '''each("//AttentionHead_v3{*}",
@@ -28,7 +27,7 @@ ATTN = '''each("//AttentionHead_v3{*}",
                instances("@call:DotBf16_v1"),
                rest())),
            rest()))'''
-CANONICAL = 'override(default(32), {"//Gemm_v1{*}": %s, "//AttentionHead_v3{*}": %s})' % (GEMM, ATTN)
+CANONICAL = f'override(default(32), {{"//Gemm_v1{{*}}": {GEMM}, "//AttentionHead_v3{{*}}": {ATTN}}})'
 
 
 @pytest.fixture(scope="module")
@@ -46,8 +45,8 @@ def attn():
     return Program(bind(b1.AttentionHeadV3, T=40, D=16, BN=16))
 
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
+TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+              "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 
 
 @pytest.fixture(scope="module")
@@ -88,10 +87,6 @@ def sweep(program, sets) -> tuple[bool, bool, int]:
         cov = max(cov, hi)
     covered = sum(hi - lo for lo, hi in ivs)
     return (not overlap), (not overlap and covered == program.gates), covered
-
-
-def all_items(spec):
-    return frozenset((j, m) for j, node in enumerate(spec.body.nodes) for m in range(n_members(node)))
 
 
 # -- GateSet -----------------------------------------------------------------------------------------------------
@@ -252,7 +247,7 @@ def test_default_32_tiles_every_body(fixture, request):
     for body in tl.bodies.values():
         spec = body.spec
         assert body.n_nodes == len(spec.body.nodes) and body.spec_id == spec.id
-        cover = {}
+        cover: dict = {}
         for e in body.entries:
             cover.setdefault(e.node, []).extend(e.members)
             if e.kind == "descend":
@@ -333,7 +328,7 @@ def test_override_and_canonical_query(gemm, rms, attn):
     fam_b, sets_b = materialise(attn, ATTN)
     assert set(sets_a) == set(sets_b)
     # a case whose G matches nothing keeps the base
-    fam_c, sets_c = materialise(rms, 'override(default(32), {"//Gemm_v1{*}": %s})' % GEMM)
+    fam_c, sets_c = materialise(rms, f'override(default(32), {{"//Gemm_v1{{*}}": {GEMM}}})')
     assert sets_c == list(evaluate(rms, "default(32)"))
 
 

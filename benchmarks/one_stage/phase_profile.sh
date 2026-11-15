@@ -4,7 +4,7 @@
 # /workspace/jobs/phase) between runs on the pod. STEPS (default setup,build,stage,ident,tl):
 #   setup  CUDA 13.3 (cuda-13.3.sh), Nsight Systems 2026.1.3 and a Python venv, unpacked under KW
 #   build  the source through 70-class-sweep.sh BUILD_ONLY=1, its binaries in KW/AS.env
-#   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit drawn
+#   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit sampled
 #          (zk_cost.py stage), once per KW and UNITS
 #   test   TESTS (default the hm96 trees', the arena layout's and level 0's fused folds') under pytest, slow ones included, on
 #          the pod's nvcc and GPU, against b684b12's cuda-ghash from the build's Flock checkout; a skip fails
@@ -42,7 +42,7 @@ if has setup; then
     curl -fsSL -o $K https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${VERSION_ID/./}/x86_64/cuda-keyring_1.1-1_all.deb \
       && dpkg -i $K > /dev/null && apt-get update -qq > /dev/null 2>&1
   fi
-  set +u; FLOCK_WORK=$W . verity/protocols/flock/pod/cuda-13.3.sh; set -u
+  set +u; FLOCK_WORK=$W . verity/protocols/flock/prover/pod/cuda-13.3.sh; set -u
   echo "$CUDA_TK" > $W/cuda.env
   NR=$W/nsys-root
   if [ ! -x $NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys ]; then
@@ -71,7 +71,7 @@ if has stage && [ ! -s $Z/plan.json ]; then
     > $O/stage.txt 2>&1; echo $? > $S/stage.rc) & STAGE_PID=$!
 fi
 if has build; then
-  FLOCK_WORK=$W/fw OUT=$O/build-$AS bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=90 > $O/build-$AS.txt 2>&1
+  FLOCK_WORK=$W/fw OUT=$O/build-$AS bash verity/protocols/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=90 > $O/build-$AS.txt 2>&1
   log "build $AS rc=$?"
   B=$(sed -n 's/^BINARY=//p' $O/build-$AS.txt | tail -1); SB=$(sed -n 's/^SELFTEST_BINARY=//p' $O/build-$AS.txt | tail -1)
   [ -x "$B" ] && [ -x "$SB" ] || { log "build $AS: no binaries"; tail -30 $O/build-$AS.txt | tee -a $O/job.log; exit 1; }

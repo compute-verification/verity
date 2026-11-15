@@ -9,8 +9,8 @@ import random
 
 import pytest
 
-import verity.definitions.ops.prims  # noqa: F401  (the one-stage tests' primitives)
-import verity.definitions.ops.scalar  # noqa: F401
+import verity.circuits.ops.prims  # noqa: F401  (the one-stage tests' primitives)
+import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
@@ -87,7 +87,7 @@ def _record(n: int = 6, law=None, row: int = 0, previous: str | None = None, wor
 
 
 def _rated(text: str, n: int = 6, table=None, **change) -> dict:
-    """A record of `n` proof blocks under the rate `text` as a stream registers it: its law and work table the ones the
+    """A record of `n` proof blocks under the rate `text` as a stream registers it: its sampling design and work table the ones the
     rate names over them (`selection_law`, `selection_table`), from the verifier's work `table`."""
     rule, program = S.Law(text), P.population_program(PAIR, n)
     return _record(n, law=S.selection_law(rule, n, D.strata_sizes(program, QUERY)),
@@ -297,16 +297,12 @@ def test_a_spec_states_each_public_item_once_with_its_reason():
     for fixed in ("subset:two", "subset:2", "stratified:2", "work:2"):
         with pytest.raises(ValueError):
             S.Law(fixed)
-    with pytest.raises(ValueError, match="uniform"):
-        S.Sequential("subset:4", "B")
     with pytest.raises(ValueError, match="positive"):
         _spec(proof_deadline=0)
     assert _spec().digest() == _spec().digest() != _spec(S.Law("rate:1/2")).digest()
 
 
 def test_a_stream_refuses_what_isnt_built_and_another_unit():
-    with pytest.raises(ValueError, match="Sequential"):
-        _stream(_spec(S.Sequential("uniform:4", "population")))
     with pytest.raises(ValueError, match="unit"):
         S.Stream(_spec(), OTHER, budget=1, delta=DELTA, challenger="c")
     with pytest.raises(ValueError, match="proof deadline"):
@@ -332,7 +328,7 @@ def test_one_stage_refusals_come_through_register():
 def test_a_bernoulli_law_is_refused_at_register():
     """A Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
     count varies; at p = 0 it samples nothing, so a stream would accept having verified nothing): `register` refuses it
-    (`bernoulli`, with `BERNOULLI`) after R1-R7, and logs nothing. A rate, a stratified or work rate and All register."""
+    (`bernoulli`, with `BERNOULLI`) after R1-R8, and logs nothing. A rate, a stratified or work rate and All register."""
     for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
         with pytest.raises(S.Refused) as e:
@@ -410,7 +406,7 @@ def test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need(
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
     """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks samples 8 (not 7) and
     `rate:1/5:4` over 12 samples 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
-    over 6 proof blocks, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
+    over 6 proof blocks, 8) is refused at register (`rate`) before R1-R8 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
     tables, in ASCII digits."""
     for text, n, k in (("rate:1/3:4", 20, 8), ("rate:1/5:4", 12, 4)):
         stream = _stream(_spec(S.Law(text)))
@@ -669,8 +665,8 @@ def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
 
 
 def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_registration():
-    """The stream draws the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
-    the window's open root, logged on the challenger's clock, drawn once and before the window's first registration.
+    """The stream samples the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
+    the window's open root, logged on the challenger's clock, sampled once and before the window's first registration.
     Both verifiers hold each registration of the window to it: a window naming it runs round to an accepted outcome, and
     one naming another or none is refused (`R6-seed-salt`); where the stream drew no salt, a window naming one (a salt
     the server chose) is refused by name. The Spec declares the salt public, of kind `coins`, or a seeded window is

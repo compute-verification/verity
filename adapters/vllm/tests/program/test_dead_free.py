@@ -8,15 +8,21 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
 from verity.commitments.windows import interface as IF
-from verity_flock import circuit as FC, class_statement as CS, ir_lower as IL
+from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import dead_free as DF
+from verity.definitions.registry import fa2_check_inf as F2
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import sampling as SA
+from verity.definitions.registry import topp_words as TW
+from verity_flock import circuit as FC
+from verity_flock import class_statement as CS
+from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
-from verity.definitions.registry import b1, dead_free as DF, fa2_check_inf as F2, hopper, prims as P, sampling as SA, topp_words as TW
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1
@@ -318,7 +324,7 @@ def test_gumbel_top_p_shared_greedy_v2_equals_v1(V):
         _same(new, old, row, TOP_P[i % 4], seed, pos, TEMPS[(i // 4) % 4], SPLITS[(i // 16) % 4])
 
 
-@pytest.mark.parametrize("V,S,dead", [(2, 1, 561), (3, 2, 1013), (16, 32, 3787)])
+@pytest.mark.parametrize("V,S,dead", [(2, 1, 561), (3, 2, 1013), pytest.param(16, 32, 3787, marks=pytest.mark.slow)])
 def test_topp_keep_word_v2_equals_v1(V, S, dead):
     """v1's dead gates are lanes of its vector operations that nothing reads after them."""
     new, old = bind(DF.TopPKeepWordV2, V=V, S=S), bind(TW.TopPKeepWord, V=V, S=S)
@@ -345,7 +351,7 @@ def test_gumbel_select_f32_v3_equals_v1(V):
         _same(new, old, row, seed, pos, TEMPS[i % 4])
 
 
-@pytest.mark.parametrize("V,S,dead", [(3, 2, 1016), (16, 32, 3790)])
+@pytest.mark.parametrize("V,S,dead", [(3, 2, 1016), pytest.param(16, 32, 3790, marks=pytest.mark.slow)])
 def test_gumbel_top_p_v3_equals_v2(V, S, dead):
     """The registered compiler's sampler (`prune.dead_free_versions`): v2's dead gates are its keep word's and the Gumbel scan's
     last 3."""
@@ -516,6 +522,7 @@ def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
     SHA-512 block, which Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
     from verity.commitments.windows import interface as IF
     from verity_flock.circuit import Port
+
     from verity_vllm.program.predict.window_builder import Grain
     from verity_vllm.program.predict.window_circuit import WindowClass
 

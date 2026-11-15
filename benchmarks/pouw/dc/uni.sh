@@ -37,8 +37,8 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
   if [ "${DC_BUILD_ONLY:-}" != 1 ]; then
     nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
-    cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-    [ "${cap%%.*}" = "$CC" ] || { echo "uni.sh: $FAM needs compute capability $CC.x, the device reports '$cap'" >&2; exit 2; }
+    have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
+    [ "${have%%.*}" = "$CC" ] || { echo "uni.sh: $FAM needs compute capability $CC.x, the device reports '$have'" >&2; exit 2; }
   fi
   srcs=()
   for t in ${UNI_TABLES:-uniform imad}; do srcs+=("$HERE/probes/${FAM}_$t.cu"); done

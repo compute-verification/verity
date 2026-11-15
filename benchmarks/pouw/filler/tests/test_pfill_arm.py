@@ -5,38 +5,15 @@ filler's certified fraction changed."""
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import json
-import sys
 from dataclasses import replace
-from pathlib import Path
 
+import arms as A
+import ledger
+import pfill_arm as P
+import pfill_proved as PR
 import pytest
-
-FILLER = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(FILLER.parent / "harness"))
-import ledger  # noqa: E402
-
-
-def _module(name):
-    """The scorer's module as test_filler_score.py registered it, else loaded here: an arm file imports `arms` from
-    sys.modules, so one copy must serve every test in the process."""
-    mod = sys.modules.get(name)
-    if mod is not None and Path(getattr(mod, "__file__", "")).resolve() == FILLER / f"{name}.py":
-        return mod
-    spec = importlib.util.spec_from_file_location(name, FILLER / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _load_file(name):
-    spec = importlib.util.spec_from_file_location(f"hcproved_{name}", FILLER / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
+import scoring as S
 
 ARMS = (("PFillRam", 4, "", 1), ("PFillDuo", 2, "", 1), ("PFillE2m1Ram", 4, "-DPFILL_E2M1", 2))
 
@@ -44,8 +21,6 @@ ARMS = (("PFillRam", 4, "", 1), ("PFillDuo", 2, "", 1), ("PFillE2m1Ram", 4, "-DP
 def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
     """Each arm sets the tile kind score.py's build inherits (NVCC_APPEND_FLAGS), says its products a slot, and has a
     lineage score.py's ledger record takes (scored, then refused a 249-character hypothesis)."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     v1 = A.load("fill-v1")
     for attr, nc, flags, per_slot in ARMS:
@@ -66,8 +41,6 @@ def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, 
     """pfill-power-split and pfill-k are pfill-ram's filler (pfill-k's on {0,1} bits) on the power-split table: an exact
     entry at every scored decode point, and 4 filler SMs during prefill. Each declares the noise filler-scorer/v3 reads:
     pfill-k bits01, the noise of Theorem K's entry, the ±1 tiles pm1, Theorem E's."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
     env = __import__("os").environ["NVCC_APPEND_FLAGS"]
@@ -89,8 +62,6 @@ def test_k_phase_arm_runs_pfill_k_with_a_phase_filler_of_the_builds_width(monkey
     """pfill-k-phase is pfill-k's pump with an exact table row at every suite point; each phase filler is a shape pscore
     takes (8 | S > 8, tiles >= 1) at the width its build fixes (-DPF_PW, which plaunch holds dfill_p to), on a split
     (psched_score refuses a phase point without one); prefill keeps pfill-k's 4-SM split and no phase filler."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     k = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillK")
     arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillKPhase")
@@ -120,8 +91,6 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
     """pfill-k-fused is pfill-k's pump (bits01, the build's -DPFILL_BITS) with an exact table row at every suite point; a
     fused point runs FILL's step with no filler warps (FW = AFW = 0: fscore counts no fixed work, which filler-scorer/v3's
     Theorem K entry refuses), always on a split; prefill keeps pfill-k's 4-SM split; its sources carry fscore's build."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     k = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillK")
     arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
@@ -149,8 +118,6 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
 def test_fused4_fold_arms_are_fused4_with_only_the_filler_changed(monkeypatch, attr, fold):
     """Each fold arm on fused4's placement is pfill-k-fused4's table, fused steps, sources and prefill split with the
     fold arm's filler, build flags and receipt, so v4 reads the tile it pumps and pfill_proved its fold share."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     f4 = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillKFused4")
     tile = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{fold}")
@@ -172,8 +139,6 @@ def test_fused4_fold_arms_are_fused4_with_only_the_filler_changed(monkeypatch, a
 def test_fphase_arms_add_a_phase_filler_at_b256_only(monkeypatch, attr, base, nc, tiles):
     """An fphase arm is its fused4 fold arm with a phase filler of the build's fold (NC) and width (-DPF_PW=4) at 256/2K
     and 256/3K, on the split there and with no fused step; every other point is the fused4 arm's."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     f4 = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{base}")
     want = __import__("os").environ["NVCC_APPEND_FLAGS"].split()
@@ -195,8 +160,6 @@ def test_fphase_arms_add_a_phase_filler_at_b256_only(monkeypatch, attr, base, nc
 def test_bu_arm_is_power_split_on_the_bu_tile(monkeypatch):
     """pfill-bu is pfill-power-split's filler and placement with only the tile's kind changed (-DPFILL_BU), in Theorem
     K's setting and no other arm."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     split = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillPowerSplit")
     arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillBU")
@@ -224,15 +187,13 @@ def _row(kind, b, l, alone_ms, arm_ms):
 
 
 def test_proved_readings_rescore_with_only_the_filler_fraction(tmp_path):
-    S = _module("scoring")
-    P = _load_file("pfill_proved")
     rows = []
     for ph, b, l in S.points():
         alone = 10.0 if ph == "decode" else 160.0
         rows.append(_row("step" if ph == "decode" else "prefill", b, l, alone, alone * 1.02))
     (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
-    res = P.readings(tmp_path)
-    assert res["provisional"]["SCORE"] == S.score(P.stats_of(tmp_path))["SCORE"]
+    res = PR.readings(tmp_path)
+    assert res["provisional"]["SCORE"] == S.score(PR.stats_of(tmp_path))["SCORE"]
     order = sorted(res, key=lambda k: res[k]["filler_fraction"])
     scores = [res[k]["SCORE"] for k in order]
     assert scores == sorted(scores) and scores[0] < scores[-1]
@@ -243,18 +204,15 @@ def test_proved_readings_rescore_with_only_the_filler_fraction(tmp_path):
 def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
     """An e2m1 run (its arm.json's lineage) keeps every s8 reading, the proved 0.225 a slot included (at 8 slots a head
     both tiles' floors are a quarter of a slot), and adds the L = 64 priced reading at twice it, marked conditional."""
-    S = _module("scoring")
-    P = _load_file("pfill_proved")
-    A = _load_file("pfill_arm")
     rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
     (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
-    (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillRam.__dataclass_fields__["lineage"]
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": P.PFillRam.__dataclass_fields__["lineage"]
                                                    .default_factory()}))
-    s8 = P.readings(tmp_path)
+    s8 = PR.readings(tmp_path)
     assert "priced-l64" not in s8
-    (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillE2m1Ram.__dataclass_fields__["lineage"]
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": P.PFillE2m1Ram.__dataclass_fields__["lineage"]
                                                    .default_factory()}))
-    f4 = P.readings(tmp_path)
+    f4 = PR.readings(tmp_path)
     assert {k: f4[k] for k in s8} == s8
     assert f4["priced-l64"]["filler_fraction"] == 2 * s8["proved"]["filler_fraction"]
     assert f4["priced-l64"]["status"] == "conditional"
@@ -266,21 +224,18 @@ def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
     """A pfill-k or pfill-bU run keeps every reading of a ±1 run, E's proved 0.225 included, and adds Theorem K's c = 1
     at φ = 0.9: proved for pfill-k (with its referee's caveats), projected for pfill-bU (not in the Lean lock yet),
     each at ram's fold share ½; a ±1 run never gets it."""
-    S = _module("scoring")
-    P = _load_file("pfill_proved")
-    A = _load_file("pfill_arm")
     rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
     (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
 
     def lineage(cls):
         return cls.__dataclass_fields__["lineage"].default_factory()
 
-    (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(A.PFillPowerSplit)}))
-    pm1 = P.readings(tmp_path)
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(P.PFillPowerSplit)}))
+    pm1 = PR.readings(tmp_path)
     assert "theorem-k" not in pm1
-    for cls, status in ((A.PFillK, "proved"), (A.PFillBU, "projected")):
+    for cls, status in ((P.PFillK, "proved"), (P.PFillBU, "projected")):
         (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(cls)}))
-        k = P.readings(tmp_path)
+        k = PR.readings(tmp_path)
         assert {n: k[n] for n in pm1} == pm1 and set(k) - set(pm1) == {"theorem-k"}
         assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.45, status)
         assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]
@@ -295,8 +250,6 @@ def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_
     their ram arm with only the fold changed; ram's receipt certifies word pairs (Q = a0 d0 + d1), so its count readings
     are half theirs: E 0.1125 against 0.225, K 0.45 against 0.9. The r9
     folds' readings are marked provisional while they are refereed."""
-    A, S = _module("arms"), _module("scoring")
-    P = _load_file("pfill_proved")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     ram = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{base}")
     flags = __import__("os").environ["NVCC_APPEND_FLAGS"]
@@ -313,7 +266,7 @@ def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_
     got = {}
     for a in (ram, arm):
         (tmp_path / "arm.json").write_text(json.dumps({"lineage": a.lineage}))
-        got[a.name] = P.readings(tmp_path)
+        got[a.name] = PR.readings(tmp_path)
     r, f = got[ram.name], got[arm.name]
     assert (f["proved"]["filler_fraction"], f["theorem-k"]["filler_fraction"]) == (0.225, 0.9)
     assert (r["proved"]["filler_fraction"], r["theorem-k"]["filler_fraction"]) == (0.1125, 0.45)

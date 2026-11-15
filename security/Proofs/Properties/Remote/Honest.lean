@@ -132,7 +132,7 @@ theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : NciCheck
   have hcS : (VStar.Recursive.Sampled.protocol.onBlobs bs).commitment kS.commitment = .ok cS := by
     rw [hS']; exact hS
   have dS' : (VStar.Recursive.Sampled.protocol.onBlobs bs).digest cS = NciCheck.Protocol.protocol.digest cI := dS
-  exact ⟨strays_two_none (ne_policy_stage bs) (ne_period_stage bs) hcI hcS dS', digestOf_ok hcI,
+  exact ⟨strays_two_none (ne_policy_stage bs) (ne_monitoringPeriod_stage bs) hcI hcS dS', digestOf_ok hcI,
     (digestOf_sampled bs _).symm.trans ((digestOf_ok hcS).trans (congrArg some dS'))⟩
 
 end Properties.Remote.SecurityProofs

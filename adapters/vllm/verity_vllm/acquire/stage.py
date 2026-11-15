@@ -10,14 +10,15 @@ Writes DIR/runtime_tree.json (always: the CPU gate's off-pod input), and with a 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from verity_vllm.observe.runtime_tree import RuntimeTree, runtime_tree_of
 from verity_vllm.acquire.gate import run as gate_run
 from verity_vllm.acquire.install import IncompletePlan
 from verity_vllm.acquire.plan import AcquisitionPlan
+from verity_vllm.observe.runtime_tree import RuntimeTree, runtime_tree_of
 
 MANIFEST_ENV = "ACQUIRE_MANIFEST"       # the row's required-value manifest path when the stage's CLI has no flag for it
 
@@ -37,8 +38,7 @@ class StageDocs:
         return out
 
 
-def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, Any] | None, out_dir: str | Path, *, source: str,
-                  refuse_incomplete: bool = True) -> StageDocs:
+def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, Any] | None, out_dir: str | Path, *, source: str) -> StageDocs:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rt = runtime_tree_of(model, runner, source=source)
@@ -51,6 +51,9 @@ def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, A
     plan.save(out / "acquisition_plan.json")
     docs.plan = plan
     docs.paths["acquisition_plan"] = str(out / "acquisition_plan.json")
-    if plan.unsupported and refuse_incomplete:
+    if plan.unsupported:
         raise IncompletePlan(f"{len(plan.unsupported)} unsupported Value(s): " + "; ".join(f"{v.value_id}: {v.why}" for v in plan.unsupported[:6]))
     return docs
+
+
+__all__ = ["MANIFEST_ENV", "plan_at_stage"]

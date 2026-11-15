@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import random
 import sys
 import tarfile
 import types
@@ -53,8 +54,8 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-agreement" / "k3.json", '{"key": "k3"}')
     _write(r["check"] / "lean-deps" / "m" / "manifest.json", "{}")           # fetched dependencies
     _write(r["check"] / "lean-audit-scratch-x1" / "p" / "lake-manifest.json", "{}")  # an audit's scratch tree
-    _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # lean_changed.py's built tree
-    _write(r["check"] / "lean-changed" / "links.json", "{}")                 # check's early Lean step's tree
+    _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # a tree a node may still hold, which no step
+    _write(r["check"] / "lean-changed" / "links.json", "{}")                 # builds in
     _write(r["check"] / "lean-records" / "build-0" / "p" / "lean-audit.json", "{}")   # the Lean fast path's
     _write(r["check"] / "lean-builds" / "k" / "ir" / "P" / "M.setup.json", "{}")  # the Lean audit's kept builds
     _write(r["check"] / "lean-artifacts" / "outputs" / "p" / "h.json", "{}")   # Lake's cache of built modules
@@ -88,13 +89,15 @@ def test_a_pack_carries_the_verdicts_and_nothing_else_and_never_replaces_an_entr
 
 
 def test_an_import_of_one_part_takes_only_its_entries(tmp_path, monkeypatch):
-    """`check.py --no-cache --circuit-cache` (drive's after-landing run) imports circuit-check's entries of a pack alone, so no
-    suite, Lean or step pass it carries is here for a step to reuse."""
+    """`check.py --no-cache --circuit-cache` (drive's after-landing run) imports circuit-check's entries of a pack and the suites'
+    passes, which it compares with and never reuses, so no Lean or step pass it carries is here for a step to reuse."""
     _fill(_machine(tmp_path, monkeypatch, "a"))
     V.export(pack := tmp_path / "pack.tar.gz")
     _machine(tmp_path, monkeypatch, "b")
     assert V.import_(pack, "check/circuit-check/") == (1, 0)
     assert sorted(V.entries()) == ["check/circuit-check/v1/d/e1.json"]
+    assert V.import_(pack, ("check/circuit-check/", "tests/")) == (1, 1)
+    assert sorted(V.entries()) == ["check/circuit-check/v1/d/e1.json", "tests/k1.json"]
 
 
 def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
@@ -151,6 +154,44 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
     assert V.export(pack, before) == 2
     with tarfile.open(pack) as tar:
         assert sorted(tar.getnames()) == ["check/lean-audit/k2.json", "tests/k4.json"]
+
+
+def test_a_pack_holds_what_its_entries_need_whether_or_not_the_run_stored_it(tmp_path, monkeypatch):
+    """circuit-check's entries refer to read records each stored once, which a later run's entries share: a pack of that run's
+    entries holds the records they name though an earlier run wrote them, and those the records name, but nothing a need names
+    in another root or that is no verdict entry here."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    cc = r["check"] / "circuit-check" / "v1"
+    _write(cc / "reads" / "r1.json", json.dumps({V.NEEDS: ["r2.json"]}))
+    _write(cc / "reads" / "r2.json", "{}")
+    _write(cc / "reads" / "r3.json", "{}")
+    before = V.snapshot()
+    _write(cc / "d" / "e3.json", json.dumps({V.NEEDS: ["../reads/r1.json", "../reads/absent.json", "../../../../tests/k1.json",
+                                                       "../d/.e2.tmp"]}))
+    held = ["check/circuit-check/v1/d/e3.json", "check/circuit-check/v1/reads/r1.json", "check/circuit-check/v1/reads/r2.json"]
+    assert V.export(pack := tmp_path / "run.tar.gz", before) == 3
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == held
+    assert V.export_paths(reused := tmp_path / "reused.tar.xz", [held[0]], xz=True) == 3
+    with tarfile.open(reused) as tar:
+        assert tar.getnames() == held
+
+
+def test_an_entry_that_is_not_json_is_packed_as_it_is_and_needs_nothing(tmp_path, monkeypatch, capsys):
+    """An entry cut short where it names what it needs can't be read by any lookup, here or where its pack goes: it is packed
+    byte for byte with nothing it names, and the export says so rather than failing the run's every other verdict."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    cc = r["check"] / "circuit-check" / "v1"
+    _write(cc / "reads" / "r1.json", "{}")
+    before = V.snapshot()
+    _write(cc / "d" / "e3.json", (cut := '{"needs": ["../reads/r1.json"'))
+    _write(cc / "d" / "e4.json", json.dumps([{V.NEEDS: ["../reads/r1.json"]}]))
+    assert V.export(pack := tmp_path / "run.tar.gz", before) == 2
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == ["check/circuit-check/v1/d/e3.json", "check/circuit-check/v1/d/e4.json"]
+        assert tar.extractfile("check/circuit-check/v1/d/e3.json").read().decode() == cut
+    assert "verdicts: check/circuit-check/v1/d/e3.json is not JSON (" in capsys.readouterr().err
 
 
 def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):
@@ -369,12 +410,15 @@ def _refused(tmp_path: Path) -> Path:
 
 class _Store:
     """The store as `verdict_packs` reads it: recorded checks, each an hour after the next one listed and running ``walls`` seconds
-    (none: one), with their run files as it lists them; with ``signs``, a remote holding every pack that signs a `file:` URL of
-    each.  Each refresh, fetch and signature is kept."""
+    (none: one), of the commits ``commits`` gives, with their run files as it lists them (``reused``: a run's pack of the passes
+    it reused, beside the one it stored); with ``signs``, a remote holding every pack that signs a `file:` URL of each.  Each
+    refresh, fetch and signature is kept."""
 
     def __init__(self, tmp: Path, runs: dict[str, Path | None], states: dict[str, str] | None = None,
-                 walls: dict[str, float] | None = None, signs: bool = False):
+                 walls: dict[str, float] | None = None, signs: bool = False, commits: dict[str, str] | None = None,
+                 reused: dict[str, Path] | None = None):
         self.tmp, self.runs, self.states, self.walls = tmp, runs, states or {}, walls or {}
+        self.commits, self.reused = commits or {}, reused or {}
         self.index, self.refreshed, self.fetched, self.signed = self, [], [], []
         self.remote = types.SimpleNamespace(presign=self.presign) if signs else None
 
@@ -385,19 +429,22 @@ class _Store:
         import sqlite3
 
         db = sqlite3.connect(":memory:")
-        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL, manifest_json TEXT)")
-        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?, '{}')",
-                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{23 - i:02d}:00:00Z", self.walls.get(rid, 1.0))
-                        for i, rid in enumerate(self.runs)])
+        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL, manifest_json TEXT, "
+                   "source_commit TEXT)")
+        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?, '{}', ?)",
+                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{23 - i:02d}:00:00Z", self.walls.get(rid, 1.0),
+                         self.commits.get(rid)) for i, rid in enumerate(self.runs)])
         return db.execute(query, params).fetchall()
 
     def get_attempt(self, rid: str) -> dict:
         return {"outputs": {"run_files": f"art:{rid}"}}
 
     def listing(self, art: str) -> list[dict]:
-        if (pack := self.runs[art.removeprefix("art:")]) is None:
+        rid = art.removeprefix("art:")
+        if (pack := self.runs[rid]) is None:
             return [{"path": "result.json", "bytes": 2, "sha256": "0" * 64, "remote": True}]
-        return [{"path": "verdicts.tar.gz", "bytes": pack.stat().st_size, "sha256": _sha(pack), "remote": True}]
+        return [{"path": name, "bytes": p.stat().st_size, "sha256": _sha(p), "remote": True}
+                for name, p in (("verdicts.tar.gz", pack), ("verdicts-reused.tar.xz", self.reused.get(rid))) if p is not None]
 
     def fetch(self, art: str, to: Path, *, paths: list[str]) -> Path:
         assert paths == ["verdicts.tar.gz"]
@@ -410,7 +457,7 @@ class _Store:
         from research.store.local import object_key
 
         self.signed.append((key, expires_s))
-        return next(p for p in self.runs.values() if p is not None and object_key(_sha(p)) == key).as_uri()
+        return next(p for p in [*self.runs.values(), *self.reused.values()] if p is not None and object_key(_sha(p)) == key).as_uri()
 
 
 def test_a_recorded_check_sends_the_newest_recorded_checks_packs_as_urls_and_fetches_none(tmp_path, monkeypatch, capsys):
@@ -433,6 +480,55 @@ def test_a_recorded_check_sends_the_newest_recorded_checks_packs_as_urls_and_fet
     assert len(nows) == 1 and nows[0] > 1.7e9, "the cutoff is counted back from the time of day, not from a monotonic clock"
     assert "sending presigned URLs for the verdict packs of 2 recorded checks (0 MiB): r-new, r-old" in capsys.readouterr().out
     assert check.verdict_url_file(tmp_path / "none", _Store(tmp_path, {"r-none": None}, signs=True)) is None
+
+
+def test_a_launch_sends_the_packs_of_the_runs_train_carry_from_names_first_held_to_no_gather_bytes(tmp_path, monkeypatch,
+                                                                                                     capsys):
+    """The verified queue names the shards a rebuilt candidate replaces (`TRAIN_CARRY_FROM`): their packs, the passes it
+    reuses whatever the newest checks' selection holds, come first, both of each (the passes stored and those reused), and
+    one too big for `GATHER_BYTES` is sent all the same; one named that published no pack, or one the store's remote doesn't
+    hold, which no machine could fetch, is printed, and a pack sent as named isn't sent again as one of the newest."""
+    check = _load("check")
+    big = random.Random(0).randbytes(8192).hex()
+    packs = _packs(tmp_path, monkeypatch, {"new": {"tests/k1.json": "new"}, "big": {"tests/k2.json": big},
+                                           "used": {"tests/k4.json": "reused"}, "old": {"tests/k3.json": "3"}})
+    store = _Store(tmp_path, {"r-new": packs["new"], "r-big": packs["big"], "r-none": None, "r-old": packs["old"]}, signs=True,
+                   reused={"r-big": packs["used"]})
+    listing = store.listing
+    store.listing = lambda art: [{**f, "remote": False} for f in listing("art:r-new")] if art == "art:r-local" else listing(art)
+    monkeypatch.setattr(check.COMMON, "recent", lambda now: "r20261108-120000")
+    monkeypatch.setattr(check, "GATHER_BYTES", packs["new"].stat().st_size + packs["old"].stat().st_size)
+    newest = [p["run"] for p in json.loads(check.verdict_url_file(tmp_path, store).read_text())]
+    assert newest == ["r-new", "r-old"], "the big pack is passed over by its size where nothing names it"
+    monkeypatch.setenv("TRAIN_CARRY_FROM", "r-big,r-none,r-local,r-old")
+    got = json.loads(check.verdict_url_file(tmp_path, store).read_text())
+    assert [(p["run"], p["sha256"]) for p in got] == [("r-big", _sha(packs["big"])), ("r-big", _sha(packs["used"])),
+                                                      ("r-old", _sha(packs["old"])), ("r-new", _sha(packs["new"]))]
+    assert ("check: verdicts: 3 packs of the 2 runs TRAIN_CARRY_FROM names that published one, held to no GATHER_BYTES: "
+            "r-big, r-old; none of r-none, r-local") in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_CARRY_FROM", "r-none")
+    assert [p["run"] for p in json.loads(check.verdict_url_file(tmp_path, store).read_text())] == newest
+    assert ("check: verdicts: 0 packs of the 0 runs TRAIN_CARRY_FROM names that published one, held to no GATHER_BYTES: "
+            "none; none of r-none") in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_CARRY_FROM", "")
+    assert [p["run"] for p in json.loads(check.verdict_url_file(tmp_path, store).read_text())] == newest
+    assert "TRAIN_CARRY_FROM" not in capsys.readouterr().out
+
+
+def test_a_commits_own_packs_are_those_of_its_recorded_checks_and_with_remote_only_those_its_remote_holds(tmp_path,
+                                                                                                         monkeypatch):
+    """`commit_packs` reads the packs of `plan.own_checks`' runs through `run_packs`, as `carried_packs` reads the named
+    ones: with ``remote``, one the store's remote doesn't hold, which no URL fetches, is passed over."""
+    check = _load("check")
+    packs = _packs(tmp_path, monkeypatch, {"a": {"tests/k1.json": "a"}})
+    store = _Store(tmp_path, {"r-a": packs["a"]}, signs=True)
+    listing, load = store.listing, check._load
+    store.listing = lambda art: [{**f, "remote": False} for f in listing("art:r-a")] if art == "art:r-local" else listing(art)
+    monkeypatch.setattr(check, "_load", lambda name, d=None: types.SimpleNamespace(
+        own_checks=lambda store, commit: ["r-local", "r-a"]) if name == "plan" else load(name, d))
+    assert [p["run"] for p in check.commit_packs(store, "c" * 40)] == ["r-local", "r-a"]
+    assert check.commit_packs(store, "c" * 40, remote=True) == [{"run": "r-a", "sha256": _sha(packs["a"]),
+                                                                 "bytes": packs["a"].stat().st_size}]
 
 
 def test_a_launch_lists_the_attempts_started_since_before_the_longest_recorded_check_could(monkeypatch):
@@ -689,6 +785,61 @@ def test_a_recorded_run_imports_the_packs_sent_beside_one_given_before_its_snaps
     assert [(x.get("run") or x["pack"], x["added"]) for x in doc["verdicts"]["in"]] == \
         [*([("given.tar.gz", 1)] if given else []), ("r-earned", 2)]
     assert doc["verdicts"]["out"]["entries"] == 0
+
+
+@pytest.mark.parametrize("circuit", [False, True])
+def test_an_uncached_check_compares_with_every_pass_two_slots_recorded_for_its_commit(tmp_path, monkeypatch, capsys, circuit):
+    """`audit-main` (`--no-cache`) compared its fresh suites only with the passes its own slot happened to hold.  Its launch now
+    lists, before the newest recorded checks' packs, both packs of each recorded check of its commit: here two slots' checks,
+    one of which reused a pass that no newer check's pack holds.  The run imports their suites' and tests' passes before its
+    steps, all its fresh suites' `contradicts` reads, and nothing a step would reuse (drive's after-landing run, with
+    `--circuit-cache`, circuit-check's entries too), and names each pack in its result."""
+    check = _load("check")
+    commit = "c" * 40
+
+    def slot(name: str, entries: dict[str, str]) -> None:
+        r = _machine(tmp_path, monkeypatch, name)
+        for k, text in entries.items():
+            _write(r[k.split("/")[0]] / k.split("/", 1)[1], text)
+
+    slot("a", {"tests/ka.json": "a", "tests/per-test/s/ta.json": "a's test", "check/lean-audit/k2.json": "{}",
+               "check/circuit-check/v1/d/e.json": "{}"})
+    V.export(a := tmp_path / "a.tar.gz")
+    slot("b", {"tests/kb.json": "b", "tests/kr.json": "reused by b", "check/lean-audit/k5.json": "{}"})
+    V.export_paths(b := tmp_path / "b.tar.gz", ["tests/kb.json"])
+    V.export_paths(b_reused := tmp_path / "b-reused.tar.xz", ["tests/kr.json", "check/lean-audit/k5.json"], xz=True)
+    slot("new", {"tests/kn.json": "the newest check's, of another commit"})
+    V.export(new := tmp_path / "new.tar.gz")
+    store = _Store(tmp_path, {"r-new": new, "r-b": b, "r-a": a}, signs=True,
+                   commits={"r-new": "d" * 40, "r-b": commit, "r-a": commit}, reused={"r-b": b_reused})
+    run_dir = tmp_path / "run"
+    (run_dir / "inputs").mkdir(parents=True)
+    check.verdict_url_file(run_dir / "inputs", store, commit=commit)
+    out = capsys.readouterr().out
+    assert f"3 packs of 2 recorded checks of {commit[:12]}, every pass it was recorded with: r-b, r-a" in out
+    assert "sending presigned URLs for the verdict packs of 3 recorded checks (0 MiB): r-b, r-a, r-new" in out
+    node = _machine(tmp_path, monkeypatch, "c")
+    _write(node["tests"] / "kc.json", "the slot's own")
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261111-000000-abcd")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.delenv(check.VERDICT_URLS_ENV, raising=False)
+    monkeypatch.setattr(check.SUITES, "foreign", lambda members, env: None)
+    seen = {}
+
+    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None, live=None, splits=None):
+        seen.update(cache=cache, entries=sorted(V.entries()))
+        return True, []
+
+    monkeypatch.setattr(check, "run", run)
+    assert check.main(["--no-cache", *(["--circuit-cache"] if circuit else []), "--keep-going"]) == 0
+    compared = ["tests/ka.json", "tests/kb.json", "tests/kc.json", "tests/kn.json", "tests/kr.json", "tests/per-test/s/ta.json"]
+    assert seen == {"cache": False, "entries": sorted([*compared, *(["check/circuit-check/v1/d/e.json"] if circuit else [])])}
+    only = [check.CIRCUIT_ENTRIES, check.COMPARED] if circuit else check.COMPARED
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert [(x["run"], x["sha256"], x["added"], x["only"]) for x in doc["verdicts"]["in"]] == \
+        [("r-b", _sha(b), 1, only), ("r-b", _sha(b_reused), 1, only), ("r-a", _sha(a), 3 if circuit else 2, only),
+         ("r-new", _sha(new), 1, only)]
 
 
 def test_two_imports_on_one_machine_never_share_a_temporary_file(tmp_path, monkeypatch):

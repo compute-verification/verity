@@ -50,6 +50,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fa3_split_twins as TW
+from verity.definitions.registry import attention_vocab, hopper
+from verity.definitions.registry import fa3_check_inf as F3
+from verity.definitions.registry import fa3_split as FS
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -87,7 +94,7 @@ def _error(e: BaseException) -> str:
 
 
 def case_list(quick: bool = False) -> list[dict[str, Any]]:
-    out = [{"name": f"len{n}", "seqlens": [n]} for n in LENGTHS]
+    out: list[dict[str, Any]] = [{"name": f"len{n}", "seqlens": [n]} for n in LENGTHS]
     out += [{"name": k, "seqlens": v} for k, v in VARLEN.items()]
     out.append({"name": "wide", "seqlens": [161, 300], "wide": True})
     return [c for c in out if c["name"] in QUICK] if quick else out
@@ -125,7 +132,9 @@ def launch_geometry(names: list[str], static: int, max_seqlen_q: int) -> dict[st
 def backend():
     """vLLM's `FlashAttnPrefillBackend` at GLM-5.3's MLA dims on a TP8 rank, as `SparseMLACommonImpl` builds it (no VllmConfig: on
     this path the backend reads none)."""
-    from vllm.v1.attention.backends.mla.prefill.flash_attn import FlashAttnPrefillBackend
+    from vllm.v1.attention.backends.mla.prefill.flash_attn import (
+        FlashAttnPrefillBackend,
+    )
 
     return FlashAttnPrefillBackend(num_heads=NH, scale=SCALE, kv_lora_rank=KV_LORA_RANK, qk_nope_head_dim=NOPE, qk_rope_head_dim=ROPE,
                                    v_head_dim=DV, vllm_config=None)
@@ -264,13 +273,9 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
     """``rows`` of a sequence of L rows the plan runs as ``ns`` splits through `fa3_split_twins.head_split_rows`, the 8 heads of a
     row at once: (out [rows, NH, DV], nonfinite [rows, NH])."""
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.numerics import fa3_split_twins as TW
-    from verity.definitions.registry import attention_vocab
-    from verity.definitions.registry import fa3_split as FS
-
     twin = {"dot16": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "inv": DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]}
-    out, nf = np.empty((len(rows), NH, DV), dtype=np.uint16), np.zeros((len(rows), NH), dtype=bool)
+    out: np.ndarray = np.empty((len(rows), NH, DV), dtype=np.uint16)
+    nf: np.ndarray = np.zeros((len(rows), NH), dtype=bool)
     for i, r in enumerate(int(x) for x in rows):
         T = r + 1
         out[i], nf[i] = TW.head_split_rows(q[r], k[:T].transpose(1, 0, 2), v[:T].transpose(1, 0, 2), T=T, BN=BN,
@@ -280,17 +285,13 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.reference import evaluate
+    from verity.definitions.numerics import fa2_relation
+    from verity.definitions.numerics import fa3_model as FM
+
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.numerics import fa2_relation, fa3_model as FM
-    from verity.definitions.registry import attention_vocab, hopper
-    from verity.definitions.registry import fa3_check_inf as F3
-    from verity.definitions.registry import fa3_split as FS
 
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
     twin = {"dot_prim": "HopperBF16WgmmaDot16_v1", "inv_prim": "Fa3InvSum_v1"}
@@ -315,13 +316,13 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
         head = bind(FS.AttentionHeadSplit if split else F3.AttentionHeadV4, T=T, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
         row_fn = bind(FS.AttentionSplit if split else F3.AttentionV4, T=T, NH=NH, KVH=NH, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
 
-        def reference(h: int) -> list[int]:
+        def reference(h: int, r=r, T=T, head=head) -> list[int]:
             rec["reference"] += 1
             return [int(x) for x in evaluate(head, q[r, h].tolist(), k[:T, h].reshape(-1).tolist(), v[:T, h].reshape(-1).tolist())]
 
         nonfinite = np.flatnonzero(flagged[i])
-        for h in nonfinite:
-            want[i, h] = reference(int(h))
+        for hn in nonfinite:
+            want[i, hn] = reference(int(hn))
         if int(r) in SAMPLE or int(r) == L - 1:
             rec["sampled_rows"] += 1
             if split:

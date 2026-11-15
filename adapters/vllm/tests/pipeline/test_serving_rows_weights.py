@@ -18,8 +18,8 @@ from verity_vllm.program.predict import window_weights as WW
 from verity.protocols.spot.verifier.one_stage import registered as REG, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 

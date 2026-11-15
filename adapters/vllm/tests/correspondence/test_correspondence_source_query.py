@@ -6,15 +6,22 @@ import gzip
 import json
 
 import pytest
-from verity_vllm.query.units import ValueRef, boundary
-from verity_vllm.correspondence import runtime as RC
-from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, call_place, parse_call_name, recorded_names
-from verity_vllm.query.module_body import Q_module_body_v1
-from verity_vllm.query.program_view import InputView, Port, ProgramView
-from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.required import request_manifest
 
 from tests.query.test_module_body import W, _call, program
+from verity_vllm.correspondence import runtime as RC
+from verity_vllm.correspondence.reader_for_query import (
+    CallName,
+    Correspondence,
+    call_name_of,
+    call_place,
+    parse_call_name,
+    recorded_names,
+)
+from verity_vllm.query.compose import merge_ranks
+from verity_vllm.query.module_body import module_body_partition
+from verity_vllm.query.program_view import InputView, Port, ProgramView
+from verity_vllm.query.required import request_manifest
+from verity_vllm.query.units import ValueRef, boundary
 
 
 def result_json() -> dict:
@@ -24,7 +31,8 @@ def result_json() -> dict:
 def _record(P) -> dict:
     """The record the frontend would have emitted for `program()`: one occurrence per (module, node), Call k -> its occurrence; the
     frontend's naming suffix kept as `member` / `row` where its parser reads it, RAW as `hint` where it does not (`.../<fx>/<member>[row]`)."""
-    occs, calls, seen = [], [], {}
+    occs: list[dict] = []
+    calls, seen = [], {}
     for c in P.calls:
         n = parse_call_name(c.name)
         key = (n.module, n.node)
@@ -49,7 +57,7 @@ def test_record_and_fallback_agree_call_for_call_and_the_source_is_recorded():
     for c in P.calls:
         assert canon.module_of(c.id) == fallback.module_of(c.id), c.name
         assert canon.name(c.id) == fallback.name(c.id), c.name
-    Qa, Qb = Q_module_body_v1(P, canon), Q_module_body_v1(P, fallback)
+    Qa, Qb = module_body_partition(P, canon), module_body_partition(P, fallback)
     assert {u.id: u.calls for u in Qa(P)} == {u.id: u.calls for u in Qb(P)}
     assert boundary(P, Qa).values == boundary(P, Qb).values
     res = result_json()
@@ -151,7 +159,8 @@ def tp_attention_program() -> ProgramView:
 def _tp_record(P: ProgramView, rank: int) -> dict:
     """The record the frontend emits for `tp_attention_program()`: a collective's occurrence carries `collective`, its Call the kind as
     `member`, and a site's owning module is the module whose forward called it (`self_attn`), not the fallback's site path."""
-    occs, calls = [], []
+    occs: list[dict] = []
+    calls = []
     for c in P.calls:
         n = parse_call_name(c.name)
         kind = n.suffix or None

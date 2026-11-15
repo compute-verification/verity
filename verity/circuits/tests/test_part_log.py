@@ -12,7 +12,7 @@ import test_codec_stream as CS
 from verity.circuits import bind, codec
 from verity.circuits.codec import (ALIAS_WINDOW, SCHEMA_V0, SCHEMA_V1, _BodyEncoder, _flat_parts, _part_key, canonical_json,
                                       decode_program, descriptor_chunks, encode_program)
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat, prefix_runs, runs
@@ -299,7 +299,7 @@ def test_encoding_and_liveness_of_log_cuts_are_those_of_concat():
 def test_a_decoded_alias_chain_is_one_log_and_decodes_to_the_flat_parts():
     """Call P's key sequence is written as an alias to call P-1's plus one part; the decoder extends one log along the chain,
     and every decoded sequence is `Concat` of the flat parts the writer had."""
-    reg = Registry()
+    reg = DefinitionTable()
     reg.add(Neg16)
     reg.add(Add16)
     N = 30
@@ -353,7 +353,7 @@ def test_a_descriptor_is_the_key_tuple_writers_byte_for_byte(monkeypatch):
     causal histories cut from a log or concatenated, with a dead row; DSA's long rows at their classes, Rows and RowsPad, the
     Definitions' own bodies among them, a history row one part or two; and a decoded circuit, whose histories are the decoder's
     logs."""
-    reg = Registry()
+    reg = DefinitionTable()
     reg.add(Neg16)
     reg.add(Add16)
     progs = [_attention_like(N, log, dead) for N in (3, 12, 40) for log in (True, False) for dead in (None, N - 1)]

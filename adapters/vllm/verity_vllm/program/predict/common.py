@@ -209,16 +209,22 @@ class _Launch:
     parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
     the request step being written; without a batch a call is its own launch.  `capture_sizes`: the breakable CUDA graphs'
     (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens; `max_num_seqs` the engine's, up to which a uniform
-    decode step replays a FULL graph (`targets.graph_launch`)."""
+    decode step replays a FULL graph (`targets.graph_launch`).  `entries`: per request step whose call computes only the first rows
+    of its sequence in the launch (a recomputed hit prefix's chunk, `steps.plan_steps`' ``recompute_hits``), that sequence's rows."""
 
     def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = (), max_num_seqs: int = 0) -> None:
         from verity_vllm.program.frontend import targets as TG
         self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
         self.capture_sizes, self.max_num_seqs = tuple(capture_sizes), int(max_num_seqs)
+        self.entries: dict[int, int] = {}
 
     def with_batch(self, batch: list) -> _Launch:
         """This launch's graphs over the request's batch."""
         return _Launch(batch, self.capture_sizes, self.max_num_seqs)
+
+    def entry(self, own: int) -> int:
+        """The rows of this request's sequence in the launch of the current step, where its call computes `own` of them."""
+        return self.entries.get(self.step, int(own))
 
     def graph(self, own: int) -> tuple[str, int]:
         """The CUDA-graph mode (FULL, PIECEWISE or NONE) of the step `own` rows run in, and the tokens its forward runs at
@@ -301,10 +307,12 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
     return batch
 
 
-def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ...] = (), T: int = 0, note: str = "") -> None:
+def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ...] = (), T: int = 0, note: str = "",
+              entries: tuple[int, ...] = ()) -> None:
     """`model`'s calls run in `batch` (`_Launch.with_batch`) where its request has one; `Unexpressible` for a decoder whose kernel
     choices read its own rows only (`reads_launch`), or for prefill `chunks` that aren't one a step of `batch` before its T decodes
-    (none for a request a window leaves mid-prefill, T < 0)."""
+    (none for a request a window leaves mid-prefill, T < 0). `entries`: per chunk, the rows of its sequence in its launch, at
+    least the chunk's (`_Launch.entries`)."""
     if batch is not None:
         if not getattr(model, "reads_launch", False):
             raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance{note}), whose kernel "
@@ -315,6 +323,11 @@ def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ..
         raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
             f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({steps})" if batch is not None else
             "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
+    if entries:
+        if len(entries) != len(chunks) or any(int(n) < c for n, c in zip(entries, chunks)):
+            raise Unexpressible(f"vocabulary cannot express: sequences of {list(entries)} rows for prefill chunks {list(chunks)} (one a "
+                                f"chunk, each at least its rows)")
+        model.launch.entries = {k: int(n) for k, (n, c) in enumerate(zip(entries, chunks)) if int(n) != c}
 
 
 def graph_capture_sizes(phi) -> tuple[int, ...]:

@@ -1,6 +1,6 @@
 // launch_hm96_finish (verity/protocols/flock/prover/cuda/sha512.cuh: the masks, then the hashes) timed: `hm96_leaves LOG_N REPS` prints one
-// JSON line with the mean time a launch over REPS launches of 2^LOG_N leaves at 256 threads a block, from a fixed draw of
-// digests, salts and a key's tables (each byte's entries the XORs of drawn columns, as hm96's are), and a 64-bit FNV-1a of
+// JSON line with the mean time a launch over REPS launches of 2^LOG_N leaves at 256 threads a block, from a fixed sample of
+// digests, salts and a key's tables (each byte's entries the XORs of sampled columns, as hm96's are), and a 64-bit FNV-1a of
 // the leaves. Built against another tree's sha512.cuh (its cuda/ directory first on the include path), it prints the same FNV
 // when that tree's leaves are the same. From the tree's root, on a leased GPU:
 //

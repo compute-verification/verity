@@ -6,7 +6,7 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate law
-  whose strata or table don't apply), then R1–R7 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
+  whose strata or table don't apply), then R1–R8 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
@@ -14,28 +14,34 @@ check the stream ran on it, in the stream's order.
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
   sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
   under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
-  read any byte carries evidence (`coins`) that the bytes are exactly the coins the session the ledger opens for the
+  read any byte carries evidence (`coins`) that the bytes are exactly the coins of the verifier's family (`family`, the
+  run's own, never the evidence's) that the session the ledger opens for the
   registration's window (the verifier's `windowRoot`) released after the registration's digest, every one read and each
   opening checked against the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none
-  (`coinsHold`, code `coins`), missing evidence or no window refused; then the sample is held to the registration and the
-  expanded law (`Draw.checkDraw`);
+  (`coinsCode`, code `coins`), missing evidence, no window or no family refused, and a family whose log shows a root
+  other than the registration's digest refused by its own code (`family`: a family's coins follow one registration, so a
+  second registration's coins are another family's, and an interior registration's too); then the sample is held to the
+  registration and the expanded law (`Draw.checkDraw`);
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
   sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
-  public-items rule on the interior values, the population (else `interior-population`), R1–R7 against its copies under
-  `subset:Q·n` (all of them committed), `population-order`, and its receipt; and `second`: the second stage on its own
+  public-items rule on the interior values, the population (else `interior-population`), its window (else
+  `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
+  digest and the sample, `interiorWindowOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
+  `population-order`, and its receipt; and `second`: the second stage on its own
   coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
-  interior registration, the second stage's cells and the design's links and wires and the rows their units read, which
-  the verifier derives from the replay block's Definition in the challenger's program (`SecondStage.replayLinks`,
-  `SecondStage.replayWires`, `SecondStage.replayRows`), as its `statements` check
+  interior registration, the second stage's cells and the design's links and wires, the rows their units read and the
+  names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
+  program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
+  `SecondStage.replayReturns`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
@@ -51,6 +57,7 @@ module
 public import Spot.OneStage
 public import Spot.Select
 public import Spot.Slots
+public import Spot.PopOrder
 public import Spot.Service
 public import Spot.ChallengerCoins
 public import Spot.SecondStage
@@ -72,9 +79,10 @@ the interior values, the record and its place in the log, the second stage's coi
 record's proved units, instances, served units and session roots, the second-stage sessions' statements
 (`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
 header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
-auditor's params name them (`templateCircuits`). The design's links and wires and their rows are the verifier's own,
-from the replay block's Definition in the boundary program (`SecondStage.replayLinks`, `SecondStage.replayWires`,
-`SecondStage.replayRows`), and never part of it. -/
+auditor's params name them (`templateCircuits`). The design's links and wires, their rows and the names of what the
+block returns are the verifier's own, from the replay block's Definition in the boundary program
+(`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`, `SecondStage.replayReturns`), and
+never part of it. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -83,6 +91,7 @@ structure Interior where
   received : String
   source : ByteArray
   coins : Json := Json.null
+  family : Option String := none
   provedUnits : Option (Array Int)
   instances : Option Int
   served : Json
@@ -111,6 +120,7 @@ structure Input where
   served : Json
   sessionRoots : Json
   coins : Json := Json.null
+  family : Option String := none
   interior : Option Interior := none
 
 private def refused (step : String) (codes : Array String) : Json :=
@@ -154,15 +164,19 @@ def receipt (record : Json) (challenger received : String) : V Json := do
   return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
     ("verifier", Json.str challenger), ("received", Json.str received)]
 
-/-- The sample's coins are the challenger's: a sample that read any byte carries evidence that holds of the bytes it read
-(`Challenger.coinsReason`, after the registration's digest, for the window whose open root `window` the verifier holds),
-so missing evidence, or a verifier that holds no window, is a refusal and never a skip; one that read none (`All`)
-carries none (`null`). -/
-def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) : Bool :=
-  if read.isEmpty then coins == Json.null else
-  match window, Registration.digest record with
-  | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
-  | _, _ => false
+/-- The sample's coins are the challenger's, or the code its step is refused with: a sample that read any byte carries
+evidence that holds of the bytes it read (`Challenger.coinsReason`, after the registration's digest, for the window whose
+open root `window` the verifier holds and the family `family` the verifier names), so missing evidence, or a verifier
+that holds no window or names no family, is a refusal (`coins`) and never a skip; one that read none (`All`) carries
+none (`null`). A family whose log shows a root other than the registration's digest has its own code (`family`,
+`Challenger.FAMILY_ROOT`). -/
+def coinsCode (coins record : Json) (window family : Option String) (read : ByteArray) : Option String :=
+  if read.isEmpty then (if coins matches .null then none else some "coins") else
+  match window, family, Registration.digest record with
+  | some w, some label, .ok after =>
+    (Challenger.coinsReason coins w label after read).map fun why =>
+      if why == Challenger.FAMILY_ROOT then "family" else "coins"
+  | _, _, _ => some "coins"
 
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
 the registration's own ports at their own roots under a two-stage rule. -/
@@ -180,6 +194,14 @@ private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
   | .twoStage grain _ _ => jeq query grain
   | _ => true
 
+/-- **The interior registration's window** is the boundary registration's, or the one the verifier computes from the
+boundary registration's digest `digest` (lowercase hex) and the replay sample (`SecondStage.interiorRoot`); `boundary`
+and `interior` are the two registrations' window roots as the verifier holds them. So one session samples both stages,
+or the second stage's is the session on the one root the boundary registration and its sample name: the second stage
+is sampled on no other window. -/
+def interiorWindowOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
+  interior == boundary || (interior.isSome && interior == SecondStage.interiorRoot digest sample)
+
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
 and codes. -/
@@ -192,13 +214,17 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   let ks ← k.over (← Select.templateIds v.query) ns
   let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
+  let boundary ← Registration.digestHex i.record
+  if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
+    return .error ("interiors", #["interior-window"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
   let (draw, read) ← Select.selectSecond sample ns ks it.source
-  if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then return .error ("second", #["coins"])
+  if let some code := coinsCode it.coins it.record v.windowRoot it.family (it.source.extract 0 read) then
+    return .error ("second", #[code])
   return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
@@ -228,7 +254,8 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
-        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn }
+        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
@@ -256,8 +283,8 @@ def run (i : Input) : V Json := do
   if i.closure.isSome then return refused "select" #["closure"]
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
-  if !coinsHold i.coins i.record v.windowRoot (i.source.extract 0 read) then
-    return refused "select" #["coins"]
+  if let some code := coinsCode i.coins i.record v.windowRoot i.family (i.source.extract 0 read) then
+    return refused "select" #[code]
   let codes := Draw.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes
   let drawn := Draw.proved draw

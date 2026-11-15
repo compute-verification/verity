@@ -1,4 +1,4 @@
-"""U's CPU pin (`verity.protocols.pouw.prover.schemes.pearl_c_u`): the integer grouped sum equals `verity.definitions.silicon`'s two step models, the pin
+"""U's CPU pin (`verity.protocols.pouw.prover.schemes.pearl_c_u`): the integer grouped sum equals `verity.circuits.silicon`'s two step models, the pin
 equals `pearl_c`'s reference, and the pinned vectors (cut from the H100 kernel's gate problem) reproduce."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import pytest
 
 import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
-from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
+from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_u as U
 
@@ -113,3 +113,15 @@ def test_vectors_are_pinned():
     file's."""
     fresh = json.loads(UV.dumps(UV.vectors()))
     assert {k: v for k, v in fresh.items() if k != "gate"} == {k: v for k, v in VECTORS.items() if k != "gate"}
+
+
+#: four cells of Pearl+'s y as the H200 stored it (r20261103-053659-36f1's decode pass, matmul 0 at k = n = 2,048, tile 5),
+#: (U, α_A, α_B, y): every one of that tile's 2,560 real cells is `y` of its U and α
+H200_Y = [(0x478391C0, 0x426D4BA7, 0x448F000E, 0x3F7E), (0xC78DF380, 0x4275FF63, 0x44965964, 0xBF7C),
+          (0x47BB95B0, 0x426E5313, 0x448643AF, 0x3FC0), (0xC81016D0, 0x42757555, 0x4495D9AA, 0xC000)]
+
+
+def test_y_is_the_h200_kernels_stored_y():
+    assert [U.y(u, a, b) for u, a, b, _ in H200_Y] == [y for *_, y in H200_Y]
+    with pytest.raises(U.NonFinite):
+        U.y(0x7F000000, 0x00800000, 0x00800000)

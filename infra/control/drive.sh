@@ -123,12 +123,13 @@ deploy() {
     || { echo "drive: $sha is on neither checked nor main: deploy only landed code" >&2; return 1; }
   echo "$sha" > "$DIR/deployed.new" && mv "$DIR/deployed.new" "$DIR/deployed" && echo "drive: runs $sha from the next tick"
 }
-# Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and the queue
-# clone's worktree records of what is gone; and $REPO's packs folded into one once they pass 50: each checkout there fetches the
-# blobs it lacks as a pack of its own, and git's auto maintenance never repacks a partial clone's such packs
+# Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and each
+# after-landing tree there as old and as idle (`research-after-land-*`, which a killed job leaves), and the queue clone's worktree
+# records of what is gone; and $REPO's packs folded into one once they pass 50: each checkout there fetches the blobs it lacks as
+# a pack of its own, and git's auto maintenance never repacks a partial clone's such packs
 prune_trees() {
   used=$(for p in /proc/[0-9]*; do readlink "$p/cwd"; done 2>/dev/null | sort -u)
-  for t in $(find "$TRAIN_TREES" -mindepth 1 -maxdepth 1 -type d -name 'train-*' -mmin +60); do
+  for t in $(find "$TRAIN_TREES" -mindepth 1 -maxdepth 1 -type d \( -name 'train-*' -o -name 'research-after-land-*' \) -mmin +60); do
     printf '%s\n' "$used" | grep -q "^$t\(/\|$\)" && continue
     [ -n "$(find "$t" -mmin -60 -print -quit 2>/dev/null)" ] && continue
     rm -rf -- "$t" "$t.log"

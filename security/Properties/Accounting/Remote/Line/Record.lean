@@ -58,7 +58,7 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
   `Record.groups` and `Record.receipts` are its groups, one a window, and its draws' receipts.
 * `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
   first event that throws; `Record.receiptsAt` its windows' receipts and `Record.sampleReceiptsAt` its draws'.
-* `recordSample`: the record's opening draw (`Accounting.Remote.Draw.Session`), one draw for each of the session's
+* `recordSample`: the record's opening draw (`Accounting.Remote.Draw.Run`), one draw for each of the session's
   (`Node.samples`), draw `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
   (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
   that `Live`, a draw's size fixed by the coins before it, can hold of a session whose acceptance turns on later coins.
@@ -216,9 +216,9 @@ def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.samples κ X → Record)
-    (correct : Fin node.samples → Accounting.Remote.Draw.Coins node.samples κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Session node.samples receiptMax (fun _ => node.params.samples) κ X where
+def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
+    (correct : Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
+    Accounting.Remote.Draw.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
 
@@ -226,8 +226,8 @@ def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Dr
 `ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordSample`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → Accounting.Remote.Draw.Coins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.Coins node.samples κ X → Finset ℕ) :
+    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
     Accounting.Remote.Draw.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordSample node (recs c) (correct c)
 

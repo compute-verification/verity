@@ -38,12 +38,20 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import rows as RK
+from verity.definitions.numerics import softcap_rows as SR
+from verity.circuits.ops import mufu
+from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import fa2_softcap as F2S
+from verity.definitions.registry import prims as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import rows as RK
-from verity.definitions.numerics import softcap_rows as SR
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
+from verity_vllm.properties.fa_tap_exactness import PAGE
+from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
@@ -60,8 +68,6 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from verity.definitions.ops import mufu
-
     (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
     sha = hashlib.sha256(words.tobytes()).hexdigest()
@@ -70,7 +76,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity.definitions.ops import mufu
+    from verity.circuits.ops import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"
@@ -115,16 +121,10 @@ def case_list() -> list[dict[str, Any]]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against `AttentionSoftcap_v2` (a worker process: numpy words in, a record out)."""
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.circuits.defs import bind
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import b1, hopper
-    from verity.definitions.registry import fa2_softcap as F2S
-    from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
+    table: np.ndarray = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
     tanh = lambda x: mufu_tanh(x, table, job["tanh_lo"])  # noqa: E731
     c, D, q, k, v, o, bt, cap = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"], job["case"]["softcap"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"]))
@@ -163,7 +163,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
                 rec["row_kernel_declined"] += 1
             rec["binding_mismatch"] += spec.id != bind(F2S.AttentionSoftcapV2, T=T, NH=H, KVH=Hk, D=D, BN=BN, CAP=cap,
                                                        DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
-            ref_heads = list(np.flatnonzero(nonfinite))
+            ref_heads: list[np.integer | int] = list(np.flatnonzero(nonfinite))
             if sampled < FINITE_SAMPLE and T > BN and not nonfinite.all():
                 ref_heads.append(int(np.flatnonzero(~nonfinite)[-1]))
                 sampled += 1
@@ -180,9 +180,9 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
             rec["mismatch"] += int(bad.size)
             rec["mismatch_finite"] += int(np.count_nonzero(~nonfinite[bad]))
             if bad.size and rec["first_mismatch"] is None:
-                h = int(bad[0])
-                rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[h]),
-                                         "want": [int(x) for x in want[h][:4]], "kernel": [int(x) for x in got[h][:4]]}
+                hb = int(bad[0])
+                rec["first_mismatch"] = {"token": tok + r, "head": hb, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[hb]),
+                                         "want": [int(x) for x in want[hb][:4]], "kernel": [int(x) for x in got[hb][:4]]}
         tok += sq
     return {"case": c["name"], "D": D, **rec}
 
@@ -247,6 +247,7 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
         from torch.profiler import ProfilerActivity, profile, record_function
 
         op = torch.ops._vllm_fa2_C.varlen_fwd
+        jobs: list[dict[str, Any]]
         doc["launches"], jobs = [], []
         with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
             for i, c in enumerate(case_list()):

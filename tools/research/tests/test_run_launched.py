@@ -309,7 +309,40 @@ def test_a_launch_that_cannot_make_its_fifo_is_refused_and_releases_what_it_took
     monkeypatch.setattr(remote.os, "mkfifo", no_fifo)
     out = remote.launch_request(req)
     assert out["started"] is False and "could not prepare the launch" in out["refused"]
+    assert out["fault"] == "CannotStart" and remote.cannot_start(out) == out["refused"], "the machine's, whatever the job"
     assert (runs_root / "mk1" / "refused.json").exists() and not cred.exists() and remote.exclusive_holder(runs_root) is None
+
+
+def test_a_runner_the_machine_cannot_start_is_the_machines_refusal_and_a_command_too_long_to_start_is_the_jobs(tmp_path, monkeypatch):
+    """A machine that can't start the runner's process (its null device can't be opened, its python is gone) refuses every job
+    alike, so its answer says so (CannotStart) and `research run --on auto` places the job elsewhere. An argument list the
+    kernel won't take fails at the same call on every machine: it stays the runner's failure, as does a runner that started
+    and exited, and neither is read as the machine's."""
+    command = [PY, "-c", "print('never')"]
+    req, runs_root = _request(tmp_path, "ns1", command, exclusive=True, python=str(tmp_path / "no-python"))
+    out = remote.launch_request(req)
+    assert out["started"] is False and out["fault"] == "CannotStart" and remote.cannot_start(out) == out["refused"]
+    assert out["refused"] == f"{remote.NOT_STARTED}: FileNotFoundError: [Errno 2] No such file or directory: '{tmp_path / 'no-python'}'"
+    assert json.loads((runs_root / "ns1" / "refused.json").read_text())["fault"] == "CannotStart"
+    assert remote.exclusive_holder(runs_root) is None and not (req.parent / remote.LAUNCH_ACK).exists(), "what it took is released"
+    again = remote.launch_request(req)
+    assert again["existing"] and remote.cannot_start(again) == out["refused"], "a redelivery answers the same"
+    null = tmp_path / "no-null-device"
+    with monkeypatch.context() as m:
+        m.setattr(os, "devnull", str(null))
+        out = remote.launch_request(_request(tmp_path, "ns2", command)[0])
+    assert out["fault"] == "CannotStart" and remote.cannot_start(out) == out["refused"]
+    assert out["refused"] == f"{remote.NOT_STARTED}: FileNotFoundError: [Errno 2] No such file or directory: '{null}'"
+    out = remote.launch_request(_request(tmp_path, "ns3", [*command, "x" * 200_000])[0])
+    assert out["started"] is False and out["refused"].startswith(f"{remote.NOT_STARTED}: OSError: [Errno {errno.E2BIG}] ")
+    assert out["fault"] == "RunnerFailed" and remote.cannot_start(out) is None, "the job's own, on any machine"
+    older = {"claimed": True, "started": False, "fault": "RunnerFailed"}
+    assert remote.cannot_start({**older, "refused": f"{remote.NOT_STARTED}: PermissionError: [Errno 13] Permission denied: '{null}'"}), \
+        "as a shipped package that predates CannotStart says it"
+    assert remote.cannot_start({**older, "refused": f"{remote.NOT_STARTED}: OSError: [Errno {errno.E2BIG}] Argument list too long"}) is None
+    assert remote.cannot_start({**older, "refused": "the runner exited 2 before writing job.json: unrecognized arguments: --x"}) is None
+    assert remote.cannot_start({"claimed": True, "started": True, "runner_pid": 7}) is None
+    assert remote.cannot_start({"claimed": False, "fault": "Refused", "refused": "machine is exclusively held by run r0"}) is None
 
 
 def test_a_relative_request_path_still_reaches_the_runners_ack(tmp_path, monkeypatch):

@@ -180,3 +180,6 @@ def install_codegen_hooks(hook: Any, into: hooks.Hooks, batch: bool = False) -> 
     if hook not in ih.INTERMEDIATE_HOOKS:
         into.append(ih.INTERMEDIATE_HOOKS, hook)
     return stats
+
+
+__all__ = ["FLUSH"]

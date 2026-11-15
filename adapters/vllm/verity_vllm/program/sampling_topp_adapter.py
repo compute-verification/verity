@@ -21,7 +21,6 @@ import os
 import struct
 
 import numpy as np
-
 from verity.definitions.registry.sampling_topp_difftest import spec
 from verity.definitions.registry.topp_geometry import splits_for
 

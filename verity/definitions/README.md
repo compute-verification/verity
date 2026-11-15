@@ -1,7 +1,7 @@
 # verity.definitions
 
 The Definitions of the kernels served models run: each kernel vLLM launches (a GEMM, an RMSNorm, attention, MoE routing,
-sampling, a training step's optimizer) written as a composite Definition over the primitives of `verity.definitions.ops`,
+sampling, a training step's optimizer) written as a composite Definition over the primitives of `verity.circuits.ops`,
 gate for gate what the kernel computes on the GPU, together with its Boolean version, the fast evaluators that reproduce
 it, and the partition of a served Program into proof blocks. The adapters (`adapters/vllm/`) build served
 Programs from these Definitions. The terms and the front doors (building, evaluating, checking, regenerating pins) are
@@ -49,7 +49,7 @@ its Definitions with their signatures.
 ## Boolean versions
 
 `boolean.boolean_version(spec)` is the registered Boolean Definition whose word Definition is `spec`, found among every module
-of `verity.definitions.ops.boolean` and of the registry, with each function-valued static bound to its own Boolean
+of `verity.circuits.ops.boolean` and of the registry, with each function-valued static bound to its own Boolean
 version; it raises `NoBooleanVersion` naming the Definitions it finds none for. The same module measures how far a served
 Program is from pure bits.
 

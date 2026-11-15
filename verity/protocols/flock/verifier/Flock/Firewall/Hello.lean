@@ -14,7 +14,8 @@ The analysis holds these to the coin layer's `Hello` (`Claims.ZKMal.CoinLayer.he
 -/
 module
 
-public import Flock.Witness
+public import Flock.Firewall
+public import Flock.WitnessZk
 public import Flock.Firewall.Coins
 
 @[expose] public section

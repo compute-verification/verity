@@ -11,6 +11,9 @@ texts this package wrote, so a record of record grades as it always did.  Depend
 """
 from __future__ import annotations
 
+__all__ = ["NOT_YET", "PROVER_SEED_SOURCE", "ROOT_SEED_SOURCE", "WHY_CLASSES_BY_NAME", "challenge_seed_source",
+           "not_evaluable_codes", "reason_code", "seed_form", "stratum_classes", "why_class"]
+
 #: the classes of a 'not evaluated' reason.  BY-NAME classes (a gap of this replay version, stated on the record) may be
 #: carried on a PASS by the verdict's named-gap rule when form (B) covers the values; FAULT classes (the evaluator or the row->member mapping
 #: failed at run time) never: a fault is a run that did not evaluate, not a gap on the record.
@@ -94,7 +97,9 @@ def stratum_classes(entry: dict) -> list[str]:
 def seed_form(sr: dict) -> str | None:
     """How the replay's sample seed was chosen (one of SEED_FORMS, or "unknown"): as stamped (`sample.seed_form`), else decoded from
     `seed_source`.  None when the record carries neither.  The summary shape (seed / seed_source at the top level) reads the same."""
-    smp = sr.get("sample") if isinstance(sr.get("sample"), dict) else {}
+    smp = sr.get("sample")
+    if not isinstance(smp, dict):
+        smp = {}
     form = sr.get("seed_form") if sr.get("seed_form") is not None else smp.get("seed_form")
     if form is not None:
         return str(form)

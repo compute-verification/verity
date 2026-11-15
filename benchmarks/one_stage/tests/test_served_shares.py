@@ -1,13 +1,13 @@
 """`served_shares.py` on toy serve dirs: a full-prefill step of 8,192 tokens of the served 1B declares 8.617 ms at the
 tensor clock, the declared utilization is the steps' ideal seconds over the loads' busy wall (a Commit window's on-loop
-close in it), the accounted share is the period credit's work at J10-R's floor over the same wall (none for no credit or a
-rejected answer), and a row with no start position or an undeclared model is refused."""
+close in it), term by term, the credited share is Pearl+'s credited MACs over the same wall (none for no credit or a
+rejected answer), the prover's replay is a CPU term beside them (the cores it takes to keep pace), and a row with no
+start position or an undeclared model is refused."""
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
-from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -47,7 +47,8 @@ def test_full_prefill_step_declares_its_ideal_work(tmp_path):
     assert got["readings"]["boost"]["declared"] < tensor["declared"]
     assert got["macs"]["linears"] == 8192 * 16 * (3072 * 2048 + 2048 * 2048 + 16384 * 2048 + 2048 * 8192)
     assert got["macs"]["lm_head"] == 8 * 2048 * 128256
-    assert tensor["credited"] == tensor["accounted"] == 0 and got["credit"]["verdict"] is None
+    assert sum(tensor["terms"].values()) == pytest.approx(tensor["declared"]) and tensor["terms"]["linears"] > 0.9 * tensor["declared"]
+    assert tensor["credited"] == 0 and got["credit"]["verdict"] is None
 
 
 def test_wall_sums_loads_and_on_loop_closes(tmp_path):
@@ -60,18 +61,27 @@ def test_wall_sums_loads_and_on_loop_closes(tmp_path):
     assert got["readings"]["tensor"]["declared"] == pytest.approx(2 * one / 0.5)
 
 
-def test_accounted_share_is_the_credit_at_the_floor(tmp_path):
-    d = _dir(tmp_path / "s", _prefill(0.0, 1.0))
-    answer = {"protocol": "verity/pouw/period/v1", "verdict": "accept", "reason": None,
-              "public": {"windows": [[0, 1]], "work": [10**12, 2 * 10**12], "k": 2, "delta": "1/1000000", "eps": [None, None]}}
+def test_credited_share_is_pearl_plus_credited_macs(tmp_path):
+    d = _dir(tmp_path / "s", _prefill(0.0, 1.0), model="verity-fp8/Llama-3.2-1B-FP8")
+    answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "00",
+              "public": {"work": {"credited": 3 * 10**12, "credited_tiles": 9, "macs": 4 * 10**12}}, "profile": {"delta": "1/100"}}
     got = S.shares(d, answer)
     tensor = got["readings"]["tensor"]
-    assert tensor["credited"] == pytest.approx(3e12 / RHO) and tensor["accounted"] == pytest.approx(9 / 64 * 3e12 / RHO)
-    assert S.shares(d, answer["public"], floor=Fraction(1))["readings"]["tensor"]["accounted"] == tensor["credited"]
-    rejected = S.shares(d, answer | {"verdict": "reject", "public": None})
-    assert rejected["readings"]["tensor"]["accounted"] == 0 and rejected["credit"]["verdict"] == "reject"
-    with pytest.raises(ValueError, match="work"):
-        S.shares(d, {"work": "3"})
+    assert tensor["credited"] == pytest.approx(3e12 / RHO) and got["credit"]["of_linears"] == 3e12 / got["macs"]["linears"]
+    rejected = S.shares(d, answer | {"verdict": "reject", "public": None, "profile": None, "reason": "tile 3"})
+    assert rejected["readings"]["tensor"]["credited"] == 0 and rejected["credit"]["verdict"] == "reject"
+    with pytest.raises(ValueError, match="credited"):
+        S.shares(d, answer | {"public": {"work": [3]}})
+
+
+def test_the_provers_replay_is_a_cpu_term_beside_the_gpu_shares(tmp_path):
+    d = _dir(tmp_path / "s", _prefill(0.0, 2.0), model="verity-fp8/Llama-3.2-1B-FP8")
+    plain = S.shares(d)
+    got = S.shares(d, replay=(110.0, 32))
+    assert plain["replay"] is None and got["readings"] == plain["readings"]
+    assert got["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0, "cores_to_keep_pace": 1760.0}
+    with pytest.raises(ValueError, match="cpus > 0"):
+        S.shares(d, replay=(110.0, 0))
 
 
 def test_refuses_what_it_cannot_count(tmp_path):
@@ -86,5 +96,10 @@ def test_cli(tmp_path):
     script = str(HERE.parent / "served_shares.py")
     out = subprocess.run([sys.executable, script, str(d)], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout)["schema"] == S.SCHEMA
+    out = subprocess.run([sys.executable, script, str(d), "--replay", "110", "--replay-cpus", "32"], capture_output=True,
+                         text=True, check=True)
+    assert json.loads(out.stdout)["replay"]["core_s"] == 3520.0
+    half = subprocess.run([sys.executable, script, str(d), "--replay", "110"], capture_output=True, text=True)
+    assert half.returncode == 2 and "go together" in half.stderr
     bad = subprocess.run([sys.executable, script, str(tmp_path / "none")], capture_output=True, text=True)
     assert bad.returncode == 2 and "served_shares.py:" in bad.stderr

@@ -4,7 +4,6 @@ ids, Calls and order (the root's Input nodes are the view's parameters, so they 
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import query_ast as G
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
@@ -14,6 +13,7 @@ from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16, F32
+
 from verity_vllm.query.program_view import from_descriptor
 from verity_vllm.query.units import partition_by
 

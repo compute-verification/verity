@@ -184,7 +184,7 @@ def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_pat
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
     assert by["ratchet-gate"]["required"] is False
-    off = ("circuit-check:t", "ratchet-gate", "lean-changed", "lean-agreement")
+    off = ("circuit-check:t", "ratchet-gate", "lean-agreement")
     assert all(p.get("required", True) for n, p in by.items() if n not in off)
     _cited, why = _judged(doc, {})
     assert why and "circuit-check" not in why and "ratchet-gate" not in why

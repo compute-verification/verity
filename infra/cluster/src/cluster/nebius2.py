@@ -1,9 +1,11 @@
 """vy-nebius-2's `gpu-lease` as the model sees it: the adapter between the node's lock files and the planner.
 
 `gpu-lease` keeps its state in `/run/gpu-lease`: `<i>.lock`, held with flock(1) for as long as a lease runs, beside
-`<i>.owner`, one line naming the holder (`pid=… run=… who=… uuid=… since=… [until=…] [mem=…G] [preempt=1] [timed=1]
-[scope=…] cmd=…`, left behind when the lease ends); and `wait.<ns>.<pid>`, a `--wait` request's line (`pid=… n=… [on=…]
-run=… who=… since=…`), locked while it waits. The node's sampler records the same lines every 10 s
+`<i>.owner`, one line naming the holder (`pid=… run=… who=… uuid=… since=… [until=…] [mem=…G] [nr_throttled=…
+throttled_usec=…] [cores=…] [preempt=1] [timed=1] [scope=…] cmd=…`, left behind when the lease ends, then opening with
+`released=…` and holding `end_nr_throttled=… end_throttled_usec=…` before `cmd=`); and `wait.<ns>.<pid>`, a `--wait`
+request's line (`pid=… n=… [on=…] run=… who=… since=…`), locked while it waits. The node's sampler records the same lines
+every 10 s
 (`/workspace/pouw/infra/util/*.jsonl`: `gpus[].lease`, `wait_files`), which is what a replay reads.
 
 `read` takes the node's state without touching a lock: which files are locked comes from the holders' `/proc/<pid>/fdinfo`,

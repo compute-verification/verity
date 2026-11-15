@@ -10,7 +10,7 @@ recomputes those names and `rows_differ` the names whose committed rows are not 
 for `bind_names`, which holds one step's committed names to the map.  `counts` totals the taps by Program status and by binder.
 A Program's `captures` names the conformance properties (`properties.record.REGISTRY`) whose captures establish it on the map's
 target; `captures` inverts them and `of_checkpoint` finds a checkpoint's map, which the circuit database reads (`verity_vllm.records`).
-Holding a map against a module inventory is `verity_vllm.check.capture_map`.
+Holding a map against a module inventory is `tests/check/capture_map_check.py`.
 """
 from __future__ import annotations
 

@@ -1,0 +1,44 @@
+# The slowdown calculator's place: what `tools/move/layout.py --map tools/move/slowdown_calculator_map.toml` moves and
+# rewrites. `verity/protocols/inference_only/rho/`, the calculator of the slowdown lower bound, is
+# `verity/protocols/inference_only/slowdown/`, and its package `rho` is `slowdown`. Only the directory, the package and
+# the references to them are rewritten. One reference names the directory from `verity/`, not from the root: its entry
+# among the trees with an import root of their own in `tests/test_boundaries.py` (`SEPARATE`), which the [tokens] row
+# follows. The names and prose that say rho for the slowdown are the maps' after it (`slowdown_prose_map.toml`,
+# `slowdown_calculator_names_map.toml`, `slowdown_python_map.toml`).
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", rho = "verity/protocols/inference_only/rho/rho" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "verity/protocols/inference_only/slowdown/slowdown" }
+
+[paths]
+"verity/protocols/inference_only/rho/" = "verity/protocols/inference_only/slowdown/"
+"verity/protocols/inference_only/rho/rho/" = "verity/protocols/inference_only/slowdown/slowdown/"
+
+[tokens]
+# the directory as a list entry writes it from `verity/`
+"protocols/inference_only/rho" = "protocols/inference_only/slowdown"
+
+[retired]
+paths = ["verity/protocols/inference_only/rho/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, the archive, and `move_check.py`, whose docstring names this directory as its example of a
+# moved one.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/check/move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+# Kept in one file: `rho/params.py`, a path from the calculator's directory in a comment of a suite outside it, which
+# `move_check.py` credits only in a file of the moved directory. `slowdown_calculator_names_map.toml` renames it.
+keep_in = { "benchmarks/circuit_properties/pyproject.toml" = ["verity/protocols/inference_only/rho/rho/params.py"] }
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"rho" = "slowdown"
+"verity.protocols.inference_only.rho" = "verity.protocols.inference_only.slowdown"

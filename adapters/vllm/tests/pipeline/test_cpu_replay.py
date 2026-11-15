@@ -16,7 +16,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
-GEO = bytes(range(32))
+GEO = bytes(range(64))
 WK = bytes(37 * i % 256 for i in range(64, 128))            # no run of the committed steps' bytes: a keep holding it holds the key
 RNG = np.random.default_rng(7)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
@@ -24,7 +24,7 @@ PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 
          "model.layers.0.self_attn.v_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
          "model.norm.weight": RNG.integers(0, 1 << 16, (8,), dtype=np.uint16)}
 QKV = "model.layers.0.self_attn.qkv_proj.weight"
-COS_SIN = np.arange(8, dtype=np.float32)
+COS_SIN: np.ndarray = np.arange(8, dtype=np.float32)
 
 
 def _shard(path, tensors):
@@ -53,7 +53,7 @@ def weights_tree(tensors: dict[str, tuple[str, np.ndarray]]) -> dict:
         entry = [name, dt, list(a.shape), int(raw.size)]
         roots.append(step_rows.tensor_root(GEO, i, entry, raw, WK))
         names.append(entry)
-    return step_rows.weights_tree(GEO, names, step_rows.names_digest(names), roots, WK)
+    return step_rows.weights_tree(GEO, names, roots, WK)
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def test_every_servable_tensor_opens_against_the_committed_root_and_is_served_as
     assert wc["equal"] is True and wc["why"] is None, wc
     assert wc["servable"] == 4 and wc["opened"] == 3 and wc["opened_by_source"] == {"checkpoint": 2, "bundle": 1}
     assert [u["name"] for u in wc["unopened"]] == ["model.unknown.weight"] and wc["mismatched_n"] == 0
-    consumed = set()
+    consumed: set[str] = set()
     rd = CPU.provider(words, "model.", consumed)
     assert np.array_equal(rd("model." + QKV, 0, 64), _served()[QKV][1].reshape(-1)) and rd("model." + QKV, 0, 65) is None
     assert np.array_equal(rd("model.rotary_emb.cos_sin_cache", 0, 8), COS_SIN.view(np.uint32))
@@ -323,7 +323,7 @@ def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
 
 
 def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
-    """The slim keep is published, and ``Kw`` opens every weights leaf (each tensor's salt key derives from it): no file of a
+    """``Kw`` opens every weights leaf (each tensor's salt key derives from it), and a keep is read by later replays: no file of a
     rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
     bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
     tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
@@ -417,7 +417,7 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
     site = C2.ReplaySources(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
                             manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
                             weights_check=None, tl=None)
-    drawn = {"picks": [tuple(p) for p in slim["picks"]]}
+    drawn: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
     CPU.kept_draw(site, slim)
     drawn["picks"] = drawn["picks"][::-1]

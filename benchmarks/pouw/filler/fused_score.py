@@ -9,7 +9,7 @@ it calls score.py's own functions wherever they apply and adds only what the fus
 
 The run is score.py's, step for step: the arm's document, coins and commit; the build (score.build) and fscore.cu's; under
 `gpu-lease 1 --wait` the gates before anything is timed: FILL's `dcap dgate`, the scorer's `dscore sgate` at every chunk
-shape the arm pumps (rows in sgate.jsonl, the arm's `filler`'s first, which the locked gate reads), CAP's `dcap gate`
+shape the arm pumps (rows in sgate.jsonl, the arm's `filler`'s first, which the locked gate reads), dcap's `dcap gate`
 and FILL's `dcap fgate` (flin bit for bit on every row of every linear at every tile height, alone and with filler
 warps, and the attention kernels with filler warps against the host, every receipt against dfill_ref with the steps − 8
 control), both into gate.jsonl, which the locked serving_exact gate reads; ncu's DRAM bytes for dfill_k and the
@@ -38,24 +38,25 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score as SC
 
+HERE = Path(__file__).resolve().parent
 A, S = SC.A, SC.S
 FUSED_SLOT_BYTES = 44  # a filler warp's global traffic a step: its receipt (8) and count (4), and the round's FState (32)
 NCU_FLIN = ("32", "8", "4", "0")  # dcap flin M FW NC THR: 32 qkv launches with filler warps, then 32 without
 
 
-def fused_of(arm, ph, b, l):
+def fused_of(arm: Any, ph: str, b: int, l: int) -> Any:
     q = arm.fused(ph, b, l)
     if q is not None and A.placed(arm, ph, b, l).place != "split":
         raise A.ArmError(f"{arm.name}: a fused step at {ph} {b}/{l} needs a split (fscore pumps FILL v1's beside it)")
     return q
 
 
-def filler_of(arm, ph, b, l):
+def filler_of(arm: Any, ph: str, b: int, l: int) -> A.Filler:
     """The chunk shape at a point: `filler_at(phase, B, L)` when the arm has one, else its `filler`; a fused point pumps
     the arm's `filler`."""
     at = getattr(arm, "filler_at", None)
@@ -67,11 +68,11 @@ def filler_of(arm, ph, b, l):
     return f
 
 
-def fused_args(q) -> list[str]:
+def fused_args(q: Any) -> list[str]:
     return [str(x) for x in (q.FW, q.FNC, q.AFW, q.ANC, q.APS, q.ALZ, q.LT, q.LM)]
 
 
-def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
+def measure(arm: Any, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
     env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip(), DFILL_CHUNK_LOG2=str(arm.filler.chunk_log2))
     fl, err, rc_log = arm.filler, out / "errors.txt", out / "rc.txt"
 
@@ -196,7 +197,7 @@ def rounded(r: dict) -> bool:
                for b in r["blocks"])
 
 
-def report(out: Path, arm) -> dict:
+def report(out: Path, arm: Any) -> dict:
     res = SC.report(out, arm)
     shutil.copy(out / "score.json", out / "score-locked.json")
     g = res["gates"]
@@ -272,7 +273,7 @@ def show(res: dict) -> None:
                   + f" {SC.fmt(h['entries'][e['entry']]['coverage'])} | {SC.fmt(h['entries_serving_099'][e['entry']])} |")
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] == "measure":
         ap = argparse.ArgumentParser(prog="fused_score.py measure")

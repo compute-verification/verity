@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     coordinates at TK 64 (over 150k gates already, so the suite keeps a family's smallest binding only: `targets.select`), and the
     pair forms over 3 experts, which reach the gathers and the schedule."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import boolean_marlin_moe as BM
 
     D = BG.HopperBF16WgmmaDot16

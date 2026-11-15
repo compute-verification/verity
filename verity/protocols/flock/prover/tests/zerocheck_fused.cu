@@ -1,5 +1,5 @@
 // cuda/zerocheck_fused.cuh against round 2's fold and the tail's first lookahead (cuda-ghash/zerocheck_round2.cuh and
-// zerocheck_tail.cuh), for test_zerocheck_fused.py. zf_check draws a packed witness of 2^log_rows rows for a and b, a
+// zerocheck_tail.cuh), for test_zerocheck_fused.py. zf_check samples a packed witness of 2^log_rows rows for a and b, a
 // GF(2)-linear fold table, split-eq tables and coins from seed, runs both paths with the fused kernels reading the table as
 // `table` says (fused_round2), and counts the words that differ: bad[0] of round 2's 8 messages, bad[1] of the first
 // lookahead's 8 and bad[2] of its folded a and b.

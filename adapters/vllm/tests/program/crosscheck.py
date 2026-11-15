@@ -1,9 +1,8 @@
 """Cross-check: the registered composites, evaluated gate by gate by the reference evaluator, against the validated
 C++/CPU numerics models (`verity.definitions.numerics`) on random and adversarial inputs.
 
-This is conformance evidence for the *definitions* (the circuit body reproduces the frozen model, which is
-bit-exact against production); correspondence against captured production values is the
-separate `verity_vllm.correspondence.capture_identities` tool.
+This is conformance evidence for the *definitions*: the circuit body reproduces the frozen model, which is
+bit-exact against production.
 """
 
 from __future__ import annotations

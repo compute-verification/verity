@@ -1,6 +1,6 @@
 """A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
 RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by Flock in one
-loopback `--zk` session under a subset sample of 16 (`../pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
+loopback `--zk` session under a subset sample of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
 v2 or a segmented row). Each unit's `x` row and output row are registered values too, so every port of the circuit is
 registered (`Flock.Registered.checkComplete`). The verifier writes its own `--registered` file from the trees as the
@@ -34,9 +34,9 @@ from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.protocols.spot.verifier.one_stage.served import register_served
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: `../pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
+#: `pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
 #: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
@@ -44,7 +44,7 @@ FIXTURES = {
     G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
     G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
 }
-#: `../pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
+#: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
 #: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
 #: record and release log; vectors/ is vectors.json's live set
 PLAIN = "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
@@ -108,7 +108,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
 def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_against(fx, tmp_path):
     """`verify`'s verdict names the public file it checked the session against by its header's digest
     (``public_header_sha512``, the SHA-512 of the header's canonical JSON, `publicHeader`: the population's header, which
-    the sampled statement is drawn from, never the drawn one), the registered reads by the digest of their file
+    the sampled statement is sampled from, never the sampled one), the registered reads by the digest of their file
     (``registered_sha512``, the SHA-512 of its canonical JSON), the session's sample (``unit_draw``, its record's) and
     its tables (``session_tables``, one here), which the second stage's audit holds each statement to. On a public file
     whose header is another's (one more key), or a registered file at another root, the session is refused, and its

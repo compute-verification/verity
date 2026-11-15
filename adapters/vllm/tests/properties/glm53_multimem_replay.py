@@ -26,11 +26,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from tests.properties import glm53_tp8_allreduce_capture_gpu as X
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.definitions.registry import boolean_tp_allreduce as BA
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_allreduce_nodes as TN
+
+from tests.properties import glm53_tp8_allreduce_capture_gpu as X
 
 OUT = "glm53_multimem_replay.json"
 #: vectors per Boolean evaluation, so a vector's every wire over them stays a few hundred MB
@@ -89,10 +93,6 @@ def launches(run: Path) -> tuple[list[dict[str, Any]], list[str]]:
 
 def boolean_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
     """(WORLD, SIZE) words through `AllReduceMultimemVector_v2`, one instance per vector of each run of one tree."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import bits as BS
-    from verity.definitions.registry import boolean_tp_allreduce as BA
-
     W, size = parts.shape
     V = T.MULTIMEM_VECTOR
     out = np.empty(size, np.uint16)
@@ -106,9 +106,6 @@ def boolean_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
 
 
 def replay_one(launch: dict[str, Any]) -> dict[str, Any]:
-    from verity.circuits import evaluation as E
-    from verity.circuits.defs import bind
-
     st = launch["statics"]
     trees, ftz, size = st["TREES"], bool(st["FTZ"]), int(st["SIZE"])
     with tempfile.TemporaryDirectory() as tmp:

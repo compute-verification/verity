@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.gates import embedding as EMB
-from verity.definitions.call_scope import spec_base, spec_statics, specialization
+from verity.circuits.call_scope import spec_base, spec_statics, specialization
 from verity.definitions.registry import boolean_fp8_moe as BM
 
 

@@ -126,7 +126,7 @@ class Pin:
 
 NCP = "verity/protocols/pouw/verifier/tests/ncp_lean.py"
 PINS = (
-    Pin("verity/protocols/pous/lean/TRUSTED.sha256", None, "verity/protocols/pous/lean", None),
+    Pin("tools/pous_grader/TRUSTED.sha256", None, "tools/pous_grader", None),
     Pin("verity/protocols/flock/prover/tests/fixtures/randomness_lean.json", "inputs", "", "bash verity/protocols/flock/prover/tests/lean/generate.sh",
         "security/Proofs"),
     Pin("verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "inputs", "",
@@ -174,7 +174,7 @@ WRITERS = (
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
 SETUP = "tools/verity/lean/setup.sh"
 #: tracked files that record Lean sources' digests and are someone else's to keep: the Lean check's locks, and the moves' history
-EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/|^archive/")
+EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/")
 
 
 def ignored(root: Path, paths: list[str]) -> set[str]:

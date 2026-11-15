@@ -25,9 +25,11 @@ PORTS = ("edge.kv", "edge.ik", "edge.iks", "edge.last")
 
 def _windows() -> tuple[W.WorkloadProgram, W.WorkloadProgram]:
     """Window w leaves r1 inside its prompt (rows [0, 2)) and r2 past it (rows [0, 4) and its last token); window w + 1 carries
-    both on, reading their history from its edge ports."""
-    w0 = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False), 2: (3, 0, 4, False)}, W.Edge(outs=((1, _groups(2)), (2, _groups(4)))))
-    w1 = _edge_wl({1: (3, 2, 0, False), 2: (3, 4, 0, True)}, W.Edge(ins=((1, _groups(2)), (2, _groups(4)))))
+    both on, reading their history from its edge ports. Every request reads the weights, so they are bound at registration
+    (`theta_registered`): a run Input two proof blocks read is refused (R8-shared-input)."""
+    w0 = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False), 2: (3, 0, 4, False)}, W.Edge(outs=((1, _groups(2)), (2, _groups(4)))),
+                  theta_registered=True)
+    w1 = _edge_wl({1: (3, 2, 0, False), 2: (3, 4, 0, True)}, W.Edge(ins=((1, _groups(2)), (2, _groups(4)))), theta_registered=True)
     return w0, w1
 
 

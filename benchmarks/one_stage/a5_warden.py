@@ -82,7 +82,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: 
 from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
 from verity.protocols.certifier.verifier.active import DATA, HEADER  # noqa: E402
 from verity.protocols.certifier.verifier.certificate import Certificate  # noqa: E402
-from verity.protocols.certifier.verifier.grid import Record  # noqa: E402
+from verity.protocols.certifier.verifier.grid import BlockGrid  # noqa: E402
 from verity.protocols.certifier.verifier.warden import END, WardenParams  # noqa: E402
 from verity.protocols.spot.verifier import service as S  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R  # noqa: E402
@@ -120,7 +120,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     cells = {(d["registration"]["direction"], d["registration"]["window"]): (d["registration"], salts, wiring_salt)
              for d, salts, wiring_salt in ws.read_cells(run) if "registration" in d}
     start = first_cells(params)
-    found: dict[str, dict[int, Record]] = {}
+    found: dict[str, dict[int, BlockGrid]] = {}
     for name in LINKS:
         link, direction = ws.CERTIFIED[name]
         found[name] = {}

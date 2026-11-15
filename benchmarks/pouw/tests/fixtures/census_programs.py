@@ -50,8 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     about = ("Census programs for the headline vector's test (test_lean_headline.py): each program's x, the warp "
              "instructions of each census class it issues a SMSP-cycle (facet_break/loads.py: load_rows of its run's "
              "out/rows.jsonl, or out/chunks/*/rows.jsonl, then program's x), from the runs VF3s-16's joint issue rows "
-             "were fitted on (machine_model/data/census/runs.toml JI3t: JI3s's 17 and RT-FACET's 6), kept when "
-             "facet_break/loads.py facet_loads puts it above 0.98 on a row of VF3r-16 or VF3s-16: "
+             "were fitted on (machine_model/data/census/runs.toml JI3t: JI3s's 17 and the 6 of facet_break's rt "
+             "families, the schedule search on the low-accumulator break), kept when facet_break/loads.py "
+             "facet_loads puts it above 0.98 on a row of VF3r-16 or VF3s-16: "
              f"{len(keep)} of {len(rows)} programs.")
     lines = ["{", f'  "about": {json.dumps(about, ensure_ascii=False)},', f'  "runs": {json.dumps(runs)},',
              '  "programs": [']

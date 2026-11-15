@@ -1,21 +1,17 @@
-"""hidden_zk's compact unit circuit (`compact_stage`) lays a circuit out as the library does: the same rows, netlist text,
+"""hidden_zk's compact unit circuit (`compact_stage`) lays a circuit out as the library does: the same rows, description text,
 counts and values, over random circuits of inputs and ANDs with constants, commits, assertions and dead gates, spooled in
 many small blocks so dead chains cross them."""
 
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
-
-import numpy as np
-import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hidden_zk"))
 
 import compact_stage as CST
-from verity.circuits.boolean import forms
+import numpy as np
+import pytest
 from verity_flock import ir_lower as IL
+
+from verity.circuits.boolean import forms
 
 IN = {"in0": 5, "in1": 130, "in2": 7}
 OUT = {"out0": 12, "out1": 4}

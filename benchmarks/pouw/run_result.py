@@ -8,16 +8,17 @@ import json
 import os
 from pathlib import Path
 
+#: what `pearlc_census.py`, `pearlc_k256_gate.py`, three scripts of `pearl_c_vllm/` and the tests read
+__all__ = ["write"]
+
 
 def write(out: Path, ok: bool, checker: str, detail: str, measurements: list[tuple[str, float, str]]) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
     d = Path(run_dir)
-    try:
-        rel = str(Path(out).resolve().relative_to(d.resolve()))
-    except ValueError:
-        rel = None
+    out, root = Path(out).resolve(), d.resolve()
+    rel = str(out.relative_to(root)) if out.is_relative_to(root) else None
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"source_sha": os.environ.get("RESEARCH_SOURCE_SHA")},
            "validation": {"status": "passed" if ok else "failed", "checker": checker, "detail": detail, "evidence": [rel] if rel else []},

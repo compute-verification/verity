@@ -22,7 +22,7 @@
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
   host. `RoundPipe` sends a window's round roots without waiting on each coin (a ring of steps whose units wait on their
   round's coin), every coin still opened after its own root and checked as it comes back. The window's sampling coin is
-  not that session's: once the prover's sample root is in, `gate_draw` reserves a withheld sample session
+  not that session's: once the prover's sample root is in, `gate_sample` reserves a withheld sample session
   (`window.DRAW_FAMILIES`, ``reserve --withhold``: the gate's ledger marks its reserve and open ``withheld: true`` and
   serves it with `remote.open_session(..., withhold=True)`) and opens it on that root. The gate's open answers no root
   for it (``commitment`` null until the session's end), its challenger answers the hello with the layout alone and the
@@ -83,15 +83,15 @@ from verity.protocols.spot.device import remote as R
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
 PEER_ENV, SSH_KEY_ENV = "POUW_CHALLENGER_PEER", "POUW_CHALLENGER_SSH_KEY"
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "config"))
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 NO_DRAW_GATE = (f"an off-node window's draw coin comes from its own draw session, which infra's gate reserves and opens "
-                f"withheld on the draw root once the prover's commitment is in (CMP-177); this run names no gate to "
+                f"withheld on the draw root once the prover's commitment is in; this run names no gate to "
                 f"open it at: set ${GATE_ENV} and ${PEER_ENV} (and ${SSH_KEY_ENV} for the lane's gate key)")
 DRAW_WITHHELD = ("a draw session is withheld: its challenger releases its coin commitment's root only at its close, after "
-                 "the prover's draw root (`reserve --withhold`, CMP-177)")
+                 "the prover's draw root (`reserve --withhold`)")
 IN_PROCESS = "in-process (not certified)"
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"
 STAND_IN = "a stand-in (coins.stand_in_root of the session), never a window's root"
@@ -152,17 +152,25 @@ def ssh_args(key: str | None = None) -> list[str]:
     return [*SSH, *(["-o", "IdentitiesOnly=yes", "-i", key] if key else [])]
 
 
+#: what a refusal shows of a gate answer it can't read: no run of hex digits long enough to be a session's secret or a root
+HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
+
+
 def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
-    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises."""
+    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. It
+    quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
+    holds its session's secret."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
+
+    def refused(why: object = None) -> Ch.CoinError:
+        return Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
+
     try:
         got = json.loads(p.stdout)
     except ValueError:
-        got = None
+        raise refused() from None
     if p.returncode or not isinstance(got, dict) or "refused" in got:
-        why = got.get("refused") if isinstance(got, dict) else None
-        raise Ch.CoinError(f"infra's gate refused {args[0]}: "
-                           f"{why or p.stderr.strip() or p.stdout.strip() or f'exit {p.returncode}'}")
+        raise refused(got.get("refused") if isinstance(got, dict) else None)
     return got
 
 
@@ -238,7 +246,7 @@ def stand_in_root(sid: str) -> bytes:
     return hashlib.sha512(STAND_IN_TAG + hashlib.sha512(sid.encode()).digest()).digest()
 
 
-def gate_draw(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run
+def gate_sample(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run
               ) -> Callable[[bytes], Endpoint]:
     """The opener of a window's sample session at infra's gate `gate`: given the sample root, it reserves a withheld sample
     session (`layout` of `epoch` and None, ``--withhold``) listening on `peer`'s 127.0.0.1 and opens it on that root."""
@@ -249,10 +257,10 @@ def gate_draw(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: C
 
 
 def env_draw(epoch: int) -> Callable[[bytes], Endpoint] | None:
-    """`gate_draw` at ``$POUW_CHALLENGER_GATE`` for ``$POUW_CHALLENGER_PEER`` (with ``$POUW_CHALLENGER_SSH_KEY``), or
+    """`gate_sample` at ``$POUW_CHALLENGER_GATE`` for ``$POUW_CHALLENGER_PEER`` (with ``$POUW_CHALLENGER_SSH_KEY``), or
     None while either is unset."""
     gate, peer = settings.get(GATE_ENV), settings.get(PEER_ENV)
-    return gate_draw(gate, peer, epoch, ssh_args(settings.get(SSH_KEY_ENV))) if gate and peer else None
+    return gate_sample(gate, peer, epoch, ssh_args(settings.get(SSH_KEY_ENV))) if gate and peer else None
 
 
 def layout_reason(commitment: Ch.LiveCommitment, epoch: int, rounds: int | None) -> str | None:
@@ -269,7 +277,7 @@ class Coins:
     """A window's live coins from `challenger` (`LiveChallenger`'s commitment and open: a `RemoteChallenger`, or the
     in-process `LiveChallenger`), `source` "off-node" or "in-process": its salt coin and its rounds through `LiveRecord`
     (`rounds`), and its sampling coin from a sample session of its own (`draw`): in process `window.draw_challenger` over
-    `entropy`, off the node the session `open_draw` opens withheld on the sample root (`gate_draw`)."""
+    `entropy`, off the node the session `open_draw` opens withheld on the sample root (`gate_sample`)."""
 
     def __init__(self, challenger: Any, source: str, session: Endpoint | None = None, epoch: int = 0,
                  entropy: Callable[[int], bytes] | None = None,
@@ -628,11 +636,11 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
         mine = Ch.LiveCommitment.from_json(coins.get("commitment"))
         salt = _openings([coins["salt_coin"]])
         openings = _openings([r["opening"] for r in coins.get("rounds", [])])
-        draw = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
+        sample = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
     except (KeyError, TypeError, Ch.CoinError) as e:
         return {**out, "reason": f"{type(e).__name__}: {e}"}
     got = roots[Wd.ROUND]
-    drawn = draw_reason(draw_out, heads, draw_after, draw, key, pins, main)
+    sample_reason = draw_reason(draw_out, heads, draw_after, sample, key, pins, main)
     bad_salts = sorted(r for r, s in (salts or {}).items()
                        if not (0 <= r < min(len(got), len(openings)))
                        or HT.live_salt(commitment, openings[r].coin, r, got[r]).hex() != s)
@@ -646,9 +654,9 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
                    f"the challenger received {len(got)} round roots, not the window's {len(rounds)} committed ones")
         or Wd.rounds_reason(commitment, got, openings),
         "salts": None if not bad_salts else f"rounds {bad_salts[:8]}'s unit salts are not their opened coins' live_salt",
-        "draw": drawn,
+        "draw": sample_reason,
     }
-    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(draw),
+    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(sample),
                commitment=commitment.root.hex())
     out["ok"] = all(v is None for v in reasons.values())
     out["coins"] = (f"off-node {host} (checked{'; ' + ', '.join(loose) + ' unanchored' if loose else ''})"
@@ -725,6 +733,11 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 
+
+__all__ = ["CHALLENGER_ENV", "COMMITMENT_ENV", "Ch", "Coins", "Endpoint", "GATE_ENV", "HEX_WITHHELD", "IN_PROCESS",
+           "PEER_ENV", "R", "RoundPipe", "SECRET_ENV", "SESSION_ENV", "SSH", "STAND_IN", "STAND_IN_TAG", "Wd", "check",
+           "gate_call", "gate_sample", "key_record", "layout", "layout_reason", "main", "open_coins", "open_window",
+           "published", "read_secret", "reserve", "session", "ssh_args", "stand_in_root", "write_secret"]
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -1,6 +1,7 @@
 """Versions of `RMSNormTriton_v1`, `TokenSelect_v1`, the top-p selects and FA2's attention without dead gates: the forms the registered
-compiler emits, where no gate may be one no output depends on.  A Program lifted to bits keeps the v1s: no Boolean Definition names
-one of these as its word.
+compiler emits, where no gate may be one no output depends on.  A Program lifted to bits keeps the v1s: no Boolean Definition the
+switch serves names one of these as its word (`boolean_attention`'s `AttnBlockFirst_v3` and `AttnHeadEnd_v2` name
+`AttnBlockFirst_v1` and `AttnHeadEnd_v1`, opt-in).
 
 * `RMSNormTriton_v5`: `RMSNormTriton_v1` with each warp reduced by the adds lane 0's sum depends on (`lane0_butterfly`).  On the GPU
   every lane adds in every round of the xor butterfly, but only lane 0's sum is read: v1 has 129 dead adds a warp.
@@ -43,9 +44,9 @@ import numpy as np
 from verity.circuits.defs import Coll, PrimitiveDefinition, SpecializedDefinition, bind, composite
 from verity.circuits.intervals import full
 from verity.circuits.liveness import Liveness
-from verity.definitions.ops.fp32 import F32AddFtz
-from verity.definitions.ops.prims import ZERO32, const
-from verity.definitions.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
+from verity.circuits.ops.fp32 import F32AddFtz
+from verity.circuits.ops.prims import ZERO32, const
+from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
 from verity.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW

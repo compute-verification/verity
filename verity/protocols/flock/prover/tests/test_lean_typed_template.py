@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit/types@210d32e1+seed-injection"
 #: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at 8505c540, and every CPU selftest case of its

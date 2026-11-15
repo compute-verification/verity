@@ -111,8 +111,12 @@ def test_a_switched_rows_moved_pins_are_re_pinned_on_the_trace_and_lose_its_aot(
 
 def test_a_rebuild_is_the_rows_own_build_stage_into_out_with_no_device_visible(tmp_path: Path, monkeypatch) -> None:
     calls = []
+
+    def run(cmd, cwd):
+        calls.append((cmd, os.environ["CUDA_VISIBLE_DEVICES"]))
+        return subprocess.CompletedProcess(cmd, 0)
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
-    monkeypatch.setattr(subprocess, "run", lambda cmd, cwd: calls.append((cmd, os.environ["CUDA_VISIBLE_DEVICES"])) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(subprocess, "run", run)
     assert N.rebuild(ROW, tmp_path, ["--build-jobs=2"]) == 0
     role, repo, rev, world = epoch.resolve(ROW)
     ((cmd, visible),) = calls

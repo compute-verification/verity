@@ -8,11 +8,15 @@ import types
 
 import pytest
 
-from verity_vllm.program.frontend.kernel_readback import kept, routers
-from verity_vllm.program.frontend.target_profile import (TargetProfile, applied_kernels, int8_exact_of, parse_target_arg,
-                                                         profile_mismatches)
-
 from tests.program.test_target_profile import _applied
+from verity_vllm.program.frontend.kernel_readback import kept, routers
+from verity_vllm.program.frontend.target_profile import (
+    TargetProfile,
+    applied_kernels,
+    int8_exact_of,
+    parse_target_arg,
+    profile_mismatches,
+)
 
 #: digests of these profiles computed by the profile before `int8_exact` existed
 EARLIER_DIGESTS = [

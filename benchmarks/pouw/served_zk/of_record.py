@@ -2,8 +2,9 @@
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered`);
-* ``registration``: one-stage's R1-R6 against the challenger's own copies (`sampled-proofs-difftest registration`,
-  `registration.check`); R7 (registered values) has no Lean form yet, and a PoUW window registers none;
+* ``registration``: one-stage's R1-R8 against the challenger's own copies (`sampled-proofs-difftest registration`,
+  `registration.check`), with the fan-out and tied values its verdict publishes (`registration_answer`); a PoUW window
+  registers no values;
 * ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
@@ -87,6 +88,14 @@ def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str
             "partition": None, "ports": {p: dict(v) for p, v in ports.items()},
             "program": json.loads(codec.canonical_json(codec.encode_program(program))), "query": dict(query),
             "registered": None, "scheme": scheme, "work_table": None}
+
+
+def registration_answer(v: Any) -> dict:
+    """The registration piece's answer of `registration.check`'s verdict `v`: its codes, with the fan-out F under a
+    template query that applies and the tied values R8 let through when any, as `Spot.Pieces.registration` writes them
+    (`Verdict.to_json`)."""
+    j = v.to_json()
+    return {"codes": j["codes"], **{k: j[k] for k in ("fanout", "rests_on_period_check") if k in j}}
 
 
 def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
@@ -183,10 +192,11 @@ class Record:
         """``{"reason"}`` (null when PoUW's rule holds), or ``{"refused"}`` for parameters or a registration it can't read."""
         return self._piece("registered", "pouw-check-difftest", POUW, "registered", x, py_registered)
 
-    def registration(self, params: dict, record: Any, python: Callable[[], list[str]]) -> list[str]:
-        """R1-R6's codes for `record` against `params` (`registration_params`); `python` is the reference's call."""
+    def registration(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
+        """R1-R8's codes for `record` against `params` (`registration_params`); `python` is the reference's call, its
+        `Verdict`, whose fan-out and tied values are held to Lean's with its codes (`registration_answer`)."""
         out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
-                          {"params": params, "record": record}, lambda _: {"codes": list(python())})
+                          {"params": params, "record": record}, lambda _: registration_answer(python()))
         return out["codes"] if "codes" in out else ["registration"]
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:

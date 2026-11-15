@@ -21,10 +21,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from .params import Reject
 
-__all__ = ["IntCtx", "Table", "Z3Ctx"]
+__all__ = ["Ctx", "IntCtx", "Table", "Value", "Z3Ctx"]
 
 
 @dataclass(frozen=True)
@@ -138,3 +139,9 @@ class Z3Ctx:
 
     def lt_pow(self, name: str, x: object, ipow: object, bits: int) -> None:
         self.rng(name, x * ipow, 0, 2**bits)
+
+
+#: a gadget's context: one of the two interpreters, or a subclass of one
+Ctx = IntCtx | Z3Ctx
+#: what a gadget's arithmetic runs on: a Python int under :class:`IntCtx`, a z3 integer expression under :class:`Z3Ctx`
+Value = Any

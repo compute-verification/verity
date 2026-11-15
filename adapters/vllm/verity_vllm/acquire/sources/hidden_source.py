@@ -22,11 +22,14 @@ launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equa
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 
-KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
+logger = init_logger(__name__)
+
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
 CHUNK_WORDS = 64
 LEGACY_TILE = (128, 64)   # (kBlockN, head_dim) of the v7 hd-64 tap: v8 keeps its stream layout, names and roots
@@ -54,7 +57,7 @@ def fa2_swapped(max_seqlen_q: int, H: int, Hk: int, head_dim: int, window_left: 
     UN-swapped kernel (b*H slabs of 1 row); a mirror of `max_seqlen_q == 1 and H > Hk` alone would declare the swapped geometry there and
     the kernel would refuse the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
     a wrong binding).  This mirrors the kernel's own rule so the declared (HB, M) is the launched one."""
-    return (int(max_seqlen_q) == 1 and H > Hk and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
+    return (int(max_seqlen_q) == 1 and Hk < H and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
             and head_dim % 8 == 0 and alibi_slopes is None)
 
 
@@ -149,12 +152,11 @@ class HiddenM1Source:
         self.bufs: dict[tuple[int, int, int, int, int], Any] = {}
         self.launch = 0
         self.launches_in_step = 0
-        self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": 8 if self.v8 else 7, "hdims": [hd for hd in (64, 96, 128, 256) if self.hdims & (1 << (hd // 32))],
                       "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
         self.ms = self.stats["ms"]
         self.active = False
-        self.time_launch = None
 
     def require_row3(self, guarded_max: bool) -> None:
         """Refuse a build whose ROW word 3 or MS class is not the manifest's: a manifest built under the guarded-max policy
@@ -224,7 +226,6 @@ class HiddenM1Source:
 
     def _wrapper(self):
         me = self
-        torch = self.torch
 
         def varlen_fwd(q, k, v, out, cu_seqlens_q, cu_seqlens_k, seqused_k, leftpad_k, block_table, alibi_slopes, max_seqlen_q, max_seqlen_k,
                        dropout_p, softmax_scale, zero_tensors, causal, window_left, window_right, softcap, return_softmax, num_splits, gen):
@@ -260,7 +261,8 @@ class HiddenM1Source:
                 me.c.x03_expected = getattr(me.c, "x03_expected", 0) + 1
                 me.c.errors.append(f"fa2 launch {me.launch}: skipped by the kernel (declared tile BN={BN} D={D}, HB={HB} M={M} NB={NB}, "
                                    f"num_splits={int(num_splits)}); stream not bound"[:300])
-                me.launch += 1; me.launches_in_step += 1
+                me.launch += 1
+                me.launches_in_step += 1
                 return res
             # acquire the stream (D2D snapshot into the arena on the compute stream, ordered after the kernel, before the next launch reuses buf)
             me.c._acquire(stream_name(me.launches_in_step, HB, M, NB, BN, D), buf, job)
@@ -348,12 +350,11 @@ class HiddenM1SourceFA3(HiddenM1Source):
         self.bufs = {}
         self.launch = 0
         self.launches_in_step = 0
-        self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": int(self.ns.verity_tap_layout_version()), "hdims": [hd for hd in (64, 128) if self.hdims & (1 << (hd // 32))],
                       "backend": "fa3", "tiles": {}, "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
         self.ms = self.stats["ms"]
         self.active = False
-        self.time_launch = None
 
     def arm(self, buf, HB: int, M: int, NB: int, BN: int, D: int, tag: int) -> None:
         self.ns.verity_set_tap_v9(3, buf, HB, M, NB, BN, D, tag)
@@ -419,7 +420,8 @@ class HiddenM1SourceFA3(HiddenM1Source):
                 me.c.x03_expected = getattr(me.c, "x03_expected", 0) + 1
                 me.c.errors.append(f"fa3 launch {me.launch}: skipped by the kernel (declared tile kBlockM={kBM} BN={BN} D={D}, HB={HB} M={M} NB={NB}, "
                                    f"num_splits={num_splits}); stream not bound"[:300])
-                me.launch += 1; me.launches_in_step += 1
+                me.launch += 1
+                me.launches_in_step += 1
                 return res
             me.c._acquire(fa3_stream_name(me.launches_in_step, HB, M, NB, BN, D), buf, job)
             me.launch += 1
@@ -479,7 +481,9 @@ def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
 def with_hidden_class(classes: tuple[str, ...], family: str | None) -> tuple[str, ...]:
     """`classes` with its attention hidden class replaced by `family` in place, or dropped when `family` is None."""
     hidden = set(HIDDEN_STREAM_BY_FA.values())
-    return tuple(family if c in hidden else c for c in classes if family or c not in hidden)
+    if not family:
+        return tuple(c for c in classes if c not in hidden)
+    return tuple(family if c in hidden else c for c in classes)
 
 
 def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], *,
@@ -500,7 +504,7 @@ def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: t
     if out != required_classes:
         versions["required_classes"] = list(out)
         versions["required_classes_source"] = f"{versions.get('required_classes_source', '')} + attention hidden class {fam or 'none'} ({states[min(states)]['why']})"
-        print(f"[tp2commit] attention hidden class {fam or 'none'} on every rank ({states[min(states)]['why']}); required classes {list(out)}", flush=True)
+        logger.info("[tp2commit] attention hidden class %s on every rank (%s); required classes %s", fam or "none", states[min(states)]["why"], list(out))
     return out
 
 
@@ -523,3 +527,8 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
     if manifest is not None:
         src.require_row3(guarded_max_policy(manifest))
     return src
+
+
+__all__ = ["HiddenM1Source", "HiddenM1SourceFA3", "make_hidden_source", "attention_hidden", "with_hidden_class", "CHUNK_WORDS",
+           "KBLOCK_M", "fa2_kblock_n", "fa2_swapped", "fa2_tap_buffer_words", "fa2_tap_words_per_seq", "fa3_tile", "mat_total_words",
+           "plan_fa2_tap_groups"]

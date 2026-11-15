@@ -82,3 +82,6 @@ def w_labels(params: Params, w: int) -> list[list[int]]:
 def w_value(params: Params, segments: Sequence[Sequence[int]]) -> int:
     """Lean `Wbits`: the inverse of `w_labels`."""
     return join([label for segment in segments for label in segment], params.m)
+
+
+__all__ = ["salt_value", "tag"]

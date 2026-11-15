@@ -1,9 +1,10 @@
 """PoUW's piece of the composed checks (`composite.py --cases`): its case and its answer on it, in one directory.
 
     pouw_piece.py v1 --out DIR [--exe PATH] (--params P --registration R --answer A | --serve-run SERVE_DIR --window K)
-    pouw_piece.py period --out DIR [--exe PATH] (--key F --ledger F --pins F --main F --name NAME --windows F
-                                                 | --serve-run SERVE_DIR --window K [--pouw DIR --key-sha512 HEX
-                                                   --main F --statements F --live-evidence F])
+    pouw_piece.py period --out DIR [--exe PATH] [--lean-answers DIR]
+                         (--key F --ledger F --pins F --main F --name NAME --windows F
+                          | --serve-run SERVE_DIR --window K [--pouw DIR --key-sha512 HEX
+                                                              --main F --statements F --live-evidence F])
 
 ``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
@@ -58,6 +59,7 @@ from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.verifier import period_check as PC
 from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity_vllm.protocols.pouw.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
 CASE = {V1: CC.case, PERIOD: PC.case}
@@ -292,7 +294,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--key-sha512", help="period: the SHA-512 of the auditor's challenger key, the verifier's pin")
     ap.add_argument("--statements", type=Path, help="period: the drawn calls' statements, a JSON list")
     ap.add_argument("--live-evidence", type=Path, help="period: the window's live evidence (h1_prove/live.py's)")
+    ap.add_argument("--lean-answers", type=Path, help="period: the verifier's memo of its runs' answers, in its own "
+                                                      "scratch, whose answers credit's runs take by key")
     a = ap.parse_args(argv)
+    run = None if a.lean_answers is None else A.Answers(a.lean_answers, by="the period check")
     protocol = V1 if a.protocol == "v1" else PERIOD
     given = (["params", "registration", "answer"] if protocol == V1
              else ["key", "ledger", "pins", "main", "name", "windows"])
@@ -310,7 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             except Missing as e:
                 why = str(e)
             else:
-                return period_piece(a.out, params, ledger, pins, windows, a.exe)
+                return period_piece(a.out, params, ledger, pins, windows, a.exe, run)
         missing(a.out, protocol, why)
         print(f"MISSING {protocol}: {why}", flush=True)
         return EXIT["undecided"]
@@ -318,7 +323,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error(f"{a.protocol} takes --serve-run and --window, or {', '.join('--' + f for f in given)}")
     if protocol == PERIOD:
         params = {"key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main), "name": a.name}
-        return period_piece(a.out, params, lines(a.ledger), lines(a.pins), json.loads(a.windows.read_text()), a.exe)
+        return period_piece(a.out, params, lines(a.ledger), lines(a.pins), json.loads(a.windows.read_text()), a.exe,
+                            run)
     params = json.loads(a.params.read_text())
     commitment = canonical(json.loads(a.registration.read_text()))
     evidence = canonical(json.loads(a.answer.read_text()))
@@ -331,11 +337,17 @@ def said(protocol: str, got: dict, exe: str | None) -> int:
     return EXIT[got["verdict"]]
 
 
-def period_piece(out: Path, params: dict, ledger: list[str], pins: list[str], windows: Any, exe: str | None) -> int:
+def period_piece(out: Path, params: dict, ledger: list[str], pins: list[str], windows: Any, exe: str | None,
+                 run: A.Answers | None = None) -> int:
     """The period's piece in `out`: `windows` as given (`credit.PROVED_KEYS`), or carrying their statements
-    (`credit.PERIOD_KEYS`) and put in that form by `proved`, whose reference verdict ``REFERENCE`` prints."""
+    (`credit.PERIOD_KEYS`) and put in that form by `proved`, whose reference verdict ``REFERENCE`` prints; its verifier
+    runs `run` when given (`answers.Answers` on ``--lean-answers``, its counts a ``LEAN-ANSWERS`` line), else
+    `proofs.verify`."""
     if isinstance(windows, list) and windows and all(isinstance(w, dict) and "statements" in w for w in windows):
-        windows, (_credit, why) = proved(params["key"], ledger, pins, params["main"], params["name"], windows)
+        windows, (_credit, why) = proved(params["key"], ledger, pins, params["main"], params["name"], windows,
+                                         **({} if run is None else {"run": run}))
+        if run is not None:
+            print(f"LEAN-ANSWERS {run.summary()}", flush=True)
         print(line("REFERENCE", outcome(PERIOD, json.dumps({"verdict": "reject" if why else "accept",
                                                             "reason": None if why is None else f"{why[0]}: {why[1]}"}))),
               flush=True)

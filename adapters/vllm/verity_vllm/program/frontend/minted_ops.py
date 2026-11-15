@@ -6,18 +6,25 @@ from __future__ import annotations
 
 import contextvars
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import torch
 from torch.utils import _pytree as pytree
-
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.circuits.types import Type
+
 from verity_vllm.program.frontend.correspond import compare_bodies
 from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.value_types import CARRIER, flat_types, shape_of, tensors_of, unflatten
+from verity_vllm.program.frontend.value_types import (
+    CARRIER,
+    flat_types,
+    shape_of,
+    tensors_of,
+    unflatten,
+)
 
 _LIB = torch.library.Library("verity", "FRAGMENT")
 

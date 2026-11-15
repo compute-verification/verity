@@ -10,10 +10,8 @@ public import Proofs.Flock.Soundness.Discharge.FailClosed.General
 public import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
 public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
 public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
-public import Proofs.Flock.Soundness.Discharge.PlainHJ
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
-public import Proofs.Flock.Soundness.Discharge.PlainJ
 public import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
 public import Proofs.Flock.Soundness.ExecStrataOf
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -45,6 +43,10 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
+public import Proofs.Flock.Soundness.Discharge.PlainHJ
+public import Proofs.Flock.Soundness.Discharge.PlainJ
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts

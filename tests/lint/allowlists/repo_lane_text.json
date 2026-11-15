@@ -1,6 +1,6 @@
 {
   "rule": "lane text in prose (tests/lint/test_repo_lane_text.py)",
   "entries": [
-
+    {"file": "tools/research/src/research/remote.py", "count": 1}
   ]
 }

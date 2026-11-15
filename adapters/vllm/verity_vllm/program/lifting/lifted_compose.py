@@ -3,9 +3,15 @@ components of the declared requests (`registry.lifted.lift_request_component`)."
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
-from verity.definitions.registry.lifted import BOUNDARY_PREFIX, check_lag, lift_request_component, lift_type
+from verity.definitions.registry.lifted import (
+    BOUNDARY_PREFIX,
+    check_lag,
+    lift_request_component,
+    lift_type,
+)
 
 
 def lift_component(component: Any, eos: Sequence[int], *, max_tokens: int, lag: int, boundary_prefix: str = BOUNDARY_PREFIX) -> Any:
@@ -16,6 +22,7 @@ def lift_component(component: Any, eos: Sequence[int], *, max_tokens: int, lag: 
     belong to the step they gate).  The `program_digest`/`program_fn` identity is the UNLIFTED component's (that is what the lift is of)."""
     import hashlib
     import json
+
     from verity_vllm.program import workload as W
     lifted = lift_request_component(component.fn, eos, max_tokens=max_tokens, lag=lag, boundary_prefix=boundary_prefix)
     body = lifted.body
@@ -56,6 +63,7 @@ def workload_program(reqs: Sequence[Any], lag: int, **kw: Any) -> Any:
     """GP-01's compose, with the declared LAG passed as the `Workload_v1` static when `WorkloadProgram` takes `lag=` (the lag in the
     workload digest); when it has no lag parameter, none is passed.  The signature is INSPECTED, never guessed: the same call composes the same Program the Build did."""
     import inspect
+
     from verity_vllm.program import workload as W
     if "lag" in inspect.signature(W.WorkloadProgram.__init__).parameters:
         return W.WorkloadProgram(list(reqs), lag=check_lag(lag), **kw)

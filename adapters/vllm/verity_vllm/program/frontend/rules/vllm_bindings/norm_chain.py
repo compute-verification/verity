@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, runs
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
+
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, scalar_kind, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    rows_of,
+    scalar_kind,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    active_target_profile,
+)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import MEAN_PINS
-
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 # -- the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy) -----------
 #
@@ -98,7 +107,7 @@ class WidenBf16ToF32Rule(ViewRule):
     def emit(self, node, ctx):
         x = node.args[0]
         ctx.define(node, ctx.coll(x), view_of=x)
-        ctx.record(self, node, {"shape": list(shape(ctx, x)), "widened_words": 16}, emitted="transparent widening (no gates; readers bind *Bf16 kinds)")
+        ctx.record(self, node, {"shape": list(known(shape(ctx, x))), "widened_words": 16}, emitted="transparent widening (no gates; readers bind *Bf16 kinds)")
 
 
 class NarrowF32ToBf16Rule(OpRule):
@@ -192,8 +201,8 @@ class MeanDimBIRule(OpRule):
                     preconditions=("x is a genuine f32 value collection of rank >= 1 (a widened bf16 view is refused)",
                                    "dim is the last axis only; keepdim=True; no dtype argument",
                                    "export facts show batch-invariant Triton launches in this graph (derived, never assumed)",
-                                   "installed vLLM's mean_kernel src sha, mean_dim and mean_batch_invariant source shas == MEAN_PINS; "
-                                   "enable_batch_invariant_mode registers aten::mean.dim"),
+                                   ("installed vLLM's mean_kernel src sha, mean_dim and mean_batch_invariant source shas == MEAN_PINS; "
+                                   "enable_batch_invariant_mode registers aten::mean.dim")),
                     evidence_domain="structural; numerics: MeanTriton_v1 (BI mean_kernel reduction order, div.full.f32)")
 
     def targets(self):
@@ -227,14 +236,14 @@ class MeanDimBIRule(OpRule):
             return "numerics_unregistered: mean of a widened bf16 view has no Definition (MeanTriton_v1 reads f32)"
         dims = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim")
         keep = node.args[2] if len(node.args) > 2 else node.kwargs.get("keepdim", False)
-        rank = len(shape(ctx, x))
+        rank = len(known(shape(ctx, x)))
         if not isinstance(dims, (list, tuple)) or len(dims) != 1 or int(dims[0]) not in (-1, rank - 1):
             return f"dim {dims!r} is not the last axis"
         if keep is not True:
             return "keepdim is not True"
         if node.kwargs.get("dtype") is not None or (len(node.args) > 3 and node.args[3] is not None):
             return "an explicit dtype argument is not the modelled call"
-        if shape(ctx, node) != tuple(shape(ctx, x)[:-1]) + (1,):
+        if shape(ctx, node) != tuple(known(shape(ctx, x))[:-1]) + (1,):
             return f"output shape {shape(ctx, node)} is not [.., 1]"
         return self._dispatch_ok() or True
 
@@ -306,6 +315,7 @@ class AddScalarRule(OpRule):
 
     def emit(self, node, ctx):
         x, c = node.args[0], _static_scalar(node.args[1])
+        assert c is not None  # `applies` refused any other second operand
         rows, lead = rows_of(ctx.coll(x))
         N = rows[0].type.n
         w = widened_bf16(ctx, x)
@@ -388,7 +398,7 @@ class MulF32Rule(OpRule):
             r = _f32_rows(ctx, a, nm)
             if r:
                 return r
-        sx, sy = shape(ctx, x), shape(ctx, y)
+        sx, sy = known(shape(ctx, x)), known(shape(ctx, y))
         if len(sx) < 2:
             return f"x {sx} has no rows (rank >= 2 needed)"
         N = sx[-1]

@@ -93,26 +93,6 @@ def test_unreadable_files_are_named_and_mark_the_record_partial(tmp_path):
     assert doc["summary"]["wrappers"] == 1
 
 
-def test_compare_claims_no_identity_over_a_partial_scan(tmp_path):
-    whole = [KI.collect(*map(str, _tree(tmp_path / side))) for side in ("a", "b")]
-    same = KI.compare(*whole)
-    assert same["kernel_sources_identical"] and same["wrappers_identical_modulo_cache_path"] and same["call_programs_identical"]
-    assert same["ptx_code_identical"] and same["autotune"]["chosen_configs_identical"] and "unreadable" not in same
-    partial = []
-    for side in ("a", "b"):
-        ind, tri = tmp_path / side / "inductor", tmp_path / side / "triton"
-        (ind / "ab" / "zz.py").mkdir()
-        partial.append(KI.collect(str(ind), str(tri)))
-    cmp = KI.compare(*partial)
-    # both sides left the same file out, so their sets agree, and that agreement shows nothing
-    assert cmp["kernel_sources"]["common"] == 1 and not cmp["kernel_sources"]["only_a"] and not cmp["kernel_sources"]["only_b"]
-    for claim in ("kernel_sources_identical", "wrappers_identical", "wrappers_identical_modulo_cache_path", "call_programs_identical",
-                  "cubins_identical", "ptx_code_identical", "b_kernel_sources_subset_of_a"):
-        assert cmp[claim] is False, claim
-    assert cmp["autotune"]["chosen_configs_identical"] is False and cmp["autotune"]["candidates_identical"] is False
-    assert {side: [u["path"] for u in us] for side, us in cmp["unreadable"].items()} == {"a": ["ab/zz.py"], "b": ["ab/zz.py"]}
-
-
 def test_the_run_record_nulls_its_kernel_pin_when_a_file_was_unreadable(tmp_path, monkeypatch):
     pytest.importorskip("torch")
     from verity_vllm.engine import code_identity as CI

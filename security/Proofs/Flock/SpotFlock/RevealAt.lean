@@ -202,8 +202,8 @@ noncomputable def pathAt (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt)
     | .ok pop => pubPath sts[0]!.c pop q (rowAt sts[0]!.c pop q (unitOf ins.read.draw n))
     | .error _ => ByteArray.empty
 
-/-- **Gate `g`'s opening at address `S` for unit `u`**, at the round-1 and round-2 messages `m₁` and `m₂` and the unit's
-session's setup (the module's docstring). -/
+/-- **Gate `g`'s opening at address `S` for unit `u`**, at the round-1 message `m₁`, the session statements' message
+`m₂` and the unit's session's setup (the module's docstring). -/
 noncomputable def openingOf (s : AuditStatement) (v : Seen) (wF : Claims.Flock.Wit) (u : ℕ) (m₁ m₂ : Msg)
     (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt) (S : Address) (g : ℕ) : List Msg × Opening Bool :=
   let xS := unitStmt h m₂ u
@@ -216,25 +216,35 @@ noncomputable def openingOf (s : AuditStatement) (v : Seen) (wF : Claims.Flock.W
         (_root_.Flock.InnerRows.salt { ins.read with sts } wF 0 n (S.port u)).data.toList
         (pathAt ins sts n (S.port u)).data.toList })
 
-/-- **The opener at an address map**: gate `g`'s opening for unit `u` at its address (`openingOf`), at a transcript
-whose rounds 1 and 2 sent `m₁` and `m₂`; an empty opening at `g` where `g` has no address or the unit's session
-statement doesn't set up. -/
+/-- **The opener at an address map and the two messages**: gate `g`'s opening for unit `u` at its address
+(`openingOf`), at the round-1 message `m₁` and the session statements' message `m₂`; an empty opening at `g` where `g`
+has no address or the unit's session statement doesn't set up. -/
+noncomputable def addressOpAt (addr : ℕ → Option Address) (s : AuditStatement) (u : ℕ) (v : Seen)
+    (wF : Claims.Flock.Wit) (g : ℕ) (m₁ m₂ : Msg) : Opening Bool :=
+  match addr g, FlockDeploy.setupOf true (unitStmt h m₂ u) with
+  | some S, some (ins, _, sts) => (openingOf h s v wF u m₁ m₂ ins sts S g).2
+  | _, _ => ⟨g, false, []⟩
+
+/-- **The opener at an address map**: gate `g`'s opening for unit `u` at its address (`addressOpAt`), at a transcript
+whose round 1 sent `m₁` and whose round `stage + 1` sent the session statements; an empty opening at `g` at a
+transcript of fewer than two rounds. -/
 noncomputable def addressOp (addr : ℕ → Option Address) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit)
     (g : ℕ) (_ : List Msg) : Opening Bool :=
   match v.msgs with
-  | _ :: (m₁, _) :: (m₂, _) :: _ =>
-    match addr g, FlockDeploy.setupOf true (unitStmt h m₂ u) with
-    | some S, some (ins, _, sts) => (openingOf h s v wF u m₁ m₂ ins sts S g).2
-    | _, _ => ⟨g, false, []⟩
+  | _ :: (m₁, _) :: _ => addressOpAt h addr s u v wF g m₁ (v.msgs.getD (h.stage + 1) ([], .rej)).1
   | _ => ⟨g, false, []⟩
 
 theorem addressOp_seenAt {addr : ℕ → Option Address} {S : Address} {s : AuditStatement} {u g : ℕ} {m₀ m₁ m₂ : Msg}
-    {c₀ c₁ : FlockDeploy.Coin} {rest : List (Msg × Out)} {wF : Claims.Flock.Wit} {ins : FlockDeploy.Ins} {spec}
-    {sts : Array _root_.Flock.Stmt} (hs : addr g = some S)
+    {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {rest : List (Msg × Out)} {wF : Claims.Flock.Wit} {ins : FlockDeploy.Ins}
+    {spec} {sts : Array _root_.Flock.Stmt} (hs : addr g = some S)
     (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts)) (R : List Msg) :
     addressOp h addr s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g R =
       (openingOf h s (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF u m₁ m₂ ins sts S g).2 := by
-  simp only [addressOp, seenAt, hs, hset]
+  have e : addressOp h addr s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g R =
+      addressOpAt h addr s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g m₁
+        ((seenAt m₀ m₁ m₂ c₀ c₁ rest).msgs.getD (h.stage + 1) ([], .rej)).1 := rfl
+  rw [e, seenAt_stmts h]
+  simp only [addressOpAt, hs, hset]
 
 /-- **The base frame**: `c₀` with the program's reveal at the addresses' opener (`addressOp`), the own ports
 `revealOwn`, each gate's place its address's, and an opening's bits, salt and path read off its data. -/
@@ -263,17 +273,17 @@ def unitCount (x : Msg) : ℕ :=
 theorem units_eq_unitCount (x : Msg) : units (base h) x = unitCount h x := rfl
 
 /-- **A checked unit of a run, with its session's setup**: the values `SlotsAt` quantifies over. The run's statement
-`x` and its parse `s`, its first three messages and the coins of rounds 0 and 1, the rest of its transcript, the
-session witness `wF`, the unit `u`, its proof block `b`, its replay block `ρ` with gates `rb`, and its session's
-setup. -/
-structure CheckedRun where
+`x` and its parse `s`, its messages of rounds 0, 1 and `stage + 1`, round 0's coin and the second stage's `R` coins,
+the rest of its transcript, the session witness `wF`, the unit `u`, its proof block `b`, its replay block `ρ` with
+gates `rb`, and its session's setup. -/
+structure CheckedRun (R : ℕ) where
   x : Msg
   s : AuditStatement
   m₀ : Msg
   m₁ : Msg
   m₂ : Msg
   c₀ : FlockDeploy.Coin
-  c₁ : FlockDeploy.Coin
+  c₁ : Fin R → FlockDeploy.Coin
   rest : List (Msg × Out)
   wF : Claims.Flock.Wit
   u : ℕ
@@ -285,12 +295,12 @@ structure CheckedRun where
 
 namespace CheckedRun
 
-variable (r : CheckedRun)
+variable (r : CheckedRun h.stage)
 
 /-- **The run is accepted and `u` is one of its checked units**: `SlotsAt`'s premises. -/
 def Ok : Prop :=
   ∃ Pt d spec, parse h r.x = some r.s ∧ partition h r.s = some Pt ∧ two h r.s = some d ∧ InScopeTwo Pt d r.s ∧
-    stmtOk h r.x r.m₁ r.m₂ r.c₀ r.c₁ = true ∧ r.u ∈ h.reg.checked (unitCount h r.x) (src r.c₀) (src r.c₁) ∧
+    stmtOk h r.x r.m₁ r.m₂ r.c₀ r.c₁ = true ∧ r.u ∈ h.reg.checked (unitCount h r.x) (src r.c₀) (stageSrc r.c₁) ∧
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h r.m₂ r.u) r.wF = true ∧
     Pt.blocks[r.u]? = some r.b ∧ replayOf Pt d.part r.u = some r.ρ ∧ d.part.blocks[r.ρ]? = some r.rb ∧
     FlockDeploy.setupOf true (unitStmt h r.m₂ r.u) = some (r.ins, spec, r.sts)
@@ -298,9 +308,11 @@ def Ok : Prop :=
 /-- The unit's session statement. -/
 abbrev xS : Msg := unitStmt h r.m₂ r.u
 
+variable {h} in
 /-- The run's transcript. -/
-abbrev seen : Seen := seenAt r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest
+abbrev seen : Seen := seenAt (h := h) r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest
 
+variable {h} in
 /-- The session statement as the verifier parses it. -/
 abbrev p : _root_.Flock.Readable.Parsed := { r.ins.read with sts := r.sts }
 

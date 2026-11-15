@@ -29,7 +29,13 @@ and vLLM V1's model-level attention entry point (vllm/attention/layer.py):
 
 from __future__ import annotations
 
+import contextlib
+
 import torch
+
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 _LIB_NAME = "vllm_iface"
 _lib = torch.library.Library(_LIB_NAME, "FRAGMENT")  # noqa: TOR901
@@ -257,7 +263,8 @@ def real_C():
     try:
         import vllm  # noqa: F401
         return torch.ops._C
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug_once("vLLM does not import here, so no rule targets its `_C` ops: %s", repr(e))
         return None
 
 
@@ -267,10 +274,8 @@ def targets_for(name: str) -> set:
     C = real_C()
     if C is not None and hasattr(C, name):
         out.add(getattr(C, name).default)
-    try:
+    with contextlib.suppress(AttributeError, RuntimeError):
         out.add(getattr(torch.ops.vllm, name).default)
-    except (AttributeError, RuntimeError):
-        pass
     return out
 
 

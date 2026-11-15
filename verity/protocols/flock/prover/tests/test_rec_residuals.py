@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.commitments import hm96
-from verity.definitions.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 from verity_flock import rec_algebra as A
 from verity_flock import rec_live as RL
 from verity_flock import rec_residuals as RR

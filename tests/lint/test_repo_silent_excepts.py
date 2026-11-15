@@ -1,4 +1,4 @@
-"""Except handlers that swallow what they catch, in every tracked Python file outside ``adapters/vllm/`` and ``archive/``,
+"""Except handlers that swallow what they catch, in every tracked Python file outside ``adapters/vllm/``,
 held to ``allowlists/repo_silent_excepts.json``, so no area adds one while its owner turns the ones it has into raises and
 records.
 
@@ -37,8 +37,8 @@ from pathlib import Path
 NAME = "repo_silent_excepts"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: the integration's own lint holds it, and the archive isn't developed
-LEFT_OUT = ("adapters/vllm/", "archive/")
+#: the integration's own lint holds it
+LEFT_OUT = ("adapters/vllm/",)
 WHY = "adapters/vllm/tests/lint/README.md (Recorded outcomes)"
 FIX = ("Re-raise; or record the outcome in your area's typed record or log, saying what was caught and what the code did "
        "instead; or narrow it away: test for the case you expect (`path.exists()`, `d.get(k)`) and let the rest raise, since "

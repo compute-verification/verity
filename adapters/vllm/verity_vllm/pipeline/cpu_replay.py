@@ -2,6 +2,10 @@
 
     verity-vllm commit-replay BUNDLE --row-dir D --checkpoint-dir CK [--checkpoints-manifest M --model REPO --revision REV]
 
+The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
+prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs
+(`sampled_proofs.one_stage`).
+
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
 required manifest and the Build's Programs of record (under `D`), with the Definitions they bound.  The weights the relations
@@ -15,12 +19,15 @@ not served (a relation that reads it is not evaluated, named).  The tree is rows
 
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
-Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick too large for this host's memory: `driver.PoolDoesNotFit`).
+Exit 0 PASS, 3 FAIL, 2 refused (`errors.Refused`: a bundle that is not this record's, or a record with no deferred replay to decide;
+`driver.PoolDoesNotFit`: a pick too large for this host's memory).
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
 serving again (the sample is seeded from the run root, so it makes the same picks).  Not under other Definition bodies: the replay is
 refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
+The keep stays on the node: it holds clear values (the opened committed values with their salts, the requests and served tokens, the
+opened tensors' salt keys and bundle bytes), so no stage publishes it (`research_outputs`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
                       linkage opened, folding to the run root
@@ -35,7 +42,7 @@ refused unless the Definitions its tree evaluates the picks by are the ones the 
 BUNDLE may be that keep (`open_keep`): its files are checked against `slim.json`, and the record beside it, decided by a replay of the
 bundle the keep was cut from (the verdict's `replayed` names that bundle's manifest sha256), is read back in its deferred state
 (`undecided`), so the replay decides the run again from its own sample.  It is refused before anything is evaluated unless this code's
-sample is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
+sample is the keep's picks in order (`kept_sample`).  A replay from a keep writes no keep.
 """
 from __future__ import annotations
 
@@ -51,16 +58,32 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
+from verity_vllm.check import derived_weights, fp8_ue8m0
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.cublas_route_pin import stamp
+from verity_vllm.check.replay.driver import PoolDoesNotFit
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.commit.partition import require_partition
 from verity_vllm.config import option
+from verity_vllm.errors import Refused
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+from verity_vllm.pipeline.timeline import Timeline
 from verity_vllm.program.compiled_relations import warm_vml
+
+__all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
+           "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
+           "worker_peak"]
+
+logger = init_logger(__name__)
 
 ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "
            "and the tensor roots fold to the committed weights root")
@@ -89,10 +112,6 @@ class Options:
                                           help="a forked worker's measured peak memory beyond what the row evaluator states for its pick, "
                                                "GiB (default: the word replay's, admission commit.c2.replay_workers.small_vu): after the "
                                                "prewarm the workers are fitted to the cgroup's memory.max less its use (`driver.fit_pool`)")
-
-
-class Refused(Exception):
-    """The bundle is not the Commit record's, or the record has no deferred replay to decide."""
 
 
 def open_keep(keep: str | os.PathLike) -> dict[str, Any]:
@@ -139,10 +158,33 @@ def undecided(c: dict[str, Any], bundle: str) -> None:
             c.pop("opened_values")
     vc = c.get("value_correspondence")
     if isinstance(vc, dict):
-        for k in ("sampled_replay", "boundary_linkage", "negatives"):
-            (vc.get("components") or {}).pop(k, None)
+        components = vc.get("components")
+        if components:  # a correspondence that holds no component has none of the replay's to take off
+            for k in ("sampled_replay", "boundary_linkage", "negatives"):
+                components.pop(k, None)
         vc["method"] = re.sub(r"^sampled-exact-replay\([^)]*\) \+ boundary-linkage \+ ", "", vc.get("method") or "")
         vc["result"] = None
+
+
+def bundle_tensors(tree: dict[str, Any]) -> dict[str, int]:
+    """The registered tensors whose bytes the bundle holds, each by its index (the tree's ``extra``); none for a tree that lists none:
+    every tensor of such a tree is read from the checkpoint."""
+    extra = tree.get("extra")
+    return extra if extra else {}
+
+
+def registered_root(c: dict[str, Any]) -> str | None:
+    """The weights root a run's Commit record registered (its ``weight_registration``); None for a run that registered no weights."""
+    registration = c.get("weight_registration")
+    return registration.get("root") if registration else None
+
+
+def deferred_entries(verdict: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    """The entries of ``kind`` a Commit's verdict lists under ``replay_deferred`` (``bundles``: each sealed bundle; ``replayed``: each
+    replay that decided a run); none for a verdict that deferred no replay or lists none of the kind."""
+    deferred = verdict.get("replay_deferred")
+    entries = deferred.get(kind) if deferred else None
+    return entries if entries else []
 
 
 def tree_scheme(tree: dict[str, Any]) -> str | None:
@@ -164,20 +206,26 @@ def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
     return bytes.fromhex(ks) if ks else None
 
 
-def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
-    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `tensor_key_of`)."""
+def held_tensor_key(tree: dict[str, Any], i: int) -> bytes:
+    """`tensor_key_of` tensor ``i``; KeyError where the slim keep carries none."""
     ks = tensor_key_of(tree, i)
     if ks is None:
         raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
-    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ks)
+    return ks
+
+
+def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
+    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `held_tensor_key`)."""
+    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"),
+                                       held_tensor_key(tree, i))
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
-    """The weights tree a slim keep carries, which is published: never the registration's ``Kw`` (every weights leaf's salt derives
+    """The weights tree a slim keep carries: never the registration's ``Kw`` (every weights leaf's salt derives
     from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
     bundle's bytes of those alone."""
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
-    keys = {str(at[n]): tensor_key_of(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.get)}
+    keys = {str(at[n]): held_tensor_key(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.__getitem__)}
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
         "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
 
@@ -195,11 +243,8 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
     (`fp8_ue8m0.Rewrites` over the registered names): the fields vLLM rewrites at load, composed as it rewrites them.  ``roles`` (the
     Build's, by registered name): a field vLLM makes at load by more than a copy, composed by its role's rule (`derived_weights`), as
     the weights of record are."""
-    from verity_vllm.check import derived_weights
-    from verity_vllm.check import weights_of_record as WR
-
     name, dt, shape, nb = tree["names"][i]
-    src = "bundle" if name in (tree.get("extra") or {}) else "checkpoint"
+    src = "bundle" if name in bundle_tensors(tree) else "checkpoint"
     if tensor_key_of(tree, i) is None:
         return src, None, "the slim keep carries no salt key for it", False
     if src == "bundle":
@@ -227,25 +272,31 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
 def registered_roles(program_dirs: Iterable[str | None], prefix: str = "") -> dict[str, dict[str, Any]]:
     """The Build's `weight_roles` (`fp8_ue8m0.build_roles` of each Program dir) by registered name: the Program's field less the
     wrapper prefix its index strips (`ProgramIndex.prefix`, as the replay's weights provider does)."""
-    from verity_vllm.check import fp8_ue8m0
-
     roles: dict[str, dict[str, Any]] = {}
     for d in program_dirs:
         roles.update(fp8_ue8m0.build_roles(d))
     return {(f[len(prefix):] if prefix and f.startswith(prefix) else f): r for f, r in roles.items()}
 
 
+def rewrites(tree: dict[str, Any], roles: dict[str, dict[str, Any]] | None, ck: Any, tp: dict[str, int] | None) -> Any:
+    """`fp8_ue8m0.Rewrites` over the tree's servable tensors: the fields of ``roles`` that vLLM rewrites at load, each read from
+    the checkpoint as `weights_of_record.compose` composes it (a TP rank's shard under ``tp``).  None without roles or a checkpoint."""
+    if not roles or ck is None:
+        return None
+    dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in tree["names"] if dt in WORDS}
+    at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
+
+    def composed(name: str) -> tuple[np.ndarray, dict[str, Any]]:
+        shape, bits = dims[name]
+        return WR.compose(name, shape, bits, ck, **at)
+
+    return fp8_ue8m0.Rewrites(list(dims), roles, composed, ck.config)
+
+
 def opener(bundle: Path, tree: dict[str, Any], ck: Any, *, tp: dict[str, int] | None = None,
            roles: dict[str, dict[str, Any]] | None = None) -> Callable[[int], tuple[str, np.ndarray | None, str | None, bool]]:
     """`_open_one` of the tree's tensor i, as `open_weights` opens it: one tensor at a time, the rewrites of ``roles`` made once."""
-    from verity_vllm.check import fp8_ue8m0
-    from verity_vllm.check import weights_of_record as WR
-
-    rw = None
-    if roles and ck is not None:
-        dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in tree["names"] if dt in WORDS}
-        at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
-        rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+    rw = rewrites(tree, roles, ck, tp)
     return lambda i: _open_one(bundle, tree, i, ck, tp, rw, roles)
 
 
@@ -309,18 +360,11 @@ class OnRead(Mapping):
 
     def __init__(self, bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, tp: dict[str, int] | None = None,
                  roles: dict[str, dict[str, Any]] | None = None):
-        from verity_vllm.check import fp8_ue8m0
-        from verity_vllm.check import weights_of_record as WR
-
         names = tree["names"]
         _folded, refused = tree_refusal(tree, root_of_record)
         if refused:
             raise ValueError(refused)
-        rw = None
-        if roles and ck is not None:
-            dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in names if dt in WORDS}
-            at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
-            rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+        rw = rewrites(tree, roles, ck, tp)
         self._at = {n: i for i, (n, dt, _s, _b) in enumerate(names) if dt in WORDS}
         self._open = lambda i: _open_one(bundle, tree, i, ck, tp, rw, roles)
         self._dtype = {n: WORDS[dt][1] for n, dt, _s, _b in names if dt in WORDS}
@@ -372,7 +416,7 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
     ``awaiting=False``: the run's record may be decided already (a reader of the bundle that decides nothing)."""
     ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
     verdict = json.loads((out / "verdict.json").read_text())
-    ent = next((x for x in ((verdict.get("replay_deferred") or {}).get("bundles") or []) if int(x["pair"]) == pair), None)
+    ent = next((x for x in deferred_entries(verdict, "bundles") if int(x["pair"]) == pair), None)
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
         raise Refused(f"the Commit's verdict names no bundle of pair {pair} with manifest sha256 {b['manifest_sha256'][:16]}")
     rows = [json.loads(ln) for ln in (out / "runs.jsonl").read_text().splitlines() if ln.strip()]
@@ -380,13 +424,13 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
     if not awaiting:
         if row is None:
             raise Refused(f"pair {pair}: no instrumented run in {out / 'runs.jsonl'}")
-    elif "keep" in b and row is not None and not RB.awaits_replay(row.get("commit") or {}):
-        done = next((x for x in ((verdict.get("replay_deferred") or {}).get("replayed") or [])
+    elif "keep" in b and row is not None and not RB.awaits_replay(RB.commit_of(row)):
+        done = next((x for x in deferred_entries(verdict, "replayed")
                      if int(x["pair"]) == pair and x.get("manifest_sha256") == b["manifest_sha256"]), None)
         if done is None:
             raise Refused(f"pair {pair}: the record was not decided by a replay of the bundle {b['manifest_sha256'][:16]} this keep was cut from")
         undecided(row["commit"], done["bundle"])
-    if awaiting and (row is None or not RB.awaits_replay(row.get("commit") or {})):
+    if row is None or (awaiting and not RB.awaits_replay(RB.commit_of(row))):
         raise Refused(f"pair {pair}: no instrumented run awaiting its deferred replay in {out / 'runs.jsonl'}")
     store, run = SD.load(bdir / "store")
     c = row["commit"]
@@ -403,8 +447,6 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
 
 
 def manifest_of(o: Options, ctx: dict[str, Any], args: SimpleNamespace) -> tuple[str | None, Any]:
-    from verity_vllm.commit.partition import require_partition
-
     want = ctx.get("required_manifest_sha256")
     if not want:
         return None, None
@@ -427,8 +469,14 @@ def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)
 
 
-def worker_peak(o: Options) -> int:
-    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+class WorkerPeakOption(Protocol):
+    """What `worker_peak` reads of a replay command's options: its `--worker-peak-gb`."""
+
+    @property
+    def worker_peak_gb(self) -> float | None: ...
+
+
+def worker_peak(o: WorkerPeakOption) -> int:
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 
 
@@ -446,12 +494,12 @@ def engine_of_record(row: dict[str, Any], ctx: dict[str, Any], art: Path) -> Non
 def weights_attest(c: dict[str, Any], wc: dict[str, Any], consumed: set[str], words: dict[str, np.ndarray], extra: Any,
                    b: dict[str, Any]) -> dict[str, Any]:
     """What the replay's weights openings attest: ``attests`` is None unless every consumed field opened and the tree folds to the root."""
-    pin = c.get("weights_pin") or {}
+    pin = c.get("weights_pin")  # no pin on the record says neither whether it held nor its root
     whole = wc["equal"] and consumed <= words.keys()
     by = {s: 0 for s in ("checkpoint", "bundle")}
     for name in consumed & words.keys():
         by["bundle" if name in extra else "checkpoint"] += 1
-    return {"pin": {"equal": pin.get("result"), "digest": pin.get("root_of_record")},
+    return {"pin": {"equal": pin.get("result") if pin else None, "digest": pin.get("root_of_record") if pin else None},
             "root_openings": f"{len(consumed & words.keys())}/{len(consumed)}", "sources": by,
             "attests": ATTESTS if whole else None, "replay": f"cpu, from {'the slim keep of ' if 'keep' in b else ''}bundle {b['manifest_sha256']}"}
 
@@ -459,9 +507,6 @@ def weights_attest(c: dict[str, Any], wc: dict[str, Any], consumed: set[str], wo
 def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any], consumed: set[str],
            words: dict[str, np.ndarray], extra: Any) -> None:
     """The run's value correspondence and verdict with the replay on the record (in the in-process Commit's component order)."""
-    from verity_vllm.check.cublas_route_pin import stamp
-    from verity_vllm.check.verdict import commit_verdict
-
     c = row["commit"]
     stamp(c)
     vc = c["value_correspondence"]
@@ -506,11 +551,13 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     reads were not all made in this process (`plan` is not a plan of as many picks as the replay picked).  ``opened``: the registered
     tensors the replay consumed and opened, the only ones whose salt keys and bundle bytes the keep's weights tree carries (`slim_tree`)."""
     ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
-    sr = c.get("sampled_replay") or {}
-    picked = (sr.get("sample") or {}).get("picked")
+    replay, commit_args = c.get("sampled_replay"), ctx.get("args")
+    sr: dict[str, Any] = replay if replay else {}
+    sample = sr.get("sample")
+    picked = sample.get("picked") if sample else None  # a record that holds no sample has no pick to keep
     if not plan.get("plan") or picked is None or plan.get("picked") != picked or len(plan.get("picks") or ()) != picked:
-        print(f"[replay] SLIM KEEP (pair {pair}): NOT WRITTEN -- the replay picked {picked}, its reads were re-made for {plan.get('picked')}",
-              flush=True)
+        logger.warning("[replay] SLIM KEEP (pair %s): NOT WRITTEN -- the replay picked %s, its reads were re-made for %s", pair, picked,
+                       plan.get("picked"))
         return None
     final = slim_path(out, pair)
     p = final.with_name(final.name + ".partial")
@@ -526,8 +573,8 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     names = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
     with ThreadPoolExecutor(8) as pool:
         sums = pool.map(lambda r: hashed.get(r.removeprefix("store/")) or RB._sha256(p / r), names)
-        files = {r: {"sha256": h, "bytes": (p / r).stat().st_size} for r, h in zip(names, sums)}
-    doc = {"schema": SLIM_SCHEMA, "pair": pair, "run_root": run.run_root.hex(), "program_digest": (ctx.get("args") or {}).get("program_digest"),
+        files: dict[str, dict[str, Any]] = {r: {"sha256": h, "bytes": (p / r).stat().st_size} for r, h in zip(names, sums)}
+    doc = {"schema": SLIM_SCHEMA, "pair": pair, "run_root": run.run_root.hex(), "program_digest": commit_args.get("program_digest") if commit_args else None,
            "programs": sr.get("programs"), "binding_map_sha256": b["manifest"]["files"]["binding_map.json"]["sha256"],
            "bundle_manifest_sha256": b["manifest_sha256"], "commit_pass": c.get("commit_pass"), "picked": picked, "picks_key": PICKS_KEY,
            "picks": plan["picks"], "touched_bytes": touched.nbytes(), "files": files, "bytes": sum(f["bytes"] for f in files.values()),
@@ -536,12 +583,12 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     if final.exists():
         shutil.rmtree(final)
     os.replace(p, final)
-    print(f"[replay] SLIM KEEP (pair {pair}): {final} -- {picked} picks, {doc['bytes'] >> 20} MiB in {len(files)} files, dump sha256 "
-          f"{doc['dump_sha256'][:16]}, run root {doc['run_root'][:16]}", flush=True)
+    logger.info("[replay] SLIM KEEP (pair %s): %s -- %s picks, %s MiB in %s files, dump sha256 %s, run root %s", pair, final, picked,
+                doc["bytes"] >> 20, len(files), doc["dump_sha256"][:16], doc["run_root"][:16])
     return doc
 
 
-def kept_draw(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
+def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     """Refused unless this code samples the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
     so another sample (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
     try:
@@ -557,11 +604,12 @@ def kept_draw(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
 
 
+#: `kept_sample` under its older name, for the callers that still say it
+kept_draw = kept_sample
+
+
 def replay(o: Options) -> bool | None:
     """The bundle's C2 replay and the run's verdict on the record; the verdict's commit_pass."""
-    from verity_vllm.check import weights_of_record as WR
-    from verity_vllm.pipeline.timeline import Timeline
-
     t0 = time.perf_counter()
     tl = Timeline.from_env("commit_replay")
     b = open_source(o.bundle)
@@ -574,23 +622,26 @@ def replay(o: Options) -> bool | None:
     args.required_manifest = man_path
     with tl.span("replay.open_weights", pair=pair) as sp:
         ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
-        words, wc = open_weights(bdir, tree, (row["commit"].get("weight_registration") or {}).get("root"), ck, threads=o.threads)
+        words, wc = open_weights(bdir, tree, registered_root(row["commit"]), ck, threads=o.threads)
         sp.update(equal=wc["equal"], opened=wc["opened"], servable=wc["servable"])
-    print(f"[replay] WEIGHTS (pair {pair}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered tensors against the committed "
-          f"weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
-          + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
+    (logger.info if wc["equal"] else logger.warning)(
+        "[replay] WEIGHTS (pair %s): %s %s/%s registered tensors against the committed weights root %s (%s; unopened %s) in %s s%s", pair,
+        "OPENED" if wc["equal"] else "FAIL", wc["opened"], wc["servable"], str(wc["committed_root"])[:16], wc["opened_by_source"], wc["unopened_n"],
+        wc["wall_s"], f" -- {wc['why']}" if wc["why"] else "")
     args.replay_worker_peak = worker_peak(o)
-    vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
+    vc = row["commit"]["value_correspondence"]
+    consumed: set[str] = set()
+    reads: dict[str, Any] = {}
     site = C2.ReplaySources(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
                             manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
                             components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
                             weights_check=lambda: dict(wc), tl=tl, reads=reads)
     if "keep" in b:
-        kept_draw(site, b["keep"])
+        kept_sample(site, b["keep"])
     with SD.touched(store) as touched:
         C2.run(site, {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
-    decide(row, ctx, wc, b, consumed, words, tree.get("extra") or {})
+    decide(row, ctx, wc, b, consumed, words, bundle_tensors(tree))
     if "keep" not in b:
         with tl.span("replay.slim_keep", pair=pair):
             keep(out, b, store, run, touched, reads, row["commit"], opened=consumed & words.keys())
@@ -602,8 +653,6 @@ def replay(o: Options) -> bool | None:
 
 
 def main(o: Options) -> int:
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
-
     warm_vml()
     try:
         ok = replay(o)

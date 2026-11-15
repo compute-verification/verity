@@ -4,9 +4,8 @@
 # Coverage cells (--config-run 1) use config-run.yaml instead: a CPU Build task and a short GPU Commit task. The night sweep submits the same
 # file with the priority label set to sweep-night (the runbook's one-line sed).
 #
-#   sky jobs launch -n row-<id> tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml \
-#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha> \
-#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#   tools/research/src/research/pods/nebius/sky/submit.sh config-run-row row-<id> \
+#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
 #
 # Resources are the measured peak of the 1-7B dense class, B 8-64: 240-512 GB of host RAM, the Build on 1-4
 # cores (16 vCPU per GPU is the fleet plan's floor), ~200 GB on /workspace. Other classes override on the command line:
@@ -15,8 +14,8 @@
 #   TP2                                 --gpus RTXPRO6000:2 --cpus 32 --memory 384   >= 377 GB
 # A row can't be checkpointed yet (5-11 h): circuits never borrows (kueue.yaml), so a row runs on circuits' own quota, which no
 # reclaim takes back. No config run is admitted in the quiet hour, 12:30-13:30Z.
-# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
-#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+# The job runs from the tree at $SRC on the host's /workspace (no upload). submit.sh ships this checkout there, sets SRC and mints
+# the job's store key; a launch by hand that names AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY would hand it the shell's own pair.
 name: config-run-row
 
 resources:

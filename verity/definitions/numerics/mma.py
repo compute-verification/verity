@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
-from verity.definitions.silicon import models as S, term as T
+from verity.circuits.silicon import models as S, term as T
 
 __all__ = [
     "AMPERE_BF16",

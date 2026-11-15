@@ -268,6 +268,16 @@ theorem TrimBridge.zk_KS_both_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha51
         Claims.Flock.KS sha512 (deployZk Readable.relation)) :=
   ⟨zk_KS_trim_of_xferWJ hx, zk_KS_of_xferWJ hx⟩
 
+/-- **`ZkXferWJ` at the statements some run accepts, from the cap/`τ` and pads fork bounds and the view's pads clash**,
+the premises `zk_KS_of_kinds` takes. -/
+theorem TrimBridge.zkXferWJ_of_kinds
+    (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
+    ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x := fun x hno =>
+  zkXferWJ_of_simWJ (zkSimWJ_of_parts (zkSimRunAt x) (zkSimAbortAt x)
+    (zkSimForkLe_of_kinds (hct x hno) (hp x hno)) (zkViewClash_of_Q (zkViewClashQ₀ x) (zkViewClashQL x) (hpads x hno)))
+
 /-- **KS at both masked records from the cap/`τ` and pads fork bounds and the view's pads clash**, the premises
 `zk_KS_of_kinds` takes: the trimmed record's is `zk_KS_of_kinds`'s, and the untrimmed instance's needs `ExtendJ` at
 full-width columns besides. -/
@@ -278,8 +288,17 @@ theorem TrimBridge.zk_KS_both_of_kinds
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) ∧
       (Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true) →
         Claims.Flock.KS sha512 (deployZk Readable.relation)) :=
-  zk_KS_both_of_xferWJ fun x hno => zkXferWJ_of_simWJ (zkSimWJ_of_parts (zkSimRunAt x) (zkSimAbortAt x)
-    (zkSimForkLe_of_kinds (hct x hno) (hp x hno)) (zkViewClash_of_Q (zkViewClashQ₀ x) (zkViewClashQL x) (hpads x hno)))
+  zk_KS_both_of_xferWJ (zkXferWJ_of_kinds hct hp hpads)
+
+/-- **One wait's bound at the untrimmed masked instance** at SHA-512 at the deployed relation, from `zk_KS_of_kinds`'s
+premises and `ExtendJ` at full-width columns. -/
+theorem TrimBridge.zk_oneWait_untrim_of_kinds
+    (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ)
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
+  zk_oneWait_of_xferWJ (zkXferWJ_of_kinds hct hp hpads) hext
 
 /-- **KS at the untrimmed masked instance** at SHA-512 at the deployed relation, from `zk_KS_of_kinds`'s premises and
 `ExtendJ` at full-width columns. -/

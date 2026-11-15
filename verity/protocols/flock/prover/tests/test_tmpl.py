@@ -2,11 +2,17 @@
 on a dot product's unit as ``ir_lower.layout`` lays it out; its Definitions repeat (a multiply-accumulate step, its bit
 cells), so its text is a fraction of the flat text's; and the Lean fixture of ``Flock/Test/Tmpl.lean`` unrolls to the
 flat text written out there. Both are in the row order ``Tmpl.ordered`` checks, and ``legalize`` splits a segment the
-check refuses only for straddling two input groups into ones it accepts, unrolling to the same rows."""
+check refuses only for straddling two input groups into ones it accepts, unrolling to the same rows. ``evaluate`` gives the
+unrolled template's values or refuses, on a one-copy call whose stride is under its callee's columns and on random
+templates."""
 from __future__ import annotations
+
+import numpy as np
+import pytest
 
 from verity.circuits.boolean import forms as F
 from verity_flock import ir_lower as IL
+from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
 
@@ -99,3 +105,118 @@ def test_the_emitter_makes_no_run_whose_copy_0_reads_its_own_columns_through_an_
     assert T.flat_lines(T.unroll(T.parse(T.write(t)))) == lines
     monkeypatch.setattr(T._Emitter, "_aligned", lambda self, lv, i0, P, m, D: m)
     assert T.emit(T.parse_flat(lines))[1]["order"]["late"] > 0
+
+
+def _unrolled(t: T.Tmpl, lanes: np.ndarray, out_at: int, n: int) -> list[int]:
+    """The unrolled template's columns ``[out_at, out_at + n)``, evaluated in column order."""
+    return S.evaluate(T.unroll(t), [int(v) for v in lanes], len(lanes))[out_at:out_at + n]
+
+
+@pytest.mark.parametrize("stride", [0, 1, 2, 5])
+def test_evaluate_reads_every_column_of_a_one_copy_call_whatever_its_stride(stride):
+    """One copy of a two-column callee at 128, the output reading its second column: a single copy's stride places
+    nothing (``Tmpl.place``, ``Call.copyOf``), so under the callee's columns it must not cut the copy short."""
+    t = T.parse("\n".join(["flock-ir-tmpl/v2 one 1 1 0 1 1 1 1 2 1 1 1", "DEF 2 1 2 0", "0 1 2 1 3", "1 1 0 1 3",
+                           "DEF 400 0 2 1", "0 1 0 1 0", "256 1 129 1 400", f"CALL 0 1 128 {stride} 1 1 0 0 1 0"]))
+    lanes = np.array([0x0123456789ABCDEF], np.uint64)
+    assert [int(v) for v in T.evaluate(t, lanes[:, None])[:, 0]] == _unrolled(t, lanes, 256, 1) == [0x0123456789ABCDEF]
+
+
+_IN, _BODY, _OUT, _COLS = 4, (128, 176), 256, 400
+
+
+def _random_tmpl(rng) -> T.Tmpl:
+    """Three Definitions and a root, each a run of rows and calls of earlier ones (so calls nest): copies of any stride
+    from 0 to past the callee's columns, overlapping only where no two write one column, and now and then a caller's row
+    in a column its copies leave unwritten."""
+    defs: list[T.Def] = []
+    wrote: list[set[int]] = []
+
+    def body(cols, ins, lo, hi, written, d):
+        const, rows, calls, holes, x = cols + ins, [], [], [], lo
+        while x < hi:
+            pool = written + list(range(cols, const + 1))
+
+            def pick():
+                return int(pool[rng.integers(len(pool))])
+
+            if holes and rng.random() < 0.08:
+                h = holes.pop(int(rng.integers(len(holes))))
+                rows.append((h, tuple(c for c in (pick(), pick()) if c < h or c >= cols), (const,)))
+                written.append(h)
+                continue
+            if d and rng.random() < 0.4:
+                e = int(rng.integers(d))
+                Le, count = defs[e].cols, int(rng.integers(1, 4))
+                stride = Le if rng.random() < 0.4 else int(rng.integers(0, Le + 3))
+                occ = [j * stride + y for j in range(count) for y in sorted(wrote[e])]
+                if len(set(occ)) < len(occ):
+                    stride = Le
+                    occ = [j * stride + y for j in range(count) for y in sorted(wrote[e])]
+                end = x + (count - 1) * stride + Le
+                if end <= hi:
+                    segs = tuple((1, pick(), int(rng.choice([0, 0, 1, 2])), 1, 0) for _ in range(defs[e].ins))
+                    calls.append(T.Call(e, count, x, stride, segs))
+                    written += [x + y for y in occ]
+                    holes, x = [x + y for y in range(end - x) if y not in set(occ)], end
+                    continue
+            holes = []
+            if rng.random() < 0.7:
+                a = tuple(pick() for _ in range(int(rng.integers(1, 4))))
+                rows.append((x, a, (const,) if rng.random() < 0.5 else tuple(pick() for _ in range(int(rng.integers(1, 3))))))
+                written.append(x)
+            x += 1
+        return rows, calls, written
+
+    for d in range(3):
+        cols, ins = int(rng.integers(2 + 3 * d, 5 + 6 * d)), int(rng.integers(1, 4))
+        rows, calls, written = body(cols, ins, 0, cols, [], d)
+        defs.append(T.Def(cols, ins, tuple(sorted(rows)), tuple(calls)))
+        wrote.append(set(written))
+    rows, calls, _ = body(_COLS, 0, *_BODY, list(range(_IN)), 3)
+    outs = [(_OUT + j, tuple(int(rng.integers(*_BODY)) for _ in range(2)), (_COLS,)) for j in range(8)]
+    root = [(i, (i,), (i,)) for i in range(_IN)] + rows + outs
+    defs.append(T.Def(_COLS, 0, tuple(sorted(root)), tuple(calls)))
+    return T.Tmpl("probe", 3, ["1", "0", "1", "1", str(_IN), "1", str(_OUT // T.WORD), "1", "1", "8"], defs)
+
+
+def _shapes(t: T.Tmpl) -> set[str]:
+    out = set()
+    for d in t.defs:
+        for c in d.calls:
+            Le, end = t.defs[c.e].cols, c.base + (c.count - 1) * c.stride + t.defs[c.e].cols
+            out |= {"nested"} if t.defs[c.e].calls else set()
+            out |= {"overlapping copies"} if c.count > 1 and c.stride < Le else set()
+            out |= {"one copy, stride under its columns"} if c.count == 1 and c.stride < Le else set()
+            out |= {"caller row inside copies"} if any(c.base <= r[0] < end for r in d.rows) else set()
+    return out
+
+
+def test_evaluate_is_the_unrolled_templates_values_or_refuses_on_random_templates():
+    """1,000 seeded random templates over nested calls, overlapping copies, caller rows inside copies and one-copy calls
+    under their callee's columns: ``evaluate`` either refuses one or gives the unrolled template's values."""
+    rng = np.random.default_rng(0)
+    seen: dict[str, int] = {}
+    differ = []
+    for i in range(1000):
+        t = _random_tmpl(rng)
+        lanes = rng.integers(0, 1 << 64, _IN, dtype=np.uint64)
+        try:
+            want = _unrolled(t, lanes, _OUT, 8)
+        except AssertionError:
+            verdict = "not unrollable"
+        else:
+            try:
+                got = [int(v) for v in T.evaluate(t, lanes[:, None])[:, 0]]
+            except ValueError:
+                verdict = "refused"
+            else:
+                verdict = "agreed"
+                if got != want:
+                    differ.append(i)
+                    verdict = "differed"
+        for s in _shapes(t) | {""}:
+            seen[f"{verdict} {s}".strip()] = seen.get(f"{verdict} {s}".strip(), 0) + 1
+    assert not differ, (differ[:5], seen)
+    assert all(seen.get(k, 0) >= 10 for k in ("agreed nested", "agreed one copy, stride under its columns",
+                                                 "refused overlapping copies", "refused caller row inside copies")), seen

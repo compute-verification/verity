@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from .ctx import IntCtx
+from .ctx import Ctx, IntCtx, Value
 from .gadgets import (
     AlignProduct,
     AlignState,
@@ -31,8 +31,8 @@ from .gadgets import (
 )
 from .params import REAL, Params, Reject
 
-__all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_vu", "check_vu_expr", "gen_step",
-           "gen_vu", "step_output", "vu_output"]
+__all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_vu", "check_vu_expr", "contracts",
+           "gen_step", "gen_vu", "step_output", "vu_output"]
 
 
 def _k(p: Params) -> int:
@@ -91,7 +91,7 @@ def gen_step(p: Params, c: int, a: Sequence[int], b: Sequence[int]) -> dict:
     return h
 
 
-def check_step_expr(ctx, p: Params, c, a: Sequence, b: Sequence, h: dict):
+def check_step_expr(ctx: Ctx, p: Params, c: Value, a: Sequence, b: Sequence, h: dict) -> Value:
     """Every predicate of one unit on ``ctx``; returns the output word as an expression of ``x`` and ``h``."""
     k = _k(p)
     if len(a) != k or len(b) != k or len(h["a"]) != k or len(h["b"]) != k or len(h["prod"]) != k:
@@ -177,7 +177,7 @@ def gen_vu(p: Params, a: Sequence[int], b: Sequence[int]) -> dict:
     return {"steps": steps, "epilogue": Epilogue.gen(p, c)}
 
 
-def check_vu_expr(ctx, p: Params, a: Sequence, b: Sequence, h: dict):
+def check_vu_expr(ctx: Ctx, p: Params, a: Sequence, b: Sequence, h: dict) -> Value:
     k = _k(p)
     if len(a) != len(b) or not a or len(a) % k or len(h["steps"]) != len(a) // k:
         raise Reject(f"operand count must be a positive multiple of {k} with one unit witness per chunk")

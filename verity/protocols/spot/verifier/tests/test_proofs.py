@@ -1,7 +1,7 @@
 """The proof system's own run of Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
 output row registered too, proved by Flock in one loopback session under a subset sample of 16
-(`verity/protocols/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+(`verity/protocols/flock/prover/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
 file are the fixture's `stage/`, the ones
 `verity/protocols/flock/prover/tests/test_lean_served_registered.py` holds to `register_served`.
 
@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -41,7 +42,7 @@ from verity.protocols.spot.verifier.one_stage import produced as PRODUCED, proof
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
 FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
-VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "agreement"
+VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "prover" / "agreement"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
@@ -146,6 +147,34 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
                          program=RUN_ONLY, partition={"program": "p"}, registered=None)
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
+
+
+@pytest.mark.parametrize("own, want", [(None, "-1"), ("0", "0")], ids=["unset", "the caller's own"])
+def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_its_own(tmp_path, monkeypatch, own, want):
+    circuit, public = _files(tmp_path)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    children = []
+
+    def child(cmd, **kw):
+        children.append(kw["env"])
+        return subprocess.CompletedProcess(cmd, 0, f"VERDICT {json.dumps(verdict)}\n", "")
+
+    assert PF.VERIFIER_ENV == {"MIMALLOC_PURGE_DELAY": "-1"}
+    if own is None:
+        monkeypatch.delenv("MIMALLOC_PURGE_DELAY", raising=False)
+    else:
+        monkeypatch.setenv("MIMALLOC_PURGE_DELAY", own)
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(PF.subprocess, "run", child)
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
+                         program=RUN_ONLY, partition={"program": "p"}, registered=None)
+    assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
+    (env,) = children
+    wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want}
+    differ = sorted(k for k in env.keys() | wanted.keys() if env.get(k) != wanted.get(k))
+    assert differ == []
 
 
 #: `Flock/Test/RecordText.lean`'s `printed` vectors and a text it `accepts`, which is its own printing, verbatim (Lean's
@@ -310,9 +339,9 @@ def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx,
 
 
 def _pointed(fx: Path) -> str:
-    """The fixture's public file with the first drawn unit's ref at port 0 (the row it reads of that port's shared table)
-    pointed at the next instance's, as a prover pointing a drawn unit at another unit's rows would write it; its header
-    and tables kept. A drawn unit's, since the session's statement is the drawn units' (`Flock.Draw`); port 0, an input,
+    """The fixture's public file with the first sampled proof block's ref at port 0 (the row it reads of that port's shared table)
+    pointed at the next instance's, as a prover pointing a sampled proof block at another unit's rows would write it; its header
+    and tables kept. A sampled proof block's, since the session's statement is the sampled proof blocks' (`Flock.Draw`); port 0, an input,
     since a circuit's inputs precede its outputs, whose refs setup holds to each instance's own row."""
     st = fx / "stage"
     head, body = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
@@ -332,7 +361,7 @@ def _pointed(fx: Path) -> str:
 @pytest.mark.slow
 def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
     """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
-    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a drawn unit's input ref
+    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a sampled proof block's input ref
     pointed at the next instance's row is refused at setup, before any proof is read, and proves no proof block. Round 2
     requires every port a second-stage header shares rows at to be registered (`second-refs`), so its sessions' refs are
     held this way."""

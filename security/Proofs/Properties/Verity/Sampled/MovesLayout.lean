@@ -207,6 +207,7 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
+    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
@@ -219,9 +220,9 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   have hP := freshBefore_verdict hA hθ hv hl hN
   have h0r := A.rounds_pos
   obtain ⟨reps, ho, hreps⟩ := firstStop_reps_verdict hA hDg reg record recordDigest rfl rfl rfl ω pts hL0 hr
-    hv hn hl hfirst hO
+    hv hn hl ht hfirst hO
     (fun hR hct h1 => fun hJt hy hO' _ hd hJ h512 hst hk => rep_answers hR hct h1 hJt hy hO' hd hJ h512 hst hk)
-  obtain ⟨_, _, _, _, hrec₀, -⟩ := accepts_sent hA hθ hv (filesOn_play hA hDg hv)
+  obtain ⟨_, _, _, _, hrec₀, -⟩ := accepts_sent hA hθ hv (filesOn_play hA hDg hv ht)
   have hop := verdict_opens hA hθ hv hl hrec₀
   have hnd := verdict_nodup hA hθ hv hl hrec₀
   have hjl := A.layout_link h0r
@@ -274,9 +275,10 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ D M
+    MovesReach V θ F c k (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
+        SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
-  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl
+  fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.movesOf hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
     (hN _ hv hl hd) (hO _ hv hl)
 
 end Verity.Sampled

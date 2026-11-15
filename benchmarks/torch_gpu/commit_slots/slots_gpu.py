@@ -56,7 +56,8 @@ import numpy as np
 import slots as S
 from verity.commitments.merkle import merkle_depth
 
-__all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "regroup"]
+__all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "driver_bindings",
+           "regroup"]
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
@@ -144,17 +145,34 @@ class _Graph:
     n: int
 
 
+def driver_bindings() -> tuple[Any, Any]:
+    """The CUDA driver's Python bindings and the check of a call's status, as torch holds them for its ``GreenContext``
+    (``torch.cuda._utils``): what an ``SmPartition`` is made through. RuntimeError where this Python has none, saying
+    what it lacks."""
+    import torch
+    from torch.cuda import _utils
+
+    drv, ok = getattr(_utils, "_cuda_bindings_driver", None), getattr(_utils, "_check_cuda_bindings", None)
+    if drv is None or ok is None:
+        raise RuntimeError(
+            f"no CUDA driver bindings in this Python (torch {torch.__version__}: torch.cuda._utils._cuda_bindings_driver is "
+            f"{'None' if hasattr(_utils, '_cuda_bindings_driver') else 'missing'}), so no green context: a plan on some SMs "
+            "(sms) needs a torch that has torch.cuda.GreenContext and the cuda-bindings package; a plan without sms needs "
+            "neither")
+    return drv, ok
+
+
 class SmPartition:
     """``sms`` of a CUDA device's SMs as a green context (the driver's ``cuGreenCtxCreate``, through the bindings torch's
-    ``GreenContext`` uses), and the rest as another, made on first use: a stream of either runs its kernels on its SMs
-    alone, while the primary context's streams still run on every SM. The split rounds ``sms`` up to the device's
-    granularity; ``sms`` and ``rest`` are the counts it gave."""
+    ``GreenContext`` uses, ``driver_bindings``), and the rest as another, made on first use: a stream of either runs its
+    kernels on its SMs alone, while the primary context's streams still run on every SM. The split rounds ``sms`` up to
+    the device's granularity; ``sms`` and ``rest`` are the counts it gave."""
 
     def __init__(self, sms: int, device: Any) -> None:
         import torch
-        from torch.cuda._utils import _check_cuda_bindings, _cuda_bindings_driver
 
-        self.torch, self.ok, self.drv = torch, _check_cuda_bindings, _cuda_bindings_driver
+        self.drv, self.ok = driver_bindings()
+        self.torch = torch
         self.index = torch.device(device).index
         self.index = torch.cuda.current_device() if self.index is None else self.index
         torch.cuda.init()
@@ -591,8 +609,8 @@ class StepCommitter:
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
     what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
     those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
-    own) waits for their read instead, as `e2e_h200.commit`'s loop waits ``LAG`` (2) groups back. A producer that drops
-    each group's tables once it has made the next group's (e2e_h200's driver) has their memory back as soon as the side
+    own) waits for their read instead, as a serving loop that commits each layer waits a fixed number of groups back. A
+    producer that drops each group's tables once it has made the next group's has their memory back as soon as the side
     stream has read them, and at the default lag of 1 by its next add at the latest. With ``marks`` (a
     list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
     (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.

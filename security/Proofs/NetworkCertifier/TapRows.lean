@@ -50,8 +50,8 @@ The network certifier registers its records at the transfer gates (`CertifierReg
 proof block outside the incorrect set is correct on the trace's committed values, so the trace opens every transfer gate
 there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network
 certifier, unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves
-unopened (`fill`): a correct proof block stays correct (`Prog.correct_mono`, it reads only opened values), and the filled
-trace carries the network certifier's records at every transfer gate (`carries_fill`), the incorrect proof blocks'
+unopened (`fillTrace`): a correct proof block stays correct (`Prog.correct_mono`, it reads only opened values), and the filled
+trace carries the network certifier's records at every transfer gate (`carries_fillTrace`), the incorrect proof blocks'
 included, since the trace's own value there, where it has one, is the network certifier's. So `accepted_of` gives
 `Accepted` with the incorrect proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
 over `faultySets`). A held gate's input value is never read, any other input in a proof block is opened, and no egress
@@ -77,44 +77,41 @@ open Claims Claims.Sampling NetTiming NetTiming.SampledAuditProof
 
 /-! ### The trace filled in with the network certifier's values -/
 
-/-- The committed values `ref`, with `tv`'s value at every gate `ref` leaves unopened. -/
-def fill (ref : ℕ → Option Bool) (tv : ℕ → Bool) (g : ℕ) : Option Bool := some ((ref g).getD (tv g))
+theorem fillTrace_ext {ref : ℕ → Option Bool} {tv : ℕ → Bool} : ∀ g b, ref g = some b → fillTrace ref tv g = some b :=
+  fun g b h => by simp [fillTrace, h]
 
-theorem fill_ext {ref : ℕ → Option Bool} {tv : ℕ → Bool} : ∀ g b, ref g = some b → fill ref tv g = some b :=
-  fun g b h => by simp [fill, h]
-
-theorem traceVal_fill {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ}
+theorem traceVal_fillTrace {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ}
     (hnc : ∀ b, C.gates[g]? ≠ some (.const b)) (hag : ∀ b, ref g = some b → b = tv g) :
-    traceVal C (fill ref tv) g = tv g := by
+    traceVal C (fillTrace ref tv) g = tv g := by
   rw [traceVal, read_of_not_const hnc]
   rcases hr : ref g with _ | b
-  · simp [fill, hr]
-  · simp [fill, hr, hag b hr]
+  · simp [fillTrace, hr]
+  · simp [fillTrace, hr, hag b hr]
 
-theorem traceVal_fill_of {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ}
+theorem traceVal_fillTrace_of {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ}
     (hc : ∀ b, C.gates[g]? = some (.const b) → tv g = b) (hag : ∀ b, ref g = some b → b = tv g) :
-    traceVal C (fill ref tv) g = tv g := by
+    traceVal C (fillTrace ref tv) g = tv g := by
   by_cases hk : ∃ b, C.gates[g]? = some (.const b)
   · obtain ⟨b, hb⟩ := hk
     rw [traceVal, read_const hb, hc b hb]
     rfl
-  · exact traceVal_fill (fun b h => hk ⟨b, h⟩) hag
+  · exact traceVal_fillTrace (fun b h => hk ⟨b, h⟩) hag
 
 /-- **The filled trace carries the network certifier's records**: where the trace opens a transfer gate the network
 certifier opens, at the network certifier's value, the trace filled in with the network certifier's values carries every
 record the network certifier registers. -/
-theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme Bool} {lay : BoundaryGates L S} {k : ℕ}
+theorem carries_fillTrace {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme Bool} {lay : BoundaryGates L S} {k : ℕ}
     {op : ℕ → List (Obs L K S) → List Bool} {s : AuditStatement} {ops : List (Opening Bool)} {o : List (Obs L K S)}
     {ref : ℕ → Option Bool} (hfit : lay.Fits s.prog k) (htap : CertifierRegisters H Cm lay k op s ops o)
     (hag : ∀ g, (∃ q ∈ ops, q.pos = g) → ∀ b, ref g = some b → b = certifierVal ops g) :
-    Carries lay s.prog (fill ref (certifierVal ops)) op k o := by
+    Carries lay s.prog (fillTrace ref (certifierVal ops)) op k o := by
   intro t ht
   obtain ⟨hE, hI, ho, hrows, hop⟩ := htap.2 t ht
   refine ⟨ho, fun ℓ => ?_, ?_⟩
   · rw [hrows ℓ]
-    exact rowOf_congr fun σ g hg => (traceVal_fill_of (hE ℓ σ g hg).1 (hag g (hE ℓ σ g hg).2)).symm
+    exact rowOf_congr fun σ g hg => (traceVal_fillTrace_of (hE ℓ σ g hg).1 (hag g (hE ℓ σ g hg).2)).symm
   · rw [hop]
-    refine List.map_congr_left fun g hg => (traceVal_fill (fun b h => ?_) (hag g (hI g hg))).symm
+    refine List.map_congr_left fun g hg => (traceVal_fillTrace (fun b h => ?_) (hag g (hI g hg))).symm
     rw [hfit.2.1 t ht g hg] at h
     cases h
 
@@ -148,23 +145,23 @@ theorem rLeakCertifier_of_r (H : Msg → Msg) (D : Compiled Coin A) {L K S : ℕ
   have hF := faulty_mem_faultySets hM (disjoint_allSlots hδ hM)
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
   refine ⟨s, P, hs, hP, fun op o htap hcov hl hD => ?_⟩
-  have hext : ∀ g b, w.val H D.commit s g = some b → fill (w.val H D.commit s) (certifierVal (tops s)) g = some b :=
-    fill_ext
-  have hcar := carries_fill hfit htap (hagree s hs htap.1)
+  have hext : ∀ g b, w.val H D.commit s g = some b → fillTrace (w.val H D.commit s) (certifierVal (tops s)) g = some b :=
+    fillTrace_ext
+  have hcar := carries_fillTrace hfit htap (hagree s hs htap.1)
   have hacc := accepted_of hsc.1 hsc.2.1 hfit ι
     (fun v u hu hv => Prog.correct_mono (Prog.refIn_mono hext) (hι v u hu hv)) hcar hcov
   have hacc' : Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o
       (traceVal s.prog (w.val H D.commit s),
-        heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (certifierVal (tops s)))) := by
+        heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s)))) := by
     intro t ht
     obtain ⟨h, hr, hst⟩ := hacc t ht
     refine ⟨h, ?_, hst⟩
     have hv : ∀ g, ¬ s.prog.Unread g →
         valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t)
-          (traceVal s.prog (fill (w.val H D.commit s) (certifierVal (tops s)))))
-          (heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (certifierVal (tops s)))) g =
+          (traceVal s.prog (fillTrace (w.val H D.commit s) (certifierVal (tops s)))))
+          (heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s)))) g =
         valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) (traceVal s.prog (w.val H D.commit s)))
-          (heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (certifierVal (tops s)))) g :=
+          (heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s)))) g :=
       valOver_congr_held s.prog _ fun i hi hfi hri => inputOf_congr_at (lay s) (k s) _ (by
         have hnf : ¬ FaultyGate s.prog P (faulty H D.commit s P w) i := fun hfg => by
           rw [heldAdv_of hfg] at hfi

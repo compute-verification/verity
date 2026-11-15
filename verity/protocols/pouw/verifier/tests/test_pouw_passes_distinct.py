@@ -2,8 +2,8 @@
 each call index of their epoch (their salt) once, each below `pearl_c.CALL_RANGE`."""
 from __future__ import annotations
 
-from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.prover.schemes import pearl_c as PC
+from verity.protocols.pouw.verifier import credit as Cr
 
 SALT, OTHER = "ab" * 32, "cd" * 32
 

@@ -114,7 +114,7 @@ def window_units(shape: Shape, calls: int, kind: str = "shift24") -> tuple[Proof
     return units_of(ncp2.window(shape, calls, kind), shape, kind)
 
 
-def window_cut(shape: Shape, calls: int, kind: str = "shift24") -> "UnitCut":
+def window_cut(shape: Shape, calls: int, kind: str = "shift24") -> UnitCut:
     """C calls on one weight in one root, cut as one Program: the invariant over an execution phase's composition."""
     return unit_cut_of(ncp2.window(shape, calls, kind), shape, kind)
 
@@ -246,7 +246,7 @@ def width_rule(shape: Shape, kind: str = "shift24") -> WidthRule:
 def width_rule_of(fn: Any, shape: Shape, kind: str, served: int) -> WidthRule:
     """`width_rule` on a given Definition and served count: the check a test runs on a variant. It is a property of the
     Definition checked, so it certifies nothing about any other; only `width_rule`'s Program is the protocol's."""
-    if not 1 <= served:
+    if served < 1:
         raise ValueError("the served outputs are at least one: a width rule over none checks nothing")
     uc = unit_cut_of(fn, shape, kind)
     g, owner = uc.graph, uc.owner

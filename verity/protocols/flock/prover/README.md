@@ -23,7 +23,11 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
     the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
     Lean's `Tmpl.layoutM`), which the verifier covers only in the form `ProvedScope.scopeOkT` states; `tables.py`
-    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a size class of
+    (`verity/flock-tables`), several tables in one commitment with private glue; `struct_slots.py`, `struct_lower.py`'s
+    template with its MUFU table reads in lookup slots, split by read depth into one template a net wired as `read_slots.py`
+    wires a flat unit's (circuit-check's `--structural DIR`, which reads a split by the reader `struct_slots_split` in
+    `struct_slots.circuit-check.py`), which no statement stages yet: `scopeOkT` admits one net;
+    `class_statement.py`, a size class of
     any partition as a `verity/flock-circuit` statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
     template, or a table read's as the verifier builds it, `read_tmpl.py`'s `flock-read-tmpl V H`, the flat unit never built, its
     outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
@@ -58,13 +62,14 @@ writes them as staging's `rows/`, to diff the two mirrors.
 
 ## Hill-climb points in GPU sessions
 
-A BF16 hill-climb point (`../pod/74-gemm-hill.sh`, its records by `../pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
+A BF16 hill-climb point (`verity/protocols/flock/prover/pod/74-gemm-hill.sh`, its records by
+`verity/protocols/flock/prover/pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
 one preflight check (byte identity at B = 16), then `POINTS=N` points of one statement. A session's points share one tree,
 one binary, one `FC_*` set and one K; a setting that differs needs a session of its own. A point whose key (the binaries, the
 `FC_*` settings, the GPU) differs from its check's fails, and with it the session.
 
 1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
-   `bash verity/protocols/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
+   `bash verity/protocols/flock/prover/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
    mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
 3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the
@@ -73,7 +78,7 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
    ~~~sh
    RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
    RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
-     python3 $T/verity/protocols/flock/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
+     python3 $T/verity/protocols/flock/prover/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
        --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
    ~~~
 

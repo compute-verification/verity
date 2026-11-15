@@ -6,10 +6,10 @@ import json
 
 import numpy as np
 import pytest
+from verity.definitions.numerics import cpu_model as CM
 
 from verity_vllm.config import ROOT
 from verity_vllm.pipeline import cli
-from verity.definitions.numerics import cpu_model as CM
 from verity_vllm.program import gemm_target_correspondence as G
 
 CONFIGS = ROOT / "verity_vllm" / "engine" / "profiles" / "hf_configs"
@@ -68,7 +68,8 @@ def _capture(tmp_path, cc, *, bias_mode=None, flip=False, M=6, K=64, N=40, x=Non
     gpu, _ = CM.gemm_model(hopper, x, w, b, CM.GemmModelSpec(hopper.name, bias_mode=bias_mode or 0), want_f32=False)
     if flip:
         gpu[2, 3] ^= 1
-    np.savez(tmp_path / "w_0.npz", w=w, cols=np.arange(N), **({"b": b} if b is not None else {}))
+    arrays: dict = {"w": w, "cols": np.arange(N), **({"b": b} if b is not None else {})}
+    np.savez(tmp_path / "w_0.npz", **arrays)
     np.savez(tmp_path / "case_0.npz", x=x, gpu=gpu, rows=np.arange(M))
     case = {"i": 0, "config": "SYNTH", "tp": 1, "shape": "o_proj", "K": K, "N": N, "family": "randn", "M": M, "w_file": "w_0.npz",
             "bias": b is not None, "kernels": ["synthetic"], "gpu_deterministic_rerun": True, "rows_evaluated": M, "cols_evaluated": N,

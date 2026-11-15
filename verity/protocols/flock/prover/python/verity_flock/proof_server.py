@@ -10,7 +10,8 @@
   of the server's (the server's own ``RAYON_NUM_THREADS``, else rayon's default: the CPUs it may run on, within its cgroup's
   CPU quota), so each sizes its work, its host witness's lane groups a pass among it, for the cores it has rather than for
   every core.
-* **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once, each session's public file and
+* **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once (a templated statement's with its
+  unit, `Statement.tmpl_unit`, which the prover's line names too), each session's public file and
   sample taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
   directory). A verifier serves its queue in the order its connections arrive, so it takes one prover's sessions, and
   `submit` writes a session's two lines together.
@@ -20,18 +21,25 @@
   challenger of its own (`verity_flock.challengers`, `serve --queue --tree-from`), whose session ends with the verifier's
   queue. Its audit holds every session the verifier served to the challenger's release log at once (no tree unused, none
   shared), so it runs at `close`, into ``challengers`` by verifier name, and a session counts only if its verifier's passed.
+* **One challenger session for every verifier** (``tree_from``, `serve`'s flags ``--tree-from ADDR [--tree-secret-file
+  F]``): every verifier takes its sessions' coin trees at the caller's address, a challenger session the caller opened
+  and closes, or its relay to one. The server starts no challenger and runs no audit: holding the sessions to that
+  session's release log is the caller's. With ``verify_ahead=0`` a verifier serves one session at a time, so a caller
+  that submits a session only once the one before has its records puts one session's rounds in that log at a time.
 
 `submit` returns a `Session` at once: `Session.result` waits for both sides' records, `Session.verdict` for the verdict of
 record. A process that exits ends its unfinished sessions as failures (`ProofServerError`) carrying its log's tail;
 nothing is retried. A prover's exit also retires its types' verifiers once they have filed the sessions it finished
-(their queues hold sessions it will never connect for), and the next session on its device or types starts fresh
-processes. `close` (or leaving the ``with`` block) ends every queue and stream, waits for the processes and the verdicts,
-and returns each process's exit status by name (a restarted process's name gets ``.2``, ``.3``, ..).
+(their queues hold sessions it will never connect for), and only after its own sessions have failed: a session a prover
+left unrecorded names the prover, never the verifier the server ends for it. The next session on its device or types
+starts fresh processes. `close` (or leaving the ``with`` block) ends every queue and stream, waits for the processes and
+the verdicts, and returns each process's exit status by name (a restarted process's name gets ``.2``, ``.3``, ..).
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -48,8 +56,9 @@ __all__ = ["ProofServer", "ProofServerError", "Session", "Statement"]
 @dataclass(frozen=True)
 class Statement:
     """A staged statement: its pinned circuit (``pin``, the circuit file's SHA-512 in hex, which names its type), the
-    circuit's tables, the prover's instance file and the verifier's public file, and for a circuit that declares links
-    the verifier's links file."""
+    circuit's tables, the prover's instance file and the verifier's public file, for a circuit that declares links
+    the verifier's links file, and for a templated statement (``verity/flock-circuit/tmpl``) its unit's rows at their
+    positions (``tmpl_unit``, `flock-tmpl-unit`'s), which both sides load its circuit with."""
 
     pin: str
     circuit: Path
@@ -57,6 +66,7 @@ class Statement:
     instances: Path
     public: Path
     links: Path | None = None
+    tmpl_unit: Path | None = None
 
 
 class ProofServerError(RuntimeError):
@@ -120,15 +130,57 @@ class Session:
 _ROOT = Path("/")
 
 
-def _threads(env: Mapping[str, str]) -> int:
+def _threads(env: Mapping[str, str], cpus: frozenset[int] | None = None) -> int:
     """The threads a server's provers share, as rayon sizes its pool: ``RAYON_NUM_THREADS`` in the server's environment
-    when it is a positive count, else rayon's default, Rust's `available_parallelism`: the CPUs this process may run on
-    (its affinity), at most its cgroups' CPU quota (`_quota`)."""
+    when it is a positive count, else rayon's default, Rust's `available_parallelism`: the CPUs the provers may run on
+    (``cpus``, else this process's affinity), at most its cgroups' CPU quota (`_quota`)."""
     v = env.get("RAYON_NUM_THREADS", "")
     if v.isdigit() and int(v) > 0:
         return int(v)
-    n, q = len(os.sched_getaffinity(0)), _quota(_ROOT)
+    n, q = len(os.sched_getaffinity(0) if cpus is None else cpus), _quota(_ROOT)
     return n if q is None else min(n, q)
+
+
+#: The command that runs a process on a set of CPUs (`taskset -c LIST CMD...`, util-linux's).
+TASKSET = "taskset"
+
+
+def _cpulist(text: str) -> frozenset[int]:
+    """A CPU list as taskset and `/sys/devices/system/cpu` write it: ``44-47``, ``44,45,46,47`` or ``0-3,8``."""
+    cpus: set[int] = set()
+    for part in text.split(","):
+        lo, sep, hi = part.strip().partition("-")
+        if not lo.isdigit() or (sep and not hi.isdigit()) or (sep and int(hi) < int(lo)):
+            raise ValueError(f"not a CPU list: {text!r} (write it as taskset does: 44-47, or 44,45,46,47)")
+        cpus.update(range(int(lo), int(hi if sep else lo) + 1))
+    return frozenset(cpus)
+
+
+def _cpus_text(cpus: frozenset[int]) -> str:
+    """``cpus`` as a CPU list of ascending runs (``0-9,12``)."""
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+
+
+def _placement(env: Mapping[str, str]) -> dict[str, frozenset[int]]:
+    """``FC_VERIFIER_CPUS`` in the server's environment, a CPU list within its affinity: the verifiers' CPUs, and the
+    provers' the server's others (by process kind); unset or empty, none (every process on every CPU of the server's)."""
+    text = env.get("FC_VERIFIER_CPUS", "").strip()
+    if not text:
+        return {}
+    mine, own = _cpulist(text), frozenset(os.sched_getaffinity(0))
+    if not mine <= own:
+        raise ValueError(f"FC_VERIFIER_CPUS={text}: CPUs {_cpus_text(mine - own)} are outside the server's affinity "
+                         f"({_cpus_text(own)}); name CPUs within it, or start the server on more")
+    if not own - mine:
+        raise ValueError(f"FC_VERIFIER_CPUS={text}: every CPU of the server's ({_cpus_text(own)}), so none is left for the "
+                         "provers")
+    return {"verifier": mine, "prover": own - mine}
 
 
 def _quota(root: Path) -> int | None:
@@ -232,21 +284,42 @@ class ProofServer:
     logs and the verifiers' own records under ``out``. ``devices``: the GPUs to prove on (None: the CPU). ``provers``: the
     provers a device (or on the CPU). ``route``: a type's device by pin, for types the caller places itself. ``env``: added
     to every process's environment (a None value removes the variable). ``zk``: the masked protocol (`--zk`), SPOT's; off,
-    the plain one. ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``)."""
+    the plain one. ``wide_leaf``: the wide level-0 leaf's statement version (`--wide-leaf`), which a session's two sides
+    both carry, so every prover and verifier of the server does; off, fast100's.
+    ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+    ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
+    ``challenger``.
+
+    ``FC_VERIFIER_CPUS`` in the server's environment (a CPU list within its affinity, as taskset takes it) runs every
+    verifier on those CPUs and every prover on the server's other CPUs (`taskset -c`), so a verifier's check of each
+    session it serves takes no CPU from the provers, whose threads split their own CPUs; unset, every process runs on all
+    the server's CPUs. A verifier's challenger keeps the server's."""
 
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  provers: int = 1, verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
-                 env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False):
+                 env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False,
+                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None):
         if provers < 1:
             raise ValueError(f"provers must be at least 1, not {provers}")
+        if challenger and tree_from:
+            raise ValueError("a verifier takes its sessions' coin trees from a challenger of its own (challenger) or from "
+                             "the caller's (tree_from), not both")
+        self.tree_from = list(tree_from or [])
         self.binary, self.out = str(binary), Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
         self.devices: list[int | None] = list(devices) if devices else [None]
         self.provers, self.verify_ahead, self.zk, self.challenger = provers, verify_ahead, zk, challenger
+        #: the protocol and statement version every process of the server runs: one list, so the two sides can't differ
+        self._version = [*(["--zk"] if zk else []), *(["--wide-leaf"] if wide_leaf else [])]
         self.challengers: dict[str, dict] = {}
         self._env = {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+        self._cpus = _placement(self._env)
+        self._taskset = shutil.which(TASKSET) if self._cpus else None
+        if self._cpus and self._taskset is None:
+            raise ValueError(f"FC_VERIFIER_CPUS places processes with {TASKSET} (util-linux), which is not on PATH")
         n = len(self.devices) * provers
-        self._share = {} if n == 1 else {"RAYON_NUM_THREADS": str(max(1, _threads(self._env) // n))}
+        share = _threads(self._env, self._cpus.get("prover")) // n
+        self._share = {} if n == 1 else {"RAYON_NUM_THREADS": str(max(1, share))}
         self._routes: dict[str, int | None] = dict(route or {})
         self._lock, self._send, self._typing = threading.Lock(), threading.Lock(), threading.Lock()
         self._provers: dict[tuple[int | None, int], _Process] = {}
@@ -268,6 +341,12 @@ class ProofServer:
     def routes(self) -> dict[str, int | None]:
         """Each type's device so far, by pin."""
         return dict(self._routes)
+
+    @property
+    def verifier_cpus(self) -> str | None:
+        """The verifiers' CPUs as ``FC_VERIFIER_CPUS`` placed them (a CPU list), or none when unplaced."""
+        cpus = self._cpus.get("verifier")
+        return _cpus_text(cpus) if cpus else None
 
     @property
     def pids(self) -> dict[str, int]:
@@ -308,6 +387,8 @@ class ProofServer:
             q["out"] = str(out)
         line = {"circuit": str(st.circuit), "tables": str(st.tables), "instances": str(st.instances), "pin": st.pin,
                 "verifier": v.addr, "label": label}
+        if st.tmpl_unit is not None:
+            line["tmpl_unit"] = str(st.tmpl_unit)
         if self_check is not None:
             line["self_check"] = self_check
         with self._send:
@@ -324,9 +405,12 @@ class ProofServer:
         with self._lock:
             self._closed = True
             provers, verifiers = list(self._provers.values()), list(self._verifiers.values())
+            all_provers = [p for p in self._started if p.kind == "prover"]
         for p in [*provers, *verifiers]:
             p.end()
-        for p in provers:
+        # every prover the server started, not only those still running: one that exited just before this close may still
+        # be failing its sessions, and its reader returns once its verifiers' retiring threads are started and listed
+        for p in all_provers:
             p.join()
         # every prover has ended, so a verifier still holding a session no prover will connect for is retired too
         for v in verifiers:
@@ -369,6 +453,8 @@ class ProofServer:
         return base if n == 0 else f"{base}.{n + 1}"
 
     def _start(self, name: str, kind: str, key: Any, cmd: list[str], env: dict[str, str]) -> _Process:
+        if cpus := self._cpus.get(kind):
+            cmd = [self._taskset, "-c", _cpus_text(cpus), *cmd]
         p = _Process(name, kind, key, cmd, self.out / f"{name}.log", env, self._line, self._exited)
         self._started.append(p)
         return p
@@ -393,9 +479,11 @@ class ProofServer:
                 except RuntimeError as e:
                     raise ProofServerError(f"{name}'s challenger: {e}") from e
                 ch = (d, p)
-            cmd = [self.binary, "serve", *(["--zk"] if self.zk else []), "--queue", "-", "--listen", "127.0.0.1:0",
-                   "--out", str(self.out / base), "--circuit", str(st.circuit), "--tables", str(st.tables), "--pin", st.pin,
-                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1), *(flags if ch else [])]
+            cmd = [self.binary, "serve", *self._version, "--queue", "-", "--listen", "127.0.0.1:0",
+                   "--out", str(self.out / base), "--circuit", str(st.circuit),
+                   *([] if st.tmpl_unit is None else ["--tmpl-unit", str(st.tmpl_unit)]), "--tables", str(st.tables), "--pin", st.pin,
+                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1),
+                   *(flags if ch else self.tree_from)]
             with self._lock:
                 v = self._verifiers[(st.pin, key)] = self._start(name, "verifier", (st.pin, key), cmd, self._env)
                 v.challenger, v.home = ch, self.out / base
@@ -408,7 +496,7 @@ class ProofServer:
             env = {**self._env, "FC_VERIFY_AHEAD": str(self.verify_ahead), **self._share}
             if dev is not None:
                 env["CUDA_VISIBLE_DEVICES"] = str(dev)
-            cmd = [self.binary, "prove", *(["--zk"] if self.zk else []), *([] if dev is None else ["--gpu"]), "--stream", "-"]
+            cmd = [self.binary, "prove", *self._version, *([] if dev is None else ["--gpu"]), "--stream", "-"]
             base = ("prover-cpu" if dev is None else f"prover-gpu{dev}") + (f"-{key[1]}" if self.provers > 1 else "")
             p = self._provers[key] = self._start(self._name(base, "prover", key), "prover", key, cmd, env)
         return p
@@ -453,12 +541,17 @@ class ProofServer:
                     if k[1] == p.key and any(self._sessions[x].served is None for x in v.sessions):
                         del self._verifiers[k]
                         stale.append(v)
-        for s in left:
-            s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
-        for v in stale:
-            t = threading.Thread(target=self._retire, args=(v,), name=f"retire-{v.name}", daemon=True)
-            self._retiring.append(t)
-            t.start()
+        # the sessions fail before any thread that retires their verifier starts: retiring ends and terminates the
+        # verifier, whose exit would otherwise race this loop to name itself as a session's reason. The threads start
+        # even if the loop raises, each before it is listed, and `close` reads the list only once this has returned
+        try:
+            for s in left:
+                s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
+        finally:
+            for v in stale:
+                t = threading.Thread(target=self._retire, args=(v,), name=f"retire-{v.name}", daemon=True)
+                t.start()
+                self._retiring.append(t)
 
     def _retire(self, v: _Process) -> None:
         """Ends verifier ``v`` once it has filed the sessions its prover finished: the rest of its queue never comes."""

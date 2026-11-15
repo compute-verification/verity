@@ -1,12 +1,12 @@
 """The registration log in Python: `Core.Registration` (`../protocols/interface/CoreProtocol/Registration.lean`), the type every
 subprotocol and both composites read, entry for entry and refusal for refusal. The composition suite's difftest holds
-this module to the Lean (`../protocols/remote/verifier/composition/tests/test_registration_difftest.py`).
+this module to the Lean (`../protocols/compose/verifier/lean/tests/test_registration_difftest.py`).
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it (`previous`):
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
 An entry is one of three kinds:
 
-* a site entry, the Site's own (`verity.hardware.site.Entry`, `verity/registration/site/v1`): the sheets, locations and
+* a site entry, the Site's own (`verity.device.Entry`, `verity/registration/site/v1`): the sheets, locations and
   links it adds to the Site, its JSON, digest and check the Site's;
 * an information entry (`Information`, `verity/registration/information/v1`): its items, each registered once in the
   log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
@@ -25,7 +25,7 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
-fails (`REFUSALS`): a site entry by the Site's (`verity.hardware.site.entry_refusal`), an information entry by `previous`
+fails (`REFUSALS`): a site entry by the Site's (`verity.device.entry_refusal`), an information entry by `previous`
 and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`. A component reads
 its view of an accepted log (`View`): the Site, θ's values (`View.value`), the builder and the days' declared circuits
 (`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
@@ -40,9 +40,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.hardware import site as S
-from verity.hardware.site import Auditor, Malformed
-from verity.configuration.wire import canonical
+from verity import device as S
+from verity.device import Auditor, Malformed
+from verity.channel import canonical
 
 INFORMATION = "verity/registration/information/v1"
 DECLARATION = "verity/registration/declaration/v1"
@@ -234,7 +234,7 @@ def _nodup(xs: Sequence[str]) -> bool:
 
 def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.Entry) -> str | None:
     """The first check a site entry `e` fails against the Site `s` and head `head` of the log before it, or None: the
-    Site's (`verity.hardware.site.entry_refusal`)."""
+    Site's (`verity.device.entry_refusal`)."""
     return S.entry_refusal(composite, s, head, e, auditor)
 
 
@@ -309,7 +309,7 @@ class View:
 # --- the core protocol ------------------------------------------------------------------------------------------------
 
 def params_of(j: Any) -> tuple[str, Auditor]:
-    """The auditor's parameters: `{"auditor": AUDITOR, "composite"}`, the auditor as `verity.hardware.site.Auditor.of_json`
+    """The auditor's parameters: `{"auditor": AUDITOR, "composite"}`, the auditor as `verity.device.Auditor.of_json`
     reads it."""
     ascii(j)
     _exactly(j, ["auditor", "composite"], "the params")

@@ -3,7 +3,7 @@ module
 public import Mathlib.Data.Fintype.Card
 public import Proofs.Flock.Sampled.Statements
 public import Proofs.Flock.Soundness.Game
-import Flock.Sizes
+import Base.Sizes
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 import Proofs.Flock.Soundness.Audit.Law

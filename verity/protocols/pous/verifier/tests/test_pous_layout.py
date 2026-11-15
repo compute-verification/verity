@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from verity.protocols.pous.verifier.layout import Layout, decode_tensor
+from verity.protocols.pous.verifier.layout import TensorLayout, decode_tensor
 from verity.protocols.pous.verifier.params import Params
 from verity.protocols.pous.verifier.primitives import reference
 from verity.protocols.pous.verifier.scheme import encode
@@ -17,7 +17,7 @@ SIZES = [("embed", 700), ("norm", 3), ("empty", 0), ("proj", 1100), ("head", 512
 
 @pytest.mark.parametrize("align", [False, True])
 def test_decode_per_tensor(align):
-    layout = Layout.of(BASE, SIZES, align=align)
+    layout = TensorLayout.of(BASE, SIZES, align=align)
     rng = random.Random(2)
     data = {name: rng.randbytes(size) for name, size in SIZES}
     w = layout.pack(data)
@@ -25,13 +25,14 @@ def test_decode_per_tensor(align):
     assert all(layout.unpack(w, name) == data[name] for name in data)
     prims = reference(layout.params)
     enc = encode(layout.params, prims, w, b"\x09" * 24)
+    read: set[int] = set()
+
+    def block(i):
+        read.add(i)
+        return enc.block(i)
+
     for name in data:
-        read = set()
-
-        def block(i):
-            read.add(i)
-            return enc.block(i)
-
+        read.clear()
         assert decode_tensor(layout, prims, enc.salt, name, block) == data[name]
         assert read == set(layout.blocks(name))
     if align:
@@ -40,8 +41,8 @@ def test_decode_per_tensor(align):
 
 def test_layout_rejects():
     with pytest.raises(ValueError):
-        Layout.of(BASE, [("a", 1), ("a", 2)])
-    layout = Layout.of(BASE, [("a", 4)])
+        TensorLayout.of(BASE, [("a", 1), ("a", 2)])
+    layout = TensorLayout.of(BASE, [("a", 4)])
     with pytest.raises(ValueError):
         layout.pack({"a": b"123"})
     with pytest.raises(KeyError):

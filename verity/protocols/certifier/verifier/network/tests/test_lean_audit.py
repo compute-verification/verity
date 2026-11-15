@@ -119,7 +119,7 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
 
     same()
 
-    # Hypothesis mixes the literals of every imported local module into what it draws, so the 600 cases above move with
+    # Hypothesis mixes the literals of every imported local module into what it samples, so the 600 cases above move with
     # unrelated code; a grid-free no-verdict is among them only a few times, and certified units under the changes that
     # leave a window undecided, checked over every window, carry it whatever else is imported.
     @settings(derandomize=True, database=None, deadline=None, max_examples=20)
@@ -431,7 +431,7 @@ def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
 
 
 def test_the_clients_certificate_refusals_are_the_references(lean):
-    """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.LinkWindow`) gives
+    """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.TransferBlocks`) gives
     `audit.certificate_refusals`'s refusal of each certificate and clock certificate of a served window: another key's,
     another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
     direction, an ingress clock certificate and one signing a digest that `seen` holds, and in another session every

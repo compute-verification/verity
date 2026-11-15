@@ -53,13 +53,13 @@ from verity.protocols.certifier.verifier.audit import Published, Verdict
 from verity.protocols.certifier.verifier.certificate import (STATUS_CODES, Certificate, CertifiedClock, CertifiedRecord,
                                                         Direction, LmsKey, PublicKey, SignedClocks)
 from verity.protocols.certifier.verifier.commitment import CommittedRecord
-from verity.protocols.certifier.verifier.grid import GridParams, Record, Status
+from verity.protocols.certifier.verifier.grid import GridParams, BlockGrid, Status
 from verity.protocols.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet
 
 PACKAGE = Path(__file__).resolve().parents[0] / "lean"
 EXE = PACKAGE / ".lake" / "build" / "bin" / "network-records"
 # `verity_difftest.build`'s lock: no two `lake build`s of a package overlap, across processes and suites.
-BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/difftest/lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/circuits/difftest" / ".lake" / "harness-build.lock"
 RAW, COMMITTED, CERTIFIED = 0, 1, 2
 DISAGREEMENT = "disagreement"
 _KEY = LmsKey(lms.Params(8, 8, 1, toy=True), bytes(24))
@@ -112,7 +112,7 @@ def encode(record: Published) -> bytes:
     elif isinstance(record, CommittedRecord):
         kind, body = COMMITTED, b"".join([_text(record.link, "link"), _u(record.window, 8, "window"),
                                           _status(record.status), _text(record.digest, "digest")])
-    elif isinstance(record, Record):
+    elif isinstance(record, BlockGrid):
         kind, body = RAW, b"".join([_text(record.link, "link"), _u(record.window, 8, "window"), _status(record.status),
                                     _grid(record.grid)])
     else:
@@ -188,7 +188,7 @@ class Server:
         return self.call(fn, case)["link_windows"]
 
     def call(self, fn: str, case: dict) -> Any:
-        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.LinkWindow`'s verdict
+        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.TransferBlocks`'s verdict
         of record on one execution phase); `ValueError` when the Lean refuses the case."""
         self._own()
         with self._lock:
@@ -343,7 +343,7 @@ def _certificate_json(c: Certificate) -> dict:
 def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int, certificates: Sequence[Certificate],
                          clocks: Sequence[Certificate], seen: Sequence[bytes] = (), server: Server | None = None
                          ) -> tuple[list[str | None], list[str | None]]:
-    """`audit.certificate_refusals`, each refusal the Lean's (`NetworkCheck.LinkWindow.refusals`, `network-records
+    """`audit.certificate_refusals`, each refusal the Lean's (`NetworkCheck.TransferBlocks.refusals`, `network-records
     verdicts`' ``certificates``), with `audit.certificate_refusals` run beside it as the reference: where the two differ
     on any certificate or clock certificate, every one of the window is refused as `disagreement`. A key other than an
     `LmsKey`, a certificate of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`; a

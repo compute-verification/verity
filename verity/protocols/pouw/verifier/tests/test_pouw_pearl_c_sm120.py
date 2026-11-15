@@ -19,7 +19,7 @@ import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
 import test_pouw_pearl_c_debit as TD
 import test_pouw_pearl_c_u as TU
-from verity.definitions.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16,
+from verity.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16,
                                  HOPPER_E4M3_K32)
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape, Tile
 from verity.protocols.pouw.prover.schemes import get
@@ -180,8 +180,8 @@ def test_the_cap_is_the_records(monkeypatch):
     tile_credit = 16 * 16 * CW.cell_credit(sm, records[0])
     atoms = int(Fraction(1, 1000) * tile_credit / D.atom_units(SM120)) + 1
     assert Fraction(1, 1000) * tile_credit < atoms * D.atom_units(SM120) <= Fraction(1, 400) * tile_credit
-    monkeypatch.setattr(D, "chain_debit", lambda a, b, device=None: (atoms, 0))
-    assert CW.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
+    monkeypatch.setattr(D, "tile_debit", lambda a, b, formed, device=None: (atoms, 0, 0))
+    assert CW.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16, [None] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
     out = CW.audit(sm, epoch, prover, tr, splits, records, E.challenger(), 2)
     assert not out.audit.accepted and all("exceeds the cap" in v.reason for v in out.audit.verdicts if not v.ok)
     assert CW.audit(at400, epoch, prover, tr, splits, records, E.challenger(), 2).audit.accepted

@@ -111,6 +111,12 @@ def _state(s: dict[str, Any]) -> str:
     return "held" if s.get("holder") else f"blocked ({s['blocked']})" if s.get("blocked") else "free"
 
 
+def _held(h: dict[str, Any]) -> str:
+    """Since when a slot's holder has held it, where its record says (slot.py's `took`); else when its process started, as that:
+    a check is one process from joining the line on, so that start is not when it took the slot."""
+    return f"since {h['took']}" if h.get("took") else f"for a time not recorded (its process started {h.get('since')})"
+
+
 def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
     """The check and Lean slots the run holds, and its places in their lines."""
     held: list[str] = []
@@ -119,7 +125,7 @@ def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
     check = sl.get("check") or {}
     for s in check.get("slots") or ():
         if (s.get("holder") or {}).get("run") == run_id:
-            held.append(f"check slot {s['name']} (cores {s['cpus']}) since {s['holder'].get('since')}")
+            held.append(f"check slot {s['name']} (cores {s['cpus']}) {_held(s['holder'])}")
     for i, w in enumerate(check.get("waiters") or ()):
         if w.get("run") == run_id:
             mine = [s for s in check.get("slots") or () if w.get("priority") or not s.get("trains")]
@@ -129,7 +135,7 @@ def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
     for pool, p in ((sl.get("lean") or {}).get("pools") or {}).items():
         for s in p.get("slots") or ():
             if (s.get("holder") or {}).get("run") == run_id:
-                held.append(f"Lean slot {pool}/{s['index']} since {s['holder'].get('took') or s['holder'].get('since')}")
+                held.append(f"Lean slot {pool}/{s['index']} {_held(s['holder'])}")
         for i, w in enumerate(p.get("waiters") or ()):
             if w.get("run") == run_id:
                 busy = sum(1 for s in p.get("slots") or () if s.get("holder") and not s.get("past_n"))

@@ -48,8 +48,8 @@ command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 15 --)
   uuid=${GPU_LEASE_UUID:-}; uuid=${uuid%%,*}
   sel=(); [ -n "$uuid" ] && sel=(-i "$uuid")
   nvidia-smi "${sel[@]}" -q >"$1/env/nvidia-smi.txt" 2>&1
-  cap=$(nvidia-smi "${sel[@]}" --query-gpu=compute_cap --format=csv,noheader | head -1)
-  [ "${cap%%.*}" = "$4" ] || { echo "rates.sh: $5 needs compute capability $4.x, the device reports $cap" >&2; exit 2; }
+  have=$(nvidia-smi "${sel[@]}" --query-gpu=compute_cap --format=csv,noheader | head -1)
+  [ "${have%%.*}" = "$4" ] || { echo "rates.sh: $5 needs compute capability $4.x, the device reports $have" >&2; exit 2; }
   python3 "$2" run "$3" --out "$1" --reps 10' _ "$OUT" "$PROBE" "$BIN" "$CC" "$ARCH" || exit $?
 
 python3 - "$OUT" <<'EOF'

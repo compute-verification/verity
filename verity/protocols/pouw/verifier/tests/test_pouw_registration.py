@@ -8,13 +8,13 @@ import itertools
 import pytest
 
 import epoch_coins as E
-from verity.protocols.pouw.verifier import registration as R
-from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.commitments.randomness import derive
+from verity.protocols.pouw.verifier import registration as R
+from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
 
 FP8, FP4 = "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0"
 VO = (R.VO_ROTATION, R.HEAD_INTERLEAVE)
@@ -125,9 +125,9 @@ def test_no_rotation_key_exists_before_the_weights_root_is_recorded():
         Epoch.start(WORK, ROOTS, E.COINS, early)
     with pytest.raises(DomainError, match="rotation key: the salt's coin was not opened after"):
         R.rotation_key(epoch, early)
-    draw = E.challenger().open("draw", weights_root(ROOTS))
+    sampling = E.challenger().open("draw", weights_root(ROOTS))
     with pytest.raises(DomainError, match="not its 'salt' coin"):
-        R.rotation_key(epoch, draw)
+        R.rotation_key(epoch, sampling)
 
 
 def test_a_salt_without_the_live_coin_keys_nothing():

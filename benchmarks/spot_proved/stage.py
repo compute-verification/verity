@@ -1455,7 +1455,7 @@ class Wires:
         whole, or one several calls wrote in parts (a mixed step's attention output: its decode rows from the absorb's
         ``out=``, its prefill rows copied in from FA3's). A view may run on into the padding rows: a full-graph step runs
         attention at the padded batch, so the absorb's ``out=`` writes every row. An earlier output that overlaps a later one
-        taken is not taken. The real rows are the whole of what an instance reads of ``ref``: every population draws real rows
+        taken is not taken. The real rows are the whole of what an instance reads of ``ref``: every population samples real rows
         only, so a padded batch's rows past them (written by the padded forward, or by nothing) reach no staged unit and are
         neither wired nor charged."""
         shape = ref.get("shape")
@@ -1504,7 +1504,7 @@ def wiring(types: dict) -> dict:
     each argument charged once, at the union of the parts staged instances read, or at its width if one read it whole), the
     trace gaps they read (``gap_bits``: computed values not wired yet, counted the same way and not charged), the rows they read
     of the window's carried cache (history, counted the same way), the selection settings (once per token and top-k), the
-    calls they're wired to that no population gates, and the drawn instances left unstaged for an unwired input."""
+    calls they're wired to that no population gates, and the sampled instances left unstaged for an unwired input."""
     inputs: dict = {}
     charged: dict = {"advice": {}, "gap": {}, "history": {}}
     selection: dict = {}

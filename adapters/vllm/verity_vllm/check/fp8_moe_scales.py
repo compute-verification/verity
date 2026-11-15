@@ -20,6 +20,8 @@ from typing import Any
 
 import numpy as np
 
+__all__ = ["on_rank_grid"]
+
 
 def on_rank_grid(parts: list[np.ndarray], srcs: list[str], which: str, ck: Any, world: int, note: dict[str, Any]) -> list[np.ndarray]:
     """One expert's checkpoint parts `srcs` (served width) for the `which` stack ("w13" or "w2"), with block scales
@@ -29,7 +31,8 @@ def on_rank_grid(parts: list[np.ndarray], srcs: list[str], which: str, ck: Any, 
     if suffix != "weight_scale_inv":
         return parts
     from verity_vllm.program.model import fp8_moe_block
-    bs = (ck.config.get("quantization_config") or {}).get("weight_block_size")
+    quant = ck.config.get("quantization_config")   # config.json of a checkpoint that is not quantized has none, and then no block size
+    bs = quant.get("weight_block_size") if quant else None
     if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and bs[0] == bs[1]):
         raise KeyError(f"{srcs[0]}: block scales, but config.json's quantization_config has no square weight_block_size (got {bs!r})")
     G = int(bs[0])
@@ -37,13 +40,13 @@ def on_rank_grid(parts: list[np.ndarray], srcs: list[str], which: str, ck: Any, 
     if not ck.has(weight):
         raise KeyError(f"{srcs[0]}: no {weight} in the checkpoint to size the expert's block grid from")
     N, K = ck.tensors[weight][2]
-    I, H = (N, K) if which == "w13" else (K, N)
-    if I % G or H % G or I % world:
-        raise ValueError(f"{srcs[0]}: expert width {I} and hidden {H} must be multiples of the block {G}, and the width of the world {world}")
+    width, H = (N, K) if which == "w13" else (K, N)
+    if width % G or H % G or width % world:
+        raise ValueError(f"{srcs[0]}: expert width {width} and hidden {H} must be multiples of the block {G}, and the width of the world {world}")
     for s, p in zip(srcs, parts):
         if list(p.shape) != [N // G, K // G]:
             raise ValueError(f"{s}: scale shape {list(p.shape)} is not the [{N // G}, {K // G}] blocks of {weight} [{N}, {K}]")
-    g = fp8_moe_block(G, I // world, H)
+    g = fp8_moe_block(G, width // world, H)
     f = G // g
     if f == 1:
         return parts

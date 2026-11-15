@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.strided_views import _permute
-from verity_vllm.program.frontend.rules.common import shape
 
+from verity_vllm.program.frontend.derive import refuse
+from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.strided_views import _permute
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16
@@ -17,7 +16,7 @@ BF16 = torch.bfloat16
 def _strides(n) -> tuple[int, ...] | None:
     """The exported operand's strides (fx `val` meta), or None."""
     v = n.meta.get("val") if isinstance(n, torch.fx.Node) else None
-    return tuple(int(s) for s in v.stride()) if hasattr(v, "stride") else None
+    return tuple(int(s) for s in v.stride()) if v is not None and hasattr(v, "stride") else None
 
 
 def _untransposed(ctx, b, K: int, N: int, hint: str) -> Coll:

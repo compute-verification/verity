@@ -100,8 +100,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import (
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import (
     BitAnd,
     BitNot,
     I32Add,

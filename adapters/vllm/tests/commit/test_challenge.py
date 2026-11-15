@@ -7,14 +7,13 @@ import json
 from pathlib import Path
 
 import pytest
-
 from verity.commitments.randomness import derive
+
+from tests.commit import test_binding_negatives as T
 from verity_vllm.acquire.committer_api import RunCommitment, StepCommitment
 from verity_vllm.check.replay import sample as SR
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH
-
-from tests.commit import test_binding_negatives as T
 
 V = json.loads(Path(__file__).with_name("challenge_legacy_vectors.json").read_text())
 ROOT = bytes.fromhex(V["run_root"])

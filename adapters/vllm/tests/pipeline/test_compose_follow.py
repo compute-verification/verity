@@ -9,14 +9,14 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.definitions.registry import b1
+
 from verity_vllm.pipeline import components as C
 from verity_vllm.pipeline import global_program as G
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.records import workload as WL
-from verity.definitions.registry import b1
 
 SHAPES = ((3, 2), (5, 1))
 
@@ -35,10 +35,10 @@ def _request_dir(d: Path, LP: int, STEPS: int) -> None:
         f.write(canonical_json(desc))
     with gzip.open(d / "instances.json.gz", "wt") as f:
         json.dump({"schema": "cb-a/instance-sequence/v1", "params": [[n, repr(t)] for n, t in rep.flat_definition.signature()[0]], "rows": []}, f)
-    json.dump({"structural_inputs": {"LP": LP, "T": STEPS, "sampling": {"kind": "greedy"}}}, open(d / "construction_manifest.json", "w"))
-    json.dump({"ok": True, "program": {"digest": program_digest(desc)}, "sampling": {"kind": "greedy"},
-               "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": {"kind": "greedy"},
-                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}, open(d / "result.json", "w"))
+    (d / "construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": LP, "T": STEPS, "sampling": {"kind": "greedy"}}}))
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": program_digest(desc)}, "sampling": {"kind": "greedy"},
+                                               "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": {"kind": "greedy"},
+                                                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}))
 
 
 @pytest.fixture(scope="module")

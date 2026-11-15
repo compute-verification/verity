@@ -72,7 +72,7 @@ def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_
     os.makedirs(t.d, exist_ok=True)
     stage = [sys.executable, "-c", "import os; print('NCCL_P2P_DISABLE=' + os.environ.get('NCCL_P2P_DISABLE', 'unset'))"]
     assert t.run_to(0, f"{t.d}/stage.log", stage) == 0
-    assert open(f"{t.d}/stage.log").read().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
+    assert Path(f"{t.d}/stage.log").read_text().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
 
 
 def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
@@ -98,7 +98,7 @@ def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_st
     monkeypatch.setattr(tp, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
     with pytest.raises(Stop) as e:
         tp.prepare()
-    last = open(f"{tp.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
+    last = Path(f"{tp.d}/stages.txt").read_text().splitlines()[-1].split(" ", 3)
     assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
     single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
 
@@ -134,7 +134,6 @@ def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it
 # ---------------------------------------------------------------------------------------------------------------- cuBLAS names
 
 def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
-    from tests.pipeline.test_row import _row
     py, _, lib = _node(tmp_path)
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
@@ -153,14 +152,13 @@ def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     """The row's release line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
-    from tests.pipeline.test_row import _row
     rel = tmp_path / "RELEASE.json"
     rel.write_text(json.dumps({"tag": "r16-int-3", "build_dirs": {"native_collect": str(tmp_path / "nc_rel")}}))
 
     def prepared(*flags, environ=None):
         r = _row(tmp_path / "sweep", "--native-collect-default", str(tmp_path / "nc_default"), *flags, environ=environ)
         monkeypatch.setattr(r, "release_line", lambda fallback: (f"r16-int-3|commit=a2dabe493 tree={r.tree}", str(rel)))
-        for step in ("precheck_identity", "precheck_target", "admission", "install_signal_forwarding"):
+        for step in ("precheck_identity", "precheck_target", "install_signal_forwarding"):
             monkeypatch.setattr(r, step, lambda: None)
 
         def shape():
@@ -181,14 +179,16 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------------------------------------------- the target-family preflight
 
 def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):
-    from tests.pipeline.test_row import _row
     r = _row(tmp_path, "--stages", "build,match")
     seen = []
-    for step in ("precheck_identity", "shape", "admission", "build", "match"):
+    for step in ("precheck_identity", "shape", "build", "match"):
         monkeypatch.setattr(r, step, lambda step=step: seen.append(step))
     monkeypatch.setattr(r, "release_line", lambda fallback: (f"UNRELEASED|commit=unknown tree={r.tree}{fallback}", "-"))
-    monkeypatch.setattr(r, "target_family", lambda *a, out: seen.append(("target_family", r.stages, a)) or
-                        (3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"))
+
+    def target_family(*a, out):
+        seen.append(("target_family", r.stages, a))
+        return 3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"
+    monkeypatch.setattr(r, "target_family", target_family)
     assert r.run() == 3
     assert seen == ["precheck_identity", "shape", ("target_family", "build,match", ())]
     assert "precheck-target FAIL" in (tmp_path / r.row / "stages.txt").read_text()

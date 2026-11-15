@@ -7,8 +7,9 @@ checks.
 arenas     each engine exports its arena over CUDA IPC (`engine.<g>.json` in --engines-dir); once every engine has run
            its plain baseline (status baseline), the prover opens each in its GPU's context and takes it as that GPU's
            HBM shard (`device.DeviceStore`'s `hbm`): the store's chunks are the arenas' in GPU order, then the host
-           tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler. With
-           --model-dir each arena is first held to the checkpoint's (`held_to_checkpoint`)
+           tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler, the host
+           tier one region of it (`store_layout.regions`). With --model-dir each arena is first held to the checkpoint's
+           (`held_to_checkpoint`)
 register   the payload tree over the plain weights as served, salted under the verifier's payload key (its first
            message); at the registration the engines pause (ctl.json's
            pause), the device gates run, the arenas are encoded in place at the key, and the engines get the key and
@@ -161,16 +162,8 @@ class ServingNode(device.GpuBackend):
         self.bases = {e["uuid"]: self.store.base[g] for g, e in enumerate(exports)}
 
     def layout(self) -> list[dict]:
-        s, out = self.store, []
-        for q in range(len(s.n)):
-            if s.on_host[q]:
-                out.append({"kind": "filler", "tier": "host", "first": s.base[q], "blocks": s.n[q]})
-                continue
-            w = self.exports[q]["weights_blocks"]
-            out.append({"kind": "weights", "tier": "hbm", "first": s.base[q], "blocks": w})
-            if s.n[q] > w:
-                out.append({"kind": "filler", "tier": "hbm", "first": s.base[q] + w, "blocks": s.n[q] - w})
-        return out
+        s = self.store
+        return store_layout.regions(s.n, s.base, s.on_host, [e["weights_blocks"] for e in self.exports])
 
     def encode(self, registration) -> dict:
         self.engines.ctl(phase="encode", pause=True)
@@ -261,7 +254,7 @@ def main() -> int:
                               warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
                               sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                               trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
-                              host_consumers=a.host_consumers)
+                              host_consumers=a.host_consumers, leaf_ctas=a.leaf_ctas)
         out["engines"] = exports
         out["layout"] = backend.layout()
         host_, port = a.connect.rsplit(":", 1)

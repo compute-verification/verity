@@ -2,9 +2,10 @@
 `benchmarks/pouw/period_cost.py`): each step's rows a function of the declaration alone, so its u is public."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 
 def utilization(step_rows: Sequence[int], rows: int, steps: int) -> Fraction:

@@ -19,7 +19,7 @@ without replacement inside each, independently.
   `Q_template_instance` and `Q_template_instances`; another query refuses it.
 * **Sizes**: k_s = max(1, round(k n_s / n)), rounding half up in integers (`stratum_k`), so every template has a sample.
 * **The sampling design object** is `{"law": "stratified", "k": K, "strata": [{"template": <descriptor id>, "units": [[lo, hi], ...],
-  "k": k_s}, ...]}`: the law `{"law": "stratified", "k": K}` expanded by `derive`. R1 holds the registered sampling design to the verifier's
+  "k": k_s}, ...]}`: the sampling design `{"law": "stratified", "k": K}` expanded by `derive`. R1 holds the registered sampling design to the verifier's
   own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
@@ -56,6 +56,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
+from verity.protocols.spot.verifier.profile import work_k
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
@@ -137,7 +138,7 @@ def rate_floor(num: int, den: int, n: int, floor: int) -> int:
 
 
 def rate_need(num: int, den: int, size: int, n: int) -> int:
-    """The least K >= 1 at which the stratified sampling design draws ceil(NUM size / DEN) of a stratum of `size` of `n` proof
+    """The least K >= 1 at which the stratified sampling design samples ceil(NUM size / DEN) of a stratum of `size` of `n` proof
     blocks (`stratum_k`): ceil((2 c n - n) / (2 size)) at c = that count, and 1 where c <= 1. The Lean's `Spot.Rate.need` is
     this."""
     c = rate_count(num, den, 1, size)
@@ -146,7 +147,7 @@ def rate_need(num: int, den: int, size: int, n: int) -> int:
 
 def strat_k(num: int, den: int, sizes: Sequence[int], n: int) -> int:
     """The stratified rate's K over strata of `sizes` of `n` proof blocks: the most any stratum needs (`rate_need`), at most `n`,
-    at which each stratum draws all of its proof blocks. The Lean's `Spot.Rate.stratK` is this, and `Rate.stratK_ge` the bound."""
+    at which each stratum samples all of its proof blocks. The Lean's `Spot.Rate.stratK` is this, and `Rate.stratK_ge` the bound."""
     return min(n, max([1, *(rate_need(num, den, s, n) for s in sizes)]))
 
 
@@ -178,12 +179,6 @@ def rate_table(program: Program, query: Mapping[str, Any], num: int, den: int,
 def stratum_k(k: int, size: int, population: int) -> int:
     """A stratum's sample under the stratified rule: max(1, round(k * size / population)), rounding half up."""
     return max(1, (2 * k * size + population) // (2 * population))
-
-
-def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's sample under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
-    at most `size`."""
-    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 def work_table(table: Mapping[str, Any]) -> dict[str, tuple[int, int]]:

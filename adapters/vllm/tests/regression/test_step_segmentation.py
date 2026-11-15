@@ -7,9 +7,19 @@ and, for the greedy select, cuts one segment per event.
 """
 from __future__ import annotations
 
+import gzip
+import json
 import tomllib
 
 import pytest
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
+from verity.definitions.registry import b1, sampling
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.prims import BF16, F32, I32
 
 from tests.regression import lift_expected as LE
 from tests.regression import resolver
@@ -47,7 +57,7 @@ def test_collapsed_and_segmented_documents_differ_on_the_segmentation_only():
     assert sorted(x.split(":")[0] for x in d) == ["$.component_steps_equal_cap", "$.requests.r0.step_nodes_sha256", "$.requests.r0.steps",
                                                    "$.unsegmented_members"], d
     assert SS._consistent(segmented["requests"], {"build_request": True}) == {
-        "r0": {"steps_eq_cap": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
+        "r0": {"steps_eq_declared": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
     assert SS._consistent(collapsed["requests"], {})["r0"]["steps_eq_sampling_events"] is False
 
 
@@ -58,14 +68,6 @@ def test_a_component_without_a_histogram_states_no_sampling_count():
 def _flat_request(family: str):
     """A flat two-step request body (what derive_step emits: the selects at the root body's top level, not inside a call):
     step 0 = [select(l0)], step 1 = [F32Add(temp, temp), select(l1)]."""
-    from verity.circuits.codec import encode_program
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.program import Program
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Array, Tuple, Value
-    from verity.definitions.registry import b1, sampling
-    from verity.definitions.registry import prims as P
-    from verity.definitions.registry.prims import BF16, F32, I32
     V, I64 = 8, Value(64)
     greedy = family == "TokenSelect_v1"
 
@@ -92,6 +94,29 @@ def test_recompute_counts_the_sampling_events_of_a_flat_request(family):
     # the Gumbel body's `steps` is the rule under test (request_component's): 2 when the rule names GumbelTokenSelect_v1, 1 when not
 
 
+def test_the_self_check_decodes_each_component_the_workload_program_names(tmp_path, monkeypatch):
+    """`actual` with no candidate: every derived component's descriptor, read from the row by its Build dir's basename and decoded."""
+    row_dir = tmp_path / "rows" / "stand-in-row"
+    (row_dir / "build_workload").mkdir(parents=True)
+    (row_dir / "build_request").mkdir()
+    request = {"request_id": "r0", "prompt_len": 1, "cap": 2, "component": {}}
+    wp = row_dir / "build_workload" / "workload_program.json"
+    wp.write_text(json.dumps({"inputs": {"derived": {"1,1": "/pod/row/build_request/"}}, "requests": [request]}))
+    with gzip.open(row_dir / "build_request" / "descriptor.json.gz", "wt") as f:
+        json.dump(_flat_request("TokenSelect_v1"), f)
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
+    row = resolver.Row("stand-in-row", {"row": 900}, fixtures={})
+    act = SS.actual(row)
+    got = act["requests"]["r0"]
+    assert act["source"] == "request_component" and act["component_steps_equal_cap"] is True and act["unsegmented_members"] == 0
+    assert (got["cap"], got["component"], got["n_nodes"], got["steps"], got["sampling_events"]) == (2, "build_request", 3, 2, 2)
+    assert act["consistent"] == {"r0": {"steps_eq_declared": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
+    wp.write_text(json.dumps({"inputs": {"derived": {"1,1": "/pod/row/build_request/"}}, "requests": [dict(request, cap=3)]}))
+    with pytest.raises(resolver.NotResolvable, match="request r0 names no derived component dir"):
+        SS.actual(row)
+
+
 def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
     carried = {"old": {"row": 11, "class": "GREEN", "selection": "green", "tp": 1, "batch": 1, "oracle": "/o/old", "programs_state": "uploaded",
                        "local": {}, "artifacts": {"records": "art:" + "a" * 64, "programs": ""},
@@ -109,7 +134,6 @@ def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
 
 @pytest.mark.slow
 def test_append_keeps_the_existing_text_and_refuses_a_known_key(tmp_path, monkeypatch):
-    import json
     fx, files = tmp_path / "fixtures.toml", tmp_path / "files.toml"
     head = ('schema = "verity-vllm/r19-reference-fixtures/v1"\nsnapshot_artifact = "art:' + "e" * 64 + '"\n\n[artifacts]\n'
             'commit_logs = "art:' + "f" * 64 + '"   # a hand comment\n\n[rows."old"]\nrow = 11\nclass = "GREEN"\n')

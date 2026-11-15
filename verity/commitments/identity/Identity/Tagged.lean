@@ -1,8 +1,8 @@
 module
 
-public import Flock.Canon
+public import Base.Canon
 public import Identity.Sha512
-meta import Flock.Canon
+meta import Base.Canon
 meta import Identity.Sha512
 
 /-!

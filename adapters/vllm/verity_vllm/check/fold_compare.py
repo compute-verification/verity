@@ -24,7 +24,7 @@ laptop (fold + Program() + digest alone: 0.21 GB / 2.4 s); comparison 3 delibera
 instances, whose `FunctionCall.args` would materialise 28M-element tuples (~1 GB each).  Snapshots follow DESIGN §3: `<snapshots>/snapshots.json` is an index of entries
 `{event, arg, view: {"$v": [...]}, file, sha256, step?}` and each file holds the raw element bytes of the view in
 row-major logical order (a storage-order dump of the view's byte extent is also accepted).  Weights come from the
-SmolLM2-135M safetensors in the HF cache (`verity_vllm.correspondence.capture_identities._LAYER_FIELDS`) and the cos/sin cache from the
+SmolLM2-135M safetensors in the HF cache (`_LAYER_FIELDS`) and the cos/sin cache from the
 tracked fixture the interior producer uses.
 """
 from __future__ import annotations
@@ -260,6 +260,22 @@ def _extent(v: ViewDesc) -> tuple[int, int]:
 
 # --- weights (parameter words by leaf interval of the weights Record) ----------------------------------------
 
+_WEIGHT_FIELDS = {  # circuit weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
+    "embed": ("w=embed_tokens.weight", ["model.embed_tokens.weight"]),
+    "norm": ("w=norm.weight", ["model.norm.weight"]),
+    "cos_sin": ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None),
+}
+_LAYER_FIELDS = {
+    "ln1": ("w=layers.{L}.input_layernorm.weight", ["model.layers.{L}.input_layernorm.weight"]),
+    "qkv_w": ("w=layers.{L}.self_attn.qkv_proj.weight", [f"model.layers.{{L}}.self_attn.{p}_proj.weight" for p in "qkv"]),
+    "qkv_b": ("w=layers.{L}.self_attn.qkv_proj.bias", [f"model.layers.{{L}}.self_attn.{p}_proj.bias" for p in "qkv"]),
+    "o_w": ("w=layers.{L}.self_attn.o_proj.weight", ["model.layers.{L}.self_attn.o_proj.weight"]),
+    "ln2": ("w=layers.{L}.post_attention_layernorm.weight", ["model.layers.{L}.post_attention_layernorm.weight"]),
+    "gate_up_w": ("w=layers.{L}.mlp.gate_up_proj.weight", ["model.layers.{L}.mlp.gate_proj.weight", "model.layers.{L}.mlp.up_proj.weight"]),
+    "down_w": ("w=layers.{L}.mlp.down_proj.weight", ["model.layers.{L}.mlp.down_proj.weight"]),
+}
+
+
 def _moe_layer_fields(weights_type: Type) -> dict[str, tuple[str, list[str]]]:
     """Checkpoint sources of the fused-MoE / qk-norm layer fields that
     `analytic.moe_layer_weights_type` adds, read off the weights Record itself (E = the expert axis of `w13`).  vLLM
@@ -338,7 +354,6 @@ class WeightSource:
 
     def __init__(self, weights_type: Type, safetensors: Iterable[Path] | None = None, cos_sin: Path | None = None,
                  repo: str | None = None, config: dict | None = None) -> None:
-        from verity_vllm.correspondence.capture_identities import _LAYER_FIELDS, _WEIGHT_FIELDS
         paths = list(safetensors) if safetensors else [Path(p) for p in sorted(glob.glob(hf_safetensors_glob(repo)))]
         self.tensors, self.tensor_dtypes = load_safetensors_words(paths) if paths else ({}, {})
         self.paths = paths

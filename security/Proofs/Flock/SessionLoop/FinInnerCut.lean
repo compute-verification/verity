@@ -294,7 +294,7 @@ theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout
 
 /-- **`InZ.tau` reads the coins of its first two rounds alone**, the second's below `|cons| + 3`. -/
 theorem tau_congr (lay : _root_.Flock.Zk.PadLayout) (p : FlockComplete.PadsZk)
-    (cons : Array (String × _root_.Flock.Zk.Lin)) {cs cs' : FlockComplete.Replay.InZ.Coins}
+    (cons : Array (String × _root_.Flock.Zk.Lin)) {cs cs' : FlockComplete.Replay.InZ.Challenges}
     (he : cs.ce 0 = cs'.ce 0) (hg : ∀ i < cons.size + 3, cs.cg i = cs'.cg i) :
     FlockComplete.Replay.InZ.tau lay p cons cs = FlockComplete.Replay.InZ.tau lay p cons cs' := by
   have hall : FlockComplete.Replay.InZ.all lay p cons cs = FlockComplete.Replay.InZ.all lay p cons cs' := by

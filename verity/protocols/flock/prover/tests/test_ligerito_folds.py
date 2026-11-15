@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 
 SOURCE = Path(__file__).resolve().with_name("ligerito_folds.cu")
 #: (log2 of level 0's words, folds): a partial block, one block, many, and a grid that strides from 2^22

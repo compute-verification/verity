@@ -69,8 +69,8 @@ from types import SimpleNamespace
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.prims import F32ToE4m3Sat, const
-from verity.definitions.ops.scalar import (BitAnd, BitNot, BitOr, F32Fabs, F32Fmaxf, F32Fminf, F32Neg, I32Add, I32Le, SelectF32,
+from verity.circuits.ops.prims import F32ToE4m3Sat, const
+from verity.circuits.ops.scalar import (BitAnd, BitNot, BitOr, F32Fabs, F32Fmaxf, F32Fminf, F32Neg, I32Add, I32Le, SelectF32,
                                            SelectI32)
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import prims as P

@@ -75,15 +75,15 @@ the broadcast's K 7168 caps at 28 (T <= 256) and then runs the same 26 .. 8 regi
 """
 from __future__ import annotations
 
-from verity.definitions.circuits.census import silicon_step
+from verity.circuits.census import silicon_step
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import F32Neg
-from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16, GroupSum
-from verity.definitions.silicon.term import TF32, tf32_product
-from verity.definitions.silicon.total import NAN, Inf, fp32_value, group_step_total, pack_value
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import F32Neg
+from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, GroupSum
+from verity.circuits.silicon.term import TF32, tf32_product
+from verity.circuits.silicon.total import NAN, Inf, fp32_value, group_step_total, pack_value
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import moe as M

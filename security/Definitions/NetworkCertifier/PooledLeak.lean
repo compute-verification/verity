@@ -42,6 +42,11 @@ a monitoring period the incorrect set that matters is the one of the witness com
 before its sample: the samples bound how many units those sets hold in total, and the count pays for which units they are
 once. `LeakAt` is the leak relation at one incorrect set, and `PooledGood` is every window's at its own set, with the
 sets' total below a bound.
+
+The period's operator `op` is fixed before the period: it is a function of the observations, never of a secret.
+Window `i`'s operator at the period's observations `o` is `op i (runsBefore o i)`. It reads only windows already
+closed, those before `i`, in order (`runsBefore`), and its own window, as a window's operator does, only through the
+observations before each step; it reads no window still open and none after.
 -/
 
 @[expose] public section
@@ -61,10 +66,12 @@ def LeakAt {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : Audit
     AcceptedFaulty s.prog P (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) F op o
 
 /-- **A monitoring period's good event**: over the windows registered as `sw i`, the incorrect sets `W i` hold fewer than
-`Fmax` units in total, and every window's observations `o i` meet its leak relation at its own set (`LeakAt`). -/
+`Fmax` units in total, and every window's observations `o i` meet its leak relation at its own set (`LeakAt`), its
+operator reading the windows before it (`runsBefore`). -/
 def PooledGood {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
-    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+    (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
     (Fmax : ℕ) (W : Fin m → Finset ℕ) (o : Fin m → List (Obs L K S)) : Prop :=
-  ∑ i, (W i).card < Fmax ∧ ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W i) (o i)
+  ∑ i, (W i).card < Fmax ∧ ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (W i) (o i)
 
 end NetTiming

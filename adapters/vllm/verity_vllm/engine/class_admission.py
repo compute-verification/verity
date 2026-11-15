@@ -1,8 +1,9 @@
 """A served engine class's admission: what a window of the class (`profiles.engine_classes`) refuses while it is served.
 
 `Admission(name).install(engine)` wraps the engine's in-process scheduler's ``add_request`` (`handle.scheduler`, through
-`engine.hooks`): a request whose prompt is over the class's prompt limit (`profiles.engine_classes.prompt_limit`, its served
-`max_model_len`) is refused before the scheduler holds it; a longer prompt within it the class prefills in chunks, each a launch of
+`engine.hooks`): a request whose prompt is over the engine's context limit (the scheduler's ``max_model_len``: the launch's, or the
+length vLLM fitted to the KV pool where the launch left it to vLLM) is refused before the scheduler holds it, since a longer
+prompt has no position for its first output; a long prompt within it the class prefills in chunks, each a launch of
 the class's request Program.  The scheduler counts the prompt it was handed, so the count is the engine's whatever form the prompt
 came in.  `close_window` is a Commit window's close: it is refused while the scheduler holds a request, since the next window
 compiles that request after its carried history (`predict.steps`), which reads the closing window's edge ports (`workload.Edge`),
@@ -21,10 +22,12 @@ from verity_vllm.errors import Refused
 
 
 class Admission:
-    """Engine class ``name``'s admission on one engine; ``refused`` is the first refusal's reason, None while there is none."""
+    """Engine class ``name``'s admission on one engine; ``limit`` is the engine's context limit once installed, and ``refused``
+    the first refusal's reason, None while there is none."""
 
     def __init__(self, name: str) -> None:
-        self.name, self.limit = name, EC.prompt_limit(name)
+        EC.of(name)
+        self.name, self.limit = name, 0
         self.refused: str | None = None
         self.sched: Any = None
         self.hooks = hooks.Hooks(tag=f"engine-class:{name}")
@@ -36,13 +39,18 @@ class Admission:
 
     def install(self, engine: Any) -> Admission:
         self.sched = handle.scheduler(engine)
+        limit = getattr(self.sched, "max_model_len", None)
+        if type(limit) is not int or limit <= 0:
+            raise Refused(f"the engine's scheduler states no context limit (its max_model_len is {limit!r})",
+                          what=f"engine class {self.name}")
+        self.limit = limit
         me = self
 
         def add_request(orig):
             def wrapped(request, *a, **kw):
                 n = int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ()))
                 me._refuse(f"request {request.request_id}: a prompt of {n} tokens, over the {me.limit} a class-{me.name} window "
-                           f"admits (its served max_model_len)" if n > me.limit else None)
+                           f"admits (its engine's max_model_len)" if n > me.limit else None)
                 return orig(request, *a, **kw)
             return wrapped
 

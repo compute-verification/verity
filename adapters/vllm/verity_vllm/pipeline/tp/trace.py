@@ -12,8 +12,9 @@ import gc
 import json
 import os
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.pipeline.tp import lease as TPL
 

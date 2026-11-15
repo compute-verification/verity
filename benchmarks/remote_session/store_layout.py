@@ -1,7 +1,8 @@
 """Pins and checkpoints for the store binding, whose layout and decision are PoUB's own
 (`verity/protocols/poub/verifier/store.py`: the pin's form and checks, the arena, the store, its expected payload
-root and `Binding`): a checkpoint's local pin, a small synthetic BF16 checkpoint for tests, and the plain SHA-256 a GiB
-of an engine's arena holding the checkpoint's weights (`node.py --model-dir`'s check of each engine against the layout).
+root and `Binding`): a checkpoint's local pin, a small synthetic BF16 checkpoint for tests, the plain SHA-256 a GiB
+of an engine's arena holding the checkpoint's weights (`node.py --model-dir`'s check of each engine against the layout),
+and the layout a serving node's hello gives of its store (`regions`).
 
     python store_layout.py pin DIR --name ROLE --out PIN.json          the local pin of a checkpoint in DIR
     python store_layout.py synthetic DIR [--layers 2 --hidden 48 ...]  a small BF16 checkpoint and its pin, for tests
@@ -36,6 +37,23 @@ def arena_sha256(a: rstore.Arena, nbytes: int, workers: int = 1) -> list[str]:
         with rstore.pool(min(workers, len(spans))) as ex:
             return list(ex.map(_sha256, *zip(*[(a, lo, n) for lo, n in spans])))
     return [_sha256(a, lo, n) for lo, n in spans]
+
+
+def regions(n: list[int], base: list[int], on_host: list[bool], weights: list[int]) -> list[dict]:
+    """The hello's layout of a store in segments (the serving node's: `device.DeviceStore`'s `n`, `base` and `on_host`),
+    an arena a GPU with `weights` blocks of weights each and then the host tier's segments: each arena's weights and
+    its filler, then the host tier as one region however many segments hold it. That is the store as the verifier's
+    binding lays it out (`rstore.Store.regions`), and the binding refuses any other layout, a region a host segment
+    among them."""
+    out = []
+    for q, w in enumerate(weights):
+        out.append({"kind": "weights", "tier": "hbm", "first": base[q], "blocks": w})
+        if n[q] > w:
+            out.append({"kind": "filler", "tier": "hbm", "first": base[q] + w, "blocks": n[q] - w})
+    host = [q for q in range(len(n)) if on_host[q]]
+    if host:
+        out.append({"kind": "filler", "tier": "host", "first": base[host[0]], "blocks": sum(n[q] for q in host)})
+    return out
 
 
 def synthetic(directory: Path, *, name: str = "synthetic-bf16", layers: int = 2, hidden: int = 48, heads: int = 4,

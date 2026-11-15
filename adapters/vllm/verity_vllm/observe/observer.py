@@ -22,8 +22,9 @@ from __future__ import annotations
 import importlib
 import re
 import time
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
@@ -118,13 +119,14 @@ def encode_arg(x: Any, storage: StorageAdapter) -> Any:
     if isinstance(x, _STR_TYPES):
         return str(x)
     if _SYM_TYPES and isinstance(x, _SYM_TYPES):
+        # a symbol with no value raises torch's GuardOnDataDependentSymNode (a RuntimeError); float() of a SymBool, TypeError
         try:
             v = x.node.maybe_as_int() if hasattr(x, "node") else None
             return int(v) if v is not None else int(x)
-        except Exception:  # noqa: BLE001
+        except (RuntimeError, TypeError):
             try:
                 return float(x)
-            except Exception:  # noqa: BLE001
+            except (RuntimeError, TypeError):
                 return {"$repr": repr(x)[:200]}
     if isinstance(x, dict):
         return {str(k): encode_arg(v, storage) for k, v in x.items()}
@@ -148,6 +150,7 @@ class Recorder:
         self.step = -1
         self.phase = "other"
         self.active = False
+        self._root_forward = False                    # a root module's forward opened the "forward" phase (`capture`'s phase hooks)
         self.module_stack: list[str] = []
         self.after_call: Callable[[int, str, tuple, dict, Any], None] | None = None
         self.after_launch: Callable[[int, str, dict], None] | None = None

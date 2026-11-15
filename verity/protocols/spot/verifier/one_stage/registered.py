@@ -67,7 +67,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
@@ -90,6 +90,8 @@ READS = "verity/registered-reads/v0"
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
 READS_V1 = "verity/registered-reads/v1"
 READS_FROM = "reads_from"
+#: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
+BOUND = "bound"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
 SCHEMA_SEG = SCHEMA_HM96_SHA512_ROW_SEG
@@ -217,14 +219,28 @@ def parameter_gates(program: Program, value: str) -> range:
     names = [name for name, _ in program.fn.signature()[0]]
     if value not in names:
         raise ValueError(f"{value!r} is not a parameter of the program ({names})")
-    first = end = None
-    for _space, _idx, lo, hi in ref_runs(program.input_coll(names.index(value)).refs):
-        if end is not None and lo != end:
-            raise ValueError(f"parameter {value!r}: its gates are not one interval")
-        first, end = lo if first is None else first, hi
-    if first is None:
+    if (gates := _gates(program, names.index(value))) is None:
         raise ValueError(f"parameter {value!r}: its gates are not one interval")
-    return range(first, end)
+    return gates
+
+
+def held_gates(program: Program, values: Iterable[str]) -> list[range]:
+    """The Input gates of each of `values` that is a parameter of the program whose gates are one non-empty interval
+    (`parameter_gates`, Lean's `Registered.Param.gates`), in `values`' order. Without `values` it reads nothing of the program,
+    which may be a decoded one (`codec.DecodedProgram`, an old record's) without a signature."""
+    if not (values := list(values)):
+        return []
+    names = [name for name, _ in program.fn.signature()[0]]
+    return [g for v in values if v in names and (g := _gates(program, names.index(v))) is not None]
+
+
+def _gates(program: Program, pi: int) -> range | None:
+    first = end = None
+    for _space, _idx, lo, hi in ref_runs(program.input_coll(pi).refs):
+        if end is not None and lo != end:
+            return None
+        first, end = lo if first is None else first, hi
+    return None if first is None or end == first else range(first, end)
 
 
 def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
@@ -657,10 +673,28 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
+def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str, Mapping[str, str]]) -> dict[str, Any]:
+    """``file``, a `READS_V1` ``--registered`` file, with each of the statement's ``ports`` that it names no registered port
+    for bound to the window's committed values (`BOUND`, `Flock.RegBound`): the root and domain of its rows in ``roots``
+    (``{port: {"root", "domain"}}``, the window's registration, which the verifier accepted before any coin), which the
+    Lean verifier holds the public header's to. Lean refuses a bound port the window's registered circuit record declares
+    registered, and a file that binds ports without that record (`--interface`). A file of another format, or one with no
+    other port, is returned as it is: Lean holds it to name every port. ValueError for a port ``roots`` holds no root and
+    domain for."""
+    free = sorted(p for p in ports if p not in file["ports"])
+    if file.get("format") != READS_V1 or not free:
+        return dict(file)
+    missing = [p for p in free if not isinstance(roots.get(p), Mapping) or not {"root", "domain"} <= set(roots[p])]
+    if missing:
+        raise ValueError(f"ports {missing} are neither registered ports of the file nor ports the window's registration "
+                         "holds a root and domain for")
+    return {**file, BOUND: {p: {"root": roots[p]["root"], "domain": roots[p]["domain"]} for p in free}}
+
+
+__all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]

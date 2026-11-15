@@ -19,7 +19,7 @@ import signers
 from verity.protocols.certifier.verifier import warden_rows as W
 from verity.protocols.certifier.verifier.active import DATA
 from verity.protocols.certifier.verifier.certificate import Direction, Issuer, certificate_digest
-from verity.protocols.certifier.verifier.grid import Record, Status
+from verity.protocols.certifier.verifier.grid import BlockGrid, Status
 from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import PARAMS
 from verity.protocols.certifier.verifier.warden import cell
 
@@ -33,10 +33,10 @@ def _cell(q: int, k: int) -> bytes:
     return cell(DATA, q, bytes([0xAA if q == QA else 0xBB, k]) * ((B - 9) // 2) + bytes((B - 9) % 2), B)
 
 
-def _record(window: int) -> Record:
+def _record(window: int) -> BlockGrid:
     rows = [tuple(_cell(QA, k) for k in range(R)) + tuple(_cell(QB, k) for k in range(R)),
             tuple(_cell(QA, k) for k in range(R, 2 * R)) + (None,) * (S - R)]
-    return Record(LINK, window, tuple(rows) + ((None,) * S,) * (T - 2), Status())
+    return BlockGrid(LINK, window, tuple(rows) + ((None,) * S,) * (T - 2), Status())
 
 
 def _issuer(tmp_path, seed=b"certifier") -> Issuer:

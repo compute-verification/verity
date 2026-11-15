@@ -11,14 +11,19 @@ record can key on the colliding id.  Tests that need the exemption skip BY NAME 
 from __future__ import annotations
 
 import pytest
-
-from verity_vllm.program import workload as W
 from verity.circuits.codec import encode_program, program_digest
-from verity.circuits.defs import REGISTRY, CompositeDefinition, IdentityConflict, PrimitiveDefinition
+from verity.circuits.defs import (
+    REGISTRY,
+    CompositeDefinition,
+    IdentityConflict,
+    PrimitiveDefinition,
+)
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
-from tests.program.test_workload_program import _WP, _desc, _wl
 from verity.circuits.types import Array, Value
+
+from tests.program.test_workload_program import _WP, _desc, _wl
+from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("PadrevCmpAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
 _SRC = {"class": "ToyForCausalLM", "mode": "profile", "inputs": [[3]], "config_sha256": "c" * 16}   # no T: derive.py's SRC shape
@@ -77,8 +82,10 @@ def test_two_identical_requests_are_two_members_of_the_fixed_population_not_one(
     assert wl2.digest != wl1.digest
     # the shared parameter maps BOTH members onto the one weights interval; each prompt onto its own
     ins0, ins1 = am["requests"][0]["inputs"], am["requests"][1]["inputs"]
-    w0 = next(i for i in ins0 if i["name"] == "weights"); w1 = next(i for i in ins1 if i["name"] == "weights")
-    p0 = next(i for i in ins0 if i["name"] == "prompt"); p1 = next(i for i in ins1 if i["name"] == "prompt")
+    w0 = next(i for i in ins0 if i["name"] == "weights")
+    w1 = next(i for i in ins1 if i["name"] == "weights")
+    p0 = next(i for i in ins0 if i["name"] == "prompt")
+    p1 = next(i for i in ins1 if i["name"] == "prompt")
     assert w0["global"] == w1["global"] == "shared.weights" and w0["gates"] == w1["gates"]
     assert p0["global"] != p1["global"] and p0["gates"][1] == p1["gates"][0]                 # two prompt intervals, disjoint, adjacent
 

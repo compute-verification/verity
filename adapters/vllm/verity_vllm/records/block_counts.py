@@ -13,6 +13,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, required
 
+__all__ = ["BlockClass", "BlockJudgment", "RULES", "shape_checks"]
+
 SCHEMA = "verity-vllm/inference-block-judgment/v1"
 FIELDS = ("format", "day", "declaration", "c", "k", "n", "table", "classes", "checks", "verdict", "reason")
 CLASS = ("definition", "slots", "steps", "gates", "unpriced", "fresh")
