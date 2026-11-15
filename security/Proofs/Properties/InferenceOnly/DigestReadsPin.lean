@@ -1,10 +1,9 @@
 module
 
 public import Proofs.Properties.InferenceOnly.DigestReads
-import all Proofs.Properties.InferenceOnly.DigestReads
 import Proofs.Properties.InferenceOnly.BodiesOk.Node
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
+import Circuits.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String

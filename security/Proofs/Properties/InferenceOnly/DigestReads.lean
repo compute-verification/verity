@@ -16,7 +16,7 @@ strong induction on the decoder's index: a node's callee sits at a smaller index
 `Proofs.Properties.InferenceOnly.DigestDecodeReads` (`decodeReads`, with `entriesPin` and `digestPins`).
 -/
 
-public section
+@[expose] public section
 
 namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 

@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Properties.InferenceOnly.DigestReads
-import all Proofs.Properties.InferenceOnly.DigestReads
 public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
 import Proofs.Properties.InferenceOnly.BodiesOk.Composite
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
@@ -11,7 +10,7 @@ import Proofs.Properties.InferenceOnly.DecodeKeys
 import Proofs.Flock.Claims.Complete.Json.Parse
 import Proofs.Flock.Claims.Complete.Encode
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
+import Circuits.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import Std.Data.HashMap.Lemmas
