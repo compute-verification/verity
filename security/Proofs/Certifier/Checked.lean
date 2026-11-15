@@ -143,6 +143,7 @@ theorem inputOf_of_mem_freeInputs {L S : ℕ} {C : Prog} {lay : BoundaryGates L 
     exact hnot hx
   unfold BoundaryGates.inputOf
   rw [hnone, hany]
+  simp
 
 /-- An input reads the advice at itself alone. -/
 theorem inputOf_congr_adv {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool}
