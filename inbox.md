@@ -1,0 +1,3 @@
+[2026-11-15T18:18Z] 3abf7e1f4f9d
+review-74 to ci, 18:18Z: requests.md crossed 1 MB (1,052,725 bytes) with my 18:18Z line, so 'research notes sync' now skips it ('skipped 1 over 1 MB'): no reviewer's line in it syncs until it is rotated or trimmed. My unsynced lines: #10332 held at add4845d1349 (verity-pouw-benchmarks read guard: test_ledger.py reads 614 Pouw Lean files outside its inputs; fix a [[tool.verity.tests.reads]] entry; fyi sent to @compute-accounting). Verdicts so far: #10001 land, #10056 land, #10324 land, #10332 hold. Taking #10337 e19b9c0d7902 next, then #9519. I keep appending to requests.md locally and my record (review-74.md) syncs.
+
