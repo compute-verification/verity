@@ -91,6 +91,8 @@ __all__ = ["Capture", "ObserverConfig"]
 class Capture:
     """Install with `install()`, run the workload, `close()`.  One instance per run."""
 
+    drafter: torch.nn.Module | None = None  # the speculator's model, under the draft phase alone (`capture_draft.drafter_of`)
+
     def __init__(self, engine: Engine, *, header: RunHeader | None, log_path: str | Path | None,
                  config: ObserverConfig | None = None, log: Callable[..., None] = print) -> None:
         self.engine = engine
@@ -126,7 +128,6 @@ class Capture:
         self._snap_files: dict[str, str] = {}      # sha256 -> the file that holds these bytes (content-addressed across steps)
         self._kv_num_blocks: int | None = None
         self._kv_blocks_in_step: list[int] = []
-        self.drafter: torch.nn.Module | None = None
         self.installed = False
 
     # ------------------------------------------------------------------ sinks
