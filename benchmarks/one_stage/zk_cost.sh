@@ -19,6 +19,8 @@
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+for o in ZK_DRAWS:ZK_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "zk-cost: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
@@ -34,7 +36,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {

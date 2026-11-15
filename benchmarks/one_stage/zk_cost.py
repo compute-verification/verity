@@ -74,7 +74,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
@@ -400,7 +400,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
             fw = {}
             for b in v.get("buckets") or []:
                 for key, x in (b or {}).items():
-                    if (key.startswith("t.zk_server") or key.startswith("cpu.zk_server")) and isinstance(x, (int, float)):
+                    if key.startswith(("t.zk_server", "cpu.zk_server", "t.firewall", "cpu.firewall")) and isinstance(x, (int, float)):
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
                           **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",

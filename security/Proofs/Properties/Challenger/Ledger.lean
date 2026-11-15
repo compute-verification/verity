@@ -107,7 +107,7 @@ theorem canon_files (close hellos record log : ByteArray) :
   exact ⟨t, ht, by omega⟩
 
 theorem plainAt_openBody {auditor device pins : String} (keyHash pin window : ByteArray) (ha : PlainStr auditor)
-    (hh : PlainStr host) (hp : PlainStr pins) : PlainAt 3 (openBody auditor device pins keyHash pin window) :=
+    (hh : PlainStr device) (hp : PlainStr pins) : PlainAt 3 (openBody auditor device pins keyHash pin window) :=
   plainAt_built (ks := ["by", "host", "key_sha512", "pinned", "pins", "window", "withheld"]) rfl (by decide)
     (by decide) (by
       intro p hm
@@ -131,9 +131,9 @@ theorem plainAt_openBody {auditor device pins : String} (keyHash pin window : By
       · exact .bool 1 true)
 
 theorem canon_openBody {auditor device pins : String} (keyHash pin window : ByteArray) (ha : PlainStr auditor)
-    (hh : PlainStr host) (hp : PlainStr pins) :
+    (hh : PlainStr device) (hp : PlainStr pins) :
     ∃ t, Flock.canon (openBody auditor device pins keyHash pin window) = .ok t ∧
-      t.length ≤ 118 + auditor.length + host.length + pins.length + (Flock.hexOf keyHash).length +
+      t.length ≤ 118 + auditor.length + device.length + pins.length + (Flock.hexOf keyHash).length +
         (Flock.hexOf pin).length + (Flock.hexOf window).length := by
   obtain ⟨tp, htp, hlp⟩ := canon_mkObj_le (l := [("lines", Lean.toJson (1 : Nat)), ("sha512", .str pins)])
     (ks := ["lines", "sha512"]) (bs := [1, pins.length + 2]) rfl (by decide) (by decide)
@@ -147,12 +147,12 @@ theorem canon_openBody {auditor device pins : String} (keyHash pin window : Byte
   have ew : (["root"].map (·.length + 4)).sum = 8 := by decide
   rw [ew] at hlw
   simp only [List.sum_cons, List.sum_nil] at hlw
-  obtain ⟨t, ht, hlen⟩ := canon_mkObj_le (l := [("by", .str auditor), ("host", .str host),
+  obtain ⟨t, ht, hlen⟩ := canon_mkObj_le (l := [("by", .str auditor), ("host", .str device),
       ("key_sha512", .str (Flock.hexOf keyHash)), ("pinned", .str (Flock.hexOf pin)),
       ("pins", Json.mkObj [("lines", Lean.toJson (1 : Nat)), ("sha512", .str pins)]),
       ("window", Json.mkObj [("root", .str (Flock.hexOf window))]), ("withheld", .bool true)])
     (ks := ["by", "host", "key_sha512", "pinned", "pins", "window", "withheld"])
-    (bs := [auditor.length + 2, host.length + 2, (Flock.hexOf keyHash).length + 2, (Flock.hexOf pin).length + 2,
+    (bs := [auditor.length + 2, device.length + 2, (Flock.hexOf keyHash).length + 2, (Flock.hexOf pin).length + 2,
       24 + pins.length, 12 + (Flock.hexOf window).length, 4]) rfl (by decide) (by decide)
     (.cons (canon_str_le ha) (.cons (canon_str_le hh) (.cons (canon_str_le (plain_hexOf _))
       (.cons (canon_str_le (plain_hexOf _)) (.cons ⟨tp, htp, by omega⟩ (.cons ⟨tw, htw, by omega⟩

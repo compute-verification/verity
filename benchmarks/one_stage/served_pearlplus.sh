@@ -106,6 +106,8 @@
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
 # wrote the piece.
 set -uo pipefail
+for o in PEARLPLUS_DRAWS:PEARLPLUS_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-pearlplus: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" && pwd) || exit 1
 cd "$(dirname "$0")/../.." || exit 1
 TREE=$PWD TPY=$PWD/.venv/bin/python

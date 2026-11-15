@@ -25,7 +25,7 @@ from the audit; on ``--arm gpu`` its prover is ``prove --zk --gpu`` on ``--devic
 Parts of a session (``cold.json``): ``submitted_to_records_s`` (submission to both sides' records, `Session.seconds`); each
 side's ``statement ... built in`` (``prover_built_s``, ``verifier_built_s``: the circuit's load and the statement's build);
 the prover's ``LIVE`` record (``e2e_s``, ``witness_s``, ``prove_total_s``, ``prove_s``, ``wait_e2e_s``) and ``outside_s``,
-``e2e_s`` less the witness, the proving and the wait on the verifier: the ZK server's part of the clock. With the
+``e2e_s`` less the witness and the proving, whose waits on the verifier it holds: the ZK server's part of the clock. With the
 stamping wrappers of `member_seconds.wrap` as the binaries, the stamps give each process's start, so ``loop_start_s``
 (the prover's start to its Lean loop's) and ``before_clock_s`` (the loop's start to the clock's) are read from them.
 Memory: ``host_peak_gib``, the summed RSS of every process of the server's trees (the provers', the verifiers' and the
@@ -47,8 +47,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
+import a0  # noqa: E402
+import a5 as A5  # noqa: E402
 import member_seconds as MS  # noqa: E402
 import server_rate as SR  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
@@ -239,10 +239,11 @@ def prove(a: argparse.Namespace) -> int:
 
 
 def outside(live: dict) -> float | None:
-    """``e2e_s`` less the witness, the proving and the wait on the verifier inside the clock (`session_split.rest`)."""
-    if not all(isinstance(live.get(k), (int, float)) for k in ("e2e_s", "prove_total_s", "wait_e2e_s")):
+    """``e2e_s`` less the witness and the proving: the ZK server's part of the clock. The prover's waits on the other side of
+    its round trips (``wait_e2e_s``) fall inside ``prove_total_s``, so they are not taken out again."""
+    if not all(isinstance(live.get(k), (int, float)) for k in ("e2e_s", "prove_total_s")):
         return None
-    return round(live["e2e_s"] - (live.get("witness_s") or 0.0) - live["prove_total_s"] - live["wait_e2e_s"], 3)
+    return round(live["e2e_s"] - (live.get("witness_s") or 0.0) - live["prove_total_s"], 3)
 
 
 def verify(a: argparse.Namespace) -> int:

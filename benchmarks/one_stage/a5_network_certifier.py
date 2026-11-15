@@ -53,7 +53,7 @@ The run exits 0 when it is as expected: accepted with every negative refused, or
 Lean's registered reads by its reason. ``--out`` holds the window as committed (``window/``, its private files too) and
 a5's records (``rank0/``, ``challenger/``, ``summary.json``); the network certifier's rows and salts stay in ``--run``.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5_network_certifier.py --run NETWORK_CERTIFIER_RUN --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
@@ -443,7 +443,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
-    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    import a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 

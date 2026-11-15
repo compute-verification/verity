@@ -158,8 +158,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 #: the record's leak guard, which chain_record.sh runs on its way out and `release` runs on a session's record
-LEAK_GUARD = "verity.protocols.accounting.certifier.device.leak_guard"
+LEAK_GUARD = "benchmarks.network_traces.leak_guard"
 TREE = Path(__file__).resolve().parents[2]
+
+
+def guard_argv(*args: str | Path) -> list[str]:
+    """`python -m LEAK_GUARD ARGS`, to run with ``cwd=TREE``: `benchmarks` is no installed package and a caller's own
+    path (pytest's `pythonpath`, a `sys.path` insert) doesn't reach the child, but ``-m`` puts its working directory
+    first on its path. So each `Path` in ARGS is made absolute; a `str` (a record path) is passed as it is."""
+    return [sys.executable, "-m", LEAK_GUARD, *(str(a.absolute()) if isinstance(a, Path) else a for a in args)]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
 
@@ -505,10 +512,10 @@ def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path
 def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
     """The record's leak guard on `out` and `hold` against the kept fetch, which releases the hold to `out` once it
     passes (0 when it found nothing, 3 when it moved a find to `quarantine`)."""
-    got = subprocess.run([sys.executable, "-m", LEAK_GUARD, str(out), str(quarantine),
-                          *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
-                          "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
-                         capture_output=True, text=True)
+    gates = ["--gates", kept] if kept is not None and kept.is_file() else []
+    got = subprocess.run(guard_argv(out, quarantine, *gates, "--hold", hold, "--release-to", out,
+                                    "--report", out / "leak-guard.json"),
+                         capture_output=True, text=True, cwd=TREE)
     print(f"leak guard (exit {got.returncode}): {(got.stdout.strip() or got.stderr.strip())[-600:]}", flush=True)
     return got.returncode
 
@@ -591,19 +598,19 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
     if a.draw is None:
-        raise Refused("--coins gate draws --draw K of the scan's units: give K")
+        raise Refused("--coins gate samples --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
         raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
                       "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the network certifier run's "
-                      f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
+                      f"witness are the auditor's, so the sample runs where the chain does, {AUDITOR} by default")
     if a.challenger_key is None:
         raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "
                       "(challenger-key current)")
     if not a.key.is_file():
-        raise Refused(f"no gate key {a.key}: the draw runs on the node that holds the lane's gate key, {AUDITOR}")
+        raise Refused(f"no gate key {a.key}: the sample runs on the node that holds the lane's gate key, {AUDITOR}")
     key = input_file(a.challenger_key, "challenger key record")
     main = input_file(a.main, "--main") if a.main else first_parent(TREE, a.keep / a.run / "scan-main.txt")
     return ["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
@@ -779,7 +786,7 @@ def chain(a: argparse.Namespace) -> int:
         if not (eq and k.startswith("CR_")):
             raise Refused(f"{kv!r}: CR_K=V, a chain_record.sh variable")
         if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer")):
-            raise Refused(f"{k}: the scan's draw and its coins are --draw and --coins's, which keep the draw off the "
+            raise Refused(f"{k}: the scan's sample and its coins are --draw and --coins's, which keep the sample off the "
                           "developer's node")
         env[k] = v
     coins = coin_args(a, fetch)

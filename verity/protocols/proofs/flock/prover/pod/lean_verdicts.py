@@ -99,7 +99,8 @@ def verdicts(log: Path) -> list[dict]:
 
 
 def zk_server_refusal(live: Path) -> str | None:
-    """The ZK server's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
+    """The ZK server's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it: ``FIREWALL-REFUSED``
+    in a run recorded before the refusal word's rename."""
     if not live.exists():
         return None
     for line in live.read_text(errors="replace").splitlines():
@@ -107,7 +108,7 @@ def zk_server_refusal(live: Path) -> str | None:
             stopped = json.loads(line).get("prover_stopped")
         except (ValueError, AttributeError):
             continue
-        if isinstance(stopped, str) and stopped.startswith("ZK-SERVER-REFUSED"):
+        if isinstance(stopped, str) and stopped.startswith(("ZK-SERVER-REFUSED", "FIREWALL-REFUSED")):
             return stopped
     return None
 

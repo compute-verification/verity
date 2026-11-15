@@ -22,6 +22,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_a0_archive_once.py",
+    "tests/test_audit_one_member.py",
+    "tests/test_audit_two_members.py",
+    "tests/test_a0_verify_members.py",
+    "tests/test_a5_memo.py",
+    "tests/test_a5_outputs.py",
     "tests/test_a5_tp_gates.py",
     "tests/test_a5_tp_store.py",
     "tests/test_a5_network_certifier.py",
@@ -65,7 +71,7 @@ parts = 7
 # `benchmarks/one_stage/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema and the census's
 # reference deployment it reads) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
-# fixtures; `verity/protocols/proofs/spot/prover/audit/records_audit.py`: prove_bundle's verifier window. `adapters/vllm/tools/served_run/serve_load.py`:
+# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `adapters/vllm/tools/served_run/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `adapters/vllm/tools/served_run/serve.sh`: the
 # demo's endpoint (`test_vllm_example`); `adapters/vllm/tools/served_run/commit.sh`: the demo's Commit, which `test_commit_records` runs
@@ -74,16 +80,18 @@ parts = 7
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
-# `verity/protocols/proofs/spot/prover/audit/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
+# `benchmarks/prove_path/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 # network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
 # `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
+# `benchmarks/slowdown/data/reference.toml`: the world fleet `leak_bounds.world_links` counts; the GLM-5.3 workload card
+# (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): the weights `leak_bounds` reads as it loads (`WEIGHTS`).
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
 # and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
 # `DISCHARGES`), which the locks record by digest and no other way.
-# `adapters/vllm/tests/pipeline/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
+# `benchmarks/one_stage/tests/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
 # adapter's test of the two-stage driver on its dockets.
 inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/prover/kernels/pearl_c",
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
@@ -97,13 +105,14 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "verity/commitments/cuda/commit_slots/slots.py",
-          "verity/protocols/proofs/spot/prover/audit/records_audit.py", "adapters/vllm/tools/served_run/serve_load.py", "adapters/vllm/tools/served_run/serve.sh",
+          "benchmarks/prove_path/records_audit.py", "adapters/vllm/tools/served_run/serve_load.py", "adapters/vllm/tools/served_run/serve.sh",
           "adapters/vllm/tools/served_run/commit.sh", "adapters/vllm/tools/served_run/published.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/census/deployments.json",
-          "benchmarks/census/adversary.json",
+          "benchmarks/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
+          "benchmarks/spot_figures/cards/workload.glm-5.3.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
@@ -111,7 +120,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/policy/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm",
-          "adapters/vllm/tests/pipeline/test_two_stage_driver.py",
+          "benchmarks/one_stage/tests/test_two_stage_driver.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
@@ -119,7 +128,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "verity/protocols/accounting/pous/verifier/p2_v1/audit-negative-vectors.json", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json",
           "verity/protocols/accounting/poub/prover/p2_stage/layout.py", "verity/protocols/accounting/poub/prover/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
-          "verity/protocols/accounting/poub/device/live_verifier/host.py", "verity/protocols/proofs/spot/prover/audit/prove_path.py", "benchmarks/prove_path/sources.json",
+          "verity/protocols/accounting/poub/device/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -127,4 +136,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_prove_subprotocol_served.py"]
+paths = ["verity/circuits/ops"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_prove_bundle.py"]
 paths = ["verity/circuits/ops"]

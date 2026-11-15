@@ -68,16 +68,17 @@ def test_a_rule_holds_where_the_run_checked_each_of_its_spots_and_each_passed():
 
 
 def test_a_spot_that_passed_without_running_a_check_is_named_beside_the_verdict():
-    """The partition over its leaf budget of a spot that is no Call is a warning, which fails nothing (circuit-check's own
-    verdict); the rule still holds, and the section names the spot and the check it skipped, so a reader doesn't take it as
-    checked."""
+    """The partition over its leaf budget of a spot that is no Call, or over its cost target, is a warning, which fails nothing
+    (circuit-check's own verdict); the rule still holds, and the section names the spot and the check it skipped, so a reader
+    doesn't take it as checked."""
     skip = {"check": "partition", "code": "unchecked"}
+    over = {"check": "partition", "code": "over-cost-target"}
     style = {"check": "redundant-gates", "code": "boolean"}
     targets = [{"target": RULE.spots[0], "failures": [], "warnings": [style]},
                {"target": RULE.spots[1], "failures": [], "warnings": [skip, style]},
-               {"target": RULE.spots[2], "failures": []}]
+               {"target": RULE.spots[2], "failures": [], "warnings": [over]}]
     (got,) = RG.section(targets, [RULE])
-    assert got["holds"] and got["unchecked"] == {RULE.spots[1]: ["partition"]}
+    assert got["holds"] and got["unchecked"] == {RULE.spots[1]: ["partition"], RULE.spots[2]: ["partition"]}
 
 
 def test_a_report_registers_an_id_by_its_own_target_else_by_a_holding_rule():

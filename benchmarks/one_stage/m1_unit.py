@@ -30,7 +30,7 @@ population Program of its one Definition at ``--n`` instances and that Program's
 as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean verity-verify-proof] [--n 1]
 
@@ -440,7 +440,7 @@ def main() -> int:
                          "column blocks or parts (comma-separated); else the first --n")
     a = ap.parse_args()
 
-    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
+    import a0
     import a11_kinds as K
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL

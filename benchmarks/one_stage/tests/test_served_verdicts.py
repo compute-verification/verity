@@ -1011,13 +1011,13 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
-#: the toy registration record R of the window the record tests' SPOT audit sampled against
+#: the toy docket R of the window the record tests' SPOT audit sampled against
 WINDOW_RECORD = {"format": "toy-registration", "window": 1}
 WINDOW_DIGEST = REG.digest(WINDOW_RECORD)
 
 
 def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
-    """SPOT's audit ``audit``'s v1 case, committing to the registration record ``rec``."""
+    """SPOT's audit ``audit``'s v1 case, committing to the docket ``rec``."""
     from verity.circuits import codec
 
     (audit / "window").mkdir(parents=True, exist_ok=True)
@@ -1059,7 +1059,7 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
 
 
 def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
-    """`window_digest` is the digest of the registration record R the audit's v1 case commits to, and None, saying
+    """`window_digest` is the digest of the docket R the audit's v1 case commits to, and None, saying
     why, for an audit with no case."""
     assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
     digest, why = S.window_digest(tmp_path / "none")
@@ -1558,7 +1558,7 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == checks
     assert json.loads((piece / "development.json").read_text())["execution_phase"] == phase
     line = S.development_line(doc)
-    assert line["execution_phase"] == {"clock": "the auditor host's", "start_utc": phase["start_utc"],
+    assert line["execution_phase"] == {"clock": "the auditor device's", "start_utc": phase["start_utc"],
                                        "end_utc": phase["end_utc"], "seconds": 460, "why": None, "prover": phase["prover"]}
     assert line["checks"] == doc["checks"]
     public = S.public_json(doc)
@@ -2786,8 +2786,8 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve"):
         d.mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_PROVE_PATH)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_PROVE_PATH)
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
     for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
@@ -2824,8 +2824,8 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", venv, tmp_path / "serve"):
         d.mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_WEIGHTS)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_WEIGHTS)
     (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (venv / "python").chmod(0o755)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
@@ -3108,7 +3108,7 @@ RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
 #: the toy tree's `window_commit.py`: the tree's own prove_path.py, run under the name served_verdicts.sh's calls record
 WINDOW_COMMIT = '''import runpy, sys
 from pathlib import Path
-sys.argv[0] = str(Path(__file__).parents[2] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py")
+sys.argv[0] = str(Path(__file__).parents[2] / "benchmarks" / "prove_path" / "prove_path.py")
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
 
@@ -3211,9 +3211,9 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
+    (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
     _one_stage(tree, linked=False)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
@@ -3334,8 +3334,8 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     cmd = argv[argv.index("--h1-window-commit") + 1]
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
@@ -3961,8 +3961,8 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     for p in (tree / "benchmarks" / "prove_path", tree / "adapters" / "vllm", tmp_path / "piece"):
         p.mkdir(parents=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
@@ -4111,7 +4111,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
-    assert [c.split("audit/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
+    assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",
         f"class-circuit --serve {d}/serve-phi.json --class 4,32,4 --pearl-tables pearl-c-h100-v1-h3 --out "
         f"{d}/circuit-record.json"] and "inference_only.py policy" in calls[-2] and "serve-openai" in calls[-1], calls
@@ -7021,7 +7021,7 @@ SERVE_OPENAI = (
     "release-order --window-requests 4 --max-model-len 512 --window-gb 32 --disk-floor-gb 100 --seal-hold-gb 32 "
     "--seal-warm-gb 0")
 WEIGHTS_REGISTRATION = (
-    "verity/protocols/proofs/spot/prover/audit/prove_path.py weights-registration --serve-run TMP/serve --checkpoint-dir "
+    "benchmarks/prove_path/prove_path.py weights-registration --serve-run TMP/serve --checkpoint-dir "
     "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
     "--key TMP/serve/private/weights.key --out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
