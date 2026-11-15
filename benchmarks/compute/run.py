@@ -68,7 +68,9 @@ below it the kit's ``a measurement, not an audit`` unless both are deployed. COI
 ``in-process`` where the answer's sample is the node's or the salt coins an in-process challenger's; a record that
 says neither prints ``ran with: not stated`` and, below it, the coins it does state. ``deployed challenger`` is printed
 only where the launcher says so and the sample and salt coins are a challenger's and the Lean verifier ran as of
-record. PARAMETERS is ``deployed`` only where the launcher says ``development`` false. DETAIL is what the record states
+record. PARAMETERS is ``deployed`` only where the launcher says ``development`` false and the record's pieces don't say
+development (`coins`): the pieces are the evidence and the launcher's word a claim, so a launcher's word the pieces
+don't bear out exits 2, and no piece's absence makes either word deployed. DETAIL is what the record states
 of the rest (`coins`): the answer's draws and δ and scheme, its sample source (`profile.source_from`), the piece's salt
 coins (``coin_source``), and whether the Lean verifier ran as of record (``--of-record`` in
 `pearlplus-lean-check.json`'s ``argv``), each ``not stated`` where the record holds none. None of them refuses a
@@ -387,8 +389,8 @@ def ran_with(doc: dict) -> tuple[str, dict] | None:
     the salt coins an in-process challenger's, and otherwise not stated (None): a challenger sample says no more than
     that some challenger drew it, so ``deployed challenger`` is printed only where the launcher says so and the coins
     and the Lean verifier's run are live. The parameters are ``deployed`` only where the launcher says
-    ``development`` false. `Unreadable` where the launcher's word is none of `CHALLENGER`'s or says a deployed
-    challenger the record's coins don't bear out."""
+    ``development`` false and the record's pieces don't say development. `Unreadable` where the launcher's word is
+    none of `CHALLENGER`'s, or says a deployed challenger or parameters the record's pieces don't bear out."""
     c = doc["coins"]
     detail = ", ".join(f"{said} {v}" if v is not None else f"{unsaid} not stated" for said, unsaid, v in (
         ("draws", "draws", c["draws"]), ("delta", "delta", c["delta"]), ("scheme", "scheme", doc["scheme"]),
@@ -401,6 +403,10 @@ def ran_with(doc: dict) -> tuple[str, dict] | None:
                                                 else None)
     if coins == "deployed challenger" and not (c["sample"] == c["salt"] == "challenger" and c["lean"] == "of record"):
         raise Unreadable(f"the record's {RAN} says a deployed challenger and its coins don't: {detail}")
+    if isinstance(c["parameters"], bool) and c["parameters"] != c["development"]:
+        raise Unreadable(f"the record's {RAN} says development {str(c['parameters']).lower()} and its pieces say "
+                         f"development {str(c['development']).lower()} (development is the pieces' word where they hold "
+                         f"{DEVELOPMENT} or their coins or Lean run aren't live): {detail}")
     if coins is None:
         return None
     return kit.ran_with(coins, "deployed" if c["parameters"] is False else "development", detail)

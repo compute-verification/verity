@@ -240,7 +240,9 @@ The first line says the number is what the Pearl+ verifier's own answer credits,
 The second and third are the harness kit's (`benchmarks/harness/README.md`): the coins and parameters the record states
 (`ran_with` in the JSON), and `a measurement, not an audit` unless both are deployed (`audit`). Where the record doesn't
 say whose challenger drew a challenger's coins, the second line is `ran with: not stated` and a line under it says what
-the record does state. It never prints `deployed challenger` unless the record says so.
+the record does state. It prints `deployed` for the coins or the parameters only where the record's pieces bear it out,
+never on the launcher's `out/compute-run.json` alone: where the two disagree it exits 2. The pieces state the salt
+coins only in PoUW's development piece, which itself means development parameters, so no record reads as an audit.
 
 **What it writes:** two files, through the harness kit's report (`kit.report`): under `research run` in its run
 directory, outside one where `OUT` names a directory, and otherwise nothing.
