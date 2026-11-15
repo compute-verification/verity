@@ -63,7 +63,6 @@ from .common import (
 from .dsa_calls import _Calls, _refuse
 from .phi import Phi
 
-
 #: a layer's latent history groups (`Net.prefix_params`) and the logs of `_Model` each fills: the latent rows, which over an
 #: fp8_ds_mla cache are its rows' NoPE bytes, then their scales and k_pe
 _ROW_GROUPS, _ROW_LOGS = ("prefix", "prefix_scale", "prefix_rope"), ("latent", "scale", "rope")
