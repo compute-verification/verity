@@ -59,8 +59,8 @@ def stage_member(set_dir: Path, indices: list[int], layer: int, out: Path, m0_pa
     return {"dir": out, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": hashlib.sha512(text.encode()).hexdigest(), **info}
 
 
-def lean_split(lean: str, n: int, k: int, registration: str, out: Path) -> dict:
-    p = a0.challenger_sample(lean, ["--population", str(n), "--k", str(k)], {"law": "subset", "k": k}, n, registration,
+def lean_split(lean: str, n: int, k: int, docket: str, out: Path) -> dict:
+    p = a0.challenger_sample(lean, ["--population", str(n), "--k", str(k)], {"law": "subset", "k": k}, n, docket,
                            out / "split-draw.log")
     line = next(x for x in p.stdout.splitlines() if x.startswith("DRAW "))
     return json.loads(line.split(" ", 1)[1])

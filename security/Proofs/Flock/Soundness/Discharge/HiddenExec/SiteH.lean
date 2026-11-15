@@ -54,7 +54,7 @@ set_option Elab.async false
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model
-open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt bytesOf bcCol saltCol RowRanges)
+open FlockSoundness.Discharge.Hm (chunkBit chunkBit_of_lt bytesOf bcCol saltCol RowRanges)
 
 theorem bit_inj : ∀ x y : ZMod 2, FlockSoundness.bit x = FlockSoundness.bit y → x = y := by decide
 
@@ -119,11 +119,11 @@ def siteAddrH (a : AcceptedH T) (o : Fin (2 ^ T.nbl)) (x : ℕ) : Fin (2 ^ T.m) 
 
 /-- **A site address reads the block's bit**: in-block column `y` of block `o`. -/
 theorem bit_siteAddrH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) {y : ℕ}
-    (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (siteAddrH a o y)) = blockBit T z o y := by
+    (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (siteAddrH a o y)) = chunkBit T z o y := by
   have hy' : y < 2 ^ T.kLog := by rw [← a.kLog_eq]; exact hy
   have hin : Layout.inBlockOr a.st.c.kLog y = ⟨y, hy⟩ := by
     simp only [Layout.inBlockOr, hy, ↓reduceDIte]
-  unfold blockBit siteAddrH
+  unfold chunkBit siteAddrH
   simp only [hy', ↓reduceDIte]
   rw [hin]
   rfl
@@ -132,7 +132,7 @@ theorem bit_siteAddrH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) 
 theorem ofFn_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     (List.ofFn fun j : Fin N => Binding.byteOf fun t => FlockSoundness.bit (z (siteAddrH a o (col j.val t.val)))) =
-      bytesOf (blockBit T z o) N col := by
+      bytesOf (chunkBit T z o) N col := by
   unfold bytesOf
   congr 1
   funext j
@@ -144,7 +144,7 @@ theorem ofFn_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N 
 theorem bytesAt_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     Binding.bytesAt z (fun (j : Fin N) (t : Fin 8) => siteAddrH a o (col j.val t.val)) =
-      bytesOf (blockBit T z o) N col :=
+      bytesOf (chunkBit T z o) N col :=
   ofFn_siteH a z o N col hcol
 
 /-! ## The registered `b ‖ c` at a site -/
@@ -291,7 +291,7 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
   refine bit_inj _ _ ?_
   rw [hb, hb8, bit_siteAddrH ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', h, L, hR, regs, rfl⟩
-    z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc, ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
+    z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc, ← hcol, chunkBit_of_lt _ z o (Fin.isLt _)]
 
 /-! ## The rows' `b ‖ c` at a site -/
 
@@ -300,10 +300,10 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitP a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
-    bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
+    bytesOf (chunkBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
       (Hidden.Any.rowMsg a.st.c.ports[p]!
-        (bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
-      (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
+        (bytesOf (chunkBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
+      (bytesOf (chunkBit T z o) 192 (saltCol a.st.c g p)) := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
   dsimp only at hupv hrf hg hp ⊢

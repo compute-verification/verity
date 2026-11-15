@@ -431,7 +431,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
             lean_of_record = port.of_record == "lean"
             e.report = "\n".join([
                 f"difftest of {port.label!r} ({s.argv[0]}): "
-                + ("Python differs from the Lean, the verifier of record" if lean_of_record else "Lean and Python differ")
+                + ("Python differs from the Lean, the verifier" if lean_of_record else "Lean and Python differ")
                 + f"; the {'minimal' if shrink else 'first'} input Hypothesis found:",
                 f"  input:  {canonical(e.input)}",
                 f"  lean:   {_show(e.lean)}" + ("  (of record)" if lean_of_record else ""),

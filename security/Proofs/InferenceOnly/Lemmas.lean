@@ -25,8 +25,8 @@ namespace InferenceOnly.Guarantees
 open Verity
 open scoped ENNReal
 
-/-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(Γ, α)`
-(`CompliesRate`), with its registered information free of the reference circuit's fresh input (`ThetaRegistered`), has
+/-- **The read bound**: a declaration that contains the reference training algorithm `r` (`M`) and complies at `(Γ, α)`
+(`CompliesRate`), with its registered information free of the reference training algorithm's fresh input (`ThetaRegistered`), has
 at least `Reads_Γ(r) / α` gates. Lower bounds on the fresh input a computation reads become lower bounds on size when the
 declared circuit computes `r` the way `r` does. -/
 def ReadBound : Prop :=

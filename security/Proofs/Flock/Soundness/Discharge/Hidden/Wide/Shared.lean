@@ -172,16 +172,16 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
     rw [s.da, hidden_delta_unpinned (unpinned_of_rep hp hcr hor)]
   have hrows : OutRowsW st.c := outRowsW_of hp hcr hu hor h64
   have hz0 := sat_flatAll L L0 F0 hda hrows hz
-  have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false :=
+  have hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false :=
     zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
   obtain ⟨hpl, hw⟩ := hrows.1.2.2 j hj
   have hb := hrows.2 j hj
-  have hbc : bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
+  have hbc : bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
       Binding.commitString
         ((HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default)).data.toList ++
-          bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
+          bytesOf (chunkBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
             (Typed.msgCol st.c g (HmOut.nIn st.c + j)))
-        (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
+        (bytesOf (chunkBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
     have h2 : 2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words + 17 ≤
         128 * ((st.c.ports.getD (HmOut.nIn st.c + j) default).chunks + 1) := by omega
     have := row_bc_tgt L0 F0 rfl hupv (hz0.ex _) o hg hpl (by rw [getElem!_eq_getD']; exact hb)

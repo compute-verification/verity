@@ -451,7 +451,8 @@ def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, caps
     assert capsys.readouterr().err == ""
     group = json.loads((tmp_path / "ours").read_text())["reads"][m]
     assert group["definitions"] == sides["theirs"]["reads"][m]["definitions"]
-    assert not set(old) & set(group["definitions"]) and f"{m.removeprefix('Definitions.')}.NoiseLayout" in group["definitions"]
+    renamed = next(d for d in old if d.endswith(".Layout")).removesuffix("Layout") + "NoiseLayout"
+    assert not set(old) & set(group["definitions"]) and renamed in group["definitions"]
     assert "guarantees" not in group
 
 

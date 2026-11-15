@@ -481,8 +481,7 @@ class Words:
             starts.append(s)
             far = max(far, e)
             reach.append(far)
-        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
-        skip = {w for g, ws in held_in if path and _match(path, g) for w in ws}
+        skip = self.held(path, protect)
 
         def one(m: re.Match) -> str:
             w = m.group(0)
@@ -497,6 +496,11 @@ class Words:
                 counts[re.sub(GAP, " ", w), new[m.lastindex - 1]] += 1
             return to
         return pattern.sub(one, text)
+
+    def held(self, path: str, protect: bool = True) -> set[str]:
+        """The words [keep_in] (and, without ``protect``, [keep_paths]) lists for `path`, which stand there as they are."""
+        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
+        return {w for g, ws in held_in if path and _match(path, g) for w in ws}
 
     def path(self, p: str) -> str:
         return p if self.scope else self.sub(p, p, protect=False)

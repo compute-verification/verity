@@ -168,14 +168,14 @@ def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_repl
     monkeypatch.setattr(TS, "spans_of", lambda c, capture, sample, rids=None: ([units(int(u)) for u in sample], {}))
     r = TS.replayed(again, c, tmp_path / "capture", tmp_path / "interior")
     assert (r.design.wires, r.design.rows) == (d.wires, d.rows)
-    assert CS.expected_ports(r.design.window(again.registration.digest, sample)) == r.interior.ports
+    assert CS.expected_ports(r.design.window(again.docket.digest, sample)) == r.interior.ports
     w = r.interior.committed.window
     assert [(m.template, m.n) for m in w.members] == [(t, Q * o) for t in ids]
     assert w.held_leaves(w.members[1], "mask") == tuple(range(Q * o))
     assert [e["value"] for e in r.record["registered"]] == ["scores", "n", "key", "r"]
     assert sorted(u // o for u in r.draw.units) == list(range(2 * Q))
     with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
-        IR.interior([units(u) for u in sample], d.cells, again.registration.digest, sample, row=again.pub["window"],
+        IR.interior([units(u) for u in sample], d.cells, again.docket.digest, sample, row=again.pub["window"],
                     links=d.links, wires=d.wires)
 
 

@@ -192,8 +192,8 @@ def test_the_guard_refuses_another_public_part(tmp_path, change, why):
 def test_the_guard_refuses_an_answer_that_does_not_say_every_verdict_ran(tmp_path):
     """The pinned public part says every verdict of the scan's audit ran (``complete``), so an answer without the
     field, as a scan answered before it had one, does not stand as a measurement."""
-    assert R.pinned("test", 1)["complete"] is True
-    before = {k: v for k, v in R.pinned("test", 1).items() if k != "complete"}
+    assert R.pinned("test")["complete"] is True
+    before = {k: v for k, v in R.pinned("test").items() if k != "complete"}
     doc = R.document(kept(tmp_path / "a", public=before), 0, RUN)
     assert doc["guard"] == {"holds": False, "scan_exit": 0,
                             "why": ["execution phase 0's public part is not public.json's for test in complete"]}
