@@ -573,7 +573,7 @@ class Draw:
     second stage is the sample of its interior docket, and `replay_sample` is the first stage's, the sample of
     the docket it follows."""
 
-    registration: WindowCommitmentRecord
+    docket: WindowCommitmentRecord
     law: Mapping[str, Any]
     draw: Mapping[str, Any]
     replay_sample: Draw | None = None
@@ -599,7 +599,7 @@ class ProofRun:
 
     @property
     def orders(self) -> list[int]:
-        return [d.registration.order for d in self.draws]
+        return [d.docket.order for d in self.draws]
 
 
 class Refused(Exception):
@@ -1053,7 +1053,7 @@ def select_second(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int], c
 
 @dataclass
 class _Entry:
-    registration: WindowCommitmentRecord
+    docket: WindowCommitmentRecord
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
@@ -1129,11 +1129,11 @@ def _docket_token(r: WindowCommitmentRecord) -> str:
 
 
 def _draw_token(d: Draw) -> str:
-    return _sha512({"registration": _docket_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
+    return _sha512({"registration": _docket_token(d.docket), "law": dict(d.law), "draw": dict(d.draw)})
 
 
 def _covered(d: Draw) -> list[Any]:
-    return [_order(d.registration), _docket_token(d.registration), _draw_token(d)]
+    return [_order(d.docket), _docket_token(d.docket), _draw_token(d)]
 
 
 def _session_digests(sessions: Any) -> list[str | None] | None:
@@ -2192,9 +2192,9 @@ class Stream:
                 if SS.parts(q, strata) != cells:
                     v = _refuse("interior-parts", {"strata": [[t, [list(r) for r in rs]] for t, rs in strata],
                                                    "cells": [[p.template, p.lo, p.n] for p in cells]}).verdict
-            boundary = self._entries[first.registration.order].copies[8]
+            boundary = self._entries[first.docket.order].copies[8]
             if v.ok and window_root != boundary and (window_root is None or window_root != SS.interior_root(
-                    first.registration.digest, D.proved(first.draw))):
+                    first.docket.digest, D.proved(first.draw))):
                 v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
             if v.ok and program is not None:
                 earlier = self._earlier(record, supplied, outputs)
@@ -2204,7 +2204,7 @@ class Stream:
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 tables = {} if history is None or not v.ok else HT.roots_of(leaf_layer, history)
-                served = first.registration.record
+                served = first.docket.record
                 unserved = [n for n, rd in sorted(tables.items()) if not tables_served(served, [(n, *rd)])]
                 if unserved:
                     v = _refuse("interior-table", {"tables": unserved}).verdict
@@ -2212,7 +2212,7 @@ class Stream:
             got["checks"] = v
             if not v.ok:
                 return list(v.codes)
-            got["registration"] = self._registration(record, first.registration.order, fanout=v.fanout)
+            got["registration"] = self._registration(record, first.docket.order, fanout=v.fanout)
             op["interior"] = _docket_token(got["registration"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
@@ -2220,7 +2220,7 @@ class Stream:
         if earlier is self._log:
             earlier = self._log[:]
         self._append(reg)
-        e = self._entries[first.registration.order]
+        e = self._entries[first.docket.order]
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
@@ -2243,7 +2243,7 @@ class Stream:
         """What an op names a sample by: its docket's order and token and its token; for a two-stage design's
         second stage, the first stage's, with `second`, its own token."""
         first = draw.replay_sample or draw
-        op = {"order": _order(first.registration), "registration": _docket_token(first.registration),
+        op = {"order": _order(first.docket), "registration": _docket_token(first.docket),
               "draw": _draw_token(first)}
         if draw.replay_sample is not None:
             op["second"] = _draw_token(draw)
@@ -2330,7 +2330,7 @@ class Stream:
         """The challenger's family the stream read `draw`'s coins from (the second stage's own for a second-stage
         sample), as it names it to the verifier's run with the coins' evidence (`outcome`); None for a sample that read
         none, and for one the stream doesn't hold."""
-        o = draw.registration.order
+        o = draw.docket.order
         e = self._entries[o] if _nat(o) and o < len(self._entries) else None
         if e is None:
             return None
@@ -2381,7 +2381,7 @@ class Stream:
         self._held(self._decide({"op": "session", "draws": [_covered(d) for d in draws]}))
         s = ProofRun(self.digest, draws)
         for d in draws:
-            self._entries[d.registration.order].session = s
+            self._entries[d.docket.order].session = s
         return s
 
     def _deliver_session(self, session: ProofRun, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
@@ -2390,7 +2390,7 @@ class Stream:
                                      "stream": session.stream if isinstance(session.stream, str) else "",
                                      "draws": [_covered(x) for x in draws], "sessions": _session_digests(sessions)},
                                     {"now": lambda: float(self._clock())}))
-        entries = [self._entries[x.registration.order] for x in draws]
+        entries = [self._entries[x.docket.order] for x in draws]
         for e in entries:
             e.sessions = list(sessions)
         if d["ok"] is None:
@@ -2410,7 +2410,7 @@ class Stream:
             return self._deliver_session(draw, sessions)
         d = self._held(self._decide({"op": "deliver", **self._sampled_op(draw), "sessions": _session_digests(sessions)},
                                     {"now": lambda: float(self._clock())}))
-        e = self._entries[draw.registration.order]
+        e = self._entries[draw.docket.order]
         e.sessions = list(sessions)
         return self._reported(self._finish(e, LATE, None, {})) if d["ok"] == LATE else None
 
@@ -2476,7 +2476,7 @@ class Stream:
                               "coin evidence is for a draw read from the challenger's coins, and this draw read none")
 
         def held() -> list[str] | None:
-            e = self._entries[draw.registration.order]
+            e = self._entries[draw.docket.order]
             assert e.sessions is not None
             outputs = self.spec.check.public_outputs
             v = V.check_verdicts(check_verdicts(verdicts, e.sessions, outputs), verdicts, e.sessions, outputs)
@@ -2494,7 +2494,7 @@ class Stream:
             op["accepted"] = got["audit"]["accepted"]
             return None
         d = self._held(self._decide(op, {"now": lambda: float(self._clock()), "verdicts": held}), got.get("verdicts"))
-        e = self._entries[draw.registration.order]
+        e = self._entries[draw.docket.order]
         if d["ok"] == LATE:
             return self._reported(self._finish(e, LATE, None, {}))
         return self._reported(self._finish(e, d["ok"], got["audit"], got["public"] if d["ok"] == ACCEPT else {},
@@ -2526,12 +2526,12 @@ class Stream:
         asked = (proved_units, instances)
         proved = list(proved_units) if proved_units is not None else D.proved(draw.draw)
         instances = len(proved) if instances is None else instances
-        rec = V.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved, instances,
+        rec = V.audit_record(draw.docket.record, draw.docket.receipt, draw.draw, draw.law, proved, instances,
                              statement, verdicts, self.delta, e.sessions, served, session_roots,
                              certified=sorted(e.certified or ()))
         accepted = rec["accepted"]
         if e.read is not None and rec["verifiers"]["agree"]:
-            reg = draw.registration
+            reg = draw.docket
             ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held, given = e.copies
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(draw.draw), "read": len(e.read),
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
@@ -2576,7 +2576,7 @@ class Stream:
         stages read no coin bytes gives `Run.run` nothing to read, so it raises (`verifier.not_written`): no Python
         decides a two-stage outcome."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
-        reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
+        reg, first, ireg, second = e.docket, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
         of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
         public = dict(verdicts[of_record[0]]["public"]) if outputs else {}
@@ -2647,7 +2647,7 @@ class Stream:
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any], *,
                 halt: Mapping[str, Any] | None = None, replay_audit: Mapping[str, Any] | None = None) -> Outcome:
-        reg, draw = e.registration, e.draw
+        reg, draw = e.docket, e.draw
         assert draw is not None or symbol == HALTED
         sample = draw if self.n_rho is None else e.second
         body = {"format": OUTCOME, "stream": self.digest, "order": reg.order, "registration": reg.digest,
@@ -2660,7 +2660,7 @@ class Stream:
             body["interior"] = None if e.interior is None else {
                 "registration": e.interior.digest, "receipt": _sha512(dict(e.interior.receipt))}
         if e.session is not None:
-            body["session"] = {"rounds": [{"order": d.registration.order, "registration": d.registration.digest,
+            body["session"] = {"rounds": [{"order": d.docket.order, "registration": d.docket.digest,
                                            "draw": _sha512(dict(d.draw))} for d in e.session.draws]}
         if halt is not None:
             body["halt"] = dict(halt)
@@ -2694,7 +2694,7 @@ class Stream:
         commitment, which is fixed before any coin; the prover's choice of interior after the first stage only raises
         it."""
         assert e.draw is not None and e.interior is not None and e.second is not None
-        reg, ireg = e.registration.record, e.interior.record
+        reg, ireg = e.docket.record, e.interior.record
         assert self.n_rho is not None
         q, n = len(e.draw.units), reg["population"]
         return IntegrityProfile(levels=(Level(REPLAY, reg["partition"]), Level(A.LEVEL, ireg["partition"])),

@@ -1012,7 +1012,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
             print("A5 " + json.dumps({"draw_refused": refused}, default=str))
             return summary, False
-        union_sample, sampled_design, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
+        union_sample, sampled_design, receipt = dict(draw.draw), dict(draw.law), dict(draw.docket.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / SAMPLE_FILE).write_text(json.dumps(union_sample, sort_keys=True))
     after: dict[str, dict] = {}
