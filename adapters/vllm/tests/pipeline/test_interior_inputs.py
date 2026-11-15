@@ -101,6 +101,7 @@ def _served_rows(pieces: dict[str, tuple[IR.Span, ...]], xs, members, cells, kin
             a = pieces[r][k].padded(cells[k])[kind][x.port]
             out = np.zeros((N * x.per, a.shape[1]), dtype=np.uint16) if out is None else out
             out[[s * x.per + j for j in x.at]] = a
+    assert out is not None
     return out
 
 

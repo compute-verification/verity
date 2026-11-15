@@ -195,7 +195,11 @@ def test_the_hooks_only_ablation_counts_the_device_tensors_its_hooks_see_and_com
     com = commit.make_committer("hooks_only", None, cast(Any, SimpleNamespace(hash_threads=1, chunk=3072)), "r0")
 
     def tensor(device: str, n: int) -> SimpleNamespace:
-        return SimpleNamespace(device=SimpleNamespace(type=device), numel=lambda: (clock.take(0.25), n)[1])
+        def numel() -> int:
+            clock.take(0.25)
+            return n
+
+        return SimpleNamespace(device=SimpleNamespace(type=device), numel=numel)
 
     waited: list[float] = []
     job = SimpleNamespace(step=3, metas=[], event=SimpleNamespace(synchronize=lambda: waited.append(clock.now)), t_step_end=99.0,

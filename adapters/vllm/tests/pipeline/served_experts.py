@@ -235,7 +235,7 @@ def weights_tree(served: dict[str, np.ndarray]) -> dict[str, Any]:
     geo, wk = bytes(range(64)), bytes(range(64))
     names, roots = [], []
     for i, (_key, (name, shape, bits)) in enumerate(fields()):
-        raw = served[name.removeprefix(WRAP)].view(np.uint8)
+        raw: np.ndarray = served[name.removeprefix(WRAP)].view(np.uint8)
         names.append([name.removeprefix(WRAP), DTYPES[bits], list(shape), int(raw.size)])
         roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
     return step_rows.weights_tree(geo, names, roots, wk)
@@ -379,8 +379,8 @@ def same_commitment(a: Path, b: Path) -> None:
 
     assert shape(wa) == shape(wb), "the members"
     ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
-    for k, m in enumerate(wa["members"]):
-        oa, ob = ba.own(k), bb.own(k)
+    for i, m in enumerate(wa["members"]):
+        oa, ob = ba.own(i), bb.own(i)
         assert oa and oa.keys() == ob.keys(), f"member {m['name']}: the ports its own file holds"
         for q in oa:
             assert np.array_equal(oa[q][0], ob[q][0]), f"member {m['name']}: the rows of port {q}"

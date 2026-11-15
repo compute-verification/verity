@@ -263,6 +263,7 @@ def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_
 
     path = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "pouw" / "test_pouw_h1_receipts.py"
     spec = importlib.util.spec_from_file_location("test_pouw_h1_receipts", path)
+    assert spec is not None and spec.loader is not None
     TR = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(TR)
 

@@ -324,6 +324,7 @@ def test_random_chains(request, which):
     an earlier one cached (more hit blocks than from the empty pool)."""
     x = request.getfixturevalue(which)
     S, rng = x.S, random.Random(31 + x.S.AS)
+    args: list
     args, quiet, links, carried, cut = [], [], [], 0, 0
     for _chain in range(10):
         base, row = [rng.randrange(1, 15) for _ in range(4)], V6.empty_row(S)

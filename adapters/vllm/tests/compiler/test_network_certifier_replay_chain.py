@@ -515,7 +515,7 @@ def _session(S, rng):
         assert loaded is not None
         cur, win = loaded
         rows.append(cur)
-        units = [("load", rows[0], last, arrivals, decisions, n)]
+        units: list[tuple] = [("load", rows[0], last, arrivals, decisions, n)]
         for u in range(S.P):
             stepped = _rand_row(rng, S, heads=False)
             taken, used = (1, 1) if u < n - 1 else (0, len(decisions) - cur.dh) if u == n - 1 else (0, 0)

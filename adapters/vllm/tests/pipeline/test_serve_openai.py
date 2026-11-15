@@ -849,6 +849,7 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     want = derived(bytes.fromhex(w["seed_coin"]["coin"]), "u-hot")
     assert by_rule["derived"]["ingress"]["seed"] == by_rule["derived"]["ingress"]["params"]["seed"] == want != DEFAULT_SEED
     assert by_rule["derived"]["committed_seeds"] == [want]
+    assert s.windows is not None
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 

@@ -35,6 +35,7 @@ def _honest(rng, table, n):
     """n calls of random requests over a small token alphabet, so prefixes repeat: each admitting row's hit derived or,
     sent, a cached prefix, and the units it computes after; the calls and the table after them."""
     KU = CS.widths(S).KU
+    walk: dict
     calls, walk = [], {}
     for _ in range(n):
         r = rng.randrange(1 << S.RW)
@@ -75,7 +76,7 @@ def _perturbed(rng, table, row):
 
 def test_the_circuit_is_its_reference_on_random_calls() -> None:
     rng = random.Random(7)
-    cases = []
+    cases: list = []
     while len(cases) < 1200:
         calls, _ = _honest(rng, (), rng.randrange(1, 9))
         for table, row in calls:

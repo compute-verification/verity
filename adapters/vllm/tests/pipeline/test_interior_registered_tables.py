@@ -160,6 +160,8 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
     cols: dict[str, list] = {p: [] for p, _w in (*m.rows, *m.outs)}
     for j in range(CELLS):
         t, e = tables[PARAMS[AT[j]]], int(rng.integers(0, E))
+        sx: np.ndarray
+        ws: np.ndarray
         xq, sx, ws = rng.integers(0, 0x70, K, dtype=np.uint8), np.asarray([0.5], "<f4"), np.asarray([0.25], "<f4")
         y, _nonfinite = moe_expert_fp8_block_row(xq, sx.view("<u4"), np.asarray(t.rows[e], "<u2").view(np.uint8),
                                                  ws.view("<u4"), G=K, KB=K, dot="mmav2")
