@@ -43,16 +43,16 @@
  },
  "digests": {
   "SparseMlaHeadBlockLive_v2{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
-   "sha512": "0"
+   "sha512": "fca40bd029d39cf3874bcd281dc0be0990639e6084ae3b478009588ccd8f0c49bf3c72b3e4c4baf37d9bf1fa2eab6a1bfc8f0c880f0a2b704e8b544053639774"
   },
   "SparseMlaHeadBlockLive_v2{DR=64,DV=512,NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
-   "sha512": "0"
+   "sha512": "80e9c3ac7fff3d528385721ebe3d22034874a35dc86aced6fdfd839e948194c77e2459053247b77dd2c2f2f86c45d2454efe6eeb80e520a526eeffb595f6d47e"
   },
   "SparseMlaHeadBlockLive_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
-   "sha512": "0"
+   "sha512": "31692285da3d35b552715de330dfe616bcd12ae105b8c58cf8ed34d179bea368a750c2dcc0280f95865e2ec125ae05603e54ee51c57083c6576d374b6fe340a2"
   },
   "SparseMlaHeadBlockLive_v2{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
-   "sha512": "0"
+   "sha512": "49ed19b2cc9e944ba0be1cb9d3950c650b9845c39500b5884238a25ca7545adb7c250503f535fabf6218c9ce86ed54f573531a0b5c01cea4905cac468513c69b"
   },
   "SparseMlaHeadBlock_v3{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
    "sha512": "134807af8d7ac4d562d9446f64398ff4ead5b82e517a50456386f22ebe1442af69d6bf50b1ef60abbd630c7414683c682a1fc5b558ecff12cde628141e97882e"
