@@ -11,7 +11,7 @@ that runs one builds circuit-check's catalog first (conftest.py), from the bindi
 binding without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
 The two walks of every Call over the partition budget (`_unchecked_walk`) are opt-in (`_opt_in`), and the nightly cold check runs
 them by name (check.py's `OPT_IN`): `circuit-check --all` fails a Call whose partition nothing checks by its name, and the walks
-hold `targets.CALLEE_CALLS` and `OVER_PARTITION_BUDGET` current.
+hold `targets.callee_calls` and `OVER_PARTITION_BUDGET` current.
 A test that selects targets by family reads the family off the catalog (`Catalog.reached`), so it makes only those.
 """
 from __future__ import annotations
@@ -540,14 +540,14 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
         VX.probe_entries(8, [(4, 9)])
 
 
-def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
+def test_a_registered_table_is_probed_and_never_flattened(monkeypatch, hand):
     """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
     vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
     from verity.circuits.evaluation import evaluate
 
     read, holds = _table_read(), _holds()
     probe = _table_probe(holds)
-    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: probe)
+    hand("table_probes", {read.id: (probe.param, lambda: probe.table, probe.entry_words, probe.regions, probe.reads)})
     monkeypatch.setattr(VX.RegisteredTable, "__iter__", lambda self: pytest.fail("the table was flattened"), raising=False)
     params, _ = CK.signature_of(read)
     instances, got, _rec = VX.table_instances(params, probe, CK._n_vectors(read, TABLE_OPTS, 1), TABLE_OPTS.seed)
@@ -565,13 +565,13 @@ def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
                                      "this Definition's correspondence reads a registered table lazily"}]
 
 
-def test_a_probe_that_reads_past_the_table_is_a_partial_reference(monkeypatch):
+def test_a_probe_that_reads_past_the_table_is_a_partial_reference(hand):
     """An entry index one past the last (an off-by-one in ``evaluate_lazy``) raises on the last entry's probe, by name."""
     read = _table_read()
     mask = (1 << TABLE_IB) - 1
     read.evaluate_lazy = lambda get: get(3 + 2 * (get(0) & mask)) | get(2 + 2 * (get(0) & mask)) << 16  # type: ignore[attr-defined]
     probe = _table_probe(_holds())
-    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: VX.TableProbe(probe.param, probe.table, 2, (), lambda e: [[e]]))
+    hand("table_probes", {read.id: (probe.param, lambda: probe.table, 2, (), lambda e: [[e]])})
     e = CK.check_definition(read, dataclasses.replace(TABLE_OPTS, vectors=4, min_vectors=4), memo={}, pins=PINS)
     (f,) = e["failures"]
     assert f["name"].startswith("correspondence/reference-not-total CircuitCheckTableRead_v1 raised on ")
@@ -583,8 +583,8 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
     assert e["conformance"] == "not-yet-established"
     assert [f["name"] for f in e["failures"]] == [
         "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget, and is neither a "
-        "registered table a probe reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily "
-        "(`circuit_check.targets.LAZY_OPERANDS`)"]
+        "registered table a probe reads (`circuit_check.targets.table_probe`) nor an operand read lazily "
+        "(`circuit_check.targets.lazy_operands`)"]
 
 
 def _wide_gemm():
@@ -597,7 +597,7 @@ def _wide_gemm():
 
 
 def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(monkeypatch):
-    """A weight over the input budget (`targets.LAZY_OPERANDS`) takes the edge and random words every parameter takes, one
+    """A weight over the input budget (`targets.lazy_operands`) takes the edge and random words every parameter takes, one
     vector at a time, and is read lazily, never flattened; the reference on each vector equals it on the same words flattened."""
     from verity.circuits.evaluation import RegisteredTable, evaluate
 
@@ -718,7 +718,7 @@ def _wide_shard():
 
 
 def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_rows():
-    """A shard's edge and random tokens lie outside it, so only its probes (`targets.OPERAND_PROBES`: the shard's first and last
+    """A shard's edge and random tokens lie outside it, so only its probes (`targets.operand_probes`: the shard's first and last
     token) read the table, one row each, on random words; the reference there equals it on the same words flattened."""
     from verity.circuits.evaluation import evaluate
 
@@ -735,16 +735,16 @@ def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_
         assert ref[n + q] == tuple(evaluate(t, tok, words)) != (0,) * 32
 
 
-def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(monkeypatch):
+def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(hand):
     t, opts = _wide_shard()
-    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [])
+    hand("operand_probes", {"EmbeddingShard_v1": lambda S: []})
     F = CK.Findings()
     rec, _arrays, _ref = CK.correspondence(t, opts, F)
     assert not F.failures and rec["wide"][0]["reads"] == 0 and "probes" not in rec
     assert [w["name"] for w in F.warnings] == [
         "correspondence/operand-unread EmbeddingShard_v1{VS=64,H=32,START=1000}: 1 no vector read 'table', so its words are "
-        "checked on none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)"]
-    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [{"table": 0}])
+        "checked on none (`circuit_check.targets.operand_probes` sets an index that reads it)"]
+    hand("operand_probes", {"EmbeddingShard_v1": lambda S: [{"table": 0}]})
     with pytest.raises(ValueError, match=r"isn't one of its Value parameters \['tok'\]"):
         CK.correspondence(t, opts, CK.Findings())
 
@@ -766,11 +766,12 @@ def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
         VX.wide_words(Array(4, Value(128)), 0, 1, 7, 0)
 
 
-def test_a_definition_over_the_leaf_budget_is_not_partitioned(monkeypatch):
+def test_a_definition_over_the_leaf_budget_is_not_partitioned(hand):
     """The word query and `Q_call` resolve every parameter leaf: over ``partition_max_leaves`` the partition is not run, a warning
     where the Definition is no Call; a primitive Call has no callees to partition it, so it fails by its name."""
     read = _table_read()
-    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: _table_probe(_holds()))
+    probe = _table_probe(_holds())
+    hand("table_probes", {read.id: (probe.param, lambda: probe.table, probe.entry_words, probe.regions, probe.reads)})
     opts = dataclasses.replace(TABLE_OPTS, partition_max_leaves=4096)
     why = "its parameters' 8193 leaves are over the partition's leaf budget 4096: the word query and Q_call resolve every leaf"
     e = CK.check_definition(read, opts, memo={}, pins=PINS, as_call=False)
@@ -863,7 +864,7 @@ def _two_callees():
 
 
 def test_a_call_over_the_budget_whose_callees_are_calls_is_partitioned_by_them(monkeypatch):
-    """Over ``partition_max_gates`` and not cut member by member, a Call whose every callee is a Call (`targets.CALLEE_CALLS`) has
+    """Over ``partition_max_gates`` and not cut member by member, a Call whose every callee is a Call (`targets.callee_calls`) has
     each callee's partition checked as a Call's: a violation fails by the callee's name, and no ``partition/unchecked`` warning
     is left; the report's summary names the callees."""
     top, twice, mul, opts = _two_callees()
@@ -953,7 +954,7 @@ def test_a_call_over_the_leaf_budget_partitioned_by_its_callees_still_compares_i
 
 
 def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_word(monkeypatch):
-    """``--all`` takes a Call's callees as Calls from `targets.CALLEE_CALLS` (through `targets.call_families`, as every task
+    """``--all`` takes a Call's callees as Calls from `targets.callee_calls` (through `targets.call_families`, as every task
     does), checks each callee's partition inside the Call's check and fails by the callee's name, and its summary reads the
     Call partitioned by its callees.  Without the entries nothing checks the Call's partition, so ``--all`` fails by the
     Call's name (``partition/unpartitioned``) rather than pass a value computed in two proof blocks as a warning."""
@@ -963,14 +964,14 @@ def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_
     monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "suite", lambda: {top.id: top})
     # the holds name the registry's Definitions, which this one-target catalog doesn't check (block/absent-hold)
-    monkeypatch.setattr(block_held, "HELD", {})
+    monkeypatch.setattr(block_held, "held", dict)
     monkeypatch.setattr(TG, "templates", lambda: [])
     monkeypatch.setattr(TG, "word_call_families", lambda: {TG.family(top)})
     monkeypatch.setattr(TG, "boolean_call_families", lambda words, found=None: set())
     monkeypatch.setattr(TG, "_CALLS", set())
 
     def everything(callee_calls):
-        monkeypatch.setattr(TG, "CALLEE_CALLS", callee_calls)
+        monkeypatch.setitem(TG._HANDS, "callee_calls", lambda: callee_calls)
         TG._CALLS.clear()
         return cli.run([], opts, everything=True, log=None, isolate=False)
 
@@ -1108,7 +1109,7 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 
 #: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
 #: is allowed: the suite's, and any range spot or callee of one `_unchecked_walk` reaches; none is.  Each passes no Call status
-#: to its callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these
+#: to its callees (`targets.callee_calls`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these
 #: walks from failing on it; circuit-check still fails it by name (``partition/unpartitioned``), and whether that may stay red is
 #: drive's policy (policy.toml's allowances).  Over the gate
 #: budget alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut
@@ -1145,7 +1146,7 @@ _WALK: dict = {}
 
 
 def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, str]]:
-    """What `targets.CALLEE_CALLS` should be, the `OVER_PARTITION_BUDGET` ids reached, and each `checks.callee_gap` reached: from
+    """What `targets.callee_calls` should be, the `OVER_PARTITION_BUDGET` ids reached, and each `checks.callee_gap` reached: from
     the suite's Calls over the budget (`_over_budget`) and the range spots that are Calls (`circuit_check.ranges`), the families
     of each `checks.uncut` Call's callees that are no Call otherwise, each with the families of the Calls that pass it, through
     each callee `uncut` itself, primitives included; one `OVER_PARTITION_BUDGET` holds passes nothing."""
@@ -1153,7 +1154,7 @@ def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, s
         from circuit_check import ranges as RG
 
         suite, calls = catalog.suite, TG.call_families()
-        own = calls - set(TG.CALLEE_CALLS)
+        own = calls - set(TG.callee_calls())
         stack = [suite[k] for k in _over_budget(catalog, calls)]
         stack += [fn for spot in RG.spots() if TG.family(fn := TG.definition(spot)) in calls]
         want: dict[str, set[str]] = {}
@@ -1190,7 +1191,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     over = _over_budget(catalog, calls)
     gaps = {k: f"{why}; {gap}" for k, why in over.items() if k not in OVER_PARTITION_BUDGET and (gap := _gap(suite[k])) is not None}
     assert gaps == {}, ("a Call over the partition budget that its callees can't partition: list a callee that is no Call in "
-                        "targets.CALLEE_CALLS, cut an uncut primitive callee or member, or hold the Call here with why")
+                        "the catalog's `callee_calls` hook (`targets.HOOKS`), cut an uncut primitive callee or member, or hold the Call here with why")
     assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - _unchecked_walk(catalog)[1]) == [], \
         "no longer an over-budget Call the suite checks, or a range spot or callee of one: remove it from OVER_PARTITION_BUDGET"
     assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and _gap(suite[k]) is None) == [], \
@@ -1200,7 +1201,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
 @pytest.mark.slow
 @_opt_in("~40 min")
 def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(catalog):
-    """`targets.CALLEE_CALLS` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
+    """`targets.callee_calls` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
     itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it
     (`_unchecked_walk`).  The uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from
     `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands.  Every other one the walk reaches,
@@ -1208,14 +1209,14 @@ def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(c
     circuit-check fails its Call (``partition/unpartitioned``).  A listed Call that no longer passes a family Call status only warns:
     it keeps a family a Call, so its partition is checked, never left unchecked."""
     want, _held, gaps = _unchecked_walk(catalog)
-    have = {f: set(by) for f, by in TG.CALLEE_CALLS.items()}
+    have = {f: set(by) for f, by in TG.callee_calls().items()}
     assert {f: sorted(by - have.get(f, set())) for f, by in want.items() if by - have.get(f, set())} == {}, (
-        f"set targets.CALLEE_CALLS to {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
+        f"make the catalog's `callee_calls` hook (`targets.HOOKS`) return {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
         "OVER_PARTITION_BUDGET, with why, a Call whose callees can't be Calls yet")
     if stale := {f: sorted(by - want.get(f, set())) for f, by in have.items() if by - want.get(f, set())}:
-        warnings.warn(f"targets.CALLEE_CALLS lists Calls that no longer pass these families Call status: {stale}; drop them",
+        warnings.warn(f"the catalog's `callee_calls` hook lists Calls that no longer pass these families Call status: {stale}; drop them",
                       stacklevel=1)
-    assert {f: by for f, by in TG.CALLEE_CALLS.items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
+    assert {f: by for f, by in TG.callee_calls().items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
     assert gaps == {}, ("Calls whose partition nothing checks (`checks.callee_gap`: a callee that is no Call, or a primitive "
                         "over the budget): cut each, or hold it in OVER_PARTITION_BUDGET with why")
 

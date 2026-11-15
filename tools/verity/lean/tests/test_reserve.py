@@ -50,7 +50,7 @@ spec = importlib.util.spec_from_file_location("reserve", Path(__file__).with_nam
 spec.loader.exec_module(importlib.util.module_from_spec(spec))
 a = sys.argv[1:]
 out = Path(a[a.index("--out") + 1])
-named = [x for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [x for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--program-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 with open(out / "ran.txt", "a") as f:
     f.write("".join(os.path.relpath(p) + "\n" for p in named))
@@ -133,16 +133,16 @@ def test_compiles_beside_a_replay_fit_in_what_its_need_leaves():
 
 def test_a_run_that_declares_nothing_plans_by_what_the_machine_lets_it_hold():
     """A check slot says its GiB and a `research run --mem-gb` run its GB; what a run reserved is the least of those and
-    what the machine lets it hold, which is all a run that declares none has, a research run's included: its cgroup's cap,
+    what the machine lets it hold, which is all a run that declares none has, a research run's included: its cgroup's limit,
     else the machine's memory, named as such. Anywhere one of them is no number, nothing."""
     names = "CHECK_SLOT_MEM_GB, CHECK_RUN_MEM_GB, RESEARCH_RUN_MEM_GB"
     assert R.reserved({}, 500.0, "this machine's memory") == (500.0, f"none of {names} declared, so this machine's memory")
-    assert R.reserved({"RESEARCH_RUN_ID": "r1"}, 64.0, "its cgroup's cap") == \
-        (64.0, f"none of {names} declared, so its cgroup's cap")
+    assert R.reserved({"RESEARCH_RUN_ID": "r1"}, 64.0, "its cgroup's limit") == \
+        (64.0, f"none of {names} declared, so its cgroup's limit")
     assert R.reserved({"CHECK_SLOT_MEM_GB": "64"}, 500.0, "m") == (64, "CHECK_SLOT_MEM_GB=64, in GiB")
     assert R.reserved({"RESEARCH_RUN_MEM_GB": "93"}, 500.0, "m") == (R.gib(93), "RESEARCH_RUN_MEM_GB=93, in GB")
     assert R.reserved({"CHECK_RUN_MEM_GB": "258", "CHECK_SLOT_MEM_GB": "64", "RESEARCH_RUN_ID": "r"}, 500.0, "m")[0] == 64
-    assert R.reserved({"RESEARCH_RUN_MEM_GB": "93"}, 40.0, "its cgroup's cap") == (40.0, "its cgroup's cap")
+    assert R.reserved({"RESEARCH_RUN_MEM_GB": "93"}, 40.0, "its cgroup's limit") == (40.0, "its cgroup's limit")
     assert R.reserved({"RESEARCH_RUN_ID": "r1", "CHECK_SLOT_MEM_GB": "x"}, 500.0, "m")[0] is None
     assert R.reserved({"CHECK_RUN_MEM_GB": "93GB", "CHECK_SLOT_MEM_GB": "64"}, 500.0, "m") == \
         (None, "CHECK_RUN_MEM_GB='93GB' is no number of GB"), "a reservation it can't read is none, never the machine"

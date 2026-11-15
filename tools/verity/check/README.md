@@ -22,7 +22,7 @@ allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
-and its red holds nothing; under the loop's `--gate check`, a red that the run beside the candidate's base didn't have rings
+and its red holds nothing; under the loop's `--gate check` or `verdict`, a red that the run beside the candidate's base didn't have rings
 its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
 for that run's preflights and `lean-agreement`, not its `ratchet-gate`. A red `ratchet-gate` (drive.toml's `warn_steps`
@@ -207,7 +207,9 @@ PRs land through the verified queue (`research queue vqueue`): its flags are `dr
 (`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
 `main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
 `--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and
-moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too; `post_train.py`
+moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too (under `--gate
+verdict` a plain candidate, AGENTS.md's, lands on its members' land verdicts and the quick tier, and `main`'s whole check
+follows); `post_train.py`
 then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
 other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off
 the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its

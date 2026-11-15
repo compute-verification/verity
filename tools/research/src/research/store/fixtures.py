@@ -12,7 +12,7 @@ id (`push --preserve` on request), rewrite the entry, and record the superseded 
 put or written when every entry already hashes to its id.  `dry_run` computes and reports, writes nothing.
 
 An entry is *tracked* (git holds its bytes: the small ones) or *fetched* (its path is gitignored and `research data fetch-fixtures`
-materialises it: everything over `tests/test_repository.py`'s 256 KiB cap).  `fetch_registry` makes the fetched entries under the
+materialises it: everything over `tests/test_repository.py`'s 256 KiB limit).  `fetch_registry` makes the fetched entries under the
 given paths present and exactly their ids (a tree's directory holds its files and nothing else), fetching only what is missing
 through `fetchset`, and never writes over a file git tracks.  `export` copies every entry, `previous` included, to the public
 export, and `hydrate_stubs` puts the bytes back where the history rewrite left a stub (`STUB`).
@@ -26,6 +26,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -303,7 +304,8 @@ def hydrate_stubs(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, s
             if f.is_symlink() or not f.is_file() or f.stat().st_size > STUB_MAX:
                 continue
             mt = STUB.match(f.read_bytes())
-        except OSError:
+        except OSError as e:
+            print(f"research data: {rel} unread, so it is not checked as a stub ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if mt:
             stubs[rel] = (mt.group(1).decode(), int(mt.group(2)))

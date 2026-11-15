@@ -166,8 +166,8 @@ def rescale(runner: Any) -> dict[str, int]:
                 p.fill_(1.0)
                 count["norm"] += 1
             elif torch.finfo(p.dtype).bits < 16:
-                draw = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
-                p.copy_(draw.to(p.dtype))
+                uniform = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
+                p.copy_(uniform.to(p.dtype))
                 count["fp8"] += 1
             else:
                 p.normal_(0.0, STD, generator=gen)
@@ -331,7 +331,7 @@ def ours(runner: Any, header: dict[str, Any]) -> tuple[dict[str, Any], Any]:
     out: dict[str, Any] = {"header_kv_cache_dtype": header.get("kv_cache_dtype")}
     hook = None
     try:
-        seen = Seen(BT.mla_layers(runner.model))
+        seen = Seen(BT.mla_layers(runner.model), BT.LAYOUT_WORDS[BT.layout(runner.model)])
         seen.seen = []
         hook = BT.StepHook(runner.model, latents=seen)
         out["tables_guard"] = {"verdict": "ok", "layers": list(hook.layers)}

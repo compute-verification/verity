@@ -13,13 +13,13 @@ import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from research import remote
+from research import remote, settings
 from research.pods import registry
 
 KEEPER = Path(registry.__file__).resolve().parent / "nebius" / "keeper.py"
@@ -29,7 +29,7 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 
 
 def t(s: str) -> float:
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp()
+    return datetime.fromisoformat(s).replace(tzinfo=UTC).timestamp()
 
 
 class Systemd:
@@ -587,10 +587,10 @@ def test_the_lease_wrapper_names_its_programs_by_path_and_a_targets_path_cannot_
     (tmp_path / "gpu-lease").write_text(f"#!/bin/sh\ntouch {tmp_path / 'leased'}\n")
     (tmp_path / "gpu-lease").chmod(0o755)
     monkeypatch.setattr(k, "GPU_LEASE", [str(tmp_path / "gpu-lease") if a == progs[-1] else a for a in wrapper])
-    k.set_target("sweep", target(k, n=1, request={**target(k)["request"], "env": {"PATH": f"{fake}:{os.environ['PATH']}"}}, command=["true", "{seed}"]))
+    k.set_target("sweep", target(k, n=1, request={**target(k)["request"], "env": {"PATH": f"{fake}:{settings.need('PATH')}"}}, command=["true", "{seed}"]))
     k.tick()
     _, chunk = sd.started[0]
-    assert "PATH" not in chunk["env"] and f"PATH={fake}:{os.environ['PATH']}" in chunk["command"]
+    assert "PATH" not in chunk["env"] and f"PATH={fake}:{settings.need('PATH')}" in chunk["command"]
     subprocess.run(chunk["command"], env={**os.environ, **chunk["env"]}, check=True)
     assert (tmp_path / "leased").exists() and not (tmp_path / "replaced").exists()
 

@@ -121,9 +121,8 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from verity.config import COMPOSITES
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R

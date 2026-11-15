@@ -1,9 +1,9 @@
 # prove
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
-`verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_records.py` the store side and
-the table); this directory holds its runner. It reads the store's labelled records and runs on any machine that reaches
-the store, with no GPU and no node.
+`verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
+`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+records and runs on any machine that reaches the store, with no GPU and no node.
 
 ```text
 verity bench prove --system flock --workload glm53                  every block proved
@@ -110,6 +110,7 @@ Every input is a record of the store, named there by a label and never in code: 
 | `cut` | the `partition` card that recuts it |
 | `flock-steady` | each run of `benchmarks/one_stage/server_rate.py`, an art naming them in its `runs`, or an art holding one run's rows as its `rate.json` |
 | `flock-single` | the `proof_overhead` card |
+| `flock-warm` | each run of `benchmarks/served_units/stage_prove.sh` (optional): a type with no steady-state row takes its own statement proved on one card, after WARM warm sessions the median of RUNS timed ones, marked `measured from warm sessions` with its WARM and RUNS |
 | `spot-sampling` | the sampling plan's art, for `--system spot` |
 | `lean-verify` | each run of `verity bench prove lean-verify` (optional: without one the two figures are "not measured") |
 

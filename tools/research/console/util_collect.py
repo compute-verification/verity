@@ -41,7 +41,7 @@ def ssh(host: str, cmd: str) -> str:
 
 
 def ts(s: str) -> float:
-    return dt.datetime.strptime(s.rstrip("Z"), "%Y-%m-%dT%H:%M").replace(tzinfo=dt.timezone.utc).timestamp()
+    return dt.datetime.strptime(s.rstrip("Z"), "%Y-%m-%dT%H:%M").replace(tzinfo=dt.UTC).timestamp()
 
 
 def prom_range(query: str, start: float, end: float) -> list[dict]:
@@ -61,7 +61,7 @@ def prom_range(query: str, start: float, end: float) -> list[dict]:
 
 
 def hour(t: float) -> str:
-    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+    return dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:00Z")
 
 
 def summarize_n1(prom: dict, start: float, end: float) -> dict:
@@ -105,7 +105,7 @@ def summarize_n2(lines: list[dict]) -> dict:
     lines = sorted(lines, key=lambda d: d["t"])
     prev = None
     for d in lines:
-        t = dt.datetime.strptime(d["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp()
+        t = dt.datetime.strptime(d["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC).timestamp()
         dh = min((t - prev) if prev else 10.0, 60.0) / 3600
         prev = t
         b = per[hour(t)]
@@ -145,8 +145,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--put", action="store_true")
     ns = ap.parse_args(argv)
-    start, end = ts(ns.since), dt.datetime.now(dt.timezone.utc).timestamp()
-    out = ns.out or Path(f"/tmp/nebius-util-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%MZ}")
+    start, end = ts(ns.since), dt.datetime.now(dt.UTC).timestamp()
+    out = ns.out or Path(f"/tmp/nebius-util-{dt.datetime.now(dt.UTC):%Y%m%dT%H%MZ}")
     out.mkdir(parents=True, exist_ok=True)
     prom = {k: prom_range(q, start, end) for k, q in Q.items()}
     (out / "n1-prom.json").write_text(json.dumps(prom))
@@ -155,8 +155,8 @@ def main(argv: list[str]) -> int:
     n2raw = ssh("n2", "cat /workspace/pouw/infra/util/*.jsonl")
     (out / "n2-util.jsonl").write_text(n2raw)
     n2 = [json.loads(ln) for ln in n2raw.splitlines() if ln.strip()]
-    n2 = [d for d in n2 if dt.datetime.strptime(d["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp() >= start]
-    summary = {"since": ns.since, "until": dt.datetime.fromtimestamp(end, dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
+    n2 = [d for d in n2 if dt.datetime.strptime(d["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC).timestamp() >= start]
+    summary = {"since": ns.since, "until": dt.datetime.fromtimestamp(end, dt.UTC).strftime("%Y-%m-%dT%H:%MZ"),
                "definitions": __doc__.split("Definitions, per server and per UTC hour:\n", 1)[1],
                "vy-nebius-1": summarize_n1(prom, start, end), "vy-nebius-2": summarize_n2(n2)}
     qlines = [json.loads(ln) for ln in (out / "n1-queues.jsonl").read_text().splitlines() if ln.strip().startswith("{")]

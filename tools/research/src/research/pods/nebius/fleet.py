@@ -2,7 +2,8 @@
 """The fleet's usage record, daily compute report and quota watch: every Nebius VM recorded, the H200s included.
 
     fleet.py sample              one pass: each RUNNING VM's state from the API, and over ssh its GPUs' utilization, its load
-                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl
+                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl, and the pass's time
+                                 and rows (none when no VM runs) in $FLEET_DIR/last-sample.json, replaced whole
     fleet.py report [--hours 24] [--now ISO]   per VM over the window: $ (rate x hours seen RUNNING), GPU busy %, CPU load, peak
                                  memory, idle hours (no GPU at >= 5%, load under a tenth of its cores and memory in use
                                  under 15%)
@@ -45,17 +46,20 @@ import subprocess
 import sys
 import time
 import tomllib
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
 
 try:
+    from research import metrics
     from research.pods.nebius import settings
-except ModuleNotFoundError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command): this file's own tree
+except ImportError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command), or beside an older `research`
+    # that lacks one of them: this file's own tree, with none of the other tree's modules kept
+    for name in [n for n in sys.modules if n == "research" or n.startswith("research.")]:
+        del sys.modules[name]
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from research import metrics
     from research.pods.nebius import settings
 
 HERE = Path(__file__).resolve().parent
@@ -81,6 +85,8 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 #: the site refuses a body over this (its MAX_BODY_BYTES): a panel that doesn't fit drops its oldest slots and says so
 PANEL_MAX_BYTES = 64 * 1024
 PANELS_NOTE = "Nebius VMs only: RunPod pods aren't sampled."
+#: each pass's time and rows, none when no VM runs, replaced whole (infra/control/loop_metrics.py reads it)
+LAST_SAMPLE = "last-sample.json"
 #: a platform's GPU, for the machine class the usage tab groups by; any other `gpu-` platform is named from its own name
 GPU_CLASS = {"gpu-h200-sxm": "H200", "gpu-h100-sxm": "H100", "gpu-b200-sxm": "B200", "gpu-l40s-a": "L40S", "gpu-l40s-d": "L40S",
              "gpu-rtx6000": "RTX PRO 6000", "gpu-rtx6000-a": "RTX PRO 6000"}
@@ -169,6 +175,12 @@ def sample(now: float | None = None) -> list[dict]:
     with open(FLEET_DIR / f"samples-{utc(now)[:10].replace('-', '')}.jsonl", "a") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
+    try:
+        tmp = FLEET_DIR / f".{LAST_SAMPLE}.{os.getpid()}"
+        tmp.write_text(json.dumps({"t": utc(now), "rows": rows}) + "\n")
+        os.replace(tmp, FLEET_DIR / LAST_SAMPLE)
+    except Exception as e:  # noqa: BLE001 (only infra/control/loop_metrics.py reads it: the pass goes on without it)
+        print(f"{utc(now)} {LAST_SAMPLE} failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
     record_deadlines(rows, reg)
     return rows
 
@@ -510,16 +522,7 @@ def put_panel(panel: dict, key: str) -> str | None:
     """PUT one panel; None when the site took it, else why not. Only an https site is sent the key."""
     if not (PANELS_URL or "").startswith("https://"):
         return f"{panel['id']}: $FLEET_PANELS_URL is {PANELS_URL!r}, not an https URL: nothing sent"
-    url = f"{PANELS_URL}/api/panels/{panel['id']}"
-    req = urllib.request.Request(url, data=json.dumps(panel).encode(), method="PUT",  # noqa: S310 (https, checked above)
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30):  # noqa: S310 (https, checked above)
-            return None
-    except urllib.error.HTTPError as e:
-        return f"{panel['id']}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}"
-    except (urllib.error.URLError, OSError) as e:
-        return f"{panel['id']}: {e}"
+    return metrics.send_json("PUT", f"{PANELS_URL}/api/panels/{panel['id']}", panel, key, panel["id"])
 
 
 def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None] = put_panel) -> list[str]:
