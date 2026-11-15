@@ -2796,9 +2796,21 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1": {
+   "owner": "@compute-accounting",
+   "digest": "11fbbc8e631ecb9b44f15770dce1d3f071b4cc0a57c467e03cf8cd3f08821e7a",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": {
    "owner": "@compute-accounting",
    "digest": "a73283d0a161d6e60166c146206b66aeb0b4226996edc961d5772114b789f15e",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120W1": {
+   "owner": "@compute-accounting",
+   "digest": "f5c362fcaafa9a56b8b773e9a2ed90bae93c4c517a7892a0b5db8de4a5e2799d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
