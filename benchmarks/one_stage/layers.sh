@@ -32,10 +32,18 @@ echo "LAYERS $ROW: coins: each session's coin tree from its own local challenger
   "IO.getRandomBytes, a test LMS key h=4 w=3), Lean's draw on a development challenger (one_stage a0.DEV_SCHEME);" \
   "parameters: development (flock-circuit's default Ligerito configs, δ=2^-20)" | tee "$OUT/layers.txt"
 
-echo "$(date -u +%H:%M:%SZ) layers: CUDA build of flock-circuit (SM ${SM:-90}) in $FW"
-RESEARCH_RUN_DIR=$OUT/gpu-build FLOCK_WORK=$FW MODE=build GPU=1 SM=${SM:-90} \
-  bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh
+# a build directory is built once: its checkout keeps the patches' new files, which a second `git apply` refuses
+KEY=$(find verity/protocols/proofs/flock/prover -type f ! -path '*/python/*' ! -path '*/tests/*' -print0 | sort -z \
+  | xargs -0 sha256sum | sha256sum | cut -c1-16)
+FW=$FW/sm${SM:-90}-$KEY
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
+if [ ! -x "$BIN" ]; then
+  echo "$(date -u +%H:%M:%SZ) layers: CUDA build of flock-circuit (SM ${SM:-90}) in $FW"
+  mkdir -p "$FW"
+  RESEARCH_RUN_DIR=$OUT/gpu-build FLOCK_WORK=$FW MODE=build GPU=1 SM=${SM:-90} \
+    bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || { rm -rf "$FW"; exit 1; }
+fi
+sha256sum "$BIN"
 (export PATH=$HOME/.elan/bin:$PATH; cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier spot-difftest) \
   > "$OUT/build-challenger.log" 2>&1 || { tail -40 "$OUT/build-challenger.log"; exit 7; }
 
