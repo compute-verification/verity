@@ -131,7 +131,8 @@
 # VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
 # to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
-# cuda-13.0, else cuda; any other line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
+# cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
+# line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -200,10 +201,15 @@ if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
   # the toolkit of the CUDA version the prover's torch is built for, where the node has it
   CUDA_ROOT=${CUDA_ROOT:-/usr/local}
   TV=$("$VPY" -c 'import torch; print(torch.version.cuda or "")' 2> /dev/null)
+  TM=${TV%%.*}
   [ "$TV" = 13.0 ] && TV=
-  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
+  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} ${TM:+"$CUDA_ROOT/cuda-$TM"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
   CUDA_HOME=$(first_of -d "${TOOLKITS[@]}") ||
     refuse "no CUDA toolkit: CUDA_HOME is not set, and none of ${TOOLKITS[*]} is a directory"
+  # the Commit's collector is built by torch's JIT, which checks no nvcc against the CUDA torch is built for
+  NV=$("$CUDA_HOME/bin/nvcc" --version 2> /dev/null | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
+  [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
+    "CUDA ${NV:-unknown}: install a CUDA $TM toolkit and state CUDA_HOME"
 fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
