@@ -37,7 +37,7 @@ into it fails (`Properties.Spot.miswired`), and the claim (`Vocab.WiresHold`) is
 at most a `2ε` share of the units not held. The target is the claim at twice SPOT's error.
 
 `Vocab.MemberWiresSound` is the same claim in the per-member form, at that form's own wiring: the parameter its
-compiled check holds the sampled units' wired rows to (`Spot.OneStageZk.wiresHeld`). It reads the wiring off SPOT's
+compiled check holds the sampled proof blocks' wired rows to (`Spot.OneStageZk.wiresHeld`). It reads the wiring off SPOT's
 case (`SpotCase`, `Spot.OneStageZk.Params.wiring`), a template's unit at its range of the partition (`popUnit`) and a
 row's root under its member's name (`memberRow`). That the policy's record names the same wiring is not in it.
 -/
@@ -181,7 +181,7 @@ def WiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array By
 
 /-- **The wires' target at composite `k`**: at all `θ`, `F` and `c`, for every strategy, the probability that
 SPOT's verdict at `k` accepts while the wires' claim fails (`WiresHold`) is at most twice SPOT's
-error at that strategy. The compiled check holds a sampled unit's wired rows to their writers' rows only in the
+error at that strategy. The compiled check holds a sampled proof block's wired rows to their writers' rows only in the
 per-member form, at its own wiring (`Spot.OneStageZk.wiresHeld`). The one statement's parameters name no wiring
 (`Spot.OneStageZk.paramsOfJson_wiring`), and nothing checks the record's, so no theorem proves it. -/
 def WiresSound (k : Verity.Registration.Composite) : Prop :=
@@ -232,7 +232,7 @@ when the parameters were read, `Spot.OneStageZk.wiringOf`), at the ranges of the
 (`Spot.Partition.evaluate` on the parameters' program and query, as `Spot.OneStageZk.wiresHeld` reads them), at
 most a `2ε` share of the committed units are not held in the extractor's transcript (`memberUnheld`): unbound in it,
 or reading a row that is not the row the wiring gives it, each row's root read under its member's name in the case's
-registration. `ε` is SPOT's published share. The compiled check holds the sampled units' wired rows to the wiring
+registration. `ε` is SPOT's published share. The compiled check holds the sampled proof blocks' wired rows to the wiring
 (`Spot.OneStageZk.membersRun_wires`); this is that check's claim on the population.
 
 What it does not say:
@@ -264,7 +264,7 @@ def MemberWiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Ar
 
 /-- **The wires' target at the per-member form's wiring, at composite `k`**: at all `θ`, `F` and `c`, for every
 strategy, the probability that SPOT's verdict at `k` accepts while the wires' claim at the parameter's wiring fails
-(`MemberWiresHold`) is at most twice SPOT's error at that strategy. The compiled check holds the sampled units'
+(`MemberWiresHold`) is at most twice SPOT's error at that strategy. The compiled check holds the sampled proof blocks'
 wired rows (`Spot.OneStageZk.wiresHeld`); no theorem lifts that to the population yet, so no theorem proves it. -/
 def MemberWiresSound (k : Verity.Registration.Composite) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),

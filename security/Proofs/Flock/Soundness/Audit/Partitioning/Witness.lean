@@ -26,9 +26,9 @@ so it meets every target. Two more show that `RiskConcave`'s hypotheses can't be
   hypothesis holds, a sampling design on the split partition certifies `ℓ`, and the factor is positive.
 * `riskConcave_needs_k_two`: at `k = 1` (`N = 2`, `p = 1/2`) the detection risk's increments rise.
 * `riskConcave_needs_small_p`: at `k = 2`, `p = 4/5` (`N = 3`) they rise too.
-* `concentration`: at `N = k = 2`, `p = 1/2`, two wrong proof blocks in one replay unit are strictly less detectable than
+* `concentration`: at `N = k = 2`, `p = 1/2`, two wrong proof blocks in one replay block are strictly less detectable than
   one in each of two.
-* `nestedEscape`: under `nested` with two replay units of two proof blocks, `k = 1` and `p = 1/2`, one wrong proof block
+* `nestedEscape`: under `nested` with two replay blocks of two proof blocks, `k = 1` and `p = 1/2`, one wrong proof block
   escapes with probability `3/4`, strictly between `1 − p` and 1.
 -/
 

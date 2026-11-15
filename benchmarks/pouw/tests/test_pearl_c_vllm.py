@@ -28,6 +28,7 @@ import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity_torch.pouw.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import served_y_device as SYD
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
@@ -388,7 +389,7 @@ def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(
         given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
         return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
     monkeypatch.setattr(run, "_retained", with_tree)
-    monkeypatch.setattr(SY, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
+    monkeypatch.setattr(SYD, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
     man = json.loads(Path(run.end()["manifest"]).read_text())
@@ -524,9 +525,9 @@ def _served(monkeypatch, kernel, weights, more=None, **run):
     from verity_vllm.protocols import pouw
     monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(PPD, "new_salt_key", lambda scheme: SALT_KEY)
+    monkeypatch.setattr(pouw, "pearl_c_salt_key", lambda scheme: SALT_KEY)
     if run:
-        monkeypatch.setattr(PPDR, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
+        monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
     model = _Model(weights)
     settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
@@ -1240,13 +1241,17 @@ def test_answer_names_its_schemes_assumption():
     """An accepted Pearl+ answer's ``public.assumption`` (`verify_run.assumption_of`) is the named Prop its scheme's credit,
     (1 − ρ)·`creditDevRev1`, is at: TT_OUT(1/400) per audit tile, rev1, at the scheme's device record. The served scheme,
     ``pearl-c-h100-v1-h3``, is at `TTOutTilePearlCH100Rev1`, every other scheme the device path runs at
-    `TTOutTilePearlCDevRev1` at its record, and each is a def of `TTOutRev1.lean`; the Lean port's `ASSUMPTION` is the
-    H100's. Neither Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no
-    TT_OUT accounting, is ever named."""
+    `TTOutTilePearlCDevRev1` at its record, a def of `TTOutRev1.lean`, which the H100's is at `devH100` (a def of the
+    records Proofs/Pouw/PearlC/Records.lean keeps since 12b47061986); the Lean port's `ASSUMPTION` is the H100's. Neither
+    Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no TT_OUT accounting,
+    is ever named."""
     root = Path(__file__).resolve().parents[3]
     lean = (root / "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean").read_text()
-    for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV):
-        assert f"def {name.rsplit('.', 1)[1]} " in lean and name.startswith("Pouw.PearlC.Assumptions."), name
+    records = (root / "security/Proofs/Pouw/PearlC/Records.lean").read_text()
+    dev, h100 = (name.rsplit(".", 1)[1] for name in (VR.ASSUMPTION_DEV, VR.ASSUMPTION_H100))
+    assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV))
+    assert f"def {dev} " in lean, dev
+    assert re.search(rf"^def {h100} .*\n(?:.*\n)*?  {dev} CM devH100 sem ρ$", records, re.M), h100
     assert VR.assumption_of(PPD.scheme_of("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
     for scheme in map(PPD.scheme_of, PPD.SCHEMES):
         got = VR.assumption_of(scheme)
@@ -1533,12 +1538,15 @@ def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
     assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
+    from verity_vllm.protocols import pouw
+
     monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
+    monkeypatch.setattr(pouw, "pearl_c_salt_key", pouw.pearl_c_salt_key)
     one, two = {"coins": None}, {}
     SP.seed_install(one)
     SP.seed_install(two)
     assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert PPD.new_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    assert PPD.new_salt_key(SCHEME) == pouw.pearl_c_salt_key(SCHEME) == SP.seeded("salt key")(32)
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -2475,7 +2483,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile), "--class", "2,8,2")
     assert rc == 0 and doc["class"] == [2, 8, 2] and answer["public"]["tie"]["load"] == [2, 8, 2], doc["line"]
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     served = answer["public"]["work"]
     assert served["give_up"] > 0 and (served["macs"], served["credited_tiles"]) == (whole["macs"], whole["credited_tiles"])
     assert answer["profile"]["exact_work"] == kept and doc["timed"] == {"passes": 2, "macs": whole["macs"], "credited": 0}
@@ -4402,7 +4410,8 @@ def test_the_served_whole_capture_launches_each_calls_a_tree_as_one_cta_on_the_t
     the pipelines are left without it.  Without ``whole_defer_a`` the graphs made split aren't replayed, and graphs made
     unsplit launch pd_commit in mode 0 alone.  The graphs are made as `_replay` makes them, a stand-in in the scatter's place
     (a Triton launch)."""
-    G = PPD.graphs
+    from verity_torch.pouw.pearl_c import graphs as G
+
     make, kernel, weights, _ = sm90_run
     run = make(schedule="serial")
     run.graphs, run.order = True, {w: i for i, w in enumerate(weights)}
@@ -4777,7 +4786,7 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
     from verity_torch.pouw.pearl_c import host as PPH
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
+    from verity_torch.pouw.pearl_c import lanes_device as PPL
     make, *_ = sm90_run
     run = make()
     calls = []

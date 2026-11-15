@@ -34,6 +34,8 @@ from verity_machine_model.lean_headline import Q
 __all__ = ["OUT", "main", "render_measured", "write"]
 
 OUT = LH.ROOT / "security" / "Definitions" / "Pouw" / "HeadlineDc"
+
+
 SHEET_ROW = {"DS_issue": ".issue", "DS_tensor": ".tensor", "DS_smem": ".smem"}
 SHAPES = {"Sm90": "sm_90's wgmma as one warp's quarter of its warpgroup instruction (`m·n·k/4`), a 2:4 sparse form at "
                   "its dense twin's, its mma.sync whole, DMMA's at the f64 peak",

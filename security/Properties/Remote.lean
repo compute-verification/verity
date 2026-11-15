@@ -134,7 +134,9 @@ verifier (the v1 part of its params, `Spot.OneStageZk.Params.base`), which it ve
 (`Properties.Spot.R2`). The record keeps the caller's facts against that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
 prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
 window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
-verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. -/
+verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. It has no
+clause for the two-stage form, which the verifier refuses while `SecondStage.FORM` is false; switching it on needs the
+two-stage clause first. -/
 def StageHeld (k : Case) : Prop :=
   ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧

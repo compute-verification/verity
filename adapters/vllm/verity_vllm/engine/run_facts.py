@@ -140,7 +140,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                 manifest["compilation"]["generated_kernels"]["error"] = gk["error"]
             notes["generated_kernels"] = {k: gk.get(k) for k in ("inductor_cache_dir", "per_process_cache_dir", "pieces", "kernels", "error")}
         pid = prof.profile_id_of(manifest)
-        notes["profile_id_method"] = ("profile.profile_id_of(profile.build_manifest(...)) as the serving recorder builds it; differs from the accepted "
+        notes["profile_id_method"] = ("profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted "
                                       "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), "
                                       "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders")
     except Exception as e:  # noqa: BLE001
