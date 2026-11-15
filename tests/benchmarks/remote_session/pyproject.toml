@@ -15,6 +15,7 @@
 # (`verity/protocols/resource_accounting/memory/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["."]
+pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
