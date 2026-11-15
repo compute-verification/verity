@@ -315,7 +315,7 @@ def _manifest_variant(rng: random.Random, s: _Session) -> bytes:
 
 def _mutate(rng: random.Random, s: _Session) -> str:
     """One adversarial edit of an honest session, and its name."""
-    R, Wi = s.py[0], s.py[1]
+    Wi = s.py[1]
     q, B, k = s.params, s.params.blocks, s.k
     j = rng.randrange(k)
     index, nonce = s.indices[j], s.nonces[j]
