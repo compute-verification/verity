@@ -1,0 +1,4 @@
+[2026-11-15T04:58Z] b8476cd24876
+RECORD, 08:58 PM PST. **The lock pass cures every lock failure in both suites; there was nothing to mend and no push. The comment for TOP-424, for you to post:**
+training's worker RECORD, 08:58 PM PST, on f5a2aa989d7. All 23 moves files hold 1,296 pairs, with no old name mapped two ways and no move_errors. benchmarks/slowdown: 29 failed on the tip's locks; 2 against the renamed locks, both test_min_cut (it opens security/Definitions/Nci/Cut.lean through the lock's reads). With reads keyed by today's modules, as the records step rebuilds them, 0. benchmarks/nci: 6 on the tip, 5 renamed, all for sources/, which this VM lacks; its lock problems (Threaded*) go. Nothing to mend, no commit. Left for ci's records step: reads (Definitions.Nci.Cut becomes Definitions.Slowdown.Cut).
+
