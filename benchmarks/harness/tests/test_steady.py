@@ -207,6 +207,12 @@ UNTOLD = [
     ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": json.dumps({"spec": "s"})},
      ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run's `out/point.json` doesn't "
       "say which cards its lease was asked of")),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": "[]"},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run's `out/point.json` doesn't "
+      "say which cards its lease was asked of")),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": "{"},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run's `out/point.json` isn't "
+      "JSON (Expecting property name enclosed in double quotes: line 1 column 2 (char 1))")),
     # a node that maps no card to a NUMA node: the lease took any card
     ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": json.dumps({"lease_on": {
         "numa_nodes": [1], "cards": None, "why": "none of the node's 8 cards says it is on NUMA node 1"}})},

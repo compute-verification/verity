@@ -356,9 +356,10 @@ def _card_node(row: Mapping[str, Any], files: Files) -> int | str:
     if (text := files(POINT)) is None:
         return f"{lacks}, and the run holds no `{POINT}` naming the cards its lease was asked of"
     try:
-        on = json.loads(text).get("lease_on")
-    except (json.JSONDecodeError, AttributeError):
-        on = None
+        said = json.loads(text)
+    except json.JSONDecodeError as error:
+        return f"{lacks}, and the run's `{POINT}` isn't JSON ({error})"
+    on = said.get("lease_on") if isinstance(said, Mapping) else None
     if not isinstance(on, Mapping):
         return f"{lacks}, and the run's `{POINT}` doesn't say which cards its lease was asked of"
     nodes = on.get("numa_nodes")

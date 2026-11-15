@@ -297,19 +297,15 @@ def version_reasons(asked: str, ran: dict[str, int]) -> list[str]:
 
 
 def _text(p: Path) -> str | None:
-    try:
-        return p.read_text().strip()
-    except OSError:
-        return None
+    return p.read_text().strip() if p.is_file() else None
 
 
 def throttled() -> dict | None:
     """`CGROUP`'s CPU throttling so far, its cpu.stat's `THROTTLE_KEYS`; None where it has no cpu.stat or the file counts
     no throttling (a host's root cgroup), which is not having been throttled no times."""
-    try:
-        stat = dict(x.split() for x in (CGROUP / "cpu.stat").read_text().splitlines())
-    except (OSError, ValueError):
+    if not (CGROUP / "cpu.stat").is_file():
         return None
+    stat = dict(x.partition(" ")[::2] for x in (CGROUP / "cpu.stat").read_text().splitlines())
     return {k: int(stat[k]) for k in THROTTLE_KEYS} if all(stat.get(k, "").isdigit() for k in THROTTLE_KEYS) else None
 
 
