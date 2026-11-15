@@ -10,6 +10,9 @@ directory's modules.
 every tensor of the layer at its `staging_offset`, zero between them. Nothing is re-laid out: W holds each tensor's bytes
 as the GEMM reads them. Both call `EncodedRows.check` before they return.
 
+`Segments` holds an encoded store's segment files on the host, each read once in block order and held to its
+`seg/<s>.json`'s SHA-512, and hands a range of blocks' rows to `DEVICE`; `sync` waits for it.
+
 With a pass of PoUB attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
 each chunk's blocks lie in from the same rows on the device before the decode reads them (`sketch.py`); the rows then
 hold whole units.
@@ -18,10 +21,16 @@ hold whole units.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import time
+from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 
 try:
@@ -31,6 +40,8 @@ except ImportError:
 
 from p2_store import gpu  # noqa: F401
 from p2_store.load import P_BYTES, PADDING, WIDE, EncodedRows, StoreError, scatter  # noqa: F401
+
+DEVICE = torch.device("cuda")
 
 
 def flat(buf: Any) -> Any:
@@ -68,6 +79,59 @@ def decode_layer(store: EncodedRows, layer: int, staging: Any, *, check: bool = 
     if check:
         store.check()
     return staging
+
+
+def sync() -> None:
+    if DEVICE.type == "cuda":
+        torch.cuda.synchronize()
+
+
+class Segments:
+    """An encoded store's segment files `needed`, in that order, each read once and held to its `seg/<s>.json`'s SHA-512,
+    `ahead` of the one in use in a thread pool; `rows` asks for blocks in increasing order."""
+
+    def __init__(self, root: Path, bps: int, needed: list[int], pool: ThreadPoolExecutor, ahead: int) -> None:
+        self.root, self.bps, self.pool, self.ahead = root, bps, pool, ahead
+        self.queue = deque(needed)
+        self.pending: dict[int, Future] = {}
+        self.held: dict[int, np.ndarray] = {}
+        self.read = 0
+
+    def _load(self, s: int) -> np.ndarray:
+        meta = L.segment_path(self.root, s, "json")
+        if not meta.exists():
+            raise SystemExit(f"segment {s} of {self.root} is not done: no {meta.name}")
+        data = np.fromfile(L.segment_path(self.root, s, "c"), dtype=np.uint8)
+        if hashlib.sha512(data).hexdigest() != json.loads(meta.read_text())["sha512"]:
+            raise SystemExit(f"segment {s}'s rows are not the SHA-512 its {meta.name} records")
+        return data
+
+    def segment(self, s: int) -> np.ndarray:
+        while self.queue and len(self.pending) < self.ahead + 1:
+            k = self.queue.popleft()
+            self.pending[k] = self.pool.submit(self._load, k)
+        if s not in self.held:
+            if s not in self.pending:
+                raise ValueError(f"segment {s} isn't next: the rows are asked for in block order")
+            self.held[s] = self.pending.pop(s).result()
+            self.read += 1
+        return self.held[s]
+
+    def rows(self, blocks: range) -> torch.Tensor:
+        """The rows of `blocks` ([n, 2056] uint8) on the device; the segments before the one before the last they touch
+        let go (the next tensor's rows in whole units can start a few blocks before these end)."""
+        out = torch.empty(len(blocks), L.ROW, dtype=torch.uint8, device=DEVICE)
+        last = (blocks.stop - 1) // self.bps
+        for s in range(blocks.start // self.bps, last + 1):
+            data = self.segment(s)
+            lo, hi = max(blocks.start, s * self.bps), min(blocks.stop, (s + 1) * self.bps)
+            part = data[(lo - s * self.bps) * L.ROW:(hi - s * self.bps) * L.ROW]
+            if len(part) != (hi - lo) * L.ROW:
+                raise ValueError(f"segment {s} ends before block {hi}")
+            out[lo - blocks.start:hi - blocks.start] = torch.from_numpy(part.reshape(hi - lo, L.ROW)).to(DEVICE)
+        for s in [s for s in self.held if s < last - 1]:
+            del self.held[s]
+        return out
 
 
 def encode_rows(kernels: Any, payload: Any, first: int) -> Any:

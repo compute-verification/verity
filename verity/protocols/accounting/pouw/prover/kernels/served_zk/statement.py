@@ -19,8 +19,8 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
 and outputs must give Python's roots and b ‖ c over the rows it staged, which must be the calls' A words; the no-write
 control (the same replay with the commitments left out) must not.
 
-The device's tensors (`zeros`, `empty`, `fill_stages`) and the gate (`check`) are torch's, which verity does not import:
-they raise here, and `benchmarks/pouw/served_zk/statement_torch.py`'s Statement supplies them."""
+The device's tensors (`zeros`, `empty`, `fill_stages`) and the gate (`check`) are benchmark-side code, which verity does not
+import: they raise here, and `benchmarks/pouw/served_zk/statement_torch.py`'s Statement supplies them."""
 from __future__ import annotations
 
 import hashlib
@@ -35,8 +35,8 @@ PREFIX = "verity/pouw/served-zk/statement/v0"
 #: forwards whose roots the device ring holds
 ROOTS = 1 << 12
 POISON = 0xA5
-NEEDS_TORCH = ("Statement.{} needs torch, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
-               "benchmarks/pouw/served_zk/statement_torch.py's Statement supplies it")
+ON_THE_DEVICE = ("Statement.{} is benchmark-side code, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
+                 "benchmarks/pouw/served_zk/statement_torch.py's Statement supplies it")
 
 
 def rows_bench() -> ModuleType:
@@ -79,15 +79,15 @@ class Statement:
 
     def zeros(self, n: int) -> Any:
         """`n` zero bytes on the run's device."""
-        raise NotImplementedError(NEEDS_TORCH.format("zeros"))
+        raise NotImplementedError(ON_THE_DEVICE.format("zeros"))
 
     def empty(self, rows: int, k: int) -> Any:
         """A `rows` × `k` FP32 stage on the run's device."""
-        raise NotImplementedError(NEEDS_TORCH.format("empty"))
+        raise NotImplementedError(ON_THE_DEVICE.format("empty"))
 
     def fill_stages(self, byte: int) -> None:
         """Every stage's bytes set to `byte`, the device synchronized after."""
-        raise NotImplementedError(NEEDS_TORCH.format("fill_stages"))
+        raise NotImplementedError(ON_THE_DEVICE.format("fill_stages"))
 
     # ---- inside and around the whole capture ------------------------------------------------------------------------
 
@@ -161,6 +161,6 @@ class Statement:
 
     def check(self, weights: dict, m: int = 32) -> dict:
         """The gate (the module's docstring), with hashing and graphs on for its length."""
-        raise NotImplementedError(NEEDS_TORCH.format("check"))
+        raise NotImplementedError(ON_THE_DEVICE.format("check"))
 
 __all__ = ["Statement", "slots_of"]
