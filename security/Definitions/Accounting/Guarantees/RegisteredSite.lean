@@ -57,7 +57,11 @@ circuit `A` placed on the Site's places, a device or a memory leaf as much as a 
 
 * **The links it sums have registered rates** (`Site.RatedOn`): each link with exactly one end in the subtree is
   registered with a rate, `β e`. A subtree with a link across its boundary that has no rate has no limit stated here:
-  the Site registers no capacity for that link.
+  the Site registers no capacity for that link. The registration's check does not discharge this: it asks a rate only
+  of a link with no `unmediated` (stated beside `Properties.Core.Site`, not proved), the network check's `registered`
+  holds only the one certifier link it is named to a rate (`Properties.Certifier.Registered.RegisteredLinkRated`), and
+  an unmediated link may be unrated, onsite a boundary link among them (it may be unmediated instead of certified),
+  and then no limit is stated across it.
 * **The wires run on the registered links** (`Placed.Links` at the Site's links and `β`, the one physical premise). It is
   taken of `A`'s image under `Site.linkPlace`, which sends each device and each memory leaf to its host (the Site's
   own `host?`) and every other place to itself, since a registered link ends at a host, a certifier, a challenger or
@@ -126,9 +130,13 @@ challenger outside `units` adds nothing and nothing is asked of what it does; on
 a jitter share. `pinned`, `units` above the shared challengers, and `K` are parameters: this gives no device's record
 limit a value, and reads no protocol's check or output.
 
-**Every link has a registered rate** (`Site.RatedOn` at every link, `β` the rates): the statement is made only of a
-Site whose every link is registered with a rate, since the location and the trusted devices it sums over are chosen
-inside it. A Site with a link that has no rate has no leak limit stated here.
+**The links it sums have registered rates** (`Site.RatedOn`): each link `β°` sums, with exactly one end among the
+subtree's prover places and neither end among its auditor's devices, is registered with a rate, `β e`. Elsewhere `β`
+is only what the links premise holds the runs to, and the limit does not read it. A subtree with such a link that has
+no rate has no leak limit stated here. The registration's check does not discharge this: it asks a rate only of a
+link with no `unmediated` (stated beside `Properties.Core.Site`, not proved), the network check's `registered` holds
+only the one certifier link it is named to a rate (`Properties.Certifier.Registered.RegisteredLinkRated`), and an
+unmediated link may be unrated, and then no limit is stated across it.
 
 **A host is one leaf.** The strategy is placed at the places a link may end at (`AtLinkEnds`): a host's own work, its
 devices' and its memory leaves' are all gates at the host. The links premise (`DeclaredLinks`) asks a registered link
@@ -145,7 +153,10 @@ def LeakPartsRegistered : Prop :=
       (jitter a b : ℕ) (K : S.Place → ℕ),
       Verity.Registration.Valid D A c l → AtLinkEnds S R →
       units ⊆ S.challengersOf pinned i → S.sharedOf pinned i ⊆ units →
-      S.RatedOn β Set.univ → CausalStrategy R ℓ → DeclaredLinks R S.placeEnds β link →
+      S.RatedOn β ↑((boundary S.placeEnds (S.placesIn (S.proverUnder i))).filter fun e =>
+        (S.placeEnds e).1 ∉ S.placesIn (S.auditorsOf pinned i) ∧
+          (S.placeEnds e).2 ∉ S.placesIn (S.auditorsOf pinned i)) →
+      CausalStrategy R ℓ → DeclaredLinks R S.placeEnds β link →
       TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter →
       Secrets R (S.placesIn (S.certifiersOf i ∪ units))
         (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) a →
