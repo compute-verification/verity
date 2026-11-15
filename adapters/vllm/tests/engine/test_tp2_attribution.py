@@ -29,7 +29,7 @@ try:
 except ModuleNotFoundError as e:  # pragma: no cover -- only if tp2_worker grows a module-level torch import
     if e.name != "torch":
         raise
-    sys.modules["torch"] = types.SimpleNamespace()
+    sys.modules["torch"] = types.ModuleType("torch")
     try:
         w = importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
     finally:

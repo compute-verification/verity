@@ -1,7 +1,7 @@
 """The class-of-record window's commit against its target, 0.20 to 0.25 of the served window: a `class_rows.py` census priced in
 SHA-512 compressions, seconds on the H200 and AND gates, beside the served window's ANDs and seconds, each lever alone and
 all of them stacked; the pad pass (positions whose values the engine never computed, recomputed) at three traffics; the
-registration's size; and the totals over monitoring periods of one week, one month and one year.
+docket's size; and the totals over monitoring periods of one week, one month and one year.
 
 Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nbytes) and its b bytes) and `Costs.fresh` more
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
@@ -29,7 +29,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
-- ``L4``, one member root: the registration is O(members) (`RegistrationSize`), every member's public body (every row's
+- ``L4``, one member root: the docket is O(members) (`RegistrationSize`), every member's public body (every row's
   b || c, 128 bytes) SHA-512'd on the CPU for `rows.leaf_layer` and written out, and every port root a JSON entry; under one
   Merkle root over members, each member's leaf over its port roots, it is a root, and an audit opens K members in O(K log M).
 
@@ -59,7 +59,7 @@ from verity.protocol import MONITORING_PERIODS
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ROWS
 from verity.circuits.defs import bind
 from verity.definitions.registry import io_shell as IO
-from verity.commitments.periods import interface as IF
+from verity.commitments.windows import interface as IF
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
 sys.path.insert(0, str(HERE))
@@ -340,7 +340,7 @@ def window_units(rest: list[Unit], heads: Heads, levers: frozenset[str]) -> list
     return us
 
 
-#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.periods.rows`)
+#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.windows.rows`)
 BC_BYTES, SALT_BYTES = 128, 192
 #: a member's entry in the leaf layer's canonical JSON: its name and 128 hex
 LEAF_JSON_BYTES = 150
@@ -348,7 +348,7 @@ LEAF_JSON_BYTES = 150
 
 @dataclass(frozen=True)
 class RegistrationSize:
-    """The window's registration as `verity.commitments.periods.rows.write` makes it, members of `CAP` units: ``members``, port
+    """The window's docket as `verity.commitments.windows.rows.write` makes it, members of `CAP` units: ``members``, port
     ``roots`` (a unit's rows each a port, the cut rows ``p#j`` included), the public bodies' bytes (b || c a row a unit) and
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
     and for its member's entry, and one over the leaf layer's canonical JSON), the JSON's bytes and the files (a member's
@@ -377,7 +377,7 @@ class RegistrationSize:
         return cls(members, roots, public, private, hashed, roots * ROOT_JSON_BYTES, 3 * members, False)
 
     def cpu_s(self, rates: dict) -> dict:
-        """Seconds of the registration's work on the committer's CPU at ``rates`` (`measure_cpu`'s), one thread as
+        """Seconds of the docket's work on the committer's CPU at ``rates`` (`measure_cpu`'s), one thread as
         `rows.write` runs: the public bodies' SHA-512s, the JSON, and the files' bytes and creation; none under ``L4``."""
         if self.member_root:
             return {"sha512": 0.0, "json": 0.0, "write": 0.0, "files": 0.0, "total": 0.0}
@@ -612,7 +612,7 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
     return {"name": f"window_cost {S} x {P} at T {T}, levers {','.join(sorted(levers)) or 'none'}", "groups": groups}
 
 
-#: the plan's order, each step stacked on those before it: exactness (no pad pass), the registration, the rows' layout
+#: the plan's order, each step stacked on those before it: exactness (no pad pass), the docket, the rows' layout
 PLAN = ("L1", "L2", "L4", "W", "R", "L3b", "P")
 
 
@@ -620,7 +620,7 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
           to: tuple[int, ...] | None = None, cpu: dict | None = None, sizing: dict | None = None) -> dict:
     """Every figure the report prints, as data, for ``census`` or its projection ``to`` a class (slots, prompt, outputs[,
     lanes, every]): each lever alone and the `PLAN` stacked. Every compression counts in ANDs wherever it runs. In seconds,
-    the window's rows (and under ``L4`` the member tree) run on the GPU at `RATES`; the registration without ``L4`` runs on
+    the window's rows (and under ``L4`` the member tree) run on the GPU at `RATES`; the docket without ``L4`` runs on
     the committer's CPU, at ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower
     bound). With an arena ``sizing`` record, serving's own stream commit too (`stream`)."""
     if to is None:

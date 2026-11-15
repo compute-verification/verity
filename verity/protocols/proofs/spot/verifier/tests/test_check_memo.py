@@ -1,7 +1,7 @@
 """a5's memo (`a5_memo.memo`), each of the one-stage verifier's pure checks asked once per input. Under it a5's negatives
 on the challenger's coins, each its own `service.Stream` on the honest sample's bytes (`a5_coins.Replay`) registering the
-same record, reuse the registration's checks and sample, and each outcome is the one it has without the memo, refused at
-the Lean run's select (`coins`); a changed registration or copy (a root, a root's domain, the ports bound to another run,
+same record, reuse the docket's checks and sample, and each outcome is the one it has without the memo, refused at
+the Lean run's select (`coins`); a changed docket or copy (a root, a root's domain, the ports bound to another run,
 a program of one proof block fewer) is checked again and refused as before; a verdict the Lean refused is never kept, and
 a hit is a copy. A toy window of two templates."""
 
@@ -76,7 +76,7 @@ def _record() -> dict:
 
 
 def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None):
-    """R1-R7 by the verifier on the toy window's registration and the verifier's copies, each a new object each call."""
+    """R1-R7 by the verifier on the toy window's docket and the verifier's copies, each a new object each call."""
     program = program or _program()
     law = S.selection_law(SPEC.selection, sum(COUNTS.values()), D.strata_sizes(program, QUERY))
     return V.check(rec or _record(), program, QUERY, law, S.SCHEME, ports or _ports(), work_table=_table(program))
@@ -109,7 +109,7 @@ def _negatives() -> dict[str, dict]:
 
 
 def test_under_the_memo_the_negatives_reuse_the_registrations_checks_and_are_refused_as_without_it(monkeypatch):
-    """Without the memo every negative's stream asks the Lean its registration's public-items rule, R1-R7 and the select
+    """Without the memo every negative's stream asks the Lean its docket's public-items rule, R1-R7 and the select
     itself; under it the negatives in one window ask each once, the one in another window its R1-R7 again, while each
     stream's whole run (`run`) is still its own. Every negative's outcome, its Lean side and its audit record are the ones
     it has without the memo: refused, at the Lean run's select (`coins`) where it is given no evidence. Afterwards the
@@ -133,8 +133,8 @@ def test_under_the_memo_the_negatives_reuse_the_registrations_checks_and_are_ref
 
 
 def test_under_the_memo_a_changed_registration_or_copy_is_checked_again(monkeypatch):
-    """The memo keys R1-R7 by everything it reads: the same registration and copies, as new objects and a new Program,
-    reuse the verdict, a copy; a registration with one root changed is asked of the Lean again, and one with a root's
+    """The memo keys R1-R7 by everything it reads: the same docket and copies, as new objects and a new Program,
+    reuse the verdict, a copy; a docket with one root changed is asked of the Lean again, and one with a root's
     domain changed (R3), the verifier's ports bound to another run (R3) and a program of one proof block fewer (R2) are
     asked again and refused."""
     asked = _asked(monkeypatch)

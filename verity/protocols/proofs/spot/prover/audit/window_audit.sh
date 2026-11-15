@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through registration, the verifier's Lean
+# One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through docket, the verifier's Lean
 # sample, M0's prover and the Lean verifier (a5.py). The Commit is the CPU RoPE d64 fixture (adapters/vllm
 # tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and the window is
 # `verity-vllm serving-rows` on it; with WINDOW=served it is the in-Commit hook's over the same members (served_rope --served),

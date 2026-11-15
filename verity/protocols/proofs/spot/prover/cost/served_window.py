@@ -53,15 +53,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import log, log2
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
-
-from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
+from verity.protocols.proofs.spot.prover.cost.inputs import (EPILOGUE, I, K_MAX, KEY, MEASURED, S8_STEP, block_k_log, cap,
+                                                             observations)
 
 from verity.protocol import MONITORING_PERIODS
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
@@ -91,7 +89,7 @@ class Input:
     source: str
 
 
-IN = {k: Input(**v) for k, v in json.loads(Path(__file__).with_name("served_window_inputs.json").read_text()).items()}
+IN = {k: Input(**v) for k, v in json.loads(MEASURED.with_name("served_window_inputs.json").read_text()).items()}
 LLAMA_1B = {"layers": 16, "hidden": 2048, "heads": 32, "kv_heads": 8, "head_dim": 64, "intermediate": 8192}
 #: (K, N) a token: qkv, o_proj, gate_up, down
 LINEARS = {"qkv": (2048, 3072), "o_proj": (2048, 2048), "gate_up": (2048, 16384), "down": (8192, 2048)}

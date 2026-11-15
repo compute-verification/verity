@@ -12,7 +12,7 @@
 #      refuses, for Flock's own refusal)  LEG_READS=slots|inline (with LEG_DEFS: a unit's MUFU table reads in lookup
 #      slots or inline; unset, its template's own, chunk_rows.reads)  FLOCK_CHALLENGER=1 (each verifier's coin trees from
 #      a challenger of its own, its audit in the leg's verdicts)
-# Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, sample), the public files and the sessions; never a
+# Kept in $OUT/leg: the leg's records (leg.json, audit.json, docket, sample), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail

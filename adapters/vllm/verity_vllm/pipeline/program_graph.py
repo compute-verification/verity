@@ -11,7 +11,7 @@ unit `Q_module_body_v1` partitions by.
   groups     a body's Calls grouped by Definition: the spec, except that a static taking more than `VARYING_MAX` values inside
              one (module, family) -- attention's history length T, one per position -- is kept as a range; each group has its
              Call count, its subcircuit template (`vu_export.template_of`: the exporter's decomposition) and instance count,
-             and, from a run's record, its verification units in the run and the exported VUs
+             and, from a run's record, its proof blocks in the run and the exported ones
   edges      producer group -> consumer group, counted in Values read (a Call reading one port of another Call is one read);
              reads of prescribed inputs (weights, prompt) per group by input port
   hashes     per module body a structural hash (its groups in order: family, constant statics, varying static names, Call
@@ -356,7 +356,7 @@ def wrapper_prefix(strata: dict[str, dict], acc: _Acc) -> str:
 
 
 def units_from_strata(strata: dict[str, dict], acc: _Acc, prefix: str) -> dict[tuple[str, str], int]:
-    """A run's verification units per group, from its replay strata (`spec|request|rank|phase|op_path|lifetime` -> population)."""
+    """A run's proof blocks per group, from its replay strata (`spec|request|rank|phase|op_path|lifetime` -> population)."""
     out: Counter = Counter()
     unplaced: Counter = Counter()
     for k, v in strata.items():

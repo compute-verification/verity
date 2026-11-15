@@ -262,7 +262,7 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
     assert ran["argv"] == ["uv", "run", "check.py"] and ran["unit"] is None, "no scope=1: CMD as it is, and no stale unit name"
 
 
-def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_cap(tmp_path, monkeypatch):
+def test_a_scoped_check_on_a_node_that_limits_login_sessions_gets_the_same_memory_limit(tmp_path, monkeypatch):
     """The research suite's local `research run` tests would exit 75 inside an uncapped scoped check, since
     `research run` refuses an uncapped cgroup on a node whose login sessions have a MemoryMax."""
     dropins = tmp_path / "session-.scope.d"

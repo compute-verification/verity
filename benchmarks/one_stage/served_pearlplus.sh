@@ -69,7 +69,7 @@
 #      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
 #      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
-#      record reads it that need no registration record, and the pass files its opened tiles read, to
+#      record reads it that need no docket, and the pass files its opened tiles read, to
 #      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
@@ -84,10 +84,10 @@
 # symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
-# serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
+# serve's first docket where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
 # served_verdicts.sh's weights(), which registers the weights before the first request), and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, with PEARLPLUS_CLASS
+# docket R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, with PEARLPLUS_CLASS
 # (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`, which refuses passes that are not
 # that class's fixed load, so the verdict's counts of passes, calls and tables are the class's, and whose accept
 # publishes its work in the grid form (verify_run.grid_work: the class's structural credit less the give-up padded up
