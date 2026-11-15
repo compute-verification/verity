@@ -296,13 +296,36 @@ A row prints its numbers only when its Lean verdict is an accept. Any other row 
 table. Its last column is one line, `ran with: coins COINS; parameters PARAMETERS (DETAIL)`: COINS is `deployed
 challenger`, `local challenger` or `in-process` and PARAMETERS `deployed` or `development`, each only where the output
 says so outright, "not stated" for a half it doesn't say, and `ran with: not stated` where it says neither. DETAIL, the
-output's own words, is also the JSON's `detail`. No output yet states development or deployed parameters. The table is followed by its JSON line. Under a research run, or
-with `$OUT` set, it writes `proof-layers.json` and one `prover-seconds` measurement a row, its `member` the layer, through
-the kit's writer.
+output's own words, is also the JSON's `detail`. No output yet states development or deployed parameters. The table
+is followed by its JSON line, and under a research run, or with `$OUT` set, it writes `proof-layers.json`.
+
+Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes three of `metrics.toml`'s rows through the
+kit's writer, each a figure a drawn proof block:
+
+| id | figure |
+|---|---|
+| `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the drawn blocks |
+| `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the drawn blocks |
+| `benchmarks/proof-layer-proof-bytes` | the session's proof files' bytes, over its drawn blocks |
+
+Under each id it writes three measurements, in this order:
+
+1. the Flock layer, member `flock`;
+2. the zero-knowledge layer, member `zero knowledge`;
+3. the sampling layer last, with no member. That is the row's own reading, Flock with zero knowledge at the sampling
+   plan, the system as served, and the one the row's title, unit and axis are for.
+
+prove_path and a5 both give these figures by dividing a member's session timing by its drawn blocks (`draw_counts`), as
+prove_path's own `per_unit` does. A member whose timing has no drawn-block count (one keyed by its chunk's name) gives no
+figure, and the row says so under the table. A layer that was not run, was unreadable, has no Lean accept or gives no
+per-block figure writes its value as null, with why, and never a number. Recursion is no member, because its seconds are
+a whole recursive run's. Its numbers on the Metrics tab are `benchmarks/recursion_e2e/metrics.toml`'s two rows, which
+the recursion job writes itself.
 
 ## The metrics
 
-`run.py`'s `METRICS` are the five rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
+`run.py`'s `METRICS` are the first five rows of `benchmarks/prove/metrics.toml`, and its `LAYER_METRICS` the last three
+(above, "The proof system by layer"). `METRICS` are the prover GPUs a serving GPU needs (the headline),
 the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
 workload's sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
 (`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run, `--system spot` writes them into the run's `result.json`
