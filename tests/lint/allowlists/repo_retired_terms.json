@@ -2526,7 +2526,7 @@
     {"file": "benchmarks/property_redteam/squaring.py", "count": 1},
     {"file": "benchmarks/prove_path/README.md", "count": 25},
     {"file": "benchmarks/prove_path/e2e_chains/README.md", "count": 10},
-    {"file": "benchmarks/prove_path/prove_path.py", "count": 116},
+    {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.py", "count": 116},
     {"file": "benchmarks/prove_path/pyproject.toml", "count": 3},
     {"file": "benchmarks/prove_path/served_statics_zk.py", "count": 25},
     {"file": "benchmarks/prove_path/served_tie_zk.py", "count": 24},
