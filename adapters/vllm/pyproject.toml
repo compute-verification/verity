@@ -116,6 +116,8 @@ untraced = [
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `poub-verifier`.
+# tests/pipeline/test_advice_bind.py binds network_e2e's two served endpoint fixtures (benchmarks/network_e2e/tests/data/endpoint
+# and endpoint_carry), which network_e2e's prove-path tests read too.
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
 # The package imports the PyTorch adapter (adapters/torch/verity_torch) throughout, and tests/program/test_inputs.py reads its
@@ -156,7 +158,8 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/ver
           "tools/research/src/research/pipefail.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py", "tools/difftest",
-          "adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli/configurations.toml"]
+          "adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli/configurations.toml",
+          "benchmarks/network_e2e/tests/data/endpoint", "benchmarks/network_e2e/tests/data/endpoint_carry"]
 parallel = true
 # verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
