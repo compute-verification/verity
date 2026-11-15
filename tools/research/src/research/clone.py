@@ -70,8 +70,12 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                                                "python3 \"$f\" %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
                                               "(tests/adapters/vllm/tests/lint/merge_allowlist.py)",
-                 # a crossing of the layout move merges once in each layout, so the script is found at either place
+                 # a crossing of a layout move merges once in each layout, so the script is found at each of its places:
+                 # the tests' own tree, beside the adapter, and the older integrations/ (the second in two pieces, so
+                 # no move rewrites it to the first)
                  "merge.vllm-allowlist.driver": "f=tests/adapters/vllm/tests/lint/merge_allowlist.py; "
+                                                "[ -f \"$f\" ] || f=adapters/vllm/"
+                                                "tests/lint/merge_allowlist.py; "
                                                 "[ -f \"$f\" ] || f=integrations/vllm/tests/lint/merge_allowlist.py; "
                                                 "python3 \"$f\" %O %A %B %P",
                  # `--caps `: origin/main's merge.py, which the command runs, knows `--limits` only once it holds it (merge.LIMITS_FLAG)
