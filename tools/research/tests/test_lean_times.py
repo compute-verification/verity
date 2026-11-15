@@ -215,6 +215,21 @@ def test_lean_times_reads_the_remotes_attempts_of_the_window(remote, capsys):
     assert not [p for p in (tmp / "reader" / "objects").rglob("*") if p.is_file()], "the run records' blobs are read, not kept"
 
 
+def test_a_check_from_a_tree_with_the_check_at_tools_check_is_read_as_one_from_tools_verity_check(remote, capsys):
+    """A tree whose check is at tools/check/ runs tools/check/check.py: its Lean steps are tasks as at tools/verity/check/, and
+    a look-alike path's are none."""
+    tmp, cfg = remote
+    node = LocalStore(tmp / "node", config_path=cfg)
+    meta = {"kind": "check/v1", "steps": [_step("lean-audit", seconds=600.0, ended="2026-10-28T11:20:00Z")],
+            "reuse": {"steps": {"lean-audit": {"reran": ["security"]}}}}
+    moved = [a.replace("tools/verity/check/", "tools/check/") for a in CHECK_ARGV]
+    odd = ("x/tools/check/check.py.bak", "tools/checks/check.py")
+    for rid, argv in (("r20261028-101000-aaaa", moved), *((f"r20261028-10200{i}-bbbb", ["python3", p]) for i, p in enumerate(odd))):
+        _publish(node, tmp, rid, argv, kind="check/v1", meta=meta, end="2026-10-28T11:30:00Z")
+    assert L.main(["--until", "2026-10-28T12:00:00Z", "--hours", "6", "--json"], store=LocalStore(tmp / "reader", config_path=cfg)) == 0
+    assert moved != CHECK_ARGV and [t["run"] for t in json.loads(capsys.readouterr().out)["tasks"]] == ["r20261028-101000-aaaa"]
+
+
 def test_the_window_ends_now_by_default_and_the_text_table_is_the_default(remote, capsys, monkeypatch):
     tmp, cfg = remote
     node = LocalStore(tmp / "node", config_path=cfg)

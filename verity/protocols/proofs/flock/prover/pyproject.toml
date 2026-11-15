@@ -114,6 +114,11 @@ parallel = true
 worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
+# check runs it as six parts by test id (`lean-suites:verity-flock:K/6`, `suites.py`'s `id_part_of`), each collecting every
+# file and running the tests whose node id hashes to K, so that ci.toml's plans put two parts beside the security analysis's
+# audit and four beside the Lean build, the four as one run: whole, on the workers a shard's memory gives it, it ran longest
+# of any step after the Lean build
+parts = 6
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",

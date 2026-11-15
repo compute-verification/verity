@@ -1,0 +1,24 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it. Each command is the loop that sends the number with loop_metrics.py, as the control pod runs it.
+
+# the watchers loop `loop-metrics` (watchers.toml, the same argv): it holds its state file's lock, so a copy started beside it
+# refuses, and one started off the pod, where /data/watchers doesn't exist, sends nothing; `floor` is the limit it reports against
+[[metric]]
+id = "infra/compute-usd-per-hour"
+title = "All compute's dollars an hour: every running Nebius machine and every RunPod pod, against the limit"
+owner = "infra"
+unit = "USD per hour"
+better = "lower"
+command = "python3.12 -s infra/control/loop_metrics.py compute --every 60 --state /data/watchers/loop-metrics.json"
+every = "10m"
+floor = 155
+
+# the store index loop: store_index.sh sends it as each pass ends, and holds its lock, so a second copy exits
+[[metric]]
+id = "infra/store-index-pass-seconds"
+title = "One store index pass's length"
+owner = "infra"
+unit = "s"
+better = "lower"
+command = "sh infra/control/store_index.sh"
+every = "30m"

@@ -318,6 +318,17 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
 
 
+def test_a_premise_s_claim_id_merges_apart_from_its_owner_and_digest():
+    """A premise entry's `id` is written by hand, as its owner is: one side's new id and the other's new owner and digest
+    both stand."""
+    base = record(t=thm([F]))
+    def hyp(**entry):
+        return base | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "due": "2026-12-01"} | entry}}
+    merged, why = M.merge(hyp(), hyp(id="trusted-device"), hyp(owner="@proofs", digest="b" * 64), candidate := [])
+    assert why == [] and merged["open"]["P.Hyp"] == {"id": "trusted-device", "owner": "@proofs", "digest": "b" * 64,
+                                                      "due": "2026-12-01"}
+
+
 def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner_which_keeps_it():
     """A restatement is the build's, so the removal applies over it; an owner is a person's, so the side that changed it
     keeps the guarantee, named (a changed side beats a removed one)."""

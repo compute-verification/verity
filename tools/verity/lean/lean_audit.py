@@ -1704,6 +1704,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
+                            "--program-cache", str((work if fresh else cache.parent) / "lean-programs"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             *(["--facts-cache", str(documents)] if documents else []),

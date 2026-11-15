@@ -51,9 +51,19 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `entries.py` | the shared lists' layout, one file per entry (`pins/`) |
 | `cli.py` | the command line and the report (`verity-circuit-check/v1`) |
 
-`heavy.json` holds the peak memory, in GiB, of each target that grows past 4 GiB: the `--all` scheduler reads it to
-decide which targets run side by side, never what a check computes. A new Definition gets a binding in its
-module's sidecar: the suite fails any registered Definition family the catalog doesn't reach.
+circuit-check names no circuit of the catalog it is handed (`tests/test_handed_names.py`): what it knows of one is in
+the sidecars of the module that defines it. Beside a module's binding file (`<module>.circuit-check.py`) and pins file
+(`.circuit-check.json`), its unkeyed file (`.circuit-check.unkeyed.json`) holds what the scheduler, the task list's guard
+and the report read and no check does, so no key holds it: the peak memory, in GiB, of each of its targets that grows
+past 4 GiB and of each of its bindings whose build grows past 2 GiB (`cli.heavy`, `units.built_apart`), its Definitions
+past Flock's block that the report holds, with why (`block_held`), and its families' counts in the last task list that
+passed. A new Definition gets a binding in its module's sidecar: the suite fails any registered Definition family the
+catalog doesn't reach.
+
+`--all` refuses a task list far larger than the last that passed before any target is checked: a family of more than
+`floor` targets and more than `factor` times its count then, or the list past `factor` times its length then
+(`task_list.json`, with the families' counts in their owners' unkeyed files). A growth on purpose is accepted with
+`circuit-check --all --accept-task-list`, whose files the change commits.
 
 circuit-check imports `verity` and Flock, and no integration. A package under `adapters/` registers itself by a
 sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What

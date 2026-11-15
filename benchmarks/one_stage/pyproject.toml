@@ -46,6 +46,12 @@ artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verif
 # What the suite's test process may reach with the processes it starts, past the runner's default for one:
 # `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.
 worker_gb = 6
+# check runs it as seven parts by test id (`lean-suites:benchmarks/one_stage:K/7`, `suites.py`'s `id_part_of`), each collecting
+# every file and running the tests whose node id hashes to K. Its two longest tests, served_cases' inference-only case on the
+# 4,32,4 class and two_stage_driver's round 2, are most of its time: of seven they hash to parts 2 and 4, with little else
+# beside the first, so ci.toml's plans put part 2 beside the security analysis's audit and the rest with the Rust build
+# (tools/verity/check/tests/test_shards.py holds them apart)
+parts = 7
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
 # `verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through

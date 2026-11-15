@@ -341,7 +341,7 @@ def main() -> None:
     ok = bad == 0 and not falsified and bool(scored)
     w = worst["fragment_share_of_credit"] if worst else 0.0
     run_result.write(out, ok, "pearlc-k256-gate", f"worst accepted fragment share {w:.6f} (threshold 0.0025), "
-                     f"{len(falsified)} falsifiers", [("worst_fragment_share", w, "fraction")])
+                     f"{len(falsified)} falsifiers", [("compute-accounting/pearlc-k256.worst-fragment-share", w, "fraction")])
     print(json.dumps({x: v for x, v in doc.items() if x != "cells"}))
 
 

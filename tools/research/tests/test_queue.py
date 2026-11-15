@@ -4,6 +4,7 @@ PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
 import base64
+import calendar
 import dataclasses
 import hashlib
 import itertools
@@ -26,6 +27,7 @@ import pytest
 
 from goals_page import DOWN, PAGE, serve
 import research.queue as Q
+from research import settings
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
 from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files, credential_args,
@@ -1777,7 +1779,7 @@ class _GitHTTP(BaseHTTPRequestHandler):
             return
         path, _, query = self.path.partition("?")
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        env = {"PATH": os.environ["PATH"], "GIT_PROJECT_ROOT": str(self.root), "GIT_HTTP_EXPORT_ALL": "1", "REMOTE_USER": "u",
+        env = {"PATH": settings.need("PATH"), "GIT_PROJECT_ROOT": str(self.root), "GIT_HTTP_EXPORT_ALL": "1", "REMOTE_USER": "u",
                "PATH_INFO": path, "QUERY_STRING": query, "REQUEST_METHOD": self.command, "CONTENT_LENGTH": str(len(body)),
                "CONTENT_TYPE": self.headers.get("Content-Type", ""), "HTTP_CONTENT_ENCODING": self.headers.get("Content-Encoding", ""),
                "GIT_PROTOCOL": self.headers.get("Git-Protocol", "")}
@@ -1849,7 +1851,7 @@ def test_credential_args_take_the_checkouts_own_settings_else_gh_where_no_helper
     bin_dir.mkdir()
     (bin_dir / "gh").write_text("#!/bin/sh\n")
     (bin_dir / "gh").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{settings.need('PATH')}")
     gh = ("-c", "credential.helper=", "-c", f"credential.helper=!{shlex.quote(str(bin_dir / 'gh'))} auth git-credential")
     assert credential_args(repo, url) == credential_args(tmp_path, url) == gh, "no helper anywhere, in a checkout or not: gh's"
     assert credential_args(repo, "/srv/origin.git") == credential_args(repo, "git@github.com:o/r") == (), "not http: no credentials"
@@ -2125,6 +2127,28 @@ def test_status_lists_every_open_pr_whose_body_names_no_linear_issue(world, monk
                                                                                   4: "none: docs only"}
 
 
+def test_status_json_writes_one_json_document_on_stdout_and_the_queues_notices_on_stderr(world, monkeypatch, capsys):
+    """A program reads `status --json`'s stdout as JSON, so the notices a reading makes (a pull ref GitHub doesn't have, a head
+    taken from its branch) go to stderr, and stdout holds the JSON alone."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    world.gh.put(1, world.change({"1.txt": "x\n"}), ready=False)
+    world.gh.put(2, two := world.change({"2.txt": "x\n"}), ready=False)
+    _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
+    _git(world.origin, "update-ref", "refs/heads/feature-2", two)
+    world.gh.prs[2] = dataclasses.replace(world.gh.prs[2], branch="feature-2")
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin),
+            "--repo", "o/verity", "--store", str(world.tmp / "queue-store"), "--marked-after", "2026-10-01T00:00:00Z"]
+    assert research_main(argv) == 0
+    got = capsys.readouterr()
+    assert [e["pr"] for e in json.loads(got.out)] == [1, 2]
+    assert "#2's pull ref can't be fetched" in got.err and "#2's pull ref isn't at its API head" in got.err
+
+
 def test_the_status_command_says_when_a_move_lands_on_its_mark_and_refuses_one_that_conflicts_with_main(world):
     """`status --loop` refuses a move PR that doesn't merge onto `main`, and says of one that does that it lands with a land
     verdict, or on its mark alone once the loop certifies its move on `main` and drive.toml allows it."""
@@ -2194,6 +2218,35 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
     assert Q.review(q, world.store, labels, None, None, None, None) == 0
     out = capsys.readouterr().out
     assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
+
+
+def test_the_review_listing_gives_each_rows_minutes_since_its_mark_and_over_keeps_the_older(world, capsys):
+    """A no-reader watch parsed `status` text and read every head's labels by hand for how long each marked PR had waited
+    without a verdict: the listing gives each row its minutes since the mark, and `over` keeps those marked longer ago."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    for n in (1, 2, 3):
+        world.gh.put(n, world.change({f"{n}.txt": "x\n"}))
+    marks = {1: "2026-11-09T10:00:00Z", 2: "2026-11-09T11:30:00Z"}
+    q = world.queue(marked_at=lambda n, h: marks.get(n))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    def now() -> float:
+        return calendar.timegm((2026, 11, 9, 12, 0, 59))
+
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True, now=now) == 0
+    assert [(r["pr"], r["waited_min"]) for r in json.loads(capsys.readouterr().out)] == [(3, None), (1, 120), (2, 30)]
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True, over=60, now=now) == 0
+    assert [r["pr"] for r in json.loads(capsys.readouterr().out)] == [3, 1]
+    assert Q.review(q, world.store, labels, None, None, None, None, over=60, now=now) == 0
+    out = capsys.readouterr().out
+    assert f"#1 {world.gh.prs[1].head[:12]} lane-1 Lean change: no, marked 2026-11-09T10:00:00Z (120 min ago): " in out, out
+    assert "#2 " not in out and out.rstrip().endswith(
+        "3 marked PR(s) not on `main` lack a land verdict; 2 of them marked over 60 min ago or at a time not known"), out
+    assert Q.waited_min(None, 0) is None
+    with pytest.raises(SystemExit):
+        research_main(["queue", "review", "7", "--land", "--by", "r", "--over", "60"])
+    assert "--over is for the review listing only" in capsys.readouterr().err
 
 
 def test_the_review_listing_says_low_risk_of_a_head_the_loops_rule_lands_on_its_mark_and_never_of_a_move_or_held_pr(world, capsys):
@@ -4063,7 +4116,7 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
         assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
         (launch, left), (fetch, _) = argvs
         assert left == 100 and fetch == ["fetch", rid, "--on", node, "--all"]
-        assert launch == ["run", "--on", node, *flags, *tail]
+        assert launch == ["run", "--on", node, "--stay", *flags, *tail], "it builds that node's tree and reads its run there"
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
@@ -4220,7 +4273,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\n[ -z "$FAKE_LAKE_FAIL" ] || exit 1\n'
                                'mkdir -p .lake && echo built > .lake/built\n')
     (bin_ / "lake").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{settings.need('PATH')}")
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
@@ -4446,7 +4499,7 @@ class Machine:
             (key := self.root / "requests" / rid / "custody").mkdir(parents=True)
             (key / "store.toml").write_text('[remote]\nkind = "s3"\n')
             (key / "cred.json").write_text("{}\n")
-        (Path(os.environ["RESEARCH_RUNS"]) / rid).mkdir(parents=True)
+        (Path(settings.need("RESEARCH_RUNS")) / rid).mkdir(parents=True)
         if self.outcome is not None:
             self.outcome(run, rid, head)
         else:
@@ -5076,7 +5129,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
                     '[ "$w" = warm ] && [ -n "$FAIL_WARM" ] && exit 3\nmkdir -p .lake && echo x > .lake/warm\n')
     lake.chmod(0o755)
     log = tmp_path / "log"
-    env = {"HOME": str(tmp_path / "home"), "PATH": os.environ["PATH"], "LOG": str(log), "CHECK_SLOT": "a"}
+    env = {"HOME": str(tmp_path / "home"), "PATH": settings.need("PATH"), "LOG": str(log), "CHECK_SLOT": "a"}
     d = "verity/protocols/proofs/flock/verifier"
 
     def run(n, **extra):

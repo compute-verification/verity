@@ -26,13 +26,22 @@ TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and Ark
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
 
 
+def lake_build(cwd: Path, *targets: str) -> None:
+    """`lake build TARGETS` in `cwd`; a build that fails fails the test with the tail of Lake's output, which is the only
+    record of why."""
+    p = subprocess.run(["lake", "build", *targets], cwd=cwd, capture_output=True, text=True)
+    if p.returncode:
+        tail = "\n".join((p.stdout + p.stderr).splitlines()[-80:])
+        pytest.fail(f"`lake build {' '.join(targets)}` in {cwd} exited {p.returncode}:\n{tail}", pytrace=False)
+
+
 def build_proofs_verifier() -> None:
     """`lake build Proofs.Flock.Verifier` in `security_proofs`, one process at a time: on a fresh tree Lake first clones that
     package's dependencies, and two Lake processes cloning them at once (two xdist workers) both fail."""
     key = hashlib.sha256(str(PROOFS).encode()).hexdigest()[:16]
     with open(Path(tempfile.gettempdir()) / f"verity-security-proofs-{key}.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        subprocess.run(["lake", "build", "Proofs.Flock.Verifier"], cwd=PROOFS, check=True, capture_output=True)
+        lake_build(PROOFS, "Proofs.Flock.Verifier")
 
 
 def sources():
@@ -104,7 +113,7 @@ def _has_unit_cut():
 
 @pytest.mark.skipif(shutil.which("lake") is None or not _has_unit_cut(), reason="no Lean toolchain or no validate_unit_cut")
 def test_unit_cut_agrees_with_the_reference(tmp_path):
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -115,7 +124,7 @@ def test_unit_cut_agrees_with_the_reference(tmp_path):
 def test_circuit_type_agrees_with_the_reference(tmp_path):
     """`flock-verify circuit-type` gives `verity_flock.circuit_types`' digest and verdict on every type (random types, call
     trees and one mutation per rule; `circuit_type_agree.py`)."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "circuit_type_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "200"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -126,7 +135,7 @@ def test_layout_agrees_with_the_reference(tmp_path):
     """`flock-verify layout` gives `verity_flock.layouts`' verdict, layout digests and own-region sizes on every archive
     (random types and call trees, placed and inline calls and reads, nested units, one mutation per rule;
     `layout_agree.py`)."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "layout_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "150"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -199,7 +208,7 @@ def _lean_draw(args):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_unit_draw_samplers_are_the_exact_reduction():
     import random
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     rng = random.Random(20260927)
     for case in range(40):
         n = rng.choice([1, 2, 3, 7, 100, 1000, 2 ** 20 + 3, 2 ** 40 - 1])
@@ -219,7 +228,7 @@ def test_unit_draw_samplers_are_the_exact_reduction():
 def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
     """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a sample that reads coins is
     refused before any is read, whatever its sampling design, and only a sample of every unit, which reads none, is sampled."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
 
     def draw(*args):
         return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
@@ -239,7 +248,7 @@ def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
     it reads a file. Only `agree` reads them, with the flag and upstream's verdicts and never under `--zk`, and it prints no
     verdict: each line says whether the checks pass exactly when upstream accepted (a legacy statement's sessions fail
     before any check runs)."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     files = [str(LEAN / ".lake/build/bin/flock-verify"), "--circuit", str(tmp_path / "none"), "--public", str(tmp_path / "none")]
     p = subprocess.run([files[0], "verify", *files[1:], "--upstream-plain", "--session", "a", "b"], capture_output=True, text=True)
     got = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
@@ -262,7 +271,7 @@ def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_unit_draw_check(tmp_path):
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     d = {"law": "subset", "population": 100, "k": 3, "units": [4, 17, 90]}
     bern = {"law": "bernoulli", "population": 10, "p": "1/2", "units": [0, 3, 9]}
     cases = [
@@ -294,7 +303,7 @@ def test_unit_draw_check(tmp_path):
 def test_a_draw_is_held_to_its_registered_law(tmp_path):
     """`draw --registration F` and `draw-test --registration F`: the sampling design is the one the window registered before any coin,
     so a sample at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     regs = {}
     for k in (2, 8):
         regs[k] = tmp_path / f"reg-{k}.json"
@@ -331,7 +340,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 def test_a_draw_over_several_tables_has_a_count_they_split():
     """`draw --tables J` refuses a sampling design whose unit count the J tables can't split evenly: a Bernoulli sample (its count is random),
     a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one sample of 4 units."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
 
     def draw(*args):
         p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args,
@@ -378,7 +387,7 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
     in order of first unit), `k_s = max(1, round(K n_s / N))`, each stratum's `subset` on its own segment of the stream,
     and U2 on stratified samples, held to the verifier's own sampling design."""
     import hashlib
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     ref = _stratified_agree()
     desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0"], "root": "Root_v0",
             "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
@@ -448,7 +457,7 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work samples
     one), each stratum's `subset` on its own segment of the stream, and U2 on work samples, held to the verifier's own sampling design."""
     import random
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     ref = _stratified_agree()
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
@@ -524,7 +533,7 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     """`verify` refuses a session whose record carries a work sample unless it holds its own K, work table, program and
     partition, since the sample's K, works and floors set every k_s; with all four, the sampling design must be its own derivation, so a
     sample made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
     other = table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0})
@@ -576,7 +585,7 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     program and partition, since the sample's K and strata set every k_s (U2 alone accepts a sample at k = 1, and strata it
     cannot check); with all three, the sampling design must be its own derivation, so a sample at another K or over other strata is
     refused."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     flags = _work_program(tmp_path)("w.json", {})[:4]
     (tmp_path / "circuit.txt").write_text("not a circuit\n")
     (tmp_path / "pub.bin").write_bytes(b"{}\n")
@@ -620,7 +629,7 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
 def test_verify_refuses_an_archived_circuit_that_does_not_hash_to_its_key(tmp_path):
     """`verify --archive` hashes the circuit file beside its parse and waits for the hash before any session: a copy that
     doesn't hash to its key is refused as an input (exit 2), with no verdict, and a copy that does goes on to setup."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     store = tmp_path / "archive" / "sha512"
     store.mkdir(parents=True)
 
@@ -652,7 +661,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
     sampled proof block's closure, less the sampled proof blocks). U2 on the closure, U3 counting the sampled proof blocks and their closure, and
     `verify` holding the closure to the verifier's own map."""
     import random
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     ref = _stratified_agree()
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
@@ -737,14 +746,14 @@ def _one_stage_draw():
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
                     reason="no Lean toolchain or no stratified law in core")
 def test_stratified_draw_agrees_with_core(tmp_path):
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--random", "20", "--draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 @pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
 def test_template_queries_agree_with_the_vectors(tmp_path):
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -760,7 +769,7 @@ def _has_check_cut():
 
 @pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.circuits.cut")
 def test_check_cut_agrees_with_the_reference(tmp_path):
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -781,7 +790,7 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
     """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
     `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2
     (v2's evaluations, refusals, the program it accepts that v1 refuses, and the recompute it reports)."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -801,7 +810,7 @@ def _qword_vectors():
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator")
 def test_qword_evaluator_agrees_with_the_reference(tmp_path):
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -829,7 +838,7 @@ def test_the_reference_vectors_exist():
                     reason="no Lean toolchain or no program format vectors")
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     ir = _format_vectors()
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
                         "--format", str(ir / "format_vectors.json")]
@@ -841,7 +850,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     p = subprocess.run(["python3", str(VERIFIER / "qcall_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--qcall", str(ir / "qcall_vectors.json"), "--format", str(ir / "format_vectors.json")],
                        capture_output=True, text=True)
@@ -874,7 +883,7 @@ def test_region_refuses_a_repeated_free_bit(tmp_path):
     """`mkRegion` refuses a region whose free bits repeat, since the pinned table-soundness theorems assume them distinct
     (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (a red-team review's case).
     Two ranges of free bits that overlap in one bit, as `bits 0 w ++ bits slotLog c` do when `slotLog < w`, are refused."""
-    subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN, "Flock")
     f = tmp_path / "Region.lean"
     f.write_text("import Flock\nopen Flock\n"
                  "def verdict (free : Array Nat) : String :=\n"
@@ -890,7 +899,7 @@ def test_region_refuses_a_repeated_free_bit(tmp_path):
 def test_pin_is_a_column_of_the_block(tmp_path):
     """Both statements' pin is a column of the block, whatever the layout checks before it established (R9c's refinement
     uses it as a local fact): a first range of one slot starting at `2^k_log` gives a pin outside the block, refused."""
-    subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN, "Flock")
     f = tmp_path / "Pin.lean"
     f.write_text("import Flock\nopen Flock\n"
                  "def at_ (pos0 : Nat) : Circuit :=\n  { (default : Circuit) with\n    kLog := 10, nets := #[(\"u\", default)],\n"
@@ -915,7 +924,7 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
@@ -958,7 +967,7 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
@@ -1036,7 +1045,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
@@ -1069,7 +1078,7 @@ def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path
     to 32 (`aux` one row at 0), it is refused for its bits against `max(1, ⌈H/2⌉)` rows of `aux`; at 33, for its height."""
     import resource
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     bits, d = [0, 1, 881, 887, 889, 895], tmp_path / "s"
     text = _bit_row_toy(bits, d)
     head = text.index("\n", text.index("CIRCUIT unit ")) + 1
@@ -1115,7 +1124,7 @@ def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
         if n_bits % 8:
             row[-1] &= (1 << n_bits % 8) - 1
         cases.append((n_bits, bytes(row), rng.randbytes(192)))
-    subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN, "Flock")
     f = tmp_path / "BitRowBc.lean"
     f.write_text(BIT_ROW_BC + "".join(f'#eval bcOf {n} "{r.hex()}" "{s.hex()}"\n' for n, r, s in cases))
     p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
@@ -1260,7 +1269,7 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
     from verity_flock import circuit as FC
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
 
     def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
@@ -1334,7 +1343,7 @@ def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differ
     `row_leaf_in_circuit` identity agree. A META that differs is refused with the Rust verifier's message: a segmented row's
     length (its prefix, or its words), a seg port read as v2 or a v2 port as seg (their compressions), its outer padding or
     midstate."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
 
     def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
@@ -1412,7 +1421,7 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     from verity.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     inst = hm96.SHA512
 
     def statement(d, text, *extra):
@@ -1499,7 +1508,7 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
     from verity.commitments import hm96
     from verity.commitments.rowleaf import sha512_row_v2_digest
 
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     inst = hm96.SHA512
 
     def statement(d, text, *extra):
@@ -1595,7 +1604,7 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
     }
     for name, (text, _) in cases.items():
         (tmp_path / f"{name}.net").write_text(text)
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     out = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "net-check", *(str(tmp_path / f"{n}.net") for n in cases)],
                          capture_output=True, text=True).stdout
     got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
@@ -1622,7 +1631,7 @@ def test_every_honest_cell_is_a_statement_the_lean_verifier_refuses():
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_legacy_statement_is_refused_at_every_session(tmp_path):
     """`verify` refuses every session of a legacy statement before it reads a file, with or without `--zk`."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     for name in (n for ns in LEGACY.values() for n in ns):
         for zk in ((), ("--zk",)):
             p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--statement", name, *zk, "--circuit",

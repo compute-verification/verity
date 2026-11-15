@@ -26,14 +26,16 @@ import sys
 import time
 from pathlib import Path
 
-LOG = Path(os.environ.get("OOM_WATCH_LOG", str(Path.home() / ".research" / "agent-oom.jsonl")))
-LOCK = Path(os.environ.get("OOM_WATCH_LOCK", "/tmp/agent-oom-watch.lock"))
-MIN_KB = int(os.environ.get("OOM_WATCH_MIN_MB", "300")) * 1024
+import settings
+
+LOG = Path(settings.get("OOM_WATCH_LOG", str(Path.home() / ".research" / "agent-oom.jsonl")))
+LOCK = Path(settings.get("OOM_WATCH_LOCK", "/tmp/agent-oom-watch.lock"))
+MIN_KB = int(settings.get("OOM_WATCH_MIN_MB", "300")) * 1024
 SAMPLE_S = 3.0
 KEEP_S = 600.0
 KILLED = re.compile(r"Killed process (\d+) \(([^)]*)\).*?anon-rss:(\d+)kB")
 OOM_KILL = re.compile(r"oom-kill:.*?task_memcg=([^,]*),task=([^,]*),pid=(\d+)")
-RESEARCH = Path(os.environ.get("OOM_WATCH_RESEARCH", "/workspace/.venv/bin/research"))
+RESEARCH = Path(settings.get("OOM_WATCH_RESEARCH", "/workspace/.venv/bin/research"))
 
 
 def worktree(cwd: str) -> str | None:
@@ -82,10 +84,14 @@ def records(fd: int):
 
 
 def last_seq() -> int:
+    if not LOG.exists():
+        return -1
     try:
         lines = LOG.read_text().splitlines()
         return max(json.loads(ln).get("seq", -1) for ln in lines) if lines else -1
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"oom_watch: {LOG} unreadable, so every kill still in the ring buffer is reported again ({type(e).__name__}: {e})",
+              file=sys.stderr)
         return -1
 
 
@@ -106,7 +112,7 @@ class Watch:
         pid = int(m.group(1))
         s = self.seen.get(pid, {})
         return {"seq": seq, "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.boot + usec / 1e6)),
-                "vm": socket.gethostname(), "agent": os.environ.get("RESEARCH_AGENT_URL"), "pid": pid, "comm": m.group(2),
+                "vm": socket.gethostname(), "agent": settings.get("RESEARCH_AGENT_URL"), "pid": pid, "comm": m.group(2),
                 "anon_rss_mb": int(m.group(3)) // 1024, "memcg": self.memcg.pop(pid, None),
                 "cgroup_limit": msg.startswith("Memory cgroup out of memory"), "cwd": s.get("cwd"),
                 "worktree": worktree(s["cwd"]) if s.get("cwd") else None}
@@ -123,8 +129,8 @@ def announce(rec: dict) -> None:
     try:
         subprocess.run([str(RESEARCH), "msg", "send", "--channel", "agent-alerts", "--as", "infra", "--kind", "alert", "--text", text],
                        cwd="/workspace", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"oom_watch: kill {rec['seq']} recorded but not announced ({type(e).__name__})", file=sys.stderr)
 
 
 def scan() -> list[dict]:

@@ -42,6 +42,8 @@ import time
 from pathlib import Path
 from typing import IO, Callable
 
+from . import settings
+
 PATHS = ("tools/research", "infra/ops", "infra/cluster")
 OPT_OUT = "RESEARCH_AT_CHECKOUT"
 #: what one command gives to setting up origin/main's copy, every git call and the wait for the cache's lock together,
@@ -357,7 +359,7 @@ def prune(cache: Path, keep: Path | None, end: float) -> None:
 
 def start(src: Path, argv: list[str], execve: Callable = os.execve) -> None:
     """Replace this process with `research ARGV` run from the package under `src`."""
-    path = os.pathsep.join(p for p in (str(src), os.environ.get("PYTHONPATH", "")) if p)
+    path = os.pathsep.join(p for p in (str(src), settings.get("PYTHONPATH", "")) if p)
     execve(sys.executable, [sys.executable, "-m", "research", *argv], {**os.environ, OPT_OUT: "1", "PYTHONPATH": path})
 
 
@@ -371,9 +373,9 @@ def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None,
 
         notice(os.environ)
     repo = repo or Path(__file__).resolve().parents[4]
-    if os.environ.get(OPT_OUT) or not (repo / ".git").exists():
+    if settings.get(OPT_OUT) or not (repo / ".git").exists():
         return
-    cache = cache or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main"
+    cache = cache or Path(settings.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main"
     end = clock() + SETUP_S
     try:
         found = behind(repo, end)
@@ -399,4 +401,4 @@ def shim(argv: list[str], repo: Path, cache: Path | None = None, execve: Callabl
 
 
 if __name__ == "__main__":
-    shim(sys.argv[1:], Path(os.environ.get("RESEARCH_CHECKOUT") or "."))
+    shim(sys.argv[1:], Path(settings.get("RESEARCH_CHECKOUT") or "."))

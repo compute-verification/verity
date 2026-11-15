@@ -159,7 +159,7 @@ def test_the_report_joins_each_relied_on_targets_verdict(declare, sidecar):
 
 
 def test_a_callee_whose_one_failure_is_a_held_block_passes_its_root(declare, sidecar, monkeypatch):
-    """A relied-on target whose only failure is ``block/past-range`` on a Definition `block_held.HELD` holds passes the
+    """A relied-on target whose only failure is ``block/past-range`` on a Definition `block_held.held` holds passes the
     by-calls root, as `checks.summarize` holds it for the target itself; any other failure of that target still fails it."""
     from circuit_check import block_held
 
@@ -168,7 +168,7 @@ def test_a_callee_whose_one_failure_is_a_held_block_passes_its_root(declare, sid
     a2, _a3, b2 = _small()
     sidecar(*_small())
     e = BC.check(root)
-    monkeypatch.setitem(block_held.HELD, b2.id, "held for the test")
+    monkeypatch.setattr(block_held, "held", lambda: {b2.id: ("held for the test", "toy.circuit-check.unkeyed.json")})
     past = CK.Findings()
     past.fail("block", "past-range", b2.id)
     entries = [e, {"definition": a2.id, "failures": []}, {"definition": b2.id, "failures": past.failures},

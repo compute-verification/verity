@@ -61,8 +61,9 @@ research run --on auto --mem-gb 258 --max-min 180 --project verity --source . --
   `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
-`check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
-`--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs' own.
+`check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--program-cache`, `--artifacts`,
+`--regenerate`, `--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs'
+own.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
@@ -209,11 +210,6 @@ keeps or drops from and never adds to.
   registry handle of the lane that answers for it. `--update` fills each record, and the `reads` section, from the
   build (`judge`, `read_groups`, `PREMISE_KINDS`); without it the audit fails on any difference. A record holds the
   statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it.
-- An unowned lock (`unowned_lock`): one that lists a guarantee or a premise and holds no lane field (`LANE_FIELDS`,
-  `LANE_SECTIONS`), the lock of a tree with no lanes; no flag makes a lock unowned. No entry owes an owner (a premise
-  the lock doesn't list still fails); its `AUDIT` line ends with `unowned`, and its report holds `"unowned": true`.
-  One lane field, or `--owner` for that run, makes it owned and held to every rule. Every lock of this tree is owned
-  (`tests/test_lean_packages.py`).
 - `shape`: the shape every guarantee has (the lean-proofs skill, "One shape"): `properties`, `premises`, `frozen`,
   `statements`, `events`, `conjectures` (`shape`, `part_refusals`, `reordered`, `shares`), and `inline`, the inline
   hypotheses still allowed, which only shrinks (`inline_failures`).
