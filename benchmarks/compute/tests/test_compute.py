@@ -6,8 +6,10 @@ of logits at a time. PoUW's row in the run's composed record is printed whatever
 node reports of what it served is read.
 
 Nothing here reaches the evidence store: `FakeStore` stands in for research's local store over the small record under
-`fixtures/record` (a run's `out/`), which each test copies and edits. A record withdrawn whole, or in a part that holds
-a file the command reads, is refused before anything is fetched, and a withdrawal of other files of it is printed."""
+`fixtures/record` (a run's directory: its `job.json` and its `out/`), which each test copies and edits. A record
+withdrawn whole, or in a part that holds a file the command reads, is refused before anything is fetched, and a
+withdrawal of other files of it is printed. `--record` reads the same record from a directory, through no store, and
+prints what `--from` prints of it."""
 from __future__ import annotations
 
 import json
@@ -33,11 +35,11 @@ CREDITED = 105_449_127_936
 
 
 def a_record(tmp_path: Path, **edits) -> Path:
-    """A copy of the fixture record, laid out as a run's (its files under `out/`), with `edits` applied, each a file's
-    name under `C` (ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS) and what becomes of it: None deletes it, a string
-    replaces its text, and a function edits its JSON in place."""
+    """A copy of the fixture record, a run's directory (its `job.json`, and its files under `out/`), with `edits`
+    applied, each a file's name under `C` (ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, VERIFY, JOB) and what becomes of
+    it: None deletes it, a string replaces its text, and a function edits its JSON in place."""
     record = tmp_path / "record"
-    shutil.copytree(RECORD, record / "out")
+    shutil.copytree(RECORD, record)
     for name, edit in edits.items():
         path = record / getattr(C, name)
         if edit is None:
@@ -695,7 +697,7 @@ def test_per_call_reads_the_grid_form_of_an_answer_held_to_its_classs_fixed_load
 def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_none(store, tmp_path, capsys):
     """``--uncredited F`` reads a split in a file of its own, with its commitment and its passes' records, in place of
     the verify document, which isn't fetched, and holds those records to the answer's where the answer names them."""
-    split = json.loads((RECORD / "pieces/pouw/verify.json").read_text())["uncredited"]
+    split = json.loads((RECORD / C.VERIFY).read_text())["uncredited"]
     given = tmp_path / "uncredited.json"
     given.write_text(json.dumps({"schema": split["schema"], "verify": "verify.json", "commitment": "c0" * 64,
                                  "records": ["aa" * 64, "bb" * 64], "uncredited": split}))
@@ -807,3 +809,104 @@ def test_a_split_whose_lm_head_calls_hold_more_than_the_classs_lm_head_is_refuse
     assert bench(store, "--from", RUN, "--per-call") == 2
     assert (f"compute: the per-call split's LM head calls hold {17 * 128_256 * 2048:,} real MACs, more than the "
             f"{MACS['lm_head']:,} of the class's LM head") in capsys.readouterr().err
+
+
+def no_store(*args, **kwargs):
+    raise AssertionError("--record touched the evidence store")
+
+
+@pytest.fixture
+def local(monkeypatch) -> None:
+    """No `research run` around the command, so it writes no output."""
+    monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+
+
+@pytest.mark.parametrize("argv", [[], ["--per-call", "--top", "2"]])
+def test_a_record_directory_prints_what_the_store_prints_for_the_same_record(store, tmp_path, capsys, argv):
+    """The fixture is a run's directory as the store keeps its record: `--record` reads it as it lies, with the run id
+    and commit its `job.json` states, and prints byte for byte what `--from` prints of the same record."""
+    store.add(RUN, a_record(tmp_path))
+    assert bench(store, "--from", RUN, *argv) == 0
+    from_store = capsys.readouterr()
+    assert C.main(["--record", str(RECORD), *argv], store_of=no_store) == 0
+    assert capsys.readouterr() == from_store
+    doc = json.loads(from_store.out.splitlines()[-1])
+    assert (doc["value"], doc["run"], doc["commit"], doc["credited_macs"]) == (0.75, RUN, COMMIT, CREDITED)
+
+
+def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys, monkeypatch, local):
+    """`--record` imports nothing of research's: with its store client's modules unimportable and the store's opener
+    raising, the number is printed, its per-call split too."""
+    import sys
+    for name in ("research", "research.store", "research.store.local", "research.store.labels_sync",
+                 "research.store.vocab"):
+        monkeypatch.setitem(sys.modules, name, None)
+    with pytest.raises(C.Unreadable, match="the evidence store's client isn't installed here"):
+        C.opened()
+    assert C.main(["--record", str(RECORD), "--per-call"], store_of=no_store) == 0
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert doc["value"] == 0.75 and doc["withdrawn"] == [] and doc["per_call"]["give_up"] == TOTAL - CREDITED
+
+
+@pytest.mark.parametrize("name", ["ANSWER", "POLICY"])
+def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, capsys, local, name):
+    record = a_record(tmp_path, **{name: None})
+    assert C.main(["--record", str(record)], store_of=no_store) == 2
+    out, err = capsys.readouterr()
+    path = getattr(C, name)
+    assert out == "" and f"compute: the record directory {record} holds no {path} ({C.REQUIRED[path]})" in err
+
+
+def test_a_record_directory_that_is_no_run_directory_exits_2_and_says_what_to_name(tmp_path, capsys, local):
+    """A run's `out/` named in place of the run's directory is refused with a hint, and a path that is no directory is
+    refused as a path, never sent to the store as a run id."""
+    assert C.main(["--record", str(RECORD / "out")], store_of=no_store) == 2
+    err = capsys.readouterr().err
+    assert f"holds no {C.ANSWER}" in err and "it is a run's out/ directory; name the directory holding it" in err
+    assert C.main(["--record", str(tmp_path / RUN)], store_of=no_store) == 2
+    assert f"compute: {tmp_path / RUN} is not a directory" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as e:
+        C.main(["--record", str(RECORD), "--from", RUN], store_of=no_store)
+    assert e.value.code == 2 and "not allowed with argument" in capsys.readouterr().err
+
+
+def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp_path, capsys, local):
+    record = a_record(tmp_path, JOB=None)
+    assert C.main(["--record", str(record)], store_of=no_store) == 0
+    text, doc, _ = printed(capsys)
+    assert (doc["run"], doc["commit"], doc["value"]) == ("record", None, 0.75)
+    assert text[1].startswith("  record, commit unknown: Pearl+'s answer accepts")
+    dirty = a_record(tmp_path / "dirty", JOB=to("store", "conditions", "source.dirty", value=True))
+    assert C.main(["--record", str(dirty)], store_of=no_store) == 0
+    assert printed(capsys)[1]["commit"] == f"{COMMIT}-dirty"
+    assert C.main(["--record", str(a_record(tmp_path / "bad", JOB="not json"))], store_of=no_store) == 2
+    assert f"compute: the record's {C.JOB} doesn't read as the run's" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("edits, rc, why", [
+    ({"ANSWER": to("verdict", value="reject"), "LEAN": to("verdict", value="reject")}, 1,
+     "no number: Pearl+'s answer is reject, not accept (no reason recorded)"),
+    ({"LEAN": to("work", "credited", value=CREDITED + 1)}, 1,
+     f"no number: the Lean verifier's credit is {CREDITED + 1} and the answer's {CREDITED}"),
+    ({"VERIFY": to("commitment", value="c1" * 64)}, 2, "the per-call split is of another run commitment than the answer's"),
+])
+def test_a_record_directory_is_refused_as_the_store_refuses_the_same_record(store, tmp_path, capsys, edits, rc, why):
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert C.main([*argv, "--per-call"], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn")) == rc
+        out, err = capsys.readouterr()
+        assert out == "" and f"compute: {why}" in err
+
+
+def test_a_record_directory_writes_the_same_outputs_as_the_store(store, tmp_path, capsys, monkeypatch, stamped):
+    store.add(RUN, a_record(tmp_path))
+    written = {}
+    for mode, argv in (("store", ["--from", RUN]), ("dir", ["--record", str(RECORD)])):
+        out = tmp_path / mode / "out"
+        monkeypatch.setenv("OUT", str(out))
+        assert bench(store, *argv) == 0
+        written[mode] = [(out / f).read_text() for f in ("compute.json", "result.json")]
+    capsys.readouterr()
+    assert written["dir"] == written["store"]
