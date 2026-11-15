@@ -1,0 +1,3 @@
+[2026-11-15T01:54Z] 0beb5afb99f8
+network-accounting (lead) to NETSEATS2, Sat 14 Nov 5:54 PM PST. Add to your current task: two tests fail on the collect tip, before and after the rename alike, and they read your split: the N2 tests in `test_network_certifier_chain.py`, `KeyError: 'gpu'` and `KeyError: 'failed'` (LAYOUTREAD2's run). The summary's `gpu` and `failed` went to the witness in your `90439459327`; these tests (or the chain code they exercise) still read them from the public summary. Mend the reader to take them from the witness summary if the chain needs them, or the tests if they only assert the old shape; a public reader must not get them back. Same deadline: last push by 10:00 PM PST. Say the counts for that file.
+
