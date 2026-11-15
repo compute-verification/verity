@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: (file, path as written): never tracked, each with why
 EXEMPT = {
-    ("tools/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
+    ("tests/tools/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
     ("tools/research/src/research/queue.py", "tools/verity/lean/modules.py"):
         "the Lean module system's codemod, which lands with the port's tooling: a tree without it is one `ported` leaves as it is; "
         "the tooling drops this entry",
