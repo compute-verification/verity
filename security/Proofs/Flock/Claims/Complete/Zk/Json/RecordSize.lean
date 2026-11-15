@@ -52,7 +52,9 @@ theorem jsz_recordObjZk_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size
   have e1 := recordList_sum_le (spec := specZ spec hz) hh ht rb hp hR hs hL proofs
   have e2 := jsz_coinTreeJ_le ct
   have e3 : (recordList (specZ spec hz) h #[rb] points streams proofs).length = 10 := rfl
+  generalize hW : jsz (Json.mkObj (recordListZk spec h hz ct #[rb] points streams proofs)) = W at e0
   unfold recordObjZk
+  rw [hW]
   simp only [recordListZk, List.map_append, List.sum_append, List.length_append, List.map_cons, List.map_nil,
     List.sum_cons, List.sum_nil, List.length_cons, List.length_nil, e3] at e0
   have r1 : (specZ spec hz).repStreams = spec.repStreams := rfl

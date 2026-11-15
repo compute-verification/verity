@@ -134,7 +134,9 @@ theorem jsz_roundObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 
   have e4 := jsz_dg_le hh spec (r.bytes.getD ByteArray.empty)
   have e5 := jsz_coins r.coins
   have e6 := jsz_hexJ (r.bytes.getD ByteArray.empty)
+  generalize hW : jsz (Json.mkObj (roundList spec h k r)) = W at e0
   unfold roundObj
+  rw [hW]
   simp only [roundList, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, List.length_cons,
     List.length_nil] at e0
   omega
@@ -159,7 +161,9 @@ theorem jsz_streamObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size =
     have := jsz_roundObj_le hh spec (k := k) (by omega) h1 h2
     omega)
   rw [Array.size_map, Array.size_range] at e3
+  generalize hW : jsz (Json.mkObj (streamList spec h rootB q)) = W at e0
   unfold streamObj
+  rw [hW]
   simp only [streamList, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, List.length_cons,
     List.length_nil, jsz_str] at e0
   have e4 : (18 * ("" : String).length + 2) = 2 := by simp
@@ -198,8 +202,9 @@ theorem jsz_linkObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 6
   have e1 := jsz_hexJ spec.sigma
   have e2 : jsz (Json.mkObj (rootBList spec id #[rb])) ≤ 18 * t.length + 36 * rb.size + 8 := by
     rw [rootBList_one ht]
-    have := jsz_mkObj_one t (hexJ (id rb))
-    rw [id, jsz_hexJ] at this
+    show jsz (Json.mkObj [(t, hexJ rb)]) ≤ _
+    have h1 := jsz_mkObj_one t (hexJ rb)
+    have h2 := jsz_hexJ rb
     omega
   have e3 : jsz (Json.mkObj (rootBList spec (dgOf spec h) #[rb])) ≤ 18 * t.length + 2312 := by
     rw [rootBList_one ht]
@@ -212,7 +217,9 @@ theorem jsz_linkObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 6
   have e7 := jsz_coins (yOf spec)
   have e8 : (yOf spec).size = spec.points := by simp [yOf, ht]
   have e9 : jsz (Json.str "exchange") = 146 := by decide +kernel
+  generalize hW : jsz (Json.mkObj (linkList spec h #[rb] points)) = W at e0
   unfold linkObj
+  rw [hW]
   simp only [linkList, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, List.length_cons,
     List.length_nil] at e0
   omega
@@ -224,7 +231,9 @@ theorem jsz_proofObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 
       first | decide +kernel | decide)
   have e0 := jsz_mkObj_keys (proofList_distinct spec h q) hK
   have e1 := jsz_dg_le hh spec q.2
+  generalize hW : jsz (Json.mkObj (proofList spec h q)) = W at e0
   unfold proofObj
+  rw [hW]
   simp only [proofList, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, List.length_cons,
     List.length_nil, jsz_str] at e0
   omega
@@ -285,6 +294,7 @@ theorem recordList_sum_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size 
   have e8 : jsz (Json.str "flock-live-session/v1") = 380 := by decide +kernel
   have e9 : jsz (Json.str "exchange") = 146 := by decide +kernel
   simp only [recordList, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, jsz_str]
+  rw [jsz_str] at e8 e9
   have e10 : jsz Json.null = 4 := rfl
   omega
 
