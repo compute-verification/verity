@@ -46,18 +46,26 @@ by the stop rule, `stop_rule`), and `pool_bound` holds rows with no preemption s
 - `ns`: n where the walk can't derive it: only when the scheduling order is unknown (`row_order` "explicit");
 - `release`: each kept output's egress bucket on an unshaped egress, where its choices are the timing channel; none on a
   shaped one.
+
+`residual` builds it from an advice and `reconstruct` and `rebuild` (the compile slice's proof block) give the advice back,
+by the same walk. `charge` puts an encoding's bits by field (`i1_records`, I1's layout, or `derived_records`, the
+residual's) in the egress windows I1's rule charges them to.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any, NamedTuple
 
-from verity.protocols.resource_accounting.network.verifier.advice import RequestAdvice, Row, Source, StepAdvice
+from verity.protocols.resource_accounting.network.verifier.advice import (
+    Advice, outputs, RequestAdvice, Row, Source, StepAdvice, WIDTH_BITS,
+)
 
-__all__ = ["CertifiedRequest", "Config", "Holdings", "pool_bound", "PREFIX_ROOT", "Prefixes", "Residual", "stop_rule",
-    "tie_fields", "TOKEN_BYTES", "unit_key", "Walk", "walk_steps"]
+__all__ = ["CertifiedRequest", "charge", "Config", "config_of", "derived_records", "earliest_windows", "FORCED", "Holdings",
+    "i1_records", "pool_bound", "PREFIX_ROOT", "Prefixes", "rebuild", "reconstruct", "Records", "Residual", "residual",
+    "stop_rule", "tie_fields", "TOKEN_BYTES", "unit_key", "Walk", "walk_steps"]
 
 
 @dataclass(frozen=True)
@@ -510,7 +518,8 @@ def tie_fields(walk: Walk, res: Residual, held: Holdings, cfg: Config) -> list[R
     return out
 
 
-def config_of(trace: dict) -> Config:
+def config_of(trace: Mapping[str, Any]) -> Config:
+    """The registered config of a step trace, or of any document holding `Config`'s fields under ``config``."""
     c = trace["config"]
     return Config(block_size=c["block_size"], num_gpu_blocks=c["num_gpu_blocks"], max_num_batched_tokens=c["max_num_batched_tokens"],
                   max_model_len=c["max_model_len"], eos_token_id=c["eos_token_id"], stop_token_ids=tuple(c["stop_token_ids"]),
@@ -519,6 +528,8 @@ def config_of(trace: dict) -> Config:
                   row_order=c.get("row_order", "scheduling" if c.get("rows_in_scheduling_order", True) else "explicit"),
                   hit_unit=c.get("hit_unit", 0))
 
+
+# --- the residual -----------------------------------------------------------------------------------------------------
 
 def _sampling_rows(advice: Advice, i: int) -> int:
     P, k = advice.requests[i].prompt_len, 0
@@ -594,9 +605,9 @@ def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int
 
 
 def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
-    """I1's steps from the residual, the config and the tokens: the compile slice's proof block's derivation, which the compiler then
-    reads."""
-    values = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
+    """I1's steps from the residual, the config and the tokens: the compile slice's proof block's derivation, which the
+    compiler then reads."""
+    values: dict[str, Any] = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
     resumes = iter(res.resumes or ())
     later, resume = [0], [next(resumes, None)]
     told = iter(res.order)
@@ -608,7 +619,7 @@ def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
         ordered, entry[0] = entry[0][1], next(told, None)
         return ordered
 
-    def take(name: str):
+    def take(name: str) -> Any:
         value = next(values[name], None)
         if value is None:
             raise ValueError(f"residual: fewer {name} values than the rows read")
@@ -642,6 +653,8 @@ def rebuild(res: Residual, cfg: Config, held: Holdings, release: Sequence[int]) 
     return Advice(tuple(requests), walk.steps, tuple(res.release if res.release is not None else release))
 
 
+# --- bits -------------------------------------------------------------------------------------------------------------
+
 class Records(NamedTuple):
     """An encoding's bits by record, as I1 charges them, each by field: the header, each request's record, each step's,
     and each kept output's release."""
@@ -652,16 +665,16 @@ class Records(NamedTuple):
 
 
 def _uvar(value: int) -> int:
-    return I1.WIDTH_BITS + value.bit_length()
+    return WIDTH_BITS + value.bit_length()
 
 
-def v0_records(adv: Advice) -> Records:
+def i1_records(adv: Advice) -> Records:
     """I1's layout (its module's docstring), by field; `charge` of it is I1's `bits_by_window`."""
     lens = [x for q in adv.requests for x in (q.prompt_len, q.output_len)]
     lens += [x for st in adv.steps for r in st.rows for x in (r.start, r.n, r.cache_hit, *(s.n for s in r.sources))]
     w_req, w_len = max(len(adv.requests) - 1, 0).bit_length(), max(lens, default=0).bit_length()
     w_src = max((len(r.sources) - 1 for st in adv.steps for r in st.rows if r.cache_hit), default=0).bit_length()
-    header = {"header": 8 + _uvar(len(adv.requests)) + _uvar(len(adv.steps)) + 3 * I1.WIDTH_BITS}
+    header = {"header": 8 + _uvar(len(adv.requests)) + _uvar(len(adv.steps)) + 3 * WIDTH_BITS}
     requests = [{"id": _uvar(len(q.id.encode())) + 8 * len(q.id.encode()), "prompt_len": w_len, "output_len": w_len, "finish": 1}
                 for q in adv.requests]
     steps = [{"rows_in_step": w_req, "request": w_req * len(st.rows), "kind": len(st.rows), "start": w_len * len(st.rows),
@@ -683,11 +696,11 @@ def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
     w_hit = max(res.hits, default=0).bit_length()
     w_res = max(res.resumes or (0,)).bit_length()
     w_step = max(len(res.rows) - 1, 0).bit_length()
-    header = {"header": 8 + _uvar(len(res.prompt_len)) + _uvar(len(res.rows)) + 3 * I1.WIDTH_BITS + 3}
+    header = {"header": 8 + _uvar(len(res.prompt_len)) + _uvar(len(res.rows)) + 3 * WIDTH_BITS + 3}
     if res.order:
         header["order"] = _uvar(len(res.order))
     if res.resumes is not None:
-        header["resumes"] = I1.WIDTH_BITS + _uvar(len(res.resumes))
+        header["resumes"] = WIDTH_BITS + _uvar(len(res.resumes))
     lagged = set(walk.lag_requests)
     requests = [{"prompt_len": w_len, "lag": int(i in lagged)} for i in range(len(res.prompt_len))]
     told = {s: len(o) for s, o in res.order}
@@ -712,17 +725,19 @@ def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
                    max(res.release, default=0).bit_length() if res.release is not None else 0)
 
 
-def _earliest(adv: Advice, T: int) -> tuple[list[int], list[int]]:
+def earliest_windows(adv: Advice, T: int) -> tuple[list[int], list[int]]:
     """I1's charge windows: each step's (the earliest window of an output at that step or later; the last window when
     none follows), and each request's first step."""
     windows = [b // T for b in adv.release]
     own: list[int | None] = [None] * len(adv.steps)
-    for o, w in zip(I1.outputs(adv), windows):
-        own[o.step] = w if own[o.step] is None else min(own[o.step], w)
+    for o, w in zip(outputs(adv), windows):
+        prev = own[o.step]
+        own[o.step] = w if prev is None else min(prev, w)
     earliest, at = [0] * len(adv.steps), None
     for s in range(len(adv.steps) - 1, -1, -1):
-        if own[s] is not None:
-            at = own[s] if at is None else min(at, own[s])
+        mine = own[s]
+        if mine is not None:
+            at = mine if at is None else min(at, mine)
         earliest[s] = max(windows, default=0) if at is None else at
     first: dict[int, int] = {}
     for s, st in enumerate(adv.steps):
@@ -746,7 +761,7 @@ def charge(adv: Advice, T: int, rec: Records) -> dict[int, dict[str, int]]:
         for d in (rec.header, *rec.requests, *rec.steps):
             add(0, d)
         return out
-    earliest, first = _earliest(adv, T)
+    earliest, first = earliest_windows(adv, T)
     add(earliest[0], rec.header)
     for i, d in enumerate(rec.requests):
         add(earliest[first[i]], d)

@@ -1,10 +1,10 @@
-"""Advice v0's residual under the derived rules, built and measured.
+"""Advice v0's residual under the derived rules, measured.
 
-The rules are `verity_vllm.pipeline.advice_code.derived` (`Config`, `Prefixes`, the walk `walk_steps`, the no-eviction and
-pool bounds, the tie; its docstring states them and the residual), re-exported here for the modules and tests that load
-this one by path. This module builds advice v0's residual with them: `residual` (the encoder) and `reconstruct` and
-`rebuild` (the compile slice's proof block), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
-verdict, derivation, checker and cost.
+The rules and the residual are `verity_vllm.pipeline.advice_code.derived` (`Config`, `Prefixes`, the walk `walk_steps`, the
+no-eviction and pool bounds, the tie; `residual`, the encoder, and `reconstruct` and `rebuild`, the compile slice's proof
+block; `charge` over `i1_records`, here `v0_records`, or `derived_records`), re-exported here for the modules and tests
+that load this one by path. This module reads traces into advice v0 (`load_trace`, `load_corpus_trace`, `advice_of`). `FIELDS` is the table of
+every I1 field: its verdict, derivation, checker and cost.
 
 `bits_table` measures v0 (I1's own `bits_by_window`) and the residual per certifier window, the residual at its own least
 widths and charged by I1's rule (`charge`), after checking that `rebuild(residual(a)) == a`.
@@ -24,14 +24,14 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict
 from pathlib import Path
-from typing import NamedTuple
 
 from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity.protocols.resource_accounting.network.verifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
 from verity_vllm.pipeline.advice_code.derived import (
-    CertifiedRequest, Config, Holdings, pool_bound, PREFIX_ROOT as PREFIX_ROOT, Prefixes, Residual,
-    stop_rule as stop_rule, tie_fields, TOKEN_BYTES as TOKEN_BYTES, unit_key as unit_key, Walk,
-    walk_steps,
+    CertifiedRequest, charge, Config as Config, config_of, derived_records as derived_records, earliest_windows, FORCED, Holdings,
+    pool_bound as pool_bound, PREFIX_ROOT as PREFIX_ROOT, Prefixes, rebuild, reconstruct, Records as Records,
+    Residual as Residual, residual, stop_rule as stop_rule, tie_fields as tie_fields, TOKEN_BYTES as TOKEN_BYTES,
+    unit_key as unit_key, i1_records as v0_records, Walk as Walk, walk_steps as walk_steps,
 )
 
 
@@ -232,7 +232,7 @@ def bits_table(trace: dict, *, T: int = 600, bucket_ms: float = 100.0) -> dict:
     vllm_sources = [(tuple(Source(num[a], n) for a, n in r["sources"]), adv.steps[s].rows[j].sources)
                     for s, st in enumerate(trace["steps"]) for j, r in enumerate(st["rows"]) if "sources" in r]
     dv, ds = charge(adv, T, derived_records(res, walk, cfg)), charge(adv, T, derived_records(shaped, walk, cfg))
-    earliest, first = _earliest(adv, T)
+    earliest, first = earliest_windows(adv, T)
     windows = []
     for w in sorted(v0):
         steps = [s for s, x in enumerate(earliest) if x == w]

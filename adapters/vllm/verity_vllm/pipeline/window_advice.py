@@ -37,11 +37,14 @@ version 0 can say, a version 2 one that aborts nothing, a finish of 3.
 """
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 import verity.protocols.resource_accounting.network.verifier.advice as I1
+from verity.circuits.codec import canonical_json
+from verity.commitments import advice as AC
 from verity.protocols.resource_accounting.network.verifier.advice import (  # the advice's parts, as `predict.batch._solo` reads them
     KINDS,
     WIDTH_BITS,
@@ -570,6 +573,21 @@ def bits_by_window(advice: Advice, T: int) -> dict[int, int]:
     return charge
 
 
+def opens(reg: Mapping[str, Any], opening: Mapping[str, Any], adv: Advice | I1.Advice) -> bool:
+    """Whether a Commit window's opening opens its registered root (``reg``, its public registration) to ``adv``, its
+    window advice (or an I1 v0 advice, a window that carries nothing): the opening's bytes are ``adv``'s encoding
+    (`encode`, I1 v0's for an I1 v0 advice), committed as `advice_windows.commit_advice` commits them (``row_bits`` rows,
+    the last zero-padded, under the binding of the scheme to the registered compiler)."""
+    data = bytes.fromhex(opening["advice"])
+    if data != (I1.encode(adv) if type(adv) is I1.Advice else encode(adv)) or opening.get("scheme") != reg["scheme"]:
+        return False
+    w = reg["row_bits"] // 8
+    rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
+    binding = hashlib.sha512(canonical_json({"scheme": reg["scheme"], "compiler": reg["binding"]["compiler"]})).digest()
+    got = AC.commit(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
+    return bool(got.root.hex() == reg["binding"]["advice"]["root"])
+
+
 def to_json(advice: Advice) -> dict:
     """The window as JSON, for debugging: I1's `to_json` for a version 0 window, with ``carried`` and this schema otherwise (an
     aborted request's finish ``abort``); `from_json` reads either back."""
@@ -620,19 +638,3 @@ def from_json(doc: Any) -> Advice:
     if not advice.version:
         raise MalformedAdvice(f"a window that carries nothing in or out and aborts nothing is I1 v0's ({I1.SCHEMA!r})")
     return advice
-
-
-def opens(reg: dict, opening: dict, adv) -> bool:
-    """Whether a Commit window's opening opens its registered root (``reg``, its public registration) to ``adv``, its
-    window advice (`window_advice.Advice`, or an I1 v0 advice, a window that carries nothing): the opening's bytes are
-    ``adv``'s encoding (`window_advice.encode`, I1 v0's for a window that carries nothing), committed as
-    `advice_windows.commit_advice` commits them (``row_bits`` rows, the last zero-padded, under the binding of the
-    scheme to the registered compiler)."""
-    data = bytes.fromhex(opening["advice"])
-    if data != (I1.encode(adv) if type(adv) is I1.Advice else WA.encode(adv)) or opening.get("scheme") != reg["scheme"]:
-        return False
-    w = reg["row_bits"] // 8
-    rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
-    binding = hashlib.sha512(canonical_json({"scheme": reg["scheme"], "compiler": reg["binding"]["compiler"]})).digest()
-    got = AC.commit(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
-    return got.root.hex() == reg["binding"]["advice"]["root"]

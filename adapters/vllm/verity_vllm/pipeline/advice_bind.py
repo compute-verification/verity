@@ -1,6 +1,45 @@
-def holdings(adv, io: list[dict]):
-    """The certified I/O (``io.json``'s requests, in ingress order) as `derived.Holdings`, and each advice request's
-    certified index; or None and why, when the advice's requests aren't the certified ones, each once."""
+"""`verity-vllm advice RUN --bind RUN_IO`: a `verity-vllm serve-openai` endpoint's own advice bound to a run's certified I/O.
+
+``RUN`` holds the endpoint's records (`ENDPOINT`) and ``--out`` (default ``RUN/advice``) the advice `verity-vllm advice` wrote
+over them, one window advice (`window_advice`) a closed Commit window, each registered (its hiding root, under the window's
+Commit) with its opening beside it. ``--bind`` names the run: its execution phases (``deployment``: ``origin_unix``,
+``windows`` and ``window_s``) and its certified I/O (``io``: each request's ``user``, ``prompt``, ``max_tokens`` and
+``output``, in ingress order), witness, so ``-`` reads them from stdin and they touch no file. The run's windows are
+bound to the advice (each window opened to its registered root, every certified request admitted in exactly one window, a
+window that carries requests in joined to the window before it, `window_chain.join`) and each chain of windows rebuilt
+from its certified I/O under the config read off the endpoint's records (`endpoint_config`), its bits placed in the run's
+execution phases (`served_advice`). The command writes nothing and prints one JSON document (`main`): either ``advice``
+and ``bits``, `served_advice`'s two, or ``error``, the repr of what refused the records.
+"""
+from __future__ import annotations
+
+import json
+import math
+import sys
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+from verity.protocols.resource_accounting.network.prover import window_chain as WC
+from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm.log import write
+from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.advice_code import derived as D
+
+#: the endpoint's records `served_advice` reads
+ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
+SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
+COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
+ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
+
+
+def _jsonl(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+
+
+def holdings(adv: I1.Advice, io: Sequence[Mapping[str, Any]]) -> tuple[D.Holdings | None, tuple[int, ...] | None, str | None]:
+    """The certified I/O (its requests, in ingress order) as `derived.Holdings`, and each advice request's certified index;
+    or None and why, when the advice's requests aren't the certified ones, each once."""
     users = [r["user"] for r in io]
     ids = [q.id for q in adv.requests]
     if sorted(users) != sorted(ids) or len(set(ids)) != len(ids):
@@ -10,13 +49,16 @@ def holdings(adv, io: list[dict]):
     return held, tuple(users.index(i) for i in ids), None
 
 
-def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) -> dict:
-    """The advice's bits per egress window of T buckets: v0's, and with ``config`` and an ``io`` it is bound to the
-    residual's (the module's docstring); ``io``, the certified I/O, binds the advice to the run, and its tokens are what
-    the residual reads and rebuilds the advice from."""
+def bits(adv: I1.Advice, T: int, windows: int, config: dict[str, Any] | None,
+         io: Sequence[Mapping[str, Any]] | None) -> dict[str, Any]:
+    """The advice's bits per egress window of T buckets: v0's (I1's `bits_by_window`) and, with ``config`` (`derived.Config`'s
+    fields) and an ``io`` it is bound to, the residual's (`derived.residual`), unshaped (release sent) and shaped (release
+    derived), charged by I1's rule (`derived.charge`), with the forced fields' share; ``io``, the certified I/O, binds the
+    advice to the run (every advice request a certified one, once), and its tokens are what the residual reads and
+    `derived.rebuild` gives the whole advice back from."""
     v0 = I1.bits_by_window(adv, T)
-    out = {"T": T, "v0_total": I1.total_bits(adv), "config": config, "bound": None, "public_fields": None,
-           "rebuilt": None, "why": None}
+    out: dict[str, Any] = {"T": T, "v0_total": I1.total_bits(adv), "config": config, "bound": None, "public_fields": None,
+                           "rebuilt": None, "why": None}
     held = order = None
     if io is None:
         out["bound_why"] = "no certified I/O to hold it to: only a varied run's check writes one (io.json)"
@@ -45,7 +87,7 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
             except ValueError as err:
                 out["why"], out["rebuilt"] = f"the rebuild from the certified I/O: {err}", False
 
-    def total(d, w, fields=None):
+    def total(d: dict[int, dict[str, int]] | None, w: int, fields: Sequence[str] | None = None) -> int | None:
         return None if d is None else sum(b for f, b in d.get(w, {}).items() if fields is None or f in fields)
 
     out["windows"] = [{"window": w, "v0_bits": v0.get(w, 0), "derived_bits": total(dv, w),
@@ -54,15 +96,7 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
     return out
 
 
-# --- the endpoint's own advice ----------------------------------------------------------------------------------------
-
-ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
-SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
-COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
-ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
-
-
-def endpoint_config(recs: list[dict], serve: dict, eos: list[int]) -> dict:
+def endpoint_config(recs: Sequence[Mapping[str, Any]], serve: Mapping[str, Any], eos: Sequence[int]) -> dict[str, Any]:
     """The serving config `derived.Config` takes, read off the endpoint's records, since it registers none: its scheduler
     trace's header (``recs``, ``advice_trace.jsonl``), ``serve.json``'s ``max_model_len``, the plan's EOS ids, and I1's
     rows in the order the trace's steps record them."""
@@ -76,10 +110,10 @@ def endpoint_config(recs: list[dict], serve: dict, eos: list[int]) -> dict:
             "stop_token_ids": list(eos[1:]), "scheduler": "async" if head.get("async_scheduling") else "sync",
             "long_prefill_token_threshold": head.get("long_prefill_token_threshold", 0),
             "max_num_seqs": head["max_num_seqs"], "enable_prefix_caching": head["enable_prefix_caching"],
-            "row_order": ROW_ORDER[next(iter(orders))]}
+            "row_order": ROW_ORDER[str(next(iter(orders)))]}
 
 
-def _first_steps(recs: list[dict]) -> dict[int, float]:
+def first_steps(recs: Sequence[Mapping[str, Any]]) -> dict[int, float]:
     """Each Commit window's first step's clock (unix seconds): the step with the least index from its open to its
     close, as `verity-vllm advice` cuts the windows (its ``windows_of``) and counts their release from."""
     clock = {r["step"]: r["t"] for r in recs if r["kind"] == "step" and "t" in r}
@@ -93,49 +127,58 @@ def _first_steps(recs: list[dict]) -> dict[int, float]:
     return out
 
 
-def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: int, eos: list[int]) -> tuple[dict, dict]:
-    """The endpoint's own advice for the honest run, as `advice` and `bits` report one: ``adv_dir`` is `verity-vllm
-    advice`'s over the endpoint's records ``ep`` (`ENDPOINT`), one window advice (`window_advice`) a closed Commit
-    window. The run's windows are those whose first step falls in its execution phases (``deployment``'s origin and span,
-    `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
-    I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
-    registered advice closed them, never its own string's, so each request and step is charged once. The advice is
-    bound to the run when each window's requests are certified ones, every certified request is admitted in exactly one
-    window, each window's opening opens its registered root and its registration names the window's Commit
-    (``windows.jsonl``), and each chain joins: a window that carries a request in follows the window before it, which
-    the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
-    config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
-    window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
-    the execution phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
-    window's row."""
+def served_advice(ep: Path, adv_dir: Path, deployment: Mapping[str, Any], io: Sequence[Mapping[str, Any]], T: int,
+                  eos: Sequence[int]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The endpoint's own advice for the run, as `bits` reports one: ``adv_dir`` is `verity-vllm advice`'s over the
+    endpoint's records ``ep`` (`ENDPOINT`), one window advice (`window_advice`) a closed Commit window. The run's windows are
+    those whose first step falls in its execution phases (``deployment``'s origin and span, `SLACK_S`). A window that
+    carries requests in joins the window before it into a chain (``chain``), joined into one I1 v0 advice
+    (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's registered
+    advice closed them, never its own string's, so each request and step is charged once. The advice is bound to the run
+    when each window's requests are certified ones, every certified request is admitted in exactly one window, each
+    window's opening opens its registered root (`window_advice.opens`) and its registration names the window's Commit
+    (``windows.jsonl``), and each chain joins: a window that carries a request in follows the window before it, which the
+    run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the config
+    read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first window's first
+    step's bucket, each later window's release counted from its own first step's, so its bits land in the execution
+    phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first window's
+    row."""
     recs = _jsonl(ep / "advice_trace.jsonl")
     serve = json.loads((ep / "serve.json").read_text())
     index = json.loads((adv_dir / "windows.json").read_text())
     commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
                for d in _jsonl(ep / "windows.jsonl")}
-    first = _first_steps(recs)
+    first = first_steps(recs)
     origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
     bucket_s = deployment["window_s"] / T
     users = [r["user"] for r in io]
     certified = set(users)
-    out = {"T": T, "served": serve.get("run_id"), "config": None, "config_from": "the endpoint's records (its trace's "
-           "header, serve.json's max_model_len, the plan's EOS ids), not one it registered", "bound": False,
-           "bound_why": None, "public_fields": None, "rebuilt": None, "why": None, "commit_windows": [], "windows": []}
+    out: dict[str, Any] = {"T": T, "served": serve.get("run_id"), "config": None, "config_from": "the endpoint's records "
+                           "(its trace's header, serve.json's max_model_len, the plan's EOS ids), not one it registered",
+                           "bound": False, "bound_why": None, "public_fields": None, "rebuilt": None, "why": None,
+                           "commit_windows": [], "windows": []}
+    config: dict[str, Any] | None
     try:
         out["config"] = config = endpoint_config(recs, serve, eos)
     except (KeyError, ValueError) as err:
         out["why"], config = f"no serving config off the endpoint's records: {err!r}", None
-    problems, rows, links, seen, loaded = [], [], {}, {u: 0 for u in users}, []
+    problems: list[str] = []
+    rows: list[dict[str, Any]] = []
+    links: dict[int, dict[str, int | None]] = {}
+    seen = {u: 0 for u in users}
+    loaded: list[list[tuple[int, Any, dict[str, Any]]]] = []
 
-    def place(charged: dict[int, dict], at: int) -> None:
+    def place(charged: Sequence[Mapping[str, Any]], at: int) -> None:
         for x in charged:
             lw = links.setdefault((x["window"] + at) // T, dict.fromkeys(COUNTS, 0))
             for k in COUNTS:
-                lw[k] = None if lw[k] is None or x.get(k) is None else lw[k] + x[k]
+                was = lw[k]
+                lw[k] = None if was is None or x.get(k) is None else was + x[k]
 
     for w in sorted(w for w, t in first.items() if origin - SLACK_S <= t < origin + span):
         if str(w) not in index["windows"]:
-            why = (index.get("refused") or {}).get(str(w)) or "still open"
+            refused = index.get("refused")
+            why = (refused.get(str(w)) if refused else None) or "still open"
             problems.append(f"Commit window {w} has no advice ({why})")
             rows.append({"window": w, "refused": why})
             continue
@@ -147,7 +190,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             if i in seen:
                 seen[i] += 1
         foreign = [i for i in ids if i not in certified]
-        opened = opens(reg, json.loads((d / "private" / "opening.json").read_text()), adv)
+        opened = WA.opens(reg, json.loads((d / "private" / "opening.json").read_text()), adv)
         at = math.floor((first[w] - origin) / bucket_s)
         row = {"window": w, "commit": reg.get("commit"), "commit_is_the_windows": reg.get("commit") == commits.get(w),
                "root": reg["binding"]["advice"]["root"], "opened": opened, "requests": len(ids) - len(adv.carried),
@@ -170,12 +213,13 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     for chained in loaded:
         at, ws, last = chained[0][2]["bucket"], [w for w, _, _ in chained], {}
 
-        def released(k: int, rid: str, _: int, b: int, chained=chained, at=at, last=last) -> int:
+        def released(k: int, rid: str, _: int, b: int, chained: Any = chained, at: int = at,
+                     last: dict[str, int] = last) -> int:
             last[rid] = max(last.get(rid, 0), b + chained[k][2]["bucket"] - at)
             return last[rid]
 
         try:
-            adv = WC.join([(w, a) for w, a, _ in chained], released, WA)
+            joined = WC.join([(w, a) for w, a, _ in chained], released, WA)
         except I1.MalformedAdvice as err:
             problems.append(str(err))
             for w, a, row in chained:
@@ -183,7 +227,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
                 row.update(chain=ws, bound=False, why=str(err), v0_bits=row["committed_bits"],
                            **dict.fromkeys(COUNTS[1:]))
             continue
-        b = bits(adv, 1, 0, config, [r for r in io if r["user"] in {q.id for q in adv.requests}])
+        b = bits(joined, 1, 0, config, [r for r in io if r["user"] in {q.id for q in joined.requests}])
         place(b["windows"], at)
         for _, _, row in chained:
             row.update(chain=ws, **{k: b[k] for k in ("bound", "public_fields", "rebuilt", "why")})
@@ -215,3 +259,23 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             "requests": sum(r["requests"] for r in ran), "steps": sum(r["steps"] for r in ran),
             "outputs": sum(r["outputs"] for r in ran), "file_sha512": None, "v0_sha512": None}
     return info, out
+
+
+def main(run: str | Path, adv_dir: str | Path | None, bind: str, T: int, eos: str) -> int:
+    """``--bind``: `served_advice` over ``run``'s records and ``adv_dir`` (default ``run/advice``) for the run ``bind``
+    names (a file, or ``-`` for stdin), printed as one JSON document; ``error`` holds the repr of an OSError, KeyError or
+    ValueError the records raised, and the exit code is then 1."""
+    run = Path(run)
+    doc = json.load(sys.stdin) if bind == "-" else json.loads(Path(bind).read_text())
+    try:
+        info, b = served_advice(run, Path(adv_dir) if adv_dir else run / "advice", doc["deployment"], doc["io"], int(T),
+                                [int(t) for t in eos.split(",")])
+    except (OSError, KeyError, ValueError) as err:
+        write(json.dumps({"error": repr(err)}))
+        return 1
+    write(json.dumps({"advice": info, "bits": b}))
+    return 0
+
+
+__all__ = ["bits", "COUNTS", "endpoint_config", "ENDPOINT", "first_steps", "holdings", "main", "ROW_ORDER", "served_advice",
+           "SLACK_S"]

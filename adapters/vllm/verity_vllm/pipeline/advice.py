@@ -55,6 +55,11 @@ position it reached, and its record (lengths and finish) is the Commit record's.
 
     verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
         [--weights-of-record FILE]
+
+``--bind`` writes nothing: it binds the advice already under ``--out`` to a run's certified I/O and prints the result
+(`advice_bind`).
+
+    verity-vllm advice RUN [--out DIR] --bind FILE|- --eos IDS --T T
 """
 from __future__ import annotations
 
@@ -641,6 +646,10 @@ class Options:
                                            help="the committer's weights registration (window_weights.weights_registration), "
                                                 "whose hiding root for each weight parameter each window's registration "
                                                 "records (default: none recorded)")
+    bind: str | None = option("--bind", default=None, metavar="JSON",
+                              help="bind the advice under --out to a run instead of writing it (advice_bind): the run's "
+                                   "deployment and certified I/O, a file or - for stdin; prints one JSON document, writes nothing")
+    eos: str | None = option("--eos", default=None, help="with --bind: the plan's EOS token ids, comma-separated")
 
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:
@@ -654,6 +663,11 @@ def _say(rep: dict[str, Any], where: str = "") -> bool:
 
 
 def main(a: Options) -> int:
+    if a.bind is not None:
+        if not a.eos:
+            raise UsageError("--bind needs --eos, the plan's EOS token ids")
+        from . import advice_bind
+        return advice_bind.main(a.run, a.out, a.bind, a.T, a.eos)
     try:
         roots = None
         if a.weights_of_record:
