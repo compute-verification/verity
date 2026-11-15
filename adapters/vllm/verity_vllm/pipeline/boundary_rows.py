@@ -840,8 +840,9 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
     return c
 
 
-__all__ = ["COMMIT", "EGRESS", "FIELD_AT", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS",
-           "PARTS", "PORTS", "PROMPT", "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout",
-           "Span", "cap", "check_template", "class_signature", "class_size", "commit", "egress_row", "ends", "id_rows",
-           "ingress_row", "inlined", "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type",
-           "run_root", "sampling_of", "window_domain", "write"]
+__all__ = ["COMMIT", "EGRESS", "FIELD_AT", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP",
+           "PARAMS", "PARTS", "PORTS", "PROMPT", "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "TABLES_UNDER_A_RULE",
+           "U32", "Committed", "Layout", "Span", "cap", "check_template", "class_signature", "class_size", "commit",
+           "descriptor_id", "egress_row", "ends", "id_rows", "ingress_row", "inlined", "layout_of", "linked",
+           "port_rows", "record", "reopen", "return_port", "row_type", "run_root", "sampling_of", "table_roots",
+           "window_domain", "write"]

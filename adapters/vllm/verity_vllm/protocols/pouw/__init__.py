@@ -107,7 +107,7 @@ from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["challenged", "h1_run"]
+__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals"]
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
