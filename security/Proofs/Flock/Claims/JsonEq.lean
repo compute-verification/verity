@@ -12,8 +12,8 @@ objects as the service's sample equality does (Python's dict equality: the same 
 their order) and arrays elementwise in order (`jsonEquiv_obj_iff`, on objects whose trees are well formed, as
 `Flock.JsonParse.parse` builds them; `jsonEquiv_arr_iff`), recursively; scalars are equal as values (a number as its mantissa and
 exponent, as `canon` reads the integers it accepts). It is equality of forms (`jsonForm`: an object as its fields in
-the order of its tree, key order in a well-formed one), so `drawEq`, `JsonEquiv` on optional values, decides it
-(`drawEq_iff`).
+the order of its tree, key order in a well-formed one), so `sampleEq`, `JsonEquiv` on optional values, decides it
+(`sampleEq_iff`).
 -/
 
 @[expose] public section
@@ -174,21 +174,21 @@ theorem jsonEquiv_obj_iff {m n : Std.TreeMap.Raw String Json compare} (hm : m.WF
   exact ⟨fun h => ⟨fun k => (h k).1, fun k a b => (h k).2 a b⟩, fun h k => ⟨h.1 k, h.2 k⟩⟩
 
 /-- `JsonEquiv` on optional values: both absent, or both present and equivalent. -/
-def drawEq : Option Json → Option Json → Bool
+def sampleEq : Option Json → Option Json → Bool
   | none, none => true
   | some a, some b => decide (JsonEquiv a b)
   | _, _ => false
 
-/-- **`drawEq` passes exactly on equivalent values.** -/
-theorem drawEq_iff (a b : Option Json) : drawEq a b = true ↔ Option.Rel JsonEquiv a b := by
+/-- **`sampleEq` passes exactly on equivalent values.** -/
+theorem sampleEq_iff (a b : Option Json) : sampleEq a b = true ↔ Option.Rel JsonEquiv a b := by
   rcases a with _ | a <;> rcases b with _ | b
   · exact ⟨fun _ => .none, fun _ => rfl⟩
-  · exact ⟨fun h => by simp [drawEq] at h, fun h => by cases h⟩
-  · exact ⟨fun h => by simp [drawEq] at h, fun h => by cases h⟩
-  · simp only [drawEq, decide_eq_true_eq]
+  · exact ⟨fun h => by simp [sampleEq] at h, fun h => by cases h⟩
+  · exact ⟨fun h => by simp [sampleEq] at h, fun h => by cases h⟩
+  · simp only [sampleEq, decide_eq_true_eq]
     exact ⟨.some, fun h => by cases h; assumption⟩
 
-theorem drawEq_refl (a : Option Json) : drawEq a a = true :=
-  (drawEq_iff a a).2 (by cases a <;> constructor; exact JsonEquiv.refl _)
+theorem sampleEq_refl (a : Option Json) : sampleEq a a = true :=
+  (sampleEq_iff a a).2 (by cases a <;> constructor; exact JsonEquiv.refl _)
 
 end FlockDeploy

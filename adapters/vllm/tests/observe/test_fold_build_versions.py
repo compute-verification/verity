@@ -28,9 +28,9 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.hopper import Fa3InvSum
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.hopper import Fa3InvSum
 
 import verity_vllm
 from verity_vllm.program.frontend import targets as TG

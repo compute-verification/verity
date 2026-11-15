@@ -7,9 +7,9 @@ public import Flock.FV3
 /-!
 # The memory challenger's records and coins
 
-`verity/core/protocols/pous/memory_challenger.py`'s formats, whose module docstring is the spec: the coin tree
+`verity/protocols/accounting/pous/device/memory_challenger.py`'s formats, whose module docstring is the spec: the coin tree
 (`coinDigest`, `coinLeaf`, `CoinTree.make`, `CoinTree.draw`, `CoinTree.opening`, `verifyCoin`), the session commitment
-and its header, the round record (`Round.value`), the records root, the signed message, and `blockDigest`. A Python
+and its header, the round record (`Round.value`), the records digest, the signed message, and `blockDigest`. A Python
 exception is an `Except.error` here, and where the Python's caller reads an exception as "no" (`verify_coin`), so does the
 Lean. Integers are big-endian.
 -/
@@ -24,16 +24,15 @@ open Flock
 
 abbrev E := Except String
 
-def PROTOCOL : String := "verity-pous/memory-challenger/v1"
+def PROTOCOL : String := "verity-pous/memory-challenger/v2"
 def COIN_DOMAIN : String := "verity/pous/memory-challenger-coins/v1"
 def COIN_TREE : String := "verity-pous/coin-tree/hm96-sha512/v1"
-def RECORDS_TREE : String := "verity-pous/round-records/frame-v3-sha512/v1"
+def RECORDS : String := "sha512/row/v2"
 def COIN_TAG : ByteArray := "verity-pous/memory-challenger/coin/v1".toUTF8.push 0
 def COIN_BINDING : ByteArray := "verity-pous/memory-challenger/coin-tree/v1".toUTF8.push 0
-def RECORD_BINDING : ByteArray := "verity-pous/memory-challenger/round-records/v1".toUTF8.push 0
 def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v1".toUTF8.push 0
 def COIN_SCHEMA : String := "pous/coin/hm96-sha512/v1"
-def RECORD_SCHEMA : String := "pous/round-record/v2"
+def RECORD_BYTES : Nat := 92
 def TEST_PREFIX : String := "test/"
 def COMPLETE : String := "complete"
 def LATE : String := "late"
@@ -110,7 +109,7 @@ def CoinTree.make (session : ByteArray) (blocks : Nat) (indices : Array Nat) (ke
 
 /-- `derive(source, COIN_DOMAIN, {"session", "blocks", "k"})` and its `uniform(blocks, j)` for `j < k`: the indices.
 `derive` refuses an empty source (a `TypeError`), and `uniform` no blocks. -/
-def drawIndices (source session : ByteArray) (blocks k : Nat) : E (Array Nat) := do
+def sampleIndices (source session : ByteArray) (blocks k : Nat) : E (Array Nat) := do
   if source.isEmpty then throw "source must be nonempty bytes: a key holder's secret"
   let key := FlockSoundness.Randomness.derive source COIN_DOMAIN
     [("session", .bytes session), ("blocks", .int blocks), ("k", .int k)]
@@ -123,7 +122,7 @@ def drawIndices (source session : ByteArray) (blocks k : Nat) : E (Array Nat) :=
 /-- `CoinTree.draw(source, session, blocks, k, key=key, salts=salts)`: the key and salts as given (the driver takes them
 from the world's coins). -/
 def CoinTree.draw (source session : ByteArray) (blocks k : Nat) (key : ByteArray) (salts : Array ByteArray) : E CoinTree := do
-  CoinTree.make session blocks (← drawIndices source session blocks k) key salts
+  CoinTree.make session blocks (← sampleIndices source session blocks k) key salts
 
 def CoinTree.k (t : CoinTree) : Nat := t.indices.size
 
@@ -133,7 +132,7 @@ def CoinTree.opening (t : CoinTree) (j : Nat) : CoinOpening :=
 /-! ## The session -/
 
 /-- What the memory challenger publishes before the session. Every field is in the signed header. -/
-structure SessionCommitment where
+structure ChallengePhaseCommitment where
   session : ByteArray
   coinRoot : ByteArray
   coinKey : ByteArray
@@ -145,7 +144,7 @@ structure SessionCommitment where
   deriving BEq, Inhabited
 
 /-- `verify_coin`: the opening opens round `j`'s coin under the commitment's coin tree, to a block index. -/
-def verifyCoin (c : SessionCommitment) (o : CoinOpening) : Bool :=
+def verifyCoin (c : ChallengePhaseCommitment) (o : CoinOpening) : Bool :=
   o.j < c.k && o.index < c.blocks &&
     match coinLeaf c.coinKey c.session o.j o.index o.salt with
     | .error _ => false
@@ -162,16 +161,20 @@ structure Round where
 
 def Round.elapsedNs (r : Round) : Int := (r.receiptNs : Int) - r.sendNs
 
-/-- `Round.value`: `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)`. -/
-def Round.value (r : Round) : E ByteArray := do
+/-- `Round.value`: `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)`, `RECORD_BYTES` bytes; a digest of another
+length is refused, so the records' stream splits one way. -/
+def Round.value (r : Round) : E ByteArray :=
+  if r.digest.size ≠ 64 then throw "a round's digest is 64 bytes" else do
   pure ((← beN 4 r.j "j") ++ (← beN 8 r.index "index") ++ (← beN 8 r.sendNs "send_ns") ++ (← beN 8 r.receiptNs "receipt_ns")
     ++ r.digest)
 
-/-- `records_root`: the frame-v3-sha512 root over the round records, the empty root for none. -/
-def recordsRoot (session : ByteArray) (rounds : Array Round) : E ByteArray := do
-  let d := domain RECORD_BINDING session rounds.size
-  let values ← rounds.mapM Round.value
-  pure (d.root ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
+/-- The round records' values in round order, as one stream. -/
+def recordsStream (rounds : Array Round) : E ByteArray := do
+  pure ((← rounds.mapM Round.value).foldl (· ++ ·) ByteArray.empty)
+
+/-- `records_digest`: the records stream's `blockDigest`. -/
+def recordsDigest (rounds : Array Round) : E ByteArray := do
+  pure (blockDigest (← recordsStream rounds))
 
 private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
@@ -195,24 +198,24 @@ def pyJsonStr (s : String) : String := Id.run do
              else let m := n - 0x10000; out ++ "\\u" ++ hex4 (0xd800 + (m >>> 10)) ++ "\\u" ++ hex4 (0xdc00 + (m &&& 0x3ff))
   return out ++ "\""
 
-/-- The header's fields, in key order, as `SessionCommitment.header()` and `message` write them. -/
-def SessionCommitment.headerFields (c : SessionCommitment) : List (String × String) :=
+/-- The header's fields, in key order, as `ChallengePhaseCommitment.header()` and `message` write them. -/
+def ChallengePhaseCommitment.headerFields (c : ChallengePhaseCommitment) : List (String × String) :=
   [("binding", pyJsonStr (hexOf c.binding)), ("block_bytes", toString c.blockBytes), ("blocks", toString c.blocks),
    ("clock", pyJsonStr CLOCK), ("coin_key_sha512", pyJsonStr (hexOf (Sha512.hash c.coinKey))),
    ("coin_root", pyJsonStr (hexOf c.coinRoot)), ("coin_tree", pyJsonStr COIN_TREE), ("k", toString c.k),
-   ("limit_ns", toString c.limitNs), ("protocol", pyJsonStr PROTOCOL), ("records_tree", pyJsonStr RECORDS_TREE),
+   ("limit_ns", toString c.limitNs), ("protocol", pyJsonStr PROTOCOL), ("records", pyJsonStr RECORDS),
    ("session", pyJsonStr (hexOf c.session))]
 
 /-- The signed header: the commitment's header with how the session ended and its number of rounds, as
 `json.dumps(sort_keys=True, separators=(",", ":"))`. -/
-def header (c : SessionCommitment) (ended : String) (rounds : Nat) : String :=
+def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
   let fields := (c.headerFields ++ [("ended", pyJsonStr ended), ("rounds", toString rounds)]).toArray.qsort (·.1 < ·.1)
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
-/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`. -/
-def message (c : SessionCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do
+/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`. -/
+def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do
   let head := (header c ended rounds.size).toUTF8
-  let root ← recordsRoot c.session rounds
-  pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ root))
+  let digest ← recordsDigest rounds
+  pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ digest))
 
 end MemoryChallenger

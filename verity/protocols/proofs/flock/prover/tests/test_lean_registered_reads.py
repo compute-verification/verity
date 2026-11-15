@@ -31,7 +31,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, regi
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 FIXTURE = "art:bf70d8eb"
 STATEMENT = "verity/flock-circuit"
 UPSTREAM_STATEMENT = "verity/flock-circuit@967b8d06"
@@ -77,7 +77,7 @@ def stage(d: Path) -> SimpleNamespace:
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
     part = P.partition(program, query)
     s = InputSet.open(synthetic_set(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
@@ -451,7 +451,7 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
 
 
 @pytest.mark.parametrize("value", ["rec-top-L0", "rec-top-stacked-L0"])
-def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
+def test_a_sampled_session_samples_every_unit_reading_a_rounds_commitment_in_full(staged, value):
     """U4 (`Flock.HmRow`, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
     when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:
@@ -530,7 +530,7 @@ def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], po
 
 
 @pytest.mark.parametrize("level", [0, 1])
-def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
+def test_a_rounds_tops_are_the_live_coin_parts(staged, tmp_path, level):
     """`RecVStar.checkTopRows`: a statement whose `out` reads the circuit table's level-`l` tops `rec-top-L<l>` (V*'s levels'
     `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the challenger recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
@@ -577,15 +577,15 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     # row r of the table reads position OUT_POSITIONS[r]: 2, 7, 0, 9, 4, 4, 1, 6
     if level == 0:
         assert why(off(root, 9), tops) == (f"setup: rec-tops: {unit}: port out's table row 3 is not node 9 of circuit's root_B, "
-                                           "which the coin server committed")
+                                           "which the challenger's live-coin part committed")
     else:
         assert why(root, [off(tops[0], 2), tops[1]]) == (
-            f"setup: rec-tops: {unit}: port out's table row 0 is not node 2 of rep 0's level 1 top, which the coin server committed")
+            f"setup: rec-tops: {unit}: port out's table row 0 is not node 2 of rep 0's level 1 top, which the challenger's live-coin part committed")
         assert why(root, [tops[0], off(tops[1], 1)]) == (
-            f"setup: rec-tops: {unit}: port out's table row 1 is not node 1 of rep 1's level 1 top, which the coin server committed")
+            f"setup: rec-tops: {unit}: port out's table row 1 is not node 1 of rep 1's level 1 top, which the challenger's live-coin part committed")
     p = verify(root, tops, [LINK_POINTS[0], [LINK_POINTS[1][0], f"{0xFF:032x}"]])
     assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the inner session's record's link points are not the "
-                                                   "ones the coin server drew (link.points): check 5 would take the extra "
+                                                   "ones the challenger's live-coin part drew (link.points): check 5 would take the extra "
                                                    "claims at points the prover chose")
 
 
@@ -598,7 +598,7 @@ def rope(tmp_path_factory):
         root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return root
 
 

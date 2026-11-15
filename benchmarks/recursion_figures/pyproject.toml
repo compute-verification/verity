@@ -2,8 +2,9 @@
 # the monitoring periods. Not a package: a script, and the suite that tests it.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# the suite imports the scripts beside it by their module names, as they import each other
-pythonpath = ["."]
+# the suite imports the scripts beside it by their module names, as they import each other, and recursion_e2e's reader
+# (rec_profile), which figures.py imports, as its command puts it on the path
+pythonpath = [".", "../recursion_e2e"]
 addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 

@@ -13,7 +13,7 @@ the batched target `T` and the batching coins `γ`). It runs each rep's zerochec
 `tree`: a session on the challenger's coin tree, as a recursive session's inner statement is (`RecVStar.innerTree`),
 else seeded coins.
 A record that keeps a draw of every unit (the recursion's inner session, `rec_live --draw`) is read at the drawn
-statement, as V*'s check 5 reads it (`RecCoins.drawnSpec`).
+statement, as V*'s check 5 reads it (`RecCoins.sampledSpec`).
 `--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
 -/
 
@@ -106,7 +106,7 @@ def main (args : List String) : IO UInt32 := do
     let some sch := fast100 st.m | throw s!"m = {st.m}: no fast100 schedule"
     let setupAt := fun d => if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins [] (some d) partition
       else Stmt.setupH tags circuitB pubB coins [] (some d) partition
-    let spec ← RecCoins.drawnSpec setupAt spec sts[0]! record
+    let spec ← RecCoins.sampledSpec setupAt spec sts[0]! record
     let sess ← Record.decode spec record
     let mut reps := #[]
     for r in [0:2] do

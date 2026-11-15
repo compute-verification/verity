@@ -1,18 +1,18 @@
 """One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one sample and
 one integrity profile.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
-      python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+      python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out DIR \\
       [--layer 0] [--k 128] [--delta 2^-20]
 
 * **Population.** The captured instances of layer `--layer` in each set under `--sets` (one directory per template, in the
   layer's order), staged by M0 as one stand-in population per template (`stage_subset.py`: the frame domains bind the
   selection). The program is `TemplatePopulations_v1` over the templates' Definitions, and the partition is
   `Q_template_instances` v0: one unit per instance, no width rule.
-* **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
+* **One docket** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` samples k units over the whole
-  population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `verity-verify-proof draw` samples k units over the whole
+  population, on a development challenger's coins opened after the docket (`a0.challenger_sample`).
   With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very sample, so the audited
   sample is the verifier's; without it, the Lean sample fixes only how many units fall in each template and each server samples
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
@@ -36,7 +36,7 @@ import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 
@@ -59,8 +59,8 @@ def stage_member(set_dir: Path, indices: list[int], layer: int, out: Path, m0_pa
     return {"dir": out, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": hashlib.sha512(text.encode()).hexdigest(), **info}
 
 
-def lean_split(lean: str, n: int, k: int, registration: str, out: Path) -> dict:
-    p = a0.challenger_draw(lean, ["--population", str(n), "--k", str(k)], {"law": "subset", "k": k}, n, registration,
+def lean_split(lean: str, n: int, k: int, docket: str, out: Path) -> dict:
+    p = a0.challenger_sample(lean, ["--population", str(n), "--k", str(k)], {"law": "subset", "k": k}, n, docket,
                            out / "split-draw.log")
     line = next(x for x in p.stdout.splitlines() if x.startswith("DRAW "))
     return json.loads(line.split(" ", 1)[1])
@@ -77,7 +77,7 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=128)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7521)
-    ap.add_argument("--draw-file", action="store_true", help="serve each template its share of the verifier's Lean draw (M0 --draw-file)")
+    ap.add_argument("--draw-file", dest="sample_file", action="store_true", help="serve each template its share of the verifier's Lean draw (M0 --draw-file)")
     ap.add_argument("--statement", default=a0.STATEMENT_ID, help="the Lean verifier's statement name")
     ap.add_argument("--binding", default=a0.STAND_IN_BINDING, choices=sorted(a0.STAND_IN_BINDINGS), help="M0's frame-domain binding tag")
     a = ap.parse_args()
@@ -116,8 +116,8 @@ def main() -> int:
         assert tid == P.template_id(m["defn"]) and cnt == m["n"]
         m["base"] = base
 
-    # one registration, before the sample
-    law = D.parse_design(f"subset:{a.k}")
+    # one docket, before the sample
+    sampling_design = D.parse_design(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:
         mine = a0.stand_in_ports(m["st"]["name"], m["st"]["content_digest"], m["st"]["meta"], m["n"])
@@ -132,9 +132,9 @@ def main() -> int:
             for m in members}
     window = {"kind": "stand-in", "of": "vllm-v1 commitment of the served Llama-3.2-1B row", "layer": a.layer, "sets": prov,
               "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         fv = m["header"]["frame_v3"]
         mine = {r["port"].split("/", 1)[1]: r for r in rec["roots"] if r["port"].startswith(m["name"] + "/")}
@@ -161,13 +161,13 @@ def main() -> int:
         sdir = out / f"session-{m['name']}"
         sdir.mkdir(parents=True, exist_ok=True)
         dfile = None
-        if a.draw_file:
+        if a.sample_file:
             dfile = sdir / "draw.json"
             local = sorted(u - m["base"] for u in split["units"] if m["base"] <= u < m["base"] + m["n"])
             dfile.write_text(json.dumps({"law": "subset", "population": m["n"], "k": k_t, "units": local}, sort_keys=True))
         t = time.time()
         # on the keyed coin tree, verified under --coins tree: Lean refuses a plain session on a seed's coins
-        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, draw_file=dfile,
+        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, sample_file=dfile,
                                   env={"FC_COINS": "tree"})
         m["session_s"] = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
@@ -176,13 +176,13 @@ def main() -> int:
         session_roots.update({f"{m['name']}/{p}": r for p, r in ((live or {}).get("roots") or {}).items()})
         proved += [m["base"] + u for u in a0.proved_units(m["header"], live or {})]
         instances += (live or {}).get("instances", 0)
-        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+        lean_u = a0.lean_sample_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         verdicts[f"m0-verifier/{m['name']}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "tree")), "tool": "flock-verify verify --archive"}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "tree")), "tool": "verity-verify-proof verify --archive"}
         statement[m["name"]] = {k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest", "public_sha512", "sigma")}
         statement[m["name"]]["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")}
         statement[m["name"]]["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
@@ -190,12 +190,12 @@ def main() -> int:
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
     union = {"law": "subset", "population": n, "k": a.k, "units": sorted(union_units)}
     # with --draw-file the audited sample is the verifier's Lean sample, and every session must have served exactly its share
-    audited, served = (split, sorted(union_units)) if a.draw_file else (union, None)
-    result = V.audit_record(rec, receipt, audited, law, sorted(proved), instances, statement, verdicts, a.delta,
+    audited, served = (split, sorted(union_units)) if a.sample_file else (union, None)
+    result = V.audit_record(rec, receipt, audited, sampling_design, sorted(proved), instances, statement, verdicts, a.delta,
                             sessions=sessions, served=served, session_roots=session_roots)
     result["split"] = {"counts": counts, "lean_draw_sha512": hashlib.sha512(canonical_json(split)).hexdigest(),
                        "served_is_lean_draw": sorted(union_units) == sorted(split["units"]),
-                       "rule": ("each template served its share of the verifier's Lean draw (--draw-file)" if a.draw_file else
+                       "rule": ("each template served its share of the verifier's Lean draw (--draw-file)" if a.sample_file else
                                 "counts from the verifier's Lean draw over the union; positions from each template's live draw")}
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
@@ -203,11 +203,11 @@ def main() -> int:
     # negatives
     neg: dict[str, dict] = {}
     fewer = R2.program([(m["defn"], m["n"]) for m in members], mixed=True)
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-query-drops-a-template"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check_draw({**union, "units": union["units"][:-1] + [n]}, rec, law)
+    v = V.check_draw({**union, "units": union["units"][:-1] + [n]}, rec, sampling_design)
     neg["union-draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
     for m in members:
         if counts[m["name"]]:
@@ -221,9 +221,9 @@ def main() -> int:
         moved[0] = next(u for u in range(n) if u not in union["units"])
         v = V.check_proved(union, sorted(moved), instances)
         neg["proved-unit-not-drawn"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(a0.audit_negatives(result, law, a.delta, session_roots, served=served))
+    neg.update(a0.audit_negatives(result, sampling_design, a.delta, session_roots, served=served))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "wrong_units")}

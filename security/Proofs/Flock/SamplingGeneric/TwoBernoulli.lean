@@ -29,7 +29,7 @@ the profile's.
 namespace Claims.Sampling
 
 open Finset
-open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
+open Claims.Sampling.EndToEndSample (SubsetInputsDesign)
 
 /-- **A first stage below independent catches**: when the first stage misses each set `T` of replay blocks with
 probability at most `∏_{ρ∈T} (1 − q_ρ)`, `P̄_a ≤ ∏_ρ (1 − q_ρ + q_ρ·e_ρ)`. -/
@@ -56,19 +56,19 @@ theorem Design.Two.subsetInputs_Pa_le (d : Design.Two) {Q : ℕ} (hd : SubsetInp
       ∏ ρ ∈ T, (1 - if ρ < c.flatten.length then (Q : ℝ) / c.flatten.length else 1) := by
   set N := c.flatten.length
   set I := ic.flatten.length
-  have hlen : d.part.blocks.length = N + I := EndToEndDraw.blocks_length_two hP
+  have hlen : d.part.blocks.length = N + I := EndToEndSample.blocks_length_two hP
   intro T hT
   rw [hlen] at hT
   by_cases hw : window N I T = ∅
-  · have hT' := EndToEndDraw.subset_range_of_window hT hw
-    rw [EndToEndDraw.Pa_subsetInputs_of_window hd hP hT hw]
+  · have hT' := EndToEndSample.subset_range_of_window hT hw
+    rw [EndToEndSample.Pa_subsetInputs_of_window hd hP hT hw]
     have : ∏ ρ ∈ T, (1 - if ρ < N then (Q : ℝ) / N else 1) = (1 - (Q : ℝ) / N) ^ T.card := by
       rw [← prod_const]
       exact prod_congr rfl fun ρ hρ => by simp [mem_range.1 (hT' hρ)]
     rw [this]
     refine choose_ratio_le_pow hQ ((card_le_card hT').trans_eq (card_range N)) fun hN => ?_
     rw [div_mul_cancel₀ _ (by exact_mod_cast hN.ne')]
-  · rw [EndToEndDraw.Pa_subsetInputs hd hP, EndToEndDraw.all_Pa_of_ne hw, mul_zero]
+  · rw [EndToEndSample.Pa_subsetInputs hd hP, EndToEndSample.all_Pa_of_ne hw, mul_zero]
     obtain ⟨u, hu⟩ := nonempty_iff_ne_empty.2 hw
     obtain ⟨v, hv, -⟩ := mem_image.1 hu
     rw [prod_eq_zero (mem_filter.1 hv).1 (by simp [not_lt.2 (mem_filter.1 hv).2.1])]
@@ -85,7 +85,7 @@ theorem Design.Two.Pa_le_bernoulli (d : Design.Two) (Pt : Partition) (fp : ℕ �
     (d.subsetInputs_Pa_le hd hP hQ)
   set N := c.flatten.length
   set I := ic.flatten.length
-  have hlen : d.part.blocks.length = N + I := EndToEndDraw.blocks_length_two hP
+  have hlen : d.part.blocks.length = N + I := EndToEndSample.blocks_length_two hP
   rw [hlen, range_eq_Ico, ← prod_Ico_consecutive _ (Nat.zero_le N) (Nat.le_add_right N I), ← range_eq_Ico] at h
   refine h.trans (le_of_eq ?_)
   congr 1

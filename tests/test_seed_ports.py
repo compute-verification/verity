@@ -59,9 +59,9 @@ KEY_COUNTS = {
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
     "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
-    "verity/definitions/registry/torch_attention.py::_POSITION":
+    "adapters/vllm/verity_vllm/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
-    "verity/definitions/registry/torch_step.py::_POSITION":
+    "adapters/vllm/verity_vllm/definitions/registry/torch_step.py::_POSITION":
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
 }
 WINDOWS = {
@@ -84,7 +84,7 @@ TESTS = {
     "verity/circuits/tests/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
     "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
-        "the drawn J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
+        "the sampled J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
         "accepts the stand-in statement (every input bit read)",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS

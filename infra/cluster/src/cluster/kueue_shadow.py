@@ -2,7 +2,7 @@
 
 Four things decide what runs on node 1 today: Kueue (the dispatcher's Jobs, SkyPilot's pods, the lease pools' holders), the
 lease pools (`n1_lease.py`: which `gpu-lease` waiter gets a pool GPU, under its own `max`, `borrow` and `borrow-until`), the
-merge-check slots (`tools/verity/check/slot.py`) and the Lean slots (`tools/verity/check/lean_slot.py`). Each tick the shadow mirrors the
+merge-check slots (`tools/check/slot.py`) and the Lean slots (`tools/check/lean_slot.py`). Each tick the shadow mirrors the
 demand of all four as bare Kueue Workloads, which Kueue admits against quota but which run no pods, and records where Kueue's
 admission differs from what the node did. Kueue is asked, not simulated, so the comparison is with the real admission logic
 (priority, FIFO, borrowing, preemption) at the node's own quotas.
@@ -68,8 +68,8 @@ POOL_LABEL = "verity.dev/gpu-pool"
 POOLS = {"node1": ("/run/gpu-lease", "provers", "dev"),
          "circuits": ("/run/gpu-lease-circuits", "deployments-gpu", "circuits-gpu")}
 TREE = Path(__file__).resolve().parents[4]
-SLOT_PY = TREE / "tools/verity/check/slot.py"
-LEAN_SLOT_PY = TREE / "tools/verity/check/lean_slot.py"
+SLOT_PY = TREE / "tools/check/slot.py"
+LEAN_SLOT_PY = TREE / "tools/check/lean_slot.py"
 TICK_S = 60
 
 

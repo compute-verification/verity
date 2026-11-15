@@ -1,4 +1,4 @@
-# The NVIDIA DGX H200, a server: the one source of its numbers (verity/hardware/README.md).
+# The NVIDIA DGX H200, a server: the one source of its numbers (hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this server exceeds it, whatever firmware
 # it runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
 # "placeholder" (neither, open). A server card is what the server's own documents state of it apart from its CPUs and

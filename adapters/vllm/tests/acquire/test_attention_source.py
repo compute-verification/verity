@@ -20,7 +20,6 @@ from typing import Any
 
 import pytest
 import torch
-from verity.definitions.registry.dsa_topk import waksman_switches
 
 from tests.acquire import glm53_model as G
 from tests.acquire.glm53_model import (
@@ -39,6 +38,7 @@ from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
+from verity_vllm.definitions.registry.dsa_topk import waksman_switches
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.query.manifest.format import RUN_FAMILY

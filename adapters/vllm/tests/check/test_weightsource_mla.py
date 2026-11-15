@@ -3,11 +3,12 @@
 bf16 tensor and the F32 correction bias is read as is."""
 import json
 import struct
+from typing import Any
 
 import numpy as np
 import pytest
 from verity.circuits.types import Array, RecordType, Tuple, Type
-from verity.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.registry.prims import BF16, F32
 
 from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
 from verity_vllm.check.fold_compare import (
@@ -113,6 +114,12 @@ def test_a_name_that_is_no_layer_field_is_a_type_error(name: str):
     assert sources is not None
     with pytest.raises(TypeError):
         mla_field_words(sources, name, lambda tensor, field: np.zeros(0, dtype=np.uint16))
+
+
+@pytest.mark.parametrize(("sources", "raised"), [(None, TypeError), ((1, {}), ValueError), ((1, {}, {}, {}), ValueError)])
+def test_sources_that_are_no_triple_raise_before_the_name_is_asked(sources: Any, raised: type[Exception]):
+    with pytest.raises(raised, match="unpack"):
+        mla_field_words(sources, "norm", lambda tensor, field: np.zeros(0, dtype=np.uint16))
 
 
 def test_mla_moe_fields_read_their_own_layer(tmp_path):

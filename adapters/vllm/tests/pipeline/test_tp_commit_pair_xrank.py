@@ -21,7 +21,7 @@ import torch
 from tests.pipeline import test_tp_commit_options as TO
 from tests.pipeline import test_tp_commit_pair as TP
 from tests.pipeline import test_tp_commit_pair_replay as PR
-from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.records import replay_codes as RC
 
 driver, pair = TO.driver, TP.pair
 

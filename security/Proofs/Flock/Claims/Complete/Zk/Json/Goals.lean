@@ -56,7 +56,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 outputs (`Out64`), and two named hypotheses in place of `StmtOk` and
 `ProverOk`:
 
-* `StmtOkZk`: a non-empty `Σ`, a printable sample that decodes (`DrawOk`), the statement's sample the one it was set up at,
+* `StmtOkZk`: a non-empty `Σ`, a printable sample that decodes (`SampleOk`), the statement's sample the one it was set up at,
   and the verifier's `Hello` a JSON object whose `coins` is an object, printable with the prover's nonce put in (what
   the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s. It holds at every good masked case
   (`stmtOkZk`, `Zk/Json/Stmt.lean`).
@@ -66,7 +66,7 @@ outputs (`Out64`), and two named hypotheses in place of `StmtOk` and
 
 `RunZk.json` is the record at the run: the printed honest masked record (`sessionPZk_facts`), which `Record.decodeWith`
 reads as `sessOf` (`decode_recordObjZk`) and `liveOf` as its live session (`live_recordObjZk`). The goals follow as the
-plain ones: `DecodesZk`, `LiveReadsZk`, `DrawMatchesZk`, `CustodyRootBZk`, `CustodyPublicsZk`, `CustodyPointsZk`,
+plain ones: `DecodesZk`, `LiveReadsZk`, `SampleMatchesZk`, `CustodyRootBZk`, `CustodyPublicsZk`, `CustodyPointsZk`,
 `CustodyCountZk`, `CustodyRoundsZk`, `PublicsZk`, `ProofListZk`, `ProofDigestsZk`, `RepStreamZk` and `RepExtrasZk`.
 -/
 
@@ -81,7 +81,7 @@ open Lean (Json JsonNumber)
 that decodes to the statement's instances, the statement's sample the one it was set up at, and the verifier's `Hello` a
 JSON object whose `coins` is an object, printable with the prover's nonce put in. -/
 def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : CaseZk H rel, 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
+  ∀ c : CaseZk H rel, 0 < c.spec.sigma.size ∧ SampleOk c.spec ∧ c.spec.unitSample = c.s.read.draw ∧
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
@@ -90,10 +90,10 @@ commitment's cap, at the `--zk` schedule's first level, is non-empty and under `
 table's extra claims at the link's points, records a round, each of at most `65536` coins. -/
 def ProverOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
-    (∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
+    (∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default)
         v.2 g extra lanePad salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
-    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v →
+    ∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
       ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
@@ -149,7 +149,7 @@ theorem RunZk.json (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   have hlv : liveOf o.spec o.record = .ok ⟨#[rb], o.spec.tables.map fun _ => ByteArray.empty,
       pointsOf o.spec (Claims.coinSeq o.r 0), streams.map (·.map liveRound)⟩ := by
     rw [hrec]
-    exact live_recordObjZk ht (good_draw hdraw) hz ct hss o.proofs
+    exact live_recordObjZk ht (good_sample hdraw) hz ct hss o.proofs
   have hsend : o.sends.headD [] = 0 :: linkBody [rb] [ByteArray.empty] := by
     unfold RunZk.sends
     rw [hbs]
@@ -205,25 +205,25 @@ theorem canonicalZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     RunZk.json h64 hS hP o
   obtain ⟨-, hdraw, -, -⟩ := hS o.toCaseZk
   rw [hrec]
-  exact check_printJ (good_recordObjZk ht _ hz ct rb _ streams o.proofs (good_draw hdraw))
+  exact check_printJ (good_recordObjZk ht _ hz ct rb _ streams o.proofs (good_sample hdraw))
 
-/-- **The record's sample is the statement's**: the goal `DrawMatches`. -/
-theorem drawMatchesZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
-    (hP : ProverOkZk H rel) : DrawMatchesZk H rel := by
+/-- **The record's sample is the statement's**: the goal `SampleMatches`. -/
+theorem sampleMatchesZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+    (hP : ProverOkZk H rel) : SampleMatchesZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     RunZk.json h64 hS hP o
   obtain ⟨-, hdraw, hdr, -⟩ := hS o.toCaseZk
-  have hd := recordDraw_recordObjZk (h := Claims.hOf H) ht hdraw hz ct rb (pointsOf o.spec (Claims.coinSeq o.r 0))
+  have hd := recordSample_recordObjZk (h := Claims.hOf H) ht hdraw hz ct rb (pointsOf o.spec (Claims.coinSeq o.r 0))
     streams o.proofs
   rw [hrec, ← hdr]
   revert hd
-  cases o.spec.unitDraw with
+  cases o.spec.unitSample with
   | none => intro hd; rw [hd]; rfl
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs)
+    exact (sampleEq_iff _ _).2 (.some hs)
 
 /-- **Custody: the record's `root_B` is the link message's**: the goal `CustodyRootB`. -/
 theorem custodyRootBZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)

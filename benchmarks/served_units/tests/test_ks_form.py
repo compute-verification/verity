@@ -42,7 +42,7 @@ def test_lines(ks, tmp_path, capsys):
     staged(fw, "c-groups", ok, groups=2)
     staged(fw, "d-shared", ok, shared=True)
     staged(fw, "e-norow", {**ok, "units_per_vu": 0})
-    staged(fw, "f-wide", {"units_per_vu": 1, "leaves_out": [[0] * (ks.PF.UNIT_CLASS_MAX // 16 + 1)]})
+    staged(fw, "f-wide", {"units_per_vu": 1, "leaves_out": [[0] * (ks.PF.SIZE_CLASS_MAX // 16 + 1)]})
     staged(fw, "g-staging", ok, done=False)
     staged(also, "h-part", ok, before=2, rec={"unit": "gq", "n": 4096})
     ks.main([str(fw), str(also)])

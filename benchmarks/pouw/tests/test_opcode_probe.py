@@ -608,3 +608,12 @@ def test_sm89_ji_points_join_only_their_own_family(tmp_path):
     (m, x, name), = pts["ffma"]
     assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
     assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
+
+
+def test_clock_ceiling_requires_the_memory_clock_naming_clock_memory_with_no_default():
+    """The memory clock clock_ceiling.sh relocks on exit is the card's `clock.memory`, which both its scripts take as a
+    required argument (`CLOCK_RELOCK_MEM_MHZ`, refused by name when unset) and neither states as a default."""
+    for script in ("clock_ceiling.sh", "clock_ceiling_lease.sh"):
+        text = (POUW / "opcode_probe" / script).read_text()
+        assert re.search(r"\$\{CLOCK_RELOCK_MEM_MHZ:\?[^}]*clock\.memory[^}]*\}", text), script
+        assert not re.search(r"\$\{CLOCK_RELOCK_MEM_MHZ:?[-=]", text), script

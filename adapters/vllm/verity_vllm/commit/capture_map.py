@@ -22,11 +22,12 @@ from typing import Any
 
 from verity_vllm.commit.identity import format_id, value_id
 from verity_vllm.config import MANIFESTS
+from verity_vllm.records.schema_ids import CAPTURE_MAP_SCHEMA
 
 __all__ = ["LAYER_VAR", "MAPS", "at_layer", "captures", "committer_names", "dim", "empty_names", "evaluate",
            "layer_set", "load", "of_checkpoint", "route_sites", "row_count_of", "rows_differ", "symbols", "tap_layers"]
 
-SCHEMA = "verity-vllm/capture-map/v0"
+SCHEMA = CAPTURE_MAP_SCHEMA
 MAPS = MANIFESTS / "capture-maps"
 #: a tap's Program today: registered and conformance-tested; being built (on a named branch); a registered family whose kernel
 #: variant is not yet pinned; a value only moved (checked by word equality against the taps it copies); none (bound by the Commit,
@@ -119,7 +120,7 @@ def config_value(config: dict[str, Any], path: str) -> Any:
     """`a.b.0` reads config["a"]["b"][0]."""
     v: Any = config
     for part in path.split("."):
-        if isinstance(v, list) and part.isdigit():
+        if isinstance(v, list) and part.isdecimal():
             v = v[int(part)]
         elif isinstance(v, dict) and part in v:
             v = v[part]

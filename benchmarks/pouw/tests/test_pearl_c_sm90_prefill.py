@@ -27,7 +27,7 @@ from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activati
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parent
-KERNEL = HERE.parents[0] / "pearl_c_sm90"
+KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 
 
 def load(name: str, path: Path):

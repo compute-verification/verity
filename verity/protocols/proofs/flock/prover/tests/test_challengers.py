@@ -50,7 +50,7 @@ challenger_audit() { echo '{"ok": true}' > "$1/audit.json"; [ -f "$CHALLENGER_WO
 
 
 def test_a_challengers_key_and_secret_stay_out_of_its_callers_tree_and_end_deletes_them(monkeypatch, tmp_path: Path):
-    """A caller keeps the tree ``d`` is in (a leg's or an audit's out directory), so the challenger's key and secret go in a
+    """A caller keeps the tree ``d`` is in (a subprotocol's or an audit's out directory), so the challenger's key and secret go in a
     private directory of their own, there until the audit and gone after it."""
     sh = tmp_path / "pod" / "a" / "b" / "c" / "challenger.sh"
     sh.parent.mkdir(parents=True)

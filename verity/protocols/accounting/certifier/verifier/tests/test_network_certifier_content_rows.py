@@ -12,19 +12,20 @@ import struct
 
 import pytest
 
-from verity.circuits.partition_v2 import UNIT_CLASSES
+from verity.circuits.partition_v2 import SIZE_CLASSES
 from verity.protocols.accounting.certifier.prover import lengths_row as LR
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import HEADER, id_request
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 
 
 def test_a_class_is_two_powers_of_two():
     """A class's size, of prompt ids or of ids released, is a power of two of at least 2; a response row's ids are
     at most 4,096, the most whose row fits the widest public size class behind its tie's verdict."""
     assert CT.MIN_SIZE == 2 and CT.most_ids() == 4096
-    assert 16 + 8 * CT.response_bytes(4096) == 131_120 <= UNIT_CLASSES[-1] < 16 + 32 * (8192 + 1)
+    assert 16 + 8 * CT.response_bytes(4096) == 131_120 <= SIZE_CLASSES[-1] < 16 + 32 * (8192 + 1)
     for size in (2, 4, 1024, 4096):
         CT.check_ids(size)
         CT.check_size(size, "prompt ids")
@@ -41,11 +42,11 @@ def test_a_class_is_two_powers_of_two():
 def test_the_most_ids_follow_the_widest_class(monkeypatch):
     """The bound on a response row's ids is computed from the widest public size class, not stated beside it: at
     the 16-bit limit no row fits, and at a class of 2^20 bits a row holds 16,384 ids."""
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 1 << 20)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 1 << 20)
     assert CT.most_ids() == 16_384 and CT.response_bytes(16_384) == 65_540
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 16 + 32 * 3)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 16 + 32 * 3)
     assert CT.most_ids() == 2
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 16)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 16)
     assert CT.most_ids() == 0
     with pytest.raises(ValueError, match="at most 0 ids"):
         CT.check_ids(2)
@@ -53,7 +54,7 @@ def test_the_most_ids_follow_the_widest_class(monkeypatch):
 
 def test_every_row_is_whole_words_of_its_classes_size():
     """A response row is its count and O ids, an end row the four bytes of a fails slot, and a request row its count and
-    its class's room to a whole word, so each is whole 16-bit words (`warden_rows.words` reads it)."""
+    its class's room to a whole word, so each is whole 16-bit words (`network_certifier_rows.words` reads it)."""
     assert [CT.response_bytes(O) for O in (2, 16, 4096)] == [12, 68, 16_388]
     assert CT.END_BYTES == 4 and CT.END_SLOT.format == CR.SLOT[CR.FAILS].format
     for B, P in ((512, 2), (512, 64), (387, 4), (4096, 512)):

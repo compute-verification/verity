@@ -39,7 +39,7 @@ that the sampled statement labels itself reads its row of the port at one of tho
 proof blocks, the first port of a name, and a rec-sparse unit's own shape. What closes the gap is the family's:
 
 * `RowsHeld`: a session accepting a transcript it writes samples every unit that reads a value `fixedRow` knows (G's
-  `RowsDrawn` at every such value, not only `rec-c<k>`), whose label is the unit by the verifier's label check
+  `RowsSampled` at every such value, not only `rec-c<k>`), whose label is the unit by the verifier's label check
   (`label_of_checked`); every family holds it (`rowsHeld`: the record's custody and the full sample);
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
@@ -237,7 +237,7 @@ public rows passes at `tr`'s setup, a sampled proof block `u` that its table's s
 port `reg` of `own` whose value `fixedRow` knows (the circuit's port `q`), and the public file's `b ‖ c` of `u`'s row
 `q` is `fixedRow`'s row `x` of the value, at the unit's RecSparse shape or else `sparse`. -/
 theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {cs : RecVStar.InnerCommits}
     {sparse : Option RecSparse.Shape}
     (hchk : ∃ spec sts, setupOf (zkInputs zo.I) tr.record = .ok (spec, sts) ∧
@@ -246,8 +246,8 @@ theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
     (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) {u : Fin nv}
     {q : Fin c.ports.size}
     (hfind : (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some q.val)
-    {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)
-    (hD : Draw.UnitDraw.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
+    {d : Lean.Json} {D : Draw.UnitSample} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)
+    (hD : Draw.UnitSample.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
     (hdp : HmOut.drawn c zo.pub (drawJ zo.I d (partOf zo.I d u.val)) = .ok dp)
     (hidx : Registered.unitIndices dp = .ok idx) (hu : u.val ∈ D.proved) {x : ℕ}
     (hread : reg.reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some x)) :
@@ -283,7 +283,7 @@ theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
   cases hp''
   have hpos : positions' = positions := congrArg Prod.fst (Except.ok.inj (hent'.symm.trans hent))
   rw [hpos] at hsize
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.sampled_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -297,7 +297,7 @@ theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
     exact this
   have hdig : zo.pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil zo.hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.sampled_digestW (Hidden.loadPublic_nil zo.hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
@@ -323,7 +323,7 @@ theorem getD_idxOf {a : Array ℕ} {u : ℕ} (h : u ∈ a) : a.getD (a.idxOf u) 
   simp [Array.getD, hlt, List.getElem_idxOf hlt]
 
 theorem checkLabel_ok {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.checkLabel dj pub j = .ok ())
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson dj = .ok D) {idx : Array ℕ}
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson dj = .ok D) {idx : Array ℕ}
     (hidx : Registered.unitIndices pub = .ok idx) : idx = D.proved := by
   simp only [RecVStar.checkLabel, hD, hidx, Bind.bind, Except.bind] at h
   split at h
@@ -333,27 +333,27 @@ theorem checkLabel_ok {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.ch
 
 theorem checkLabels_at {d : Lean.Json} {count : ℕ} {sts : Array Stmt}
     (h : RecVStar.checkLabels (some d) count sts = .ok ()) (j : ℕ) (hj : j < sts.size) :
-    RecVStar.checkLabel (RecVStar.tableDraw d count j) sts[j].pub j = .ok () := by
+    RecVStar.checkLabel (RecVStar.tableSample d count j) sts[j].pub j = .ok () := by
   have := array_forM_ok (show (Array.range sts.size).forM
-    (fun j => RecVStar.checkLabel (RecVStar.tableDraw d count j) sts[j]!.pub j) = .ok () from h) j (by simpa using hj)
+    (fun j => RecVStar.checkLabel (RecVStar.tableSample d count j) sts[j]!.pub j) = .ok () from h) j (by simpa using hj)
   simpa [Array.getElem_range, getElem!_pos sts j hj] using this
 
 /-- The verifier's table sample is the one the model's tables are set up from. -/
-theorem drawJ_tableDraw (I : Inputs) (d : Lean.Json) (j : ℕ) : drawJ I d j = RecVStar.tableDraw d I.count j := by
-  unfold drawJ RecVStar.tableDraw DecodeZLJ.partJson Tables.partDraw
+theorem sampleJ_tableSample (I : Inputs) (d : Lean.Json) (j : ℕ) : drawJ I d j = RecVStar.tableSample d I.count j := by
+  unfold drawJ RecVStar.tableSample DecodeZLJ.partJson Tables.partSample
   rfl
 
 /-- **The label conjunct, from the verifier's label check** (`RecVStar.checkLabels`): at an accepted transcript whose
 tables label their instances with the units their samples prove, the sampled statement's label of a sampled proof block is the
 unit. -/
 theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr)
     (hlb : ∃ spec sts, setupOf (zkInputs zo.I) tr.record = .ok (spec, sts) ∧
       RecVStar.checkLabels (recordDraw tr.record) zo.I.count sts = .ok ())
-    {u : Fin nv} {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ}
+    {u : Fin nv} {d : Lean.Json} {D : Draw.UnitSample} {dp : Public} {idx : Array ℕ}
     (hd : recordDraw tr.record = some d)
-    (hD : Draw.UnitDraw.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
+    (hD : Draw.UnitSample.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
     (hdp : HmOut.drawn c zo.pub (drawJ zo.I d (partOf zo.I d u.val)) = .ok dp)
     (hidx : Registered.unitIndices dp = .ok idx) (hu : u.val ∈ D.proved) :
     idx.getD (D.proved.idxOf u.val) 0 = u.val := by
@@ -375,17 +375,17 @@ theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
   rw [hcst, hdp] at hdr'
   have hpd : sts[(partOf zo.I d u.val).val].pub = dp := (Except.ok.inj hdr').symm
   have hl := checkLabels_at hlb _ hjs
-  rw [← drawJ_tableDraw, hpd] at hl
+  rw [← sampleJ_tableSample, hpd] at hl
   rw [checkLabel_ok hl hD hidx]
   exact getD_idxOf hu
 
 /-! ## At the family -/
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n1) A session accepting a transcript it writes samples the units that read a value `fixedRow` knows**: G's
-`RowsDrawn` at every such value, at the outcomes the session's game reaches (`ZkOuter.Writes`). `AcceptsZKR` checks the
+`RowsSampled` at every such value, at the outcomes the session's game reaches (`ZkOuter.Writes`). `AcceptsZKR` checks the
 sampled proof blocks only (U4, `checkFull`, is not among its checks), so a unit it does not sample has a public row no check reads;
 a transcript it writes samples every unit (`rowsHeld`). The sampled statement's label of the unit
 (`Registered.unitIndices`) is the unit by the verifier's label check (`label_of_checked`), not by this. -/
@@ -395,22 +395,22 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
     (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true →
     ∀ (u : Fin (F.Vs j).nv) x, reg.reads[u.val]? = some (some x) →
       ∃ d D dp idx, recordDraw tr.record = some d ∧
-        Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
+        Draw.UnitSample.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
         HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub
           (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok dp ∧
         Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved
 
 /-- **(n1) Every family holds its rows**: a transcript a session writes and accepts records the sampling design's sample file (the
-record's custody, `hRec`), the table each unit is sampled into has a sampled statement (`drawn_of_acceptsZKR`), and that
-table's sample proves the unit (the challenger's live-coin part's sample, `hDraw`), since V*'s law, the full sample, samples every unit
+record's custody, `hRec`), the table each unit is sampled into has a sampled statement (`sampled_of_acceptsZKR`), and that
+table's sample proves the unit (the challenger's live-coin part's sample, `hDraw`), since V*'s sampling design, the full sample, samples every unit
 (`execOS_subset_full_mem`). -/
 theorem rowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : RowsHeld F := by
   rintro R ω t R₂ j R' tr ⟨ω', o, rfl⟩ hacc _ _ _ u _ _
   have hd := ((F.zs R ω t R₂ j).hRec _ _ _ (acceptsZK_of_R hacc)).1
-  obtain ⟨D, dp, idx, hD, hdp, hidx⟩ := FlockSoundness.Discharge.ZkReg.drawn_of_acceptsZKR (F.zs R ω t R₂ j).I
+  obtain ⟨D, dp, idx, hD, hdp, hidx⟩ := FlockSoundness.Discharge.ZkReg.sampled_of_acceptsZKR (F.zs R ω t R₂ j).I
     (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hcH (F.zs R ω t R₂ j).hpub (F.zs R ω t R₂ j).hTags hacc hd u.val
   exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((F.zs R ω t R₂ j).hDraw ω' (partOf (F.zs R ω t R₂ j).I _ u.val)).1 D hD u
-    (FlockSoundness.Discharge.Composed.mem_partS (execOS_subset_full_mem (F.Vs j).law.src ω' u))⟩
+    (FlockSoundness.Discharge.Composed.mem_partS (execOS_subset_full_mem (F.Vs j).samplingDesign.src ω' u))⟩
 
 /-- **(n1) Each of V*'s circuits names each port once** (G's `PortNamesUnique`): the check reads the first port of a
 name. -/

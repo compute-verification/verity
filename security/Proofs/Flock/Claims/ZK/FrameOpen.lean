@@ -48,7 +48,7 @@ which adds the rep's pads at those values' absorbed positions, releases it as th
 * **Value by value** (`oodFr_unmask`, `pairFr_unmask`): where the frame's pad at each value's position is the one the
   rep's round carries, the round at the pads with each pad added back is the round at zero pads (`add_pad_pad`).
 * **The frame's pads at level 0** (`l0_pad`, `l0_padAt`): at a masked level 0, each of its pads' absorbed positions
-  lies past the algebraic phase's, and the frame's pad there is the samples' (`padAt_ofDraws_absPos`). So a stopped rep
+  lies past the algebraic phase's, and the frame's pad there is the samples' (`padAt_ofSamples_absPos`). So a stopped rep
   masks them as a live one does (`maskFrames_ge`): `maskVal` zeroes only the algebraic phase's values.
 * **A level-0 round** (`L0Round`, `l0Round_ood`, `l0Round_msg`, `l0Round_e`): the zero-pad round, the round at the
   rep's pads, and the facts the frame's round reads; through the frame's masks the zero-pad round is the round at the
@@ -64,7 +64,7 @@ which adds the rep's pads at those values' absorbed positions, releases it as th
 namespace Claims.ZKServer
 
 open _root_.Flock (F128 F256)
-open _root_.Flock.Firewall.Frame (Cfg Masker absorbed nLig Draws MaskSlot)
+open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig Draws MaskSlot)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ## Level 0's masked rounds, value by value -/
@@ -157,12 +157,12 @@ theorem absPos_add (l : _root_.Flock.Zk.PadLayout) {q : ℕ} (hq : l.fa + 2 ≤ 
 `h_ab`) sits at an absorbed position past the algebraic phase's, where the frame's pad is the samples' pad `q`. -/
 theorem l0_pad (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {q : ℕ}
     (h1 : l.lgOod 0 ≤ q) (h2 : q < l.hab) :
-    (Cfg.ofDraws l d mk).nPiop ≤ absPos l q ∧ padAt (Cfg.ofDraws l d mk) (absPos l q) = d.h[q]! := by
+    (Cfg.ofSamples l d mk).nPiop ≤ absPos l q ∧ padAt (Cfg.ofSamples l d mk) (absPos l q) = d.h[q]! := by
   have hq := l0_ge l h1
   have hlig : nLig l = l.nOod0 + 4 * l.k0 + 4 := by
     unfold nLig
     rw [if_pos hk]
-  refine ⟨?_, (padAt_ofDraws_absPos l d mk (j := q) ?_ ?_).2⟩
+  refine ⟨?_, (padAt_ofSamples_absPos l d mk (j := q) ?_ ?_).2⟩
   · show (absorbed l).size - nLig l ≤ absPos l q
     rw [absorbed_size, absPos_ge l (j := q) (by omega)]
     simp only [_root_.Flock.Zk.PadLayout.lgOod, _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc,
@@ -178,7 +178,7 @@ theorem l0_pad (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot
 /-- `l0_pad` at the positions after pad `q`'s. -/
 theorem l0_padAt (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {q : ℕ}
     (h1 : l.lgOod 0 ≤ q) {t : ℕ} (h2 : q + t < l.hab) :
-    padAt (Cfg.ofDraws l d mk) (absPos l q + t) = d.h[q + t]! := by
+    padAt (Cfg.ofSamples l d mk) (absPos l q + t) = d.h[q + t]! := by
   rw [← absPos_add l (q := q) (by have := l0_ge l h1; omega) t]
   exact (l0_pad l d mk hk (by omega) h2).2
 
@@ -216,7 +216,7 @@ theorem L0Round.abs_G {c : Cfg} {p n : ℕ} {G H : List Frame} (R : L0Round c p 
 /-- **Level 0's out-of-domain round** (`y` at its pad `lgOod 0`, then the nonce's bytes `b`) at a masked level 0. -/
 theorem l0Round_ood (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) (y : F128)
     (z : Array F128) (hz : z[l.lgOod 0]! = 0) (b : ByteArray) (hb : b.size < 2 ^ 64) :
-    L0Round (Cfg.ofDraws l d mk) (absPos l (l.lgOod 0)) 1 (oodFr (y + z[l.lgOod 0]!) b)
+    L0Round (Cfg.ofSamples l d mk) (absPos l (l.lgOod 0)) 1 (oodFr (y + z[l.lgOod 0]!) b)
       (oodFr (y + d.h[l.lgOod 0]!) b) := by
   have hlt : l.lgOod 0 < l.hab := by
     simp only [_root_.Flock.Zk.PadLayout.lgOod, _root_.Flock.Zk.PadLayout.hab]
@@ -253,7 +253,7 @@ theorem pairFr_nd (a b : F256) : ∀ f ∈ pairFr a b, noDom f := by
 /-- **Lane round `j`'s message** (`maskMsg`, at the pads `lgMsg j 0 … 3`) at a masked level 0, for `j < k_0`. -/
 theorem l0Round_msg (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {j : ℕ}
     (hj : j < l.k0) (m : F256 × F256) (z : Array F128) (hz : ∀ t < 4, z[l.lgMsg j t]! = 0) :
-    L0Round (Cfg.ofDraws l d mk) (absPos l (l.lgMsg j 0)) 4
+    L0Round (Cfg.ofSamples l d mk) (absPos l (l.lgMsg j 0)) 4
       (pairFr (FlockComplete.maskMsg l z j m).1 (FlockComplete.maskMsg l z j m).2)
       (pairFr (FlockComplete.maskMsg l d.h j m).1 (FlockComplete.maskMsg l d.h j m).2) := by
   have h1 : l.lgOod 0 ≤ l.lgMsg j 0 := by
@@ -263,7 +263,7 @@ theorem l0Round_msg (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option Mas
     intro t _
     simp only [_root_.Flock.Zk.PadLayout.lgMsg]
     omega
-  have hpad : ∀ t < 4, padAt (Cfg.ofDraws l d mk) (absPos l (l.lgMsg j 0) + t) = d.h[l.lgMsg j t]! := by
+  have hpad : ∀ t < 4, padAt (Cfg.ofSamples l d mk) (absPos l (l.lgMsg j 0) + t) = d.h[l.lgMsg j t]! := by
     intro t ht
     rw [l0_padAt l d mk hk h1 (t := t) (by
       simp only [_root_.Flock.Zk.PadLayout.lgMsg, _root_.Flock.Zk.PadLayout.hab]
@@ -272,7 +272,7 @@ theorem l0Round_msg (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option Mas
   have hP := (l0_pad l d mk hk (le_refl _) (q := l.lgOod 0) (by
     simp only [_root_.Flock.Zk.PadLayout.lgOod, _root_.Flock.Zk.PadLayout.hab]
     omega)).1
-  refine ⟨pairFr_unmask (Cfg.ofDraws l d mk) (absPos l (l.lgMsg j 0)) m.1 m.2 _ _ _ _ _ _ _ _ (hpad 0 (by omega)) (hpad 1 (by omega)) (hpad 2 (by omega))
+  refine ⟨pairFr_unmask (Cfg.ofSamples l d mk) (absPos l (l.lgMsg j 0)) m.1 m.2 _ _ _ _ _ _ _ _ (hpad 0 (by omega)) (hpad 1 (by omega)) (hpad 2 (by omega))
     (hpad 3 (by omega)) (hz 0 (by omega)) (hz 1 (by omega)) (hz 2 (by omega)) (hz 3 (by omega)),
     pairFr_mid _ _, pairFr_plain _ _, pairFr_nd _ _, rfl, ?_⟩
   have hmono : absPos l (l.lgOod 0) ≤ absPos l (l.lgMsg j 0) := by
@@ -284,7 +284,7 @@ theorem l0Round_msg (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option Mas
 /-- **The pair's sums** `e_0`, `e_1` (at the pads `lgE 0 0`, `lgE 0 1`, `lgE 1 0`, `lgE 1 1`) at a masked level 0. -/
 theorem l0Round_e (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) (e0 e1 : F256)
     (z : Array F128) (hz : ∀ i < 2, ∀ c < 2, z[l.lgE i c]! = 0) :
-    L0Round (Cfg.ofDraws l d mk) (absPos l (l.lgE 0 0)) 4
+    L0Round (Cfg.ofSamples l d mk) (absPos l (l.lgE 0 0)) 4
       (pairFr (e0 + ⟨z[l.lgE 0 0]!, z[l.lgE 0 1]!⟩) (e1 + ⟨z[l.lgE 1 0]!, z[l.lgE 1 1]!⟩))
       (pairFr (e0 + ⟨d.h[l.lgE 0 0]!, d.h[l.lgE 0 1]!⟩) (e1 + ⟨d.h[l.lgE 1 0]!, d.h[l.lgE 1 1]!⟩)) := by
   have h1 : l.lgOod 0 ≤ l.lgE 0 0 := by
@@ -294,13 +294,13 @@ theorem l0Round_e (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskS
     simp only [_root_.Flock.Zk.PadLayout.lgE, _root_.Flock.Zk.PadLayout.hab]
     omega
   have hp : ∀ t i c, t < 4 → l.lgE 0 0 + t = l.lgE i c →
-      padAt (Cfg.ofDraws l d mk) (absPos l (l.lgE 0 0) + t) = d.h[l.lgE i c]! := by
+      padAt (Cfg.ofSamples l d mk) (absPos l (l.lgE 0 0) + t) = d.h[l.lgE i c]! := by
     intro t i c ht he
     rw [l0_padAt l d mk hk h1 (t := t) (by omega), he]
   have hP := (l0_pad l d mk hk (le_refl _) (q := l.lgOod 0) (by
     simp only [_root_.Flock.Zk.PadLayout.lgOod, _root_.Flock.Zk.PadLayout.hab]
     omega)).1
-  refine ⟨pairFr_unmask (Cfg.ofDraws l d mk) (absPos l (l.lgE 0 0)) e0 e1 _ _ _ _ _ _ _ _
+  refine ⟨pairFr_unmask (Cfg.ofSamples l d mk) (absPos l (l.lgE 0 0)) e0 e1 _ _ _ _ _ _ _ _
     (hp 0 0 0 (by omega) (by unfold _root_.Flock.Zk.PadLayout.lgE; omega))
     (hp 1 0 1 (by omega) (by unfold _root_.Flock.Zk.PadLayout.lgE; omega))
     (hp 2 1 0 (by omega) (by unfold _root_.Flock.Zk.PadLayout.lgE; omega))

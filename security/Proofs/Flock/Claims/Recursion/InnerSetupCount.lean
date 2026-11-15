@@ -56,7 +56,7 @@ accepts, and it holds for every hash `h`, not only SHA-512 (`innerSetupCalls_le_
   shared-row tables (at most `2^17` rows each) and the sampled population (at most `2^17`);
 * those three are functions of the files alone, whatever the hash (`SetupValues`), so the bounds the verifier
   establishes at SHA-512 hold at `h`: the ports from `checkInRange`'s regions (`read_setup_in`, `regions_size`), and
-  the rows and the files' statement's `n`, which the sample's population is (`Layout.drawn_spec`), from
+  the rows and the files' statement's `n`, which the sample's population is (`Layout.sampled_spec`), from
   `RecBudget.innerRows` (`checkShape_rows`);
 * `innerB = 12 + 5 · 2^29 ≤ 2^32` (`innerB_le`).
 
@@ -113,7 +113,7 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
   have hrow : HmRow.loadPublicWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags
       { st'.c with outPorts := #[] } pf = .ok pop :=
     (With.loadPublicWith_std _ _ _).trans (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
-  obtain ⟨D, hD, hDp, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
+  obtain ⟨D, hD, hDp, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
   have hN : D.population ≤ 2 ^ 17 := by
     rw [hDp, ← hpub]
     exact hn
@@ -126,9 +126,9 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
       (With.Sim.forget_counted h) tags c pi pf k) fun p hp =>
       SetupValues.counts_le (SetupValues.load_counts_eq h Sha512.hash hp hrow hc') hrows
   · intro c pi p hpt
-    exact okC_of_V (fun k => With.hmInDrawnWith_sim (With.Sim.forget _) With.Throws.exceptT With.Throws.v
+    exact okC_of_V (fun k => With.hmInSampledWith_sim (With.Sim.forget _) With.Throws.exceptT With.Throws.v
       (With.Sim.forget_counted h) c pi p d k) fun pub hp => by
-      obtain ⟨D', hD', hn, he⟩ := SetupValues.drawn_pop h hp
+      obtain ⟨D', hD', hn, he⟩ := SetupValues.sampled_pop h hp
       rw [hD] at hD'
       cases hD'
       refine ⟨by unfold PT at hpt ⊢; exact SetupValues.counts_le he hpt, ?_⟩

@@ -2,7 +2,7 @@
 
 A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at most `k` bits from outside itself and
 outside θ, at most `n` of them (the Lean's `CompliesAtMost c k n`; `UNITS`). Its number is the slowdown
-`min_cut.slowdown_of` gives it (`benchmarks/rho/rho/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on
+`min_cut.slowdown_of` gives it (`benchmarks/slowdown/slowdown/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on
 one block's work, one forward product: `N` the block's work in the policy's own MACs, `O = N o b` its output wires (`o` the output values a
 MAC of the model's forward matmuls, `Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size
 `c`. That is `max(1, N / limit)`, `limit` the most of such work one block of the policy finishes
@@ -10,7 +10,7 @@ MAC of the model's forward matmuls, `Shape.outputs / Shape.macs`, and `b` a bf16
 
 `stated` reads a policy's public numbers from a file (`served.toml`, whose keys README.md lists) and says what its `k`
 is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's limit beside the blocks a fleet
-holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/rho`).
+holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/slowdown`).
 `tied` reads the served class under the value tie (`tied.toml`), which `tied.py` prices over those periods.
 """
 from __future__ import annotations
@@ -23,12 +23,12 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-RHO = ROOT / "benchmarks" / "rho"
-# first on the path: rho's `periods` imports rho's own `run`, not this benchmark's
-sys.path.insert(0, str(RHO))
+SLOWDOWN = ROOT / "benchmarks" / "slowdown"
+# first on the path: the slowdown calculator's `periods` imports the slowdown calculator's own `run`, not this benchmark's
+sys.path.insert(0, str(SLOWDOWN))
 
-from rho import hardware, min_cut  # noqa: E402
-from rho.params import Registry  # noqa: E402
+from slowdown import hardware, min_cut  # noqa: E402
+from slowdown.params import Registry  # noqa: E402
 
 #: the served policy's public numbers
 SERVED = HERE / "served.toml"
@@ -115,14 +115,12 @@ def pinned(model: str) -> tuple[str, Path]:
 
 
 def shape(model: str) -> Shape:
-    """``model``'s forward matmuls, from its config of record: the 2-D weights of a layer's record
-    (`b1.layer_weights_type`) and the LM head's, the embedding's where the two are tied."""
-    from verity_vllm.program.model import config_of
-
-    from verity.definitions.registry import b1
+    """``model``'s forward matmuls, from its config of record: the 2-D weights of a layer's record (`model.weights_type`'s
+    `layers`) and the LM head's, the embedding's where the two are tied."""
+    from verity_vllm.program.model import config_of, weights_type
 
     C, _ = config_of(pinned(model)[1])
-    weights = dict(b1.weights_type(C).fields)
+    weights = dict(weights_type(C).fields)
     head = weights.get("lm_head", weights["embed"])
     linears = tuple((name.removesuffix("_w"), t.n, t.elem.n) for name, t in weights["layers"].elem.fields
                     if name.endswith("_w"))
@@ -231,16 +229,16 @@ def bound(p: Policy, sh: Shape, blocks: float = 1.0, k: float | None = None) -> 
 
 
 def fleet_periods(work: float) -> list[dict[str, Any]]:
-    """For each of the slowdown calculator's fleets and monitoring periods (rho's `periods.FLEETS` and `PERIODS`): the
+    """For each of the slowdown calculator's fleets and monitoring periods (the slowdown calculator's `periods.FLEETS` and `PERIODS`): the
     period's seconds and the policy's blocks the fleet holds at capacity, each of ``work`` MACs. A fleet's rate is its
     locations' data-sheet dense rate (`location.<name>.flops`, two FLOPs a MAC)."""
-    import periods as rho_periods
+    import periods as slowdown_periods
 
     reg, rows = Registry.load(), []
-    for fleet, label in rho_periods.FLEETS:
+    for fleet, label in slowdown_periods.FLEETS:
         f = hardware.fleet(reg, fleet)
         rate = f.count * reg[f"location.{f.location}.flops"] / 2
-        for name in rho_periods.PERIODS:
+        for name in slowdown_periods.PERIODS:
             seconds = hardware.monitoring_period(reg, name).seconds
             rows.append({"where": label, "fleet": fleet, "location": f.location, "locations": f.count, "period": name,
                          "seconds": seconds, "blocks": rate * seconds / work})

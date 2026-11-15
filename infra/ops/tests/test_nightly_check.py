@@ -167,7 +167,7 @@ def test_the_loop_in_watchers_toml_builds_the_nightly_command_from_its_settings(
     assert lp.argv[:3] == ["python3.12", "-s", "/data/watchers/src/infra/control/nightly_check.py"]
     cfg, ns = N.parse(lp.argv[3:])
     assert N.command(cfg, "python") == [
-        "python", "tools/verity/check/check.py", "--record", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
+        "python", "tools/check/check.py", "--record", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
         "--base", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "--no-cache", "--timeout", "36000"]
     assert N.command(cfg)[0] == sys.executable
     assert cfg.hour == 9 and not ns.once and not ns.dry_run
@@ -191,7 +191,7 @@ def test_a_dry_run_says_the_command_and_starts_nothing(tmp_path, capsys):
     assert N.main(["--on", "node-a", "--pool", "pool-a", "--timeout", "7200", "--hour", "9", "--work", str(tmp_path / "work"),
                    "--state", str(tmp_path / "state.json"), "--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert "tools/verity/check/check.py --record --on node-a --pool pool-a" in out and "--no-cache --timeout 7200" in out
+    assert "tools/check/check.py --record --on node-a --pool pool-a" in out and "--no-cache --timeout 7200" in out
     assert list(tmp_path.iterdir()) == []
 
 
@@ -244,7 +244,7 @@ def test_the_state_is_saved_as_launching_before_the_launch(tmp_path):
 def result(status, steps, **more):
     """check's result.json, as `write_result` writes it."""
     return {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": RUN,
-            "validation": {"status": status, "checker": "tools/verity/check/check.py"},
+            "validation": {"status": status, "checker": "tools/check/check.py"},
             "steps": [{"step": s, "status": v, "seconds": 1.0} for s, v in steps], **more}
 
 
@@ -826,7 +826,7 @@ def test_a_launch_that_names_no_run_is_an_error_with_its_last_lines(tmp_path):
 
 def test_a_launch_that_cannot_start_is_an_error(tmp_path):
     fx = Fx(tmp_path)
-    fx.fail["launch"] = [FileNotFoundError(2, "No such file or directory: 'tools/verity/check/check.py'")]
+    fx.fail["launch"] = [FileNotFoundError(2, "No such file or directory: 'tools/check/check.py'")]
     loop = Loop(tmp_path, fx)
     loop(utc(20, day=18))
     s = loop(utc(9))
@@ -1137,7 +1137,7 @@ def published(tmp_path, rid, rec=None, *, commit=COMMIT, kind="check-shard/v1", 
         outputs["run_files"] = node.put_artifact("run-files/v1", {"run_id": rid}, tree=d)
     node.put_attempt({
         "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "python3", "version": None}, "derivation": "drv:" + "0" * 64,
-        "reuse_key": None, "argv": ["python3", "tools/verity/check/check.py", *argv], "params": {}, "key_params": [], "inputs": {},
+        "reuse_key": None, "argv": ["python3", "tools/check/check.py", *argv], "params": {}, "key_params": [], "inputs": {},
         "conditions": {}, "key_conditions": [], "source": {"commit": commit, "dirty": dirty}, "closure": None, "execution": {},
         "cost": None, "status": {"state": "done", "rc": 0}, "outputs": outputs, "telemetry": None})
     for art in (outputs["result"], outputs["run_files"]):
