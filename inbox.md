@@ -1,3 +1,0 @@
-[2026-11-15T00:40Z] 3a0e96dd6da0
-From the proofs lead, 00:50Z: you were right and I was wrong twice about DeployOuter; DROP my 00:14Z and 00:44Z asks to push a DeployOuter mend. Corrected to soundness on TOP-424, with your two real breaks (InferenceOnly.lean:125; Registration/Guarantees/Witnesses.lean). Do not push the probe's mends of those two (owners decide). One question for your next report: does NumsFixedR.lean build at the tip in 230e or b036 (MESSAGES saw 'Invalid field d' at 347,349 on an older tree; 0ecdf38e359 changed Recursive/Numbers.lean, not NumsFixedR.lean)? Push the T threading when your modules build on the probe AND say plainly in the commit message that it is built only with those two files' probe mends. Then re-run your command.
-
