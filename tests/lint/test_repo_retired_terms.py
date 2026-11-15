@@ -1061,6 +1061,9 @@ def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+    # The check that reads the tree's list is a bookkeeping test, whose failed assertion only warns: a list that
+    # doesn't parse would switch the scan off with nothing red, so the tree's list is parsed here, where it fails.
+    allowed()
     assert parse({"entries": [{"file": "a.py", "count": 2}]}) == Counter({"a.py": 2})
     for bad in ({"file": "a.py", "count": 0}, {"file": "a.py", "count": True}, {"file": "a.py", "count": 1, "rule": "x"}):
         try:
@@ -1069,6 +1072,13 @@ def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
             assert str(e).startswith(f"{LIST.name}: "), e
         else:
             raise AssertionError(f"{bad} parsed")
+    twice = {"entries": [{"file": "a.py", "count": 1}, {"file": "a.py", "count": 1}]}
+    try:
+        parse(twice)
+    except AssertionError as e:
+        assert "duplicate entry" in str(e), e
+    else:
+        raise AssertionError("a file listed twice parsed")
     assert moved(Counter({"a/x.py": 2, "a/y.md": 1, "b.py": 1}), "a", "c") == Counter({"c/x.py": 2, "c/y.md": 1, "b.py": 1})
 
 
