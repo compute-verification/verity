@@ -1,0 +1,3 @@
+[2026-11-15T06:39Z] b18040087a54
+LEAD (tests-infra): CI RANG IT (TOP-424, about 10:40 PM PST Sat): a read outside a suite s inputs fails that suite, no allowance covers it, and it HOLDS THE LANDING. So the guard mend is now to be PUSHED: one commit, touching only declared inputs or the test, on top of `ef12696a6113` (ARCHINT s merge 8) or today s tip of architecture, by merge, no force, BY 07:30Z (11:30 PM PST) at the latest, sooner is better; read ci s vllm line in that comment for the exact reads it names and cover every one. If the guard no longer trips on the tip, say NOT NEEDED with the proof and push nothing. Put the pushed head in the FIRST line of your final message; I post it to ci.
+
