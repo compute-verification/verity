@@ -257,11 +257,11 @@ paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
-paths = ["verity/protocols/accounting/pouw/verifier/tests", "verity/circuits/kernels"]
+paths = ["tests/verity/protocols/accounting/pouw/verifier", "verity/circuits/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_grouped.py"]
-paths = ["verity/protocols/accounting/pouw/verifier/tests"]
+paths = ["tests/verity/protocols/accounting/pouw/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_prefill.py"]
@@ -273,11 +273,11 @@ paths = ["benchmarks/pouw/filler", "verity/protocols/accounting/pouw/prover/kern
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_salt_bind.py"]
-paths = ["verity/protocols/accounting/pouw/verifier/lean/check/tests", "verity/protocols/accounting/pouw/verifier/tests"]
+paths = ["tests/verity/protocols/accounting/pouw/verifier/lean/check", "tests/verity/protocols/accounting/pouw/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_served_zk.py"]
-paths = ["verity/protocols/accounting/pouw/verifier/tests"]
+paths = ["tests/verity/protocols/accounting/pouw/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]

@@ -117,8 +117,8 @@ included, and a remote session's `verifier.json`, which keeps no roots, plans, c
 its arrivals, steps, samples and parameters make (the module's docstring says how it is held to the recorded verdict).
 
 ~~~text
-uv run python verity/protocols/accounting/poub/verifier/lean/tests/replay.py record VERIFIER.json ... --out ROWS.json
-uv run python verity/protocols/accounting/poub/verifier/lean/tests/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
+uv run python tests/verity/protocols/accounting/poub/verifier/lean/replay.py record VERIFIER.json ... --out ROWS.json
+uv run python tests/verity/protocols/accounting/poub/verifier/lean/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
 ~~~
 
 A transcript that doesn't name its session's pace replays only with the pace its `verifier.json` gives

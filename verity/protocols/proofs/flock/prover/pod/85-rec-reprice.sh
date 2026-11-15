@@ -176,7 +176,7 @@ export FC_ZK_SERVER_LEAN=$L/lean-$LSHA/flock-zk-server
 CSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/recursion/verifier/zk_server)
 export FC_CORE_ZK_SERVER=$L/corefw-$CSHA/core-zk-server
 FWS=$DD/fw RELEASE=${RELEASE:-0}
-FSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
+FSHA=$( (echo $LSHA; cat tests/verity/protocols/proofs/flock/prover/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 # the ship's name for each binary: its cache key in the name, so a node takes only the one its own sources key
 SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:verity-verify-proof-$LSHA $FC_ZK_SERVER_LEAN:flock-zk-server-$LSHA $FOLD_BIN:inner-fold-$FSHA $FC_CORE_ZK_SERVER:core-zk-server-$CSHA"
@@ -549,7 +549,7 @@ fold_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/fold.lock; flock 9
     if [ ! -x $FOLD_BIN ]; then
-      C=$L/fold-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp verity/protocols/proofs/flock/prover/tests/lean/InnerFold.lean $C/ \
+      C=$L/fold-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp tests/verity/protocols/proofs/flock/prover/lean/InnerFold.lean $C/ \
         && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
         && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi

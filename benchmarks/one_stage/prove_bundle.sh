@@ -28,7 +28,7 @@ PY=$REPO/.venv/bin/python
 
 STAMP=$(git rev-parse HEAD:verity/protocols/proofs/flock/prover HEAD:verity/protocols/proofs/flock/prover/pod HEAD:verity/protocols/proofs/flock/prover/agreement HEAD:verity/protocols/proofs/flock/prover/tool.py HEAD:verity/protocols/proofs/flock/verifier HEAD:verity/circuits/base HEAD:verity/circuits/lean HEAD:verity/commitments/lean 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
-BUNDLE_WINDOW=benchmarks/one_stage/tests/fixtures/bundle-window
+BUNDLE_WINDOW=tests/benchmarks/one_stage/fixtures/bundle-window
 FX=$REPO/$BUNDLE_WINDOW
 if [ -n "${PB_WINDOW:-}" ]; then
   BUNDLE=${PB_BUNDLE:?PB_WINDOW needs its PB_BUNDLE} WINDOW=$PB_WINDOW TAMPERED=${PB_TAMPERED:-}

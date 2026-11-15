@@ -17,7 +17,7 @@ COMMAND = re.compile(r"`([^`]*\b(?:uv run|uv sync|research|python3?|git|suites\.
 #: (file, function, the command it names) -> the test, `path::name`, that runs it from the refused state
 REMEDIATED = {
     ("tools/check/suites.py", "changed_base", "--changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)"):
-        "tools/check/tests/test_suites.py::test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it",
+        "tests/tools/check/test_suites.py::test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it",
 }
 
 #: (file, function, the command it names) -> "owner: why", each untested when this test landed

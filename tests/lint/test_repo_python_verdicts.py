@@ -9,7 +9,7 @@ around the line, dotted through its classes and outer functions (``Verifier.sess
 around it or the file isn't Python.  ``detail`` is the line, stripped at both ends.  ``digest`` is the first 16 hex digits
 of SHA-256 over the function's lines, from its ``def`` line to its last (no decorator), each stripped on the right and
 joined by newlines, or over ``detail`` where ``symbol`` is ``""``.  The first four fields are the key the lists' merge
-driver reads (``adapters/vllm/tests/lint/merge_allowlist.py``), so two changes that each delete an entry merge.
+driver reads (``tests/adapters/vllm/tests/lint/merge_allowlist.py``), so two changes that each delete an entry merge.
 
 Each entry's line is one of its tracked file's lines exactly once, or the suite fails: the list only shrinks, and a line
 that left its file says nothing about whether Python still decides there, which only a reader of the change can say.  A

@@ -221,4 +221,4 @@ body) lands on its ready mark alone once the queue's rerun of its map is certifi
 Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
 into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
 (refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
-variable it doesn't declare. Reads outside it are held by `tools/check/tests/test_settings.py` to a list that only shrinks.
+variable it doesn't declare. Reads outside it are held by `tests/tools/check/test_settings.py` to a list that only shrinks.

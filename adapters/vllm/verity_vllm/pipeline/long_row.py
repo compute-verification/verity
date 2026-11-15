@@ -133,7 +133,7 @@ DsaTopKReadRowsCut = CompositeDefinition(
     "DsaTopKReadRowsCut", 1, ("N", "TOPK", "BLOCK", "READ"), _signature, _body, refuse=R.DsaTopKReadRows.refuse,
     conformance="model-untested: DsaTopKReadRows_v1's ok as its cut (dsa_topk_reads.cut) where index rows c[k] = k and "
                 "i[k] = k, its read units' outputs that Definition's kv: both held to DsaTopKReadRows_v1 at small statics by "
-                "adapters/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
+                "tests/adapters/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
                 "DsaTopKReadRows_v1's",
     doc="DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}'s ok as its cut, the chunks' and slots' index rows (c, i) its last two "
         "parameters: every unit serving proves the row by is a call reading whole parameter rows and whole outputs, and "

@@ -1296,7 +1296,7 @@ finish computed none) and a missed release time. A session that goes waits for i
 leave, and serve's verdict is its release or its stop. At each decision the loop writes one line to its stderr,
 `FIREWALL-TIMES {"session", "part", "ready_ms", "release_ms", "outcome"}`: when it decided, the release time it holds
 the proofs to (null on a stop) and `go` or `stop`, by which a run times its windows (pod 85's `RELEASE=1`,
-`rec_inner.py release-report`). `verity/protocols/proofs/recursion/verifier/zk_server/tests` holds these stages to
+`rec_inner.py release-report`). `tests/verity/protocols/proofs/recursion/verifier/zk_server` holds these stages to
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
@@ -1339,7 +1339,7 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 
 The first row holds wherever the inner phase runs `rec_live --zk-server --parts --budget` and the outer phase runs through the
 ZK server (`flock-circuit prove --zk-server-state`, or the tests' relay; `tests/test_zk_server_release.py` and
-`verity/protocols/proofs/recursion/verifier/zk_server/tests`, a rule a test). The rules as `admit` and `Decision.after` run them are proved
+`tests/verity/protocols/proofs/recursion/verifier/zk_server`, a rule a test). The rules as `admit` and `Decision.after` run them are proved
 properties (`Properties.ZkServer`): only the next statement not yet released is admitted, and only before any stop; a
 statement asked out of its turn is the stop at the next one; the first stop ends the recursive session; proofs leave
 only on time. The first row's count from them is not yet a theorem.
