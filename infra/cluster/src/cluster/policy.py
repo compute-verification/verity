@@ -41,6 +41,7 @@ import fcntl
 import json
 import re
 import shlex
+import sys
 import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
@@ -690,7 +691,9 @@ def _read_n2(node: str, raw: str, now: int, live: Live) -> None:
     for f in _slots(files.get(f"{FILL}/windows") or ""):
         try:
             start, minutes = _start(f[0]), float(f[1]) if len(f) > 1 else 30.0
-        except ValueError:
+        except ValueError as e:
+            print(f"cluster policy: {node}'s fill window {' '.join(f)[:80]!r} skipped, as fill_runner.py skips it ({e})",
+                  file=sys.stderr)
             continue
         if start + 60 * minutes > now:
             key = f"{node}.fill.window.{_minute(start)}"
