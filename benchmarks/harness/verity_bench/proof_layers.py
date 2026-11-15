@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_bench import kit, settings
+from verity_bench import kit
 
 SCHEMA = "verity-bench/proof-layers/v1"
 #: each layer's flag and its row's title, in the table's order
@@ -54,6 +54,11 @@ RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
          "out/machine.txt", "out/*a5.log")
 NOT_STATED = "not stated"
+#: what a run id that can't be fetched here takes instead
+FIX = "give the run's out/ as a directory instead (where the store's read key is: `research fetch RUN`, then ~/.research/runs/RUN)"
+#: the line a table prints unless every row ran on a deployed challenger's coins at deployed parameters, which this
+#: command never takes as an audit: it checks no challenger's signature
+NOT_AN_AUDIT = "a measurement, not an audit"
 #: what a ``ran with:`` line may say a row's coins and parameters were, each only where its output says so outright
 COINS = ("deployed challenger", "local challenger", "in-process")
 PARAMETERS = ("deployed", "development")
@@ -78,6 +83,9 @@ class Row:
     accepted: bool = False
     prover_s: float | None = None
     prover_unit: str = "s"
+    per: str = ""
+    device: str = NOT_STATED
+    eps_delta: str = NOT_STATED
     prover_what: str = ""
     lean_s: float | None = None
     lean_what: str = ""
@@ -121,12 +129,12 @@ def fetch(run: str) -> Path:
         from research.store import labels_sync
         from research.store.local import LocalStore, StoreError
     except ImportError as e:
-        raise Unreadable(f"{run}: the evidence store's client isn't installed here ({e}): give the run's out/ directory") from e
+        raise Unreadable(f"{run}: the evidence store's client isn't installed here ({e}): {FIX}") from e
     store = LocalStore()
     try:
         attempt = store.get_attempt(run)
         if attempt is None:
-            raise Unreadable(f"{run} is not in the evidence store this machine reads")
+            raise Unreadable(f"{run} is not in the evidence store this machine reads: {FIX}")
         outputs = attempt.get("outputs") or {}
         art = outputs.get("run_record") or outputs.get("run_files")
         if not art:
@@ -136,7 +144,7 @@ def fetch(run: str) -> Path:
             raise Unreadable(f"{run} was withdrawn ({why}): nothing of it is read")
         return Path(store.fetch(art, paths=list(FETCH)))
     except StoreError as e:
-        raise Unreadable(f"{run}'s record can't be fetched: {e}") from e
+        raise Unreadable(f"{run}'s record can't be fetched: {e}: {FIX}") from e
 
 
 def detect(d: Path) -> str | None:
@@ -227,13 +235,29 @@ def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> No
         row.notes.append("no drawn block holds a timing")
         return
     row.notes += [f"no per-block {name} figure: a drawn member's timing doesn't give one" for name in sorted(missing)]
-    row.prover_unit, row.per_block = "s a block", True
+    row.prover_unit, row.per, row.per_block = "s a block", "a drawn block", True
     row.prover_s = None if "prove" in missing else figures["prove"] / n
-    row.prover_what = f"Flock's prove_total_s a drawn block, the mean over {n}"
+    row.prover_what = f"Flock's prove_total_s, the mean over {n}"
     row.lean_s = None if "lean" in missing else figures["lean"] / n
-    row.lean_what = f"Lean's verify a drawn block, the mean over {n}"
+    row.lean_what = f"Lean's verify, the mean over {n}"
     row.proof_bytes = None if "bytes" in missing else figures["bytes"] / n
-    row.bytes_what = "a drawn block, its session's proof files over its blocks"
+    row.bytes_what = "its session's proof files over its drawn blocks"
+
+
+def _device(timings: Iterable[Mapping[str, Any]]) -> str:
+    """The prover's device as a5's summary ``timing`` states it for every member (``gpus``, ``device``: a5.proving_of):
+    the CPU, the cards named, else "not stated"."""
+
+    said = [((t or {}).get("gpus"), (t or {}).get("device")) for t in timings]
+    if said and all(g == 0 for g, _ in said):
+        return "CPU (timing gpus 0)"
+    if said and all(isinstance(g, int) and g >= 1 for g, _ in said):
+        return "GPU " + ", ".join(sorted({str(d) for _, d in said})) + " (timing device)"
+    return NOT_STATED
+
+
+def _eps_delta(delta: Any) -> str:
+    return f"ε {NOT_STATED} at δ {delta}" if _number(delta) is not None else NOT_STATED
 
 
 def _drawn(counts: Mapping[str, Any], population: Any, ranks: int = 1) -> str:
@@ -270,14 +294,17 @@ def read_recursion(d: Path, row: Row) -> None:
             f": {h['not_composed']}" if h.get("not_composed") else "")
     else:
         row.lean = "not accepted: a part or a negative did not hold"
+    row.per = "a run"
+    if p.get("GPU") == "0" and p.get("OPROVE_GPU", "0") == "0":
+        row.device = "CPU (params GPU=0, OPROVE_GPU=0)"
     pipeline = h.get("pipeline") or {}
     prover = {k: v for k, v in pipeline.items() if k != "Lean step_s" and _number(v) is not None}
     if prover:
         row.prover_s = sum(float(v) for v in prover.values())
         row.prover_unit = "s a run"
-        row.prover_what = "wall, one recursive run's path without Lean's step: " + " + ".join(prover)
+        row.prover_what = "one recursive run's path without Lean's step: " + " + ".join(prover)
     row.lean_s = _number(pipeline.get("Lean step_s"))
-    row.lean_what = "wall, the lean step whole: every V* release and the inner statement"
+    row.lean_what = "the lean step whole: every V* release and the inner statement"
     found = re.search(r"\(([^)]*)\)", str(h.get("outer_mode") or ""))
     outer = (h.get("outer") or {}).get(found.group(1) if found else "") or {}
     row.proof_bytes = _number(outer.get("proof_bytes"))
@@ -309,12 +336,12 @@ def read_prove_path(d: Path, row: Row) -> None:
     lean = [v for vs in per_rank for v in vs]
     each = len(audits) == len(ranks) and all(per_rank)
     if not each:
-        row.notes.append(f"{len(audits)} audited A5 line(s) for {len(ranks)} rank(s), "
+        row.notes.append(f"{len(audits)} A5 result line(s) for {len(ranks)} rank(s), "
                          f"{sum(1 for vs in per_rank if not vs)} without a Lean verify verdict: not one verdict a rank")
     row.accepted = (pp.get("ok") is True and bool(ranks) and all(r.get("accepted") is True for r in ranks.values())
                     and each and all(v is True for _, v in lean))
     if row.accepted:
-        row.lean = f"accepted: every rank's audit ({len(ranks)}), each with Lean's {', '.join(sorted({k for k, _ in lean}))}"
+        row.lean = f"accepted: Lean's {', '.join(sorted({k for k, _ in lean}))} true on every rank ({len(ranks)})"
     else:
         held = [f"PROVE-PATH ok {pp.get('ok')}"] + [f"rank {r} accepted {x.get('accepted')}" for r, x in sorted(ranks.items())
                                                    if x.get("accepted") is not True]
@@ -333,6 +360,9 @@ def read_prove_path(d: Path, row: Row) -> None:
         [f"summary.json coins.challenger {challenger}"] if challenger else [])
     row.proof = pp.get("proof")
     row.said(_challenger(pp.get("coins"), challenger), None, "; ".join(said))
+    timings = [t for f in sorted(arm.glob("rank*/summary.json"))
+               for t in (json.loads(f.read_text()).get("timing") or {}).values()]
+    row.device, row.eps_delta = _device(timings), _eps_delta(pp.get("delta"))
 
 
 def read_a5(d: Path, row: Row) -> None:
@@ -356,9 +386,9 @@ def read_a5(d: Path, row: Row) -> None:
     else:
         lean = _lean_verdicts([a5])
         row.accepted = (a5.get("audit") or {}).get("accepted") is True and bool(lean) and all(v is True for _, v in lean)
-        row.lean = (f"accepted: the audit, with Lean's {', '.join(sorted({k for k, _ in lean}))}" if row.accepted else
+        row.lean = (f"accepted: Lean's {', '.join(sorted({k for k, _ in lean}))} true, with a5's checks" if row.accepted else
                     "not accepted: " + ("; ".join(f"{k} {v}" for k, v in lean if v is not True) or
-                                        ("audit accepted " + str((a5.get("audit") or {}).get("accepted")) if "audit" in a5
+                                        ("a5's checks accepted " + str((a5.get("audit") or {}).get("accepted")) if "audit" in a5
                                          else json.dumps(a5)[:300])))
     machine = next((x for x in _text(d / "machine.txt").splitlines() if x.startswith("row dir ")), None)
     registered = next((x for x in text if x.startswith("REGISTERED ")), "")
@@ -373,9 +403,11 @@ def read_a5(d: Path, row: Row) -> None:
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}
     said = (f"summary.json coins {json.dumps(coins, sort_keys=True)}" if coins else
-            f"audit verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
+            f"A5 line's verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
     row.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
     row.proof = "plain" if summary.get("plain") else "zk" if summary else None
+    row.device = _device((summary.get("timing") or {}).values())
+    row.eps_delta = _eps_delta(summary.get("delta"))
     if summary.get("arm"):
         row.notes.append(f"arm {summary['arm']}")
 
@@ -415,30 +447,48 @@ def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) 
 # ---- printing and writing ------------------------------------------------------------------------------------------------
 
 
-def _cell(x: float | None, what: str, bytes_: bool = False) -> str:
+def _cell(x: float | None, unit: str, per: str, what: str) -> str:
+    """A figure with its unit as its first words (seconds a drawn block, or a whole run's wall seconds), then how it was
+    read."""
+
     if x is None:
         return "—"
-    return (f"{x:,.0f}" if bytes_ else f"{x:.4g}") + (f" ({what})" if what else "")
+    figure = f"{x:,.0f} bytes" if unit == "bytes" else f"{x:.4g} s"
+    wall = ", wall" if unit == "s" and per == "a run" else ""
+    return f"{figure} {per}{wall}" + (f" ({what})" if what else "")
+
+
+def has_number(rows: Sequence[Row]) -> bool:
+    return any(x is not None for r in rows for x in (r.prover_s, r.lean_s, r.proof_bytes))
 
 
 def render(rows: Sequence[Row]) -> str:
-    """The table as text: a row a layer, then why each row without a number has none."""
+    """The table as text: its title; `NOT_AN_AUDIT` unless every row ran on a deployed challenger's coins at deployed
+    parameters (and the JSON's ``audit`` is false regardless); each row's ``ran with:`` line; the table; then why each
+    row without a number has none. With no number in any row its first line says so (`run` exits 1)."""
 
-    lines = ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`).", "",
-             "| layer | workload | proof | prover s | Lean verifier | Lean s | proof bytes | ran with |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = [] if has_number(rows) else ["prove layers: no number: " + "; ".join(f"{r.layer}: {r.why}" for r in rows)]
+    lines += ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`)."]
+    if not all(r.ran_with.startswith("ran with: coins deployed challenger; parameters deployed") for r in rows):
+        lines.append(NOT_AN_AUDIT)
+    lines += [f"- {LAYERS[r.layer]}: {r.ran_with}" for r in rows]
+    lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes |",
+              "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
-        unit = f"{r.prover_unit}: {r.prover_what}" if r.prover_what else r.prover_unit
-        proof = r.proof or (NOT_STATED if r.status == "read" else "—")
-        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {_cell(r.prover_s, unit)} | {r.lean} | "
-                     f"{_cell(r.lean_s, r.lean_what)} | {_cell(r.proof_bytes, r.bytes_what, bytes_=True)} | {r.ran_with} |")
+        read = r.status == "read"
+        proof = r.proof or (NOT_STATED if read else "—")
+        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {r.device if read else '—'} | "
+                     f"{r.eps_delta if read else '—'} | {_cell(r.prover_s, 's', r.per, r.prover_what)} | {r.lean} | "
+                     f"{_cell(r.lean_s, 's', r.per, r.lean_what)} | {_cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]
     return "\n".join(lines).rstrip()
 
 
 def document(rows: Sequence[Row]) -> dict[str, Any]:
-    return {"schema": SCHEMA, "rows": [{"title": LAYERS[r.layer], **asdict(r)} for r in rows]}
+    """The table as JSON. ``audit`` is always false: the command checks no challenger's signature."""
+
+    return {"schema": SCHEMA, "audit": False, "rows": [{"title": LAYERS[r.layer], **asdict(r)} for r in rows]}
 
 
 def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
@@ -463,31 +513,6 @@ def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, 
     return out
 
 
-def report(name: str, text: str, doc: Mapping[str, Any], measurements: Iterable[Mapping[str, Any]] = (), *,
-           mark: str = "measured") -> Path | None:
-    """The command's last step: prints `text`, then `doc` as one line of JSON, and where it has a place to write (under a
-    research run its ``out/``, else ``$OUT`` where set) writes that line to ``<name>.json`` there and each of
-    `measurements` at `mark` to the run's result (`kit.writer`); with no place it writes nothing, and an empty
-    ``$RESEARCH_RUN_DIR`` or ``$OUT`` is none, never the working directory. Its signature is the kit's report step's, so a
-    caller moves to that one by its name alone."""
-
-    print(text)
-    line = json.dumps(doc)
-    print(line)
-    run_dir = str(settings.RESEARCH_RUN_DIR or "") if settings.is_set("RESEARCH_RUN_DIR") else ""
-    out = str(settings.OUT or "") if settings.is_set("OUT") else ""
-    if not (run_dir or out):
-        return None
-    place = Path(run_dir) / "out" if run_dir else Path(out)
-    place.mkdir(parents=True, exist_ok=True)
-    (place / f"{name}.json").write_text(line + "\n")
-    if measurements := list(measurements):
-        w = kit.writer(place)
-        for m in measurements:
-            w.measurement(**m, mark=mark)
-    return place
-
-
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     for layer, title in LAYERS.items():
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
@@ -496,5 +521,5 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> int:
     rows = [read(layer, getattr(args, layer)) for layer in LAYERS]
-    report(REPORT, render(rows), document(rows), measured(rows, getattr(args, "metrics", None) or {}))
-    return 0
+    kit.report(REPORT, render(rows), document(rows), measured(rows, getattr(args, "metrics", None) or {}))
+    return 0 if has_number(rows) else 1
