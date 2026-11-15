@@ -43,7 +43,7 @@ from verity_vllm.definitions.registry import moe as _moe
 from verity_vllm.definitions.registry import pad_prims as PP
 from verity_vllm.definitions.registry import pouw_rows as _pouw_rows
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.registry import ref_prims as RP  # noqa: F401  -- imported to register the reference kinds
 from verity_vllm.definitions.registry import sparse_mla as _sparse_mla
 from verity_vllm.definitions.registry import sparse_mla_split as _sparse_mla_split
 from verity_vllm.definitions.registry import (
