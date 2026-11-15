@@ -127,7 +127,8 @@ def test_a_first_line_stamped_ahead_of_the_clock_is_refused_with_the_stamp_the_c
     (SUN_0225, "lean, 2:2x AM PST: the run ends 3:00 AM PST"),            # the first clock time can't be read: no later one
     (SUN_0225, "the run finishes by 3:00 AM PST"), (SUN_0225, "lean: ETA 4:00 AM PST"), (SUN_0225, "node 2 reboots at 22:00Z"),
     (SUN_0225, "lean/STAMP, the PR is up\n3:00 AM PST on the second line"),
-    (SUN_0225, "lean 13:05 PM PST: no such hour"), (SUN_0225, "ci 25:00Z: no such hour"),
+    (SUN_0225, "lean 13:05 PM PST: no such hour"), (SUN_0225, "ci 25:00Z: no such hour"), (SUN_0225, "ci 10:61Z: no such minute"),
+    (SUN_0225, "lean, 31 Nov 3:00 AM PST: no such day"), (SUN_0225, "ci, 15 Nov 9999 23:00Z: past the calendar"),
     (SUN_0225, "freeze 2026-11-15T12:00Z"), (SUN_0225, "lean, Sat 14 Nov 11:59 PM PST: yesterday"),
     (SUN_0001, "lean (lead), 11:59 PM PST: last night, across midnight"),
     (dt.datetime(2026, 11, 16, 0, 1, 10, tzinfo=UTC), "ci 23:59Z: across UTC midnight"),

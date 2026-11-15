@@ -3,6 +3,7 @@ names, ids, front matter, log lines) stays UTC. `slack_dates` rewrites the dated
 which shows each reader their own zone and falls back to `both`. Stdlib only."""
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -110,24 +111,23 @@ def stamp_ahead(text: str, now: dt.datetime) -> str | None:
     if pac and PACIFIC is None:
         return None
     zone = PACIFIC if pac else UTC
-    try:
-        if pac:
-            if not 1 <= int(g["ph"]) <= 12:
-                return None
-            hour, minute = int(g["ph"]) % 12 + (12 if g["ap"].upper() == "PM" else 0), int(g["pm"])
-        else:
-            hour, minute = int(g["zh"]), int(g["zm"])
-        mon = g["m1"] or g["m2"]
-        if mon:
-            month, day = _MONTHS.index(mon[:3].lower()) + 1, int(g["d1"] or g["d2"])
-            days = [dt.date(y, month, day) for y in ([int(g["y"])] if g["y"] else [u0.year - 1, u0.year, u0.year + 1])]
-        else:
-            today = u0.astimezone(zone).date()
-            days = [today + dt.timedelta(days=k) for k in (-1, 0, 1)]
-        stamp = min((dt.datetime(d.year, d.month, d.day, hour, minute, tzinfo=zone).astimezone(UTC) for d in days),
-                    key=lambda c: abs(c - u0))
-    except ValueError:
+    hour, minute = int(g["ph"] if pac else g["zh"]), int(g["pm"] if pac else g["zm"])
+    if minute > 59 or not (1 <= hour <= 12 if pac else hour <= 23):
         return None
+    if pac:
+        hour = hour % 12 + (12 if g["ap"].upper() == "PM" else 0)
+    mon = g["m1"] or g["m2"]
+    if mon:
+        month, day = _MONTHS.index(mon[:3].lower()) + 1, int(g["d1"] or g["d2"])
+        days = [dt.date(y, month, day) for y in ([int(g["y"])] if g["y"] else [u0.year - 1, u0.year, u0.year + 1])
+                if 1 < y < dt.MAXYEAR and 1 <= day <= calendar.monthrange(y, month)[1]]
+    else:
+        today = u0.astimezone(zone).date()
+        days = [today + dt.timedelta(days=k) for k in (-1, 0, 1)]
+    if not days:
+        return None
+    stamp = min((dt.datetime(d.year, d.month, d.day, hour, minute, tzinfo=zone).astimezone(UTC) for d in days),
+                key=lambda c: abs(c - u0))
     if stamp <= u0:
         return None
     local = u0.astimezone(zone)
