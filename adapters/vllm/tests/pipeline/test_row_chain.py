@@ -1,18 +1,23 @@
 """`verity-vllm row chain`: a row whose Build, Match and Commit Attempts pass publishes its record in the circuit database with their
 artifacts, the Commit's summary.json, the newest captures of record and the tree the Commit ran; any other row publishes nothing,
 and a chain that would publish a row whose file is not done only at its public cap is refused before any stage runs.  The research
-CLI and `records publish` are stand-ins that record what they were asked."""
+CLI and `records publish` are stand-ins that record what they were asked.
+
+Then the run store's driver beside the chain (`pipeline/research.py`, private with this file in the public boundary's `team` group,
+so only a file the boundary keeps private may import it): a job's recorded input, the pod guard's preserve list, a `row.json` that
+does not parse, and `row shed` on a tree with no pod guard."""
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.config import WORKLOADS, UsageError
-from verity_vllm.pipeline import cli, row
+from verity_vllm.config import WORKLOADS, UsageError, workload_file
+from verity_vllm.pipeline import cli, row, source_identity
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research as R
 
@@ -58,7 +63,7 @@ class _Research:
 @pytest.fixture(autouse=True)
 def capped(tmp_path, monkeypatch) -> Path:
     """ROW's file done only at its public cap, as the file of a row the chain publishes must be; returns its path."""
-    doc = json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    doc = json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     p = tmp_path / "workloads" / f"{ROW}.json"
     p.parent.mkdir()
     p.write_text(json.dumps({**doc, "sampling": {**doc["sampling"], "ignore_eos": True}}))
@@ -170,7 +175,7 @@ def test_what_the_record_needs_is_refused_before_any_stage_runs(tmp_path, resear
 
 
 def test_a_chain_that_would_publish_a_row_not_done_only_at_its_public_cap_is_refused_before_any_stage_runs(tmp_path, research, capped):
-    capped.write_text((WORKLOADS / f"{ROW}.json").read_text())
+    capped.write_text(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     fake = research()
     with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
                                          r"is 'eos-token'.*the chain would publish it as one \(or --no-publish\)"):
@@ -183,7 +188,6 @@ def test_a_chain_that_would_publish_a_row_not_done_only_at_its_public_cap_is_ref
 
 
 def test_the_records_branch_is_the_trees_unless_it_names_none(tmp_path, research, monkeypatch):
-    from verity_vllm.pipeline import source_identity
     fake = research()
     monkeypatch.setattr(source_identity, "tree_identity", lambda root: {"git_sha": SHA, "branch": "cursor/glm53-land-21f3"})
     assert _chain(tmp_path, "--by", "circuits", "--tier", "fast") == 0
@@ -191,3 +195,48 @@ def test_the_records_branch_is_the_trees_unless_it_names_none(tmp_path, research
     monkeypatch.setattr(source_identity, "tree_identity", lambda root: {"git_sha": SHA, "branch": "HEAD"})
     with pytest.raises(UsageError, match="names no branch: --ref REF"):
         _chain(tmp_path, "--by", "circuits", "--tier", "fast")
+
+
+def _said(capsys, caplog) -> str:
+    """What the run store's driver said beside its product: its stderr and its log records."""
+    return capsys.readouterr().err + caplog.text
+
+
+def test_a_jobs_input_is_the_artifact_its_run_recorded(tmp_path):
+    job = tmp_path / "job.json"
+    assert R.job_input(None, "build") == "" and R.job_input(str(tmp_path), "build") == ""
+    job.write_text(json.dumps({"store": {"inputs": {"build": "art:b", "match": ""}}}))
+    assert R.job_input(str(tmp_path), "build") == "art:b"
+    assert R.job_input(str(tmp_path), "match") == "" and R.job_input(str(tmp_path), "commit") == ""
+    for unreadable in ("{}", '{"store": null}', "[]", "{"):
+        job.write_text(unreadable)
+        assert R.job_input(str(tmp_path), "build") == ""
+
+
+def test_a_run_is_put_on_the_preserve_list_once(tmp_path, capsys, caplog):
+    path = tmp_path / "guard" / "preserve.txt"
+    for run in ("run-a", "run-b", "run-a"):
+        R.preserve(str(path), run)
+    assert path.read_text() == "run-a\nrun-b\n" and _said(capsys, caplog) == ""
+    R.preserve(str(path / "under-a-file"), "run-c")
+    assert "not updated" in _said(capsys, caplog) and path.read_text() == "run-a\nrun-b\n"
+
+
+def test_a_row_json_that_does_not_parse_is_said_and_left_as_it_is(tmp_path, capsys, caplog):
+    R._row_json(str(tmp_path), ("stages", "build"), {"rc": 0})
+    assert json.loads((tmp_path / "row.json").read_text()) == {"schema": "verity-sweep/row-v2/v1", "stages": {"build": {"rc": 0}}}
+    assert _said(capsys, caplog) == ""
+    (tmp_path / "row.json").write_text("{")
+    R._row_json(str(tmp_path), ("stages", "match"), {"rc": 0})
+    assert "row.json not updated" in _said(capsys, caplog) and (tmp_path / "row.json").read_text() == "{"
+
+
+def test_row_shed_terminates_nothing_on_a_tree_with_no_pod_guard(tmp_path, monkeypatch, capsys, caplog):
+    def run(*argv, **kw):
+        raise AssertionError(f"row shed ran {argv} without a pod guard")
+
+    monkeypatch.setattr(R, "REPO_ROOT", str(tmp_path))
+    monkeypatch.setattr(R.subprocess, "run", run)
+    env = SimpleNamespace(pod_guard=str(tmp_path / "pod_guard.sh"), environ={})
+    assert R.shed(SimpleNamespace(env=env, research_bin=None, research_py=sys.executable, force=True)) == 2
+    assert "no pod_guard.sh found; not terminating" in _said(capsys, caplog)

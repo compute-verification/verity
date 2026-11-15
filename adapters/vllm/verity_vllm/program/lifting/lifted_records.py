@@ -6,9 +6,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from verity.definitions.registry.lifted import check_lag
-from verity_vllm.program.workload import eos_lag_rows_declared
+from verity_vllm.definitions.registry.lifted import check_lag
 
+from verity_vllm.program.workload import eos_lag_rows_declared
 
 LAG_FIELD = "RunHeader.profile.engine_kwargs.async_scheduling"  # the ONE attested field GP-01's eos_lag_rows and this LAG both read
 LAG_DECLARED_FIELDS = ("lag.value", "stop_rule.lag", "stop_rule.eos_lag_rows")  # workload_program.json: the current names, then GP-01's older field

@@ -7,11 +7,11 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
 * ``row-id-split``: splitting a string on ``"__"`` (``split``/``rsplit``/``partition``/``rpartition``), the other way
   the row id gets parsed.
 * ``root-list``: a hand-written list, tuple or set of string literals naming code roots (``verity_vllm``, ``verity``,
-  ``research``, ``adapters/vllm``, ``verity/...``, ``verity/circuits/...`` (its census aside), ``verity/definitions/kernels/...``,
-  ``verity/core/...``, ``tools/research/...`` or paths under them), which is
+  ``research``, ``adapters/vllm``, ``verity/...``, ``verity/circuits/...`` (its census aside), ``verity/circuits/kernels/...``,
+  ``verity/protocols/...``, ``tools/research/...`` or paths under them), which is
   how code identity gets defined outside the one ``code_identity()``.
 
-The owners, ``config.py`` (row-id grammar) and ``pipeline/identity.py`` (code identity), do not exist yet; the modules
+The row-id grammar's owner is ``config.py``; code identity's, ``pipeline/identity.py``, does not exist yet.  The modules
 that become them (``target_family.py`` into ``config.py``; ``pipeline/source_identity.py`` and
 ``pipeline/release_json.py`` into ``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
 (no single literal shape to scan for), and the rule's test that editing a core file in a temp tree changes the identity.
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import ast
 import re
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -29,8 +29,8 @@ RULE = "P12 (each shared key has one owner)"
 OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
                     "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
-CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.definitions.kernels|verity.core|research|adapters/vllm|tools/research)(?:/|$)"
-                       r"|verity/circuits/(?!census)|verity/definitions/kernels/|verity/core/)")
+CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.circuits.kernels|verity.protocols|research|adapters/vllm|tools/research)(?:/|$)"
+                       r"|verity/circuits/(?!census)|verity/circuits/kernels/|verity/protocols/)")
 
 
 def file_violations(src: str, rel: str) -> list[R.Violation]:
@@ -49,13 +49,13 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             out.append(R.Violation(rel, "row-id-split", symbol, f"{node.func.attr}('__')", node.lineno))
         elif isinstance(node, (ast.Tuple, ast.List, ast.Set)) and len(node.elts) >= 2 \
                 and all(R.is_str(e) for e in node.elts):
-            roots = [e.value for e in node.elts if CODE_ROOT.match(e.value)]
+            roots = [e.value for e in node.elts if R.is_str(e) and CODE_ROOT.match(e.value)]
             if roots:
                 out.append(R.Violation(rel, "root-list", symbol, ", ".join(roots)[:120], node.lineno))
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():

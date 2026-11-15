@@ -27,14 +27,13 @@ from tests.pipeline import test_serve_openai as TSO
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_admit import Admission
-from verity_vllm.protocols.pouw.h1 import hooks as H1H
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw import h1_hooks as H1H
 
 
 class Engine:
     """vLLM's ``LLMEngine`` over its engine core, synchronous or with the batch queue (module docstring). FCFS, at most
     ``seqs`` requests running and ``budget`` tokens a schedule, a new request's whole prompt in its first; its rows in Model
-    Runner V2's batch order (`requests.sort_batch_req_ids`); each sample a function of the request's ids. ``calls`` holds each
+    Runner V2's batch order (`h1_hooks.sort_batch_req_ids`); each sample a function of the request's ids. ``calls`` holds each
     ``step``'s (the forward it ran, the forward whose outputs it returned), None for none."""
 
     def __init__(self, runner: Any, *, async_scheduling: bool, seqs: int, budget: int) -> None:
@@ -76,7 +75,7 @@ class Engine:
     def _launch(self) -> tuple[int | None, list[tuple[str, int]]]:
         rows, new = self._schedule()
         name = {self.reqs[e]["internal"]: e for e in rows}
-        live = [name[i] for i in RQ.sort_batch_req_ids({i: len(rows[e][0]) for i, e in name.items()}, {}, 1)]
+        live = [name[i] for i in H1H.sort_batch_req_ids({i: len(rows[e][0]) for i, e in name.items()}, {}, 1)]
         ids, qsl, pos = [], [0], []
         for e in live:
             ids += rows[e][0]
@@ -230,6 +229,33 @@ def test_async_scheduling_commits_and_admits_what_sync_scheduling_does(tmp_path,
     assert asyn.rounds == sync.rounds and len(sync.rounds) == sync.engine.forwards
     for w in sync.windows:
         assert [s for v, s, _, _ in sync.rounds if v == w["window"]] == list(range(w["steps"])) == list(range(w["pouw_h1"]["rounds"]))
+
+
+def test_a_window_that_holds_no_step_serves_the_next_burst_rather_than_closing_empty_at_the_request_cap(tmp_path):
+    """Under async scheduling the call that only returns a burst's last outputs runs no forward, so when the window's bound
+    fell on the burst's last forward that call opens a window that holds no step, live with the finished burst's requests.
+    The next burst serves in it: a window that holds no step counts no request against ``--window-requests``, so no
+    window closes empty between bursts, and async scheduling leaves at most one, at the stop."""
+    com = SimpleNamespace(_step_index=0, install=lambda: None)
+    com.reset = lambda: setattr(com, "_step_index", 0)
+    w = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=2, request_cap=2)
+    closed: list[tuple[int, int, list[str]]] = []
+
+    def close() -> None:
+        closed.append((w.window, com._step_index, sorted(w.in_window)))
+        w.is_open = False
+
+    w.close = close
+    for live, forward in ((["a", "b"], 1), (["a", "b"], 1), (["a", "b"], 0)):    # two forwards, then the outputs only
+        w.before_step(live)
+        com._step_index += forward
+    w.idle()
+    assert closed == [(0, 2, ["a", "b"])] and w.is_open and com._step_index == 0, "the window the last call opened is empty"
+    for live in (["c", "d"], ["c", "d"]):
+        w.before_step(live)
+        com._step_index += 1
+    w.idle()
+    assert closed == [(0, 2, ["a", "b"]), (1, 2, ["c", "d"])], "each burst's window holds its 2 steps, none is empty"
 
 
 def test_the_gpu_comparison_holds_every_async_window_committed_with_syncs_roots():

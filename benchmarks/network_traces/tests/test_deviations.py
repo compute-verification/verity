@@ -19,11 +19,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier import active
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import DATA, VirtualClock
-from verity.protocols.certifier.verifier.certificate import Issuer
-from verity.protocols.certifier.verifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, cells, read_cell
+from verity.protocols.accounting.certifier.verifier.id_form import ID_REQUEST_HEAD
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
+from verity.protocols.accounting.certifier.verifier.certificate import Issuer
+from verity.protocols.accounting.certifier.verifier.network_certifier import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -41,7 +43,7 @@ dv = _load("network_traces_deviations", "benchmarks/network_traces/deviations.py
 ws, IT = dv.ws, dv.IT
 #: the connections of a try on the virtual clock: a lane and a place in the queue each, so that they arrive together
 N = 8
-PARAMS = WardenParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
+PARAMS = NetworkCertifierParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
                       ingress_cells=40, ingress_buckets=30, egress_cells=64, egress="id")
 P = PARAMS.payload
 IDS = [1000, 1001, 2002, 2003, 3004, 3005, 4006]
@@ -52,8 +54,8 @@ class _Side:
     """One end of an in-memory connection as the relay holds it: a reader fed what the peer sends, and a transport
     that keeps each write with the tick it was made in."""
 
-    def __init__(self, warden: Warden | None = None) -> None:
-        self.warden, self.writes, self.closed, self.transport = warden, [], False, self
+    def __init__(self, network_certifier: NetworkCertifier | None = None) -> None:
+        self.network_certifier, self.writes, self.closed, self.transport = network_certifier, [], False, self
         self.reader, self.fed, self.eof = asyncio.StreamReader(), 0, False
 
     def feed(self, data: bytes, end: bool) -> None:
@@ -65,7 +67,7 @@ class _Side:
             self.eof = True
 
     def write(self, data: bytes) -> None:
-        self.writes.append((self.warden.ticks if self.warden else None, bytes(data)))
+        self.writes.append((self.network_certifier.ticks if self.network_certifier else None, bytes(data)))
 
     def is_closing(self) -> bool:
         return self.closed
@@ -96,21 +98,22 @@ def _watermark_log(relay) -> dict:
                           "error": relay.watermark_error}}
 
 
-def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[bytes],
+def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: Sequence[bytes],
                served: Sequence[tuple[bytes, bool]], watermark: bool = False, refuse: Sequence[int] = (),
                cut: int | None = None) -> list[dict]:
     """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
     `served[k]`'s bytes and, when its flag says so, ending: a server that doesn't end withholds the rest. Published in
-    `out` as `warden_serve`'s `serve` and `client` publish a run (`test_warden_serve._run`, whose servers all end),
+    `out` as `network_certifier_serve`'s `serve` and `client` publish a run (`test_network_certifier_serve._run`, whose servers all end),
     with the relay's log (`warden.json`), each bucket ticked once the relay has read what its servers sent. Under
     `watermark` the relay also sends the watermark stream, whose bytes go to ``watermark.bin`` and whose end to the
     log as `serve` writes it; the servers of `refuse` take no connection, and the watermark's server closes the stream
     once it has taken `cut` writes. Returns the relay's log, an entry a connection."""
     out.mkdir(parents=True, exist_ok=True)
     tau, B = params.bucket_ms / 1000, params.cell_bytes
-    signer = ws.cs.signer(key, 4)
+    signer = ws.ck.signer(key, 4)
     public = signer.public_key()
     publisher = ws.Publisher(out, Issuer(signer, SESSION), params, WR.Cells.of)
+    start = ws.start_json(ws.certify_start(publisher.issuer, 0, 0, params))
     servers: list[_Side] = []
     streams: list[_Side] = []
 
@@ -126,38 +129,38 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
         streams.append(_Side() if cut is None else _Cut(cut))
         return streams[-1].reader, streams[-1]
 
-    def settled(w: Warden) -> bool:
+    def settled(w: NetworkCertifier) -> bool:
         return all(c.ingress_ended and (c.upstream is not None if c.server is None else
                                         c.bytes_out == c.server[1].fed and c.egress_ended == c.server[1].eof)
                    for c in w.active)
 
-    async def main() -> tuple[list[_Side], Warden]:
+    async def main() -> tuple[list[_Side], NetworkCertifier]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+        network_certifier = NetworkCertifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
                         withhold=publisher.withhold, watermark=mark if watermark else None)
-        running = asyncio.create_task(warden.run())
+        running = asyncio.create_task(network_certifier.run())
         clients, tasks = [], []
         for request in requests:
-            side = _Side(warden)
+            side = _Side(network_certifier)
             side.feed(cells(request, B), True)
             clients.append(side)
-            tasks.append(asyncio.create_task(warden.handle(side.reader, side)))
-        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
+            tasks.append(asyncio.create_task(network_certifier.handle(side.reader, side)))
+        await network_certifier.until(lambda w: w.ordinals + w.refused == len(requests))
         for t in range(params.window):
-            await warden.until(settled)
+            await network_certifier.until(settled)
             clock.advance(t * tau)
-            await warden.until(lambda w, t=t: w.ticks > t)
+            await network_certifier.until(lambda w, t=t: w.ticks > t)
         await running
         await asyncio.gather(*tasks)
-        return clients, warden
+        return clients, network_certifier
 
     try:
-        clients, warden = asyncio.run(main())
+        clients, network_certifier = asyncio.run(main())
     finally:
         publisher.close()
         signer.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, listen=("127.0.0.1", 1),
-                                      upstream=("127.0.0.1", 2), slack=warden.slack, run_id=warden.run_id)
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, slack=network_certifier.slack,
+                                      run_id=network_certifier.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -171,13 +174,13 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
         shim.outcome = ("refused" if REFUSED in kinds else "end" if END in kinds else "fail" if FAIL in kinds
                         else "cut")
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
-                                     params.payload if request.startswith(active.ID_REQUEST_HEAD) else None))
+                                     params.payload if request.startswith(ID_REQUEST_HEAD) else None))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    marks = _watermark_log(warden) if watermark else {}
-    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": warden.log} | marks))
+    marks = _watermark_log(network_certifier) if watermark else {}
+    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": network_certifier.log} | marks))
     if watermark:
         (out / "watermark.bin").write_bytes(b"".join(data for side in streams for _, data in side.writes))
-    return warden.log
+    return network_certifier.log
 
 
 def _bits(bits: list[int]):
@@ -275,7 +278,7 @@ def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str 
     assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(N))
     (run / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
     (run / dv.PLANTED).write_text("".join(json.dumps(x) + "\n" for x in lines))
-    (run / "check.json").write_text(json.dumps(ws.check(run)))
+    (run / "check.json").write_text(json.dumps(RC.check(run)))
     return 0.0
 
 
@@ -408,7 +411,7 @@ def test_what_a_try_keeps_holds_no_salt_or_address_and_the_table_is_made_from_it
     assert (conn["user"], conn["release"], conn["held"], conn["failed"]) == ("user-0", 0, True, None)
     assert [x >> 1 for x in conn["ids"]] == [x >> 1 for x in HONEST[0]]
     assert conn["planted"] == ("10" * 60)[:len(HONEST[0])] == "".join(str(x & 1) for x in conn["ids"])
-    record = ws.read_records(run, PARAMS)[ws.EGRESS][0]
+    record = RC.read_records(run, PARAMS)[RC.EGRESS][0]
     cells = {(t, i): frame for t, row in enumerate(record.grid) for i, frame in enumerate(row)
              if frame is not None and frame != IT.pad_cell(PARAMS.cell_bytes)}
     assert {(e[0], e[1]): dv.cell_of(e, PARAMS.cell_bytes) for e in kept["egress"][0]["cells"]} == cells

@@ -27,10 +27,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from verity.definitions.registry import b1
-from verity.definitions.registry.prims import BF16
 from verity.circuits.types import Array, RecordType, Value
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.prims import BF16
+
+__all__ = ["INT8_EXACT_QUANT", "check_cos_sin", "config_of", "cos_sin_table", "f32_to_bf16_words", "fp8_moe_block",
+           "mla_weights_type", "normalizer_word", "quant_refusal", "rotary_dim", "weights_type"]
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
@@ -63,7 +65,8 @@ INT8_EXACT_LMHEAD_QUANT = {**INT8_EXACT_QUANT, "modules_to_not_convert": []}
 
 
 def is_int8_exact(qc: dict[str, Any] | None) -> bool:
-    return bool(qc) and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
+    """Whether `qc`'s `quant_method` is the exact-int8 profile's.  False for an absent or empty `qc` of any type, which is not read."""
+    return bool(qc and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"])
 
 
 def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:
@@ -206,7 +209,7 @@ def moe_layer_weights_type(C: dict[str, Any]) -> RecordType:
     `mlp.gate.weight [E][H]`, `mlp.experts.routed_experts.w13_weight [E][2I][H]` (gate|up fused), `w2_weight [E][H][I]`.
     Field order = parameter order in the checkpoint's layer (b1's order for the shared fields).  With `C["FP8_BLOCK"]` the linears but
     the router are e4m3, each followed by its block scales (`_fp8_fields`)."""
-    H, QKV, E, I = C["H"], C["QKV"], C["NUM_EXPERTS"], C["I"]
+    H, QKV, E, inter = C["H"], C["QKV"], C["NUM_EXPERTS"], C["I"]
     fields: list[tuple[str, Any]] = [("ln1", Array(H, BF16)), ("qkv_w", Array(QKV, Array(H, BF16)))]
     if C.get("BIAS", True):
         fields.append(("qkv_b", Array(QKV, BF16)))
@@ -221,10 +224,10 @@ def moe_layer_weights_type(C: dict[str, Any]) -> RecordType:
         fields += [("q_norm", Array(C["NH"] * C["D"] * W, BF16)), ("k_norm", Array(C["KVH"] * C["D"] * W, BF16))]
     fields += [("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("ln2", Array(H, BF16)),
                ("gate_w", Array(E, Array(H, BF16))),
-               ("w13", Array(E, Array(2 * I, Array(H, BF16)))),
-               ("w2", Array(E, Array(H, Array(I, BF16))))]
+               ("w13", Array(E, Array(2 * inter, Array(H, BF16)))),
+               ("w2", Array(E, Array(H, Array(inter, BF16))))]
     G = int(C.get("FP8_BLOCK") or 0)
-    return RecordType(*(_fp8_fields(fields, G, fp8_moe_block(G, I, H)) if G else fields))
+    return RecordType(*(_fp8_fields(fields, G, fp8_moe_block(G, inter, H)) if G else fields))
 
 
 def fp8_moe_block(G: int, I_r: int, H: int) -> int:
@@ -247,8 +250,8 @@ def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str
     g)][cdiv(H, g)]` and `w2_ws [E][cdiv(H, g)][cdiv(I, g)]` on the rank's g-block grid (`fp8_moe_block`): the shapes vLLM's
     `Fp8MoEMethod.create_weights` gives `w13_weight_scale_inv` / `w2_weight_scale_inv`.  The router `gate_w` and the norms stay bf16
     (`quant_refusal` admits the router only in `modules_to_not_convert`)."""
-    from verity.definitions.registry.fp8 import E4M3, weight_blocks
-    from verity.definitions.registry.prims import F32
+    from verity_vllm.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity_vllm.definitions.registry.prims import F32
 
     def cdiv(a: int, b: int) -> int:
         return -(-a // b)
@@ -279,13 +282,13 @@ def layernorm_layer_weights_type(C: dict[str, Any]) -> RecordType:
     [H][I], `down_b` [H].  The base field names (`ln1`, `qkv_w`, `qkv_b`, `o_w`, `ln2`, `down_w`) keep b1's meaning; the
     bias / `up_w` fields are the family's additions.  Selected by `C["NORM"] == "layernorm"` (a hand fact of the family's
     profile: `nn.LayerNorm` with bias, `use_parallel_residual`); RMSNorm families are unchanged."""
-    H, QKV, I = C["H"], C["QKV"], C["I"]
+    H, QKV, inter = C["H"], C["QKV"], C["I"]
     return RecordType(("ln1", Array(H, BF16)), ("ln1_b", Array(H, BF16)),
                   ("qkv_w", Array(QKV, Array(H, BF16))), ("qkv_b", Array(QKV, BF16)),
                   ("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("o_b", Array(H, BF16)),
                   ("ln2", Array(H, BF16)), ("ln2_b", Array(H, BF16)),
-                  ("up_w", Array(I, Array(H, BF16))), ("up_b", Array(I, BF16)),
-                  ("down_w", Array(H, Array(I, BF16))), ("down_b", Array(H, BF16)))
+                  ("up_w", Array(inter, Array(H, BF16))), ("up_b", Array(inter, BF16)),
+                  ("down_w", Array(H, Array(inter, BF16))), ("down_b", Array(H, BF16)))
 
 
 def rotary_dim(C: dict[str, Any]) -> int:
@@ -325,7 +328,7 @@ def dense_layer_weights_type(C: dict[str, Any]) -> RecordType:
 def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
     """A dense layer's fields under the exact-int8 checkpoint (`INT8_EXACT_QUANT`): each linear of `FP8_LINEAR_FIELDS` is s8 `[N][K]`
     (`Value<8>`, the stored bytes) followed by its f32 per-row scale `[N][1]` (`weight_scale`, the checkpoint's and vLLM's shape)."""
-    from verity.definitions.registry.prims import F32
+    from verity_vllm.definitions.registry.prims import F32
     scale_of = dict(FP8_LINEAR_FIELDS)
     out: list[tuple[str, Any]] = []
     for n, t in fields:
@@ -343,8 +346,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> RecordType:
     the shared experts' fused gate/up and down projections, and the routed experts' `w13 [E][2I][H]` / `w2 [E][H][I]`.
     A block-FP8 checkpoint stores every linear except the router and the DSA indexer's replicated key/weight projection as e4m3 followed
     by its f32 block scales.  A bf16 checkpoint retains the original GLM-4.7 layout."""
-    from verity.definitions.registry.prims import F32
-    from verity.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity_vllm.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity_vllm.definitions.registry.prims import F32
     H, NH, QL, L, DN, DR, DV = (int(C[k]) for k in ("H", "NH", "Q_LORA", "KV_LORA", "QK_NOPE", "QK_ROPE", "V_HEAD"))
     G = int(C.get("FP8_BLOCK") or 0)
 
@@ -369,29 +372,29 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> RecordType:
     fields += linear("o_w", H, NH * DV)
     fields += [("ln2", Array(H, BF16))]
     if dense:
-        I = int(C["I_DENSE"])
-        fields += linear("gate_up_w", 2 * I, H)
-        fields += linear("down_w", H, I)
+        inter = int(C["I_DENSE"])
+        fields += linear("gate_up_w", 2 * inter, H)
+        fields += linear("down_w", H, inter)
         return RecordType(*fields)
-    E, I, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
+    E, inter, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
     fields += [("gate_w", mat(E, H, BF16 if G else F32)), ("gate_bias", Array(E, F32))]
-    fields += linear("sh_gate_up_w", 2 * I * S, H)
-    fields += linear("sh_down_w", H, I * S)
+    fields += linear("sh_gate_up_w", 2 * inter * S, H)
+    fields += linear("sh_down_w", H, inter * S)
     if G:
-        g = fp8_moe_block(G, I, H)
-        fields += [("w13", Array(E, mat(2 * I, H, E4M3))),
-                   ("w13_ws", Array(E, mat(-(-(2 * I) // g), -(-H // g), F32))),
-                   ("w2", Array(E, mat(H, I, E4M3))),
-                   ("w2_ws", Array(E, mat(-(-H // g), -(-I // g), F32)))]
+        g = fp8_moe_block(G, inter, H)
+        fields += [("w13", Array(E, mat(2 * inter, H, E4M3))),
+                   ("w13_ws", Array(E, mat(-(-(2 * inter) // g), -(-H // g), F32))),
+                   ("w2", Array(E, mat(H, inter, E4M3))),
+                   ("w2_ws", Array(E, mat(-(-H // g), -(-inter // g), F32)))]
     else:
-        fields += [("w13", Array(E, mat(2 * I, H))), ("w2", Array(E, mat(H, I)))]
+        fields += [("w13", Array(E, mat(2 * inter, H))), ("w2", Array(E, mat(H, inter)))]
     return RecordType(*fields)
 
 
 def mla_indexer_weights_type(C: dict[str, Any]) -> RecordType:
     """One full GLM-5.3 DSA indexer.  Shared indexer layers have no parameters and therefore no entry in the top-level indexer array."""
-    from verity.definitions.registry.fp8 import E4M3, weight_blocks
-    from verity.definitions.registry.prims import F32
+    from verity_vllm.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity_vllm.definitions.registry.prims import F32
 
     H, QL, IH, ID, G = (int(C[k]) for k in ("H", "Q_LORA", "INDEX_HEADS", "INDEX_HEAD_DIM", "FP8_BLOCK"))
     return RecordType(
@@ -459,7 +462,7 @@ def weights_type(C: dict[str, Any]) -> RecordType:
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))   # guard: b1.weights_type may carry the untied field itself
     if C.get("INT8_LM_HEAD"):
         # the int8 LM head (`INT8_EXACT_LMHEAD_QUANT`): s8 `[V][H]` and its f32 per-row scale `[V][1]`, as `_int8_fields` states a linear
-        from verity.definitions.registry.prims import F32
+        from verity_vllm.definitions.registry.prims import F32
         i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
         fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
     if C.get("embed_normalizer") is not None:
@@ -526,9 +529,9 @@ def _inv_freq(C: dict[str, Any]) -> np.ndarray:
     # 198 words of the captured table (positions t with t * inv_freq_k near a zero of cos / sin).
     exps = (np.arange(0, D, 2, dtype=np.float32) * (np.float32(1.0) / np.float32(D))).astype(np.float32)
     inv = (np.float32(1.0) / np.power(base, exps, dtype=np.float32)).astype(np.float32)
-    rs = C.get("rope_scaling") or {}
+    rs = C.get("rope_scaling")
     rtype = (rs.get("rope_type") or rs.get("type") or "").lower() if isinstance(rs, dict) else ""
-    if rtype == "llama3":
+    if isinstance(rs, dict) and rtype == "llama3":
         # vLLM Llama3RotaryEmbedding._compute_inv_freq (fp32): blend between inv_freq and inv_freq / factor by wavelength
         factor = np.float32(rs["factor"])
         low = np.float32(rs["low_freq_factor"])
@@ -589,7 +592,7 @@ TRIG_ULPS = 2
 
 def check_cos_sin(C: dict[str, Any], captured: str | Path | np.ndarray, *, max_ulp: int = COS_SIN_MAX_ULP,
                   rows: int = 4096) -> dict[str, Any]:
-    """Gate I9: the captured rotary table (uint16 words [MAX_POS, D], `m1_capture.dump_cos_sin`) is the analytic function of
+    """Gate I9: the captured rotary table (uint16 words [MAX_POS, D], `match_capture.dump_cos_sin`) is the analytic function of
     `C`.  Two views are reported: the bf16-ulp distance to numpy's fp32 evaluation (`max_ulp`, histogram; informational — at
     large positions and near the zeros of cos/sin the two fp32 libms legitimately land on different bf16 words) and the
     **bound check** that decides `status`: every captured word must round from a value within the error the fp32 pipeline

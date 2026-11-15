@@ -19,7 +19,7 @@ faithful, or some faulted-use party steals it, which `FaultedUseHard` at the int
 
 The fault model's facts about populations (`Population.Dataflow`). In a checked population the run with some units'
 writes fixed is unique (`runOf_unique`, from `determinate_of_checked`), and any assignment is the run with its own
-incorrect units' writes fixed (`runOf_faultsOf`), whose pattern names exactly its incorrect units (`faultSet_faultsOf`).
+incorrect proof blocks' writes fixed (`runOf_faultsOf`), whose pattern names exactly its incorrect proof blocks (`faultSet_faultsOf`).
 So a release the network certifier ties to a trace is a faulted run of the population's faulted function
 (`Served.faithful_of_tie`). When every unit reads each slot through an idempotent clamp fixed in advance, the run with a
 pattern differs from the run with the pattern clamped only on the faulted slots, each by its clamp (`runOf_clamp`). With
@@ -71,11 +71,11 @@ theorem runOf_exists [Finite U] (h : P.Checked) (f : P.Fns V) (a : S → V) (φ 
   exact ⟨σ, (P.runOf_iff f a φ σ).2 hσ⟩
 
 open Classical in
-/-- **An assignment's fault pattern**: what each incorrect unit wrote, and nothing at a correct one. -/
+/-- **An assignment's fault pattern**: what each incorrect proof block wrote, and nothing at a correct one. -/
 noncomputable def faultsOf (f : P.Fns V) (σ : S → V) : (u : U) → Option (P.writes u → V) :=
   fun u => if P.Correct f σ u then none else some fun t => σ t
 
-/-- **Every assignment is the run with its own incorrect units' writes fixed**, at its own inputs. -/
+/-- **Every assignment is the run with its own incorrect proof blocks' writes fixed**, at its own inputs. -/
 theorem runOf_faultsOf (f : P.Fns V) (σ : S → V) : P.RunOf f σ (P.faultsOf f σ) σ := by
   refine ⟨fun _ _ => rfl, fun u w hw t => ?_, fun u hu => ?_⟩
   · unfold faultsOf at hw
@@ -90,13 +90,13 @@ open Classical in
 noncomputable def faultSet [Fintype U] (φ : (u : U) → Option (P.writes u → V)) : Finset U :=
   univ.filter fun u => (φ u).isSome
 
-/-- **An assignment's fault pattern names exactly its incorrect units.** -/
-theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.wrong f σ := by
+/-- **An assignment's fault pattern names exactly its incorrect proof blocks.** -/
+theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.incorrect f σ := by
   ext u
   have key : (P.faultsOf f σ u).isSome = true ↔ ¬ P.Correct f σ u := by
     simp only [faultsOf]
     split_ifs with hc <;> simp [hc]
-  simpa [faultSet, wrong] using key
+  simpa [faultSet, incorrect] using key
 
 /-- **A checked population's faulted function**: the values on the slots `eg` of its run at the inputs `a` with the
 fault pattern `φ`. -/
@@ -407,14 +407,14 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
 omit [Fintype O] in
 /-- **`Faithful` from the dataflow.** If each accepted window that releases released, on the egress slots `eg`, a trace
 `σ` of a checked population at the inputs `inp θ x` of the outsider's query `x` served with the window's advice, with at
-most the window's count of incorrect units (the network certifier's tie), then its releases are faulted runs of the
+most the window's count of incorrect proof blocks (the network certifier's tie), then its releases are faulted runs of the
 population's faulted function, each at its trace's own fault pattern. -/
 theorem faithful_of_tie {U S : Type} [Fintype U] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V)
     (inp : Θ → Q × Adv → S → V) (eg : O → S) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ)
     (θ : Θ) (r : R) (l : List (Served O V Tick Adv))
     (htie : ∀ n < count L l, ∀ w, l[n]? = some w → w.accepted → ∃ σ : S → V,
       (∀ s ∈ P.input, σ s = inp θ ((Ou.query r (view Ou L r l n)).1, w.adv) s) ∧
-        (P.wrong f σ).card ≤ w.incorrect ∧ w.egress = fun o => σ (eg o)) :
+        (P.incorrect f σ).card ≤ w.incorrect ∧ w.egress = fun o => σ (eg o)) :
     Faithful (fun θ x => P.faultedOut h f eg (inp θ x.1) x.2) (fun φ => (P.faultSet φ).card) Ou L θ r l := by
   intro n hn w hw ha
   obtain ⟨σ, hin, hcard, heg⟩ := htie n hn w hw ha

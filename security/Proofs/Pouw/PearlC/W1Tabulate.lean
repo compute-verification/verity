@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.PearlC.W1Stop
 import Mathlib.Tactic.Positivity.Finset
@@ -9,7 +10,7 @@ import Proofs.Pouw.Prob
 # A cheap winning W1 program refutes TT_OUT at W1, and W1 charges only the branch a run takes
 
 `TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `GGap` and `GGapPerCoin` bound every adversary by its cost and
-its oracle calls. W1 itself bounds a program's text (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64`
+its oracle calls. W1 itself bounds a program's text (`W1.CodeImage.bounded`: at every layout `2^64` code nodes and `2^64`
 constants), and nothing else bounds an adversary. These lemmas make that exact, as attack tools for
 the TT family restated at `W1.w1Priced`.
 
@@ -30,7 +31,7 @@ the TT family restated at `W1.w1Priced`.
 What these do not do: refute a named form at the deployed protocol. At `NoiseSha512.sha512Sem` with the game's salt the
 reference reads no oracle. Without the text bound a program could tabulate it per salt in `tree` at depth 256 and pay
 for one path (`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its
-transcript are arithmetic. Under
+trace are arithmetic. Under
 the bound it is not a program (`tree_not_code`).
 
 **What the bound leaves, an argument and not a theorem here.**
@@ -131,9 +132,9 @@ theorem size_tree (leaf : List Bool → W1.Code) : ∀ (n : ℕ) (path : List Bo
       omega
 
 /-- **No W1 program's code is a tree of `ite`s of depth above 64**, at any layout and whatever the tree's leaves: the
-tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. The table of one
+tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`CodeImage.bounded`) allows `2^64`. The table of one
 leaf per salt, `tree leaf 256 []` on the salt's 256 bits, is one of them. -/
-theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Prog)
+theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : CodeImage)
     (L : Layout) : pr.code L ≠ tree leaf n path := by
   intro h
   have h1 := (pr.bounded L).1
@@ -150,8 +151,8 @@ theorem not_ttOutW1_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary (W1.w1Priced dv salt : CostModel Q R S)) (hA : A.Bounded U T q)
     (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))) :
+      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))) :
     ¬ TTOutW1 dv salt P D g₀ δ := fun h =>
   absurd (h U hU T hT q hq A hA) (not_le.mpr hwin)
 
@@ -160,7 +161,7 @@ theorem not_gGap_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM 
     {P : Protocol Q R S} {D : Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM) (hA : A.Bounded U T q)
-    (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2)) :
+    (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S => Wins P U g T (A.trace U x.1 x.2) x.1 x.2)) :
     ¬ GGap CM P D g δ := fun h =>
   absurd (h U hU T hT q hq A hA) (not_le.mpr hwin)
 
@@ -172,7 +173,7 @@ theorem not_gGapPerCoin_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype 
     (A : Adversary CM)
     (hcalls : ∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q)
     (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S =>
-      CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧ Wins P U g T (A.transcript U x.1 x.2) x.1 x.2)) :
+      CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧ Wins P U g T (A.trace U x.1 x.2) x.1 x.2)) :
     ¬ GGapPerCoin CM P D g δ := fun h =>
   absurd (h U hU T hT q hq A hcalls) (not_le.mpr hwin)
 
@@ -189,11 +190,11 @@ def tabP : Protocol Unit Unit Unit where
   actOK := fun _ _ => True
   fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 1
-  capOK := fun _ _ _ _ _ => True
+  inertBoundOK := fun _ _ _ _ _ => True
   Wref := fun _ _ => 1
 
 /-- The empty program: one node of text, within W1's bound. -/
-def emptyProg : Prog := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
+def emptyProg : CodeImage := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
 
 /-- The adversary that runs the empty program on zero activations, with no preprocessing. -/
 def emptyAdv (dv : W1Device) : Adversary (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) :=
@@ -209,15 +210,15 @@ theorem emptyAdv_bounded (dv : W1Device) : (emptyAdv dv).Bounded tabU 0 0 := by
   refine ⟨(emptyAdv_cost dv H s).le, ?_⟩
   simp [emptyAdv, W1.w1Priced, QTree.calls]
 
-/-- Unit 0 of the empty program's transcript is correct, on every coin. -/
+/-- Unit 0 of the empty program's trace is correct, on every coin. -/
 theorem emptyAdv_mem (dv : W1Device) (H : Unit → Unit) (s : Unit) :
-    0 ∈ correctSet tabP tabU H s ((emptyAdv dv).transcript tabU H s) := by
-  simp [correctSet, Correct, Adversary.transcript, W1.w1Priced, final, readout, emptyAdv, emptyProg, exec, init,
+    0 ∈ correctSet tabP tabU H s ((emptyAdv dv).trace tabU H s) := by
+  simp [correctSet, Correct, Adversary.trace, W1.w1Priced, final, readout, emptyAdv, emptyProg, exec, init,
     tabP, tabU, ticketAt, usefulAt, QTree.eval]
 
 /-- The empty program's correct units are unit 0 alone, on every coin. -/
 theorem emptyAdv_correctSet (dv : W1Device) (H : Unit → Unit) (s : Unit) :
-    correctSet tabP tabU H s ((emptyAdv dv).transcript tabU H s) = {0} := by
+    correctSet tabP tabU H s ((emptyAdv dv).trace tabU H s) = {0} := by
   ext u
   rw [Finset.mem_singleton]
   constructor

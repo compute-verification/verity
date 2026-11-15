@@ -1,13 +1,14 @@
 module
 
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
+public import Definitions.Core.Requirement
 
 /-!
-# A declared circuit's requirement (trusted)
+# A registered circuit's requirement (trusted)
 
-What a declared circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a kernel):
-the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in bits,
-in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
+What a registered circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a
+kernel): the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in
+bits, in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
 (`credited`); and when the audit's store and plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`), so that
 what the audit credits counts toward this requirement. Placed on devices
 (`Placement`), the execution's gates are also what PoUW credits and the bits they read from other devices
@@ -17,7 +18,7 @@ A step is always an **engine step**: the engine's `s`-th step (a request's step 
 never a device tick. The ticks a step spans on each device are the placement's (`Placement.ticks`), and a window
 (`Window`) here is a run of engine steps (`Window.steps`), never of ticks.
 
-* **Wiring.** `W`'s values are its gates in the IR's canonical layout (`verity/ml/circuits/PROTOCOL.md` §6), each a
+* **Wiring.** `W`'s values are its gates in the IR's canonical layout (`verity/circuits/PROTOCOL.md` §6), each a
   `Value<w>` leaf of `width` bits. A value is registered (a `RegisteredInput`: the weights), a run input (an `Input` not
   bound by registration: a request's tokens, `inputs`) or a gate's output. A gate's operands are `ops` (`layout.Circuit.gate(i).operands`). The operands it
   uses when the circuit's values are `x` are `uses x`: all of `ops`, except that a gather uses its index and the one
@@ -33,7 +34,7 @@ never a device tick. The ticks a step spans on each device are the placement's (
   an input gate wherever it is placed: it arrives over a side channel, and is no device's work.
 * **Live.** A value is live when step `s` begins if it was produced before `s` (or registered) and is an operand of a
   gate the execution runs at step `s` or later: the boundary values `out(S_<s) ∩ in(S_≥s)` of
-  `verity/ml/circuits/boundary.py`, for `S_<s` the gates of the steps before `s`. A value no later gate reads is not
+  `verity/circuits/boundary.py`, for `S_<s` the gates of the steps before `s`. A value no later gate reads is not
   live: `liveness.py`'s dead gates, and a step's outputs that leave the device. Liveness is structural (`ops`): a later
   gather may select any word of its column, so the whole column stays live.
 * **Reads.** Step `s` reads the values produced before it that its gates use: `in(S_s)`, the boundary inputs of step
@@ -44,7 +45,7 @@ never a device tick. The ticks a step spans on each device are the placement's (
   store index `j`: registered (`j < N`, the weights) or appended by the memory map (`j ≥ N`, KV). Static and dynamic
   blocks are counted alike: a block is in `liveBlocks s` while it holds a live value, whatever wrote it.
 * **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
-  `verity/core/protocols/remote_bandwidth/memory_map.py`): `N` registered blocks, the fresh indices each serving step
+  `verity/protocols/accounting/poub/verifier/memory_map.py`): `N` registered blocks, the fresh indices each serving step
   wrote and those it freed, and each block's payload. A block is written once, complete and encoded, so its payload is
   a function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is written in the record of
   the step before its first encoded read (deferred residency: the step that completes it when its append's coin is back
@@ -63,6 +64,9 @@ never a device tick. The ticks a step spans on each device are the placement's (
   sequence, layer and plane when the store placement fills each one's pages in turn, and one more while the page it
   completed last waits for its coin (`OneBlockEach`, the page's parity in the group).
 
+The execution, its placement and the store (`Execution`, `Placement`, `Store`) are Core's
+(`Definitions/Core/Requirement.lean`), stated there as the bullets above describe them.
+
 Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
 (4,096 bytes).
 -/
@@ -79,7 +83,7 @@ end Accounting
 
 namespace Accounting.Requirement
 
-/-- A declared circuit's wiring over its values `G`. -/
+/-- A registered circuit's wiring over its values `G`. -/
 structure Wiring (G : Type) where
   /-- a value's width in bits (`Value<w>`) -/
   width : G → ℕ
@@ -92,30 +96,6 @@ structure Wiring (G : Type) where
   /-- the operands gate `g` uses when the circuit's values are `x`: `ops g`, except a gather's index and the word it
   selects -/
   uses : (G → ℕ) → G → Finset G
-
-/-- A scheduled execution of a circuit over values `G`. -/
-structure Execution (G : Type) where
-  /-- the values it produces, the registered ones among them -/
-  ran : Finset G
-  /-- the engine step at which it produces each value (an engine step, never a device tick) -/
-  step : G → ℕ
-  /-- each value, as its bits -/
-  value : G → ℕ
-
-/-- A scheduled execution placed on devices `L`: the device of each value, and the tick at which each device begins each
-engine step. -/
-structure Placement (L G : Type) extends Execution G where
-  /-- the device at which each value is produced or, an input, stored: a leaf of the actual circuit's tree of locations
-  (`Accounting.Placed.x`), the device, never an SM, an SMSP or a unit -/
-  leaf : G → L
-  /-- the tick at which device `x` begins engine step `s` -/
-  ticks : L → ℕ → ℕ
-
-/-- The tick at which a value is placed: the one at which its device begins its engine step (`Accounting.Placed.t`). -/
-def Placement.tick {L G : Type} (p : Placement L G) (v : G) : ℕ := p.ticks (p.leaf v) (p.step v)
-
-/-- Each device of `X` begins its engine steps at strictly increasing ticks. -/
-def Placement.Paced {L G : Type} (p : Placement L G) (X : Finset L) : Prop := ∀ x ∈ X, StrictMono (p.ticks x)
 
 /-- **`W`'s wiring is topological**: a gate's operands come before it (the IR's canonical order, §6). -/
 def Wiring.Topological {G : Type} [LT G] (W : Wiring G) : Prop := ∀ g, ∀ v ∈ W.ops g, v < g
@@ -277,23 +257,6 @@ def creditedBits (s : ℕ) : ℕ := bits W (credited W e ℓ s)
 def creditedReadBits (s : ℕ) : ℕ := bits W (creditedReads W e ℓ s)
 
 end Credited
-
-/-- The audit's store: the registered store and the memory map beside it (I3). -/
-structure Store where
-  /-- the registered store's blocks `N`, store indices `0 … N - 1` -/
-  registered : ℕ
-  /-- the fresh store indices the record of engine step `s` wrote (memory-map/v1's `written`) -/
-  written : ℕ → Finset ℕ
-  /-- the store indices the record of engine step `s` freed (memory-map/v1's `freed`, by the indices their slots held,
-  and the blocks its writes overwrote) -/
-  freed : ℕ → Finset ℕ
-  /-- each block's payload, as its bits -/
-  payload : ℕ → ℕ
-
-/-- **The blocks resident when step `s` begins**: the registered ones and those written in the records of steps before
-`s`, less those freed in them. -/
-def Store.resident (σ : Store) (s : ℕ) : Finset ℕ :=
-  (Finset.range σ.registered ∪ (Finset.range s).biUnion σ.written) \ (Finset.range s).biUnion σ.freed
 
 section Link
 

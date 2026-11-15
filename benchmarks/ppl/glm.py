@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from gates import Gates
     from model import Collect, Config
 
+__all__ = ["GlmLayer", "check_reference", "dequant"]
+
 BLOCK = 128
 FP32_KEEP = ("mlp.gate.e_score_correction_bias",)
 

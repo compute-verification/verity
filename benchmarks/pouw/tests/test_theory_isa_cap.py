@@ -1,10 +1,6 @@
-"""One IMAD writes 4 single-entry fields and one IMAD.WIDE 6, above qstar's "IMAD ≤ 3" and ISA-CAP's 32/7."""
+"""theory/'s check of ISA-CAP: one IMAD writes 4 single-entry fields and one IMAD.WIDE 6, above qstar's "IMAD ≤ 3" and
+the premise's 32/7."""
 from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 
 import isa_cap_check as ic
 

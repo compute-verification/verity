@@ -12,7 +12,7 @@ from research.store.local import LocalStore
 
 T = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 ARGV = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
-CHECK_ARGV = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
+CHECK_ARGV = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py", "--keep-going"]
 STDOUT = """lean-records: taking the slot path: check.py on /c/lean-records/build-1
 AUDIT /c/lean-records/build-1/Security: PASS  24170 declarations in 646 modules; axioms propext; 1003 guarantees; {'build': 46.3}
 AUDIT /c/lean-records/build-1/Security/Proofs: PASS  160227 declarations in 3191 modules; axioms propext; 0 guarantees; {}
@@ -77,17 +77,17 @@ def test_a_checks_lean_steps_are_tasks_lean_audit_under_each_package_it_audited_
     meta = {"kind": "check/v1", "steps": [
         _step("pytest", seconds=900.0), _step("lean-audit", seconds=1800.0), _step("lean-suites", "failed", 1200.0),
         _step("lean-build", "skipped"), _step("lean-agreement", seconds=900.0), _step("lean-build", "stopped", None),
-        _step("lean-audit:verity/protocols/flock/verifier", seconds=120.0, cache={"hit": True}), "not a step"],
+        _step("lean-audit:verity/protocols/proofs/flock/verifier", seconds=120.0, cache={"hit": True}), "not a step"],
         "reuse": {"steps": {"lean-audit": {"reran": ["security", "security/Proofs"], "reused": ["X"]},
-                            "lean-suites": {"reran": [{"suite": "verity/protocols/flock/prover", "seconds": 1100.0, "forced_by": []},
+                            "lean-suites": {"reran": [{"suite": "verity/protocols/proofs/flock/prover", "seconds": 1100.0, "forced_by": []},
                                                       {"suite": "benchmarks/pouw", "seconds": None}]}}}}
     got = L.check_tasks("r20261028-100000-cccc", _doc(CHECK_ARGV, host="vy-nebius-cpu-1"), meta)
     assert [(t["kind"], t["packages"], t["minutes"], t["outcome"]) for t in got] == [
         ("lean-audit", ["security", "security/Proofs"], 30.0, "passed"),
-        ("lean-suites", ["verity/protocols/flock/prover"], 1100 / 60, "failed"),
+        ("lean-suites", ["verity/protocols/proofs/flock/prover"], 1100 / 60, "failed"),
         ("lean-suites", ["benchmarks/pouw"], None, "unfinished"),
         ("lean-build", [L.NONE], None, "unfinished"),
-        ("lean-audit", ["verity/protocols/flock/verifier"], 2.0, "passed")]
+        ("lean-audit", ["verity/protocols/proofs/flock/verifier"], 2.0, "passed")]
     assert {t["node"] for t in got} == {"vy-nebius-cpu-1"} and [t["cached"] for t in got] == [False] * 4 + [True]
 
 
@@ -134,13 +134,13 @@ def test_the_summary_is_per_kind_and_package_with_all_first_and_records_wait_and
 
 
 def test_the_table_names_each_task_over_the_limit_the_longest_first():
-    tasks = [_rec("r20261028-100000-aaaa", 20.0, work=5.0), _rec("r20261028-100000-bbbb", 90.0, "verity/protocols/poub/verifier/lean"),
+    tasks = [_rec("r20261028-100000-aaaa", 20.0, work=5.0), _rec("r20261028-100000-bbbb", 90.0, "verity/protocols/accounting/poub/verifier/lean"),
              _rec("r20261028-100000-dddd", 3.0), _rec("r20261028-100000-eeee", None),
-             {"kind": "lean-suites", "packages": ["verity/protocols/flock/prover"], "run": "r20261028-100000-cccc", "node": "n", "minutes": 33.0,
+             {"kind": "lean-suites", "packages": ["verity/protocols/proofs/flock/prover"], "run": "r20261028-100000-cccc", "node": "n", "minutes": 33.0,
               "outcome": "failed"}]
     out = L.render(L.summary(tasks), tasks, T.replace(hour=0), T)
     assert out.startswith("Lean tasks that ended 2026-10-28 00:00Z to 2026-10-28 12:00Z")
-    assert "verity/protocols/poub/verifier/lean " in out, "the longest package path whole"
+    assert "verity/protocols/accounting/poub/verifier/lean " in out, "the longest package path whole"
     assert "records runs over 15 min: 2, 1 of them over 15 min of Lean work" in out
     slow = out.split("records runs over")[1]
     assert slow.index("r20261028-100000-bbbb") < slow.index("r20261028-100000-aaaa") and "r20261028-100000-dddd" not in slow
@@ -202,6 +202,21 @@ def test_lean_times_reads_the_remotes_attempts_of_the_window(remote, capsys):
     assert recs["security"] == recs[L.ALL] and (recs[L.ALL]["n"], recs[L.ALL]["unfinished"]) == (1, 1)
     assert out["summary"]["lean-audit"]["security"]["p95_min"] == 25.0
     assert not [p for p in (tmp / "reader" / "objects").rglob("*") if p.is_file()], "the run records' blobs are read, not kept"
+
+
+def test_a_check_from_a_tree_with_the_check_at_tools_verity_check_is_read_as_one_from_tools_check(remote, capsys):
+    """A tree whose check is at tools/verity/check/ runs tools/verity/check/check.py: its Lean steps are tasks as at
+    tools/check/, and a look-alike path's are none."""
+    tmp, cfg = remote
+    node = LocalStore(tmp / "node", config_path=cfg)
+    meta = {"kind": "check/v1", "steps": [_step("lean-audit", seconds=600.0, ended="2026-10-28T11:20:00Z")],
+            "reuse": {"steps": {"lean-audit": {"reran": ["security"]}}}}
+    moved = [a.replace("tools/check/", "tools/verity/check/") for a in CHECK_ARGV]
+    odd = ("x/tools/verity/check/check.py.bak", "tools/verity/checks/check.py")
+    for rid, argv in (("r20261028-101000-aaaa", moved), *((f"r20261028-10200{i}-bbbb", ["python3", p]) for i, p in enumerate(odd))):
+        _publish(node, tmp, rid, argv, kind="check/v1", meta=meta, end="2026-10-28T11:30:00Z")
+    assert L.main(["--until", "2026-10-28T12:00:00Z", "--hours", "6", "--json"], store=LocalStore(tmp / "reader", config_path=cfg)) == 0
+    assert moved != CHECK_ARGV and [t["run"] for t in json.loads(capsys.readouterr().out)["tasks"]] == ["r20261028-101000-aaaa"]
 
 
 def test_the_window_ends_now_by_default_and_the_text_table_is_the_default(remote, capsys, monkeypatch):

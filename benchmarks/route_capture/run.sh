@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The route capture (README.md), under research run on a node with eight H200s: GLM-5.3 served like production (`vllm
+# The route capture (README.md), under research run on a node with eight H200s: GLM-5.3 served at serving's settings (`vllm
 # serve` at vLLM's defaults: CUDA graphs, chunked prefill, prefix caching and async scheduling, with the compilation vLLM
 # picks for the model; TP8, at most 256 sequences and 8,192 tokens a step) under about DURATION_S of four concurrent
 # clients (`vllm bench serve`: ShareGPT greedy on a 1-to-24 request/s ramp, ShareGPT sampled at 2/s, 8k-32k-token
@@ -23,7 +23,7 @@ export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
 # vLLM takes FlashInfer's block-FP8 GEMM below 32 rows only with FlashInfer's kernels prebuilt (flashinfer-cubin, which
-# production images ship) or nvcc on PATH to compile them, and its sampler compiles at warmup with that nvcc;
+# serving images ship) or nvcc on PATH to compile them, and its sampler compiles at warmup with that nvcc;
 # engine_env.txt says which held
 export PATH="$CUDA_HOME/bin:$PATH"
 unset NCCL_P2P_DISABLE
@@ -66,7 +66,7 @@ scratch=$(mktemp -d)
 site=$scratch/site/verity_route_capture-0.0.dist-info; mkdir -p "$site"
 printf 'Metadata-Version: 2.1\nName: verity-route-capture\nVersion: 0.0\n' > "$site/METADATA"
 printf '[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n' > "$site/entry_points.txt"
-export PYTHONPATH="$scratch/site:$here:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$scratch/site:$here:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 # only the capture's plugin loads, and the compile starts from empty caches so the generated code kept is this run's
 export VLLM_PLUGINS=verity_route_capture
 export VLLM_CACHE_ROOT=$scratch/cache/vllm TORCHINDUCTOR_CACHE_DIR=$scratch/cache/inductor TRITON_CACHE_DIR=$scratch/cache/triton

@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("pouw_tensor_kinds", Path(__file__).parents[1] / "tensor_kinds" / "tensor_kinds.py")
-TK = importlib.util.module_from_spec(spec)
-sys.modules["pouw_tensor_kinds"] = TK
-spec.loader.exec_module(TK)
+import tensor_kinds as TK
 
 
 def test_kernel_key_reads_the_struct_by_its_length():

@@ -20,6 +20,8 @@ from model import Config, Weights, check_reference, head, make_layer, rotary
 from spec import HEAD, Arm
 from steps import FIRST, GROUP
 
+__all__ = ["evaluate", "shards"]
+
 
 def stream_key(arm: Arm, seed: int) -> str:
     return f"{arm.name}/s{seed}"

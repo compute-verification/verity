@@ -6,6 +6,7 @@
   (slices that span two windows, the tail, `numel()`, `is_cuda`).
 * the padded-length bookkeeping the windowed worker relies on (leaves per window sum to the step's leaves).
 * the collector commits rows-sha512 on the windowed worker only, and refuses every other scheme and path.
+* `_Footprint`: the file it is given takes one whole JSON line an event, appended.
 
 The GPU end-to-end (roots of a windowed run == roots of the single-block run for the same manifest; B=2 green) is the pod acceptance
 run, re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roots`).
@@ -13,12 +14,14 @@ run, re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roo
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import subprocess
 import sys
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -147,6 +150,45 @@ def test_the_collector_commits_rows_sha512_on_the_windowed_worker_only(monkeypat
             CD.make_committer(kind, None, args, "run")
 
 
+def test_the_footprint_file_takes_one_whole_json_line_an_event(tmp_path: Path, monkeypatch):
+    """`_Footprint` makes its file when it is made and refuses a path it cannot open there, before any step. Each event is one JSON
+    line, whole in the file when `event` returns, after the lines the file held: nothing is truncated, by a second profiler on the
+    same path either. Its `t` is the clock's seconds since the profiler was made, and a value JSON has no form for is written as
+    its `str`."""
+    from verity_vllm.commit.committer import footprint
+
+    readings = itertools.count()
+    monkeypatch.setattr(footprint, "time", SimpleNamespace(perf_counter=lambda: 100.0 + next(readings) / 4))   # a quarter second a reading
+    path = tmp_path / "footprint.jsonl"
+    path.write_text('{"event": "earlier"}\n')
+    fp = nh._Footprint(str(path))
+    assert path.read_text() == '{"event": "earlier"}\n'
+    fp.event("begin_step", step=3, arena_block_bytes=None, out=Path("staging"))
+    lines = path.read_text().splitlines(keepends=True)
+    assert len(lines) == 2 and lines[1].endswith("\n")
+    rec = json.loads(lines[1])
+    assert list(rec) == ["t", "event", "thread", "step", "arena_block_bytes", "out", "cuda"] and rec["t"] == 0.25
+    assert (rec["event"], rec["thread"], rec["step"], rec["arena_block_bytes"], rec["out"]) == \
+        ("begin_step", threading.current_thread().name, 3, None, "staging")
+    assert set(rec["cuda"]) == set(nh._Footprint.cuda())
+    workers = [threading.Thread(target=fp.event, args=("absorbed",), kwargs={"step": i}, name=f"worker-{i}") for i in range(8)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    absorbed = [json.loads(line) for line in path.read_text().splitlines()[2:]]
+    assert sorted((r["step"], r["thread"]) for r in absorbed) == [(i, f"worker-{i}") for i in range(8)]
+    assert sorted(r["t"] for r in absorbed) == [0.5 + i / 4 for i in range(8)]
+    nh._Footprint(str(path)).event("end_step", step=9)
+    held = [json.loads(line) for line in path.read_text().splitlines()]
+    assert [r["event"] for r in held] == ["earlier", "begin_step", *["absorbed"] * 8, "end_step"] and held[-1]["t"] == 0.25
+    fresh = tmp_path / "fresh.jsonl"
+    nh._Footprint(str(fresh))
+    assert fresh.read_text() == ""
+    with pytest.raises(OSError):
+        nh._Footprint(str(tmp_path / "no_such_directory" / "footprint.jsonl"))
+
+
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_windowed_roots(tmp_path: Path):
     """Same manifest, single-block path vs windowed path (256 MiB windows, host retention): identical run roots, both fail-closed PASS."""
@@ -179,7 +221,7 @@ def test_e2e_windowed_roots(tmp_path: Path):
         _c2_only = str(v.get("first_fail_reason") or "").startswith("C2 of record not established: sampled replay None -- not run")
         assert v["commit_pass"] is True or _c2_only, f"{name}: exit {p.returncode}: {v.get('first_fail_reason') or v.get('commit_fail_reason')}"
         assert p.returncode == 0 or (p.returncode == 3 and _c2_only), f"{name}: exit {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
-        rows = [json.loads(l) for l in (tmp_path / name / "runs.jsonl").read_text().splitlines()]
+        rows = [json.loads(line) for line in (tmp_path / name / "runs.jsonl").read_text().splitlines()]
         rr = {r["commit"]["run_root"] for r in rows if r["arm"] != "control"}
         assert len(rr) == 1
         roots.append(rr.pop())

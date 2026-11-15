@@ -40,11 +40,11 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The compiled part's setup is the model's recursive setup
 
 Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`) sets its session up as
-`flock-verify verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
+`verity-verify-proof verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
 verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
 `RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
 `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`
-at no link table, `RecVStar.checkLabels` and the sample's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
+at no link table, `RecVStar.checkLabels` and the sample's sampling design. The model's recursive setup (`RecDeploy.RecIns.setup`,
 which `setupO` runs on a V\* statement) makes the same calls in the same order. This module matches them.
 
 * `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
@@ -105,7 +105,7 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
 part `j`'s check calls it on the session's tables `sts`: the inner checks, the inner shape at no link table, the
 registration's and V\*'s list's caps, V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public
-rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's law
+rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's sampling design
 where there is a sample. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))
@@ -129,7 +129,7 @@ structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags
     (some h.link)) = .ok ()
   linkParts : sts.forM (RecLinkPart.check · registered (some h.src) none) = .ok ()
   labels : RecVStar.checkLabels draw 1 sts = .ok ()
-  law : draw.isSome = true → ProvedScope.drawLaw true tags false draw = .ok ()
+  samplingDesign : draw.isSome = true → ProvedScope.sampleDesign true tags false draw = .ok ()
 
 /-- At a shape without a RecSparse phase, the inner checks don't read the inner circuit's META binding. -/
 theorem checkInner_dense {sh : RecVStar.Inner} {src : RecCoins.Source}
@@ -182,7 +182,7 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
     Option.isSome_some, hc.regs, hc.statements, hc.checks, hc.oneFull, hc.table, hc.shapeOk, hc.coins, hc.pubRows,
     hc.linkRounds, hc.topRows, hc.link, hc.linkParts, hc.labels]
   by_cases hd : draw.isSome = true
-  · simp only [hd, ↓reduceIte, hc.law hd]
+  · simp only [hd, ↓reduceIte, hc.samplingDesign hd]
   · simp only [hd, Bool.false_eq_true, ↓reduceIte]
 
 /-- **The staged statement's setup is the compiled part's.** Where `readX x` reads `r`, part `s` is `p`, its staged
@@ -377,7 +377,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
     rcases D with _ | d
     · first
-        | (simp [ProvedScope.drawLaw, bind, Except.bind] at hv; done)
+        | (simp [ProvedScope.sampleDesign, bind, Except.bind] at hv; done)
         | cases hv
     have hdraw : T.hm96Rows = true ∧ Witness.recordDraw record = some d := by
       cases hh : T.hm96Rows
@@ -388,8 +388,8 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     try dsimp only at hst
     split at hst
     · rename_i spec sts hb0
-      have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
-        cases hl : ProvedScope.drawLaw true T false (some d) with
+      have hlaw : ProvedScope.sampleDesign true T false (some d) = .ok () := by
+        cases hl : ProvedScope.sampleDesign true T false (some d) with
         | error e => simp [hl, Except.map] at hst
         | ok u => rfl
       obtain ⟨⟨⟩, hprog, hb1⟩ := bind_ok hb0

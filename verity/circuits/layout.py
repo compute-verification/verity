@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Iterator, Sequence
 
-from .defs import Node, PrimitiveDefinition, SpecializedDefinition
+from .defs import BodyNode, PrimitiveDefinition, SpecializedDefinition
 from .refs import Ref
 from .types import axis_runs
 
@@ -151,7 +151,7 @@ class LazyOperands(Sequence):
 
     __slots__ = ("scope", "node", "m", "_segments", "_n", "_res")
 
-    def __init__(self, scope: Scope, node: Node, m: int, res: Callable[[Ref], int] | None = None) -> None:
+    def __init__(self, scope: Scope, node: BodyNode, m: int, res: Callable[[Ref], int] | None = None) -> None:
         self.scope, self.node, self.m = scope, node, m
         self._res = partial(resolve, scope) if res is None else res
         segs = []  # (start, count, refs-getter)
@@ -200,7 +200,7 @@ class LazyOperands(Sequence):
 WIDE_FAN_IN = 4096
 
 
-def _prim_member_args(scope: Scope, node: Node, m: int):
+def _prim_member_args(scope: Scope, node: BodyNode, m: int):
     """Operand gate indices of member `m` of a primitive node (`prim`, or a `batch` of a primitive)."""
     return _member_operands(scope, node, m)
 
@@ -408,7 +408,7 @@ class FunctionCall(Region):
         Region.__init__(self, circuit, lo, lo + node.fn.gates)
 
     @property
-    def node(self) -> Node:
+    def node(self) -> BodyNode:
         return self.parent.spec.body.nodes[self.node_idx]
 
     @property

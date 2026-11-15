@@ -5,10 +5,16 @@ the fold finishes."""
 
 from __future__ import annotations
 
-from verity.circuits.refs import Affine
+import json
+import os
+
+from verity.circuits.refs import Affine, runs
 from verity.circuits.types import RecordType, Type, Value
 
+from verity_vllm.errors import Refused
 from verity_vllm.observe.fold.resolver import Supplied
+
+__all__ = ["program_registered_values"]
 
 
 class SuppliedInputs:
@@ -34,7 +40,7 @@ class SuppliedInputs:
         if ptype != Value(int(op.width)):
             raise err(f"{what}: a {op.width}-bit supplied value for a parameter of type {ptype!r}")
         if op.binding == "registration":
-            owner = "values"
+            owner: str | int = "values"
         elif op.binding == "run":
             if op.request not in req_index:
                 raise err(f"{what}: run value {op.name!r} names request {op.request!r}, which is not in the run header")
@@ -55,10 +61,10 @@ class SuppliedInputs:
 
     def finalise(self, params: tuple) -> tuple:
         """`params` with every supplied RecordType's fields."""
-        params = list(params)
+        out = list(params)
         for owner, pidx in self.param.items():
-            params[pidx] = (params[pidx][0], RecordType(*[(f["name"], Value(f["width"])) for f in self.fields[owner]]))
-        return tuple(params)
+            out[pidx] = (out[pidx][0], RecordType(*[(f["name"], Value(f["width"])) for f in self.fields[owner]]))
+        return tuple(out)
 
     def layout(self, params: tuple, requests: list[dict], program=None) -> dict:
         """The supplied inputs as the record states them: the registered `values` and each request's `run_<i>`, every field with its
@@ -71,7 +77,7 @@ class SuppliedInputs:
             return {}
         out = {"registration": {"param": self.param["values"], "name": "values", "fields": fields("values")},
                "run": [{"param": self.param[i], "name": params[self.param[i]][0], "request": requests[i]["request_id"], "fields": fields(i)}
-                       for i in sorted(k for k in self.param if k != "values")]}
+                       for i in sorted(k for k in self.param if isinstance(k, int))]}
         if program is not None:
             out["input_nodes"] = input_nodes(program)
         return out
@@ -80,24 +86,23 @@ class SuppliedInputs:
 def program_registered_values(program_dirs) -> bool:
     """Whether the Build's Program dirs register the program's values (`result.json` `program.supplied.registration`, a
     `registered_values` derive's), so the fold the Match compares against them folds under `Profile.registered_values` too.  Dirs
-    that disagree, or one without a readable result.json, are refused by name (SystemExit)."""
-    import json
-    import os
+    that disagree, or one without a readable result.json, are refused by name (`Refused`)."""
     got = set()
     for d in program_dirs:
         try:
-            prog = json.load(open(os.path.join(d, "result.json"))).get("program") or {}
+            with open(os.path.join(d, "result.json")) as f:
+                prog = json.load(f).get("program")
         except (OSError, ValueError, AttributeError) as e:
-            raise SystemExit(f"{d}: no readable result.json ({type(e).__name__}): whether its Program registers its values is unknown") from None
-        got.add(bool((prog.get("supplied") or {}).get("registration")))
+            raise Refused(f"{d}: no readable result.json ({type(e).__name__}): whether its Program registers its values is unknown") from None
+        supplied = prog.get("supplied") if prog else None
+        got.add(bool(supplied and supplied.get("registration")))
     if len(got) > 1:
-        raise SystemExit(f"{list(program_dirs)}: some Programs register their values and some hold them as constants")
+        raise Refused(f"{list(program_dirs)}: some Programs register their values and some hold them as constants")
     return got == {True}
 
 
 def input_nodes(program) -> dict[str, list[int]]:
     """Each root parameter's Input nodes (root body node indices, ascending), by parameter name, from the lowered root itself."""
-    from verity.circuits.refs import runs
     root = program.root
     out: dict[str, list[int]] = {}
     for (name, _t), coll in zip(root.program_fn.signature()[0], root.input_colls):

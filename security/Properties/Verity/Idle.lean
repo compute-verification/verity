@@ -7,7 +7,7 @@ public import Properties.Verity.Coupling
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
+circuit file is read as empty files under the `verity/flock-netlist/v1` tags (`fileRead`); the coin commitment has no families, the device
 samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
 at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
@@ -17,8 +17,10 @@ are both the parameters' own SHA-512, so the committed files pass the commit pha
 the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
-term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
-every error is `0` while PoUW's claim, a gate computed, fails on every play.
+term; no play computes a gate or a MAC. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target
+holds. At `exact` (`δ = 0`, `W = 1`) every error is `0` while PoUW's claim fails on every play after the empty
+commitment: at onsite a gate computed, at remote a credit Pearl+'s check published, which needs a commitment that binds
+the components' digests, and the empty one doesn't.
 
 `coupling δ` is the period coupling at PoUW that `Verity.TargetOfPeriods`' witnesses read: the run of the coins model
 that charges nothing and accepts everything (`periodRun`), whose claim, a gate of work, fails at every coin.
@@ -36,7 +38,7 @@ noncomputable section
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
-/-- **The committed files as v2 reads them**: empty files under the netlist tags. -/
+/-- **The committed files as v2 reads them**: empty files under the `verity/flock-netlist/v1` tags. -/
 def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
@@ -94,7 +96,7 @@ def forger : Hash.Assumptions.LmsForger where
 
 /-- **The idle deployment's names**, publishing the error `δ` for every subprotocol and the work certificate `W`. -/
 noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
-  read _ _ := fileRead
+  read _ _ := .one fileRead
   place _ _ _ _ := none
   programDigest θ := some (sha512 θ.data.toList)
   publicDigest θ := some (sha512 θ.data.toList)
@@ -115,15 +117,12 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   signs_le _ _ _ _ _ := Nat.le_refl 0
   forger_signed _ _ _ _ _ _ := Nat.zero_le _
   computed _ _ _ _ _ := ∅
+  macs _ _ _ _ _ := 0
   world _ _ _ _ _ := world
   window _ := ⟨0, 0⟩
   capacity _ := ()
   world_window _ _ _ _ _ := rfl
   world_capacity _ _ _ _ _ := rfl
-  theta _ _ := ∅
-  theta_input _ _ _ h := absurd h (Finset.notMem_empty _)
-  gates _ := 0
-  fresh _ := 0
   spans _ _ := 1
   schedule _ _ := blocks
   boundary _ _ := 0

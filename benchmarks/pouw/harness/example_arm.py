@@ -24,6 +24,9 @@ import fill as F
 import numpy as np
 from arm import Buffer, GateResult, Shape, Work
 
+#: what `bench.py --arm example_arm:ExampleFp8` loads by its name (`arm.load`)
+__all__ = ["ExampleFp8"]
+
 MAX_D_BYTES = 1 << 29  # the gate reads D and its twin to the host
 
 

@@ -183,8 +183,7 @@ def reference(x, topk_weights, topk_ids, w13, s13, w2, s2):
 
     def bf16(v):
         b = np.ascontiguousarray(v, dtype=np.float32).view(np.uint32).astype(np.uint64)
-        b = (b + 0x7FFF + ((b >> 16) & 1)) >> 16 << 16
-        return b.astype(np.uint32).view(np.float32)
+        return ((b + 0x7FFF + ((b >> 16) & 1)) >> 16 << 16).astype(np.uint32).view(np.float32)
 
     def linear(a, w, s):
         a = a.astype(np.float32)

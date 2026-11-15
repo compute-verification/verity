@@ -1,4 +1,4 @@
-"""(T0) The sampler VALUE check of a stochastic row reproduces (row_pod.sh's `rcs`, `match_summary.json` `stoch_value_check`):
+"""(T0) The sampler VALUE check of a stochastic row reproduces (a row's Match's `rcs`, `match_summary.json` `stoch_value_check`):
 `match_stoch.json` -- every sampled row of the record recomputed with the Program's own sampler Definition (`GumbelTopPTokenSelect_v1{V,S}`,
 the registry interpreter walking the V lanes) from the Match record's snapshots of the device sampler chain, under the DECLARED seed /
 temperature / top-p.  Lifted: its verdict and reasons, the summary (engine steps in the record, sampled rows, rows checked, the row tally,
@@ -9,17 +9,16 @@ check is complete only when every sampled row is snapshotted).
 
 Recomputed: `verity_vllm.check.replay.stoch_recompute.recompute_run` with the CURRENT code over the record's capture (`match/capture/
 log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- files.toml pins exactly those, not the 870 MB of every
-snapshot), the in-repo workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
+snapshot), the row's workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
 `build_workload/workload_program.json`: the stop rule); the snapshot steps are the steps the capture's `snapshots.json` dumped.  In
 candidate mode the candidate's own `match_stoch.json` + `match/run.json` are lifted the same way.  STRONG: a sampler Definition that moves
 a lane, a sample read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
 
-Applies to stochastic rows only (a greedy row has no match_stoch.json: row_pod's rcs = -1).
+Applies to stochastic rows only (a greedy row has no match_stoch.json: its Match's rcs = -1).
 """
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 
@@ -74,15 +73,18 @@ def _linked(row: resolver.Row, rels, dest: Path) -> None:
 
 
 def actual(row: resolver.Row) -> dict:
+    if kept := resolver.kept_on_the_node(row, "match_stoch.json"):
+        return kept
     if row.candidate_root() is not None:
         ms_p = row.candidate("match_stoch.json")
         if ms_p is None:
             return {"source": "candidate", "verdict": resolver.not_applicable("the candidate has no match_stoch.json")}
         run_p = row.candidate("match/run.json")
-        run = json.load(open(run_p)) if run_p is not None else {}
-        return dict(lift(json.load(open(ms_p)), run.get("snapshot_steps")), source="candidate")
-    from verity_vllm.check.replay import stoch_recompute as SR
+        run = resolver.read_json(run_p) if run_p is not None else {}
+        return dict(lift(resolver.read_json(ms_p), run.get("snapshot_steps")), source="candidate")
+    # fold_compare imports torch and stoch_recompute numpy, which only this recompute needs: the module itself loads neither
     from verity_vllm.check.fold_compare import SnapshotStore
+    from verity_vllm.check.replay import stoch_recompute as SR
     capture = [rel for rel in row.files if rel.startswith("match/capture/")]
     if "match/capture/log.jsonl.gz" not in capture or "match/capture/snapshots.json" not in capture:
         raise resolver.NotResolvable(f"{row.key}: files.toml pins no match/capture/log.jsonl.gz + snapshots.json (the sampler value check's input)")

@@ -1,7 +1,7 @@
 module
 
-public import Properties.Flock.ReadNet
 public import Proofs.Accounting.ReadUnit.Digests
+public import Proofs.Accounting.ReadUnit.Accepts
 public import Proofs.Accounting.ReadUnit.Guarantees
 public import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Core.Circuit
@@ -23,8 +23,8 @@ import all Init.WF
 # `TableReadBinding` says something
 
 * **Honest** (`TableReadBinding_honest`): the check accepts a template at the served expert-row read's shape, 256 rows
-  of 3072 words (the one the read's text reads back to), from the one fact witnessed outside Lean
-  (`ReadUnit.ExpertReadAccepted`).
+  of 3072 words: the read's own template, which the check accepts at every 2 ≤ V < 2^32 and 1 ≤ H ≤ 2^16
+  (`Accepts.check_readTmpl`).
 * **Nontrivial** (`TableReadBinding_nontrivial`): where the check doesn't fix the read's gates, a read needn't bind: some
   unit's reads don't. The unit net `net₀` has 5 input words (640 columns), its constant on column 640 and no computed
   row, so a read at the template's columns (`portsAt`, at one row of no words) holds its index, root and the domain
@@ -463,24 +463,24 @@ theorem returns₀ (i : Unit) :
   rw [R₀_table, R₀_unit, R₀_port, localEval₀, hOf₀]
   decide
 
-/-- What the drawn read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
-theorem drawnHashed₀ (ω : Unit) :
-    R₀.drawnHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
+/-- What the sampled read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
+theorem sampledHashed₀ (ω : Unit) :
+    R₀.sampledHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
       L₀ := by
   have hr : R₀.reads = {()} := rfl
-  unfold Reads.drawnHashed
+  unfold Reads.sampledHashed
   simp only [hr, Finset.mem_univ, Finset.filter_true, Finset.toList_singleton, List.flatMap_cons, List.flatMap_nil,
     List.append_nil]
   unfold Reads.hashedAt Reads.index
   rw [R₀_unit, R₀_port, R₀_domain, localEval₀, tokOf₀, opening₀, R₀_table, verifier₀]
   rfl
 
-/-- The reads' collision finder at the counterexample: every unit drawn, the trace `tr₀`, no cost. -/
+/-- The reads' collision finder at the counterexample: every unit sampled, the trace `tr₀`, no cost. -/
 noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
 
 theorem out₀ (ω : finder₀.S) : finder₀.out ω = none := by
-  have h := drawnHashed₀ ω
+  have h := sampledHashed₀ ω
   exact dif_neg (by rw [h]; exact no_collision₀)
 
 theorem cost₀ (ω : finder₀.S) : finder₀.cost ω = 0 := rfl
@@ -498,10 +498,9 @@ namespace Accounting.SecurityProofs
 open Accounting.ReadUnit Accounting.ReadUnit.Witness
 
 /-- **`TableReadBinding`'s honest lemma**: the check accepts a template at the served expert-row read's shape, 256 rows
-of 3072 words (the one its text reads back to), from the fact witnessed outside Lean (`ExpertReadAccepted`). -/
-theorem TableReadBinding_honest (h : ExpertReadAccepted) : ∃ t, Flock.ReadNet.check 256 3072 t = true :=
-  let ⟨t, _, ht⟩ := h
-  ⟨t, ht⟩
+of 3072 words: the read's own template (`Accepts.check_readTmpl`). -/
+theorem TableReadBinding_honest : ∃ t, Flock.ReadNet.check 256 3072 t = true :=
+  ⟨Flock.ReadNet.readTmpl 256 3072, Accepts.check_readTmpl (by norm_num) (by norm_num) (by norm_num) (by norm_num)⟩
 
 /-- **`TableReadBinding`'s nontrivial lemma**: at a unit the check doesn't fix, the reads needn't bind. At `Witness.D₀`,
 a net whose read columns are inputs and the constant, every hypothesis of `ReadUnit.BindsAt` holds at no error and no

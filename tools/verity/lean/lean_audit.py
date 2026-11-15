@@ -26,7 +26,7 @@ each file under its path relative to its package (a module's is its name), never
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
   otherwise stays a path in the key;
-- `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
+- `tools/verity/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
   `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
   (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
@@ -73,7 +73,8 @@ run takes no kept build, no artifact bundle and no artifact cache, and keeps not
 The audit's `dependencies` check still compares their `.olean` files with the package's record, and the kernel replay
 still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
-those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
+those of every module it imports, transitively, as their bytes or, where a message keeps the source's path, as their object
+graph without it (`check.replay_digest`, so a build at another path counts as the same), passed an earlier replay here or in a recorded check whose verdict pack this
 one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
@@ -144,7 +145,7 @@ def _module(path: Path, name: str):
 
 #: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them), `common.py` and the task graph's
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
-COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
 SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
@@ -252,14 +253,16 @@ FLAGS = ["--build", "--closure"]
 #: read of one fails the audit
 NOT_READ = {
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
+    "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
-    "public_lock.py": "a lock as the public export ships it, which `tools/verity/check/public_export.py` loads",
+    "posture.py": "each deployed guarantee's premises against the trust list, a command of its own on the locks",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",
+    "trust-list.json": "Daniel's trust list, which `posture.py` and the repository suite's `test_trust_list.py` read",
     "trusted_size.py": "the size of a package's trusted text, a command of its own on a records run's facts document",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
@@ -430,7 +433,7 @@ def tool_files(files: list[str]) -> list[str]:
     """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
             and f[len(LEAN_TOOL):] not in NOT_READ]
-    return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
+    return sorted({*tool, "tools/check/common.py", CONTRACT})
 
 
 def read_packages(pkg: str) -> list[str]:
@@ -1115,6 +1118,9 @@ class LakeArtifacts:
         Of a build that names the modules Lake said it built (`"compiled"`: one that read Lake's own cache, where an
         archive of main's published build unpacks to outputs, fresh `.hash` files and the publisher's trace, which nothing
         in the build tells from a compile), only those go in.
+        A build that says where it read its tree (`"bound"`: the fixed path and the tree, check.py's `bound`) has the
+        paths Lake wrote under the first read as the second's (`module_keys.indexable`); the log says how many of its
+        `setup.json` name a path under the tree's own instead, each read as it is.
         Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
         as its module's. And only a build none of whose sources runs code while it compiles, outside a reviewed listing
@@ -1146,9 +1152,14 @@ class LakeArtifacts:
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
-                keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
+                keyed, owners, own = MK.keys(pkg, MK.policy_roots(pkg)), {}, set()
+                at = tuple(b) if isinstance(b := rep.get("bound"), list) and len(b) == 2 and all(
+                    isinstance(s, str) for s in b) else None
                 with ThreadPoolExecutor(max_workers=8) as ex:
-                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
+                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners, at, own), keyed)))
+                if at:
+                    log(f"lean-audit: {pkg}: {len(own)} setup.json of this build, which read its tree at {at[0]}, name a "
+                        f"path under the tree's own ({at[1]}), each read as it is")
                 if isinstance(only := rep.get("compiled"), list):
                     built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
                              else "not compiled by this run: Lake didn't say it built it" for m, b in built.items()}
@@ -1189,10 +1200,13 @@ class LakeArtifacts:
         return n
 
     @staticmethod
-    def _built(mod: str, keyed: dict, pkgs: list, since: float | None,
-               owners: dict | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
+    def _built(mod: str, keyed: dict, pkgs: list, since: float | None, owners: dict | None = None,
+               at: tuple[str, str] | None = None,
+               own: set[str] | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
         """(Lake's input hash, the outputs its trace names, {artifact: (its file, its digest)}) of ``mod`` as its build
-        compiled it, or why it isn't indexed: not compiled since ``since``, restored, not `indexable` (``owners``), or
+        compiled it, or why it isn't indexed: not compiled since ``since``, restored, not `indexable` (``owners``; ``at``:
+        the report's `bound`, the fixed path the build read its tree at and the tree; ``own``, which gets ``mod`` when its
+        `setup.json` names the tree's own path), or
         not whole. Lake removes a module's outputs, runs `lean`, hashes each output into its `.hash`, and only then writes
         the trace naming those hashes (`Module.buildLean`, `buildAction`), and it leaves the previous trace and `.hash`
         files in place until then. So a compile that was stopped leaves a trace that isn't JSON, an output that is
@@ -1214,7 +1228,7 @@ class LakeArtifacts:
         out, h = d.get("outputs"), d.get("depHash")
         if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h):
             return "a trace without its outputs or input hash"
-        if why := MK.indexable(mod, keyed, pkgs, owners):
+        if why := MK.indexable(mod, keyed, pkgs, owners, at, own):
             return Unindexable(why)
         files = {}
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
@@ -1679,6 +1693,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
+                            "--program-cache", str((work if fresh else cache.parent) / "lean-programs"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             *(["--facts-cache", str(documents)] if documents else []),

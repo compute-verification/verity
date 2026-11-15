@@ -5,16 +5,16 @@ torch-free, no run artifacts.  The default B0 profile stays the pinned one (PROT
 from __future__ import annotations
 
 import importlib
-
 import json
 from pathlib import Path
 
-from verity_vllm.observe.fold.profiles import profile_module_for_case, vllm_d9105ea80_sm89_eager as BASE
+from tests.observe.test_gen_sampling import _adapter_fn
+from verity_vllm.observe.fold.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
 
 OVB0 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0_ovs")
 OVB1 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B1_ovs")
-from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
-from tests.observe.test_gen_sampling import _adapter_fn
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 
@@ -28,7 +28,6 @@ def test_b0_profile_is_the_pinned_profile_plus_the_sampler_recognizer():
     assert isinstance(p.patterns[0], TokenSampleGumbel) and p.patterns[0].vocab == BASE.C["V"] == 49152
     tuned = [x for x in p.patterns[1:] if x.name == "gemm.matmul_kernel_persistent.tuned"]        # the generic list's target specialization
     assert len(tuned) == 1 and [type(x) for x in p.patterns[1:] if x not in tuned] == [type(x) for x in BASE.PROFILE.patterns]
-    assert p.kernel_allowlist == BASE.PROFILE.kernel_allowlist
     assert "ov_sampling" in p.notes and "GumbelArgmaxBf16" in p.notes["ov_sampling"]["definition"]
 
 

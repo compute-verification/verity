@@ -6,10 +6,10 @@ exfiltration bound, with and without the tick, over the headline and secondary s
 (b) reads the sweep's points (`point.json`: `point`, `load`, `rate`, `tick` with `sat_ms` and `free_ms`, or null
 without the tick, `ttft_p50_s`, `ttft_p99_s`, `itl_p50_s`, `output_tok_per_s`, `goodput_ttft_req_per_s`, and
 `busy_cycle.mean_us` and `preemptions` where measured) and is pending without them. A tick point named by
-`--old-rule` took τ_sat from the no-tick step at its own load, the old rule, and is drawn hollow, off its load's line.
+`--old-rule` took τ_sat from the no-tick step at its own load, the old rule, and is sampled hollow, off its load's line.
 (c) reads an advice file: `machine_windows` by scope and `arms`, each a `label`, `tick` (true or false) and `bits`, the
 advice a machine window is charged, so its term is that times the scope's windows, and a `pending` reason where the
-arm's figure isn't a result yet, drawn hatched.
+arm's figure isn't a result yet, sampled hatched.
 
     uv run python benchmarks/spot_figures/figure6.py --model GLM-5.3 --advice ADVICE.json [--points POINT.json...]
         [--old-rule POINT...] [--out DIR]
@@ -104,7 +104,7 @@ def _sweep_caption(out: dict) -> str:
     sw = out["sweep"]
     loads = ", ".join(f"{g['load']} ({g['rate']:g} req/s)" for g in sw)
     taus = sorted({(r["sat_ms"], r["free_ms"]) for g in sw for r in g["tick"] if not r["old_rule"]})
-    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the production "
+    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the serving "
             "scheduler beside the tick at each period, τ_sat / τ_free "
             + ", ".join(f"{a:.0f} / {f:.0f} ms" for a, f in taus) + ". ")
     pairs = [(g, r) for g in sw if g["none"] for r in g["tick"]]
@@ -125,7 +125,7 @@ def _sweep_caption(out: dict) -> str:
         if r["old_rule"] and r["step_ms"] is not None and (f := ratio(g, r, "ttft_p50_s")) is not None:
             text += (f"{r['point']} took τ_sat from the no-tick step at its load, the old rule: {r['sat_ms']:.0f} ms "
                      f"against the tick arm's own {r['step_ms']:.0f} ms step, so its queue grew (TTFT p50 {_times(f)}); "
-                     "it is drawn hollow, off its load's line. ")
+                     "it is sampled hollow, off its load's line. ")
     return text
 
 
@@ -294,7 +294,7 @@ def _advice(ax, out: dict) -> None:
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
-    """Draw the figure into `outdir` as figure6.png and .svg; returns their paths."""
+    """Sample the figure into `outdir` as figure6.png and .svg; returns their paths."""
     import matplotlib
 
     matplotlib.use("Agg")

@@ -26,7 +26,7 @@ def boundary_path(row: Any) -> str:
 
 def programs_args(row: Any) -> list[str]:
     """The Build's Programs the Commit reads (sampled replay, producer facts): the per-request Programs under the row dir at B >= 2,
-    the request Program at B = 1; none without the Build's instance set."""
+    the request Program at B = 1; none without the Build's input set (`instances.json.gz`)."""
     pd_req = f"{row.d}/build_request"
     if not os.path.isfile(f"{pd_req}/instances.json.gz"):
         return []

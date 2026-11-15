@@ -7,13 +7,13 @@ import struct
 from dataclasses import replace
 
 import pytest
-from verity.hardware import registration
-from verity.protocols.spot.verifier.one_stage import registration as one_stage
+from verity.protocols.accounting.registration.verifier import registration
+from verity.protocols.proofs.spot.verifier.one_stage import docket as one_stage
 from verity.circuits import partition_object
-from verity.definitions.circuits.census import census
+from verity.circuits.census import census
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
+from verity.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments import advice
@@ -103,8 +103,8 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
 
 
 @pytest.mark.slow
-def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
-    """The sampled proofs sample proof blocks from the Program's partition, which one-stage registers with the Program (the
+def test_each_blocks_computed_claim_rests_on_its_proof_blocks_under_the_registered_partition(setup):
+    """SPOT samples proof blocks from the Program's partition, which one-stage registers with the Program (the
     record names the query's digest, the partition's and the population). A block's proof blocks are that partition's
     whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
     Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its
@@ -276,7 +276,7 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
     values leaving a block were free, and something off the block can read them. The export, λ_out, is the committed
     bits that cross a certified boundary out of a block, to another block or outside, by egress port and within the
     epoch, read from the declared crossings: h out of a and y out of b, 512 bits each, and not x, which comes in.
-    It counts as novel information read by its receivers once network certifiers cover every link,
+    It counts as fresh input read by its receivers once network certifiers cover every link,
     and not before. The test datacenter's world-to-leaf link is uncovered, so the export is reported and not
     applicable; with the world behind a certifier, the same run's export is charged. The covert budget is the same in
     both."""

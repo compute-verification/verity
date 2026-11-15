@@ -8,7 +8,7 @@ import time
 
 from verity.circuits.boolean.forms import maj
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import scalar as SB
+from verity.circuits.ops.boolean import scalar as SB
 
 P = (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT))
 _LOWERED = [0]
@@ -41,7 +41,7 @@ def _clocked(C, a, b, c):
     return _plain(C, a, b, c)
 
 
-def _drawn(C, a, b, c):
+def _sampled(C, a, b, c):
     random.random()
     return _plain(C, a, b, c)
 
@@ -55,4 +55,4 @@ Counted = _def("Counted", _counted)
 SetOrder = _def("SetOrder", _set_order)
 Environ = _def("Environ", _environ)
 Clocked = _def("Clocked", _clocked)
-Drawn = _def("Drawn", _drawn)
+Sampled = _def("Sampled", _sampled)

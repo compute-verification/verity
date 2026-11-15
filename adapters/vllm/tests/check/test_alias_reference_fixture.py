@@ -2,7 +2,7 @@
 (opening.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
 table) SHARE.  "Reader and oracle sharing one alias mechanism prevents drift AND lets them share the same bug" -- so this file derives what
 every side must say BY COUNTING (layers x members x steps x requests, invocation k = layer order, ordinal = position in acquisition order),
-never by reading `op_path_aliases`, `entry_read_name`, `same_name_invocations` or the inverse table; then drives the production chain
+never by reading `op_path_aliases`, `entry_read_name`, `same_name_invocations` or the inverse table; then drives the library's chain
 end-to-end -- `binding.build_binding_map` (the invocation numbering), `OpenedReader` + `CommittedStore` (the reader), `oracle_compare`
 over a REAL `MatchOracle` of a per-layer-hinted synthetic Match dir (the oracle) -- and checks each against the enumerator.  A bug the two
 sides share fails HERE, not each other.
@@ -16,7 +16,7 @@ Rules it pins: "different logical producer/version -> never merged solely becaus
 Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest tests), not this
 fixture's: the binding map carries no spec.
 
-It tests the COMMON MECHANISM on one synthetic record, not every production record."""
+It tests the COMMON MECHANISM on one synthetic record, not every served record."""
 from __future__ import annotations
 
 import gzip
@@ -24,14 +24,15 @@ import hashlib
 import json
 import os
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from tests.check.opened import commit_steps
-from verity_vllm.commit import binding as B
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import opening as OP
+from verity_vllm.commit import binding as B
 
 CANON = "model.layers.0.self_attn.rotary_emb"
 MEMBERS = ("query", "key")                              # the shared RotaryEmbedding's two outputs (q, k)
@@ -114,7 +115,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
             data = words(0, k, member, 0).tobytes()
             sha = hashlib.sha256(data).hexdigest()
             fn = f"values/0/{sha[:16]}_{k}_{member}.bin"
-            open(os.path.join(d, "capture", fn), "wb").write(data)
+            Path(os.path.join(d, "capture", fn)).write_bytes(data)
             alloc = 10 + 2 * k + MEMBERS.index(member)
             entries.append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [1, W], [W, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [1, W], "strides": [W, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
@@ -123,7 +124,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
                           "hint": f"{per_layer_path(k)}/{HINT[member]}", "request": U0, "position": 0, "operand_views": [],
                           "output_views": [{"alloc": alloc, "offset": 0, "shape": [W], "strides": [1], "dtype": "bfloat16", "device": "cuda:0"}]})
             ev += 1
-    json.dump({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}))
     with open(os.path.join(d, "instances.jsonl"), "w") as f:
         f.write(json.dumps({"schema": "verity-gen/instances/v1", "digest": "f" * 64, "n_instances": len(insts),
                             "requests": [{"index": 0, "request_id": U0, "prompt_len": 1, "served_samples": 1, "max_tokens": 1}]}) + "\n")
@@ -133,7 +134,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
         f.write(json.dumps({"$e": "RunHeader", "schema": "verity-capture/log/v1", "created_utc": "2026-09-20T23:00:00Z", "profile_id": "abc", "profile": {"vllm": {"version": "t"}}}) + "\n")
         f.write(json.dumps({"$e": "StepStart", "step": 0, "rows": [[U0, 0]]}) + "\n")
         f.write(json.dumps({"$e": "SampleEnd", "step": 0, "sampled_token_ids": [5]}) + "\n")
-    json.dump({"requests": [{"request_id": U0, "prompt_token_ids": [1], "generated_token_ids": [5]}]}, open(os.path.join(d, "capture", "tokens.json"), "w"))
+    Path(os.path.join(d, "capture", "tokens.json")).write_text(json.dumps({"requests": [{"request_id": U0, "prompt_token_ids": [1], "generated_token_ids": [5]}]}))
     return d
 
 

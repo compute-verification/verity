@@ -172,7 +172,7 @@ def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
                                                                     "outputs.jsonl"]
 
 
-def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded(monkeypatch):
+def test_a_serving_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded(monkeypatch):
     corpus = SimpleNamespace(request_seed=lambda rid: int(rid[4:]) + 1000, SAMPLING={"production": {}})
     monkeypatch.setattr(T.S, "corpus", lambda: corpus)
     greedy = {"i": 0, "prompt_ids": [1, 2], "max_tokens": 8, "seeded": False, "sampling": {"temperature": 0.0}}

@@ -471,7 +471,7 @@ alignment = "every term rescaled to a 26-bit significand (the BF16 pipeline's ad
 accumulation = "summed exactly, normalized to 26 bits by truncation, then to FP32 by truncation; the accumulator's 24 bits fit the 26-bit adder, so unlike Hopper's 14-bit FP8 adder it isn't truncated a step (the B200's tcgen05 kind::f8f6f4 is the same pipeline to the bit)"
 promotion = "none needed: the FP32 accumulator chains step to step (Pearl's B200 path, pearl_kw.py Device b200: W = 25, width 26)"
 rate = "1023.8 MACs/SM/clk (tensor.e4m3.k32), as every native form; MXFP8 (QMMA.SF) the same; no FP8 k16 form is timed"
-source = "verity.definitions.silicon models.BLACKWELL_SM120_E4M3_M16N8K32 (groups (32,), width 26, floor -133): RTX PRO 6000 Server Edition, fitted on 6,434,816 elements (0 mismatches; Ada's (16,16)/14 and Hopper's (32,)/14 refuted), evaluated on 25,040,128 (0), and on 25,041,024 at a 2,100 MHz lock (0); E5M2 BLACKWELL_SM120_E5M2_M16N8K32. NVIDIA documents state none of this"
+source = "verity.circuits.silicon models.BLACKWELL_SM120_E4M3_M16N8K32 (groups (32,), width 26, floor -133): RTX PRO 6000 Server Edition, fitted on 6,434,816 elements (0 mismatches; Ada's (16,16)/14 and Hopper's (32,)/14 refuted), evaluated on 25,040,128 (0), and on 25,041,024 at a 2,100 MHz lock (0); E5M2 BLACKWELL_SM120_E5M2_M16N8K32. NVIDIA documents state none of this"
 
 # ---- B_RF writers (schema in data/devices/sm_90/theta.toml)
 # ----------------------------------------------------------------
@@ -632,7 +632,7 @@ what = "SHA-512 compressions (one 128-B block each)"
 unit = "compressions/SM/clk"
 sheet = 0.018741
 grade = "Programming Guide (alu.lop3's 64 lanes over the kernel's 3,415 ALU instructions a compression)"
-source = "CPG Table 7, CC 12.0: 64 lanes a SM-clock for 32-bit shifts and logic; commit_gpu's SASS: 1,728 SHF, 927 LOP3, 760 IADD.64 a block, at 16 lanes a cycle a sub-partition (benchmarks/pouw/commit_gpu/README.md 'What decides the speed')"
+source = "CPG Table 7, CC 12.0: 64 lanes a SM-clock for 32-bit shifts and logic; commit_gpu's SASS: 1,728 SHF, 927 LOP3, 760 IADD.64 a block, at 16 lanes a cycle a sub-partition (verity/commitments/cuda/commit_gpu/README.md 'What decides the speed')"
 measured = 0.018129
 runs = "7.13 G compressions/s (r20261016-110413-c5d1, commit_gpu README) over 188 SMs at the node's 2,092 MHz lock; r20261016-110829-a28e 6.94 G/s"
 
@@ -843,15 +843,15 @@ rotates = 864
 adds = 760
 add_form = "IADD.64"
 overlap = "yes: θ's census issues LOP3 and IMAD together at 4.0 warp instructions a SM-clock (alu.iadd3's runs); commit_gpu's SHA_ROT r3 (480 rotations, two IMAD.HI and two IMAD each) at 5.28 against 7.13 G/s fits IMAD.HI at about 16 lanes a SM-clock, not a shared pipe, so with IMAD.HI unmeasured here the ceiling without it is the one on measured rates"
-source = "benchmarks/pouw/commit_gpu/README.md 'What decides the speed': our kernel's 1728 SHF (864 rotations and shifts), 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe"
+source = "verity/commitments/cuda/commit_gpu/README.md 'What decides the speed': our kernel's 1728 SHF (864 rotations and shifts), 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe"
 
 [[public]]
 impl = "hashcat 7.1.2 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"
 form = "generic"
 gps = 7.894
 card = "RTX PRO 6000 Blackwell Server Edition"
-sms = 188
-mhz = 2430
+sms = { card = "sm.count" }
+mhz = { card = "clock.sm" }
 source = "gist.github.com/blurbdust/5f7c8e07f8b0015c187e69f438e2e664: 'Hash-Mode 1800 (sha512crypt $6$, SHA512 (Unix)) [Iterations: 5000] Speed.#01: 1578.8 kH/s'; 1578.8e3 · 5,000 rounds, each one block (the 64-B digest, the salt and the password, at most 111 B together at hashcat's benchmark lengths); read at the 2,430 MHz fmax"
 
 [[public]]
@@ -859,8 +859,8 @@ impl = "hashcat 7.1.2 SHA2-512 (mode 1700, -O: one-block short messages, early e
 form = "structured"
 gps = 9.432
 card = "RTX PRO 6000 Blackwell Server Edition"
-sms = 188
-mhz = 2430
+sms = { card = "sm.count" }
+mhz = { card = "clock.sm" }
 source = "gist.github.com/blurbdust/5f7c8e07f8b0015c187e69f438e2e664: 'Hash-Mode 1700 (SHA2-512) Speed.#01: 9432.0 MH/s'"
 
 [[public]]

@@ -4,10 +4,11 @@ committer that reads it late fails the tap compare by name."""
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+torch: Any = pytest.importorskip("torch")
 
 from verity_vllm.check.value_check import ValueChecker  # noqa: E402
 
@@ -41,7 +42,8 @@ class Committer:
         self.model, self.runner, self.late = model, SimpleNamespace(), late
         self._modules = [("lin", model.lin), ("norm", model.norm)]
         self._layouts: dict[int, list] = {}
-        self.step, self._held = -1, []
+        self.step = -1
+        self._held: list = []
         for name, m in self._modules:
             m.register_forward_hook(self._acquire(name))
 

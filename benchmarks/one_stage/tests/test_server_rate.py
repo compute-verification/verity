@@ -132,6 +132,16 @@ def test_a_row_keeps_its_verifier_cpus_and_their_seconds(monkeypatch, tmp_path):
     assert row["verifier_cpus"] == "44-47"
 
 
+def test_a_row_says_which_unit_kernel_its_sessions_ran(monkeypatch, tmp_path):
+    walked, host = {"buckets": [{"unit_walk": True}, {"unit_walk": True}]}, {"buckets": [{"unit_walk": False}]}
+    assert SR.unit_walk([walked, walked]) == [True]
+    assert SR.unit_walk([host, None, {}]) == [False]
+    assert SR.unit_walk([walked, host]) == [False, True]
+    assert SR.unit_walk([{"buckets": [{"t.total": 1.0}]}, {"accepted": True}]) == []
+    rc, row = run(monkeypatch, tmp_path)
+    assert (rc, row["unit_walk"]) == (0, [])
+
+
 def test_one_refused_session_voids_the_row_and_the_run(monkeypatch, tmp_path, capsys):
     rc, row = run(monkeypatch, tmp_path, refuse={4})
     assert (rc, row["statements_per_s"], row["accepted"], row["refused_n"]) == (1, None, 8, 1)
@@ -315,7 +325,7 @@ def test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement(monkeypat
             pass
 
     monkeypatch.setattr(SR, "Lean", Lean)
-    run(monkeypatch, tmp_path, "--lean", "flock-verify", "--wide-leaf", tmpl_unit=tmp_path / "unit.placed" if tmpl else None)
+    run(monkeypatch, tmp_path, "--lean", "lean", "--wide-leaf", tmpl_unit=tmp_path / "unit.placed" if tmpl else None)
     assert got == [(SR.FC.TMPL_STATEMENT if tmpl else SR.STATEMENT_ID) + "+wide-leaf"]
 
 
@@ -330,7 +340,7 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
             pass
 
     monkeypatch.setattr(SR, "Lean", Lean)
-    run(monkeypatch, tmp_path, "--lean", "flock-verify", tmpl_unit=tmp_path / "unit.placed")
+    run(monkeypatch, tmp_path, "--lean", "verity-verify-proof", tmpl_unit=tmp_path / "unit.placed")
     assert got == [SR.FC.TMPL_STATEMENT]
 
 
@@ -381,10 +391,10 @@ def test_lean_is_handed_the_rows_program_and_the_row_keeps_what_its_verdict_says
 @pytest.mark.parametrize("statement", [SR.STATEMENT_ID + SR.WIDE_LEAF, SR.STATEMENT_ID])
 @pytest.mark.parametrize("refuses", [True, False])
 def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_path, statement, refuses):
-    """A `flock-verify` that refuses the statement's name (exit 2, "unknown statement" on stderr, no VERDICT line) is
-    recorded as a refusal of the name, and for a wide-leaf name as a `flock-verify` that does not list it; any other
+    """A Lean verifier that refuses the statement's name (exit 2, "unknown statement" on stderr, no VERDICT line) is
+    recorded as a refusal of the name, and for a wide-leaf name as a verifier that does not list it; any other
     exit with no verdict keeps the plain reason."""
-    lean = tmp_path / "flock-verify"
+    lean = tmp_path / "lean"
     end = "echo 'unknown statement; known: [verity/flock-circuit]' >&2; exit 2" if refuses else "exit 3"
     lean.write_text(f'#!/bin/sh\n[ "$1" = verify ] || exit 0\n{end}\n')
     lean.chmod(0o755)
@@ -398,5 +408,6 @@ def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_pat
     if not refuses:
         assert got["why"] == "no verdict (rc 3)"
         return
-    assert got["why"].startswith(f"no verdict (rc 2): this flock-verify does not know the statement {statement!r}")
+    assert got["why"].startswith("no verdict (rc 2): this ")
+    assert f" does not know the statement {statement!r} and refused it unread" in got["why"]
     assert ("Flock/Tags.lean" in got["why"]) is statement.endswith(SR.WIDE_LEAF)

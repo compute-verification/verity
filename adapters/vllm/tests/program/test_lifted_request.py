@@ -24,16 +24,17 @@ What it does NOT establish: anything about a real record (that needs an early-st
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import Program, bind
-from verity.circuits.codec import _spec_id, encode_program, program_digest
+from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import REGISTRY
-from verity_vllm.program import workload as W
-from verity.definitions.registry import b1, lifted as L
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs
 from verity.circuits.types import Array, Value
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
+from verity_vllm.program import workload as W
 
 I32 = Value(32)
 CAP = D_MAX + 1
@@ -107,12 +108,12 @@ def test_component_is_the_flat_program_and_the_lift_has_exactly_the_guard_nodes_
     for k, nu in enumerate(body_u.nodes):
         nl = body_l.nodes[nidx[k]]
         assert body_l.offsets[nidx[k] + 1] - body_l.offsets[nidx[k]] == body_u.offsets[k + 1] - body_u.offsets[k]
-        assert L.unlifted_id(_spec_id(nl.fn)) == _spec_id(nu.fn)  # Lifted[X_vk]_v2{same bindings, ORD=m} / Lifted[prim]_v2{ORD=m}: the same id modulo wrapper + class vector (G1)
+        assert L.unlifted_id(descriptor_id(nl.fn)) == descriptor_id(nu.fn)  # Lifted[X_vk]_v2{same bindings, ORD=m} / Lifted[prim]_v2{ORD=m}: the same id modulo wrapper + class vector (G1)
         assert nl.name == nu.name and nl.form == nu.form
-    rows_u = [(_spec_id(n.fn), body_u.offsets[k], body_u.offsets[k + 1]) for k, n in enumerate(body_u.nodes)]
+    rows_u = [(descriptor_id(n.fn), body_u.offsets[k], body_u.offsets[k + 1]) for k, n in enumerate(body_u.nodes)]
     rows_l = L.address_map_modulo_guards(lifted)
     assert [(lo, hi) for _, lo, hi in rows_l] == [(lo, hi) for _, lo, hi in rows_u]
-    assert [L.unlifted_id(sl) for sl, _, _ in rows_l] == [_spec_id(n.fn) for n in body_u.nodes]
+    assert [L.unlifted_id(sl) for sl, _, _ in rows_l] == [descriptor_id(n.fn) for n in body_u.nodes]
     # the guard nodes: eos consts + bot32 + t=1/emit at the head, then per slot t (right after its sampling event) the controller's
     # (slot=<t>/is_eos, slot=<t>/out, slot=<t+1>/emit) and (s=<s>/live, s=<s>/tok_in) immediately before each step's first token reader
     names = [body_l.nodes[k].name for k in lifted.guard_nodes]
@@ -120,7 +121,7 @@ def test_component_is_the_flat_program_and_the_lift_has_exactly_the_guard_nodes_
     ctrl = [n for t in range(1, CAP + 1) for n in ((f"slot={t}/is_eos", f"slot={t}/out") + ((f"slot={t + 1}/emit",) if t < CAP else ()))]
     assert sorted(names[4:]) == sorted(ctrl + [n for s in range(1, CAP) for n in (f"s={s}/live", f"s={s}/tok_in")])
     # G1: the EOS set is ordinary (`Const32`), and the members reading it say so on their id (`{ORD=2}`: the eos_set operand)
-    assert {_spec_id(body_l.nodes[k].fn) for k in lifted.guard_nodes} == {"Const32[0x00000011]_v1", "LBot32_v1", "LStepLive1_v1{ORD=2}", "LSelect32_v1",
+    assert {descriptor_id(body_l.nodes[k].fn) for k in lifted.guard_nodes} == {"Const32[0x00000011]_v1", "LBot32_v1", "LStepLive1_v1{ORD=2}", "LSelect32_v1",
                                                                              "Const2[0x1]_v1", "LIsEOS1_v1{ORD=2}", "LEmitNext[H=1]_v1"}
     by_name = {body_l.nodes[k].name: k for k in lifted.guard_nodes}
     for s in range(1, CAP):
@@ -228,7 +229,7 @@ def test_the_lift_is_a_function_of_the_manifest_and_refuses_by_name(component, l
     assert other is not lifted and other.body.gates == lifted.body.gates + 1 and other.bindings["EOS"] == (17, 63)
     d1, d2 = program_digest(encode_program(L.as_program(lifted))), program_digest(encode_program(L.as_program(other)))
     assert d1 != d2 and d1 == program_digest(encode_program(L.as_program(lifted)))
-    assert _spec_id(lifted) != _spec_id(component.fn) and 'EOS=[17],GUARD="in"' in _spec_id(lifted)
+    assert descriptor_id(lifted) != descriptor_id(component.fn) and 'EOS=[17],GUARD="in"' in descriptor_id(lifted)
     du = program_digest(encode_program(L.as_program(component.fn)))  # the flat component is a DERIVED object: its own digest, not the record's
     assert du == program_digest(encode_program(L.as_program(component.fn))) and du not in (d1, d2, component.program_digest)
     with pytest.raises(ValueError, match="output guard .* refused by name"):
@@ -245,14 +246,13 @@ def test_the_lift_is_a_function_of_the_manifest_and_refuses_by_name(component, l
 
 def test_boundary_detection_refuses_a_body_whose_steps_do_not_consume_the_token(component):
     """A body whose event tokens are returned but never read by a later node is not a request (nothing links the events)."""
-    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, Body, Node
-    from verity.circuits.refs import Coll, Affine, concat
+    from verity.circuits.defs import Body, BodyNode, SpecializedDefinition
+    from verity.circuits.refs import Affine, Coll, concat
     tsel = bind(b1.TokenSelect, V=4)
-    d = CompositeDefinition("FakeReq", 1, ("program_digest", "program_fn"), lambda S: ((), None), lambda *_: None, register=False)
     sp = SpecializedDefinition(W._REQUEST_DEF, {"program_digest": "x", "program_fn": "y"}, (("program_digest", "x"), ("program_fn", "y")))
     params = (("logits", Array(4, Value(16))),)
-    n0 = Node("call", tsel, (Coll(Array(4, Value(16)), Affine("p", 0, 0, 4)),), I32, name="e0")
-    n1 = Node("call", tsel, (Coll(Array(4, Value(16)), Affine("p", 0, 0, 4)),), I32, name="e1")
+    n0 = BodyNode("call", tsel, (Coll(Array(4, Value(16)), Affine("p", 0, 0, 4)),), I32, name="e0")
+    n1 = BodyNode("call", tsel, (Coll(Array(4, Value(16)), Affine("p", 0, 0, 4)),), I32, name="e1")
     sp.set_body(Body(params, Array(2, I32), [n0, n1], concat([Affine("n", 0, 0, 1), Affine("n", 1, 0, 1)]), [0, tsel.gates, 2 * tsel.gates]))
     with pytest.raises(ValueError, match="read by no node: step 1 does not consume it"):
         L.lift_request_component(sp, (0,), max_tokens=2, lag=0)

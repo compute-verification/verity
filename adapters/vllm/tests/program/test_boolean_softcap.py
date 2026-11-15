@@ -1,5 +1,5 @@
 """`boolean_softcap`: `AttnBlockSoftcap_v3` / `AttentionHeadSoftcap_v3` / `AttentionSoftcap_v3` with ``TANH`` = `MufuTanh_v2` and
-``EX2`` = `MufuEx2Ftz_v2` (`verity.definitions.ops.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
+``EX2`` = `MufuEx2Ftz_v2` (`verity.circuits.ops.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
 same statics, over `MufuTanh_v1` and `MufuEx2Ftz_v1`), Call their blocks and heads as the word chain does, and are pinned by gate
 count and program digest.
 
@@ -12,23 +12,22 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, const_bits, sub
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
-from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.types import Array
-from verity.definitions.ops.boolean import attention as BA
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import mufu as BM
-from verity.circuits.boolean import trace as TR
-from verity.circuits.boolean.forms import NOT, const_bits, sub
-from verity.definitions.registry import boolean_softcap as BSC
-from verity.definitions.registry import fa2_softcap as FS
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import boolean_softcap as BSC
+from verity_vllm.definitions.registry import fa2_softcap as FS
+from verity_vllm.definitions.registry import prims as P
 
 F32 = Array(32, BL.BIT)
 
@@ -147,7 +146,7 @@ def _mismatches(target, inputs) -> int:
 
 
 def test_the_word_views_and_word_statics() -> None:
-    assert BSC.WORD_STATICS == {"TANH": P.MufuTanh, "EX2": P.MufuEx2Ftz}
+    assert {"TANH": P.MufuTanh, "EX2": P.MufuEx2Ftz} == BSC.WORD_STATICS
     for d in (BSC.AttnBlockSoftcap, BSC.AttentionHeadSoftcap, BSC.AttentionSoftcap):
         assert d.word_statics is BSC.WORD_STATICS
     hopper = TR.word_of(BG.HopperBF16WgmmaDot16)
@@ -160,9 +159,9 @@ def test_the_word_views_and_word_statics() -> None:
 
 @pytest.mark.slow
 def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
-    """The switch (`verity.definitions.boolean`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
+    """The switch (`verity.circuits.ops.boolean.versions`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
     ``word_statics`` to `MufuTanh_v2` and `MufuEx2Ftz_v2`, and nothing left on words."""
-    from verity.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
     for target in PINNED:
         bits = BB.boolean_version(TR.word_of(target))
         assert bits.id == target.id and BL.is_boolean(bits)
@@ -192,7 +191,7 @@ def test_the_instances_reach_every_tanh_region() -> None:
     q, k = _inputs(TR.word_of(blk), 48, 1)[:2]
     with np.errstate(all="ignore"):
         x = np.abs((_f32_of_bf16(q)[:, None, :] * _f32_of_bf16(k)).sum(-1) * (16 ** -0.5 / 50.0))
-    regions = (x < IDENTITY_BELOW, (IDENTITY_BELOW <= x) & (x < SATURATE_FROM), x >= SATURATE_FROM)
+    regions = (x < IDENTITY_BELOW, (x >= IDENTITY_BELOW) & (x < SATURATE_FROM), x >= SATURATE_FROM)
     assert all(r.any(axis=1).sum() > 36 for r in regions)
 
 

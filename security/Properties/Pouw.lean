@@ -1,14 +1,14 @@
 module
 
 public import PouwWindow
-public import PouwWindow.Draw
+public import PouwWindow.Sample
 public import PouwWindow.Public
 
 /-!
 # PoUW's window: what its Lean code (`PouwWindow`) does
 
-The properties of the executable window (`verity/core/protocols/pouw/lean/window/`, the port of
-`verity/core/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
+The properties of the executable window (`verity/protocols/accounting/pouw/verifier/lean/window/`, the port of
+`verity/protocols/accounting/pouw/verifier/window.py`), stated against its functions as they run. Each covers every input the
 function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and a property says
 what an answer is, so its domain comes from the answer. That the function answers every input on its domain is
 completeness, proved beside it. Each is a `Prop`, and `Proofs.Properties.Pouw` proves every one, on Lean core.
@@ -142,7 +142,7 @@ def MissBounded (eps δ : Rat) (credited n w : Int) (B k : Nat) : Prop :=
 def DrawMisses : Prop :=
   ∀ eps δ (credited n w : Int) (B k : Nat), kPrime eps δ credited n w = .ok k → MissBounded eps δ credited n w B k
 
-/-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s law; 0 if refused). -/
+/-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s sampling design; 0 if refused). -/
 def servedK (δ : Rat) (ℓ : Nat) : Nat :=
   let w := Work.at gridBits ℓ
   ((kPrime (1 / 2) δ (w.credited * 4096) w.n 4096).toOption).getD 0

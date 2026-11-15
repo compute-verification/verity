@@ -6,13 +6,10 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 
-import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pfill_fp_score as F
+import pytest
 
 A, S, SC = F.A, F.S, F.SC
 ARM = "benchmarks/pouw/filler/pfill_arm.py:PFillBUDuoFPhase3"
@@ -20,10 +17,8 @@ PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' t
 
 
 @pytest.fixture(autouse=True)
-def _one_arms_module(monkeypatch):
-    # as test_psched_score: the arm module imports `arms` when A.load runs it, and its Filler must be check_arm's
-    monkeypatch.setitem(sys.modules, "arms", A)
-    monkeypatch.setitem(sys.modules, "scoring", S)
+def _no_build_flags(monkeypatch):
+    # an arm sets the build's flags when A.load runs it: each test starts from a value no arm sets
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
 
 

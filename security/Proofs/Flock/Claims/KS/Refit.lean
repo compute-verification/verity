@@ -325,15 +325,15 @@ open FlockSoundness.Discharge.ZkSession in
 theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2 ^ 128)
     {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
     (T : TabZK F mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
-    (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.m) (ht : T.t = FlockSoundness.Accounting.m1Pad st.m)
+    (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (ht : T.t = FlockSoundness.Accounting.m1Pad st.wideLeaf st.m)
     (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168)
     (hδ : 7 / 16 ≤ T.δ) : T.bound.toReal ≤ εtable true x := by
   rw [εtable_one h]
-  have hl0 : 0 ≤ FlockSoundness.Accounting.padLinkError (FlockSoundness.Accounting.m1Schedule st.m) (acct spec st)
-      (FlockSoundness.Accounting.m1Pad st.m) := by
+  have hl0 : 0 ≤ FlockSoundness.Accounting.padLinkError (FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (acct spec st)
+      (FlockSoundness.Accounting.m1Pad st.wideLeaf st.m) := by
     unfold FlockSoundness.Accounting.padLinkError
     positivity
-  have hr0 := FlockSoundness.Accounting.m1_rep_nonneg st.m h25 h35 (acct spec st)
+  have hr0 := FlockSoundness.Accounting.m1_rep_nonneg (wide := st.wideLeaf) st.m h25 h35 (acct spec st)
   have hi := Claims.Flock.Numbers.innerUp_nonneg
   have hb : εInner T.N F T.q T.δ ≤ ENNReal.ofReal (Claims.Flock.Numbers.innerUp : ℝ) := by
     rw [hq]
@@ -341,10 +341,10 @@ theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF
   unfold tableErr TabZK.bound
   simp only [↓reduceIte]
   rw [hS, hsch, ht, he]
-  set l := FlockSoundness.Accounting.padLinkError (FlockSoundness.Accounting.m1Schedule st.m) (acct spec st)
-    (FlockSoundness.Accounting.m1Pad st.m)
-  set r := FlockSoundness.Accounting.padRepError (FlockSoundness.Accounting.m1Schedule st.m) (acct spec st)
-    (FlockSoundness.Accounting.m1Pad st.m) 2
+  set l := FlockSoundness.Accounting.padLinkError (FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (acct spec st)
+    (FlockSoundness.Accounting.m1Pad st.wideLeaf st.m)
+  set r := FlockSoundness.Accounting.padRepError (FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (acct spec st)
+    (FlockSoundness.Accounting.m1Pad st.wideLeaf st.m) 2
   refine ENNReal.toReal_le_of_le_ofReal (add_nonneg hl0 (sq_nonneg _)) ?_
   calc ENNReal.ofReal l + (ENNReal.ofReal r + εInner T.N F T.q T.δ) ^ 2
       ≤ ENNReal.ofReal l + (ENNReal.ofReal r + ENNReal.ofReal (Claims.Flock.Numbers.innerUp : ℝ)) ^ 2 := by
@@ -401,7 +401,7 @@ theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claim
   have htw : tableWeight false st = Claims.Flock.Numbers.weightOf sch 0 := by
     simp only [tableWeight, Bool.false_eq_true, ↓reduceIte, hgs]
   have hlen : tableLen false st = 2 ^ (Claims.Flock.plainLevel0 st.m).d := rfl
-  have hfits := kFits_all false st.m
+  have hfits := kFits_all (wideLeaf := st.wideLeaf) false st.m
   simp only [level0, wSched, Bool.false_eq_true, ↓reduceIte, hgs] at hfits
   have he := Real.exp_pos 1
   have hpow : (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
@@ -512,6 +512,8 @@ theorem advRSL_nonneg {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
   unfold advRSL
   exact FlockSoundness.Game.Lock.forkE_nonneg _ _ (fun _ _ _ => FlockSoundness.Game.ind_nonneg _ _) _ _
 
+variable {wideLeaf : Bool}
+
 open FlockSoundness.Discharge.Exec in
 /-- **The salted session's `ε_c⁻`, averaged over a mixture of strategies, at one table**, is at most `ε_table` and the
 old escapes' term, when each fork term's mean `Adv` is at most its fork event's probability and the mean self-clash
@@ -561,8 +563,8 @@ theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
 
 /-- Flock ZK's level 0 reads at least one position at every `m` it serves. -/
 theorem m1_queries₀_pos : ∀ m : Fin 11,
-    1 ≤ ((FlockSoundness.Accounting.m1Schedule (m.val + 25)).levels.headD default).queries := by
-  decide +kernel
+    1 ≤ ((FlockSoundness.Accounting.m1Schedule wideLeaf (m.val + 25)).levels.headD default).queries := by
+  cases wideLeaf <;> decide +kernel
 
 /-- **The old masked escapes fit the masked weight with the fork event of weight `k`**, at a statement whose table 0
 has Flock ZK's schedule, when no two of them share a round and the pads' weight `N_p` is at most the deployed pads'
@@ -571,8 +573,8 @@ domain: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_
 theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
     (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
-    (hsch : sch = FlockSoundness.Accounting.m1Schedule st.m) (Np : ℕ)
-    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (hsch : sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (Np : ℕ)
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
     (j : Claims.Flock.IZ sch.levels.length → Fin ((deployZk rel).V.k x)) (hj : Function.Injective j)
     (ev : Claims.Flock.IZ sch.levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
       (Fin ((deployZk rel).V.k x) → Coin) → Prop)
@@ -602,7 +604,7 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
     have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
     have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
     have hq0 : 1 ≤ (sch.levels.headD default).queries := by
-      have := m1_queries₀_pos ⟨st.m - 25, by omega⟩
+      have := m1_queries₀_pos (wideLeaf := st.wideLeaf) ⟨st.m - 25, by omega⟩
       simp only [Nat.sub_add_cancel h25] at this
       rw [hsch]
       exact this
@@ -611,28 +613,28 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
       have h1 : (1 : ℝ) ≤ 2 ^ (sch.levels.headD default).logLen := one_le_pow₀ (by norm_num)
       have h2 : (1 : ℝ) ≤ (sch.levels.headD default).queries := by exact_mod_cast hq0
       nlinarith
-    set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
+    set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)
     have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
       simp only [tableWeight, ↓reduceIte, hsch, pd]
     have hNp2 : (Np : ℝ) * Np ≤ (pd : ℝ) ^ 2 := by
       have := Nat.mul_le_mul hNp hNp
       rw [sq]
       exact_mod_cast this
-    have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
-    have hfits := kFits_all true st.m
+    have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d := rfl
+    have hfits := kFits_all (wideLeaf := st.wideLeaf) true st.m
     simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
     have he := Real.exp_pos 1
-    have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+    have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
       pow_le_pow_right₀ (by norm_num) hfits
-    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d / Real.exp 1 ≤
         4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
       gcongr
     have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
     have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
     have hsplit := weight_split h0
     rw [hlen] at hsplit
-    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.m).d) / Real.exp 1 =
-        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 := by ring
+    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d) / Real.exp 1 =
+        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d / Real.exp 1 := by ring
     rw [e] at hsplit
     show ((2 : ℕ) : ℝ) * ((deployZk rel).k x + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i) ≤
       2 * weight true x
@@ -655,8 +657,8 @@ theorem epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [F
     (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (OutZC F D Sl)))
     (cap₀ : FlockSoundness.Model.Cap D) (σ : FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
     {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
-    (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.m)
-    (ht : T.t = FlockSoundness.Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m)
+    (ht : T.t = FlockSoundness.Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
     {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))
@@ -707,8 +709,8 @@ theorem mean_epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
     (cap₀ : FlockSoundness.Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
     {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
-    (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.m)
-    (ht : T.t = FlockSoundness.Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m)
+    (ht : T.t = FlockSoundness.Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
     {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))

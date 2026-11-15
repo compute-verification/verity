@@ -9,20 +9,16 @@ depends on every fragment, on the tile id, on the coins and on the tile's kind."
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
+import pfill_ref as R
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("pfill_ref", HERE / "pfill_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+KERNEL = HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 
@@ -34,7 +30,7 @@ def lib(tmp_path_factory):
         pytest.skip("no g++ for the host build of pfill.cuh")
     so = tmp_path_factory.mktemp("pfill-host") / "pfill_host.so"
     subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", "-Wno-unknown-pragmas",
-                    "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
+                    "-o", str(so), str(KERNEL / "pfill_host.cpp")], check=True)
     cdll = ctypes.CDLL(str(so))
     cdll.pfill_ref.restype = ctypes.c_uint64
     cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4

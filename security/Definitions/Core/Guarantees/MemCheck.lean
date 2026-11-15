@@ -11,7 +11,7 @@ public import Definitions.Core.MemCheck
 was none, and the final contents are the memory the log leaves. Its proof needs no coin: the check's error is only the
 fingerprint's below.
 
-A memory check accepts when two multisets of packed records have equal fingerprints at coins drawn uniformly after both
+A memory check accepts when two multisets of packed records have equal fingerprints at coins flipped uniformly after both
 are committed (`Verity.MemCheck.fingerprint`), and keys its memory by prints at a coin of their own
 (`Verity.MemCheck.element`). Each bound is the probability, over the coins, that two different objects pass as one.
 Both are about records already packed into `m` chunks of a finite field `F`: a packing that is injective keeps two

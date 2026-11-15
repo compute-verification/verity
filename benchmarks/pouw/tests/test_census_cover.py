@@ -3,14 +3,14 @@
 Bit-exact folds on the H200, the B200 and sm_120 broke FOLD-OPT at π* the same way: a bit-exact fold issued an
 instruction the statement's machine has no class for, or one whose class has no coefficient on π*'s row, so the Lean
 priced it at 0 and the fold came in under ♭'s. Here that is a failure. For every headline statement the exporters write
-(`lean_headline.py`, and `lean_headline_dc.py` where it exists), on the statement's vector and at its certificate π*,
+(`lean_headline.py` and `lean_headline_dc.py`), on the statement's vector and at its certificate π*,
 every instruction of every bit-exact program the tree carries for that device maps to one of the vector's classes priced
 above 0 at π* (Σ_r π*_r·c_kr > 0). The programs:
 
 - every table of census-class counts in the device's data: the honest kernels' profiles, the designs (folds,
   `[fold_routes]`, fillers, baselines, operand floors) and `headline.toml`;
 - sm_120's attack families that hold at the vector's epoch (`data/attacks/`);
-- `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`, where it has them;
+- `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`;
 - every program `facet_break/generate.py` emits, each family's targeted part, by the SASS its gate pins (`expect_of`);
 - the red-team witnesses' timed loops (`fixtures/census_cover_sass.json`: cpw_routes' modes, rt3_dc's lane loops).
 
@@ -29,37 +29,25 @@ device (a catch-all covering it doesn't count: the entry waits for the class), s
 
 from __future__ import annotations
 
-import importlib.util
 import inspect
 import json
 import re
-import sys
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 
+import generate
+import loads
 import pytest
+import test_lean_headline as T
+from verity_machine_model import dc_reading as D
+from verity_machine_model import lean_headline as H
 from verity_machine_model.model import DATA, devices, model, vector
 
-POUW = Path(__file__).resolve().parents[1]
 SASS = Path(__file__).resolve().parent / "fixtures" / "census_cover_sass.json"
 
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-H = _load("pouw_lean_headline", POUW / "lean_headline.py")
-loads = _load("facet_break_loads", POUW / "facet_break" / "loads.py")
-generate = _load("facet_break_generate", POUW / "facet_break" / "generate.py")
 
 #: instructions that change no state: a program priced without them is the same program
 NO_WORK = frozenset({"NOP"})
@@ -111,22 +99,19 @@ def statements() -> list[Statement]:
     """Every headline statement the exporters write: its vector, its π* and each class's price there."""
     i = H.instance()
     m = H.measured(i)
-    fam, cat = H.SM120, getattr(H, "CATCH_ALL", {})
+    fam, cat = H.SM120, H.CATCH_ALL
     out = [Statement(f"{fam.ns}SheetHeadline", fam.key, fam.data, fam.device, {i.pistar: Fraction(1)},
                      {k: H.coef(i, i.pistar, k) for k in i.classes}, cat.get(fam.key) or cat.get(fam.device),
                      "lean_headline.py"),
            Statement(f"{fam.ns}MeasuredHeadline", fam.key, fam.data, H.VECTOR, {m.pistar: Fraction(1)},
                      {k: m.c[k].get(m.pistar, Fraction(0)) for k in i.classes}, cat.get(H.VECTOR), "lean_headline.py")]
-    dc = POUW / "lean_headline_dc.py"
-    if dc.is_file():
-        D = _load("pouw_lean_headline_dc", dc)
-        cat = getattr(D, "CATCH_ALL", {})
-        for f in D.FAMILIES:
-            for v, kind in ((f.sheet, "Sheet"), (f.measured, "Measured")):
-                x = D.reading(f, v).data
-                out.append(Statement(f"{f.ns}{kind}Headline", f.key, f.data, v, dict(x.lam),
-                                     {k: _at(x.lam, x.c[k]) for k in x.classes},
-                                     (cat.get(f.key) if kind == "Sheet" else None) or cat.get(v), "lean_headline_dc.py"))
+    cat = D.CATCH_ALL
+    for f in D.FAMILIES:
+        for v, kind in ((f.sheet, "Sheet"), (f.measured, "Measured")):
+            x = D.reading(f, v).data
+            out.append(Statement(f"{f.ns}{kind}Headline", f.key, f.data, v, dict(x.lam),
+                                 {k: _at(x.lam, x.c[k]) for k in x.classes},
+                                 (cat.get(f.key) if kind == "Sheet" else None) or cat.get(v), "lean_headline_dc.py"))
     return out
 
 
@@ -165,12 +150,8 @@ def data_programs(key: str, data: Path) -> list[Program]:
 
 def fold_programs() -> list[Program]:
     """`test_lean_headline.py`'s bit-exact fx1 folds, lane instructions a word, and its uniform route."""
-    T = _load("pouw_test_lean_headline", POUW / "tests" / "test_lean_headline.py")
-    out = [Program("sm_120", f"test_lean_headline.py FOLDS[{n!r}]", dict(f), False)
-           for n, f in getattr(T, "FOLDS", {}).items()]
-    if hasattr(T, "UNIFORM_FOLD"):
-        out.append(Program("sm_120", "test_lean_headline.py UNIFORM_FOLD", dict(T.UNIFORM_FOLD), False))
-    return out
+    return [*(Program("sm_120", f"test_lean_headline.py FOLDS[{n!r}]", dict(f), False) for n, f in T.FOLDS.items()),
+            Program("sm_120", "test_lean_headline.py UNIFORM_FOLD", dict(T.UNIFORM_FOLD), False)]
 
 
 def facet_break_programs() -> list[Program]:

@@ -1,6 +1,6 @@
 """The int8 attention's two Triton kernels (`int8_attention_triton.kv_rows` and `lut_rows`) held to Int8KvQuant_v1 and
 Int8LutAttentionRow_v1 at the PTX and SASS level, as `int8_fused.ptx_check` holds the fused linears at the PTX level and
-benchmarks/pouw/harness/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
+verity/protocols/accounting/pouw/prover/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
 (no GPU needed: Triton's own ptxas and nvdisasm) under `int8_fused.OPTS`, the options it is launched with, or taken from a
 GPU process's JIT cache after a launch (`launched`).
 
@@ -47,7 +47,7 @@ from types import ModuleType
 from typing import Any
 
 SCHEMA = "verity-vllm/int8-attention-sass/v1"
-HARNESS = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "harness" / "sass_gate.py"
+HARNESS = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "sass_gate.py"
 ARCHES = (120, 90)
 #: ptxas's IEEE subroutines (div.rn.f32's slow path; div.s64 / div.u64 / rem for integer division by a 64-bit divisor)
 IEEE_SUBROUTINES = frozenset({"__cuda_sm3x_div_rn_noftz_f32_slowpath", "__cuda_sm20_div_s64", "__cuda_sm20_div_u64",
@@ -76,21 +76,22 @@ class ToolMissing(RuntimeError):
 
 @functools.cache
 def harness() -> ModuleType:
-    """benchmarks/pouw/harness/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
+    """verity/protocols/accounting/pouw/prover/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
     spec = importlib.util.spec_from_file_location("pouw_harness_sass_gate", HARNESS)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-def tool(name: str, cap: int = 120) -> str:
-    """Triton's bundled CUDA tool: nvdisasm, or the ptxas Triton compiles `cap` with."""
+def tool(name: str, arch: int = 120) -> str:
+    """Triton's bundled CUDA tool: nvdisasm, or the ptxas Triton compiles `arch` with."""
     import triton
     from triton.backends.nvidia import compiler as nv
-    t = nv.get_ptxas(cap) if name == "ptxas" else getattr(triton.knobs.nvidia, name)
+    t = nv.get_ptxas(arch) if name == "ptxas" else getattr(triton.knobs.nvidia, name)
     path = getattr(t, "path", None)
     if not path or not Path(path).is_file():
-        raise ToolMissing(f"Triton has no {name} for sm_{cap}")
+        raise ToolMissing(f"Triton has no {name} for sm_{arch}")
     return path
 
 
@@ -103,13 +104,13 @@ def variants(T: ModuleType) -> dict[str, tuple[Any, dict, dict]]:
             "lut_rows/d64": (T.lut_rows, LUT_SIG, {"BLOCK_M": T.BLOCK_M, "BLOCK_N": T.BLOCK_N, "BLOCK_D": 64})}
 
 
-def compile_variant(T: ModuleType, variant: str, cap: int, **opts):
-    """Triton's CompiledKernel of one variant for sm_`cap` under `int8_fused.OPTS` (`opts` overriding them)."""
+def compile_variant(T: ModuleType, variant: str, arch: int, **opts):
+    """Triton's CompiledKernel of one variant for sm_`arch` under `int8_fused.OPTS` (`opts` overriding them)."""
     import triton
     from triton.backends.compiler import GPUTarget
     from triton.compiler import ASTSource
     fn, sig, consts = variants(T)[variant]
-    return triton.compile(ASTSource(fn, sig, consts), target=GPUTarget("cuda", cap, 32), options={**T.OPTS, **opts})
+    return triton.compile(ASTSource(fn, sig, consts), target=GPUTarget("cuda", arch, 32), options={**T.OPTS, **opts})
 
 
 def ptx_ops(ptx: str) -> Counter:
@@ -164,7 +165,9 @@ def _int_seed(op: list[str]) -> bool:
 def sass_rules(kernel: str, text: str) -> dict[str, Any]:
     G = harness()
     c: Counter = Counter()
-    flagged_out, foreign, mma = Counter(), Counter(), Counter()
+    flagged_out: Counter = Counter()
+    foreign: Counter = Counter()
+    mma: Counter = Counter()
     for fd in G.parse_nvdisasm(text):
         fn = G.Function(fd)
         sub = {k: name for name, s, e in fn.subroutines.values() for k in range(s, e)}
@@ -223,12 +226,12 @@ def instructions(text: str) -> list[str]:
     return [t for fd in G.parse_nvdisasm(text) for _, t in fd["insns"]]
 
 
-def ptxas(ptx: str, cap: int, fmad: bool) -> bytes:
+def ptxas(ptx: str, arch: int, fmad: bool) -> bytes:
     from triton.backends.nvidia.compiler import sm_arch_from_capability
     with tempfile.TemporaryDirectory() as td:
         src, out = Path(td) / "k.ptx", Path(td) / "k.cubin"
         src.write_text(ptx)
-        cmd = [tool("ptxas", cap), "-lineinfo", *([] if fmad else ["--fmad=false"]), f"--gpu-name={sm_arch_from_capability(cap)}",
+        cmd = [tool("ptxas", arch), "-lineinfo", *([] if fmad else ["--fmad=false"]), f"--gpu-name={sm_arch_from_capability(arch)}",
                str(src), "-o", str(out)]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode:
@@ -236,20 +239,20 @@ def ptxas(ptx: str, cap: int, fmad: bool) -> bytes:
         return out.read_bytes()
 
 
-def fmad_rule(ptx: str, cap: int) -> dict[str, Any]:
-    on, off = (instructions(listing(ptxas(ptx, cap, f))) for f in (True, False))
+def fmad_rule(ptx: str, arch: int) -> dict[str, Any]:
+    on, off = (instructions(listing(ptxas(ptx, arch, f))) for f in (True, False))
     ffma = [sum(t.split()[0].startswith("FFMA") for t in x) for x in (on, off)]
     same = on == off
     return {"same": same, "ffma_contraction_allowed": ffma[0], "ffma_fmad_false": ffma[1],
-            "refused": [] if same else [f"fmad: ptxas contracts this PTX when allowed ({ffma[0]} FFMA against {ffma[1]} with "
-                                        "--fmad=false)"]}
+            "refused": [] if same else [(f"fmad: ptxas contracts this PTX when allowed ({ffma[0]} FFMA against {ffma[1]} with "
+                                         "--fmad=false)")]}
 
 
-def gate(kernel: str, ptx: str, cubin: bytes, cap: int) -> dict[str, Any]:
+def gate(kernel: str, ptx: str, cubin: bytes, arch: int) -> dict[str, Any]:
     """The verdict on one compiled kernel: its PTX, ptxas's build of it with and without contraction, and its SASS."""
-    p, f, s = ptx_rules(kernel, ptx), fmad_rule(ptx, cap), sass_rules(kernel, listing(cubin))
+    p, f, s = ptx_rules(kernel, ptx), fmad_rule(ptx, arch), sass_rules(kernel, listing(cubin))
     refused = p["refused"] + f["refused"] + s["refused"]
-    return {"kernel": kernel, "arch": f"sm_{cap}", "ptx": p, "fmad": f, "sass": s, "refused": refused, "ok": not refused}
+    return {"kernel": kernel, "arch": f"sm_{arch}", "ptx": p, "fmad": f, "sass": s, "refused": refused, "ok": not refused}
 
 
 def gate_compiled(compiled) -> dict[str, Any]:
@@ -266,6 +269,7 @@ def div_full_mutant(where: Path) -> ModuleType:
     path = where / "int8_attention_triton_div_full.py"
     path.write_text(src.replace(old, "x / s"))
     spec = importlib.util.spec_from_file_location("int8_attention_triton_div_full", path)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -276,15 +280,15 @@ def unrounded(ptx: str) -> str:
     return re.sub(r"\b(mul|add|sub)\.rn\.f32\b", r"\1.f32", ptx)
 
 
-def negatives(T: ModuleType, where: Path, cap: int) -> dict[str, Any]:
+def negatives(T: ModuleType, where: Path, arch: int) -> dict[str, Any]:
     """Each must be refused, except kv_rows with contraction allowed, which must compile to the same SASS and pass."""
-    lut = compile_variant(T, "lut_rows/d128", cap, enable_fp_fusion=True)
-    shipped = compile_variant(T, "lut_rows/d128", cap)
+    lut = compile_variant(T, "lut_rows/d128", arch, enable_fp_fusion=True)
+    shipped = compile_variant(T, "lut_rows/d128", arch)
     stripped = unrounded(shipped.asm["ptx"])
-    kv_on, kv_off = (compile_variant(T, "kv_rows/paged", cap, enable_fp_fusion=f) for f in (True, False))
-    mutant = compile_variant(div_full_mutant(where), "kv_rows/paged", cap)
+    kv_on, kv_off = (compile_variant(T, "kv_rows/paged", arch, enable_fp_fusion=f) for f in (True, False))
+    mutant = compile_variant(div_full_mutant(where), "kv_rows/paged", arch)
     return {"lut_rows contraction allowed": gate_compiled(lut),
-            "lut_rows PTX unrounded through ptxas": gate("lut_rows", stripped, ptxas(stripped, cap, True), cap),
+            "lut_rows PTX unrounded through ptxas": gate("lut_rows", stripped, ptxas(stripped, arch, True), arch),
             "kv_rows div.full": gate_compiled(mutant),
             "kv_rows contraction allowed": {**gate_compiled(kv_on), "same_sass": instructions(listing(kv_on.asm["cubin"]))
                                             == instructions(listing(kv_off.asm["cubin"]))}}
@@ -305,15 +309,16 @@ def main(argv: list[str] | None = None) -> int:
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "triton": __import__("triton").__version__, "compiled": {},
                            "negatives": {}, "launched": []}
     with tempfile.TemporaryDirectory() as td:
-        for cap in ARCHES:
+        for arch in ARCHES:
             for v in variants(T):
-                doc["compiled"][f"{v}/sm_{cap}"] = r = gate_compiled(compile_variant(T, v, cap))
-                print(f"[sass] {v} sm_{cap} ok={r['ok']} {r['sass']['census']} {r['refused'][:2]}", flush=True)
-            doc["negatives"][f"sm_{cap}"] = neg = negatives(T, Path(td), cap)
+                doc["compiled"][f"{v}/sm_{arch}"] = r = gate_compiled(compile_variant(T, v, arch))
+                print(f"[sass] {v} sm_{arch} ok={r['ok']} {r['sass']['census']} {r['refused'][:2]}", flush=True)
+            doc["negatives"][f"sm_{arch}"] = neg = negatives(T, Path(td), arch)
             for name, r in neg.items():
-                print(f"[negative] {name} sm_{cap} ok={r['ok']} {r.get('same_sass', '')} {[x[:120] for x in r['refused']]}", flush=True)
+                print(f"[negative] {name} sm_{arch} ok={r['ok']} {r.get('same_sass', '')} {[x[:120] for x in r['refused']]}", flush=True)
     if a.launch:
         import torch
+
         from tests.engine import int8_batch_gpu as B
         for i, case in enumerate([(32, 8, 128, 8, 600, 16, 1.0), (8, 2, 64, 6, 200, 16, 1.0)]):
             B.run_case(7000 + i, case)

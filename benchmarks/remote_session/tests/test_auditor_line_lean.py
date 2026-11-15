@@ -1,4 +1,4 @@
-"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `remote-audit-verifier`'s
+"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `poub-verifier`'s
 `line_record` request off the record, or its `line` of groups and windows given), held exactly to `line.py`'s on the
 same inputs: a disagreement refuses the line, naming both values, whether
 the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
@@ -28,12 +28,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
-from verity.protocols.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.poub.verifier import audit, codec, line, receipts  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, codec, line, receipts  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
+RECORDED_DISK = 4.4e9
+"""The disks' rate gate runs 5-7 were read at, which `auditor_line.RATES` has since lowered to the card's measurement."""
 OLD = {"4.4e+09": line.TIME_HELD, "5.4e+10": line.LINK_CHARGED}
-"""The recorded lines' forms by today's names (`auditor_line.RATES`: disk 4.4e9, and disk 4.4e9 plus link 5e10)."""
+"""The recorded lines' forms by today's names (disk 4.4e9, and disk 4.4e9 plus link 5e10)."""
 GROUPS = [{"released_ns": 10 ** 9 * g, "last_ns": 10 ** 9 * g + 10 ** 8, "passes": 2, "least": 1000, "weights": 1200,
            "hbm": 1600, "host": 400} for g in range(7)]
 INPUTS = {"groups": GROUPS, "per": 2, "blocks": 1000, "block_bytes": 4096, "chip_bytes": 4096, "node_bytes": 4096000,
@@ -55,7 +57,7 @@ RECORD = {**{k: INPUTS[k] for k in ("per", "block_bytes", "chip_bytes", "node_by
                      "blocks": 1000, "appended": 0, "released": 0, "lifetime": 2, "pace": {"k": 2, "window_ns": 10 ** 9},
                      "appends": None, "registration": REGISTRATION.digest.hex()}}
 """`INPUTS`' session read off its record of `REGISTRATION`: window t group t, two passes over the 1000 chunks, 1500 of
-its 2000 receipts drawn (`line.record_inputs_json`'s form)."""
+its 2000 receipts sampled (`line.record_inputs_json`'s form)."""
 
 
 @pytest.fixture(scope="module")
@@ -176,7 +178,7 @@ def test_the_leans_line_is_the_record_of_gate_runs_5_to_7(lean, g):
     the same. That holds but for `ULP`'s, each the float beside the exact share's nearest and no nearer it; and the
     line at each T is the recorded one, its session the record's."""
     run = json.loads(gzip.decompress((FIXTURES / f"gate_run_{g}.json.gz").read_bytes()))
-    assert run["gate_run"] == g and run["rates"] == al.rates_at(bursts="none")
+    assert run["gate_run"] == g and run["rates"] == al.rates_at(RECORDED_DISK, bursts="none")
     got, off = {}, set()
     for s in run["sessions"]:
         inputs = {**s["inputs"], "groups": [dict(zip(line.GROUP, x)) for x in s["inputs"]["groups"]]}

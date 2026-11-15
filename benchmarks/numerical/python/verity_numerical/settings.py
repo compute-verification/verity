@@ -1,8 +1,8 @@
 """Every environment variable ``verity_numerical`` reads, declared once in `REGISTRY` and read only through it: as an
 attribute of this module (``settings.RESEARCH_RUN_ID``) or by name (`get`), its value parsed from the environment at that
-read, or its default when the variable is unset or empty.  ``verity/settings.py`` says what a `Setting` and its roles are.
+read, or its default when the variable is unset or empty.  ``tools/config/verity_config/verity_settings.py`` says what a `Setting` and its roles are.
 
-The registry is built on ``verity/settings.py`` alone: a pod's job runs this package with the repository's root and
+The registry is built on ``tools/config/verity_config/verity_settings.py`` alone: a pod's job runs this package with the repository's root and
 ``benchmarks/numerical/python`` on its path and no other distribution of the workspace, so the variables research's runner
 sets are declared here rather than read from ``verity_config.settings.SHARED``.  It owns no prefix.
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.settings import VALUE, WHERE, Registry, Setting, present
+from verity_config.verity_settings import VALUE, WHERE, EnvSettings, Setting, present
 
 __all__ = ["REGISTRY", "STANDALONE", "get"]
 
@@ -22,7 +22,7 @@ RECORD_SCHEMA = "verity-numerical/settings/v1"
 STANDALONE = ("bench/placement.py",)
 
 S = Setting
-REGISTRY = Registry(
+REGISTRY = EnvSettings(
     __file__, (),
     # ---- research's runner sets these for a run
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run's id: a result and a generated set's provenance name it; unset, "

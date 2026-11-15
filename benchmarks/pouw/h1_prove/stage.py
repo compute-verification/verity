@@ -1,9 +1,9 @@
 """stage.py K WORK: the H1 tile unit's statement circuit, built once, and each requested round staged on it (the prover's).
 
 The circuit (`h1unit.Shape(K).stager`, written once to WORK/circuit.txt) is the long step at K = 4096, so it is built while
-the window is served and sampled: once `run.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
+the window is served and sampled: once `recorded.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
 "calls"}``), the statement is bound to the window's Program and template-instance partition (`h1unit.Shape.window`), so
-the Lean verifier derives each instance's unit from its own copy of them. `run.py` then drops a request in WORK/requests/
+the Lean verifier derives each instance's unit from its own copy of them. `recorded.py` then drops a request in WORK/requests/
 for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
 rows, the sampled proof blocks' instances in order, and their indices in the Program), and this stages it with Flock's
 `UnitStager.stage` under the window's own salts as a shared-row statement (`h1unit.statement_tables`): each A port's, B
@@ -36,8 +36,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
-import h1unit as U  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U  # noqa: E402
+
+import h1form as F  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
 
@@ -53,14 +55,14 @@ def _ports(ps) -> list:
 def check_against_reference(rows: dict, outs: dict, r: int = U.TILE[0], c: int = U.TILE[1]) -> None:
     """Each instance's staged receipt and ok words are `h1zy.reference`'s (over v3's tile under ``H1_TILE=v3``) on its
     rows' codes and scales (`h1unit.split_row`), its record (`h1unit.split_record`), salt, position and roots."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
+    from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
     salt, units, roots = bytes(rows["salt"]), rows["units"], rows["roots"]
     for i, u in enumerate(units):
         a = [U.split_row(rows[f"w_a{x}"][i]) for x in range(r)]
         b = [U.split_row(rows[f"w_b{x}"][i]) for x in range(c)]
         rc, ok = Z.reference([x for x, _s in a], [x for x, _s in b], [s for _x, s in a], [s for _x, s in b],
                              U.split_record(rows["w_zy"][i], r * c), salt, int(u), (bytes(roots[i][0]), bytes(roots[i][1])),
-                             stream=U.tile() == "v3")
+                             stream=F.tile() == "v3")
         if not (np.array_equal(outs["o0"][i], U.receipt_words(rc)) and np.array_equal(outs["o1"][i], [ok])):
             raise AssertionError(f"{NAME}: instance {i} (unit {int(u)}): the lowered circuit's outputs are not h1zy.reference's")
 
@@ -73,7 +75,7 @@ def main() -> None:
     if stage == "fast":
         import fast_stage
         fast_stage.install(work / "scratch")
-    shape = U.Shape(k)
+    shape = F.shape(k)
     while not (work / "window.json").exists():
         if (work / "requests" / "END").exists():
             print("END before the window's shape", flush=True)
@@ -85,7 +87,8 @@ def main() -> None:
     program, query = shape.window([tuple(c) for c in win["calls"]], win["slot"])
     part = P.partition(program, query)
     t_bind = time.time()
-    stager = shape.stager(NAME, circuit=work / "circuit.txt", bind={"partition": P.digest(part), "program": part["program"]})
+    stager = shape.stager(NAME, circuit=work / "circuit.txt", bind={"partition": P.digest(part), "program": part["program"]},
+                          layout=F.layout())
     if _ports(stager.ports) != _ports(shape.ports()):
         raise SystemExit(f"the statement's ports {_ports(stager.ports)} are not h1unit.Shape's {_ports(shape.ports())}")
     counts = stager.low.layout.counts
@@ -135,6 +138,8 @@ def main() -> None:
         print("STAGED " + json.dumps(rec), flush=True)
     print("END", flush=True)
 
+
+__all__ = ["check_against_reference"]
 
 if __name__ == "__main__":
     main()

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from verity_vllm.observe.events import TritonLaunch
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -35,7 +36,7 @@ def op_name(op: str) -> str:
 def triton_name(node: TreeNode) -> str:
     """Last component of a Triton launch's `fn` (`'...batch_invariant.matmul_kernel_persistent' ->
     'matmul_kernel_persistent'`); '' for dispatcher nodes."""
-    if not node.is_triton:
+    if not isinstance(node.enter, TritonLaunch):
         return ""
     return node.enter.fn.rsplit(".", 1)[-1]
 
@@ -92,7 +93,7 @@ def schema_param_names(schema: str) -> list[str]:
 def bound_args(node: TreeNode) -> dict[str, Any]:
     """Arguments by name: Triton launches are recorded by name already; dispatcher calls are bound through their
     schema (positional args -> schema parameter names, then kwargs).  Unnamed positions become `arg<i>`."""
-    if node.is_triton:
+    if isinstance(node.enter, TritonLaunch):
         return dict(node.enter.args)
     names = schema_param_names(node.enter.schema)
     out: dict[str, Any] = {}

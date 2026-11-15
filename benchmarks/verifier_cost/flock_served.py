@@ -1,6 +1,6 @@
 """flock_served.py VALUES KIND WORK [N] [--layout MODE [--structural]]: one kind of a saved served step (`one_stage/a11.py --save-values`'s
 directory, or its `.tar.gz`) staged as a11.py stages it: the kind's unit Definition as a flat statement (`CS.UnitStager` with
-no layout, the unit's whole netlist in the circuit file), bound to the population program and partition of that one kind,
+no layout, the unit's whole circuit description in the circuit file), bound to the population program and partition of that one kind,
 with the kind's first N saved units (a11's ``--per-kind``; all of them without N) under a11's salt key. So the files are
 a11's, byte for byte while the stager is unchanged, and an a11 session over them verifies against them. ``--layout MODE``
 (``iv/hybrid/4``): the same unit as a templated statement (`CS.UnitStager`'s ``layout``, statement
@@ -27,7 +27,7 @@ sys.path.insert(0, str(ONE_STAGE))
 
 import a11  # noqa: E402
 import a11_kinds as K  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.circuits import codec  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402

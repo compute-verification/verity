@@ -18,8 +18,8 @@ from typing import Any
 import numpy as np
 
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline.serving_templates import SLICES, _bind, template
 from verity_vllm.pipeline.slice_rows import dims
@@ -116,7 +116,7 @@ def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Seq
             if v is None:
                 raise ValueError(f"{m.key} {p} reads {param!r}: give its committed value, or no values at all")
             at = np.asarray(positions, dtype=np.int64)[refs]
-            if v.words != dict(m.rows + m.outs)[p] or not np.array_equal(CS.value_rows(v, at), np.asarray(d[part][p], dtype=np.uint16)):
+            if CS.value_words(v) != dict(m.rows + m.outs)[p] or not np.array_equal(CS.value_rows(v, at), np.asarray(d[part][p], dtype=np.uint16)):
                 raise ValueError(f"{m.key} {p}: the rows its units {'wrote' if part == 'outs' else 'read'} aren't {param!r}'s "
                                  f"committed rows {at[:4].tolist()}...")
             if part == "outs":

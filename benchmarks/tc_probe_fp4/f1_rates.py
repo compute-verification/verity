@@ -59,7 +59,7 @@ sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
 
 # isort: split
-# verity_config is importable once probe has put verity/configuration/config on sys.path
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
@@ -1329,7 +1329,7 @@ def collect(args: argparse.Namespace) -> int:
     (out / "f1_table.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     ok = not failures and not missing
     meas = [{"name": f"{n}_fp4_slots_per_product", "value": v["fp4_slots_per_product"], "unit": "NVFP4 products"} for n, v in rows.items()]
-    meas += [{"name": f"{n}_products_per_sm_per_clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
+    meas += [{"name": f"circuits/fp4-price.{n}.products-per-sm-per-clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
              for n, v in rows.items()]
     clocks = sorted({f["clocks"] for f in fams.values()})
     res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,

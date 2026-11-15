@@ -17,7 +17,7 @@ set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 art=${1:?usage: lean_verify.sh ART [--with ART PATH]... [lean-verify flags]}
 shift
-L=$PWD/verity/protocols/flock/verifier
+L=$PWD/verity/protocols/proofs/flock/verifier
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

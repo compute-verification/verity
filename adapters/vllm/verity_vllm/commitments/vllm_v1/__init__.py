@@ -1,8 +1,8 @@
 """``vllm-v1``: the commitment framing vLLM's serving Commit path emits, as a named scheme.
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
-beside this file.  Conformance vectors: ``vectors.json`` beside it, written by
-``python -m verity_vllm.commitments.vllm_v1.vectors``.  This module is the plain reference: stdlib ``hashlib``
+beside this file.  Conformance vectors: ``vectors.json`` beside it, which
+``adapters/vllm/tests/commitments/vectors.py`` renders from this module.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.
 
 The tree rule (pairs ``node``, an odd trailing child ``lift``, zero leaves ``empty``) and the id leaf are the ones
@@ -17,16 +17,24 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.errors import InvalidArtifact
-
-from ..leaves import empty_root, fold_path, levels, open_path, path_shape
-from ..leaves import ids_digest as ids_digest
-from ..leaves import leaf_hash as id_leaf
+from verity.commitments import domains
 from verity.commitments.identity import identity_digest, identity_digest_sha512
-from ..leaves import LEAF_TAG, shape_text
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.scheme import LeafLayout, Path
 from verity.commitments.scheme import sha as _sha
+from verity.errors import InvalidArtifact
+
+from ..leaves import (
+    LEAF_TAG,
+    empty_root,
+    fold_path,
+    levels,
+    open_path,
+    path_shape,
+    shape_text,
+)
+from ..leaves import ids_digest as ids_digest
+from ..leaves import leaf_hash as id_leaf
 
 __all__ = [
     "FA2H_KIND_CHUNK",
@@ -40,7 +48,7 @@ __all__ = [
     "TREE",
     "TREE_SHA512",
     "Tree",
-    "VllmV1",
+    "Scheme",
     "domain_digest",
     "id_leaf_layout",
     "pos_leaf_layout",
@@ -80,17 +88,17 @@ NAME = "vllm-v1"
 NAME_SHA512 = "vllm-v1-sha512"
 NAMES = {"sha256": NAME, "sha512": NAME_SHA512}
 
-POS_LEAF_TAG = b"verity/pos-leaf/v0"
+POS_LEAF_TAG = domains.POS_LEAF.encode()
 FA2H_TAG = 0x68326166  # b"fa2h" read as a little-endian u32
 FA2H_VERSION = 7
 FA2H_KIND_CHUNK = 1
 
-SEMANTIC_ROOT_TAG = b"verity/semantic-root/v0"
-STEP_ROOT_TAG = b"verity/fa2c/root/v0"
-RUN_ROOT_TAG = b"verity/cmt-integ/run-root/v0"
-WEIGHTS_ROOT_TAG = b"verity/cmt-integ/weights-root/v0"
-STREAM_ROOT_TAG = b"verity/fa2-hidden/root/v7"
-THREAD_ROOT_TAG = b"verity/fa2-hidden/thread-root/v7"
+SEMANTIC_ROOT_TAG = domains.SEMANTIC_ROOT.encode()
+STEP_ROOT_TAG = domains.FA2C_ROOT.encode()
+RUN_ROOT_TAG = domains.CMT_INTEG_RUN_ROOT.encode()
+WEIGHTS_ROOT_TAG = domains.CMT_INTEG_WEIGHTS_ROOT.encode()
+STREAM_ROOT_TAG = domains.FA2_HIDDEN_ROOT.encode()
+THREAD_ROOT_TAG = domains.FA2_HIDDEN_THREAD_ROOT.encode()
 
 _U32 = 1 << 32
 _U64 = 1 << 64
@@ -247,7 +255,7 @@ def verify_opening(
 
 
 class Tree:
-    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`VllmV1` folds with."""
+    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`Scheme` folds with."""
 
     def __init__(self, hash: str = "sha256") -> None:
         self.hash = hash
@@ -333,16 +341,17 @@ def weights_root(geo_digest: bytes, names_digest: bytes, tensor_roots: Sequence[
 def stream_ctx_digest(*, launch_tag: int, src_mask: int, chunk_words: int, leaf_count: int, hash: str = "sha256") -> bytes:
     """SHA-256 of the ASCII text ``{"chunk_words": C, "launch_tag": T, "leaf_count": N, "src_mask": S}`` (decimal)."""
 
-    text = '{"chunk_words": %d, "launch_tag": %d, "leaf_count": %d, "src_mask": %d}' % (
-        _u32(chunk_words, "chunk_words"), _u32(launch_tag, "launch_tag"), _u32(leaf_count, "leaf_count", _U64), _u32(src_mask, "src_mask", 1 << 8)
-    )
+    c, t = _u32(chunk_words, "chunk_words"), _u32(launch_tag, "launch_tag")
+    n, s = _u32(leaf_count, "leaf_count", _U64), _u32(src_mask, "src_mask", 1 << 8)
+    text = f'{{"chunk_words": {c}, "launch_tag": {t}, "leaf_count": {n}, "src_mask": {s}}}'
     return _sha(hash)(text.encode("ascii")).digest()
 
 
 def thread_ctx_digest(*, launch_tag: int, src_mask: int, hash: str = "sha256") -> bytes:
     """SHA-256 of the ASCII text ``{"launch_tag": T, "src_mask": S}`` (decimal)."""
 
-    text = '{"launch_tag": %d, "src_mask": %d}' % (_u32(launch_tag, "launch_tag"), _u32(src_mask, "src_mask", 1 << 8))
+    t, s = _u32(launch_tag, "launch_tag"), _u32(src_mask, "src_mask", 1 << 8)
+    text = f'{{"launch_tag": {t}, "src_mask": {s}}}'
     return _sha(hash)(text.encode("ascii")).digest()
 
 
@@ -570,7 +579,7 @@ def id_leaf_layout(canonical_id: str, dtype: str, shape: Sequence[int], nbytes: 
 
 Domain = SemanticDomain | StepDomain | StreamDomain | ThreadDomain
 
-DOMAIN_DIGEST_TAG = "verity/vllm-v1/domain/v1"
+DOMAIN_DIGEST_TAG = domains.VLLM_V1_DOMAIN
 _DOMAIN_KIND = {SemanticDomain: "semantic", StepDomain: "step", StreamDomain: "stream", ThreadDomain: "thread"}
 
 
@@ -595,7 +604,7 @@ def domain_digest(domain: Domain) -> bytes:
     return bytes.fromhex(identity_digest(DOMAIN_DIGEST_TAG, doc))
 
 
-class VllmV1:
+class Scheme:
     """``vllm-v1`` over a statement's ports, each a verifier-held domain; ``root`` is the published (bound) root.
 
     Position-leaf ports need ``value_nbytes[port](position)``: the value length the layout (template or layout digest)

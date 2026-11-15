@@ -4,15 +4,19 @@ through the last layer, with the v1 Definitions.  Put in the compiler's form it 
 instance and operand for operand, in both operand forms; and the Build's Program is its own fixed point."""
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 
 import pytest
-
 from verity.circuits.codec import encode_program
+
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match.instance_sequence import RootView
-from verity_vllm.check.match.program_compare import _canon_step_relative as canon_step_relative, compare_steps
+from verity_vllm.check.match.program_compare import (
+    _canon_step_relative as canon_step_relative,
+)
+from verity_vllm.check.match.program_compare import compare_steps
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 
@@ -79,12 +83,36 @@ def test_a_changed_views_positions_are_its_new_sequences(descriptors, compact):
     B.to_compiler_form()
     fresh.to_compiler_form()
     want = seqs(fresh)
-    spare = [[] for _ in range(256)]
+    spare: list[list] = [[] for _ in range(256)]
     del first
     again = seqs(B)
     assert again == want and len(spare) == 256
     assert [canon_step_relative(B, i, again, False) for idxs in again for i in idxs] == [
         canon_step_relative(fresh, i, want, False) for idxs in want for i in idxs]
+
+
+#: per operand form: the digest of every operand `canon_step_relative` gives in `test_the_step_relative_operands_are_these`'s
+#: four passes, and how many producers each pass remaps ("N") and leaves as a pad ("N-PAD")
+STEP_RELATIVE = {False: ("f7f3ac1e21c38753b765fb4c117576c34568b5cbb4f44e3347ef5c1ca8d26560", [550, 107, 107, 550], [0, 97, 97, 0]),
+                 True: ("0d02a42c8a36abf21e26f66e5622856bb9b46b33b924efd645732198dcfb346a", [342, 107, 107, 342], [0, 97, 97, 0])}
+
+
+@pytest.mark.parametrize("compact", [False, True])
+def test_the_step_relative_operands_are_these(descriptors, compact):
+    """The step-relative operands of every instance of the unpruned request, in four passes over one view: its own steps,
+    then without the first step (its producers there are pads), the same list unfolded, and its own steps again.  Each
+    pass's list or `unfold` is not the pass before's, so its first call builds the positions and the calls after it read
+    the kept ones."""
+    P = RootView("ran", descriptors[1], {}, tok_node=0, compact=compact)
+    later = [list(idxs) for idxs in P.steps[1:]]
+    h, remapped, pads = hashlib.sha256(), [], []
+    for seqs, unfold in ((P.steps, False), (later, False), (later, True), (P.steps, False)):
+        ops = [canon_step_relative(P, i, seqs, unfold) for idxs in seqs for i in idxs]
+        h.update(json.dumps(ops, separators=(",", ":"), default=str).encode())
+        producers = [t[0] for inst in ops for row in inst for t in row if isinstance(t, tuple) and t]
+        remapped.append(producers.count("N"))
+        pads.append(producers.count("N-PAD"))
+    assert (h.hexdigest(), remapped, pads) == STEP_RELATIVE[compact]
 
 
 @pytest.mark.parametrize("compact", [False, True])
@@ -130,7 +158,7 @@ def test_a_component_naming_only_the_dead_free_versions_is_in_the_form_whatever_
     qkv on the prompt rows), so its derive report alone keeps the fold as it ran and every request compares unequal (Llama-3.2-1B
     int8 B4 on an H200: RMSNormTriton_v5 against the fold's v1 at each request's first norm).  Its Program
     names the dead-free versions and none of the v1s they replace, as the Build's histogram of TINY's request Program does; the
-    unpruned request, a row of record's, and one naming both or neither are not in the form."""
+    unpruned request, a workload of record's, and one naming both or neither are not in the form."""
     from verity_vllm.pipeline.build import _spec_histogram
 
     dead = {"dead_computed_gates": 30912, "approximate": False}

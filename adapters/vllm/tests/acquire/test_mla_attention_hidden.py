@@ -6,22 +6,29 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import types
+from typing import Any
 
 import pytest
 import torch
 
-from verity_vllm.acquire.sources import taps as TAPS
-from verity_vllm.acquire.sources.hidden_source import (attention_hidden, require_hidden_on_every_rank, with_hidden_class)
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT
 from tests.acquire.glm53_model import L, glm_model
+from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.acquire.sources.hidden_source import (
+    attention_hidden,
+    require_hidden_on_every_rank,
+    with_hidden_class,
+)
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT
 
-GLM_ROWS = [{"family": "weights", "op_path": "model.layers.0.self_attn.fused_qkv_a_proj", "step": "*"},
-            {"family": "instance_outputs", "op_path": "model.layers.0.self_attn.indexer.indexer_op", "output_member": "topk", "step": 0},
-            {"family": "instance_outputs", "op_path": "model.layers.0.self_attn.mla_attn", "output_member": "out", "step": 0},
-            {"family": "moe_block_stream", "op_path": "moe/L3", "output_member": "router_w", "step": 0},
-            {"family": "tp_rank_partials", "op_path": "model.layers.0.self_attn.o_proj", "step": 0},
-            {"family": "input_token_ids", "op_path": "model.embed_tokens", "step": 0},
-            {"family": "sampled_token_ids", "op_path": "runner.sampler", "step": 0}]
+GLM_ROWS: list[dict[str, Any]] = [
+    {"family": "weights", "op_path": "model.layers.0.self_attn.fused_qkv_a_proj", "step": "*"},
+    {"family": "instance_outputs", "op_path": "model.layers.0.self_attn.indexer.indexer_op", "output_member": "topk", "step": 0},
+    {"family": "instance_outputs", "op_path": "model.layers.0.self_attn.mla_attn", "output_member": "out", "step": 0},
+    {"family": "moe_block_stream", "op_path": "moe/L3", "output_member": "router_w", "step": 0},
+    {"family": "tp_rank_partials", "op_path": "model.layers.0.self_attn.o_proj", "step": 0},
+    {"family": "input_token_ids", "op_path": "model.embed_tokens", "step": 0},
+    {"family": "sampled_token_ids", "op_path": "runner.sampler", "step": 0},
+]
 FA3_ROWS = GLM_ROWS[:1] + [{"family": "fa3_hidden_m1_stream", "op_path": "fa3.m1/L0", "output_member": "matReq_v9", "step": 0}]
 
 
@@ -117,7 +124,11 @@ def test_the_glm_stand_in_names_no_hidden_family():
 def _glm_committer(sources):
     """A native committer over the GLM-5.3 stand-in's attention layers (`model.layers.{i}.self_attn`, `DeepseekV32Attention`), with
     `sources` attached, after two steps that committed each layer's output once."""
-    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+    from verity_vllm.commit.committer.native_host import (
+        GPU_CHUNK_BYTES,
+        NativeHostCommitter,
+        TensorMeta,
+    )
 
     mods = [(n, m) for n, m in glm_model().named_modules() if n.endswith(".self_attn")]
     com = NativeHostCommitter(None, run_id="glm53-mla", gpu_tree=True)

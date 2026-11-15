@@ -1,7 +1,7 @@
 /-
-The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
-records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
-(coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
+The integrity profile: what an accepted check established, as `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`
+records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
+hierarchy (coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
 `IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.
 
 A protocol whose acceptance is not a sampling design over proof blocks (a timed storage audit, a certificate check) declares
@@ -12,6 +12,9 @@ module
 
 public import Base.Canon
 public import CoreProtocol.Ratio
+meta import Lean.Data.Json
+meta import Base.Canon
+meta import CoreProtocol.Ratio
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -28,20 +31,50 @@ structure Stratum where
   k : Nat
   deriving BEq, DecidableEq, Repr
 
-/-- How a level is sampled: each member independently with probability `p`, exactly `k` members uniformly, or uniform
-samples inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
-inductive Draw where
+/-- A stratum of the work sampling design: its name, size and `k`, the work of each of its members (an integer in any
+fixed unit, `0` for members that do none) and its floor, the fewest members it samples (`profile.WorkStratum`). -/
+structure WorkStratum extends Stratum where
+  work : Nat
+  floor : Nat
+  deriving BEq, DecidableEq, Repr
+
+/-- How a level is sampled, its sampling design: each member independently with probability `p`, exactly `k` members
+uniformly, uniform samples inside disjoint strata of the checked level, or the work design `work:k`, uniform samples inside
+strata each recorded with its `k_s`, its members' work and its floor (`profile.Bernoulli`, `Subset`, `Stratified`,
+`Work`). The sample of a work design is a stratified one at its `k_s`. The profile records each `k_s` and does not hold
+it to the rule that sizes it by work: the draw's own check does, and a reader that relies on the rule checks it
+there. -/
+inductive SamplingDesign where
   | bernoulli (p : Ratio)
   | subset (k : Nat)
   | stratified (strata : Array Stratum)
+  | work (k : Nat) (strata : Array WorkStratum)
   deriving BEq, DecidableEq, Repr
+
+/-- A work design's population work, `Σ_s work_s · size_s`. -/
+def WorkStratum.total (strata : Array WorkStratum) : Nat := strata.foldl (fun acc s => acc + s.work * s.size) 0
+
+/-- Why `strata` are not the work design `work:k`'s, else none (`profile.Work`'s refusals): `1 ≤ k ≤ population`,
+distinct names, a floor of at least one in every stratum, and a population that does some work. A stratum's `k` is read
+as recorded and compared with no rule. -/
+def WorkStratum.problem (k : Nat) (strata : Array WorkStratum) : Option String := Id.run do
+  let population := strata.foldl (fun acc s => acc + s.size) 0
+  if strata.isEmpty || k < 1 || k > population then return some "a work design needs strata and 1 <= k <= population"
+  let total := WorkStratum.total strata
+  if total == 0 then return some "a work design's population does no work"
+  let mut seen : Array String := #[]
+  for s in strata do
+    if seen.contains s.name then return some s!"stratum '{s.name}' twice"
+    seen := seen.push s.name
+    if s.floor < 1 then return some s!"stratum '{s.name}': a floor is at least one"
+  return none
 
 structure Level where
   name : String
   /-- The id of the query whose family is this level's members, or `none` for a level bound to no Program. -/
   query : Option String
   size : Nat
-  draw : Option Draw
+  draw : Option SamplingDesign
   deriving BEq, DecidableEq, Repr
 
 structure Integrity where
@@ -61,12 +94,16 @@ structure Integrity where
 
 private def sorted (xs : Array String) : Json := Json.arr ((xs.qsort (· < ·)).map Json.str)
 
-def Draw.toJson : Draw → Json
+def SamplingDesign.toJson : SamplingDesign → Json
   | .bernoulli p => Json.mkObj [("bernoulli", Json.str p.toString)]
   | .subset k => Json.mkObj [("subset", Json.num k)]
   | .stratified strata => Json.mkObj [("law", Json.str "stratified"),
       ("strata", Json.arr (strata.map fun s =>
         Json.mkObj [("name", Json.str s.name), ("size", Json.num s.size), ("k", Json.num s.k)]))]
+  | .work k strata => Json.mkObj [("law", Json.str "work"), ("k", Json.num k),
+      ("strata", Json.arr (strata.map fun s =>
+        Json.mkObj [("name", Json.str s.name), ("size", Json.num s.size), ("k", Json.num s.k),
+          ("work", Json.num s.work), ("floor", Json.num s.floor)]))]
 
 def Level.toJson (l : Level) : Json :=
   Json.mkObj [("name", Json.str l.name), ("query", match l.query with | some q => Json.str q | none => Json.null),
@@ -92,21 +129,29 @@ private def nullOr {α} (f : Json → String → V α) (j : Json) (k ctx : Strin
   | Json.null => pure none
   | v => some <$> f v s!"{ctx}.{k}"
 
-def Draw.ofJson (j : Json) (ctx : String) : V Draw := do
+def SamplingDesign.ofJson (j : Json) (ctx : String) : V SamplingDesign := do
   let d ← if Flock.J.has j "bernoulli" then do pure (.bernoulli (← Ratio.ofString (← Flock.J.str j "bernoulli" ctx) s!"{ctx}.bernoulli"))
     else if Flock.J.has j "subset" then do pure (.subset (← Flock.J.nat j "subset" ctx))
+    else if Flock.J.has j "strata" && j.getObjVal? "law" matches .ok (.str "work") then do
+      let k ← Flock.J.nat j "k" ctx
+      let strata ← (← Flock.J.arr j "strata" ctx).mapM fun s => do
+        let c := s!"{ctx}.strata"
+        pure ({ name := ← Flock.J.str s "name" c, size := ← Flock.J.nat s "size" c, k := ← Flock.J.nat s "k" c,
+                work := ← Flock.J.nat s "work" c, floor := ← Flock.J.nat s "floor" c } : WorkStratum)
+      if let some why := WorkStratum.problem k strata then throw s!"{ctx}: {why}"
+      pure (.work k strata)
     else if Flock.J.has j "strata" then do
       let strata ← (← Flock.J.arr j "strata" ctx).mapM fun s => do
         let c := s!"{ctx}.strata"
         pure ({ name := ← Flock.J.str s "name" c, size := ← Flock.J.nat s "size" c, k := ← Flock.J.nat s "k" c } : Stratum)
       pure (.stratified strata)
-    else throw s!"{ctx}: not a bernoulli, subset or stratified draw"
-  exactly Draw.toJson j ctx d
+    else throw s!"{ctx}: not a bernoulli, subset, stratified or work draw"
+  exactly SamplingDesign.toJson j ctx d
 
 def Level.ofJson (j : Json) (ctx : String) : V Level := do
   let l : Level := {
     name := ← Flock.J.str j "name" ctx, query := ← nullOr Flock.J.asStr j "query" ctx, size := ← Flock.J.nat j "size" ctx,
-    draw := ← nullOr Draw.ofJson j "draw" ctx }
+    draw := ← nullOr SamplingDesign.ofJson j "draw" ctx }
   exactly Level.toJson j ctx l
 
 /-- The inverse of `toJson`. `drawn` is read in level order; a count for a level the profile doesn't name is refused. -/
@@ -123,5 +168,15 @@ def Integrity.ofJson (j : Json) (ctx : String := "profile") : V Integrity := do
     covered := ← strs j "covered" ctx, levels, delta := ← Ratio.ofString (← Flock.J.str j "delta" ctx) s!"{ctx}.delta",
     drawn }
   exactly Integrity.toJson j ctx p
+
+private def workExample : SamplingDesign :=
+  .work 3 #[{ name := "a", size := 4, k := 2, work := 3, floor := 1 }, { name := "b", size := 6, k := 1, work := 1, floor := 1 }]
+
+#guard (SamplingDesign.ofJson workExample.toJson "draw").toOption == some workExample
+#guard (SamplingDesign.ofJson (SamplingDesign.stratified #[{ name := "a", size := 4, k := 2 }]).toJson "draw").toOption ==
+  some (.stratified #[{ name := "a", size := 4, k := 2 }])
+-- A stratum's `k` is read as recorded: stratum `a`'s is 1 here, where sizing it by its work gives 3, and it reads.
+#guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 1, work := 3, floor := 1 }]).toJson "draw").isOk
+#guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 3, work := 0, floor := 3 }]).toJson "draw").isOk == false
 
 end Core

@@ -16,6 +16,8 @@ from training_slowdown import formalism as F
 from training_slowdown.gates import per_mac
 
 FIXTURES = Path(__file__).parent / "fixtures"
+#: the calculator's choices of the work, the subsets of M the entry point's figure names
+SUBWORKS = calculator._min_cut().SUBWORKS
 
 
 def measured(u1=1e8, sigma=0.8, delta=None, dgrad=None, decoder=0.0, tail=0.0, affected=0.5) -> F.Measured:
@@ -79,7 +81,7 @@ def test_the_tail_profiles():
 
 def test_varying_token_blocks_take_the_largest_per_token_affected_count():
     """Two parts whose token blocks differ: the token form holds with α_max in place of a common count,
-    ρ ≥ (1 − x0) c Σ|T ∩ A| / (α_max |C| s*) = σ (1 − x0) (s/s*) (ᾱ/α_max)."""
+    the record's slowdown ≥ (1 − x0) c Σ|T ∩ A| / (α_max |C| s*) = σ (1 − x0) (s/s*) (ᾱ/α_max)."""
     a = F.Part(gates=1e12, tokens=1e3, token_gates=0.9e12, affected_gates=0.8e12, delta_grad_bits=None)
     b = F.Part(gates=1e12, tokens=1e3, token_gates=0.5e12, affected_gates=0.2e12, delta_grad_bits=None)
     u = F.even(1e9)
@@ -97,7 +99,7 @@ def test_varying_token_blocks_take_the_largest_per_token_affected_count():
 
 def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     """Training fits when compute (Δ + sτ), reduction (2Δ_grad) and update application (Δ + Δ_grad) each fit in k;
-    ρ is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
+    the record's slowdown is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
     (`capped`), so x0's bound is 1 and the token form 0."""
     c, k = 1e13, 1e6
     s_tau = c / 0.8e9 * 32
@@ -326,7 +328,7 @@ EMA = {"kind": "a Python number read back in several earlier steps", "where": "t
 ])
 def test_a_trace_the_capture_cannot_vouch_for_is_refused_never_scored(trace, e_bytes, reason):
     """A clip on a read-back estimate leaves the trace with no update (affected share 0, u(1) 0), which would score
-    ρ = 1 whatever the update. A data-dependent capture, a Python number folded over steps, a
+    the record's slowdown as 1 whatever the update. A data-dependent capture, a Python number folded over steps, a
     nonempty E with no update in its trace and a trace without the read-back lists are each refused with the
     reason."""
     row = traced({k: v for k, v in trace.items() if v is not None}, e_bytes)
@@ -457,12 +459,12 @@ STATED = {"k": policy.CONSOLE[1], "he": stated(policy.CONSOLE[1])}
 
 
 def test_the_products_term_is_the_theorem_of_records_on_m():
-    """The products kind's term is the theorem of record's ρ on M (the entry point's, on the products' `he`) and the record's
-    |C|, linear in c at a fixed k, and the published row rests on (H) at the β it took and (E) at its b_y, which
-    `products_rests_on` carries wherever the term is measured. It is unmeasured at a k the products weren't
-    classified at, on products that come without M (no rows), on rows that don't flag a gather's and where an
-    elementwise op fans out into an operand. The published row names the code that wrote the products' trace where
-    the trace records it, and None where it doesn't."""
+    """The products kind's term is the slowdown the theorem of record gives on M (the entry point's, on the products' `he`) and the record's
+    |C|, linear in c at a fixed k, and the published row rests on (H) at the β it took, (E) at its b_y and the
+    premise on the batch (`work.P_BATCH`), which `products_rests_on` carries wherever the term is measured. It is
+    unmeasured at a k the products weren't classified at, on products that come without M (no rows), on rows that
+    don't flag a gather's and where an elementwise op fans out into an operand. The published row names the code
+    that wrote the products' trace where the trace records it, and None where it doesn't."""
     c, k = 1e11, policy.CONSOLE[1]
     stated = replace(one_part(), products=STATED)
     b = F.bound(stated, c, k)
@@ -478,7 +480,8 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert one["products_rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H)")
     assert all(x in one["products_rests_on"] for x in ("(H)", "β_w = 16 and β_x = 15.9 bits a word", calculator.BETA_K_LABEL,
                                                        "the casts of one value count as one word", "(E)",
-                                                       "b_y = 16 bits an output", "a single counterexample refutes"))
+                                                       "b_y = 16 bits an output", "a single counterexample refutes",
+                                                       work.P_BATCH))
     assert F.CODE_LABEL not in one["products_rests_on"]
     assert one["rests_on"] == (one["products_rests_on"] if one["binding_kind"] == "products" else
                                F.RESTS_ON_CELL[one["binding_kind"]])
@@ -491,8 +494,9 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     fans = F.bound(replace(stated, products=STATED | {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]}), c, k)
     assert fans["terms"]["products"] is None and "breaks the premise" in fans["unmeasured"]["products"]
     assert all(x in F.RESTS_ON["products"] for x in ("(H)", "(E)", "F = 2/√3", "β_eff", "K* = ½√(k/β)",
-                                                    calculator.BETA_K_LABEL, F.CODE_LABEL, "casts of one value"))
-    assert all(x in F.RESTS_ON_CELL["products"] for x in ("(H)", "(E)", "a single counterexample refutes"))
+                                                    calculator.BETA_K_LABEL, F.CODE_LABEL, "casts of one value",
+                                                    work.P_BATCH))
+    assert all(x in F.RESTS_ON_CELL["products"] for x in ("(H)", "(E)", "a single counterexample refutes", work.P_BATCH))
     assert F.CELL_SENSITIVITIES == ("reduction", "update")
 
 
@@ -535,12 +539,12 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
         (8, False, False, (False, True)), (1024, False, False, (False, True)), (1024, False, False, (False, True)),
         (1024, True, False, (False, False)), (1024, True, True, (False, False)), (4096, False, True, (False, True))]
     fig = figure(he, c, C)
-    assert fig["subset"] == calculator.HE_SUBSETS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
+    assert fig["subset"] == SUBWORKS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
     assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
     dw = [g for g in he["groups"] if g["dw"]]
     N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
     alone = {"N": N, "O": O, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16, "F": 1.0, "C_gates": C}
-    assert fig["subsets"][calculator.HE_SUBSETS[2]] == calculators_count(c, k, alone)
+    assert fig["subsets"][SUBWORKS[2]] == calculators_count(c, k, alone)
     first = figure(he, c, C, tau=16)
     assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
     assert fig["first_steps"] is None and figure(he, c, C, tau=1e3)["first_steps"] == 0
@@ -587,11 +591,11 @@ def test_all_of_m_binds_where_the_count_puts_it_above_the_weight_gradients_and_t
     count = {name: calculators_count(c, k, w) for name, w in (("M", whole), ("dw", alone))}
     assert (fig["subset"], fig["F"], fig["beta_w"], fig["N"], fig["O"]) == (
         "M", calculator._min_cut().share(3), 8.0, whole["N"], whole["O"])
-    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][calculator.HE_SUBSETS[2]]
+    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][SUBWORKS[2]]
     words = F.he_rests_on(fig)
     assert words.startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at β_w = 8 "
                             f"({F.CODE_LABEL}) and β_x = 15.9 bits a word")
-    assert calculator.HE_SUBSETS[2] not in words
+    assert SUBWORKS[2] not in words
     second = calculator._min_cut().slowdown_at_least
     assert second(whole["N"], whole["O"], C, c, k, 8.0 * 15.9, 16.0, whole["F"]) < second(
         alone["N"], alone["O"], C, c, k, 15.9 * 15.9, 16.0, 1.0) < count["dw"]
@@ -644,16 +648,16 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
     fig = figure(he, c, C, beta_code=2.0)
     share = 2 / math.sqrt(3)
 
-    def rho(M: list, bw: float, bx: float, f: float = share) -> float:
+    def slowdown(M: list, bw: float, bx: float, f: float = share) -> float:
         work = {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M), "beta_w": bw, "beta_x": bx,
                 "b_y": 16, "F": f, "C_gates": C}
         return calculators_count(c, k, work)
 
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
     assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
-    assert fig["rho"] == pytest.approx(rho([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
-    assert rho([fwd, dx, dw], 2.0, 8.0) < rho([fwd, dx, dw], 2.0, 15.9)
-    assert fig["rho"] > max(rho([fwd, dw], 2.0, 15.9), rho([dw], 15.9, 8.0), rho([dw], 15.9, 8.0, 1.0)) > 0
+    assert fig["rho"] == pytest.approx(slowdown([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
+    assert slowdown([fwd, dx, dw], 2.0, 8.0) < slowdown([fwd, dx, dw], 2.0, 15.9)
+    assert fig["rho"] > max(slowdown([fwd, dw], 2.0, 15.9), slowdown([dw], 15.9, 8.0), slowdown([dw], 15.9, 8.0, 1.0)) > 0
 
 
 def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
@@ -691,13 +695,16 @@ CODE_NAME = __import__("re").compile(
 
 def test_no_published_string_names_the_code():
     """Every string a panel publishes is plain words, since a reader's page prints them: what the kind and each
-    published ρ rest on, every reason the term is unmeasured (no product rows, no M, a retrace, another k, a broken
-    P-match, a trace of another program), the sensitivities' labels, the record's labels and the label. The code is
-    "training's slowdown code", and a premise is named in words beside its name."""
+    record's published slowdown rest on, every reason the term is unmeasured (no product rows, no M, a retrace, another k, a broken
+    P-match, a trace of another program), the premise on the batch, the sensitivities' labels, the record's labels
+    and the label. The code is "training's slowdown code", and a premise is named in words beside its name."""
     c, k = 1e11, policy.CONSOLE[1]
     static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
               work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS, calculator.he_past(), work.HE_HEAD, work.OTHER_PROGRAM, F.STAND_IN,
-              F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
+              F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL, work.P_BATCH, work.P_REPEATS, work.COUNTED,
+              F.COUNTED_PRODUCTS] + [f(n) for n in ({"positions": 1, "tokens": 9, "measured": 9},
+                                                     {"positions": 1, "tokens": 9, "measured": 3})
+                                     for f in (F.rests_on_products, F.cell_products, F.traced_label, work.batch_premise)]
     strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
     other = {"shapes": 2, "unmatched": 1, "ran": 3, "largest": [[4, 512, 8]]}
     records = [one_part(), one_part(delta=500.0, decoder=5e10), replace(one_part(), products={"k": k})] + [
@@ -711,10 +718,10 @@ def test_no_published_string_names_the_code():
             reasons |= set(b["unmeasured"].values())
             one = F.published(m, c, at)
             strings += [one["label"], one["rests_on"], one["why"] or "", one["products_rests_on"] or ""]
-    alone = F.he_rests_on({"subset": calculator.HE_SUBSETS[2], "F": 1.0, "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
+    alone = F.he_rests_on({"subset": SUBWORKS[2], "F": 1.0, "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
                            "below_width": True, "code_bound": True})
     assert alone.startswith("theorem of record on the weight gradients alone at F = 1, given (H)")
-    strings += [alone, F.SHARED_LABEL, *calculator.HE_SUBSETS]
+    strings += [alone, F.SHARED_LABEL, *SUBWORKS]
     assert {work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS} <= reasons
     assert all(any(x in r for r in reasons) for x in ("classified at k", "breaks the premise", "own program"))
     named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
@@ -740,7 +747,7 @@ def test_published_above_1_is_the_products_term():
 
 
 def test_published_with_the_term_unmeasured_is_null_never_1():
-    """With no product rows the one kind is unmeasured: ρ is null, never the floor's 1, which would read as no
+    """With no product rows the one kind is unmeasured: the record's slowdown is null, never the floor's 1, which would read as no
     slowdown, with `why` saying no kind is measured."""
     one = F.published(one_part(), 1e11, 3600)
     assert (one["rho"], one["binding_kind"], one["rests_on"], one["partial"], one["why"]) == (
@@ -749,7 +756,7 @@ def test_published_with_the_term_unmeasured_is_null_never_1():
 
 
 def test_published_with_every_kind_measured_and_none_above_1_is_1_binding_none():
-    """The stated products' term at c = 1e8 is at most 1: ρ is 1, binding none, resting on no kind exceeding 1; the
+    """The stated products' term at c = 1e8 is at most 1: the record's slowdown is 1, binding none, resting on no kind exceeding 1; the
     floor sets it, not the term."""
     one = F.published(replace(one_part(), products=STATED), 1e8, policy.CONSOLE[1])
     assert all(t is not None and t <= 1 for t in one["terms"].values())
@@ -763,7 +770,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
     with the reason, as at every k but their own for products that keep no rows on the dial. On the 45M dense step
     the term falls with k (220,665 at the console's 65,536 bits, 160,416 at 80,000, 60,188 at the served block's
     145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its short contractions), and from 8e7 bits up β(k) is so
-    low that the count allows fewer blocks than |C|/c, so the term is below 1, which ρ's floor reads as 1."""
+    low that the count allows fewer blocks than |C|/c, so the term is below 1, which the floor of the record's slowdown reads as 1."""
     from training_slowdown.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
@@ -997,7 +1004,7 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     """They come out labelled beside the kind: reduction and update where the step's token work fills two or more
     blocks (b = 8 at c = 1e11), unmeasured without the cuts, and Slowdown's token form and the decoding form,
     targets; asking for any of them in the max is refused. A record with no product rows has no measured kind, so
-    where Fit fails ρ is unmeasured, whatever the token form gives."""
+    where Fit fails the record's slowdown is unmeasured, whatever the token form gives."""
     m, c, k = measured(u1=1e9), 1e11, 1e5
     b = F.bound(m, c, k)
     assert b["sensitivities"]["token_form"] > 1

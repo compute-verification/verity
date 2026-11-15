@@ -1,6 +1,6 @@
 """`Serve@3` at TINY-PAD against its frozen semantics — the prefix property (`n ∈ {0, 3, D_MAX}`), the absorbing
 property and the inactive step-boundary relation, output interpretation, digest distinctness, the measured gate budget,
-and the vectorized reference evaluator (`verity/definitions/numerics/serve3_reference.py`) bit-for-bit against the
+and the vectorized reference evaluator (`adapters/vllm/verity_vllm/definitions/numerics/serve3_reference.py`) bit-for-bit against the
 gate-level evaluation.
 
 Fixture: TINY-PAD dims (the test-suite TINY with `MAX_POS` 8 → 16), random bf16 weights
@@ -23,13 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
 from verity.circuits.codec import program_digest
-from verity.definitions.registry import b1, serve3
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry.b1 import weights_type
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
-        "tie_word_embeddings": True, "profile": {}}
+TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+              "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
+              "tie_word_embeddings": True, "profile": {}}
 LP, D_MAX = 4, 8
 #: raw greedy samples of `Serve_v1{TINY, LP=4, STEPS=8}` on the fixture inputs (pinned; y[3]=17 is fresh)
 Y_RAW = [15, 23, 26, 17, 26, 17, 26, 17, 26]
@@ -41,7 +41,7 @@ def c3(eos: int) -> dict:
     return {**TINY, "EOS_ID": eos}  # C₃ = {**C, "EOS_ID": id} at the binding site
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _inputs() -> tuple[tuple[int, ...], tuple[int, ...]]:
     rng = np.random.default_rng(1001)
     w = ((rng.standard_normal(weights_type(TINY).leaves) * 0.05).astype(np.float32).view(np.uint32) >> 16)
@@ -49,7 +49,7 @@ def _inputs() -> tuple[tuple[int, ...], tuple[int, ...]]:
     return tuple(int(x) for x in prompt), tuple(int(x) for x in w)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _v1(steps: int):
     """(program, transcript, outputs) of the frozen `Serve_v1{TINY, LP, STEPS=steps}`."""
     prompt, w = _inputs()
@@ -58,7 +58,7 @@ def _v1(steps: int):
     return prog, t, [t[g] for g in prog.circuit.root_outputs()]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _v3(eos: int):
     """(program, transcript, out, live) of `Serve_v3{TINY_PAD(eos), LP, D_MAX, Ampere}`."""
     prompt, w = _inputs()
@@ -175,7 +175,7 @@ def test_output_interpretation(ell):
         assert out[ell] == eos  # stop evidence: the live event ℓ samples and commits the EOS
         assert out[ell + 1:] == [0] * (D_MAX - ell)
     else:
-        assert out[D_MAX] == Y_RAW[D_MAX]  # length cap: slot D_MAX committed, never a semantic output
+        assert out[D_MAX] == Y_RAW[D_MAX]  # length bound: slot D_MAX committed, never a semantic output
     # well-formedness — theorems of the circuit, checked on its outputs
     assert all(live[g] <= live[g - 1] for g in range(1, D_MAX + 1))
     assert all(live[g] == (live[g - 1] and out[g] != eos) for g in range(1, D_MAX + 1) if live[g - 1] == 1)

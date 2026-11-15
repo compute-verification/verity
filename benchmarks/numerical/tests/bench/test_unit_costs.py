@@ -1,6 +1,7 @@
 """F6's unit-cost inventory: pinned Boolean counts of small subcircuits, the exact affine check, the sample and the work model."""
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from math import comb
 
@@ -45,27 +46,41 @@ def test_affine_refuses_a_bent_metric():
         U.affine(pts[:2], ("ands",))
 
 
-def test_argmax_scan_law_predicts_a_later_band():
+def test_argmax_scan_counts_predict_a_later_band():
     builds = {v: _counts("token-select-greedy", {"V": v}) for v in range(2, 20)}
-    law = U.argmax_scan_law(builds)
-    assert law.constants == {"alpha": 103, "beta": 163, "inputs_per_V": 16}
-    assert law(70) == _counts("token-select-greedy", {"V": 70})
+    scan = U.argmax_scan_counts(builds)
+    assert scan.constants == {"alpha": 103, "beta": 163, "inputs_per_V": 16}
+    assert scan(70) == _counts("token-select-greedy", {"V": 70})
     bent = {**builds, 15: {**builds[15], "ands": builds[15]["ands"] + 1, "committed": builds[15]["committed"] + 1}}
     with pytest.raises(ValueError, match="breaks at V = 15"):
-        U.argmax_scan_law(bent)
+        U.argmax_scan_counts(bent)
 
 
-def test_block_law_affine_or_curved():
+def test_block_excess_affine_or_curved():
     fit = {m: (Fraction(3), Fraction(7)) for m in U.METRICS}
     head = lambda T, extra: {m: 3 * T + 7 + extra for m in U.METRICS}  # noqa: E731
     r = {"params": {"BN": 64}, "_fit": fit, "method": "model",
          "block_checks": {80: {"built": head(80, 11)}, 144: {"built": head(144, 22)}}}
-    U.block_law(r)
+    U.block_excess(r)
     assert r["method"] == "affine" and r["per_extra_block"]["ands"] == 11 and "block_curvature" not in r
     r = {"params": {"BN": 64}, "_fit": fit, "method": "model",
          "block_checks": {80: {"built": head(80, 11)}, 144: {"built": {**head(144, 22), "nnz_AB": 3 * 144 + 7 + 25}}}}
-    U.block_law(r)
+    U.block_excess(r)
     assert r["method"] == "model" and r["block_curvature"] == {"nnz_AB": 3}
+
+
+def test_reuse_reads_an_earlier_inventory_and_rederives_the_attention_fit(tmp_path):
+    gemm = {"template": "gemm-coordinate", "params": {"K": 64}, "method": "exact", "ands": 5, "notes": ["stale"]}
+    head = {"template": "attention-head", "params": {"BN": 64}, "method": "affine", "per_extra_block": {"ands": 11},
+            "block_curvature": {"nnz_AB": 3}, "fit": {m: ["3/2", "7"] for m in U.METRICS}}
+    path = tmp_path / "unit-costs.json"
+    path.write_text(json.dumps({"subcircuits": [gemm, head]}))
+    subs = U.reuse(str(path))
+    assert set(subs) == {U._key("gemm-coordinate", {"K": 64}), U._key("attention-head", {"BN": 64})}
+    assert subs[U._key("gemm-coordinate", {"K": 64})] == {k: v for k, v in gemm.items() if k != "notes"}
+    got = subs[U._key("attention-head", {"BN": 64})]
+    assert got["method"] == "model" and got["_fit"] == {m: (Fraction(3, 2), Fraction(7)) for m in U.METRICS}
+    assert "per_extra_block" not in got and "block_curvature" not in got
 
 
 def test_missing_piece_is_reported_not_guessed():
@@ -77,13 +92,13 @@ def test_sample_size_is_the_record_k():
     assert U.sample_size() == 27_713
 
 
-def test_draw_count_against_the_exact_hypergeometric():
+def test_sample_count_against_the_exact_hypergeometric():
     N, n, K, tail = 30, 7, 12, 1e-3
     pmf = [comb(n, k) * comb(N - n, K - k) / comb(N, K) for k in range(n + 1)]
     want = next(k for k in range(n + 1) if sum(pmf[k + 1:]) <= tail)
-    mean, q = U.draw_count(N, n, K, tail)
+    mean, q = U.sample_count(N, n, K, tail)
     assert (mean, q) == (K * n / N, want)
-    assert U.draw_count(10, 3, 4, 0.05) == (1.2, 2)
+    assert U.sample_count(10, 3, 4, 0.05) == (1.2, 2)
 
 
 def test_work_model():
@@ -121,7 +136,7 @@ def test_registered_units(template, params, units, nnz_ab):
 
 
 def test_registered_none_says_why():
-    assert U.registered("token-select-greedy", {"V": 64}) == {"none": "no registered C-Flock lowering"}
+    assert U.registered("token-select-greedy", {"V": 64}) == {"none": "no registered Flock lowering"}
     assert "N = 1536" in U.registered("rmsnorm-fused-cuda", {"N": 1536, "EPS": 1e-6})["none"]
     assert "NotImplementedError" in U._reg_job(U._key("gemm-coordinate", {"K": 32, **HOPPER}))[1]["none"]
 
@@ -149,7 +164,7 @@ def test_inventory_takes_registered_counts_and_keeps_generic():
                                                        "counts": gen}}
     regs = {U._key("silu-mul", {"I": 16}): {"lowering": "l", "units": 4, "unit": {"rows": 5, "ands": 3, "nnz_a": 7, "nnz_b": 9,
                                                                                    "reads": 0}},
-            U._key("token-select-greedy", {"V": 64}): {"none": "no registered C-Flock lowering"}}
+            U._key("token-select-greedy", {"V": 64}): {"none": "no registered Flock lowering"}}
     step = {"rows": 2, "ands": 1, "nnz_a": 3, "nnz_b": 4}
     inv = U.inventory([w], subs=subs, regs=regs, step=step, log=lambda m: None)
     silu, ts = inv["rows"]
@@ -159,3 +174,31 @@ def test_inventory_takes_registered_counts_and_keeps_generic():
     assert ts["source"] == "generic" and ts["subcircuit"]["per_unit"]["nnz"] == 110 == ts["subcircuit"]["per_unit"]["nnz_generic"]
     assert ts["nnz_step_model"]["nnz"] == 63 * 9
     assert "| R |" in U.render(inv) and "| G |" in U.render(inv)
+
+
+def test_inventory_prices_a_fitted_head_at_its_stratum_and_its_blocks():
+    """A stratum of three key blocks of 64, the last partial: T from 129 to 191, mean 160, two blocks past the first.
+    The fit is 3T/2 + 7 in every metric (247 at the mean), and the excess over it is lin e + curv e (e − 1) / 2, here
+    2 x 5 + 1 x 0, with a curvature of 4 in the ANDs alone. With no block built past the first, the fit stands alone."""
+    p = {"D": 64, "BN": 64, "semantics": "sm80.fa2.bf16"}
+    w = {"id": "w", "template_mix": [
+        {"vu_family": "Attn", "parameters": {"NB": 3, "last": "partial"}, "vus": 100_000, "subcircuits_per_vu": 1,
+         "subcircuit_template": "attention-head", "subcircuit_parameters": p}]}
+    fit = {m: (Fraction(3, 2), Fraction(7)) for m in U.METRICS}
+    block = ({m: 5 for m in U.METRICS}, {m: 4 if m == "ands" else 0 for m in U.METRICS})
+
+    def row(**found):
+        head = {"template": "attention-head", "params": p, "method": "model", "_fit": fit, **found}
+        inv = U.inventory([w], subs={U._key("attention-head", p): head}, regs={}, log=lambda m: None)
+        assert "_fit" not in head and "_block" not in head
+        (r,) = inv["rows"]
+        return r["subcircuit"]
+
+    built = {"_fit": fit, "_block": block}
+    assert U._fitted_sub(built, 2, 160) == {m: 261 if m == "ands" else 257 for m in U.METRICS}
+    assert U._fitted_sub(built, 0, 160) == U._fitted_sub({"_fit": fit}, 2, 160) == U.at(fit, 160)
+    sub = row(_block=block)
+    assert {m: sub["per_unit"][m] for m in U.METRICS} == {m: 261.0 if m == "ands" else 257.0 for m in U.METRICS}
+    assert sub["per_unit"]["nnz"] == 518.0 and sub["nnz_range"] == {"min": 425.0, "max": 611.0}
+    sub = row()
+    assert sub["per_unit"]["nnz"] == 494.0 and sub["nnz_range"] == {"min": 401.0, "max": 587.0}

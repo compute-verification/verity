@@ -12,12 +12,12 @@ ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
-  -o "$S/libh1c.so" benchmarks/hash/dither/h1c.cu > "$OUT/build-h1c.log" 2>&1 \
+  -o "$S/libh1c.so" verity/protocols/experimental/dither/prover/kernels/h1c.cu > "$OUT/build-h1c.log" 2>&1 \
   || { echo "h1c: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build-h1c.log" | tail -30; exit 11; }
 grep -A2 "h1c_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head
 [ -n "${BUILD_ONLY:-}" ] && { echo "h1c: built (BUILD_ONLY)"; exit 0; }
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
-export PYTHONPATH=$ROOT:$ROOT/verity/configuration/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=$ROOT:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 echo "h1c: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --max-min 25 -- timeout 1450 "$PY" "benchmarks/hash/dither/${H1C_GATE:-h1cgate.py}" --lib "$S/libh1c.so" \
   --out "$OUT" "$@"

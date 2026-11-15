@@ -8,15 +8,14 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import dsv4_decode_indices_twin as T
-from verity.definitions.registry import boolean_dsv4_decode_indices as BX
-from verity.definitions.registry import dsv4_decode_indices as X
+from verity.circuits.ops.boolean import versions as SW
+from verity_vllm.definitions.numerics import dsv4_decode_indices_twin as T
+from verity_vllm.definitions.registry import boolean_dsv4_decode_indices as BX
+from verity_vllm.definitions.registry import dsv4_decode_indices as X
 
 U = np.uint32
 M32 = 0xFFFFFFFF
@@ -144,8 +143,8 @@ def test_the_slot_and_the_length_pieces():
     for x, want in [(0, (20, 1)), (11, (31, 1)), (-1, (M32, 0)), (I32_MIN, (M32, 0)), (12, ((-4) & M32, 1))]:
         assert tuple(int(v) for v in evaluate(slot, x & M32, blocks)) == want, x
     length = bind(X.Dsv4GlobalTopkLen, TOPK=5)
-    for live, byte, want in [([1, 0, 1, 1, 0], 1, 3), ([1] * 5, 0x40, 5), ([1] * 5, 0, 0), ([0] * 5, 0xFF, 0)]:
-        assert [int(v) for v in evaluate(length, live, byte)] == [want]
+    for live, byte, count in [([1, 0, 1, 1, 0], 1, 3), ([1] * 5, 0x40, 5), ([1] * 5, 0, 0), ([0] * 5, 0xFF, 0)]:
+        assert [int(v) for v in evaluate(length, live, byte)] == [count]
 
 
 # --- the twin --------------------------------------------------------------------------------------------------------------------
@@ -178,7 +177,7 @@ def test_the_twin_is_the_kernel_on_edge_rows(st):
 ], ids=["bs-3", "bs-0", "bs-2^31", "nb-0", "nb-past-int32", "topk-0", "v2-bs-6", "v2-topk-0"])
 def test_bad_statics_are_refused_by_name(fn, kw, name):
     with pytest.raises(ValueError, match=name):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions ---------------------------------------------------------------------------------------------------------

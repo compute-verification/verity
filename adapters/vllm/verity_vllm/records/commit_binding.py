@@ -19,6 +19,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, optional, required
 
+__all__ = ["CommitBinding"]
+
 NAME = "commit.binding"
 
 
@@ -28,12 +30,17 @@ def _object(doc: Any, where: str, name: str) -> Mapping[str, Any]:
     return doc
 
 
-def _by_request(doc: Mapping[str, Any], key: str, where: str, kind: type, name: str, *, always: bool = True) -> Mapping[str, Any] | None:
-    """`doc[key]`, a JSON object of request id -> a `kind` or null; required unless not `always`."""
-    m = (required if always else optional)(doc, key, where, Mapping, name)
-    for rid in m or ():
+def _by_request(doc: Mapping[str, Any], key: str, where: str, kind: type, name: str) -> Mapping[str, Any]:
+    """`doc[key]`, a required JSON object of request id -> a `kind` or null."""
+    m = required(doc, key, where, Mapping, name)
+    for rid in m:
         optional(m, rid, where, kind, f"{name}.{rid}")
     return m
+
+
+def _by_request_if_any(doc: Mapping[str, Any], key: str, where: str, kind: type, name: str) -> Mapping[str, Any] | None:
+    """`_by_request` of a key its writer wrote, else None."""
+    return None if doc.get(key) is None else _by_request(doc, key, where, kind, name)
 
 
 def _items(doc: Mapping[str, Any], key: str, where: str, kind: type, name: str) -> tuple | None:
@@ -174,8 +181,8 @@ class CommitAccountLink:
                    not_applied=optional(d, "not_applied", where, str, f"{name}.not_applied"),
                    record_path=None if rec is None else optional(rec, "path", where, str, f"{name}.record.path"),
                    record_sha256=None if rec is None else optional(rec, "sha256", where, str, f"{name}.record.sha256"),
-                   served_by_request=_by_request(d, "served_by_request", where, int, f"{name}.served_by_request", always=False),
-                   tokens_committed=_by_request(d, "tokens_committed", where, bool, f"{name}.tokens_committed", always=False))
+                   served_by_request=_by_request_if_any(d, "served_by_request", where, int, f"{name}.served_by_request"),
+                   tokens_committed=_by_request_if_any(d, "tokens_committed", where, bool, f"{name}.tokens_committed"))
 
 
 @dataclass(frozen=True)

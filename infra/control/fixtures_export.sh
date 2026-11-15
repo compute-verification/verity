@@ -1,5 +1,5 @@
 #!/bin/sh
-# Every 5 min: copy every fixture origin/main's fixtures/artifacts.json registers to the public export that nodes and pods fetch
+# Every 5 min: copy every fixture origin/main's artifacts.json registers to the public export that nodes and pods fetch
 # fixtures from (`research data export`, the store README's export), so a newly registered fixture reaches it with nobody running
 # the export by hand. The export never reads the bucket: each object is a conditional PUT (412 = already there), and the
 # export store's record of what landed keeps a pass with nothing new from sending anything. Code and registry

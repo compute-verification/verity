@@ -8,41 +8,53 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import inspect
 import itertools
 import json
 import random
+import stat
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
-# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.prover.circuit import live as L
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import LiveOpening, LiveRecord
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import LiveOpening, LiveRecord
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_gpu as GPU
+from tests.protocols import pouw_h1_rehearsal as RH
+from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm import protocols as PO
 from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
-from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
-
-from tests.protocols import challenger_host as CH
+from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity_torch.pouw import credit_gate_device as CGD
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 K = 64
 #: the window's T
@@ -206,7 +218,7 @@ def _reach(monkeypatch, host):
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
-    """The auditor host's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
+    """The auditor device's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
     `RESERVED` and opened by `_gate`, which opens the window's sample's challenge phase (`DRAW_RESERVED`) withheld."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, gated=True)
     _reach(monkeypatch, host)
@@ -225,7 +237,6 @@ LAYOUT = SV.declared_layout([(64, K)], {0: "q"}, ROWS, 1)
 def _descriptor(shapes=((64, K),), modules=(("q"),), rows=ROWS, steps=1) -> bytes:
     """The declared window Program's descriptor bytes (`pouw_h1_served.descriptor`) on the served test's stand-in
     proof block: the period's circuit is their SHA-512, and core's credit reads the window's layout from them."""
-    from tests.protocols.test_pouw_h1_served import _unit
     return SV.descriptor(SV.declared(list(shapes), dict(enumerate(modules)), rows, steps, unit=_unit()))
 
 
@@ -277,7 +288,6 @@ def _period_weights() -> SV.Weights:
 def _served(**kw) -> SV.Served:
     """The served path's `Served`, its b/<K> registered at install from the served linear under `_model_key` (or as
     ``kw`` says)."""
-    from tests.protocols.test_pouw_h1_served import _unit
     return SV.Served(PH.TILE, _unit(), **(kw or {"registry": _model_key()}))
 
 
@@ -313,7 +323,7 @@ def _commit(tap, x, ids, n):
 def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None, pad=0, graphs=()):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
-    the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
+    the plain linear's when `exact`. Its coins are the auditor device's challenger's with `remote` (the `auditor` fixture),
     else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
     Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's). With `pad` the call runs `pad` rows past
     the m scheduled, as a CUDA graph of the engine's capture sizes `graphs` pads it, its padded input ids 0."""
@@ -361,11 +371,11 @@ def _refused(run, reason, m=3, n=32):
 def test_the_int8_arm_under_h1_serves_scaled_mm_zy_and_is_credited(auditor):
     """vllm's int8 arm with H1 installed: the install sets its ``zy_rows`` to T, so it serves ``scaled_mm_zy`` (y bit for
     bit the plain linear's) and hands over the records, which are the call's z table, one leaf a proof block; the call is
-    credited and the window, its coins the auditor host's challenger's, credits its served rows; the install's close
+    credited and the window, its coins the auditor device's challenger's, credits its served rows; the install's close
     takes ``zy_rows`` back off."""
     arm = ZyArm()
     y, run = _serve(arm, remote=True, n=64)
-    assert arm.zy_rows is None and auditor.ended() is None and run.coin_source == PH.CHALLENGER
+    assert arm.zy_rows is None and auditor.ended() is None and run.coins_from == PH.CHALLENGER
     (v,) = run.verdicts.values()
     assert v["credit"] and "reason" not in v
     assert (v["kernel"], v["y_from"], v["z_from"]) == (ZY,) * 3 and v["gemms"] == [ZY]
@@ -405,7 +415,7 @@ def test_serve_h1s_wrapper_is_refused_too():
     quantizes the same activations again and takes z from `int_mm`; the trace refuses it the same way."""
     layer = Linear(32, 1, TodayArm())
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
-    with CG.Trace("q") as t:
+    with CGD.Trace("q") as t:
         y = layer.quant_method.apply(layer, x)
         xq, _sa = E.quantize_rows(x.reshape(-1, x.shape[-1]))
         z = E.int_mm(xq, layer.weight)
@@ -426,7 +436,7 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
     'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
-    assert v["credit"] and run.coin_source == "in-process"
+    assert v["credit"] and run.coins_from == "in-process"
     c = run.credit()
     assert c["gate_passed"] == {"rows": 0, "macs": 0} and c["coins"] == "in-process"
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
@@ -435,8 +445,7 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
 def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
     """A claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier's claim instance
-    names their source; a window is credited only on the auditor host's challenge phase (the int8 arm's test above)."""
-    from verity.protocols.pouw.verifier import verifier
+    names their source; a window is credited only on the auditor device's challenge phase (the int8 arm's test above)."""
     held, real = [], Challenger
 
     def named(epoch, entropy):
@@ -445,7 +454,7 @@ def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing
     monkeypatch.setitem(globals(), "Challenger", named)
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
-    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coin_source == "in-process"
+    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coins_from == "in-process"
     assert "coins-not-the-auditors" in PH.IN_PROCESS and run.credit()["refused"]["reasons"] == {PH.IN_PROCESS: 1}
 
 
@@ -582,8 +591,10 @@ def test_the_honest_forgery_stand_in_is_credited():
 
 @pytest.mark.parametrize("name", [None, *FORGERIES])
 def test_the_value_check_on_the_device_is_the_hosts(name):
-    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
-    what it is of their host copies: None for honest records, and each forgery's own refusal."""
+    """A call's records, scales and served y left on a CUDA device, as the arm leaves them, are judged as their host copies
+    are: `pouw_h1_records.holds_on` there holds exactly when `reason` of the host copies is None (honest records), and
+    `reason` of the device's records is each forgery's own refusal. `reason` takes y as its bf16 bits and the scales as
+    arrays, as `H1Run` hands them over (`numpy_of`, `row_words`)."""
     if not torch.cuda.is_available():
         pytest.skip("needs CUDA")
     w = Linear(64, 1, None)
@@ -591,16 +602,18 @@ def test_the_value_check_on_the_device_is_the_hosts(name):
     y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
     if name is not None:
         y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
-    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
+    bits, sa, sw = y.contiguous().view(torch.int16).numpy(), PH.numpy_of(s_a), PH.numpy_of(w.weight_scale)
+    host = ZR.reason(zy.numpy(), ROWS, 64, bits, sa, sw)
     assert host == (None if name is None else FORGERIES[name][1])
-    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
+    assert ZR.holds_on(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == (host is None)
+    assert ZR.reason(zy.cuda(), ROWS, 64, bits, sa, sw) == host
 
 
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
     w = torch.randint(-127, 128, (32, K), dtype=torch.int8)
     xq = torch.randint(-127, 128, (3, K), dtype=torch.int8)
     z = zy_linear(xq, torch.ones(3), w, torch.ones(32, 1))[0]
-    with CG.Trace("q") as t:
+    with CGD.Trace("q") as t:
         y = zy_linear(xq, torch.ones(3), w, torch.ones(32, 1))[1]
     assert CG.verdict(t, y, z)["reason"] == f"credit: served-output-not-credited-kernel: q y from {ZY}, z from <untraced>"
 
@@ -655,7 +668,6 @@ def _verifier(units, reject=(), seen=None, opened=lambda port: True):
     `reject`, its verdict naming the program it was handed and its registered finding the ports of the `--registered`
     file credit built that `opened` keeps, each at the root credit read from the window's entries. A statement on the
     live template's circuit file proves its round's proof block, the round its ``m@<s>`` port names, and opens every port."""
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     def run(proof, *, circuit_sha512, program, partition, registered):
         if circuit_sha512 == FILES[CR.LIVE]:
@@ -695,7 +707,6 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its sampled calls' statements
     (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
     (`credit.window`) passes its weights and refuses it only for want of its sampled calls' proof files."""
-    from verity.protocols.pouw.verifier import salt as PS
     k = PHC.draw_k(LAYOUT)
     assert k == 2
     auditor = periodic(k, files=FILES)
@@ -789,17 +800,16 @@ def test_the_gpu_harness_holds_an_in_process_window_to_cores_roots1_steps(edit):
     engine: its record is one manifest under calls_root with the Commit's record (`pouw_h1_gpu.record_reason`, its salt
     from the in-process coin commitment), its A tables under their rounds' roots, and each the Commit's value; with the
     A codes all zero, core refuses it at ``arow`` alone. A calls_root off the record is refused."""
-    from tests.protocols import pouw_h1_gpu as G
-    from tests.protocols.test_pouw_h1_served import _unit
     arm = ZyArm() if edit is None else EditArm(torch.zeros_like)
     _y, run = _serve(arm, n=64, served=SV.Served(PH.TILE, _unit(), weights=_period_weights(), window=bytes(64)))
     assert run.commits.get("coin_source") != PH.CHALLENGER and not run.served.refused
     record = {"commitment": dict(run.commits), "calls": run.manifest()}
-    v = G.core_verdict({**record, "descriptor": _descriptor().hex()})
+    v = GPU.core_verdict({**record, "descriptor": _descriptor().hex()})
     assert v["manifest"] is None and v["a_link"] is None and v["commit_values"] == 2, v
     assert v["tied"] if edit is None else (v["arow"][0] == "arow" and "is not the Commit's" in v["arow"][1]), v
     off = {**record["commitment"], "calls_root": "00" * 64}
-    assert "calls_root is not over" in G.record_reason({**record, "commitment": off})
+    reason = GPU.record_reason({**record, "commitment": off})
+    assert reason is not None and "calls_root is not over" in reason
 
 
 def _bare_table(monkeypatch):
@@ -969,7 +979,8 @@ def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
     assert auditor.ended() is None
     rec = _record(run)
     drawn = _credit(auditor, rec)["drawn"]
-    st, seen = [_statement(tmp_path / "c0", 0, len(drawn))], []
+    st = [_statement(tmp_path / "c0", 0, len(drawn))]
+    seen: list[dict] = []
     assert _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=_live(tmp_path, rec))["credit"] == [0]
     ports = seen[0]["registered"]["ports"]
     b = {p: e for p, e in ports.items() if p.startswith(f"b_k{K}_")}
@@ -994,7 +1005,6 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     evidence refuses the whole window. The closed period's credit
     (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -1003,7 +1013,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     out = _credit(auditor, rec)
     assert out["window"][0] == "missing" and out["credit"] is None, out
     drawn = out["drawn"]
-    st, seen, live = [_statement(tmp_path / "c0", 0, len(drawn))], [], _live(tmp_path, rec)
+    st, live = [_statement(tmp_path / "c0", 0, len(drawn))], _live(tmp_path, rec)
+    seen: list[dict] = []
     assert _credit(auditor, rec, st, run=_verifier(drawn))["window"] == ("live", CR.LIVE_STATEMENTS_FORM)
     out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=live)
     assert out["manifest"] is None and out["window"] is None, out
@@ -1034,8 +1045,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
     off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
     assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
-                   f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}")
+        "circuit", (f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
+                    f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}"))
     assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
     b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
@@ -1094,10 +1105,10 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
     assert why is None and [(s["template"], s["units"], s["work"]) for s in ss] == [
         ("k64", [[0, 4], [6, 10]], 32 * 32 * 64), ("k128", [[4, 6], [10, 12]], 32 * 32 * 128)]
     for k in (1, 6, 12):
-        assert CR.law(ss, k) is None
+        assert CR.sampling_design(ss, k) is None
         want = CC.work_units(bytes.fromhex(coin), root, reg, {"receipts": receipts}, ss)
         got, why = PHC.drawn_of(record, {"root": root}, k, desc)
-        assert why is None and got == want == CR.drawn(coin, root, reg, {"receipts": receipts}, layout, k)[0]
+        assert why is None and got == want == CR.drawn_twin(coin, root, reg, {"receipts": receipts}, layout, k)[0]
         assert len(got) == len(set(got)) and all(0 <= u < 12 for u in got)
     assert set(PHC.drawn_of(record, {"root": root}, 12, desc)[0]) >= {4, 5, 10, 11}
     assert PHC.drawn_of(record, {"root": root}, 13, desc)[1][0] == "budget"
@@ -1105,13 +1116,157 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
     assert PHC.draw_k(layout) == 12
 
 
+def test_the_rehearsals_gate_keeps_each_verb_its_exit_and_its_answer_less_the_secrets(monkeypatch):
+    """`pouw_h1_rehearsal.Gate` runs a verb as its command with the verb's words and answers the JSON the command
+    printed. Its ``log`` keeps the verb, the exit code and the answer without its ``secret`` and ``key``. A command
+    that printed no JSON answers a refusal naming its exit code and what it said."""
+    said = iter([(0, b'{"session": "s0", "secret": "s", "key": "k"}', b""), (2, b"", b"no such peer\n")])
+    ran = []
+
+    def run(argv, capture_output):
+        ran.append(argv)
+        rc, out, err = next(said)
+        return SimpleNamespace(returncode=rc, stdout=out, stderr=err)
+
+    monkeypatch.setattr(RH.subprocess, "run", run)
+    gate = RH.Gate(["gate", "dir"])
+    assert gate("status", "s0") == {"session": "s0", "secret": "s", "key": "k"}
+    assert gate("reserve", "--peer", "p") == {"refused": "exit 2: no such peer\n"}
+    assert ran == [["gate", "dir", "status", "s0"], ["gate", "dir", "reserve", "--peer", "p"]]
+    assert gate.log == [{"verb": ["status", "s0"], "rc": 0, "answer": {"session": "s0"}},
+                        {"verb": ["reserve", "--peer", "p"], "rc": 2, "answer": {"refused": "exit 2: no such peer\n"}}]
+
+
+def test_the_rehearsals_check_hands_the_harness_its_samples_tree_by_name(monkeypatch, tmp_path):
+    """`pouw_h1_rehearsal.check` calls `pouw_h1_gpu.check_challenger` with the tree of the window's sample as the
+    harness's directory of its sample session, the one parameter it has for a second directory, and not as its
+    statements, which stand before it: the tree itself on a check of the challenge phase's tree, its ``out/`` on a check
+    with a window. It passes the harness nothing else, so no statements and no live session, and answers the five fields
+    of what the harness found."""
+    signature = inspect.signature(GPU.check_challenger)
+    (second,) = (name for name in signature.parameters if name.endswith("_directory"))
+    found = {"ok": True, "reason": None, "manifest": None, "period": {"id": "p"}, "credit": {"credit": 3}}
+    bound = []
+
+    def check_challenger(*args, **kwargs):
+        bound.append(signature.bind(*args, **kwargs).arguments)
+        return {**found, "rounds": 2}
+
+    monkeypatch.setattr(GPU, "check_challenger", check_challenger)
+    calls, tree, ledger, out, sample = (tmp_path / n for n in ("calls.json", "tree", "ledger.jsonl", "check", "sample"))
+    plain = {"calls_file": str(calls), "public_sha512": "ab" * 64, "out": str(out), "ledger": [str(ledger)]}
+
+    assert RH.check(calls, tree, "ab" * 64, [ledger], out, None, None, None, None, None, sample) == found
+    assert bound.pop() == {**plain, "directory": str(tree), "window_file": None, "period": None, "descriptor": None,
+                           "pins": [], "main": None, second: str(sample)}
+
+    pins, window = tmp_path / "pins.jsonl", {"root": "00" * 64}
+    assert RH.check(calls, tree, "ab" * 64, [ledger], out, window, "p", b"circuit", [pins], ["m0"], sample) == found
+    assert bound.pop() == {**plain, "directory": str(tree / "out"), "window_file": str(out / "window.json"),
+                           "period": "p", "descriptor": b"circuit", "pins": [str(pins)], "main": ["m0"],
+                           second: str(sample / "out")}
+    assert json.loads((out / "window.json").read_text()) == window
+
+    assert RH.check(calls, tree, "ab" * 64, [ledger], out) == found
+    assert bound.pop()[second] is None and not bound
+
+
+def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_needs_every_one_refused(monkeypatch, tmp_path):
+    """`pouw_h1_rehearsal.red_team` with no gate asks `check` fourteen times, in a fixed order, for the run's record,
+    ledger, pins log and main lines with one thing changed in each: the record's session root, the window's root, the
+    ledger cut before the session's end, the pins log gone, empty or with its first line at another time, the main lines
+    gone or without the pinned commits, a call's table root changed or unbound, the last round dropped, another pin. A
+    case is ``refused`` when the check does not answer ok, and ``all_refused`` needs every one. A record whose session
+    names no root stops it before any case is asked. `check` is a stand-in here that binds by the real signature."""
+    signature = inspect.signature(RH.check)
+    sample = list(signature.parameters)[-1]
+    asked: list[dict] = []
+    passing: set[str] = set()
+
+    def check(*args, **kwargs):
+        call = signature.bind(*args, **kwargs)
+        call.apply_defaults()
+        asked.append(dict(call.arguments))
+        return {"ok": call.arguments["out"].name in passing, "reason": "r", "manifest": None, "period": None, "credit": None}
+
+    monkeypatch.setattr(RH, "check", check)
+    weights, table = "22" * 64, "33" * 64
+    session = {"session": "s1", "root": "11" * 64}
+    record = {"commitment": {"session": session, "weights_root": weights,
+                             "requests_root": table, "draw_session": {"session": "s2"},
+                             "rounds": [{"root": "44" * 64}, {"root": "55" * 64}]},
+              "calls": [{"k": 0}, {"k": 1, "tables": {"a": "66" * 64, "b": "77" * 64}}]}
+    ledger = [{"kind": "open", "session": "s1"}, {"kind": "end", "session": "s0"}, {"kind": "end", "session": "s1"},
+              {"kind": "open", "session": "s2"}]
+    pinned = [CH.PINS[0], LC.pin_line("ab" * 20, CH.PINNED, "2026-10-21T10:00:00Z")]
+    g, rt, record_path = tmp_path / "gate", tmp_path / "red_team", tmp_path / "serve" / "pouw-h1-calls.json"
+    g.mkdir()
+    record_path.parent.mkdir()
+    record_path.write_text(json.dumps(record))
+    (g / "windows.jsonl").write_text("".join(json.dumps(line) + "\n" for line in ledger))
+    (g / "pins.jsonl").write_text("".join(line + "\n" for line in pinned))
+
+    def red_team() -> dict:
+        asked.clear()
+        return RH.red_team(tmp_path, "cd" * 64, "p", None, "peer", "at", main=list(CH.MAIN))
+
+    def held(name: str, *path, to) -> bool:
+        want = json.loads(json.dumps(record))
+        at = want
+        for key in path[:-1]:
+            at = at[key]
+        at[path[-1]] = to
+        return json.loads((rt / name).read_text()) == want
+
+    got = red_team()
+    other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
+    honest = {"calls": record_path, "tree": g / "fetch" / "s1", "pin": "cd" * 64, "ledger": [g / "windows.jsonl"],
+              "window": None, "period": "p", "descriptor": None, "pins": [g / "pins.jsonl"], "main": list(CH.MAIN),
+              sample: g / "fetch" / "s2"}
+    changed = {"r_bare_weights_root": {"calls": rt / "bare.json"},
+               "r_bare_weights_root_window": {"window": {"root": weights}},
+               "r_other_window_root": {"calls": rt / "other.json"},
+               "r_other_window_root_window": {"window": {"root": other}},
+               "ledger_cut_before_end": {"ledger": [rt / "ledger-cut.jsonl"]},
+               "pins_none": {"pins": []},
+               "pins_cut": {"pins": [rt / "pins-cut.jsonl"]},
+               "pins_rewritten": {"pins": [rt / "pins-rewritten.jsonl"]},
+               "main_none": {"main": None},
+               "main_without_pin": {"main": [CH.MAIN[0]]},
+               "table_root_changed": {"calls": rt / "table.json"},
+               "table_a_root_unbound": {"calls": rt / "unbound.json"},
+               "table_rounds_cut": {"calls": rt / "rounds-cut.json"},
+               "other_pin": {"pin": "ab" * 64}}
+    assert asked == [{**honest, "out": rt / name, **change} for name, change in changed.items()]
+    assert held("bare.json", "commitment", "session", "root", to=weights)
+    assert held("other.json", "commitment", "session", "root", to=other)
+    assert held("table.json", "calls", 1, "tables", "a", to="00" * 64)
+    assert held("unbound.json", "calls", 1, "tables", "a", to=None)
+    assert held("rounds-cut.json", "commitment", "rounds", to=[{"root": "44" * 64}])
+    assert (rt / "ledger-cut.jsonl").read_text() == "".join(json.dumps(line) + "\n" for line in ledger[:2])
+    assert (rt / "pins-cut.jsonl").read_bytes() == b""
+    assert (rt / "pins-rewritten.jsonl").read_text() == "".join(
+        line + "\n" for line in (LC.pin_line(CH.PINNED, CH.PINNED, "2000-01-01T00:00:00Z"), pinned[1]))
+    refused = {"ok": False, "reason": "r", "manifest": None, "period": None, "credit": None, "refused": True}
+    assert got == {"cases": dict.fromkeys(changed, refused), "all_refused": True, "must_refuse": list(changed)}
+
+    passing.add("pins_cut")
+    got = red_team()
+    assert got["cases"] == {**dict.fromkeys(changed, refused), "pins_cut": {**refused, "ok": True, "refused": False}}
+    assert got["all_refused"] is False and got["must_refuse"] == list(changed) and len(asked) == 14
+
+    del session["root"]
+    record_path.write_text(json.dumps(record))
+    with pytest.raises(KeyError, match="root"):
+        red_team()
+    assert not asked
+
+
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
     """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
-    from tests.protocols import pouw_h1_rehearsal as RH
-    from verity_vllm.protocols.pouw import h1 as PH
     shapes, modules = RH.declaration()
     layout = SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps)
     k = RH.declared_draw_k()
@@ -1204,7 +1359,6 @@ def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_direct
     there, owner-only, past the close; the run's published output (its transcript) holds neither the key's bytes nor
     its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a sampled proof block
     opens after the close, while a kept row changed afterwards is refused."""
-    import stat
     prover, out, key = tmp_path / "prover", tmp_path / "out", bytes(range(32))
     salt = hashlib.sha512(b"salt").digest()
     rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)

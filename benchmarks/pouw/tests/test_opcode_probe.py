@@ -6,32 +6,27 @@ probe with nvcc and gates it; it skips without nvcc and nvdisasm.
 from __future__ import annotations
 
 import csv
-import importlib.util
 import io
 import json
 import re
-import sys
 from pathlib import Path
 
+import clocks
+import collective_verdict
+import eps1
+import ji as ji89
+import pipes_verdict
+import probe
 import pytest
+from conftest import load
 from verity_machine_model import model
 
 POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
 MACHINE_MODEL = Path(__file__).resolve().parents[2] / "machine_model"
 
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-probe = _load("opcode_probe_probe", POUW / "opcode_probe" / "probe.py")
+#: `census` is also dc's script's name, so sm_89's comes from its file
+sm89 = load("opcode_probe/sm89/census.py")
 rows, G = probe.rows, probe.G
 RUN = "r20261016-183617-3914"
 
@@ -171,8 +166,6 @@ def test_an_until_loop_counts_only_the_fixed_roles_time():
 
 # ---- the issue facets --------------------------------------------------------------------------------------------------
 
-eps1 = _load("opcode_probe_eps1", POUW / "opcode_probe" / "eps1.py")
-
 
 def test_facets_are_the_upper_hull_with_the_margin():
     pts = [(0.0, 0.5, "alone"), (0.05, 0.25, "mix"), (0.02, 0.2, "inside"), (0.0625, 0.0, "imma")]
@@ -204,9 +197,6 @@ def test_prior_points_give_back_the_published_facets(tmp_path):
     fs = eps1.facets(pts + [(0.0, 0.98 / 1.96, "alone")], 0.02)
     got = {(round(f["MMA"], 6), round(f["X"], 6)) for f in fs}
     assert {(2.0, 1.96), (15.0, 0.4)} <= got
-
-
-sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "census.py")
 
 
 def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
@@ -337,9 +327,6 @@ def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, caps
     assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
 
 
-clocks = _load("opcode_probe_clocks", POUW / "opcode_probe" / "clocks.py")
-
-
 def test_lock_passes_megahertz_or_nvmls_id_for_tdp_and_unlimited():
     """`clocks.py lock`: MIN and MAX reach nvmlDeviceSetGpuLockedClocks as MHz, or as NVML's limit id for `tdp` and
     `unlimited`; the row says what was asked and the call's rc."""
@@ -381,9 +368,6 @@ def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     assert "best alone:  gl_w32_fast 20.480 B/SM/clk = 4.096 TB/s" in got
     assert "best beside: gh_w32 8.192 B/SM/clk = 1.638 TB/s, MMA kept 0.5000" in got
     assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
-
-
-pipes_verdict = _load("opcode_probe_pipes_verdict", POUW / "opcode_probe" / "pipes_verdict.py")
 
 
 def _pipes_rows(**over: dict[str, float]) -> dict[str, dict]:
@@ -444,9 +428,6 @@ def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
     rows.write_text("".join(json.dumps(r) + "\n" for n, r in _pipes_rows().items() if n != "mix_bar_or_lop3"))
     assert pipes_verdict.main([str(rows)]) == 0
     assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_bar_or_lop3; ")
-
-
-collective_verdict = _load("opcode_probe_collective_verdict", POUW / "opcode_probe" / "collective_verdict.py")
 
 
 def _collective_rows(**over: dict[str, float]) -> dict[str, dict]:
@@ -553,9 +534,6 @@ def test_probes_build_and_gate(tmp_path):
                                                                  "dsm_red_add64_self"}
 
 
-ji89 = _load("opcode_probe_sm89_ji", POUW / "opcode_probe" / "sm89" / "ji.py")
-
-
 def test_sm89_ji_pins_only_the_schedule_its_name_says():
     top = {"FMUL": 112, "IMMA.16816.S8.S8": 8, "MOV": 1, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}
     assert ji89.exact("j16_fmuli_q112_a2u1_w2", top)
@@ -630,3 +608,12 @@ def test_sm89_ji_points_join_only_their_own_family(tmp_path):
     (m, x, name), = pts["ffma"]
     assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
     assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
+
+
+def test_clock_ceiling_requires_the_memory_clock_naming_clock_memory_with_no_default():
+    """The memory clock clock_ceiling.sh relocks on exit is the card's `clock.memory`, which both its scripts take as a
+    required argument (`CLOCK_RELOCK_MEM_MHZ`, refused by name when unset) and neither states as a default."""
+    for script in ("clock_ceiling.sh", "clock_ceiling_lease.sh"):
+        text = (POUW / "opcode_probe" / script).read_text()
+        assert re.search(r"\$\{CLOCK_RELOCK_MEM_MHZ:\?[^}]*clock\.memory[^}]*\}", text), script
+        assert not re.search(r"\$\{CLOCK_RELOCK_MEM_MHZ:?[-=]", text), script

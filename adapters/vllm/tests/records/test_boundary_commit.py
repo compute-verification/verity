@@ -33,6 +33,8 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     verdicts = _doc() | {"verdicts": True}
     assert BoundaryCommit.of(verdicts, "w").dump() == verdicts and rec.verdicts is None and "verdicts" not in rec.dump()
     assert BoundaryCommit.of(tables | verdicts, "w").dump() == tables | verdicts
+    ids = _doc() | {"ids": True}
+    assert BoundaryCommit.of(ids, "w").dump() == ids and rec.ids is None
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))
@@ -42,6 +44,14 @@ def test_a_missing_field_is_refused_by_name(field):
     with pytest.raises(MissingField) as e:
         BoundaryCommit.of(doc, "commit.json")
     assert (e.value.where, e.value.field) == ("commit.json", field)
+
+
+def test_a_missing_field_is_refused_before_a_wrong_kind_of_one_only_some_writers_write():
+    doc = _doc() | {"stop": [3, 7]}
+    del doc["seconds"]
+    with pytest.raises(MissingField) as e:
+        BoundaryCommit.of(doc, "commit.json")
+    assert e.value.field == "seconds"
 
 
 def test_another_format_an_unknown_field_and_a_wrong_kind_are_refused_by_name():

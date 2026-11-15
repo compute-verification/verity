@@ -58,8 +58,8 @@ points are the coins':
 namespace FlockComplete.LigLock.Fed
 
 open _root_.Flock (F128 ZcOut LcOut abcClaims)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (AsksRel Asks.toC repPiop)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (AsksRel Asks.toC repPiop)
 open FlockComplete.Replay (pushes pushes_congr)
 
 /-- **The recorded coins as a coin function**: round `k`'s word `i`, zero past either. -/
@@ -211,14 +211,14 @@ theorem ptsAt_claims_x {m kLog kL : ℕ} {coin : ℕ → ℕ → F128} {L : ℕ}
     (Replay.abc_x (h.1.trans h'.1.symm) (h.2.1.trans h'.2.1.symm) (h.2.2.trans h'.2.2.symm)).2 he
 
 /-- **The switched claims read each claim's seven `r''` and the claims' `γ`** only. -/
-theorem sws_coins_congr (claims : Array _root_.Flock.Claim) {cs cs' : Replay.Rs.Coins}
+theorem sws_coins_congr (claims : Array _root_.Flock.Claim) {cs cs' : Replay.Rs.Challenges}
     (hr : ∀ k < claims.size, ∀ i < 7, cs.cr k i = cs'.cr k i) (hg : ∀ k < claims.size, cs.cg k = cs'.cg k) :
     Replay.Rs.sws claims cs = Replay.Rs.sws claims cs' := by
   have hpc : Replay.Rs.perClaim claims cs = Replay.Rs.perClaim claims cs' := by
     unfold Replay.Rs.perClaim
     refine pushes_congr fun k hk => ?_
     have e : cs.rpp k = cs'.rpp k := by
-      unfold Replay.Rs.Coins.rpp
+      unfold Replay.Rs.Challenges.rpp
       apply Array.ext (by simp)
       intro i hi _
       simp only [Array.size_map, Array.size_range] at hi
@@ -245,14 +245,14 @@ theorem repPiop_rec (coins : Got) (st : _root_.Flock.Setup) (lay : _root_.Flock.
     (h : ((repPiop (stepAsks coins false) st lay cap root extras mk).run t).run #[] = .done r) :
     ∃ zc lc, r.1.1.2.2 = abcClaims st.m st.kLog zc lc ++ extras ∧
       PtsAt st.m st.fold.kLog (recCoin coins) 0 zc lc := by
-  have hR := _root_.Flock.Firewall.Finish.repPiop_rel recSim (asksRel_rec coins) st lay cap root extras mk
+  have hR := _root_.Flock.ZkServer.Finish.repPiop_rel recSim (asksRel_rec coins) st lay cap root extras mk
   obtain ⟨l', hy, -⟩ := hR t #[] r.1 r.2 h #[] rfl
   obtain ⟨⟨⟨zp, lp, cl⟩, t''⟩, g⟩ := r
   dsimp only at hy ⊢
   unfold repPiop at hy
-  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, hy⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hy
+  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, hy⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hy
   dsimp only at hy
-  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, hy⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hy
+  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, hy⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hy
   have hy' : (Except.ok ((zp', lp', abcClaims st.m st.kLog zc lc ++ extras), t₂), l₂) =
       ((Except.ok ((zp, lp, cl), t'') : Except String _), l') := hy
   simp only [Prod.mk.injEq, Except.ok.injEq] at hy'

@@ -9,11 +9,11 @@ import Proofs.Pous.Prob
 /-!
 # The streamed-label wipe per server: each claim's honest and nontrivial lemmas
 
-For each claim of `Security/Definitions/Pous/Claims/StreamedWipeServer.lean`, whose guarantee is the claim at
+For each claim of `security/Definitions/Pous/Claims/StreamedWipeServer.lean`, whose guarantee is the claim at
 `StreamedWipe.Accepts`:
 
-* **The honest lemma** (`<claim>_meets`): its numeric antecedents hold at the deployed H200 as measured on
-  vy-dc-h200-2 (`StreamedWipe.h200`): `M_s = 512·n + R`, `0 < n`, `0 < r`,
+* **The honest lemma** (`<claim>_meets`): its numeric antecedents hold at the deployed H200 as measured
+  (`StreamedWipe.h200`): `M_s = 512·n + R`, `0 < n`, `0 < r`,
   `(r − 1)^k · 2^129 ≤ r^k` at the deployed `k = 5500` and its `r = 62`, and the 5 GB point, each decided by the kernel.
 * **The nontrivial lemma** (`<claim>_fails`): the claim is false at `StreamedWipe.acceptAll`, at the same numbers. The
   prover `keepAll` stays inside the physical model: its fill writes its prior content into the first `q` of its `M_s`
@@ -67,20 +67,24 @@ theorem winRealBy_acceptAll_keepAll {N k b q M E κ : ℕ} (hN : 0 < N) (h : q �
   have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
   exact pr_of_forall fun x => ⟨trivial, keepAll_keeps h _ _ _⟩
 
+/-- Against `acceptAll`, the PRF's advantage against the distinguisher built from `keepAll` is 0: it wins on every run
+under either labels. -/
+theorem keepAll_adv_zero {N k b q M E κ : ℕ} (hN : 0 < N) (h : q ≤ M) (prf : Bits κ → Fin N → Bits b) :
+    prfAdvantage prf (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 0 := by
+  have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
+  have hreal := winRealBy_acceptAll_keepAll (E := E) (k := k) hN h prf
+  have hideal : pr (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 1 :=
+    pr_of_forall fun x => ⟨trivial, keepAll_keeps h _ _ _⟩
+  unfold prfAdvantage
+  rw [show pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ =>
+      wipeDistinguisherBy acceptAll (keepAll N k b q M E h) (x.1, prf x.2)) = 1 from hreal, hideal, tsub_self]
+
 /-- **`keepAll` breaks every claim's bound at `acceptAll`**: it wins with probability 1, and the PRF's advantage
 against the distinguisher built from it is 0. -/
 theorem keepAll_not_within {N k b q M E κ : ℕ} (hN : 0 < N) (h : q ≤ M) (prf : Bits κ → Fin N → Bits b) :
     ¬ winRealBy acceptAll prf (keepAll N k b q M E h) ≤
       (2⁻¹ : ℝ≥0∞) ^ 128 + prfAdvantage prf (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) := by
-  have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
-  have hreal := winRealBy_acceptAll_keepAll (E := E) (k := k) hN h prf
-  have hideal : pr (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 1 :=
-    pr_of_forall fun x => ⟨trivial, keepAll_keeps h _ _ _⟩
-  have hadv : prfAdvantage prf (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 0 := by
-    unfold prfAdvantage
-    rw [show pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ =>
-        wipeDistinguisherBy acceptAll (keepAll N k b q M E h) (x.1, prf x.2)) = 1 from hreal, hideal, tsub_self]
-  rw [hreal, hadv, add_zero, not_le]
+  rw [winRealBy_acceptAll_keepAll hN h prf, keepAll_adv_zero hN h prf, add_zero, not_le]
   exact pow_lt_one₀ zero_le (ENNReal.inv_lt_one.2 ENNReal.one_lt_two) (by norm_num)
 
 /-- **A prover that keeps nothing doesn't meet the threshold**: if its keep is a constant `w`, it is accepted and keeps
@@ -128,8 +132,8 @@ theorem honest_within {N k b q κ : ℕ} (hq : 128 ≤ q) (prf : Bits κ → Fin
 def noKey (N : ℕ) : Bits 0 → Fin N → Bits 512 := fun _ _ _ => false
 
 /-- **`StreamedWipeMeetsReadsTight`'s honest lemma**: its antecedents hold at the deployed H200 as measured
-(`h200`): `r = 62 ≥ 1`, `61^5500 · 2^129 ≤ 62^5500`, `n = 2,319,974,400 ≥ 1` labels, and its
-memory `M_s = 1,206,038,560,768` bits is `n · 512 + R`. -/
+(`h200`): `r = 62 ≥ 1`, `61^5500 · 2^129 ≤ 62^5500`, `n = 2,319,974,400 ≥ 1` labels, and its memory
+`M_s = 1,206,038,560,768` bits is `n · 512 + R`. -/
 theorem StreamedWipeMeetsReadsTight_meets :
     0 < h200.r ∧ (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ 0 < h200.n ∧
       h200.Ms = h200.n * 512 + h200.R := by
@@ -176,8 +180,8 @@ theorem StreamedWipeMeetsServer5GB_fails : ¬ StreamedWipeMeetsServer5GB acceptA
       (keepAll _ _ _ _ _ _ (by decide +kernel)) le_rfl)
 
 /-- **`StreamedWipeMeetsServerH200`'s honest lemma**: the premises of the 5 GB form hold at the deployed H200 as
-measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at the
-deployed `k = 5500` and `r = 62`. -/
+measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at
+the deployed `k = 5500` and `r = 62`. -/
 theorem StreamedWipeMeetsServerH200_meets :
     h200.Ms = 512 * h200.n + h200.R ∧ 0 < h200.n ∧ 0 < h200.r ∧
       (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ OperatingPoint h200.n h200.r h200.k h200.R := by

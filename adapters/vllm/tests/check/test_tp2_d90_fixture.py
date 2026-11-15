@@ -13,7 +13,7 @@ kernels that read the RECEIVED storages (RMSNorm x2, argmax).  `test_exact_unsup
 (the profile without `TpCollective`); the rest is the D90 fold rule: the received value is the OUTPUT of an `AllReduce2_v1{N}` /
 `AllGather2_v1{N}` instance over (own partial, peer partial) in rank order, the peer partial the fold's `peers` ROOT PARAMETER
 (collective_received), never a free prescribed input; the rank Program (Build side, built here with the same Definitions the derive
-binds) compares instance by instance through `cb_a.compare` with the PEER canonical source; the cross-rank leg
+binds) compares instance by instance through `cb_a.compare` with the PEER canonical source; the cross-rank check
 (`tp.rank_match.cross_rank_check`) links rank r's peers field (s, k) to rank 1-r's own partial at (s, k).
 
 NEGATIVES (must FAIL BY NAME): wrong peer, swapped rank, off-by-one step, wrong segmentation/count, reordered collectives,
@@ -23,25 +23,47 @@ equal-result-but-wrong-producer -- as mutations of the RECORD (the rank's log or
 from __future__ import annotations
 
 import gzip
+import hashlib
 import itertools
 import json
 import threading
 from dataclasses import dataclass
+from pathlib import Path as _P
 
 import pytest
-
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.fold import FoldError, fold
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
-from verity_vllm.check.match import rank_match as RM
-from verity_vllm.observe.fold.patterns.collectives import TpCollective
+from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, runs
-from verity.definitions.registry import b1, b1_tp2
-from verity_vllm.pipeline import cli
 from verity.circuits.types import Array, RecordType, Value
+from verity_vllm.definitions.registry import b1, b1_tp2
+
+from verity_vllm.check.match import rank_match as RM
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.fold import fold, summarize
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    PerRow,
+    Profile,
+    Shared,
+    Transparent,
+)
+from verity_vllm.observe.log import dumps as dump_events
+from verity_vllm.pipeline import cli
 
 BF16, I32 = Value(16), Value(32)
 BF, I32D, I64D = "bfloat16", "int32", "int64"
@@ -345,8 +367,8 @@ def rank_program(rank: int, *, swap_parts: bool = False, peer_of: dict[int, int]
             h2 = [B.call(bind(b1_tp2.AllReduce2, N=H), parts(x, peer(k, i))) for i, x in enumerate(own2)]
             k += 1
             f = [B.call(bind(b1.RMSNormTriton, N=H, EPS=C["EPS"]), x, norm) for x in h2]
-            l = B.call(bind(b1.Gemm, K=H, N=VS), f[-1], embed)
-            lg = B.call(bind(b1_tp2.AllGather2, N=VS), parts(l, peer(k, 0)))
+            own_logits = B.call(bind(b1.Gemm, K=H, N=VS), f[-1], embed)
+            lg = B.call(bind(b1_tp2.AllGather2, N=VS), parts(own_logits, peer(k, 0)))
             k += 1
             t = B.call(bind(b1.TokenSelect, V=V_FULL), lg)
             toks.append(t)
@@ -360,7 +382,6 @@ def rank_program(rank: int, *, swap_parts: bool = False, peer_of: dict[int, int]
 def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict | None = None, spec_histogram: dict | None = None):
     """descriptor.json.gz + derive-report.json + tp_links.json + result.json as derive_step writes them (the fields cb_a.compare and the
     fold's construction read)."""
-    from verity.circuits import codec
     from verity_vllm.pipeline.build import _spec_histogram
     prog = Program(spec)
     desc = codec.encode_program(prog)
@@ -383,7 +404,7 @@ def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict 
 
 
 def persist_fold(result, d, rank: int):
-    from verity_vllm.pipeline.match import persist_program
+    from verity_vllm.pipeline.match_fold import persist_program
     persist_program(result, d, profile_name="toy-tp2-rank", log_path=f"log.rank{rank}.jsonl.gz")
 
 
@@ -396,7 +417,7 @@ def compare_rank(tmp_path, rank: int, result, spec: SpecializedDefinition, *, li
     write_derived(dd, spec, rank, links_mut=links_mut)
     A, B = CMP.load_oracle(str(fd), "oracle", compact=compact), CMP.load_derived(str(dd), "derived", compact=compact)
     res = CMP.compare_steps(A, B)
-    # the record's verdict rule (sweep/row_pod.sh): canonical instance sequences equal, same step count, no differing operand
+    # the record's verdict rule (`pipeline.row_records.match_summary`, B=1): canonical instance sequences equal, same step count, no differing operand
     res["ok"] = bool(res["canonical_sha256"]["equal"]) and res["a"]["steps"] == res["b"]["steps"] and int(res["totals"].get("operands_different", 0)) == 0
     return res, A, B
 
@@ -472,7 +493,7 @@ def test_persisted_record_states_the_layout(tmp_path):
     assert [n for n, _ in pj["params"]] == ["prompt", "peers", "weights"] and pj["tp"] == {"rank": 0, "world": 2}
     assert [f["name"] for f in pj["peers_layout"][0]["fields"]] == ["s0_k0", "s0_k1", "s0_k2", "s1_k0", "s1_k1", "s1_k2"]
     assert pj["n_input_nodes"] == 3       # prompt, peers (one homogeneous RecordType), weights (one homogeneous RecordType)
-    rows = [json.loads(l) for l in (tmp_path / "instances.jsonl").read_text().splitlines()[1:]]
+    rows = [json.loads(ln) for ln in (tmp_path / "instances.jsonl").read_text().splitlines()[1:]]
     coll = [o for o in rows if o.get("collective")]
     assert len(coll) == 2 + 2 + 1 + 1 + 1 + 1 and coll[0]["collective"]["site"] == "model.embed_tokens"
 
@@ -515,7 +536,7 @@ def test_negatives_fail_the_compare_by_name(tmp_path, name, fold_kw, prog_kw):
     assert not res["ok"], f"{name}: the compare must FAIL: {_first_fail(res)[:600]}"
 
 
-# ---------------------------------------------------------------------------------------------------------- tests: the cross-rank leg
+# ---------------------------------------------------------------------------------------------------------- tests: the cross-rank check
 
 
 def _xrank(r0, r1, **kw):
@@ -539,7 +560,7 @@ def _recorder(result, rank):
 
 def _links_req(rank, result, q, drop_last=False):
     """The B>1 form: request q's Program links = the collectives carrying a peers field of q, in (step, k) order, with q's rows."""
-    out = []
+    out: list[dict] = []
     for c in sorted(result.collectives, key=lambda c: (c["step"], c["k"])):
         f = next((f for f in c["fields"] if f["request"] == q), None)
         if f is None:
@@ -550,7 +571,7 @@ def _links_req(rank, result, q, drop_last=False):
     return out[:-1] if drop_last else out
 
 
-REC_SHA = {0: "0" * 64, 1: "1" * 64}      # the recorder files' digests as the unit tests' cross-rank leg loads them (no files here)
+REC_SHA = {0: "0" * 64, 1: "1" * 64}      # the recorder files' digests as the unit tests' cross-rank check loads them (no files here)
 
 
 def _provenance(n, mismatches=(), *, rec_sha=None, digested=None, digest_mismatches=()):
@@ -572,7 +593,7 @@ def _links(rank, mut=None):
     return out
 
 
-def test_cross_rank_leg_passes_on_the_two_rank_fixture():
+def test_cross_rank_check_passes_on_the_two_rank_fixture():
     r0, r1 = fold_rank(0), fold_rank(1)
     res = _xrank(r0, r1, recorder={0: _recorder(r0, 0), 1: _recorder(r1, 1)}, links={0: _links(0), 1: _links(1)}, provenance=_provenance(6))
     assert res["verdict"] == "PASS", res
@@ -622,10 +643,10 @@ def test_cross_rank_negatives_fail_by_name():
     rec1 = [dict(x, shape=[x["shape"][0] + 1, x["shape"][1]]) for x in _recorder(r1, 1)]
     res = _xrank(r0, r1, recorder={0: _recorder(r0, 0), 1: rec1})
     assert res["verdict"] == "FAIL" and res["failed"] == ["recorder"], res["failed"]
-    # a fold with errors never passes the producer leg
+    # a fold with errors never passes the producer check
     res = _xrank(r0, fold_rank(1, tp_note=False))
     assert res["verdict"] == "FAIL" and "producer" in res["failed"] or "count" in res["failed"]
-    # VALUE leg: the ranks received different bytes at (1, 0) (the recorder's digests disagree) -> value fails by name
+    # VALUE check: the ranks received different bytes at (1, 0) (the recorder's digests disagree) -> value fails by name
     rec1 = [dict(x, out_sha256=("other" if (x["step"], x["k"]) == (1, 0) else x["out_sha256"])) for x in _recorder(r1, 1)]
     res = _xrank(r0, r1, recorder={0: _recorder(r0, 0), 1: rec1})
     assert res["verdict"] == "FAIL" and res["failed"] == ["value"], res["failed"]
@@ -649,7 +670,7 @@ def test_cross_rank_negatives_fail_by_name():
     assert res["failed"] == ["provenance"] and any("do not digest to their recorder rows" in f for f in next(c for c in res["checks"] if c["name"] == "provenance")["fails"])
     res = _xrank(r0, r1, provenance=_provenance(6, digested=20))
     assert res["failed"] == ["provenance"] and any("digested 20 stored tensors, 24 required" in f for f in next(c for c in res["checks"] if c["name"] == "provenance")["fails"])
-    # the library itself refuses an incomplete leg set when asked (any second consumer inherits the entry point's rule)
+    # the library itself refuses an incomplete set of checks when asked (any second consumer inherits the entry point's rule)
     res = _xrank(r0, r1, require_all=True)
     assert res["verdict"] == "FAIL" and res["failed"] == ["complete"] and len(next(c for c in res["checks"] if c["name"] == "complete")["fails"]) == 3
     # B>1 link table: request r1's Program has one link too few (its k sequence is not the request's collectives)
@@ -669,17 +690,15 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# the row's per-rank fold Match entry point (bench/tp/fold_match.py) over the fixture: the fold runs in-process (the CLI's fold_rank is
+# the row's per-rank fold Match entry point (`verity_vllm.pipeline.tp.fold_match`) over the fixture: the fold runs in-process (the CLI's fold_rank is
 # a subprocess over a profile MODULE; the fixture's profile is an object), everything after it -- persisted record, cb_a.compare per
-# rank, recorder / links / provenance ingestion, the cross-rank leg, the verdict -- is the CLI's own code
+# rank, recorder / links / provenance ingestion, the cross-rank check, the verdict -- is the CLI's own code
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provenance=True, links_mut=None, recorder_mut=None, gprog=True,
          provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0, fold_workers=0, wrap=None, spec_histogram=None,
          folded_under=None):
-    import hashlib
     from verity_vllm.pipeline.tp import fold_match as FM
-    from verity_vllm.observe.fold.fold import summarize
     tmp_path = tmp_path / f"case{len(list(tmp_path.iterdir()))}"
     tmp_path.mkdir()
     cap = tmp_path / "capture"
@@ -715,7 +734,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
         gp[r].write_text(json.dumps({"toy": True, "rank": r}))
 
     def gm_inproc(py, rank_dir, gprog_path, workload, within, timeout, reuse=False, x09=None):
-        # the GM-01 leg's plumbing only (the checker of record runs on the real row); the toy has no GP-01 workload Program
+        # the GM-01 check's plumbing only (the checker of record runs on the real row); the toy has no GP-01 workload Program
         ok = gprog_path.exists() and workload.exists()
         return {"rc": 0 if ok else 2, "seconds": 0.0, "verdict": "PASS" if ok else "FAIL", "ok": ok, "failed_checks": [], "checks": {},
                 "achieved_concurrency": {"programmed_max": 1, "observed_max": 1}, "generated_lengths": {REQ: 2}, "eos_truncated_requests": [], "within_step_criterion": within}
@@ -764,8 +783,8 @@ def _stable(doc):
     return doc
 
 
-def test_rank_legs_run_concurrently_and_the_document_does_not_depend_on_the_schedule(tmp_path, monkeypatch):
-    """The two ranks' fold/compare/GM-01 chains are independent until the cross-rank leg: run concurrently (default) and serially
+def test_rank_checks_run_concurrently_and_the_document_does_not_depend_on_the_schedule(tmp_path, monkeypatch):
+    """The two ranks' fold/compare/GM-01 chains are independent until the cross-rank check: run concurrently (default) and serially
     (--rank-workers 1) they yield the SAME verdict document -- per_rank in rank order, problems in rank order, same cross-rank record."""
     rc_p, par, _ = _e2e(tmp_path, monkeypatch)
     rc_s, ser, _ = _e2e(tmp_path, monkeypatch, rank_workers=1)
@@ -777,14 +796,14 @@ def test_rank_legs_run_concurrently_and_the_document_does_not_depend_on_the_sche
     assert rc_p == rc_s == 1 and par["pass"] is False and _stable(par) == _stable(ser)
 
 
-def test_the_folds_run_wider_than_the_legs_after_them(tmp_path, monkeypatch):
-    """`--fold-workers` ranks fold at once while `--rank-workers` bounds the compare and GM-01 legs after the fold (a GLM-5.3 B8 rank's
-    fold peaks at 40 GB, its GM-01 near 400 GB): both ranks are inside their fold together, at a barrier neither passes alone, yet never
+def test_the_folds_run_wider_than_the_checks_after_them(tmp_path, monkeypatch):
+    """`--fold-workers` ranks fold at once while `--rank-workers` bounds the compare and GM-01 checks after the fold (a rank's
+    GM-01 holds far more memory than its fold): both ranks are inside their fold together, at a barrier neither passes alone, yet never
     inside GM-01 together, and the document is the serial run's."""
     barrier, lock, inside, most = threading.Barrier(2), threading.Lock(), [0], [0]
 
     def wrap(name, fn):
-        def leg(*a, **k):
+        def part(*a, **k):
             if name == "fold_rank":
                 barrier.wait()
                 return fn(*a, **k)
@@ -796,7 +815,7 @@ def test_the_folds_run_wider_than_the_legs_after_them(tmp_path, monkeypatch):
             finally:
                 with lock:
                     inside[0] -= 1
-        return leg
+        return part
 
     rc, wide, _ = _e2e(tmp_path, monkeypatch, rank_workers=1, fold_workers=2, wrap=wrap)
     rc_s, ser, _ = _e2e(tmp_path, monkeypatch, rank_workers=1)
@@ -815,8 +834,6 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
                                                  "value", "provenance", "links", "complete"]
     assert len(xr["peer_binding"]) == 12 and res["cross_rank"]["peer_binding_n"] == 12
     # the record names the tp2_match.json it consumed, by digest, and the recorder digests that record was bound to
-    import hashlib
-    from pathlib import Path as _P
     assert res["tp2_match"]["sha256"] == hashlib.sha256(_P(res["tp2_match"]["path"]).read_bytes()).hexdigest()
     assert res["tp2_match"]["recorder_sha256"] == {str(r): hashlib.sha256((_P(res["capture"]) / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1)}
     # the TP1 Match-dir layout per rank, for the checker of record and the fast path (mfast): capture/log.jsonl.gz + program.json + instances.jsonl
@@ -827,7 +844,7 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
 def test_a_tp_fold_of_a_v2_sampler_build_carries_the_builds_construction(tmp_path, monkeypatch):
     """Each rank folds under the construction its Build's Programs declare (`match.fold_construction_args`, which the single-rank driver
     passes too): a v2 top-p Build folds under greedy-check-per-stage, never the profile's shared-greedy default, which its Programs never
-    match.  --reuse-fold refolds a persisted fold made under another construction (and --reuse-legs then keeps none of its legs) and keeps
+    match.  --reuse-fold refolds a persisted fold made under another construction (and --reuse-legs then keeps none of its checks) and keeps
     one made under the same."""
     from verity_vllm.pipeline.tp import fold_match as FM
     fold_worker = FM.fold_rank      # `_e2e` replaces it with the in-process fold
@@ -859,31 +876,31 @@ def test_a_tp_fold_of_a_v2_sampler_build_carries_the_builds_construction(tmp_pat
 
 @pytest.mark.slow
 def test_fold_match_entry_point_fails_by_name(tmp_path, monkeypatch):
-    # partner rank missing: rank 1 never logged -> the cross-rank leg names it, the row is not a PASS on rank 0's fold alone
+    # partner rank missing: rank 1 never logged -> the cross-rank check names it, the row is not a PASS on rank 0's fold alone
     rc, res, _ = _e2e(tmp_path, monkeypatch, drop_rank1_log=True)
     assert rc == 1 and res["pass"] is False and res["cross_rank"]["failed"] == ["partner_rank"] and "partner rank missing" in res["problems"][0]
-    # no provenance record -> named FAIL, not a skipped leg
+    # no provenance record -> named FAIL, not a skipped check
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance=False)
     assert rc == 1 and "provenance_missing" in res["cross_rank"]["failed"]
-    # rank 1 reordered its collectives: rank 1's own compare fails AND the cross-rank order/op legs fail
+    # rank 1 reordered its collectives: rank 1's own compare fails AND the cross-rank order/op checks fail
     rc, res, _ = _e2e(tmp_path, monkeypatch, rank1_mut={"reorder": True})
     assert rc == 1 and res["legs"]["compare_per_rank"]["1"].startswith("FAIL") and res["legs"]["compare_per_rank"]["0"] == "PASS"
     assert {"order", "op"} & set(res["cross_rank"]["failed"])
-    # wrong peer in rank 1's Program link table only (the fold and compare are clean): the link leg names it
+    # wrong peer in rank 1's Program link table only (the fold and compare are clean): the link check names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, links_mut={3: {"peer_collective_k": 4}})
     assert rc == 1 and res["cross_rank"]["failed"] == ["links"] and res["legs"]["compare_per_rank"] == {"0": "PASS", "1": "PASS"}
-    # the ranks received different bytes at one collective (recorder digests): the value leg names it
+    # the ranks received different bytes at one collective (recorder digests): the value check names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, recorder_mut=lambda x: dict(x, out_sha256=("x" if (x["step"], x["k"]) == (0, 2) else x["out_sha256"])))
     assert rc == 1 and res["cross_rank"]["failed"] == ["value"]
     # no GM-01 stage (no --gprog/--workload): not a PASS, named
     rc, res, _ = _e2e(tmp_path, monkeypatch, gprog=False)
     assert rc == 1 and res["pass"] is False and res["legs"]["global_match_per_rank"] == {"0": None, "1": None}
     assert any("GM-01 stage not run" in p for p in res["problems"]), res["problems"]
-    # --tp2-match from ANOTHER run (its recorder digests are not these rows'): the provenance leg names it
+    # --tp2-match from ANOTHER run (its recorder digests are not these rows'): the provenance check names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance_of_other_run=True)
     assert rc == 1 and res["cross_rank"]["failed"] == ["provenance"]
     assert "provenance from ANOTHER run" in json.dumps(res["cross_rank"]["checks"])
-    # stored .pt bytes that do not digest to the recorder rows (tp2_match named them): the leg refuses the record
+    # stored .pt bytes that do not digest to the recorder rows (tp2_match named them): the check refuses the record
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance_digest_mismatch=True)
     assert rc == 1 and res["cross_rank"]["failed"] == ["provenance"] and "do not digest to their recorder rows" in json.dumps(res["cross_rank"]["checks"])
 
@@ -965,7 +982,7 @@ def test_commit_binding_needs_the_commit_oracle(tmp_path):
 # the B2 form: two co-scheduled requests; the peer field's M_r and the own-part read range derive from the StepStart row
 # attribution.  Positive: both ranks fold, every request's projection equals its request Program (batch_decomp X-09), cross-rank PASS.
 # Negative: ONE row boundary shifted (r0 3 rows / r1 1 row instead of 2 / 2) FAILS BY NAME -- at the fold's stated segmentation, at
-# the cross-rank segmentation leg, and at the per-request compare -- not by value.
+# the cross-rank segmentation check, and at the per-request compare -- not by value.
 
 
 def fold_rank_b2(rank: int, *, shift: bool = False):
@@ -979,7 +996,6 @@ def _segments(r):
 
 def _decompose_b2(tmp_path, rank: int, r, *, tag: str):
     from verity_vllm.check.match import batch_decomp as BD
-    from verity_vllm.observe.log import dumps as dump_events
     od, dd = tmp_path / f"oracle_{tag}_r{rank}", tmp_path / f"derived_{tag}_r{rank}"
     (od / "capture").mkdir(parents=True)
     dd.mkdir()
@@ -1017,7 +1033,7 @@ def test_b2_every_request_projection_equals_its_program_both_ranks(tmp_path):
         assert res["xreq_total"] == 0                                 # no request reads another request's peer rows
 
 
-def test_b2_cross_rank_leg_passes_with_per_request_link_tables():
+def test_b2_cross_rank_check_passes_with_per_request_link_tables():
     r0, r1 = fold_rank_b2(0), fold_rank_b2(1)
     links = {rk: {q: _links_req(rk, r, q) for q in ("r0", "r1")} for rk, r in ((0, r0), (1, r1))}
     res = _xrank(r0, r1, recorder={0: _recorder(r0, 0), 1: _recorder(r1, 1)}, links=links, provenance=_provenance(6))
@@ -1029,7 +1045,7 @@ def test_b2_shifted_row_boundary_fails_by_name(tmp_path):
     r0, r1s = fold_rank_b2(0), fold_rank_b2(1, shift=True)
     # (1) the fold STATES the shifted segmentation (from the StepStart rows, never from the tensor)
     assert _segments(r1s)["r0"][0] == ("s0_k0", 3) and _segments(r1s)["r1"][0] == ("s0_k0", 1)
-    # (2) the cross-rank leg names it: the two ranks segment (0, 0) differently
+    # (2) the cross-rank check names it: the two ranks segment (0, 0) differently
     res = _xrank(r0, r1s)
     assert res["verdict"] == "FAIL" and "segmentation" in res["failed"], res["failed"]
     seg = next(c for c in res["checks"] if c["name"] == "segmentation")
@@ -1042,7 +1058,7 @@ def test_b2_shifted_row_boundary_fails_by_name(tmp_path):
     assert not r1s.reference_eligible
     dec = _decompose_b2(tmp_path, 1, r1s, tag="shift")
     assert dec["verdict"] != "PASS" and [(e["request_id"], e["LP"], e["T"]) for e in dec["requests"]] == [("r0", 2, 0), ("r1", 2, 0)], dec["reasons"]
-    # both ranks shifted alike: the cross-rank leg agrees, the fold still refuses each rank by name (the ranks agree; the record does not)
+    # both ranks shifted alike: the cross-rank check agrees, the fold still refuses each rank by name (the ranks agree; the record does not)
     r0s = fold_rank_b2(0, shift=True)
     assert [e["class"] for e in r0s.errors][:2] == ["TokenWiring", "TokenWiring"] and not r0s.reference_eligible
     assert "segmentation" not in _xrank(r0s, r1s)["failed"]

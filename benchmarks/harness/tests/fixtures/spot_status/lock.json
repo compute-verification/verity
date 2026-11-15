@@ -1,0 +1,18 @@
+{
+ "format": 1,
+ "guarantees": {
+  "Verity.Sampled.remote_soundness_deployedReady": {
+   "owner": "@soundness",
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Verity.Sampled.Instance.SessionsReady", "Verity.Vocab.PouwSound"],
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected"]
+   }
+  },
+  "Verity.Other.guarantee": {
+   "owner": "@soundness",
+   "premises": {"assumptions": [], "domain": [], "open": ["Verity.Other.Open"], "reads": []}
+  }
+ }
+}

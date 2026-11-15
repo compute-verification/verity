@@ -1,6 +1,7 @@
 """`verity bench overhead`'s rules: the cards, the operating points' rule, the prover overhead γ and its interval, and what
 γ means per monitoring period. Standard library only, and loadable alone by its path, but for γ's pairing, which is the
-harness kit's (`kit.paired`): the node's sweep (`overhead_node`) and the store side (`overhead_records`) both read it.
+harness kit's (`kit.paired`), and a card's figures, which `verity.device` reads (`Gpu.sms`, `Gpu.l2_bytes`): the node's
+sweep (`overhead_node`) and the store side (`overhead_records`) both read it.
 
 **The operating points** belong to a card, a model and a precision. Over one layer of the model's linears (`MODELS`), the
 fastest stock kernel at each m is the fastest of every library and scaling the card runs (`Gpu.libraries`, the precision's
@@ -20,7 +21,7 @@ stock's at the card's weight (`host_cost`, from the timed pass); the denominator
 arm is each linear's fastest kernel of the scheme's scaling by wall time, with the least-SM-time kernel's γ beside it; the
 `stock` scheme's γ is the A/A control, one kernel against its own twin. A figure of record has at least `MIN_REPS` reps,
 an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes the SM-time cross-check
-(`cross_check_why`); the scheme gate is γ ≤ `GAMMA_CAP` at each point. `periods` states it per monitoring period.
+(`cross_check_why`); the scheme gate is γ ≤ `GAMMA_MAX` at each point. `periods` states it per monitoring period.
 
 **What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
 scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
@@ -33,6 +34,9 @@ import math
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
+from functools import cached_property
+from typing import Any
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -46,14 +50,15 @@ RULE = {"c_share": C_SHARE, "l_slack": L_SLACK, "grid": GRID, "m_max": M_MAX}
 #: busy SM-time at most CROSS_CHECK over its kernels' durations x the SMs their blocks occupy
 MIN_REPS, HALF_WIDTH, CROSS_CHECK = 20, 0.05, 0.05
 #: the scheme gate: γ at most this at each point
-GAMMA_CAP = 10.0
+GAMMA_MAX = 10.0
 POINTS = ("C", "L")
 
 
 @dataclass(frozen=True)
 class Gpu:
-    """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`, `sms`), the
-    harness's build target, the L2 the operand sets must pass twice, host CPU core-seconds' weight in SM-seconds (the
+    """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`),
+    its card (`sku`, whose `sm.count` and `store.l2` are `sms` and the L2 the operand sets must pass twice, `l2_bytes`), the
+    harness's build target, host CPU core-seconds' weight in SM-seconds (the
     node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
     since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
@@ -62,22 +67,35 @@ class Gpu:
     gpu: str
     name: str
     capability: str
-    sms: int
+    sku: str
     arch: str
-    l2_bytes: int
     cpu_sm_s_per_core_s: float
     precisions: Mapping[str, tuple[str, ...]]
     libraries: tuple[str, ...]
     bridge: bool
     datasheet: str
 
+    @cached_property
+    def sms(self) -> int:
+        return int(self._figure("sm", "count"))
+
+    @cached_property
+    def l2_bytes(self) -> int:
+        return int(self._figure("store", "l2"))
+
+    def _figure(self, table: str, key: str) -> Fraction:
+        # imported here, so the rules above load alone by this file's path, with no package beside them
+        from verity.device import load_card, number
+
+        return number(load_card(self.sku)[table][key])
+
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 CARDS = {card.gpu: card for card in (
-    Gpu("h200", "H200", "9.0", 132, "sm_90a", 50 << 20, 0.48, {"fp8": FP8},
+    Gpu("h200", "H200", "9.0", "h200-sxm-141gb", "sm_90a", 0.48, {"fp8": FP8},
          ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
-    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", 188, "sm_120a", 128 << 20, 1.64,
+    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", "rtx-pro-6000-server", "sm_120a", 1.64,
          {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
 )}
 
@@ -116,7 +134,7 @@ class Scheme:
 SCHEMES = {s.id: s for s in (
     Scheme("stock", "fp8-e4m3-rowwise"),
     Scheme("pearl-plus", "fp8-e4m3-rowwise", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90",
-           "overhead_arm:epsilon"),
+           "overhead_arm:epsilon", commits_y=True),
 )}
 
 
@@ -204,11 +222,11 @@ def _mid(lo: int, hi: int) -> int | None:
 
 @dataclass(frozen=True)
 class Points:
-    """The rule's verdict on the m's sampled so far: C and L (None until sampled), the best throughput, and the bracket each
+    """The rule's verdict on the m's sampled so far: C and L (`c`, `lat`; None until sampled), the best throughput, and the bracket each
     lies in (its sampled neighbour on the side it could still move to, None at the sweep's end)."""
 
     c: int | None
-    l: int | None
+    lat: int | None
     best_flop_per_ms: float
     c_bracket: tuple[int | None, int | None]
     l_bracket: tuple[int | None, int | None]
@@ -229,17 +247,17 @@ def rule(times: Mapping[int, float], model: str = KERNEL_MODEL) -> Points:
             break
         if m % GRID == 0:
             c = m
-    l = None
+    lat = None
     for m in ms:
         if times[m] > (1 + L_SLACK) * times[1]:
             break
         if m % GRID == 0:
-            l = m
+            lat = m
     below = max((m for m in ms if c is not None and m < c), default=None)
-    above = min((m for m in ms if l is not None and m > l), default=None)
-    if l is None:
+    above = min((m for m in ms if lat is not None and m > lat), default=None)
+    if lat is None:
         above = min((m for m in ms if m > 1 and times[m] > (1 + L_SLACK) * times[1]), default=None)
-    return Points(c, l, best, (below, c), (l, above))
+    return Points(c, lat, best, (below, c), (lat, above))
 
 
 def next_ms(times: Mapping[int, float], model: str = KERNEL_MODEL) -> list[int]:
@@ -268,7 +286,7 @@ def final(times: Mapping[int, float], model: str = KERNEL_MODEL) -> Points:
     if more := next_ms(times, model):
         raise ValueError(f"the sweep isn't finished: it still samples m = {', '.join(map(str, more))}")
     p = rule(times, model)
-    if p.c is None or p.l is None:
+    if p.c is None or p.lat is None:
         raise ValueError(f"the rule finds no {'C' if p.c is None else 'L'} on multiples of {GRID} in the sweep")
     return p
 
@@ -299,9 +317,10 @@ def sweep_times(results: Sequence[Mapping], model: str = KERNEL_MODEL,
     linears = MODELS[model]
     rows = {row["label"]: row for r in results for row in r.get("shapes", [])}
     ms = sorted({row["m"] for row in rows.values() if (row["n"], row["k"]) in set(linears.values())})
-    times, chosen = {}, {}
+    times: dict[int, float] = {}
+    chosen: dict[int, dict] = {}
     for m in ms:
-        per = {}
+        per: dict[str, dict[str, Any]] = {}
         for linear, (n, k) in linears.items():
             row = rows.get(label(m, n, k))
             got = timed(row, method=method) if row else {}
@@ -474,7 +493,7 @@ def cross_check_why(ratios: Mapping[str, float | None], bound: float = CROSS_CHE
     off = {k: r for k, r in ratios.items() if r is None or r - 1 > bound}
     if not off:
         return None
-    worst = max(off, key=lambda k: math.inf if off[k] is None else off[k])
+    worst = max(off, key=lambda k: math.inf if (r := off[k]) is None else r)
     return (f"{len(off)} entries' SMs Active SM-time exceeds their kernels' occupied SM-time by over {bound:.0%} "
             f"({worst}: {off[worst]})")
 

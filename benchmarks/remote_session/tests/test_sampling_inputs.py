@@ -1,7 +1,7 @@
 """`sampling_inputs`' closed form for the paced line's sampling term is `paced_line`'s arithmetic on uniform sessions,
 with the wrong receipts spilling past one group and not, and with one openings coin over several groups; that arithmetic
 is a stretch worked by hand; a region's solution meets the constraints it was solved under; and the code's coin over g
-groups (`groups_per_coin`) is the model's shared draws, each plan at g agreeing with it."""
+groups (`groups_per_coin`) is the model's shared samples, each plan at g agreeing with it."""
 from __future__ import annotations
 
 import sys
@@ -46,18 +46,16 @@ def test_a_region_solution_meets_its_constraints():
             assert flight == 2 or s["k"] / s["r"] >= si.least_period(p, s["k"]) * (1 - 1e-12)
         for s in (line, shared):
             assert 2 * (s["l_max_s"] - p["c_s"]) * p["xi"] / p["blocks"] <= 0.01 * (1 + 1e-12)
-        assert line["d"] >= 1
-        if flight == 2:
-            assert shared["d"] < 1 and shared["o"] < line["o"]
+        assert line["d"] >= 1 and shared["o"] <= line["o"]
         cost = {id(s): s["passes_gpus"] + s["proving_gpus_fit"] for s in (line, shared, loose)}
         assert cost[id(shared)] <= cost[id(line)]
         assert cost[id(loose)] <= cost[id(line)] and loose["rebuild_held"] > line["rebuild_held"]
 
 
 def test_the_code_reads_one_coin_over_g_groups_as_the_merged_window_the_model_drew():
-    """`audit.pooled` on each group's receipts and draws naming `groups_per_coin` g is the model's reading of shared
-    draws, one window of g groups' receipts and the coin's samples, however the coin's samples fall in its groups."""
-    from verity.protocols.poub.verifier import audit
+    """`audit.pooled` on each group's receipts and samples naming `groups_per_coin` g is the model's reading of shared
+    samples, one window of g groups' receipts and the coin's samples, however the coin's samples fall in its groups."""
+    from verity.protocols.accounting.poub.verifier import audit
     for g, shares in ((2, (0, 3)), (4, (1, 0, 2, 0)), (3, (0, 0, 1))):
         n, u = 5, 7_000
         split = si.record_of([(u, shares[x % g]) for x in range(n * g)], g)

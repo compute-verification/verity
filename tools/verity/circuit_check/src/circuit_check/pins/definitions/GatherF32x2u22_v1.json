@@ -1,8 +1,0 @@
-{
- "definitions": {
-  "GatherF32x2u22_v1": {
-   "and": 704,
-   "type": "fb701309ba230174dbf31cc26eed2ce41886e68b1027f332836e775e28f3d308ad752c1a2d4c03359029646ebe4c1553fff51f5921f193b073ddf101ff2f888d"
-  }
- }
-}

@@ -6,7 +6,8 @@ each through total_cost._point as Figure 1 computes it.
                                                              [--steady ROWS.json]
 
 A case is a base line ((A) `tokens`, or (A′) `per_expert`, optionally with each table read fused into its consumer
-GEMM) and its levers: all proving scaled (`scale`, a faster prover or another h), the marginal scaled (`marginal`,
+GEMM), its circuit cut further by a `partition` card of another kind where `partition` names one, and its levers: all
+proving scaled (`scale`, a faster prover or another h), the marginal scaled (`marginal`,
 each block's seconds), each statement's cap in blocks multiplied (`cap`) or its fixed cost scaled
 (`fixed`), the registration statements share within (`registration`), and the replay a sampled request costs in
 GPU-seconds (`replay`; default the figure's, a machine's 600 s block).  `tax` is its serve tax, outside beta.
@@ -126,6 +127,7 @@ class Case:
     budget_form: str = ""
     leverage: tuple[float, ...] = ()
     steady: str = ""
+    partition: str = ""
 
     def tax(self) -> float:
         """The serve tax, a sum of the serve_tax card's named parts: the certified tick, the step record, the two-stage
@@ -147,8 +149,9 @@ def build(case: Case):
     strata = None
     per_type = (case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain or case.verify
                 or case.server)
-    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type:
-        strata = priced_strata(case.line)
+    if (case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type
+            or case.partition):
+        strata = priced_strata(case.line, case.partition)
         if case.fuse:
             strata = fuse_reads(strata, fixed="sum" if case.fixed_sum or case.fused else "read")
             if case.fused:

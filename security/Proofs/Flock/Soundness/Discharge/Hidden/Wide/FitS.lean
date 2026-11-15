@@ -44,7 +44,15 @@ include h
 theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
   h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
 
+theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => by
+  rcases h.2 p hp with h1 | h1
+  · exact h1.2.1
+  · exact h1.2.1
+
 end RowsFitP
+
+/-- A `RowsFitS` proof where a `RowsFitP` one is asked for (`RowsFitS.toP`). -/
+instance instCoeRowsFitSRowsFitP {c : Circuit} : Coe (RowsFitS c) (RowsFitP c) := ⟨RowsFitS.toP⟩
 
 /-- **The bytes a row's `hm96` slot hashes**, `bytes` its message bytes: `RowSeg.enc` of them at a segmented row, else
 its own prefix (`rowPre`) and them. -/
@@ -59,10 +67,7 @@ include h
 theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
   h.toP.kind hp
 
-theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => by
-  rcases h.2 p hp with h1 | h1
-  · exact h1.2.1
-  · exact h1.2.1
+theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := h.toP.bits16
 
 end RowsFitS
 
@@ -96,9 +101,9 @@ theorem row_bc_tgtS (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hk : PadRow st.c.ports[p]! ∨ SegRow st.c.ports[p]!) :
-    bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
-      (rowMsg st.c.ports[p]! (bytesOf (blockBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p)))
-      (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
+    bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
+      (rowMsg st.c.ports[p]! (bytesOf (chunkBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p)))
+      (bytesOf (chunkBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
   rcases hk with hf | hs
   · rw [rowMsg_fit hf]
     exact Any.row_bc_tgt L F hda hupv hz o hg hp hf.2.1 hf.2.2.1 hf.2.2.2 hf.1
