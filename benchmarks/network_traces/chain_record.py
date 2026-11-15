@@ -367,15 +367,10 @@ def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
                f"{(rec.get('control') or {}).get('of')} pieces, so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
 
 
-def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None, witness: dict | None = None) -> dict:
-    """N2's step from its public summary `s`; each member's prove and verify seconds and its scan's ``structured``
-    finds from `witness`, the private side ``n2_zk.py prove --witness`` writes, where the summary leaves them."""
+def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
+    """N2's step from its public summary `s` alone: the timings and the scan's ``structured`` finds stay in the
+    private side ``n2_zk.py prove --witness`` writes, and the report, which is released, holds none of them."""
     job = job or {}
-    timed = (witness or {}).get("members") or {}
-
-    def timed_wins(name: str):
-        return ((timed.get(name) or {}).get("windows") or {}).values()
-
     why, stand_in = (job.get("why") or {}).get("n2"), (job.get("stand_in") or {}).get("n2")
     rc = (job.get("rc") or {}).get("n2")
     if s is None or (rc not in (None, "0") and not any((m.get("windows") or [])
@@ -394,10 +389,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None, witness: d
                          "lean_proved": sum(bool((w.get("proof") or {}).get("proved")) for w in wins),
                          "as_expected": sum(bool(w.get("as_expected")) for w in wins),
                          "leaked": (m.get("received") or {}).get("leaked"),
-                         "structured": ((timed.get(name) or {}).get("received") or {}).get("structured"),
-                         "ok": m.get("ok"),
-                         "prove_s": round(sum((w.get("prove") or {}).get("session_s") or 0 for w in timed_wins(name)), 1),
-                         "verify_s": round(sum(w.get("verify_s") or 0 for w in timed_wins(name)), 1)}
+                         "ok": m.get("ok")}
     honest = members.get("honest") or {}
     draw = s.get("draw") if isinstance(s.get("draw"), dict) else {}
     n = (draw.get("population") or honest.get("windows")
@@ -908,8 +900,7 @@ def report(a) -> dict:
     endpoint = (warden_endpoint_step if warden else endpoint_step)(_json(a.endpoint))
     merged = None if scan_only else merged_n2(a.n2)
     n2 = ({"verdict": "not given", "why": SCAN_ONLY, "in_the_clear": CLEAR["n2"]} if scan_only
-          else n2_step(merged, cert, job, {"members": {k: v for d in map(_json, getattr(a, "n2_witness", None) or []) if d
-                                                       for k, v in (d.get("members") or {}).items()}}))
+          else n2_step(merged, cert, job))
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
             else scan_step(_json(a.scan), a.network_certifier_run, job))
     certificates = dict(cert)
@@ -1026,8 +1017,6 @@ def main(argv=None) -> int:
     r.add_argument("--tie", help="the network certifier path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
-    r.add_argument("--n2-witness", nargs="*", help="each --n2 run's private side (n2_zk.py prove --witness), which "
-                                                   "holds its timings and its scan's structured finds")
     r.add_argument("--warden-run", dest="network_certifier_run")
     r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
                                               "circuit.json each), whose sample and free inputs d1's K counts")
