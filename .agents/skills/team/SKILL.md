@@ -23,8 +23,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   command; `AGENT_GUARD_LOCAL_OK=1` in the command opts in.
 
   ~~~text
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
+  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py'  # --quick: no slow tests
+  uv run python tools/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
   research status RUN  # check back on a run; research run --wait only under 20 min
   ~~~
 
@@ -45,7 +45,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 ## Landing
 
 `main` holds only fully checked commits. ci's verified queue (`research queue vqueue`: `research.vqueue_loop`'s docstring
-has the rules, `tools/verity/check/drive.toml` the settings) merges the PRs ready to land onto `main` as a candidate, checks
+has the rules, `tools/check/drive.toml` the settings) merges the PRs ready to land onto `main` as a candidate, checks
 it, and fast-forwards `main` only to a candidate with no new failure:
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
