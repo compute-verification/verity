@@ -259,6 +259,19 @@ def test_a_crossing_over_moves_with_their_own_map_or_hand_changes_carries_the_ma
     assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
 
 
+def test_the_check_runs_a_move_by_a_restack_py_from_before_own_maps_and_hand_changes_as_that_one_ran_it(world, tmp_path):
+    """The check runs each move by the restack.py of the commit the crossing went onto, which may predate own maps and hand
+    changes (no `own_map`, no `hand_of`, a `run_script` of four arguments): it runs the move's script as that restack.py did,
+    and doesn't fail on what that one lacks."""
+    (tmp_path / "restack.py").write_text(
+        "SCRIPT = SCRIPT_ARGS = None\n\n\n"
+        "def move_line(move, cwd):\n    return 'tools/move/rename.py', ['--map', 'm.toml']\n\n\n"
+        "def move_base(move, cwd):\n    return move + '^'\n\n\n"
+        "def run_script(merged, base, python, cwd):\n    return '0' * 40, [], []\n")
+    head = _git(world.dev, "rev-parse", "origin/main")
+    assert Q.mapped_tree(world.dev, head, head, tmp_path) == ("0" * 40, "")
+
+
 def _restacked(world: World, head: str) -> str:
     """``head`` carried across `main`'s moves by `main`'s own `tools/move/restack.py`, with `main`'s `move_lines.toml`."""
     _git(world.dev, "checkout", "-q", "--detach", "origin/main")

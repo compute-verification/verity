@@ -4192,14 +4192,15 @@ MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): (tools/move/[\w.-]+\.toml)(?:
 #: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
 #: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/` and the map the
 #: move adds, `own_map`, in a scratch worktree), merges in what the move has beside its script's output on its parent (its hand
-#: changes and that map: `check_generated`) as restack.py's step `hand` does, and prints the tree it leaves (`MAPPED_RE`)
+#: changes and that map: `check_generated`) as restack.py's step `hand` does, and prints the tree it leaves (`MAPPED_RE`); by a
+#: restack.py from before own maps and hand changes, as that one ran a move
 _MAPPED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
            "x, m = sys.argv[2:4]\n"
            "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(m, None)\n"
            "base = R.move_base(m, None)\n"
-           "own = R.own_map(m, base, R.SCRIPT_ARGS, None)\n"
-           "tree = R.run_script(x, base, sys.executable, None, (m, own) if own else None)[0]\n"
-           "if own or R.hand_of(m, None):\n"
+           "own = getattr(R, 'own_map', lambda *a: None)(m, base, R.SCRIPT_ARGS, None)\n"
+           "tree = R.run_script(x, base, sys.executable, None, *([(m, own)] if own else []))[0]\n"
+           "if own or getattr(R, 'hand_of', lambda *a: [])(m, None):\n"
            "    on_base = R.commit_tree(R.check_generated(m, base, sys.executable, None), [], 'the script on the base', None)\n"
            "    tree, files = R.merge_trees(R.commit_tree(tree, [x], 'the script', None), m, None, base=on_base)\n"
            "    if files:\n"
