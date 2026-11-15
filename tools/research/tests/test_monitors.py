@@ -1882,6 +1882,24 @@ def test_a_check_that_failed_only_where_a_live_allowance_covers_runs_on_and_any_
                            "allowances at its commit cover, which the verified queue takes as passed.")
 
 
+@pytest.mark.parametrize("left", [["suites.failed.json (IsADirectoryError)"],
+                                  [f"suites.json (over {M.JUDGED_BYTES} B)", "circuit-check.log (PermissionError)"]],
+                         ids=["unreadable", "over-bound"])
+def test_a_check_whose_failures_the_reader_left_a_file_of_out_is_cancelled_as_before_and_the_post_names_the_files(
+        monkeypatch, left):
+    """A failure the reader couldn't bring a file of (`judged`'s ``left_out``) isn't known to be allowed: no step is taken as
+    allowed, though a live allowance covers what it did bring, so the check is cancelled as before, and the post says the
+    allowances weren't judged and names each file left out, with why."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    calls = []
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=waited_on([{**credit_red(TRAIN), "left_out": left}], calls,
+                                                                credit_policy(LIVE)), act=True))
+    assert [c for c in calls if "cancel" in c][0][-1].startswith("failed-checks: step pytest failed while 1 waited")
+    assert f.text.endswith(" Cancelled at 20:40Z, since r2 waited for a check slot on vy-nebius-cpu-1. Its allowances were not "
+                           f"judged: the reader left out {', '.join(f'`{x}`' for x in left)}.")
+
+
 def test_a_check_spared_for_an_allowed_failure_is_still_cancelled_for_a_later_red(monkeypatch):
     """Sparing a check for an allowed failure is judged again on each pass: once a gating step fails beyond the allowances, the
     check is cancelled and a second post says so; a later failure off the merge gate cancels nothing."""
@@ -1902,7 +1920,9 @@ def test_a_check_spared_for_an_allowed_failure_is_still_cancelled_for_a_later_re
 def test_the_reader_brings_a_running_checks_steps_suite_reports_and_failed_logs_fail_lines_to_judge_its_failures_by(tmp_path):
     """The relay judges a running check's failures by the queue's own judge (`landing.allowed_steps`), which reads the run's
     steps.jsonl, its suite reports and a failed step's log's FAIL lines (circuit-check's allowances): the reader brings those,
-    each whole or not at all (a report over `JUDGED_BYTES` covers nothing), and nothing of a run that ended."""
+    each whole or not at all, and nothing of a run that ended.  Each file it leaves out is on the row with why, over its bound
+    (`JUDGED_BYTES`) or unreadable (the error's class); an absent one is no failure reported, as the queue reads it.  A file
+    it couldn't read elsewhere is in its `unread`, but a steps.jsonl's last line its writer hasn't finished."""
     slot = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"]
     steps = [{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"},
              {"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}]
@@ -1910,16 +1930,34 @@ def test_the_reader_brings_a_running_checks_steps_suite_reports_and_failed_logs_
     logs = {"pytest.log": f"FAILED {CREDIT}\n", "circuit-check.log": "PASS a\nFAIL width/overflow Foo_v1{N=8}\n",
             "suites.failed.json": failed, "suites-lean.failed.json": "x" * (M.JUDGED_BYTES + 1)}
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="running", rc=None, steps=steps, logs=logs)
+    (tmp_path / "runs" / "r20261003-200000-aaaa" / "suites.json").mkdir()       # there, and unreadable
     write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=1, steps=steps, logs=logs)
+    write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="running", rc=None, steps=steps)
+    (tmp_path / "requests" / "r20261003-200000-cccc" / "request.json").write_text("{not json")
     script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
-    rows = {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True,
-                                                                text=True, check=True).stdout)["rows"]}
+    got = json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True, text=True, check=True).stdout)
+    rows = {r["run"][-4:]: r for r in got["rows"]}
     files = rows["aaaa"]["files"]
     assert sorted(files) == ["circuit-check.log", "pytest.log", "steps.jsonl", "suites.failed.json"]
     assert (files["suites.failed.json"], files["pytest.log"], files["circuit-check.log"]) == (
         failed, "", "FAIL width/overflow Foo_v1{N=8}\n")
     assert files["steps.jsonl"] == (tmp_path / "runs" / "r20261003-200000-aaaa" / "steps.jsonl").read_text()
-    assert "files" not in rows["bbbb"]
+    assert rows["aaaa"]["left_out"] == [f"suites-lean.failed.json (over {M.JUDGED_BYTES} B)", "suites.json (IsADirectoryError)"]
+    assert "files" not in rows["bbbb"] and "left_out" not in rows["bbbb"]
+    req = tmp_path / "requests" / "r20261003-200000-cccc" / "request.json"
+    assert [u.split(": ")[:2] for u in got["unread"]] == [[str(req), "JSONDecodeError"]]
+
+
+def test_no_handler_of_the_reader_swallows_what_it_caught():
+    """The reader runs as a string, inside which the silent-excepts lint (tests/lint/test_repo_silent_excepts.py) can't see:
+    held here to the lint's own definition, every handler of it raises, records or calls something with what it caught."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("silent_excepts", REPO / "tests" / "lint" / "test_repo_silent_excepts.py")
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    source = M.failed_reader(T0)
+    assert "except" in source and lint.handlers(source) == []
 
 
 def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queue_decides_nothing(tmp_path):

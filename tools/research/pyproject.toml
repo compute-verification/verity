@@ -283,6 +283,11 @@ paths = ["tools/research/src/research/pods/nebius/deploy.toml", "tools/research/
 tests = ["tests/test_nebius_lockout.py"]
 paths = ["tools/research/src/research/pods/nebius/lockout"]
 
+# the failed-checks reader runs as a string the silent-excepts lint can't see inside: its test holds it to the lint's `handlers`
+[[tool.verity.tests.reads]]
+tests = ["tests/test_monitors.py"]
+paths = ["tests/lint/test_repo_silent_excepts.py"]
+
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nebius_monitoring.py"]
 paths = ["tools/research/src/research/pods/nebius/monitoring"]

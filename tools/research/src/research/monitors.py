@@ -1152,29 +1152,39 @@ RATCHET_LINES = 40
 CI_TOML = "tools/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
-# "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
+# "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`), "unread": each file it
+# couldn't read, and why}. No handler of it swallows what it caught (the silent-excepts lint's rule, which its test holds it to).
 FAILED_READER = r'''
 import fcntl, json, os, re, subprocess, time
 A = json.loads(__ARGS__)
 PICK = [re.compile(p) for p in A["pick"]]
 RATCHET = re.compile(A["ratchet"]["re"], re.M)
 SUITE = re.compile(r"^(passed|failed|reused|skipped)\s+(\S+)\s")
+UNREAD = []
+
+
+def unread(p, e, out=None):
+    """``out``, in place of what ``p`` would have given, which raised ``e``: recorded in UNREAD (the relay logs it) unless the
+    file is merely absent, as a run's failure.json is until it ends."""
+    if not isinstance(e, FileNotFoundError):
+        UNREAD.append(f"{p}: {type(e).__name__}: {str(e)[:120]}")
+    return out
 
 
 def load(p):
     try:
         with open(p, errors="replace") as f:
             return json.load(f)
-    except (OSError, ValueError):
-        return {}
+    except (OSError, ValueError) as e:
+        return unread(p, e, {})
 
 
 def first_failing(p):
     try:
         with open(p, errors="replace") as f:
             lines = f.read(A["log_bytes"]).splitlines()
-    except OSError:
-        return None
+    except OSError as e:
+        return unread(p, e)
     for rx in PICK:
         for ln in lines:
             if rx.search(ln):
@@ -1186,8 +1196,8 @@ def ratchet_failed(p):
     try:
         with open(p, errors="replace") as f:
             return [m[0] for m in RATCHET.finditer(f.read(A["log_bytes"]))][:A["ratchet"]["max"]]
-    except OSError:
-        return []
+    except OSError as e:
+        return unread(p, e, [])
 
 
 def failed_suite(p):
@@ -1196,8 +1206,8 @@ def failed_suite(p):
     try:
         with open(p, errors="replace") as f:
             lines = f.read(A["log_bytes"]).splitlines()
-    except OSError:
-        return None
+    except OSError as e:
+        return unread(p, e)
     for i, ln in enumerate(lines):
         if m := SUITE.match(ln):
             if m[1] != "failed":
@@ -1213,41 +1223,47 @@ def failed_suite(p):
 
 
 def steps(p):
+    """The records of steps.jsonl ``p``, but a last line its writer hasn't finished (no newline yet), which is no error."""
     out = []
     try:
         with open(p, errors="replace") as f:
             for ln in f:
                 try:
                     out.append(json.loads(ln))
-                except ValueError:
-                    pass
-    except OSError:
-        pass
+                except ValueError as e:
+                    if ln.endswith("\n"):
+                        unread(p, e)
+    except OSError as e:
+        unread(p, e)
     return out
 
 
 def judged(d, ran):
-    """What the relay judges a running check's failures by (`_judged`): its steps.jsonl and suite reports whole, and each failed
-    step's log's FAIL lines (all an allowance of circuit-check reads); a file over its bound is left out, which covers nothing."""
-    out = {}
+    """(what the relay judges a running check's failures by (`_judged`): its steps.jsonl and suite reports whole, and each failed
+    step's log's FAIL lines (all an allowance of circuit-check reads); each file it left out, with why: over its bound
+    (`over N B`) or unreadable (the error's class)).  An absent file is no failure reported, as the queue reads it."""
+    out, left = {}, []
     for name, bound in [*((n, A["judged_bytes"]) for n in A["judged"]),
                         *((os.path.basename(s["log"]), A["log_bytes"]) for s in ran if s.get("status") == "failed" and s.get("log"))]:
         p = os.path.join(d, name)
         try:
-            if os.path.getsize(p) <= bound:
-                with open(p, errors="replace") as f:
-                    text = f.read()
-                out[name] = text if name in A["judged"] else "".join(ln for ln in text.splitlines(True) if ln.startswith("FAIL "))
-        except OSError:
-            pass
-    return out
+            if os.path.getsize(p) > bound:
+                left.append(f"{name} (over {bound} B)")
+                continue
+            with open(p, errors="replace") as f:
+                text = f.read()
+            out[name] = text if name in A["judged"] else "".join(ln for ln in text.splitlines(True) if ln.startswith("FAIL "))
+        except OSError as e:
+            if not isinstance(e, FileNotFoundError):
+                left.append(f"{name} ({type(e).__name__})")
+    return out, left
 
 
 now, rows = time.time(), []
 try:
     names = sorted(n for n in os.listdir(A["runs"]) if any(n.startswith("r" + d + "-") for d in A["days"]))
-except OSError:
-    names = []
+except OSError as e:
+    names = unread(A["runs"], e, [])
 for n in names:
     d = os.path.join(A["runs"], n)
     ts = [os.stat(p).st_mtime for p in (os.path.join(d, f) for f in ("status.json", "steps.jsonl", "stdout.log")) if os.path.exists(p)]
@@ -1278,7 +1294,7 @@ for n in names:
         row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"), suite=bad.get("suite", False),
                    line=bad.get("line") or (first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None))
         if state == "running" and not row["suite"]:
-            row["files"] = judged(d, ran)
+            row["files"], row["left_out"] = judged(d, ran)
     # the ratchet gate's lines, though another step failed first: each change it fails is a lane to ring
     gate = next((s for s in ran if s.get("step") == A["ratchet"]["step"] and s.get("status") == "failed"), None)
     if gate is not None:
@@ -1288,29 +1304,29 @@ for n in names:
             r = subprocess.run(["git", "-C", cwd, "log", "--first-parent", "--format=%s", "-n", "40", sha],
                                capture_output=True, text=True, timeout=10)
             row["subjects"] = r.stdout.splitlines() if r.returncode == 0 else []
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        except (OSError, subprocess.TimeoutExpired) as e:
+            unread(cwd, e)
     rows.append(row)
 waiting = []
 try:
     tickets = sorted(t for t in os.listdir(A["line"]) if not t.startswith("."))
-except OSError:
-    tickets = []
+except OSError as e:
+    tickets = unread(A["line"], e, [])
 for t in tickets:
     try:
         fd = os.open(os.path.join(A["line"], t), os.O_RDONLY)
-    except OSError:
+    except OSError as e:
+        unread(os.path.join(A["line"], t), e)
         continue
+    # a ticket another process holds locked is a live waiter; one nobody holds, its waiter died
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-        continue
     except BlockingIOError:
-        pass
+        who = load(os.path.join(A["line"], t))
+        waiting.append({"run": who.get("run"), "by": who.get("by")})
     finally:
         os.close(fd)
-    who = load(os.path.join(A["line"], t))
-    waiting.append({"run": who.get("run"), "by": who.get("by")})
-print(json.dumps({"rows": rows, "waiting": waiting}))
+print(json.dumps({"rows": rows, "waiting": waiting, "unread": UNREAD}))
 '''
 
 
@@ -1504,8 +1520,9 @@ def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> tup
     (`vqueue_slim`) and stops them itself, and a red its base shares still lands it, so a cancel only throws away its evidence.
     Of any other check, a step whose job policy.toml's `off_gate` lists at the run's commit (`_policy`) holds no candidate, and
     one that failed only where an allowance live there covers (`_judged`, as the queue judges a step) is taken as passed, so
-    neither cancels anything (the second is said, and judged again on each pass, so a later red still cancels); when the policy
-    can't be read, nothing is cancelled and the post says so.  A suites.py run's failed suite only rings: the lander runs those
+    neither cancels anything (the second is said, and judged again on each pass, so a later red still cancels); a failure the
+    reader couldn't bring a file of (``left_out``) isn't known to be allowed, so no step is taken as allowed then, and the post
+    names those files; when the policy can't be read, nothing is cancelled and the post says so.  A suites.py run's failed suite only rings: the lander runs those
     to land a PR on, and decides whether a suite that failed is its change's (a suite can fail for its machine's sake while the
     run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
@@ -1521,6 +1538,8 @@ def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> tup
         why = f"{type(e).__name__}: {str(e)[:120]}".replace("`", "'")
         return f"Not cancelled, though a ticket waits for its slot: policy.toml is unread ({why}).", True
     failed, allowed = _judged(pol, ctx.now, row)
+    if left := row.get("left_out") or []:
+        allowed = set()
     gating = [s for s in dict.fromkeys([row["step"], *sorted(failed)]) if step_job(s) not in pol.off_gate]
     if not (red := [s for s in gating if s not in allowed]):
         return (f"Not cancelled, though a ticket waits for its slot: {', '.join(f'`{s}`' for s in gating)} failed only where "
@@ -1530,7 +1549,8 @@ def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> tup
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
             f"failed-checks: step {red[0]} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
            timeout=120)
-    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}.", True
+    lacked = f" Its allowances were not judged: the reader left out {', '.join(f'`{x}`' for x in left)}." if left else ""
+    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}.{lacked}", True
 
 
 def failed_checks(ctx: Ctx) -> list[Finding]:
@@ -1550,6 +1570,8 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
         except Exception as e:  # noqa: BLE001  (the other machines still post)
             errors.append(f"{machine}: {type(e).__name__}: {e}"[:300])
             continue
+        for u in got.get("unread") or ():
+            print(f"monitors: failed-checks on {machine} could not read {u}", file=sys.stderr, flush=True)
         for row in rows:
             key, new = f"{machine}:{row['run']}", f"{machine}:{row['run']}" not in memo
             if new:
