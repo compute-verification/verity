@@ -10,9 +10,9 @@ sandbox hides `/run` and the TMPDIR under private tmpfs, and three modes do the 
 - `inventory`: before the sandbox mounts its own /proc, every unix socket name the kernel lists in the network
   namespace of a process it can see (`/proc/PID/net/unix`), one per line: what a walk of every mount would find (a walk
   takes minutes on a node), and also names in a directory no walk can list.
-- `probe`: run as CMD runs (under `exec`), tries to connect to each name the inventory gave (`SANDBOX_SOCKETS`), the
-  well-known ones, and the abstract names of the sandbox's network namespace; exit 3, naming each, if any connects or
-  the inventory can't be read.
+- `probe [ADDRESS...]`: run as CMD runs (under `exec`), tries to connect to each name the inventory gave (on stdin),
+  each D-Bus address or agent socket given, the well-known ones, and the abstract names of the sandbox's network
+  namespace; exit 3, naming each, if any connects or the sandbox's own list can't be read.
 """
 
 from __future__ import annotations
@@ -83,14 +83,15 @@ def names(text: str) -> tuple[list[str], bool]:
 
 
 def inventory() -> int:
-    seen, found, ok, read = set(), set(), True, 0
+    seen, found, ok, read, unread = set(), set(), True, 0, []
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
             continue
         try:
             with open(f"/proc/{pid}/net/unix") as f:
                 text = f.read()
-        except OSError:
+        except OSError as e:
+            unread.append(f"{pid} ({e.strerror})")
             continue
         read += 1
         if text in seen:
@@ -101,7 +102,8 @@ def inventory() -> int:
         found.update(n for n in got if not n.startswith("@"))
     if not read or not ok:
         print("sockets.py: the kernel's list of unix sockets (/proc/PID/net/unix) "
-              + ("could be read for no process" if not read else "holds a name no line parses"), file=sys.stderr)
+              + (f"could be read for no process: {', '.join(unread[:5])}" if not read
+                 else "holds a name no line parses"), file=sys.stderr)
         return 3
     sys.stdout.write("".join(f"{n}\n" for n in sorted(found)))
     return 0
@@ -116,37 +118,39 @@ def host_uid() -> str:
     return str(os.getuid())
 
 
+def connects(addr: str, kind: int) -> bool:
+    """Whether a unix socket of ``kind`` that we make connects to ``addr``; under `exec` none can be made."""
+    try:
+        s = socket.socket(socket.AF_UNIX, kind)
+    except OSError:
+        return False
+    try:
+        s.settimeout(2)
+        s.connect(addr)
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
 def reached(name: str) -> str | None:
     """How ``name`` was reached, or None: a stream, a datagram or a seqpacket socket of ours that connected to it."""
     addr = "\0" + name[1:] if name.startswith("@") else name
-    for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM, socket.SOCK_SEQPACKET):
-        try:
-            s = socket.socket(socket.AF_UNIX, kind)
-        except OSError:
-            return None
-        try:
-            s.settimeout(2)
-            s.connect(addr)
-            return {socket.SOCK_STREAM: "stream", socket.SOCK_DGRAM: "datagram"}.get(kind, "seqpacket")
-        except OSError:
-            continue
-        finally:
-            s.close()
-    return None
+    kinds = ((socket.SOCK_STREAM, "stream"), (socket.SOCK_DGRAM, "datagram"), (socket.SOCK_SEQPACKET, "seqpacket"))
+    return next((how for kind, how in kinds if connects(addr, kind)), None)
 
 
-def probe() -> int:
-    listed = os.environ.get("SANDBOX_SOCKETS")
-    if listed is None:
-        print("sockets.py: probe without the inventory (SANDBOX_SOCKETS)", file=sys.stderr)
-        return 3
+def probe(addresses: list[str]) -> int:
+    """``addresses``: the command's D-Bus addresses and agent sockets (`DBUS_SESSION_BUS_ADDRESS`, `SSH_AUTH_SOCK`, ...),
+    as `sandbox.sh` passes them; the inventory comes on stdin."""
     uid = host_uid()
-    want = {*filter(None, listed.split("\n")), *(k.format(uid=uid) for k in KNOWN)}
-    for var in ("DBUS_SESSION_BUS_ADDRESS", "DBUS_SYSTEM_BUS_ADDRESS"):
-        want |= {a[len("unix:path="):].split(",")[0] for a in os.environ.get(var, "").split(";")
-                 if a.startswith("unix:path=")}
-    if os.environ.get("SSH_AUTH_SOCK"):
-        want.add(os.environ["SSH_AUTH_SOCK"])
+    want = {*filter(None, sys.stdin.read().split("\n")), *(k.format(uid=uid) for k in KNOWN)}
+    for a in (p for v in addresses for p in v.split(";")):
+        if a.startswith("unix:path="):
+            want.add(a[len("unix:path="):].split(",")[0])
+        elif a.startswith("/"):
+            want.add(a)
     try:
         with open("/proc/self/net/unix") as f:
             own, ok = names(f.read())
@@ -171,9 +175,9 @@ def main(argv: list[str]) -> int:
             os.execvp(cmd, [cmd, *args])
         case ["inventory"]:
             return inventory()
-        case ["probe"]:
-            return probe()
-    print("usage: sockets.py exec -- CMD... | inventory | probe", file=sys.stderr)
+        case ["probe", *addresses]:
+            return probe(addresses)
+    print("usage: sockets.py exec -- CMD... | inventory | probe [ADDRESS...] < INVENTORY", file=sys.stderr)
     return 2
 
 

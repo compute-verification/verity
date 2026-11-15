@@ -800,7 +800,7 @@ def test_the_command_reaches_no_unix_socket_it_did_not_make(tmp_path, fetch):
         unshare = [a for a in UNSHARE if a != "--net"] if fetch else UNSHARE
         r = subprocess.run([*unshare, "--", "bash", str(SANDBOX), *(["--net"] if fetch else []), str(tmp_path / "rw"),
                             "--", "bash", "-c", '[ ! -e "$1" ] && echo unseen; shift; exec "$@"', "_", str(job / "s"),
-                            sys.executable, "-c", CONNECT, *names],
+                            sys.executable, "-I", "-S", "-c", CONNECT, *names],
                            env={**os.environ, "TMPDIR": str(job)}, capture_output=True, text=True)
     finally:
         for s in held:
@@ -811,17 +811,18 @@ def test_the_command_reaches_no_unix_socket_it_did_not_make(tmp_path, fetch):
 
 def test_the_probe_refuses_a_socket_the_command_could_reach_and_names_it(tmp_path):
     """The probe, run unconfined as a broken filter would leave the command: a listening socket of the inventory is
-    reached and named, exit 3; a socket file no process listens on is not."""
-    live, dead = str(tmp_path / "live"), str(tmp_path / "dead")
-    held = listening(live)
+    reached and named, exit 3, and so is one only a D-Bus address names; a socket file no process listens on is not."""
+    live, bus, dead = str(tmp_path / "live"), str(tmp_path / "bus"), str(tmp_path / "dead")
+    held = [listening(live), listening(bus)]
     listening(dead).close()
     try:
-        r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "probe"], capture_output=True, text=True,
-                           env={"SANDBOX_SOCKETS": f"{live}\n{dead}\n", "PATH": os.environ["PATH"]})
+        r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "probe", f"unix:path={bus},guid=0", ""],
+                           capture_output=True, text=True, input=f"{live}\n{dead}\n", env={})
     finally:
-        held.close()
+        for s in held:
+            s.close()
     assert r.returncode == 3, r.stderr
-    assert f"{live} (stream)" in r.stderr and dead not in r.stderr
+    assert f"{live} (stream)" in r.stderr and f"{bus} (stream)" in r.stderr and dead not in r.stderr
 
 
 @pytest.mark.skipif(os.uname().machine not in ("x86_64", "aarch64"), reason="no seccomp filter for this machine")

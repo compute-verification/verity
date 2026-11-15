@@ -263,6 +263,7 @@ if [ ${#writable[@]} -gt 0 ]; then
     "read-only remount failed). Run the build where every mount can be remounted read-only in a user namespace." >&2
   exit 3
 fi
-SANDBOX_SOCKETS=$sockets "${as_cmd[@]}" "$py" -I -S "$tool/sockets.py" probe || exit 3
+printf '%s\n' "$sockets" | "${as_cmd[@]}" "$py" -I -S "$tool/sockets.py" probe "${DBUS_SESSION_BUS_ADDRESS-}" \
+  "${DBUS_SYSTEM_BUS_ADDRESS-}" "${SSH_AUTH_SOCK-}" || exit 3
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
 exec "${as_cmd[@]}" "$@"
