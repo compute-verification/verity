@@ -42,7 +42,7 @@ an answer names as bytes is the head as hex are outside them.
 
 namespace Properties.Registration
 
-open Properties.Site (regEntry composite auditor)
+open Properties.Site (regEntry auditor)
 
 /-- The spec's value of θ of a code value: its name, its root, its rows' shape and its leaves' domain. -/
 def theta (t : Core.Registration.Theta) : Verity.Registration.Theta :=
@@ -80,7 +80,7 @@ def view (B : String → Verity.Compiler) (v : Core.Registration.View) : Verity.
 entry by `E`. -/
 def digests (E : Verity.Registration.Entry → String) : Verity.Registration.Digests :=
   ⟨(Properties.Site.digests Core.Site.Registration.sha512).sheet, E,
-    fun c => Core.Registration.genesis (Properties.Site.ofComposite c)⟩
+    fun c => Core.Registration.genesis c⟩
 
 open Classical in
 /-- **The log's names of spec entries**: a spec entry by the code's digest of the first entry of `l` that denotes it,
@@ -96,9 +96,9 @@ def Checks : Prop :=
   ∀ (B : String → Verity.Compiler) (A : Core.Site.Registration.Auditor)
     (c : Core.Site.Registration.Composite) (l : Core.Registration.Log), Caps B l →
     ((Core.Registration.check A c l).toOption.isSome = true ↔
-      Verity.Registration.Valid (digests (names B l)) (auditor A) (composite c) (log B l)) ∧
+      Verity.Registration.Valid (digests (names B l)) (auditor A) c (log B l)) ∧
     ∀ s, Core.Registration.check A c l = .ok s →
-      view B s.view = Verity.Registration.view (digests (names B l)) (composite c) (log B l)
+      view B s.view = Verity.Registration.view (digests (names B l)) c (log B l)
 
 /-- **The published view carries its heads**: the JSON the protocol makes public of a view
 (`Core.Registration.View.toJson`) holds, under `heads`, each prefix head of the view it denotes with the prefix's length,
@@ -165,7 +165,7 @@ its HBM leaf, a network certifier splitting the host's uplink to the outside, an
 host. -/
 def siteEntry : Core.Registration.Entry :=
   .site (.site (Core.Registration.genesis .onsite)
-    ⟨[Core.Registration.Example.sheet], Core.Registration.Example.locs, Core.Registration.Example.links⟩)
+    ⟨[Core.Site.Example.sheet], Core.Site.Example.locs, Core.Site.Example.links⟩)
 
 /-- An information entry registering one value of θ and the builder, at cap 0, following `siteEntry`. -/
 def infoEntry : Core.Registration.Entry :=
