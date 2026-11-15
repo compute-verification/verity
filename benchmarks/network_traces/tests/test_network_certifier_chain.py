@@ -360,7 +360,7 @@ def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_prove
     assert [x["expect"] for x in tampered] == [0] * sz.W63.windows
     assert all(x["failed"] == {"egress": ["signed"], "ingress": []} for x in tampered)
     assert [x["expect"] for x in other] == [1] * sz.W63.windows
-    with pytest.raises(SystemExit, match="a period draw takes 1 to 2"):
+    with pytest.raises(SystemExit, match="a period sample takes 1 to 2"):
         n2.main(["prove", "--warden-run", str(run), "--draw", "3", "--dry", "--out", str(tmp_path / "n2x")])
 
 

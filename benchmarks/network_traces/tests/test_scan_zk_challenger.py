@@ -27,14 +27,14 @@ zk_drivers.install()
 
 
 @pytest.mark.slow
-def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_draws(tmp_path, monkeypatch):
+def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_samples(tmp_path, monkeypatch):
     """The stream holds the registration's R1-R7 against its own copy of the round's Program, the generator form the
     round registers (`scan_root`, `stream_of`), so it registers and samples the round: a stratified sample of 4 with
     each template's stratum sampled, a session for each member holding a sampled proof block and only for those, a
     registration of the generator form's digest and partition, its start registered at the empty state's root with no
     earlier record (the spec declares the start and the stream holds the verifier's log, `spec_of`, `stream_of`), and
     coins whose evidence holds against the execution phase's root and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
-    (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
+    (``R2-program``, ``R2-partition``) and sampled nothing. Each member's registered reads, the verifier's file and its
     statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
     its circuit, its o0 at the registration's root for it (the start's, the scan's state's leaf 0), as Lean's `Registered.checkComplete` requires. The round
     names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets
