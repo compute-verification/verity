@@ -296,7 +296,7 @@ class Capture:
         orig_execute, orig_sample = runner.execute_model, runner.sample
 
         def execute_model(scheduler_output, *a, **kw):
-            cap._close_awaiting_draft()
+            self._close_awaiting_draft()
             dummy = bool(kw.get("dummy_run", False)) or (len(a) >= 2 and bool(a[1]))
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_execute(scheduler_output, *a, **kw)
@@ -334,15 +334,15 @@ class Capture:
             orig_propose = speculator.propose
 
             def propose(*a, **kw):
-                st = cap._cur
+                st = self._cur
                 if st is None or not st.awaiting_draft:
                     return orig_propose(*a, **kw)
                 t0 = time.perf_counter()
                 try:
-                    return cap._run_observed(lambda: orig_propose(*a, **kw), phase="draft")
+                    return self._run_observed(lambda: orig_propose(*a, **kw), phase="draft")
                 finally:
                     st.draft_s = time.perf_counter() - t0
-                    cap._close_step(st)
+                    self._close_step(st)
 
             self._hooks.patch(speculator, "propose", propose)
 
@@ -355,7 +355,7 @@ class Capture:
             def compute_logits(*a, **kw):
                 out = orig_cl(*a, **kw)
                 st = cap._cur
-                if st is not None and cap.cfg.mode == "record" and isinstance(out, torch.Tensor) and cap.rec.phase != "draft":
+                if st is not None and cap.cfg.mode == "record" and isinstance(out, torch.Tensor) and self.rec.phase != "draft":
                     try:
                         st.logits_view = cap.storage.view_of(out)
                     except Exception as e:  # noqa: BLE001
