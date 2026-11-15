@@ -51,7 +51,8 @@ with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `Inference
 composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (SPOT, and PoUW, which
 at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that
 tie the inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
-`Properties.Verity.Committed`). They are proved by `Properties.Composition` (a composite's acceptance is its
+`Properties.Verity.Committed`). `PlainSoundness` is it at remote's plain sibling, whose inference-only policy is the
+rows check, with its three. They are proved by `Properties.Composition` (a composite's acceptance is its
 subprotocols' and its record's) and the union bound over one strategy in one game.
 
 Each target is a hypothesis until its subprotocol's piece proves it at its compiled check, and `Vocab`'s fields are given
@@ -112,5 +113,18 @@ case, `workIsTheCredit` among them); that is the Pearl+ target's proof, not this
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .remote → V.PouwSound .remote → V.WiresSound .remote → GateARow → V.SoundnessAt .remote
+
+/-- **Soundness at remote's plain sibling: `SoundnessOf` at its list** (`Verity.Registration.Composite.plain`), whose
+guarantee is soundness alone. If SPOT, PoUW (Pearl+'s run verdict, its claim in MACs as at remote) and the
+inference-only policy, decided by the rows check (`rowsCheck`, `verity/inference-only/rows/v1`), each meet their target
+at the plain sibling, then the probability that its compiled verifier accepts files that passed the commit phase's check
+while one of their claims fails is at most their three errors at that strategy summed. The rows check's target
+(`V.InferenceOnlySound .plain`) is the hypothesis no proof discharges yet: nothing states the rows check's behavior
+(`rowsUnbuilt`) until a compiled check carries its id, nor its claim (`rowsHeld`; v0's clause, which
+`Vocab.inferenceOnlySound` proves where v0 decides, would read no case here), and until that target is proved the
+code refuses the plain sibling's list (`Core.Composites.ofIds`, `Verity.ofIds_plain`). -/
+def PlainSoundness : Prop :=
+  ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
+    V.SpotSound .plain → V.PouwSound .plain → V.InferenceOnlySound .plain → V.SoundnessAt .plain
 
 end Verity

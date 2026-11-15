@@ -376,8 +376,8 @@ theorem checkFacts_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) 
   name_lets
   cases hv2 : v.registered.isEmpty
   all_goals
-    jp_mono [poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
-    jp_walk h' [poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
+    jp_mono [VStar.Recursive.Caller.poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
+    jp_walk h' [VStar.Recursive.Caller.poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
   -- the branch of `if v2` the registered values rule out
   all_goals
     first

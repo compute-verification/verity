@@ -193,23 +193,23 @@ theorem pos_registers (H : Msg → Msg) (b : Bool) (op : ℕ → List (Obs 1 1 1
     rw [h, certVal0]
     exact hop
 
-theorem pos_empty_mem : (∅ : Finset ℕ) ∈ faultySets (⟨[.all]⟩ : Design) notPart 0 := by
+theorem pos_empty_mem : (∅ : Finset ℕ) ∈ incorrectSets (⟨[.all]⟩ : Design) notPart 0 := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset]
   refine ⟨Finset.empty_subset _, ?_, Finset.disjoint_empty_left _⟩
   show (0 : ℝ) < Design.Pa ⟨[.all]⟩ notPart ∅
   simp [Design.Pa, notPart, classesPa, OneStage.Pa, window]
 
-theorem pos_faulty_empty {F : Finset ℕ} (hF : F ∈ faultySets (⟨[.all]⟩ : Design) notPart 0) : F = ∅ := by
+theorem pos_faulty_empty {F : Finset ℕ} (hF : F ∈ incorrectSets (⟨[.all]⟩ : Design) notPart 0) : F = ∅ := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
   obtain ⟨hsub, -, hdis⟩ := hF
   refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
   have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
   obtain rfl : v = 0 := by omega
   exact Finset.disjoint_left.1 hdis hv (by decide)
 
-theorem pos_faultySets : faultySets (⟨[.all]⟩ : Design) notPart 0 = {∅} :=
+theorem pos_incorrectSets : incorrectSets (⟨[.all]⟩ : Design) notPart 0 = {∅} :=
   Finset.eq_singleton_iff_unique_mem.2 ⟨pos_empty_mem, fun _ h => pos_faulty_empty h⟩
 
 /-- **What the network certifier registers at `posStmt b` is accepted**, at every operator: the openings hold the
@@ -229,7 +229,7 @@ theorem pos_acc (H : Msg → Msg) (b : Bool) (ρ : ℕ → Bool) (op : ℕ → L
   have hin : ingressUpTo op o 0 = [[b]] := by
     have h : ingressUpTo op o 0 = [op 0 []] := rfl
     rw [h, hop']
-  show o.length = 1 ∧ (∀ y ∈ o, y.jitter < 1) ∧ ∃ F ∈ faultySets (⟨[.all]⟩ : Design) notPart 0,
+  show o.length = 1 ∧ (∀ y ∈ o, y.jitter < 1) ∧ ∃ F ∈ incorrectSets (⟨[.all]⟩ : Design) notPart 0,
     AcceptedChecked notProg notPart notLay 1 (AsReg notProg notLay 1 ∅ ρ) (fun _ => True ∧ True) F op o
   refine ⟨hlen, hj, ∅, pos_empty_mem, fun _ => false,
     ⟨fun g hg _ => absurd hg (Finset.notMem_empty g), fun _ _ => rfl⟩, fun _ => none, fun g c hg => by simp at hg,
@@ -287,9 +287,9 @@ theorem pos_executionPhasesCount :
   have hfree : (freeInputs notProg notLay 1 \ (∅ ∪ ∅)).card = 0 := by decide
   unfold executionPhasesCount
   rw [Fin.prod_univ_one]
-  show 2 ^ (freeInputs notProg notLay 1 \ (∅ ∪ ∅)).card * (faultySets (⟨[.all]⟩ : Design) notPart 0).card * 2 ^ 0 *
+  show 2 ^ (freeInputs notProg notLay 1 \ (∅ ∪ ∅)).card * (incorrectSets (⟨[.all]⟩ : Design) notPart 0).card * 2 ^ 0 *
     1 ^ 1 = 1
-  rw [hfree, pos_faultySets]
+  rw [hfree, pos_incorrectSets]
   simp
 
 theorem posDec_obs (z : Bool) : posDec (fun _ => [posObs z]) = z := by cases z <;> rfl

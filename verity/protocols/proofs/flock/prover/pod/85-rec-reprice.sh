@@ -23,7 +23,7 @@
 #                rec-compose over them; its tree-top controls are vstage's FORGE=top and top-salt, which Lean must refuse
 #   STEP=icheck  (CPU) the replay on the inner's last session, the schedule the sessions were held to against
 #                the statement's (derived again), each session's own schedule, how it ended and its message count, and the
-#                coin server's record against the clear tops
+#                live-coin part's record against the clear tops
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
@@ -596,7 +596,7 @@ inner_partition() {
 
 # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement, set up under
 # the verifier's own program of it (which a wired inner's Linking needs), and the inner session STEP=vstage staged every
-# statement from, a forgery's too, with the coin server's transcript of it, whose root_B, later tops and link points
+# statement from, a forgery's too, with the challenger's live-coin part's transcript of it, whose root_B, later tops and link points
 # every statement's tops and check 5 are held to (RecVStar.checkTopRows, RecCoins.checkLink) and whose c_k its rec-c<k>
 # rows are (RecVStar.checkPubRows)
 rec_inner_files() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-program $DD/stage/program.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session"; }

@@ -88,7 +88,7 @@ theorem rsAtG_computes : (rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).Compute
 
 /-- **The headline at the executable over hidden-output sessions, at the general form.** Against any live prover `τ`,
 verity-verify-proof accepts with at least `K` incorrect proof blocks of the template instance's program `instProg c n`, at the simulated
-prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`. Its circuit condition is `scopeGenH`;
+prover's committed values, with probability at most `miss(K) + ε_ks + ε_bind`. Its circuit condition is `scopeGenH`;
 `hdec` is `decodesOn_execHI`'s, from the tags, the challenger's record and its samples, at the model's leaf of the tags'
 leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves). -/
 theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
@@ -164,7 +164,7 @@ theorem rsZG_computes {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
 
 /-- **One hidden-output `--zk` sampled session is sound, at the general form.** `ZkHidden.zk_session_soundH` at the
 template instance's program `instProg c n`: for any live prover `τ`,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`. Its circuit condition is
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`. Its circuit condition is
 `scopeGenH`; `RunsZC` at the sampling design's samples is `runsZC_liveHI`'s. -/
 theorem zk_session_soundH_gen
     (I : Inputs) (ht : I.tags.typed = false)

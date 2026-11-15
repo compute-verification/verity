@@ -17,11 +17,20 @@ from verity_vllm.pipeline import window_replay as WRP
 
 if TYPE_CHECKING:
     from verity_vllm.commit import opened as OC
-    from verity_vllm.program.predict import node_window_join as NWJ
 
 GOAL = "vllm/compiler-wires-period-pieces"
 #: what `commit_rank_window` returns: `tp.serving_rows.write`'s keys, then the window's H
 KEYS = ("run", "population", "partition_digest", "registration_digest", "seconds", "window")
+
+
+class Rank(Protocol):
+    """A rank's window as `node_window_join.Rank` gives it, read here for its number and its circuit."""
+
+    @property
+    def rank(self) -> int: ...
+
+    @property
+    def circuit(self) -> IF.Circuit: ...
 
 
 class Rows(Protocol):
@@ -34,7 +43,7 @@ class Rows(Protocol):
     def outputs(self, tid: str, units: Sequence[int]) -> dict[str, np.ndarray]: ...
 
 
-def served_values(rank: NWJ.Rank, committed: OC.OpenedReader, weights: Any) -> Rows:
+def served_values(rank: Rank, committed: OC.OpenedReader, weights: Any) -> Rows:
     """Rank ``rank.rank``'s node-window values: each unit's outputs from the rank's committed store where serving tapped
     them, else from its Definition on its inputs (`node_window_values.Check`). In a class window
     (`class_window.class_window`) a decode step past the request's stop is such a unit: its rows are its Definition's on
@@ -51,7 +60,7 @@ def _held(circuit: IF.Circuit, tid: str, port: str, n: int) -> bool:
     return filled != n * k
 
 
-def commit_rank_window(rank: NWJ.Rank, values: Rows, *, run: str, law: Mapping[str, Any], cap: int,
+def commit_rank_window(rank: Rank, values: Rows, *, run: str, law: Mapping[str, Any], cap: int,
                        registered: Mapping[str, Any], out: Path) -> dict[str, Any]:
     """Commit ``rank``'s node window as ``interface.Window(rank.circuit, run, law, cap, registered=registered)`` and
     write ``partition.json``, ``circuit.json`` and ``window.json`` under ``out``. The circuit is a request's window

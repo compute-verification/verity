@@ -72,11 +72,11 @@ sessions were verified against (`PERIOD`); and the remote theorem's registered-f
 each statement's circuit file is, by SHA-512, the one remote's SPOT case's (``--sampled-proofs-case``) params
 θ name for it (proofs.circuit, or its member's under proofs.members), θ held to the params each composite that reads the
 case states, the files hashed here, and each statement's public file one a5 pinned (``--public-pin``,
-`pinned`): as staged before the draw, the pin's staged bodies held to the registration the challenger's coins committed
+`pinned`): as staged before the draw, the pin's staged bodies held to the docket the challenger's coins committed
 to by their leaf layer, or as a5 completed it from the staged file once the tie held. `scan-state-pinned` (`scan_state_pinned`): where an audit's window commits the scan's state in
 its activations (`SCAN_STATE`, the entry `NetworkCheck.Period` holds to the scan's), V3c's audit opened its registered
 reads of it at that entry's root and domain (`AUDIT_SUMMARY`'s registered.own), accepted, and reported exactly each
-sampled member's registered reads (`AUDIT`): one-stage's registration checks read nothing of the window, so the audit's
+sampled member's registered reads (`AUDIT`): one-stage's docket checks read nothing of the window, so the audit's
 driver pins it, and the record checks that it did.
 
 **SPOT's guarantee** (``spot``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
@@ -174,7 +174,7 @@ count over the period's windows too.
 
 **Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
 unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
-that write what it reads, the registration, the draw, its receipt and the challenger's release of its coins, and the
+that write what it reads, the docket, the draw, its receipt and the challenger's release of its coins, and the
 public files, each by where it is (the serve dir's by their paths there, naming no window) and what it holds, with whether
 the run wrote each of OUT's and how each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off
 OUT and custody in a copy off the served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept
@@ -276,7 +276,7 @@ COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its fin
                       "error has no number here, and ``stated`` is the sum of the δs the run states, a lower bound on it")
 NO_NCI_DELTA = "no published file states it: each composite publishes each case's params by their SHA-512 alone"
 DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-stage answer's stated δ (its integrity "
-         "profile's, a sampling-design parameter in (0, 1) and not C-Flock's soundness error, which is in ε_ks), plus "
+         "profile's, a sampling-design parameter in (0, 1) and not Flock's soundness error, which is in ε_ks), plus "
          "δ_i for each tied audit drawn in part (NetworkCheck.Period's chargedOf). Where the public lists those "
          "readings (`charged`: each audit's draw read at δ_i, with its bound b there), δ_i is the period check's own "
          "constant, fixed before any coin, and the same draw read at its answer's δ stays sampled proofs' term of the "
@@ -360,7 +360,7 @@ POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where SPOT's audit publishes its record (`served_integrity.public_copy`)
 AUDIT = Path("v3c-audit") / "window" / "audit.json"
 #: V3c's audit as the network certifier's period reads it, as the run publishes it (`records_audit.py period`): its
-#: registration, and each root template's circuit file by the SHA-512 a5 held every session of its members to
+#: docket, and each root template's circuit file by the SHA-512 a5 held every session of its members to
 PERIOD = Path("v3c-audit") / "period.json"
 #: V3c's audit's summary as the run publishes it (`served_integrity.public_copy`): its verdict, and the entries its
 #: registered reads opened the window's own values at (``registered.own``)
@@ -697,7 +697,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
     "windows-placed": {"is": "ExecutionPhasesPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
-                             "the period read, and each of its faulty sets at δ commits at most the bits β the period "
+                             "the period read, and each of its incorrect sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
                        "discharged_by": ("Properties.NetworkPeriod.scanWindowsPlaced",)},
@@ -1420,7 +1420,7 @@ def advice_cap(reg: Any) -> int:
 
 def caps(case: Mapping[str, Any], cap: int) -> list[int]:
     """Each audit's ℓ_a (`CAP`), the run's ``cap``, in the order of the case's commitment. ValueError where an audit's
-    registration binds an advice or a compiler, whose bits no term of K charges."""
+    docket binds an advice or a compiler, whose bits no term of K charges."""
     audits = json.loads(bytes.fromhex(case["commitment"]))["audits"]
     if bound := [i for i, r in enumerate(audits)
                  if any((r.get("window") or {}).get(k) is not None for k in ("advice", "compiler"))]:
@@ -1576,7 +1576,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
 
 def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
     """`CHECKED`'s auditor-listing on the run: each audit's circuit files its ``case``'s params list (``circuits``),
-    against the run's published V3c period (`PERIOD`) where the case's commitment holds that period's registration at
+    against the run's published V3c period (`PERIOD`) where the case's commitment holds that period's docket at
     the audit's place, and the scan's (``scan_circuits``), of which the run publishes no record. ``holds``, ``listed``,
     how many files the period lists, and ``why`` where it doesn't hold."""
     res: dict[str, Any] = {"is": CHECKED[AUDITOR_LISTING], "holds": False}
@@ -1610,7 +1610,7 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
 def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
     """`CHECKED`'s scan-state-pinned on the run: each audit of ``case``'s commitment whose window commits `SCAN_STATE`
     in its activations as `NetworkCheck.Period.auditStateEntries` reads it (the entry at that value, naming it), held to
-    the run's published V3c audit (`PERIOD`'s registration): the entry its registered reads opened the value at
+    the run's published V3c audit (`PERIOD`'s docket): the entry its registered reads opened the value at
     (`AUDIT_SUMMARY`'s registered.own) is that activations entry by value, root and domain, the audit accepted, and its
     record reported exactly each sampled member's registered reads (`AUDIT`). ``holds``, ``audits``, those audits'
     places in the commitment, and ``why`` where it doesn't hold, its evidence missing included."""
@@ -1659,8 +1659,8 @@ def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) ->
     """Why the public file remote's SPOT case registers, ``public``, isn't one a5 pinned (``pin``, a5's
     ``public-pin.json``: by member key, each public file's SHA-512 and its body's as staged before the draw, their leaf
     layer, and a drawn member's as completed once the tie held, its ``completed``), else None. The pin's staged bodies
-    are, by their leaf layer, those the registration the case commits to holds (``commitment``, which each composite
-    that reads the case states, ``stated``): the registration the challenger's coins committed to, which R4 held to the
+    are, by their leaf layer, those the docket the case commits to holds (``commitment``, which each composite
+    that reads the case states, ``stated``): the docket the challenger's coins committed to, which R4 held to the
     bodies before the draw. And ``public`` is, by SHA-512 and its body's, a pinned member's as staged, or a drawn
     member's completed entry, completed from that member's staged body (`completed_from`)."""
     from verity.circuits.codec import canonical_json
@@ -1707,7 +1707,7 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
     staged file (`a5.complete_drawn`, `flock_inputs.complete`), else None. Its body is the staged body, or, where
     completing the member re-lays it (the staged entry's ``relaid``: an instance-major member's), the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its ``instances`` read off its header: either way by SHA-512
-    the staged ``body`` R4 holds to the registration. Its header v2 holds to its member's slice of the registration (``publicHeld``)."""
+    the staged ``body`` R4 holds to the docket. Its header v2 holds to its member's slice of the docket (``publicHeld``)."""
     from verity.commitments.periods import flock_inputs as FI
 
     if not isinstance(relaid := entry.get("relaid"), bool):

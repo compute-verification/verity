@@ -161,11 +161,18 @@ keeps or drops from and never adds to.
   it (`trusted-device`, `cr/sha-512`), written by hand and never renamed; `claim_ids.py` writes the table from each id
   to its Lean names, `verity/commitments/claim_ids.json`, from these. `open_seed`, `open_default_issue` and
   `default_owner` are what `--update` and the records run fill an entry from (`bookkeeping_ticket`).
+- `ids`: {premise: its claim id}, the id `verity.claims` cites it by; every named assumption and every premise `trust`
+  names has one, written by hand, and `--update` drops an entry whose premise the lock no longer lists (`id_failures`).
+  `claim_ids.py --write` writes `verity.claims`' table of each id's premises (`LEAN`) from every lock's.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+  `posture.py` prints one line per deployed guarantee, each premise marked against Daniel's trust list
+  (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
+  definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
+  premises.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,

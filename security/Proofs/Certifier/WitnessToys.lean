@@ -163,26 +163,26 @@ theorem sampAllSlots : allSlots sampDesign sampPart = ∅ := by
   first | rfl | decide | simp [allSlots, allSlotsFrom, sampDesign, sampPart]
 
 theorem sampFaulty_mem {F : Finset ℕ} (hsub : F ⊆ Finset.range 1) (hPa : (1 / 4 : ℝ) < sampDesign.Pa sampPart F) :
-    F ∈ faultySets sampDesign sampPart (1 / 4) := by
+    F ∈ incorrectSets sampDesign sampPart (1 / 4) := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset]
   exact ⟨hsub, hPa, by rw [sampAllSlots]; exact Finset.disjoint_empty_right _⟩
 
-theorem empty_mem_sampFaulty : (∅ : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
+theorem empty_mem_sampFaulty : (∅ : Finset ℕ) ∈ incorrectSets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (Finset.empty_subset _) (by rw [sampPa]; norm_num [Claims.Sampling.window])
 
 /-- **The one proof block is a possible incorrect set** at `δ = 1/4`: the design misses it with probability `1/2`. -/
-theorem single_mem_sampFaulty : ({0} : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
+theorem single_mem_sampFaulty : ({0} : Finset ℕ) ∈ incorrectSets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (by decide) (by
     rw [sampPa, show (Claims.Sampling.window 0 1 ({0} : Finset ℕ)).card = 1 by
       first | decide | rfl | simp [Claims.Sampling.window]]
     norm_num)
 
 /-- Each possible incorrect set at `δ = 1/4` commits at most the proof block's three gates' bits. -/
-theorem sampBits : ∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3 := by
+theorem sampBits : ∀ F ∈ incorrectSets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3 := by
   intro F hF
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
   have h : faultyBits sampProg sampPart F ≤ faultyBits sampProg sampPart (Finset.range 1) := by
     unfold faultyBits
     exact Finset.sum_le_sum_of_subset hF.1

@@ -164,7 +164,7 @@ def test_the_cheating_share_stops_at_the_fleets_capacity():
     """A proof block's outputs fit its Definition's public size class, and an incorrect block injects the widest.
     At today's sparse samples the pool is then worth more than the fleet's capacity: the share is 1 and SPOT bounds
     nothing, while at batched proving it is the chord times the injected bits."""
-    assert T.DEFAULTS["step_bits"] == T.partition_v2.UNIT_CLASS_MAX
+    assert T.DEFAULTS["step_bits"] == T.partition_v2.SIZE_CLASS_MAX
     sparse, batched = (T.evaluate(T.DEFAULTS | over, T.TIERS["T5"]) for over in ({}, BATCHED))
     worth = 2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, sparse["cheat_bits"]) * sparse["cheat_bits"]
     capacity = T.DEFAULTS["nodes"] * T.DEFAULTS["node_flops"] * T.DEFAULTS["years"] * T.YEAR

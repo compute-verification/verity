@@ -240,7 +240,7 @@ From a record that holds `audit` the command prints one more section, before the
 
 ## The security level
 
-Beside the GB the command prints the binding bound the row of record holds: the probability that an accepted run
+Beside the GB the command prints the binding bound the plan of record's row holds: the probability that an accepted run
 opens a value off the committed trace, by the bound Lean states of a two-stage sample counted by classes of gates
 (`CompiledTwo.eventTwoX_le_cls_at_budget`'s right-hand side). The planner computes it for each
 row's own design (`benchmarks/spot_figures/binding.py`, `over_phases`) and writes it in the row's

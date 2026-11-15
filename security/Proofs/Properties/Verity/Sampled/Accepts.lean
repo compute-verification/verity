@@ -345,15 +345,15 @@ theorem pinnedTables_extend {T : PinnedTables} {s : Verity.Sent} {circuitB : Byt
 each pinned table the circuit file looks up (`Spot.OneStageZk.tablesAmong`, every name of
 `Spot.OneStageZk.lookupsOf`) and each the blobs hold is its registered file (`TablesSent`), whatever other pinned
 table the blobs hold. -/
-theorem pinnedTables_among {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
+theorem pinnedTables_among {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
     (hl : _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names)
     (hn : (_root_.Spot.OneStageZk.tablesAmong names (_root_.Core.Blobs.ofArray s.blobs)).map (·.1) = names)
-    (ht : TablesSent s) :
-    TablesExtend (pinnedTables circuitB)
+    (ht : TablesSent T s) :
+    TablesExtend (pinnedTables T circuitB)
       (_root_.Spot.OneStageZk.tablesAmong names (_root_.Core.Blobs.ofArray s.blobs)) := by
   classical
-  have hp : pinnedTables circuitB = Flock.MUFU_TABLES.filterMap fun t =>
-      if t ∈ Flock.MUFU_TABLES ∧ names.contains t.name = true then (pinnedFile t.sha512).map (fun b => (t.name, b))
+  have hp : pinnedTables T circuitB = Flock.MUFU_TABLES.filterMap fun t =>
+      if t ∈ Flock.MUFU_TABLES ∧ names.contains t.name = true then (T.file t.sha512).map (fun b => (t.name, b))
       else none := by
     simp only [pinnedTables, hl]
     refine List.filterMap_congr fun t ht => ?_

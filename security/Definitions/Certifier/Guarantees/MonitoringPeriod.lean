@@ -56,8 +56,8 @@ audits, not from a premise:
   `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`ExecutionPhaseGood`) number at most
-  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
-  `log2 #Ss + Σ_c log2 (cap_c + 1) + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 Dj)` bits
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
+  `log2 #Ss + Σ_c log2 (cap_c + 1) + Σ_i (#(freeInputs_i \ reg_i) + log2 #incorrectSets_i(δ) + β_i + k_i·log2 Dj)` bits
   through the network certifier in the monitoring period.
 
 The union of the windows' failures over the monitoring period's live coins is not stated here. `ExecutionPhaseGood` is the
@@ -96,7 +96,7 @@ and the observations of the monitoring period's windows (its record of those cel
   run's earlier windows (`CertifierRegisters`), a covert sender in the server, whose secrets a decoder recovers from the
   client's view of the server side: its secrets whose every window meets `ExecutionPhaseGood`, at that window's statement
   `x z i` and extracted witness `wit z i`, number at most
-  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
+  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`. -/
 def MonitoringPeriodLeakAccepted : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
@@ -104,7 +104,7 @@ def MonitoringPeriodLeakAccepted : Prop :=
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))
     (ρ : Fin n → ℕ → Bool) (op : Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
-    (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
+    (hβ : ∀ i, ∀ F ∈ incorrectSets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
@@ -125,6 +125,6 @@ def MonitoringPeriodLeakAccepted : Prop :=
         {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
             ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
           Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-            reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
+            reg (sw i)).card * (incorrectSets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
 
 end NetTiming.Guarantees

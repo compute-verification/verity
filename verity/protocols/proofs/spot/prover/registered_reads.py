@@ -25,7 +25,7 @@ WORD_BITS = 16
 def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None],
          schema: str = SCHEMA_HM96_SHA512_ROW) -> dict[str, Any]:
     """The port reading ``value`` at ``rows`` (one per proof block, None where the proof block doesn't read it): ``e`` its
-    entry (``leaves``, ``words``, ``domain``, and ``word_bits`` unless 16) and ``root`` its registration's root.
+    entry (``leaves``, ``words``, ``domain``, and ``word_bits`` unless 16) and ``root`` its docket's root.
     Refused (ValueError) for rows of another format than `SCHEMAS`."""
     if schema not in SCHEMAS:
         raise ValueError(f"a registered value's rows are {', '.join(SCHEMAS)} rows, not {schema!r}")

@@ -4546,6 +4546,11 @@
         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_cap.py": "verity/protocols/accounting/pouw/verifier/tests/test_circuit_inert_bound.py",
         "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_debit.py": "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_inert_work.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/torch_gpu/p2_stage/build.sh": "verity/protocols/accounting/pous/prover/p2/p2_store/build.sh"
+      }
     }
   ]
 }
