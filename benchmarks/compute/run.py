@@ -52,7 +52,15 @@ Either way it reads the verifier's side of the record, and nothing the developer
 - `out/record/verdicts.json`, the run's composed record: PoUW's row. A row that isn't an accept (a development run's
   reads `missing`) is printed beside the number, never left out: the credit is then the Pearl+ piece's alone;
 - `out/pieces/pouw/verify.json`, the Pearl+ verifier's document, where the record holds it: its per-call split, which
-  says whether the passes hold the LM head's calls, and which `--per-call` prints.
+  says whether the passes hold the LM head's calls, and which `--per-call` prints;
+- `out/pieces/pouw/development.json`, the Pearl+ piece's document (`served_verdicts.py pearlplus`), where the record
+  holds it: its ``coin_source`` alone, where the passes' salt coins came from (`coins`).
+
+The line under the number says which coins and parameters the record states the run used (`coins`): the answer's
+sample source (`profile.source_from`), the piece's salt coins (``coin_source``), whether the Lean verifier ran as of
+record (``--of-record`` in `pearlplus-lean-check.json`'s ``argv``), and the answer's draws and δ. Each that the record
+doesn't state is printed as not stated; ``development`` ends the line unless all three state live coins. None of them
+refuses a number.
 
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
@@ -114,9 +122,9 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_config.settings import SHARED
 
-__all__ = ["ABSENT", "ANSWER", "DELTA_S", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY",
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY",
            "RECORDS", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
-           "amounts", "capacity", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
+           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the number's id in metrics.toml beside this file, the name result.json records it under
@@ -130,7 +138,9 @@ LEAN = "out/pieces/pouw/pearlplus-lean.json"
 LEAN_CHECK = "out/pieces/pouw/pearlplus-lean-check.json"
 POLICY = "out/inference-only-policy.json"
 VERDICTS = "out/record/verdicts.json"
-RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS]
+#: the Pearl+ piece's own document (`served_verdicts.py pearlplus`), read for its ``coin_source`` alone
+DEVELOPMENT = "out/pieces/pouw/development.json"
+RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, DEVELOPMENT]
 #: the verifier's document, read by `--per-call` alone
 VERIFY = "out/pieces/pouw/verify.json"
 #: the run's own record of itself, where `--record` reads the run's id and commit
@@ -293,6 +303,28 @@ def credit(tree: Path) -> dict:
         raise NoNumber(f"the record's comparison of the Lean verifier's verdict with the answer differs on {differ}")
     return {"credited": credited, "passes": passes, "scheme": public.get("scheme"), "epsilon_s": work.get("epsilon"),
             "delta_s": (answer.get("profile") or {}).get("delta"), "lean": theirs is not None}
+
+
+def coins(tree: Path) -> dict:
+    """Which coins and parameters the record under `tree` ran with, as it states them, never refused: the source of the
+    answer's sample (`profile.source_from`, ``challenger`` or ``node``), of the passes' salt coins (the piece's
+    ``coin_source``, ``challenger`` or ``in-process``), whether the Lean verifier ran as of record (``--of-record`` in
+    the comparison's ``argv``, which `served_passes.py lean` passes only on live coins), the answer's draws and δ, each
+    None where the record doesn't state it, and ``development`` unless all three state live coins."""
+    def read(path: str, *keys: str) -> Any:
+        try:
+            got = _held(tree, path)
+            for k in keys:
+                got = got.get(k) if isinstance(got, dict) else None
+            return got
+        except (OSError, ValueError):
+            return None
+    argv = read(LEAN_CHECK, "argv")
+    lean = None if not isinstance(argv, list) else "of record" if "--of-record" in argv else "development"
+    sample, salt = read(ANSWER, "profile", "source_from"), read(DEVELOPMENT, "coin_source")
+    return {"sample": sample, "salt": salt, "lean": lean, "draws": read(ANSWER, "profile", "draws"),
+            "delta": read(ANSWER, "profile", "delta"),
+            "development": not (sample == salt == "challenger" and lean in ("of record", None))}
 
 
 def load(tree: Path) -> dict:
@@ -469,7 +501,7 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
     return {"value": c["credited"] / total, "unit": UNIT, "commit": commit, "run": run, "target": float(TARGET),
             "met": Fraction(c["credited"], total) >= TARGET, "credited_macs": c["credited"], "model_macs": total,
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
-            "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "record": record,
+            "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "coins": coins(tree), "record": record,
             "withdrawn": withdrawn,
             "model": served["model"], "class": served["class"], "policy_agrees": served["policy_agrees"],
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head}
@@ -585,12 +617,24 @@ def per_call_text(got: dict, model_macs: int) -> list[str]:
     return lines
 
 
+def coins_text(c: dict) -> str:
+    """The printed line of a document's `coins`: which coins and parameters the record says the run used."""
+    stated = "not stated in the record"
+    return (f"  coins: {c['sample'] or 'sample source ' + stated} sample, "
+            + (f"salt coins from {c['salt']}" if c["salt"] else f"salt coins: {stated}")
+            + f"; Lean verifier run {'as ' + c['lean'] if c['lean'] else stated}"
+            + f"; parameters: draws {c['draws'] if c['draws'] is not None else stated}, "
+            + f"delta {c['delta'] if c['delta'] is not None else stated}"
+            + (", development" if c["development"] else ""))
+
+
 def text(doc: dict) -> str:
     """The printed lines of a document: the number, what accepted it, and what it is made of."""
     macs, cls, tokens, record = doc["macs"], doc["class"], doc["tokens"], doc["record"]
     lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
               f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
               f"{100 * doc['target']:g}% target")]
+    lines.append(coins_text(doc["coins"]))
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
