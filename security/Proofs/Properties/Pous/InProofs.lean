@@ -176,7 +176,8 @@ theorem runGives : RunGives := by
     rw [Array.getElem?_eq_getElem hj] at this
     exact Option.some.inj this
   rw [Bool.eq_false_iff] at hrej
-  refine hrej (verdict_accepted_of schemes trusted expected _ c openings p hp ht sd.m hmsg ?_ rfl he hsz ?_)
+  refine hrej (verdict_accepted_of (p := p) (m := sd.m) hp (List.contains_iff_mem.2 ht) hmsg ?_
+    (commitment_beq_self c) he hsz ?_)
   · show lmsVerify p pk c.session sd.m sg.sig = .ok true
     rw [← hm]
     exact h0 p hp
@@ -281,7 +282,8 @@ theorem runGives_honest : RunGivesHonest := by
     refine ⟨rfl, fun j hj => ?_⟩
     obtain rfl : j = 0 := by simp [honestCommitment] at hj; omega
     rfl
-  · refine verdict_accepted_of _ _ _ _ _ _ Lms.deployed hlook (List.mem_singleton.2 rfl) m hm hlms rfl rfl rfl ?_
+  · refine verdict_accepted_of (p := Lms.deployed) (m := m) hlook (List.contains_iff_mem.2 (List.mem_singleton.2 rfl))
+      hm hlms (commitment_beq_self _) rfl rfl ?_
     intro j hj
     obtain rfl : j = 0 := by simp [challengePhaseOf, constRun, V] at hj; omega
     exact ⟨⟨honestOpening, by simp [honestOpening], rfl, rfl, hcoin⟩,
