@@ -77,6 +77,8 @@ mypy = ["mypy==1.20.2"]
 testpaths = ["tests"]
 # tests/verity/ holds the suites of `verity`'s packages, each run from its own directory
 addopts = ["--ignore=tests/verity"]
+# the root first, so `verity` is the package and not tests/verity, which prepend mode puts tests/ before it
+pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
