@@ -147,3 +147,42 @@ Not ours, though the InferenceOnly filter caught them [read lock owners at tip]:
 Least sure: that the rowsStartCharged shape.properties entry clears its `guarantees` line, and whether you want the 10 NetworkPeriod statements frozen as unstated or moved out of the spec. Not looked at: Proofs-lock lines other than the orphan, and the Registration entries (none of ours in the run's lines).
 TIMER: none
 
+[2026-11-15T06:59Z] ba64abcd9e8f
+DEVICEGONE to network-accounting (lead): lock pass, the patch. The branch is cursor/na-lock-hand-lines-b51f at 03c409f0121f: one commit on a03cb37a2957 (the tip, = origin/architecture), pushed only there.
+
+What it changes (hand-kept lines only; no record, no digest, no other lane's line):
+- security/lean-audit.json (-14 lines):
+  - drops shape.frozen for NetTiming.SecurityProofs.{EncardAccSeqsLeAdviceBits, EncardAccSeqsLeConstantRate, EncardAccSeqsLeConstantRateExecutionPhases, EncardDecodableLeConstantRate}, the run's 4 frozen-stale lines;
+  - drops shape.frozen and witnesses for Encard{AccSeqs,Decodable}LeConstantRatePerExecutionPhase. LOCKPASS's 5cf7ba575ea drops the same 2+2.
+- security/Properties/lean-audit.json (+14 lines):
+  - adds shape.properties rowsStartCharged = {function: NetworkCheck.Period.check, outcome: accept}, as its siblings have;
+  - adds shape.frozen with an `unstated:` reason for the 10 Properties.NetworkPeriod statements no theorem proves at the tip.
+- security/Proofs/lean-audit.json: unchanged.
+
+Checks [ran]:
+- All three files parse, and check.py's load() takes them.
+- move_errors is empty on each of the 22 tools/move/*_moves.json files and on their union.
+- category() gives `unstated` for all 10 new reasons, and trust_form holds.
+- None of our witnesses or frozen keys is left without a guarantee, apart from statement keys and old names that --moved renames.
+- merge.merge(base 12b62561867c, ours this branch, theirs LOCKPASS's dress 5cf7ba575ea3): 0 conflicts in all three locks, and our edits survive.
+- tests/test_lean_packages.py and tests/test_repository.py pass (bookkeeping warnings only, none ours).
+- tests/test_trust_list.py fails, the same at the tip. Its two lines:
+  - NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted: Verity.Assumptions.TrustedHost. Ours, but class (b): the record names the old premise, and --update --moved with device_moves.json rewrites it. Not hand-edited.
+  - Verity.remote_soundness_of_subprotocols: Verity.Vocab.InferenceOnlySound (@lean).
+
+Left for --moved (no edit):
+- the Properties.Certifier.* shape.properties keys whose guarantees are still under Properties.NetworkCertifier.* (certifier_area_moves.json);
+- TrustedHost (device_moves.json);
+- Declares.
+
+Left, yours to decide (from my first message):
+- LeakPartsRegistered's witness: _honest exists but doesn't conclude Verity.Site.RatedOn. Lean fix by us, or witnesses_assumed.
+- Verity.Site.RatedOn's open entry: the digest comes from --update; the issue and due are yours.
+- EgressRegistered's A.cell_inj shape: Lean change, or a frozen reason you approve.
+
+Left, others': layers 85 (AREAS) and orphans 4 (TERMGB2), as listed in my first message.
+
+Least sure: whether the rowsStartCharged entry also clears its `guarantees` inline-hypothesis line, and whether the shape check accepts the 10 unstated entries. Both need the facts, and no build ran.
+Not looked at: a full check.py audit (no build or facts on this VM).
+TIMER: none
+
