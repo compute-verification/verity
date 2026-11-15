@@ -45,7 +45,7 @@ EPS1-SPEC §0.4–§0.7a and §1.3 over `Accounting.TS.Machine`:
 * `Model`: the machine with the ISA's words per instruction `ω`, the vector classes, the byte classes of the memory
   levels, SCALAR-ROUTE's floors, the side units' per-word vectors, the fold and filler menus `ℱ` and `𝒳`, the
   committed words per unit of honest work `N_w` and the slacks `μ_f`, `μ_x`.
-* `Labelled`: a program's labelled split into word production, fold, filler and skippable work (honest's, §0.4, and
+* `Labelled`: a program's labelled split into word production, fold, filler and ε_skip work (honest's, §0.4, and
   the floor program ♭'s, §0.7a). `Honest` adds honest's measured cycles and clock.
 * `Anatomy`: a cheater's run labelled the same way, with its word production split by head (`nword h`), its owned
   right fixed words per head (`words h`), and `fixed`, the owned right committed words less the adaptive ones
@@ -125,7 +125,7 @@ structure Model (K R T L U F X : Type) where
 
 /-- **A labelled program** (§0.4), per unit of honest work: its word production `nw` (the MMAs and the operand loading
 and forming the checked words need, and everything else it executes that isn't below), its fold `nf`, its filler
-`nx` and its skippable work `ns` (work Verify neither checks nor needs). -/
+`nx` and its ε_skip work `ns` (work Verify neither checks nor needs). -/
 structure Labelled (K : Type) where
   nw : K → ℝ
   nf : K → ℝ
