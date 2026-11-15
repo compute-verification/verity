@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.class_window: GLM-5.3's Program at the class (32, 4) at TP8 rank 0, cut to its first decoder
+"""verity_vllm.program.predict.class_window: GLM-5.3's Program at the class (43, 4) at TP8 rank 0, cut to its first decoder
 layer, and its class window. Two requests of the class run one Program and one window; the first bit and count are
 constants inside the first select, every later one a committed output wired from the step before; one boundary read of
 `b.request` feeds every select and the check; only the decode steps' key blocks are masked, each by the bit of the step
@@ -32,7 +32,7 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
-P, O = 32, 4
+P, O = 43, 4
 
 
 def registered(layers: int, rank: int = 0) -> Registered:
