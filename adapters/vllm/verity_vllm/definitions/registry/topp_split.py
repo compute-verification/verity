@@ -30,7 +30,7 @@ Public: `topp_split_row(x_in_f32, p, S, F, R, cfg) -> (x_out_f32, stats[S,4], pa
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, cache
 
 import numpy as np
 
@@ -43,14 +43,14 @@ STEP_BLOCK = 2048
 MASK_BLOCK = 8192
 
 
-@lru_cache(maxsize=None)
+@cache
 def _fa():
     from verity_vllm.definitions.numerics import fa2_model as FA
     from verity_vllm.definitions.numerics import fa2_relation as FAR
     return FA, FAR.tables()
 
 
-@lru_cache(maxsize=None)
+@cache
 def _rm():
     from verity_vllm.definitions.numerics import rms_relation as RR
     from verity_vllm.definitions.numerics import rms_triton_model as RM
