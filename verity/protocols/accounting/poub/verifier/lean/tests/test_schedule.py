@@ -165,7 +165,7 @@ def test_the_honest_session_s_verdict_is_the_leans(server) -> None:
     (lambda v: v["schedule"]["registered"].append([7, 1, 2 ** 40]),
      "the schedule is 264 bits, over the cap of 256 committed before the coins"),
 ], ids=["registered", "empty-append", "write-past", "free-past", "free-before-write", "steps", "appends",
-        "append-extent", "passes", "step", "steered-plan", "unjoined-runs", "over-cap"])
+        "append-extent", "passes", "step", "steered-plan", "unjoined-runs", "too-long"])
 def test_each_refusal_is_the_leans_word_for_word(server, change, why) -> None:
     v = {"blocks": HONEST["blocks"], "cap": HONEST["cap"],
          "schedule": {k: [list(x) if isinstance(x, list) else x for x in vs]

@@ -19,7 +19,7 @@ from verity.protocols.accounting.poub.verifier import session_parties as SP
 from verity.runtime import sources as S
 from verity.runtime.runner import run
 
-SEED = b"remote bandwidth session parties"
+SEED = b"PoUB session parties"
 BOTH = [SP.VERIFIER, SP.PROVER]
 MS = 1_000_000
 
