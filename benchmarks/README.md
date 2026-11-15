@@ -151,7 +151,6 @@ doesn't name, each entry saying what it writes that is no row):
 
 | command | directory | owner |
 |---|---|---|
-| `verity bench compute` | `benchmarks/compute` | compute-accounting |
 
 ## Metrics
 
