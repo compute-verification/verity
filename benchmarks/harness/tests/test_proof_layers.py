@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -41,7 +43,7 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     rank = {"accepted": lean, "ok": lean, "population": 8, "draw_counts": {"SiluMul_v2{I=8192}": 2},
             "per_unit": {"SiluMul_v2{I=8192}": {"units": 2, "proof_bytes": 1700000, "prove_s_per_unit": 3.0,
                                                 "lean_verify_s_per_unit": 1.0}}}
-    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "ranks": {str(r): rank for r in range(ranks)}}
+    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "delta": 0.5, "ranks": {str(r): rank for r in range(ranks)}}
     (arm / "audit.log").write_text("A5 {\"lean_workers\": 1}\n" + ("A5 " + json.dumps(a5) + "\n") * (a5_lines or ranks)
                                    + "PROVE-PATH " + json.dumps(line) + "\n")
     (arm / "summary.json").write_text(json.dumps({"coins": {"source": "challenger", "challenger": "local"}}))
@@ -119,7 +121,7 @@ def test_every_rank_needs_its_own_lean_verify_verdict(tmp_path):
     assert PL.read("zk", str(prove_path_arm(tmp_path / "a", "llama", ranks=2))).accepted
     row = PL.read("zk", str(prove_path_arm(tmp_path / "b", "llama", ranks=2, a5_lines=1)))
     assert not row.accepted and row.prover_s is None and "not every rank has a Lean verify verdict" in row.lean
-    assert "1 audited A5 line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
+    assert "1 A5 result line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
 
 
 def test_the_printed_row_states_its_proof(tmp_path):
@@ -129,12 +131,17 @@ def test_the_printed_row_states_its_proof(tmp_path):
     rows = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
             PL.read("flock", None)]
     text = PL.render(rows)
-    line = {r.layer: x for r, x in zip(rows, text.splitlines()[4:7], strict=True)}
-    assert line["sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
-    assert "| plain | — |" in line["sampling"] and "| zk | 3 (s a block" in line["zk"]
-    assert line["flock"].startswith("| Flock | not run | — | — |")
+    line = table_lines(text)
+    assert line["with sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
+    assert "| plain | not stated | not stated | — |" in line["with sampling"]
+    assert "| zk | not stated | ε not stated at δ 0.5 | 3 s a drawn block (Flock's prove_total_s" in line["Flock with zero knowledge"]
+    assert line["Flock"].startswith("| Flock | not run | — | — | — | — |")
     assert ("- with sampling: no number: --sampling is the zk proof's row, and this output says its proof is plain"
             in text.splitlines())
+
+
+def table_lines(text: str) -> dict[str, str]:
+    return {x.split(" | ")[0][2:]: x for x in text.splitlines() if x.startswith("| ") and not x.startswith("| layer ")}
 
 
 def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
@@ -151,7 +158,7 @@ def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_th
     assert row.workload == ("row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
                             "(kind=served commitment=rows-sha512)")
     assert row.ran_with == "ran with: not stated"
-    assert row.detail == "audit verdicts challenger/m0, a challenger per drawn member"
+    assert row.detail == "A5 line's verdicts challenger/m0, a challenger per drawn member"
     assert "replay rc=0 a5 rc=0" in row.notes and "serving stage build PASS 2026-11-15T10:00:00Z" in row.notes
     assert "arm dev" in row.notes
 
@@ -217,7 +224,17 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
     assert doc["rows"][3]["ran_with"] == "ran with: not stated" and doc["rows"][3]["prover_s"] == 1202.0
-    assert "| ran with |" in text and "| ran with: not stated |" in text
+    head = text.splitlines()
+    assert head[1:6] == [PL.NOT_AN_AUDIT, "- Flock: ran with: not stated",
+                         "- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
+                         "(PROVE-PATH coins challenger; summary.json coins.challenger local)",
+                         "- with sampling: ran with: not stated", "- with recursion: ran with: not stated"]
+    assert doc["audit"] is False and "audit" not in text.replace(PL.NOT_AN_AUDIT, "")
+    line = table_lines(text)
+    assert "| 1202 s a run, wall (one recursive run's path" in line["with recursion"]
+    assert "| 90 s a run, wall (the lean step whole" in line["with recursion"]
+    assert "| 18,000,000 bytes a run (V*'s 10 releases" in line["with recursion"]
+    assert "| 850,000 bytes a drawn block (its session's" in line["Flock with zero knowledge"]
 
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
@@ -246,3 +263,51 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.setenv("OUT", out)
     assert PL.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS)) is None
     assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())
+
+
+def test_with_no_number_in_any_row_the_command_says_so_first_and_exits_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv("OUT", raising=False)
+    assert main(["prove-layers", "--zk", str(tmp_path / "missing")]) == 1
+    first = capsys.readouterr().out.splitlines()[0]
+    assert first.startswith("prove layers: no number: flock: not run: no output given (--flock DIR|RUN); zk: unreadable: ")
+    assert main(["prove-layers", "--recursion", str(recursion(tmp_path / "r"))]) == 0
+    assert capsys.readouterr().out.startswith("The proof system by layer")
+
+
+def test_the_help_names_the_command_as_the_readme_does(capsys):
+    with pytest.raises(SystemExit):
+        main(["prove-layers", "--help"])
+    assert capsys.readouterr().out.startswith("usage: verity bench prove layers ")
+
+
+def test_a_run_id_the_store_cant_give_says_to_give_its_out_directory(monkeypatch):
+    monkeypatch.setitem(sys.modules, "research.store", None)
+    row = PL.read("recursion", "r20261115-183449-c6f6")
+    assert row.status == "unreadable" and "isn't installed here" in row.why and PL.FIX in row.why
+
+
+def test_the_device_is_the_outputs_own_words(tmp_path):
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    assert PL.read("sampling", str(a5_out(tmp_path / "c", timing=cpu))).device == "CPU (timing gpus 0)"
+    assert PL.read("sampling", str(a5_out(tmp_path / "n"))).device == "not stated"
+    assert PL.read("recursion", str(recursion(tmp_path / "r"))).device == "not stated"
+
+
+def test_prove_without_the_store_refuses_in_one_line(monkeypatch, capsys):
+    """An outside machine has no store client, or no remote it can read: `prove` names what it needs and exits 2."""
+
+    monkeypatch.setitem(sys.modules, "research.store.local", None)
+    assert main(["prove", "--system", "flock", "--workload", "glm53"]) == 2
+    err = capsys.readouterr().err.strip().splitlines()
+    assert len(err) == 1 and err[0].startswith("verity bench prove: needs the evidence store's client")
+
+    class NoRemote:
+        remote, remote_error = None, "no remote is configured"
+
+    local = types.ModuleType("research.store.local")
+    local.LocalStore = NoRemote  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "research.store.local", local)
+    assert main(["prove", "--system", "flock", "--workload", "glm53"]) == 2
+    assert capsys.readouterr().err.strip().endswith("the evidence store has no remote here (no remote is configured)")
