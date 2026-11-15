@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Replay.RepRounds
 public import Proofs.Flock.Claims.Complete.Replay.Sizes
+import Proofs.Flock.Claims.Complete.Json.RecordSize
 
 /-!
 # A rep's rounds are few bytes each
@@ -71,9 +72,11 @@ theorem pBytes_le {b : ByteArray} {C : ℕ} (hb : b.size ≤ C) : ∀ Q, (pBytes
   have := pBytes_size_le b Q
   omega
 
-theorem pLabel_le {s : String} (hs : s.toUTF8.size ≤ 64) : ∀ Q, (pLabel s Q).size ≤ Q.size + 95 := by
+theorem pLabel_le {s : String} (hs : s.length ≤ 40) : ∀ Q, (pLabel s Q).size ≤ Q.size + 191 := by
   intro Q
-  have := pLabel_size_le s Q
+  have h1 := pLabel_size_le s Q
+  have h2 : s.toUTF8.size = s.utf8ByteSize := String.size_toByteArray
+  have h3 := size_le_length s
   omega
 
 theorem pSlice_le {vs : Array F128} {V : ℕ} (hv : vs.size ≤ V) : ∀ Q, (pSlice vs Q).size ≤ Q.size + (16 + 16 * V) := by
@@ -109,9 +112,9 @@ theorem wb_loopT {B m : ℕ} {cs : Challenges} {tr : Trace} {t₀ : Transcript} 
 /-- Zerocheck's rounds: the binding's (the digest and the cap), round 1's two vectors, and two field elements each. -/
 theorem wb_tEnd {B P C V m : ℕ} {digest cap : ByteArray} {cs : Challenges} {tr : Trace} {t : Transcript}
     (h : Wb B P t) (hd : digest.size ≤ C) (hc : cap.size ≤ C) (hab : (r1ab tr (m - 6) (cs.r m)).size ≤ V)
-    (hcc : (r1c tr (m - 6) (cs.r m)).size ≤ V) (hP : P + 2 * C + 268 ≤ B) (hV : 32 * V + 48 ≤ B) (h80 : 80 ≤ B) :
+    (hcc : (r1c tr (m - 6) (cs.r m)).size ≤ V) (hP : P + 2 * C + 460 ≤ B) (hV : 32 * V + 48 ≤ B) (h80 : 80 ≤ B) :
     Wb B 64 (tEnd m digest cap cs tr t) := by
-  have h₁ : Wb B (P + 95 + (C + 31) + (C + 31) + 95) (t₁ digest cap t) :=
+  have h₁ : Wb B (P + 191 + (C + 31) + (C + 31) + 191) (t₁ digest cap t) :=
     (((h.ap (pLabel_le (by decide +kernel))).ap (pBytes_le hd)).ap (pBytes_le hc)).ap
       (pLabel_le (by decide +kernel))
   have h₃ : Wb B 0 (t₃ m digest cap cs t) := (h₁.sq (by omega) _ _ _).sq (by omega) _ _ _
@@ -126,7 +129,7 @@ end Zc
 namespace Lc
 
 theorem wb_loopT {B P : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
-    {t : Transcript} (h : Wb B P t) (hP : P + 111 ≤ B) (hB : 80 ≤ B) : ∀ i, Wb B 0 (loopT c m tr zc full cs t i)
+    {t : Transcript} (h : Wb B P t) (hP : P + 207 ≤ B) (hB : 80 ≤ B) : ∀ i, Wb B 0 (loopT c m tr zc full cs t i)
   | 0 => ((h.ap (pLabel_le (by decide +kernel))).sq (by omega) _ _ _).sq (by omega) _ _ _
   | i + 1 => by
     simp only [loopT]
@@ -135,7 +138,7 @@ theorem wb_loopT {B P : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOu
 /-- Lincheck's rounds: its label, two field elements each, and `z_partial`. -/
 theorem wb_tEnd {B P V : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128}
     {cs : Challenges} {t : Transcript} (h : Wb B P t) (hz : (zrT c m tr zc cs (c.kLog - 6)).size ≤ V)
-    (hP : P + 111 ≤ B) (hV : 16 * V + 32 ≤ B) (hB : 80 ≤ B) : Wb B 0 (tEnd c m tr zc full cs t) :=
+    (hP : P + 207 ≤ B) (hV : 16 * V + 32 ≤ B) (hB : 80 ≤ B) : Wb B 0 (tEnd c m tr zc full cs t) :=
   ((wb_loopT h hP hB _).ap (pSlice_le hz)).sq (by omega) _ _ _
 
 end Lc
@@ -145,8 +148,8 @@ end Lc
 namespace Rs
 
 theorem wb_loopT {B P V : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Wb B P t)
-    (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 222 ≤ B) :
-    ∀ k, Wb B (P + 95) (loopT tr claims cs t k)
+    (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 414 ≤ B) :
+    ∀ k, Wb B (P + 191) (loopT tr claims cs t k)
   | 0 => h.ap (pLabel_le (by decide +kernel))
   | k + 1 => by
     refine Wb.mono (P := 0) ?_ (by omega)
@@ -154,7 +157,7 @@ theorem wb_loopT {B P V : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challen
 
 /-- The ring switch's rounds: its label, and each claim's label and `s_k`. -/
 theorem wb_tEnd {B P V : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Wb B P t)
-    (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 222 ≤ B) :
+    (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 414 ≤ B) :
     Wb B 0 (tEnd tr claims cs t) :=
   (wb_loopT h hs hB _).sq (by omega) _ _ _
 
@@ -224,7 +227,7 @@ theorem wb_loop {B C NY : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {
     (hy : p.finalProof.yr.size ≤ NY) (hB : C + 32 * NY + 256 ≤ B) : ∀ j, Wb B 0 (loop p cf sch x j).2.2
   | 0 => h
   | j + 1 => by
-    have ih := wb_loop h hc hy hB j
+    have ih := wb_loop (cf := cf) (sch := sch) h hc hy hB j
     show Wb B 0 (step p cf sch j (loop p cf sch x j)).2.2
     unfold step
     split
@@ -236,12 +239,12 @@ theorem wb_loop {B C NY : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {
 theorem wb_out {B C NY : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {T : F128}
     {cap : Array ByteArray} {t : Transcript} (h : Wb B 0 t) (hcap : (capBytes cap).size ≤ C)
     (hc : ∀ j : ℕ, (capBytes p.recursiveCaps[j]!).size ≤ C) (hy : p.finalProof.yr.size ≤ NY)
-    (hB : C + 32 * NY + 256 ≤ B) : Wb B 0 (out p cf sch T cap t).2.2 := by
+    (hB : C + 32 * NY + 300 ≤ B) : Wb B 0 (out p cf sch T cap t).2.2 := by
   have hpre : Wb B 0 (pre p cf sch T cap t).2.2 := by
     unfold pre
     exact wb_lv0 (wb_chals (wb_head (((h.ap (pLabel_le (by decide +kernel))).ap (pF_le _)).ap (pBytes_le hcap))
       (by omega) (by omega)) (by omega) _) (hc 0) (by omega)
-  exact wb_loop (x := x₀ p cf sch T cap t) hpre hc hy hB _
+  exact wb_loop (x := x₀ p cf sch T cap t) hpre hc hy (by omega) _
 
 end Lg
 
