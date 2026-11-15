@@ -79,18 +79,21 @@ absolute); with no `record` there, or no file, it reads none.
    prints no figure of the tied policy and says why. With it the section opens with its label: the class is not
    served, and a share typed on the command line rests on no PoUW verdict, so every figure of the section holds only
    where PoUW's checks credit all but that share of every block's work.
-5. **One JSON object**, the last line, also written to `--out DIR` (default `$OUT`) as `inference_only.json`: `value`,
-   `unit`, `check`, `rests_on`, `work_is`, `policies` (each with its `c`, `k`, `n` and their `units`), `divisions`,
-   `periods`, `tied` (the tied section's figures, `null` without a share), `record` (a served record's, below, `null`
-   without `--served`), `commit`, and `run` where the environment
-   names one. `check` is the Lean count's verdict on the policy the value is
+5. **One JSON object**, the last line, printed and written through the harness kit's report (`kit.report`,
+   `benchmarks/harness/README.md`), as `verity bench compute` and `verity bench memory` do: as `inference_only.json` in
+   `--out DIR` where given, else in the run's `out/` (`$RESEARCH_RUN_DIR/out`) under a research run, else in `$OUT`
+   where set; with none of them, or an empty one, it is only printed. Its first keys are `value`, `unit`, `commit` and
+   `run` (the research run around the command, `null` outside one), then, in name order, `benchmark`, `check`,
+   `divisions`, `periods`, `policies` (each with its `c`, `k`, `n` and their `units`), `record` (a served record's,
+   below, `null` without `--served`), `rests_on`, `tied` (the tied section's figures, `null` without a share) and
+   `work_is`. `check` is the Lean count's verdict on the policy the value is
    of, `refused` or `accepted` by its executable. For a stated policy it is `not run`, which is no verdict: this tree
    has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
    counts every weight and wired row a block reads as fresh input: on the built class it counts `c` exactly and
    refuses on `k`, and an instance of any other class has the same form.
-6. **The metric**: with `--out`, the served policy's `value` is also a measurement named
+6. **The metric**: where the JSON is written, the served policy's `value` is also a measurement named
    `training/inference-only-slowdown` in the run's `result.json` (the harness kit's writer: `$RESEARCH_RUN_DIR` under
-   a research run, else `--out`), the number `benchmarks/inference_only/metrics.toml` declares, marked `modeled`: it
+   a research run, else the place the JSON went), the number `benchmarks/inference_only/metrics.toml` declares, marked `modeled`: it
    is priced from the policy's stated numbers, and no check runs on the served class. Its target is 1,000, its goal's
    (the `goal` `metrics.toml` names: a slowdown of at least 1,000), and its verdict says
    where the value stands against it, `misses` below it and `within target` at or above it: the console's Metrics tab

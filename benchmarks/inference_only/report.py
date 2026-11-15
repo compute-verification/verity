@@ -457,8 +457,9 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     ap.add_argument("--log", type=Path, nargs="+", metavar="FILE",
                     help="the served run's registration log, in order, its own registration last: a record a file, or "
                          "a .jsonl file of one a line")
-    ap.add_argument("--out", type=Path, default=SHARED.OUT, metavar="DIR",
-                    help="write inference_only.json here (default: $OUT; unset: only printed)")
+    ap.add_argument("--out", type=lambda s: Path(s) if s else None, metavar="DIR",
+                    help="write inference_only.json here (default: the run's out/ under a research run, else $OUT; "
+                         "neither, or empty: only printed)")
     args = ap.parse_args(argv)
     named = [x for x in ("program", "circuit", "log") if getattr(args, x)]
     if named and (args.served is None or len(named) != 3):
@@ -570,18 +571,12 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         tied = T.priced(policy, P.shape(policy.policy.model), args.uncredited_share)
         print("\n" + "\n".join(tied_lines(tied, P.TIED.name)))
 
-    doc = {"benchmark": "inference_only", "value": served["value"], "unit": UNIT, "check": served["check"],
-           "rests_on": served["rests_on"], "work_is": P.WORK_IS, "policies": policies, "divisions": divisions,
-           "periods": periods, "tied": tied, "record": record, "commit": commit()}
-    if run := SHARED.RESEARCH_RUN_ID:
-        doc["run"] = run
-    text = json.dumps(doc, sort_keys=True)
-    if args.out:
-        args.out.mkdir(parents=True, exist_ok=True)
-        (args.out / "inference_only.json").write_text(text + "\n")
-        # the metric reads the stated policy until a data file the command reads names a served run of record
-        if stated.label == "served" and record is None:
-            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT, target=TARGET, mark="modeled",
-                                             verdict=verdict(doc["value"]))
-    print("\n" + text)
+    doc = {"value": served["value"], "unit": UNIT, "commit": commit(), "run": SHARED.RESEARCH_RUN_ID,
+           "benchmark": "inference_only", "check": served["check"], "rests_on": served["rests_on"], "work_is": P.WORK_IS,
+           "policies": policies, "divisions": divisions, "periods": periods, "tied": tied, "record": record}
+    # the metric reads the stated policy until a data file the command reads names a served run of record
+    measured = [{"name": METRIC, "value": doc["value"], "unit": UNIT, "target": TARGET,
+                 "verdict": verdict(doc["value"])}] if stated.label == "served" and record is None else []
+    shown = {k: doc[k] for k in ("value", "unit", "commit", "run")} | json.loads(json.dumps(doc, sort_keys=True))
+    kit.report("inference_only", "", shown, measured, mark="modeled", out=args.out)
     return doc
