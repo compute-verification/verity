@@ -314,7 +314,9 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
     held = [f.circuit, f.public, *(p for p in optional.values() if p)]
     tables = sorted(p for p in f.tables.iterdir() if p.is_file()) if f.tables else []
     out.mkdir(parents=True, exist_ok=True)
-    scratch = Path(tempfile.mkdtemp(prefix="lean-verify-archive-"))
+    # beside FLOCK_WORK, which its job removes at any exit: a SIGTERM skips the finally below, and the archive holds a copy
+    # of the circuit, as large as it
+    scratch = Path(tempfile.mkdtemp(prefix="lean-verify-archive-", dir=os.environ.get("FLOCK_WORK") or None))
     try:
         t = clock()
         rc, printed, _ = run([a.lean, "archive-put", str(scratch), *map(str, [*held, *tables])], out / "archive-put.log")
