@@ -54,7 +54,7 @@ the ones here.
 The guarantees are in `Guarantees` (read `Verity.Guarantees.SampleAfterRecorded` and `Verity.Guarantees.SoundBatch`
 first) and the named assumptions in `Assumptions`. This module, `Assumptions` and `Guarantees` are the spec: they import
 only one another and Mathlib, so their diff is everything a statement reviewer reads. The proofs and their lemmas are in
-`Security/Proofs/Core/`.
+`security/Proofs/Core/`.
 -/
 
 @[expose] public section

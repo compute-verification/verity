@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Properties.Poub.Remote.Sample
 public import Proofs.Properties.Poub.Remote.Window
 public import Proofs.Properties.Poub.Remote.Sample
 public import Proofs.Properties.Poub.Remote.Plan

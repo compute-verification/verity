@@ -24,6 +24,7 @@ import pytest
 from verity.commitments.crypto import lms
 from verity.commitments.merkle import tree_levels
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.accounting.pouw.verifier import core_check as CC
@@ -37,7 +38,6 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-import of_record as OR
 import of_record_lean as ORL
 import served_commit as SC
 
@@ -1012,7 +1012,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     ch = _challenger(params)
     o, pub, _ = _through(ch, rec)
     w = ch.witness["honest"]
-    assert [e["check"] for e in w] == ["registered", "pass", "registration", "public", "draw", "answer"]
+    assert [e["check"] for e in w] == ["registered", "pass", "registration", "caller", "public", "draw", "answer"]
     assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w)
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
@@ -1314,7 +1314,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
 
     assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)], record=ORL.Record) == 0
     assert capsys.readouterr().out.startswith("SAME ")
-    assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler)  # the twin
+    assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler, record=ORL.Record())  # the twin
     forged = {**sampling, "coin": ("00" if sampling["coin"][:2] != "00" else "01") + sampling["coin"][2:]}
     (log / "openings.jsonl").write_text(json.dumps(salt) + "\n" + json.dumps(forged) + "\n")
     assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean)], record=ORL.Record) == 1

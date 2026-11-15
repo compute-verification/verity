@@ -133,7 +133,7 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
 #: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
 #: holding a number, a list or a map of numbers, in text
 _OWN = "windows|users|engine_steps|every_slot|population|bits_by_window|advice_bits"
-_NUMBERED = "window|steps|window_steps|requests|refused"
+_NUMBERED = "window|steps|requests|refused"
 
 
 def _published(rule: str) -> str:
@@ -345,7 +345,7 @@ def test_publish_holds_pearlpluss_exclusion_tiles_count_and_ids_and_leaves_its_o
             "pieces/pearlplus/pearlplus-lean.json": {"verdict": "accept", "drawn": 2, "verdicts": tiles, "work": work,
                                                      "tie": answer["public"]["tie"]},
             "pieces/pearlplus/verify.json": {"answer": answer, "verdicts": tiles, "accepted": True},
-            "record/record.json": {"verdicts": {"pouw": "accept", "sampled_proofs": "accept"}, "tiles": 4,
+            "record/record.json": {"verdicts": {"pouw": "accept", "spot": "accept"}, "tiles": 4,
                                    "rows": [{"protocol": "pouw", "answer": answer}]}}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     for rel, doc in docs.items():
@@ -1942,6 +1942,22 @@ def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_window
     assert S.publish(out, private) == []
 
 
+def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_serving_setting(tmp_path):
+    """`publish` holds ``window_steps`` by its path, ``load.window_steps``, and not as a bare key: the caller's own
+    serving setting, ``serving.window_steps`` (`onsite_record.py --window-steps`), is published as written, in a document
+    and in a line, at any depth, beside a tied Pearl+ piece's load, which is held."""
+    serving = {"serving": {"window_steps": 16, "max_tokens": 4}}
+    doc = {"run": {**serving, "load": {"window_steps": 3}}}
+    assert S.public_json(serving) == serving and S.public_json(doc) == {"run": {**serving, "load": {}}}
+    line = f"ONSITE {json.dumps(serving)}"
+    assert S.public_line(line) == line and S.public_doc(json.dumps(serving)) == json.dumps(serving)
+    said = json.loads(S.public_line(f"POUW-DEV {json.dumps(doc)}").removeprefix("POUW-DEV "))
+    assert said == {"run": {**serving, "load": {}}}
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "onsite.json").write_text(json.dumps(serving))
+    assert S.publish(tmp_path / "out", tmp_path / "private") == []
+
+
 @pytest.mark.parametrize("reserved, joined", [
     ({"session": SID, "by": "vllm", "period": "pearlplus-r1"},
      "reserved under lane vllm's key into its Pearl-C period pearlplus-r1"),
@@ -2084,7 +2100,7 @@ def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_it
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "class held")
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert row["verdict"] == "accept" and "development" not in row
     assert row["answer"]["public"]["work"] == {**PEARL_LEAN_WORK, "give_up": 96}
     assert "exact_work" not in json.dumps(row)
@@ -2910,6 +2926,25 @@ W63K4 = "8,32,4,4,16"
 #: V3c's default rules (`served_verdicts.sh`'s V3C_LAW), which its window-commit and its audit both take: a rate, and
 #: under H1_TIE a stratified rate
 RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
+#: the toy tree's `window_commit.py`: the tree's own prove_path.py, run under the name served_verdicts.sh's calls record
+WINDOW_COMMIT = '''import runpy, sys
+from pathlib import Path
+sys.argv[0] = str(Path(__file__).parents[2] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py")
+runpy.run_path(sys.argv[0], run_name="__main__")
+'''
+
+
+def _one_stage(tree: Path, *, linked: bool = True) -> None:
+    """The toy tree's benchmarks/one_stage: this directory's files (``linked``), but a window_commit.py that runs the
+    tree's own prove_path.py rather than SPOT's."""
+    one = tree / "benchmarks" / "one_stage"
+    one.mkdir(parents=True, exist_ok=True)
+    for f in HERE.parent.iterdir() if linked else ():
+        if f.name != "window_commit.py":
+            (one / f.name).symlink_to(f, target_is_directory=f.is_dir())
+    (one / "window_commit.py").write_text(WINDOW_COMMIT)
+
+
 FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
@@ -3000,6 +3035,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
+    _one_stage(tree, linked=False)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -3121,7 +3157,7 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
@@ -3748,7 +3784,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
         p.mkdir(parents=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
@@ -4925,6 +4961,26 @@ def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve
     assert S.witness(listed) == []
     sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
     assert sums[first] == hashlib.sha256((d / first).read_bytes()).hexdigest()
+
+
+def test_a_hand_off_carries_every_windows_pearl_plus_record_and_audit_record_the_serve_dir_holds(tmp_path):
+    """The inference-only case's log is walked among the serve's docket records, so the hand-off lists and hashes
+    each one the serve dir holds: every window's Pearl+ record W (pearlplus/w<k>/registration.json, the audited window's
+    and each earlier one's) and every window's record R as its audit wrote it, of whatever class, beside the serve's
+    first. Each hides roots and names alone: `served_verdicts.py witness` refuses nothing of the list, and of Pearl+'s
+    directories it lists nothing else (no pass, no row)."""
+    records = ("deployment-registration.json", "pearlplus/w6/registration.json", "pearlplus/w7/registration.json",
+               f"v3c-w6-{VTAG}/audit/window/registration.json", f"v3c-w7-{VTAG}/audit/window/registration.json")
+    rows = ("pearlplus/w7/pass-0/rows.bin", "pearlplus/w7/registration.json.d/x", f"v3c-w6-{VTAG}/window/registration.json")
+    run = _handed(tmp_path, files={**{f: {"format": "verity/registration/v2", "previous": None} for f in records},
+                                   **{f: {} for f in rows}})
+    assert run.returncode == 0, run.stderr
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    listed = dc.joinpath("inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([*records, *HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
+    assert S.witness(listed) == []
+    sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
+    assert all(sums[f] == hashlib.sha256((d / f).read_bytes()).hexdigest() for f in records)
 
 
 def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):

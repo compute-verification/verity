@@ -44,7 +44,7 @@ its committed form read at a time budget, with `CompilerKSRegAt`'s, and `Samplin
 zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met by a trivial
 instance has a theorem `<Claim>_vacuous` that exhibits it.
 
-The lock's `claims` section (`Security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
+The lock's `claims` section (`security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
 guarantees: `Stated` states the shared, Flock and sampling claims' failures over the spec (`Claims.<Claim>_fails`), and
 `Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`), and `BindingMeets` the
 sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). The ZK-recursion compiler's claims carry

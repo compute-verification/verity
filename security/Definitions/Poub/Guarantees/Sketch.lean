@@ -7,7 +7,7 @@ public import Definitions.Poub.Tag.Sketch
 /-!
 # Exact integer ±1 sketches: the statements (trusted)
 
-The down-projection tag (`Security/Definitions/Poub/Tag/Sketch.lean`): `k` rows of uniform signs, each row's inner
+The down-projection tag (`security/Definitions/Poub/Tag/Sketch.lean`): `k` rows of uniform signs, each row's inner
 product with a block's elements, computed exactly on the tensor cores.
 
 * `NonCollision`: two integer vectors fixed before the signs, if different, have the same sketch with probability at

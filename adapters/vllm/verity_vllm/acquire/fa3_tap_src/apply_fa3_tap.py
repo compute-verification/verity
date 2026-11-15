@@ -25,8 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.config import option
-from verity_vllm.log import init_logger
-from verity_vllm.pipeline.cli import write
+from verity_vllm.log import init_logger, write
 
 logger = init_logger(__name__)
 

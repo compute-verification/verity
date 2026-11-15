@@ -8,7 +8,7 @@ public import Mathlib.Tactic.FinCases
 # The training formalism v2: the instances its witnesses are stated at (trusted)
 
 The instances the honest and nontrivial lemmas of `Slowdown.Formalism.Guarantees` are stated at
-(`Security/Definitions/Slowdown/Guarantees/Formalism/Witnesses.lean`). Each is a small Boolean declaration whose gate 0 is its
+(`security/Definitions/Slowdown/Guarantees/Formalism/Witnesses.lean`). Each is a small Boolean declaration whose gate 0 is its
 one registered input, the weight `θ`.
 
 * `Honest`, serving one token: gate 1 is a data bit `x`, gate 2 the new weight `θ' = θ ⊕ x` and gate 3 the token,

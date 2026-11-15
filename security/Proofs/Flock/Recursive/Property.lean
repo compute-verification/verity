@@ -58,7 +58,7 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
   to.
 
 Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
-in `Security/Properties/`.
+in `security/Properties/`.
 -/
 
 @[expose] public section

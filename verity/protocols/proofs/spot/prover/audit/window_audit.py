@@ -232,6 +232,7 @@ sys.path.insert(0, str(HERE))
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import check_memo as AM  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -862,7 +863,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     if plain(a):
-        summary.update(zk_server=None, arm=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER})
+        summary.update({"firewall": None, "arm": None, "plain": {"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER}})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
@@ -1413,7 +1414,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 def own_replay():
     """The `replay.py` beside this file, loaded by its path and never by its name: a process with `network_traces` on
     its path, as the audit over a network certifier's run has, holds that directory's `replay` under the name."""
-    return AC._module("one_stage_replay", HERE / "replay.py")
+    return LC._module("one_stage_replay", HERE / "replay.py")
 
 
 def write_case(out: Path, program, query: dict, sampling_design: dict, ports: dict, leaf_layer: str | None, delta: float,
@@ -2529,7 +2530,8 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
         manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
-                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
+                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key,
+                                              local=LC.Local)
         summary["challenger"] = {"challenger": a.challenger, "rule": a.rule}
     try:
         for r, row in tp_ranks(a, sets, out, world, ranks):

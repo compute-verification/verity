@@ -253,8 +253,8 @@ def h100Frags : List Frag := (List.range 25).flatMap fun i => [⟨.e4m3, 64, 64 
 
 /-- The H100's fragments with INT8: `h100Frags` and S8 m64nNk32 with `.satfinite` (`IGMMA.64xNx32.S8.S8.SAT`) for
 `N = 64, 80, …, 256`, PTX's dense integer `wgmma` shapes at `N ≥ 64`, as `h100Frags`. Each output is
-`GEMM_SM90_S8`'s dot (`verity.ml.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
-`verity.ml.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200. The
+`GEMM_SM90_S8`'s dot (`verity.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
+`verity.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200. The
 wider N here follow PTX's `wgmma` semantics, the same dot at each output, and no run has measured them. -/
 def h100S8Frags : List Frag := h100Frags ++ (List.range 13).map fun i => ⟨.s8, 64, 64 + 16 * i⟩
 
@@ -390,7 +390,7 @@ def s8Value (c : ℕ) : ℤ := if c < 128 then c else c - 256
 
 /-- **The S8 fragment's step** (PTX `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32`, SASS
 `IMMA.16832.S8.S8.SAT`): the accumulator word as an s32, plus every product `x_l·y_l` of the codes as s8, summed
-exactly and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.ml.circuits.silicon.integer`'s
+exactly and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.circuits.silicon.integer`'s
 `BLACKWELL_SM120_S8_M16N8K32`, the served INT8 dot `BlackwellS8ImmaDot32`, which the RTX PRO 6000 reproduced on all
 10,243,968 words tested, the clamp only at D; an H200 and a B200 compute the same function. -/
 def s8Step (acc : ℕ) (x y : List ℕ) : ℕ :=
