@@ -99,6 +99,8 @@ def roots() -> dict[str, Path]:
     for d in pkgs.values():
         top = d.split("/")[0]
         out.setdefault(top, ROOT / top)
+    # `tests` is the package of the suite a caller runs from (the vLLM adapter's, from tests/adapters/vllm), not the root's tests/
+    out.pop("tests", None)
     return out
 
 
