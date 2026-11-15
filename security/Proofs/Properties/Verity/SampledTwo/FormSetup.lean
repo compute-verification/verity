@@ -351,8 +351,8 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : S
   obtain ⟨s', spec', st, hset', hk₀, -⟩ :=
     reps_of_scope (twoHolds_at hof hacc hi hit) (hrounds o m₂ hacc hm₂) (hscope o m₂ hacc hm₂) ht
   obtain ⟨fs, hfs⟩ := SessionMsgs.filesAt_of_stmt hx hf
-  obtain ⟨m, circuitB, pubB, rd, record, spec, tabs, ⟨p0, o0⟩, proofs, hpl, hm, hc, hp, hrd, hrec, hsetup, hfiles,
-    hzk, hfw, hfd⟩ := verified_at hacc hk hf hfs
+  obtain ⟨m, circuitB, pubB, rd, tables, record, spec, tabs, ⟨p0, o0⟩, proofs, hpl, hm, hc, hp, hrd, htab, hrec,
+    hsetup, hfiles, hzk, hfw, hfd⟩ := verified_at hacc hk hf hfs
   have hxw := stmtAtCase_of_member hf hm hfs hrec hc hp
   obtain ⟨hgp, hgr⟩ := hprint o k p e hacc hgood hk hf t m hm
   have hdec := stmtRaw_decode hfw hfd

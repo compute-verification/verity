@@ -125,7 +125,7 @@ theorem stmtAt_raw {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verit
     exact ht
   obtain ⟨hl, hb⟩ := hfit o k p e xs hacc hgood hk hf hxs
   have hx := SessionMsgs.stmtAt_stmtsMsg A.h hmsg hf hxs hl hb hte
-  obtain ⟨m, circuitB, pubB, rd, record', spec, tabs, rest, proofs, -, hm, hc, hp, -, hrec', hsetup, -, -, hfw, hfd⟩ :=
+  obtain ⟨m, circuitB, pubB, rd, -, record', spec, tabs, rest, proofs, -, hm, hc, hp, -, -, hrec', hsetup, -, -, hfw, hfd⟩ :=
     SessionCoins.verified_at hacc hk hf hfs
   have hrr : record' = record := Option.some.inj (hrec'.symm.trans hrec)
   rw [hrr] at hsetup hfd
