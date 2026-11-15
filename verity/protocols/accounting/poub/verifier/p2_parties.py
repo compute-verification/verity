@@ -142,6 +142,7 @@ GAMMA_TERMS = ("μ_timing + μ_sample only, 1 − q_bytes/(R · span), R the rea
                "before μ_chip, λ, μ_rebuild, μ_host, μ_link and μ_carrier, which `audit.ledger` does not take off a P2 "
                "record")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
+_OPENING_KEYS = frozenset({"blocks", "leaf", "leaf_salt", "pass", "paths", "position", "receipt_path"})
 _ANSWER_ERRORS = (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError, audit.SessionError)
 
 
@@ -173,9 +174,17 @@ def recv(f: BinaryIO, key: str | None = None) -> Any:
     return message(f.readline(), key)
 
 
+def _is_hex(x: Any) -> bool:
+    return type(x) is str and _HEX.fullmatch(x) is not None
+
+
+def _is_hexes(xs: Any) -> bool:
+    return type(xs) is list and all(map(_is_hex, xs))
+
+
 def _unhex(x: Any) -> bytes:
     """Lowercase hex's bytes (`Flock.unhex`), else ValueError."""
-    if type(x) is not str or not _HEX.fullmatch(x):
+    if not _is_hex(x):
         raise ValueError("not lowercase hex")
     return bytes.fromhex(x)
 
@@ -260,15 +269,13 @@ def opening_json(o: p2.Opening) -> dict[str, Any]:
 def opening_of(doc: Any) -> p2.Opening | None:
     """`opening_json`'s inverse (`P2Session.openingOf`), None for anything else (the session rejects it
     `malformed`)."""
-    try:
-        if (not isinstance(doc, dict) or type(doc["pass"]) is not int or type(doc["position"]) is not int
-                or type(doc["paths"]) is not list):
-            return None
-        return p2.Opening(doc["pass"], doc["position"], _hexes(doc["blocks"]),
-                          tuple(_hexes(path) for path in doc["paths"]), _unhex(doc["leaf"]),
-                          _unhex(doc["leaf_salt"]), _hexes(doc["receipt_path"]))
-    except (KeyError, ValueError):
+    if (not isinstance(doc, dict) or not doc.keys() >= _OPENING_KEYS or type(doc["pass"]) is not int
+            or type(doc["position"]) is not int or type(doc["paths"]) is not list
+            or not all(map(_is_hexes, (doc["blocks"], *doc["paths"], doc["receipt_path"])))
+            or not _is_hex(doc["leaf"]) or not _is_hex(doc["leaf_salt"])):
         return None
+    return p2.Opening(doc["pass"], doc["position"], _hexes(doc["blocks"]), tuple(_hexes(path) for path in doc["paths"]),
+                      _unhex(doc["leaf"]), _unhex(doc["leaf_salt"]), _hexes(doc["receipt_path"]))
 
 
 def request_of(node: bytes, *, windows: int, passes: int, samples: int, window_ns: int,
@@ -681,7 +688,7 @@ class Lines:
         try:
             (key, _), = message(line).items()
         except (ConnectionError, ValueError):
-            key = None
+            return Message("Malformed", body=line)
         return Message(self.names.get(key, "Malformed"), body=line)
 
 

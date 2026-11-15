@@ -1088,10 +1088,7 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
                            pinned=pinned or pinned_commit(), busy=busy, start=hooks.get("start") or start_unit, own=own,
                            tree=hooks.get("tree") or TREE)
         elif verb == "status" and len(rest) <= 1:
-            try:
-                pin = pinned or pinned_commit()
-            except Refused:
-                pin = None
+            pin = pinned or (pinned_commit() if PINNED.fullmatch(TREE.name) else None)
             doc = gate_status(rest, host, busy, pin)
         elif verb == "fetch":
             gate_fetch(rest, host, sink)
