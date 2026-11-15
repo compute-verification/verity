@@ -1,5 +1,5 @@
-"""`tools/check/check.py`, run with this one's arguments: a launcher from before the move runs a candidate's check from this
-path and greps it for what the check takes (`--bookkeeping-warn`, `DESELECT_FILE`). It goes once no launcher names this path."""
+"""`tools/check/check.py`, run with this one's arguments: watchers installed from before the move run the check from this path
+(`--record`, `--preflight`). It goes once no installed watcher runs this path."""
 import os
 import sys
 
