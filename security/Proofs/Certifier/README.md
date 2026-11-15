@@ -27,10 +27,10 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     a bin and a uniform offset (binned, uniform), counted in one segment, then the length
     terms' tail (tailBits) (window), the carry the decisions' and the last order entry's
     position and rank, a run's charges (charges)
-../../Definitions/Certifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
+../../Definitions/Certifier/Cells.lean  trusted: the network certifier (design v3): its cells (CellView), its public schedule
     (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
     certifierCode), the fail cell (failCell) and the client's view (clientView)
-../../Definitions/Certifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
+../../Definitions/Certifier/Tap.lean  trusted: the tap, the network certifier and the certifier as one auditor device on a
     server's uplink: its record format (RecordFormat: on a schedule it holds, every cell its
     code sends reads back from its record) and its one code run giving the cells and the
     record (recordingCode)
@@ -38,7 +38,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
     (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
 ../../Definitions/Certifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
-    committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
+    committed bits (faultyBits), the possible incorrect sets at δ (incorrectSets), the
     sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
     audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
     run, which a period's operator reads (runsBefore)
@@ -53,7 +53,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     monitoring period of sampled audits (MonitoringPeriodLeakAccepted)
 ../../Definitions/Certifier/Guarantees/Pooled.lean  trusted: the incorrect proof blocks over a monitoring period
     of sampled audits on independent live coins (PooledIncorrectBlocksLe)
-../../Definitions/Certifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
+../../Definitions/Certifier/PooledLeak.lean  trusted: a window's leak relation at one incorrect set (LeakAt) and a
     monitoring period's good event (PooledGood)
 ../../Definitions/Certifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
     monitoring period of sampled audits, conditional on two per-window inputs
@@ -104,7 +104,7 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bit
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
     over the first `m` periods of `T` buckets: the factor per block and per period
-Warden.lean     the warden's code is the client view: its lane is the client view of its first late
+Cells.lean     the network certifier's code is the client view: its lane is the client view of its first late
     cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
     Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
@@ -114,7 +114,7 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
     relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
     hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
-Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-device, on a schedule its
+Tap.lean        what the tap's certifier saw is what its network certifier sent: under trusted-device, on a schedule its
     record format holds, its cells read back from the record its same run writes
     (certifier_cells_read), and each data cell its lane sends before the fail cell is
     in it (certifier_data_read)
@@ -140,15 +140,15 @@ MonitoringPeriod.lean  MonitoringPeriodLeakAccepted as MonitoringPeriodLeakCheck
     before the period)
 MonitoringPeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
     period's windows by a union bound (Pr_exists_mem_le_sum, monitoringPeriodLeak_le_sum)
-Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
+Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform sample misses `f` blocks with
     probability at most `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over
     windows on independent coins (pr_adaptive_le), and with each window's
     soundness error added, the monitoring period's bound (pooledIncorrectBlocks)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
     each window's error added (pr_adaptive_add_le, the monitoring-period step
-    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
+    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of incorrect sets
     under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
-    decode to at each draw, read back from the certifier's record
+    decode to at each sample, read back from the certifier's record
     (encard_pooledGood_le, pooledLeak; pooledLeak_fixed at operators fixed
     before the period), each over any per-window event
     (encard_pooledFam_le, pr_pooled_le), the count also over any event on the
@@ -347,7 +347,7 @@ The other 16 are the rest of the Capacity table's bounds:
   from the audits: over a monitoring period's windows, each registered as a
   statement, where the network certifier registers its observations at the transfer gates (`CertifierRegisters`, its openings
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`ExecutionPhaseGood`)
-  number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
+  number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakCertifier`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. The period's operator is fixed before the period and the secrets, a function of the
   observations: window `i`'s operator reads only the windows before `i`, closed by then (`runsBefore`), and its own

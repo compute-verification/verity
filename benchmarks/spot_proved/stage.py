@@ -281,7 +281,7 @@ class Capture:
             firsts = [t * slots + k for t in sorted(self.only) for k in range(slots) if t * slots + k < dims[0]]
             dims = (len(firsts), *dims[1:])
         n = int(np.prod(dims, dtype=np.int64)) if dims else 1
-        for i in (draw(self.coins, f"cells/{label}/{call}", n, self.per_call) if self.per_call else range(n)):
+        for i in (sample(self.coins, f"cells/{label}/{call}", n, self.per_call) if self.per_call else range(n)):
             idx = tuple(int(x) for x in np.unravel_index(i, dims))
             yield idx if firsts is None else (firsts[idx[0]], *idx[1:])
 
@@ -868,7 +868,7 @@ def mla_split_part_instances(cap: Capture):
 
 # ---- sample, gate, stage ---------------------------------------------------------------------------------------------------
 
-def draw(coins: bytes, label: str, n: int, k: int) -> list[int]:
+def sample(coins: bytes, label: str, n: int, k: int) -> list[int]:
     """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``), in the order sampled, so that
     any prefix is itself a uniform sample (a11's ``--per-kind`` takes one)."""
     if n <= k:
@@ -1600,7 +1600,7 @@ def every_call(cap: Capture, pops: dict, a, unstaged: dict | None = None) -> dic
             calls.setdefault(call_of(label, inst[2]), []).append(i)
         rec["calls"] = len(calls)
         for c, idx in sorted(calls.items()):
-            tasks += [(label, idx[j]) for j in draw(cap.coins, f"every/{label}/{c}", len(idx), a.every_call)]
+            tasks += [(label, idx[j]) for j in sample(cap.coins, f"every/{label}/{c}", len(idx), a.every_call)]
     random.Random(cap.coins).shuffle(tasks)
     rep["from_checkpoint"] = preload(cap, pops, tasks, a.jobs)
     _EVERY.update(pops=pops, specs=specs, full_gates=a.full_gates)
@@ -1764,7 +1764,7 @@ def main() -> int:
         if rows_spec is None:
             rec.update(staged=False, why=f"{spec.id}: the parameters' bits are not whole u16 words")
             continue
-        picks = draw(cap.coins, label, len(insts), a.per_type)
+        picks = sample(cap.coins, label, len(insts), a.per_type)
         rec["drawn"] = [list(insts[i][2]) for i in picks]
         ins, outs, gate = [], [], []
         for i in picks:
@@ -1795,7 +1795,7 @@ def main() -> int:
                          "twin": {"agree": all(x is True for x in agree), "calls": len(agree), "compared": sum(g.get("words", 0) for g in gate)}}
         kinds[label] = {"gates": spec.gates, "outcome": "lowers"}
         rec.update(staged=True, n=n)
-        print(f"stage {label}: {n}/{len(picks)} drawn of {len(insts)} pass the gate ({spec.id[:80]})", flush=True)
+        print(f"stage {label}: {n}/{len(picks)} sampled of {len(insts)} pass the gate ({spec.id[:80]})", flush=True)
     for label, rec in report["types"].items():
         if not rec.get("staged"):
             print(f"stage {label}: not staged: {rec.get('why')}", flush=True)

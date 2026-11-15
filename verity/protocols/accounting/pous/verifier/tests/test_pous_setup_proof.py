@@ -16,15 +16,16 @@ from verity.protocols.accounting.pous.verifier import setup_proof as V
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 
 
-def test_law_samples_8828_at_any_size():
-    assert V.law(1) is None and V.law(V.SAMPLE) is None
-    assert V.law(V.SAMPLE + 1) == f"rate:8828/{V.SAMPLE + 1}" and V.law(1 << 19) == "rate:8828/524288"
+def test_sampling_design_samples_8828_at_any_size():
+    assert V.sampling_design(1) is None and V.sampling_design(V.SAMPLE) is None
+    assert V.sampling_design(V.SAMPLE + 1) == f"rate:8828/{V.SAMPLE + 1}"
+    assert V.sampling_design(1 << 19) == "rate:8828/524288"
     with pytest.raises(ValueError):
-        V.law(0)
+        V.sampling_design(0)
 
 
 def test_claim_round_trips():
-    c = V.Claim({"w": 64}, bytes(88), bytes(range(64)), "ab" * 64, V.law(1 << 19), b"\x01\x02")
+    c = V.Claim({"w": 64}, bytes(88), bytes(range(64)), "ab" * 64, V.sampling_design(1 << 19), b"\x01\x02")
     assert V.Claim.from_json(c.to_json()) == c
 
 
@@ -76,7 +77,7 @@ class Given:
         self.recorded.append((template, inputs, outputs))
 
 
-def test_setup_window_reads_every_input_of_each_sampled_unit():
+def test_setup_window_reads_every_input_of_each_sampled_proof_block():
     """Each unit reads its block of ``store`` and its row of ``weights`` at their leaves, and its own row of the supplied
     base (72 leaves) and slot (one leaf), and every unit's ok output the supplied ok's one row; the circuit names the
     three as supplied, which proofs' `Registered` refuses until the window gives them (`proofs/zero-knowledge`); a

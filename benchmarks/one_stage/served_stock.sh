@@ -11,7 +11,7 @@
 # WINDOW_STEPS` with SEED: FIXED requests of PROMPTS tokens, each with ignore_eos and max_tokens WINDOW_STEPS, which FIXED
 # needs (REQUESTS, RATE and MAX_TOKENS unused). The first load is the composed run's one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
-# the weights docket before the load. Each lifetime's --out is a serve dir on the node, SERVE_ROOT/runs/RUN/<lifetime>:
+# the weights registration before the load. Each lifetime's --out is a serve dir on the node, SERVE_ROOT/runs/RUN/<lifetime>:
 # serve.json, advice_trace.jsonl (the scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl,
 # the client's record of load j, and load-<j>.timings.json, its per-request send, first-token and done times. The trace and
 # the load's records hold request values, so they stay there: once the endpoint stops, `served_overhead.py metrics` reads
@@ -36,7 +36,7 @@ PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
 FIXED=${FIXED:-} WINDOW_STEPS=${WINDOW_STEPS:-}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
 PRIV=$ROOT/runs/${RESEARCH_RUN_ID:-local}; mkdir -p "$PRIV"; export PRIV

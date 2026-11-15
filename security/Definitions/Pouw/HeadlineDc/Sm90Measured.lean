@@ -5,7 +5,7 @@ public import Definitions.Pouw.HeadlineDc.Sm90
 /-!
 # H200 (sm_90)'s measured headline instance: DC-90-ri and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
@@ -22,7 +22,7 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
   on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold routes, floors
   and `N_w`.
 * `flatFold`, `flatSkip`, `flat`: ♭ is `Sm90.flat`'s word production and filler, its fold DC-90-ri's (the fold routes'
-  cheapest mix, by share of the words: cp-red2-generic 0.6632, cp-red8-generic 0.3368), with ε_skip's skippable work at
+  cheapest mix, by share of the words: cp-red2-generic 0.6632, cp-red8-generic 0.3368), with ε_skip's free compute at
   DC-90-ri's 0.592731% (`eps_budget.design_skip` on DC-90-ri), at ALU's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 0.003598 + JI90_0 0.966699 + JI90_1
   0.029703).
@@ -162,7 +162,7 @@ noncomputable def model : Model (Fin 50) (Fin 15) (Fin 2) Unit Empty (Fin 56) Un
 cp-red2-generic 0.6632, cp-red8-generic 0.3368. -/
 def flatFold : Sparse := [(0, 577013, 8744), (1, 17579, 4372), (30, 64, 1)]
 
-/-- ♭'s skippable work a unit on DC-90-ri, at its ALU price. -/
+/-- ♭'s free compute a unit on DC-90-ri, at its ALU price. -/
 def flatSkip : Sparse := [(0, 125777099033414960567038367679, 216302012937701487883735000000)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/

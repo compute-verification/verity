@@ -1080,9 +1080,9 @@ class AuditRun:
         last root.  Its rejection when it has fewer than
         `min_passes` roots, and, at the last window, `coin` if an append's coin went unused: no root followed it.
 
-        At `groups_per_coin` g > 1 the openings coin is group c's, c = t // g (`Params.sample_of`): only the group's last
-        window closes, and that makes every window of the group final (an earlier one's deadline is before t's), each
-        rejected `few` in order; its `s` receipts are sampled over the group's passes in order, numbered across its
+        At `groups_per_coin` g > 1 the openings coin is group c's, c = t // g (`Params.sample_of`): only the group's
+        last window closes, and that makes every window of the group final (an earlier one's deadline is before t's),
+        each rejected `few` in order; its `s` receipts are sampled over the group's passes in order, numbered across its
         windows, under the key of window c, and each window keeps its own share, (pass, position) in it, which `verify`
         checks.  A window whose share is none has nothing to open: the close accepts it, and `verify` refuses it.  At
         g = 1 that is the window's own sample, never none."""

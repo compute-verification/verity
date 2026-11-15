@@ -7,13 +7,13 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 /-!
 # The headline at the executable, with every open guarantee named
 
-`Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
+`Prog.flock_headline` is about the unsalted batched session. At the proving statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is the salted, one-table
 form at verity-verify-proof's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
 `hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
 decoder right at the sampling design's samples, `DecodesOn`).
 
-`flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
+`flock_headline_exec` instantiates it at the proving program `Placed.keyProg c hU n` (the circuit's program on Δ's
 source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
 session's inputs (`planAt`, `Sites.lean`), with:
 * `pp := Placed.Sites.progPlaces_keyProg` at `sitesAt` (W6 and `Layout.Aliased` at keyProg's places);
@@ -77,9 +77,9 @@ the circuit prover's per-instance public files load, under `@967b8d06` too, whos
 challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
 session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof
-accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated prover's
+accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
-at most `miss(K) + ε_ks + δ_link`.
+at most `miss(K) + ε_ks + ε_bind`.
 
 Its hypotheses, past the session's inputs:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the
@@ -98,7 +98,7 @@ Its hypotheses, past the session's inputs:
 
 Scope. W6 is definitional on the untyped path: the unit's rows are the parsed net's (`Rows.ofNet`), and nothing verifies
 that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
-rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds template instances
+rows. The typed path is not the prover's. `keyProg` has no edges between units: the headline bounds template instances
 that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
 constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
 tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session

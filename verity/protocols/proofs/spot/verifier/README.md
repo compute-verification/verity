@@ -149,9 +149,9 @@ params are; round 2 runs no template check.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
-Serving's record is not yet the scheme the audit proves: the benchmark's first run (`verity/protocols/proofs/spot/prover/audit/template_audit.py`)
+Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
-served run (`verity/protocols/proofs/spot/prover/audit/window_audit.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are
 `served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred run's serving becomes
@@ -167,7 +167,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `ExecStratified.lean` and `ExecSampleOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
-  `verity/protocols/proofs/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
+  `verity/protocols/proofs/spot/verifier/lean`, its `spot-verifier`) and the Python beside it on every check: R1-R8
   (`check`, with the fan-out its verdict publishes), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
@@ -185,7 +185,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   is a reject whose audit record fails `run`. `Spot/Slots.lean` puts that sample in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`).
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
-  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
+  `spot-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
   and check are in the module's docstring; the parameters, one statement's check and a member's statement and files
   are in `Spot/OneStageZkStatement.lean`, which it imports, and the run over the members and the checks in the
   module itself, all in the namespace `Spot.OneStageZk`. It reads the
@@ -280,7 +280,7 @@ Tests: `uv run tools/check/suites.py protocols/spot`.
 ### Verdicts of record
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
-`sampled-proofs-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
+`spot-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
 refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 `NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
 
@@ -303,7 +303,7 @@ not give.
 
 | Guard | Why it can only refuse |
 | --- | --- |
-| `parties`' `_held` | returns a reject answer unchanged, and turns an accept into a reject when its commitment or interior is not the registration sent; otherwise returns the answer it was given |
+| `parties`' `_held` | returns a reject answer unchanged, and turns an accept into a reject when its commitment or interior is not the docket sent; otherwise returns the answer it was given |
 | `one_stage.proofs.ks_form_why` | a reason or None for a circuit outside the form `verify --zk` covers (`Flock.KsScope.filesWhy`); a reason refuses a session, None leaves the binary's verdict |
 | `one_stage.proofs.template_why` | a reason or None for a circuit the template refuses, read only before `members.files_why`'s other refusals; None decides nothing |
 | `one_stage.proofs.population_why` | a reason or None for a public file whose units are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
@@ -379,7 +379,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
   of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
-  in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
+  in a public size class (`verity.circuits.partition_v2.size_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## The docket
@@ -446,7 +446,10 @@ A program's weights, constants and tables are values: committed once, under hidi
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
   `Record.sessionRegistered`) to the docket's own (`Record.ownRegistered`), taking a read named by one of its
-  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other. It holds
+  a read of a window value its caller names (the parameters' `window_values`, none by default; never a port or a
+  registered value of the verifier's) to the root of that value's entry in the record's `window.activations.values`,
+  refusing it at any other root, under two roots, or with no such entry (`audit.window_reads`, `Record.windowReads`).
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 
@@ -467,7 +470,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The one-stage audit applies `Q_template_instance` v0 and `Q_template_instances` v0, and `Q_word` v1 at X = 16 and
   `Q_call` v1 at X <= 16. Under a template query each instance of a listed template in the program's root body is one
   proof block, in canonical order (node, then member). Every proof block's committed bits fit a public size class, a power of two
-  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`), and a program with a wider proof block is refused. The
+  from 16 to `SIZE_CLASS_MAX` bits (`size_class`), and a program with a wider proof block is refused. The
   template queries are demo queries for template runs, not the serving partition. Only they define strata; any other
   query refuses the stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same

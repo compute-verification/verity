@@ -1,9 +1,9 @@
 module
 
-public import Definitions.Accounting.Assumptions.Stacking
+public import Definitions.Poub.Assumptions.Stacking
 public import Definitions.Accounting.Guarantees.RegisteredCircuit
 public import Mathlib.Tactic.Continuity
-public import Proofs.Accounting.Stacking
+public import Proofs.Poub.Stacking
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +41,7 @@ import Proofs.Poub.Bandwidth.Chip
 import Proofs.Poub.RateAudit.Windows
 
 /-! The first pieces of the proof of `Accounting.Guarantees.RegisteredCircuitRequirement`, whose theorem is in
-`RegisteredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
+`RegisteredCircuit/Requirement.lean`: a carrier of a registered circuit's is within its census over its life, its inputs
 within the run-input bytes the stacking property's caps allow its windows (`Provenance.OfCircuit.budget`), a uniform
 function restricted along an injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is
 steered after the coins to
@@ -52,7 +52,7 @@ device told it does (`KeyBinding.pr_steered_le`). -/
 
 namespace Accounting.RateSketch.Provenance
 
-/-- **A carrier of a declared circuit's is within its census over its life**: over at most `life` of the audit's
+/-- **A carrier of a registered circuit's is within its census over its life**: over at most `life` of the audit's
 windows, its inputs are at most the run-input bits the stacking property's caps allow in any `life` of them
 (`8·R_life`), and its encodes at most `life` times the most nonlinear units (budgeted units and data products) the
 circuit has in a window. -/

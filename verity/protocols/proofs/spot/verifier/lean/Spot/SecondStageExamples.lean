@@ -1,6 +1,7 @@
 module
 
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 meta import Spot.SecondStage
 
 /-!
@@ -28,10 +29,10 @@ private def exRec (population : Nat) (roots : List (String × Nat × Nat)) (wind
 private def exRun : String := "run-0"
 
 /-- The interior registration's window: the run, and the replay sample `sample` it lays out. -/
-private def exWindow (sample : Json) (run : Json := .str exRun) : Json :=
+private def exExecutionPhase (sample : Json) (run : Json := .str exRun) : Json :=
   Json.mkObj [("kind", "served"), ("run", run), ("interior", Json.bool true), ("replay_sample", sample)]
 
-private def exInterior (window : Json := exWindow (natsJson #[1, 3])) : Json :=
+private def exInterior (window : Json := exExecutionPhase (natsJson #[1, 3])) : Json :=
   exRec 6 [("x", 1, 2), ("out", 3, 4)] window
 
 private def exSchemas : Json := Json.mkObj [("x", "hm96-sha512/row/v2"), ("out", "hm96-sha512/row/v2")]
@@ -146,19 +147,19 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck t
   #["second-header"]
 #guard exCodes exOwn (exIn "frame_v3" "bindings" (Json.mkObj [("x", exBinding "x")])) == #["second-header"]
 #guard exCodes exOwn (exIn "frame_v3" "schemas" (Json.mkObj [("x", "hm96-sha512/row/v2")])) == #["second-header"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[1, 3]) (.str "run-1")) } id ==
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[1, 3]) (.str "run-1")) } id ==
   #["second-header"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[1, 3]) .null) } id == #["second-header"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } id == #["second-interior-order"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (natsJson #[1])) } id == #["second-interior-order"]
-#guard exCodes { exOwn with interior := exInterior (exWindow (.arr #[.bool true, Lean.toJson (3 : Nat)])) } id ==
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[1, 3]) .null) } id == #["second-header"]
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } id == #["second-interior-order"]
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (natsJson #[1])) } id == #["second-interior-order"]
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase (.arr #[.bool true, Lean.toJson (3 : Nat)])) } id ==
   #["second-interior-order"]
-#guard exCodes { exOwn with interior := exInterior (exWindow .null) } id == #["second-interior-order"]
-#guard (exCheck false { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } #[exHeader id]).codes ==
+#guard exCodes { exOwn with interior := exInterior (exExecutionPhase .null) } id == #["second-interior-order"]
+#guard (exCheck false { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } #[exHeader id]).codes ==
   #["second-interior-order"]
-#guard (check true { exOwn with interior := exInterior (exWindow (natsJson #[3, 1])) } none).codes ==
+#guard (check true { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } none).codes ==
   #["second-interior-order", "second-statements"]
-#guard (check true { exOwn with interior := exInterior (exWindow .null), links := none } none).codes ==
+#guard (check true { exOwn with interior := exInterior (exExecutionPhase .null), links := none } none).codes ==
   #["second-interior-order", "second-links"]
 #guard (exCodes exOwn (exIn "units" "blocks" (natsJson #[0]))).isEmpty
 #guard (exCodes { exOwn with refs := #[("Pair_v0", exIn "units" "blocks" (natsJson #[9]) exRef)] } id).isEmpty
@@ -655,7 +656,7 @@ private def exWire : Wire := ⟨"Triple_v0", "x", "Pair_v0", "out"⟩
 /-- An interior record naming its ports by template, six leaves each: `Pair_v0`'s `x` and `out` and `Triple_v0`'s
 `out`, and no tree of `Triple_v0`'s wired `x`. -/
 private def exWiredInterior : Json :=
-  exRec 6 [("Pair_v0/x", 1, 2), ("Pair_v0/out", 3, 4), ("Triple_v0/out", 5, 6)] (exWindow (natsJson #[1, 3]))
+  exRec 6 [("Pair_v0/x", 1, 2), ("Pair_v0/out", 3, 4), ("Triple_v0/out", 5, 6)] (exExecutionPhase (natsJson #[1, 3]))
 
 /-- `exTwoParts` over `exWiredInterior`, `Triple_v0`'s `x` wired from `Pair_v0`'s `out`, its unit reading its writer's
 first unit of three a block. -/

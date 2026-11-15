@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
 
 
@@ -29,16 +31,13 @@ def test_family_imports_without_torch():
             "from verity.circuits.refs import runs\n"
             "assert _runs is runs\n"
             "print('ok')")
-    repo = (Path(__file__).resolve().parents[3] / "vllm")
+    repo = Path(__file__).resolve().parents[2]
     out = subprocess.run([sys.executable, "-c", code], cwd=repo, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "ok"
 
 
 def test_derive_alias_when_torch_available():
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        return
+    pytest.importorskip("torch")
     from verity_torch.frontend import derive
     assert derive._runs is runs

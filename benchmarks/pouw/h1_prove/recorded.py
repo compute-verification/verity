@@ -135,7 +135,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import h1unit as U  # noqa: E402
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U  # noqa: E402
+
+import h1form as F  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
@@ -149,7 +151,7 @@ SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
 #: the in-proof negatives, by `window.py tamper`'s flag
 IN_PROOF = {"in-receipt": "--receipt-word", "in-d": "--d-word", "in-y": "--y-cell", "in-z": "--z-cell", "in-swap": "--swap",
-            "in-call": "--call", "in-z-only": "--z-only", **({"in-xa": "--xa-flip"} if U.tile() == "v3" else {})}
+            "in-call": "--call", "in-z-only": "--z-only", **({"in-xa": "--xa-flip"} if F.tile() == "v3" else {})}
 #: the negatives that fail at binding, by `window.py tamper`'s flag
 BINDING = {"flipped-zy": "--zy-word", "wrong-receipt": "--receipt"}
 #: the in-proof negative whose base statement (its unit computes ok = 0 where its record moved) ``ok-zero`` proves
@@ -197,7 +199,7 @@ def tamper_flag(flag: str, units: list[int], call: tuple[int, int]) -> list[str]
 def program_of(k: int, calls: Sequence[tuple[str, int]], slot: int) -> SimpleNamespace:
     """The public Program of an execution phase shape (`h1unit.Shape.window`: its calls' names and B rows, its slot), its
     template-instance query and partition (``tp`` as core evaluates it, ``obj`` the `verity/partition/v1` object)."""
-    program, query = U.Shape(k, R, C).window(calls, slot)
+    program, query = F.shape(k, R, C).window(calls, slot)
     return SimpleNamespace(program=program, query=query, tp=P.evaluate(program, query), obj=P.partition(program, query))
 
 
@@ -308,7 +310,7 @@ def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int,
     """Unit ``u``'s registered reads as the verifier's public file states them (`h1unit.verifier_pub`'s ``reads``): each
     registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path, and the
     ok port's at the verifier's own ``ok`` (``okr``, `ok_registration`) and its path there."""
-    reg = set(U.Shape(k).in_rows)
+    reg = set(F.shape(k).in_rows)
     out = {port: (value, index, "".join(op["rows"][port]["path"]))
            for port, (value, index) in U.unit_reads(win.program, win.tp, u).items() if port in reg}
     value, index = U.unit_reads(win.program, win.tp, u)["o1"]
@@ -321,7 +323,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
     its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 execution phase's own reads
     (`h1unit.unit_reads`) at the sampled ``units``. Returns what it wrote and the file."""
     k, t = com["unit"]["k"], time.time()
-    reg = {*U.Shape(k).in_rows, "o1"}
+    reg = {*F.shape(k).in_rows, "o1"}
     doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in roots_of(com, okr).items()},
                              com["window"], U.window_open_root(com), win.obj["program"])
     if why := U.check_known(win.obj["program"], U.window_open_root(com), U.OUT_PORTS["ok"], doc["ports"][U.OUT_PORTS["ok"]]):
@@ -556,7 +558,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
                       "reads": {str(u): U.unit_reads(win.program, win.tp, u) for u in units}}
     log(f"drew {units} of {T}: {record['draw']['calls']}")
     k = com1["unit"]["k"]
-    shape = U.Shape(k, R, C)
+    shape = F.shape(k, R, C)
     regs1, docs1, record["registered_reads"] = {c: vp / f"w1-c{c}.registered.json" for c in by_call}, {}, {}
     for c, us in by_call.items():
         record["registered_reads"][f"w1-c{c}"], docs1[c] = registered_file(regs1[c], win, com1, c, us, ok1)
@@ -906,7 +908,7 @@ def cmd_summarize(a: argparse.Namespace) -> int:
         pe = out / s["tag"] / "prove.err"
         fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
         proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
-                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.zk_server" in fw}
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.zk_server" in fw or "t.firewall" in fw}
     zk_server = a.zk_server == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
     if zk_server and not proofs.get("honest", {}).get("firewall_timed"):
@@ -970,7 +972,7 @@ def cmd_summarize(a: argparse.Namespace) -> int:
                "credit_registration": {"from_reads": record.get("credit_registration"), "from_lean": credit},
                "windows": {w: {k: v[k] for k in ("tiles", "slot", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},
-               "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
+               "tile": F.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
                                                           for w, v in record["windows"].items()},
                "xa": {w: v["served"].get("xa") for w, v in record["windows"].items()},
                "xa_flip": (record.get("tampered") or {}).get("in-xa", {}).get("xa_flip"),

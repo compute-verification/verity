@@ -43,7 +43,7 @@ def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
 
-def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
+def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
     """The audit's integrity profile under any of the four sampling designs. The work sampling design is the stratified sampling design at its sizes (Lean
     `SamplingDesign.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
     helps)."""
@@ -52,11 +52,11 @@ def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: flo
     elif draw["law"] == "bernoulli":
         sampling_design = Bernoulli(Fraction(draw["p"]))
     elif draw["law"] in ("stratified", "work"):
-        sampling_design = core_sampling_design(sampling_design_of(draw), registration["population"])
+        sampling_design = core_sampling_design(sampling_design_of(draw), docket["population"])
     else:
         raise ValueError(f"no profile for a {draw['law']!r} sample")
-    return IntegrityProfile(levels=(Level(LEVEL, registration["partition"]),), sizes=(registration["population"],),
-                            draws={LEVEL: sampling_design}, delta=delta, programs=(registration["program"],),
+    return IntegrityProfile(levels=(Level(LEVEL, docket["partition"]),), sizes=(docket["population"],),
+                            draws={LEVEL: sampling_design}, delta=delta, programs=(docket["program"],),
                             drawn={LEVEL: len(draw["units"])})
 
 
@@ -85,11 +85,11 @@ def design(sampling_design: Mapping[str, Any]) -> SamplingDesign:
     return Stratified(tuple(Stratum(s["template"], n, s["k"]) for s, n in zip(sampling_design["strata"], sizes)))
 
 
-def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
+def wrong_units(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
     """The profile's bounds on incorrect proof blocks at delta, as the record states them: `bound`, and for `stratified` each
     template's own (`per_template`)."""
-    p = profile(registration, draw, delta)
-    out: dict[str, Any] = {"delta": delta, "of": registration["population"], "bound": p.bound(),
+    p = profile(docket, draw, delta)
+    out: dict[str, Any] = {"delta": delta, "of": docket["population"], "bound": p.bound(),
                            "rule": "except with probability delta, an accepted transcript has at most `bound` wrong units"}
     if draw["law"] in ("stratified", "work"):
         out["per_template"] = p.stratum_bounds()
@@ -97,38 +97,38 @@ def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta:
     return out
 
 
-def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
+def integrity_profile(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                       sessions: Sequence[str], verdict: str | list[str] | None) -> dict[str, Any]:
     """`verity/integrity-profile/v1`; `sessions` are the session records' SHA-512, `verdict` the verdicts of record (a list
     when the sampled proof blocks were proved in several sessions)."""
-    return {"format": PROFILE, "protocol": registration["protocol"], "program": registration["program"],
-            "query": registration["query"], "partition": registration["partition"], "population": registration["population"],
-            "registration": registration_digest(registration), "scheme": registration["scheme"],
-            "roots": [{"port": r["port"], "root": r["root"], "leaves": r["leaves"]} for r in registration["roots"]],
-            "law": registration["law"], "drawn": list(draw["units"]),
-            "inputs": {"anchored": list(registration["anchors"]), "linked": [],
-                       **({"registered": [{k: e[k] for k in ("value", "root", "leaves", "domain")} for e in registration["registered"]]}
-                          if "registered" in registration else {})},
+    return {"format": PROFILE, "protocol": docket["protocol"], "program": docket["program"],
+            "query": docket["query"], "partition": docket["partition"], "population": docket["population"],
+            "registration": registration_digest(docket), "scheme": docket["scheme"],
+            "roots": [{"port": r["port"], "root": r["root"], "leaves": r["leaves"]} for r in docket["roots"]],
+            "law": docket["law"], "drawn": list(draw["units"]),
+            "inputs": {"anchored": list(docket["anchors"]), "linked": [],
+                       **({"registered": [{k: e[k] for k in ("value", "root", "leaves", "domain")} for e in docket["registered"]]}
+                          if "registered" in docket else {})},
             "budget_log2_t": None, "terms": None, "epsilon_log2": None,
             "evidence": {"receipt": _sha512(dict(receipt)), "draw": _sha512(dict(draw)), "sessions": list(sessions),
                          "verdict": verdict}}
 
 
 def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
-                       registration: Mapping[str, Any] | None = None) -> dict[str, str | None] | None:
+                       docket: Mapping[str, Any] | None = None) -> dict[str, str | None] | None:
     """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verdicts of record report
     (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
     report under different roots mapped to None. None when no accepted verdict of record reports registered reads. With
-    `registration`, only its own values (its roots' ports and its registered values)."""
+    `docket`, only its own values (its roots' ports and its registered values)."""
     out: dict[str, str | None] | None = None
     for v in verdicts.values():
         if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), Mapping):
             out = {} if out is None else out
             for e in v["registered"].values():
                 out[e["value"]] = e["root"] if out.get(e["value"], e["root"]) == e["root"] else None
-    if out is None or registration is None:
+    if out is None or docket is None:
         return out
-    named = {r["port"] for r in registration["roots"]} | {e["value"] for e in registration.get("registered", [])}
+    named = {r["port"] for r in docket["roots"]} | {e["value"] for e in docket.get("registered", [])}
     return {k: r for k, r in out.items() if k in named}
 
 
@@ -140,12 +140,12 @@ def _jeq(a: Any, b: Any) -> bool:
         return False
 
 
-def less_own_reads(opened: Mapping[str, Any] | None, registration: Mapping[str, Any]) -> dict[str, Any] | None:
+def less_own_reads(opened: Mapping[str, Any] | None, docket: Mapping[str, Any]) -> dict[str, Any] | None:
     """`Record.lessOwnReads`: ``opened`` less the reads of the docket's own ports at their own roots (each port's
     last root). A read named by one of its ports at another root stays, to be held to the registered values."""
     if opened is None:
         return None
-    roots = {r["port"]: r["root"] for r in registration["roots"]}
+    roots = {r["port"]: r["root"] for r in docket["roots"]}
     return {v: r for v, r in opened.items() if not (v in roots and _jeq(roots[v], r))}
 
 
@@ -162,11 +162,11 @@ def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
     it of none."""
     if record.get("accepted") is not True:
         raise ValueError("only an accepted audit record has an accept's answer")
-    registration, sample = record["registration"], record["draw"]
-    p = profile(registration, sample, delta).to_json()
+    docket, sample = record["registration"], record["draw"]
+    p = profile(docket, sample, delta).to_json()
     p["delta"] = str(delta)
-    wrong = wrong_units(registration, sample, delta)
-    return {"commitment": registration_digest(registration), "profile": p, "protocol": PROTOCOL,
+    wrong = wrong_units(docket, sample, delta)
+    return {"commitment": registration_digest(docket), "profile": p, "protocol": PROTOCOL,
             "public": {"bound": wrong["bound"], COMPLETE: record.get("complete") is True,
                        "drawn": sorted(sample["units"]), "per_template": wrong.get("per_template"),
                        "proved": sorted(record["proved_units"])},
@@ -181,7 +181,44 @@ def answer_complete(answer: Any) -> bool:
     return isinstance(public, Mapping) and answer.get("verdict") == "accept" and public.get(COMPLETE) is True
 
 
-def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
+def _field(j: Any, k: str) -> Any:
+    return j.get(k) if isinstance(j, Mapping) else None
+
+
+def window_reads(opened: Mapping[str, Any] | None, docket: Mapping[str, Any],
+                 named: Sequence[str]) -> dict[str, Any] | None:
+    """`Record.windowReads`: ``opened``'s reads of the window values ``named`` that are not the docket's own (no
+    port of its roots, no value of its registered entries), less each at the root of that value's entry in its
+    `window.activations.values` (an entry whose `value` is its key and whose root is a string). A named value's read at
+    another root, or with no such entry, stays, to be held to the registered values. The caller names the values."""
+    if opened is None:
+        return None
+    roots = _field(docket, "roots")
+    regs = _field(docket, "registered")
+    own = {x for x in [*(_field(r, "port") for r in (roots if isinstance(roots, list) else [])),
+                       *(_field(e, "value") for e in (regs if isinstance(regs, list) else []))] if isinstance(x, str)}
+    free = {v for v in named if v not in own}
+    values = _field(_field(_field(docket, "window"), "activations"), "values")
+
+    def root_of(v: str) -> str | None:
+        e = _field(values, v)
+        return e["root"] if _field(e, "value") == v and isinstance(_field(e, "root"), str) else None
+
+    return {v: r for v, r in opened.items() if v in free and not (root_of(v) is not None and _jeq(root_of(v), r))}
+
+
+def held_reads(verdicts: Mapping[str, Mapping[str, Any]], docket: Mapping[str, Any],
+               window_values: Sequence[str] = ()) -> dict[str, Any] | None:
+    """`Record.heldReads` on the verdicts' reads (`session_registered`): the docket's own values' less those of its
+    own ports at their own roots (`less_own_reads`), then the window values' less those at their window entries' roots
+    (`window_reads`). What `audit_record`'s `session_registered` takes."""
+    opened = less_own_reads(session_registered(verdicts, docket), docket)
+    if opened is None:
+        return None
+    return {**opened, **(window_reads(session_registered(verdicts), docket, window_values) or {})}
+
+
+def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  sampling_design: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
@@ -190,22 +227,23 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
     record opened the sessions' reads against (`session_registered(verdicts)`, never the docket's own), less the
-    reads of its own ports at their own roots (`less_own_reads`); each read it reports must be of a registered value, at
+    reads of its own ports at their own roots, with the reads of the window values its caller names less those at their
+    window entries' roots (`held_reads`); each read it reports must be of a registered value, at
     that value's registered root, and a registered value needs no reported read. `certified`: the names of the values
     the verifier holds certified entries for; each of them does need a reported read (the check `certified` names the
     ones that have none), so a read reported under another value's name does not stand in for it."""
-    checks = {"draw": check_draw(draw, registration, sampling_design).to_json(),
+    checks = {"draw": check_draw(draw, docket, sampling_design).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
-    if receipt.get("registration") != registration_digest(registration):
+    if receipt.get("registration") != registration_digest(docket):
         checks["receipt"] = {"ok": False, "codes": ["receipt"], "detail": {"receipt": receipt.get("registration")}}
     if served is not None and sorted(served) != sorted(draw["units"]):
         checks["served"] = {"ok": False, "codes": ["served"], "detail": {"served": sorted(served)[:16], "drawn": list(draw["units"])[:16]}}
     if session_roots is not None:
-        registered = {r["port"]: r["root"] for r in registration["roots"]}
+        registered = {r["port"]: r["root"] for r in docket["roots"]}
         wrong = sorted(p for p, r in session_roots.items() if p not in registered or registered[p] != r)
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
-    want = {e["value"]: e["root"] for e in registration.get("registered", [])}
+    want = {e["value"]: e["root"] for e in docket.get("registered", [])}
     opened = dict(session_registered or {})
     wrong = sorted(v for v in opened if v not in want or opened[v] != want[v])
     if wrong:
@@ -220,13 +258,13 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)
                 and all(v["accepted"] is True for v in ran.values()) and all(c["ok"] for c in checks.values()))
     rec: dict[str, Any] = {
-        "format": FORMAT, "registration": dict(registration), "registration_digest": registration_digest(registration),
+        "format": FORMAT, "registration": dict(docket), "registration_digest": registration_digest(docket),
         "receipt": dict(receipt), "draw": dict(draw), "law": sampling_design_of(draw), "proved_units": list(proved_units),
         "statement": dict(statement), "checks": checks, "verdicts": {k: dict(v) for k, v in verdicts.items()},
         "accepted": accepted, "complete": len(ran) == len(verdicts), "profile": None, "integrity_profile": None,
         "wrong_units": None}
     if accepted:
-        p = profile(registration, draw, delta)
+        p = profile(docket, draw, delta)
         if draw["law"] in ("stratified", "work"):
             sampled = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
                        for s in draw["strata"]}
@@ -234,9 +272,9 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         else:
             rec["profile"] = p.to_json()
         digests = [v.get("digest") for v in of_record]
-        rec["integrity_profile"] = integrity_profile(registration, receipt, draw, sessions,
+        rec["integrity_profile"] = integrity_profile(docket, receipt, draw, sessions,
                                                      digests[0] if len(digests) == 1 else digests)
-        rec["wrong_units"] = wrong_units(registration, draw, delta)
+        rec["wrong_units"] = wrong_units(docket, draw, delta)
     return rec
 
 

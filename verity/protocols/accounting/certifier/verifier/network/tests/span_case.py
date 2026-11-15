@@ -39,7 +39,7 @@ from verity_difftest import protocol as P
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import registered as R
 from verity.protocols.accounting.certifier.verifier import span
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
                                                             Direction, Issuer, certificate_digest, mark_digest,
                                                             marks_link)
@@ -179,18 +179,23 @@ def site(r: random.Random, link: str, key: str, elsewhere: str,
     outside; a second host behind a second certifier, on the link `elsewhere`; a link between the two hosts and the
     second host's bare uplink. `joins`: what the link `link` joins in place of the host and its certifier, or None for
     a site with no such link. `alone`: the site without the link between the two hosts, so that the link `link` is the
-    host's one link."""
+    host's one link. The site states its unit of time, each host the auditor's figure for its on-chip state, and each
+    certifier its key's scheme."""
     def loc(i: str, kind: str, **more: Any) -> dict:
-        return {"bytes": 0, "id": i, "key": "", "kind": kind, "owner": "prover", "parent": "site0", "sheet": "",
-                "tier": None} | more
+        return {"bw": None, "bytes": 0, "chip": None, "drift": None, "id": i, "key": "", "kind": kind, "owner": "prover",
+                "parent": "site0", "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None,
+                "timebase": None} | more
 
     def joined(i: str, a: str, b: str, beta: int) -> dict:
-        return {"beta": beta, "ends": [a, b] if r.random() < 0.5 else [b, a], "id": i, "latency": r.randint(0, 3)}
+        return {"beta": beta, "ends": [a, b] if r.random() < 0.5 else [b, a], "id": i, "latency": r.randint(0, 3),
+                "unmediated": None}
 
-    locs = [loc("site0", "site", parent=None), loc("node0", "host"), loc("gpu0", "device", parent="node0", sheet="s"),
+    scheme = "lms-sha512/n64-w1-h20/v0"
+    locs = [loc("site0", "site", parent=None, time_unit="1/1000000000"), loc("node0", "host", chip=1 << 23),
+            loc("gpu0", "device", parent="node0", sheet="s"),
             loc("hbm0", "memory", parent="gpu0", tier="hbm", bytes=1 << 30),
-            loc("cert0", "certifier", owner="auditor", key=key), loc("node1", "host"),
-            loc("cert1", "certifier", owner="auditor", key=r.randbytes(24).hex())]
+            loc("cert0", "certifier", owner="auditor", key=key, scheme=scheme), loc("node1", "host", chip=1 << 23),
+            loc("cert1", "certifier", owner="auditor", key=r.randbytes(24).hex(), scheme=scheme)]
     links = [joined("out0", "cert0", R.OUTSIDE, 100), joined(elsewhere, "cert1", "node1", 40),
              joined("out1", "cert1", R.OUTSIDE, 40), joined("hh0", "node0", "node1", 400),
              joined("bare0", "node1", R.OUTSIDE, 10)]
@@ -208,12 +213,13 @@ def _other_schedule(r: random.Random, s: Schedule) -> Schedule:
 
 
 def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], bytes] | None = None,
-          alone: bool = False) -> dict:
+          alone: bool = False, record: int | None = None) -> dict:
     """A span with the one change `m` (`EXPECT`), sampled from `seed`. `between` is what runs between the two marks,
     in place of their sampled messages: it is handed the network certifier's mark source, which marks the start
     message it is called on and returns the start certificate's bytes (`Certificate.encode`), and it returns the end
     message, which the end mark is then on. `alone`: the registered hardware's host has the link as its one link
-    (`site`)."""
+    (`site`). `record`: the egress record (its index in `span.records`) whose certificate a change to one execution
+    phase's certificates replaces, in place of a sampled one; a `cert-link` change then always replaces it."""
     if m not in EXPECT:
         raise ValueError(f"a change is one of {MUTATIONS}, not {m!r}")
     r = random.Random(f"network-span {m} {seed}")
@@ -307,6 +313,7 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
     phases += [phase(w, [dataclasses.replace(c, window=w) for c in certificates(LAST)], head(LAST))
                for w in range(LAST + 1, last + 1)]
     k, j = r.randrange(len(phases)), r.randrange(2)
+    j = j if record is None else record
     w, name = start + k, span.records(link)[j][1]
     if m == "missing":
         del phases[k]
@@ -335,9 +342,9 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
     elif m in ("cert-link", "cert-phase", "cert-ingress", "cert-session", "cert-key", "cert-forged"):
         cs = certificates(w)
         if m == "cert-link":
-            cs = r.choice([
-                cs[::-1], cs[:j] + [certificates(w, on=elsewhere)[j]] + cs[j + 1:],
-                cs[:j] + [own.sign(marks_link(link), EGRESS, w, r.randbytes(DIGEST_BYTES))] + cs[j + 1:]])
+            swaps = [cs[:j] + [certificates(w, on=elsewhere)[j]] + cs[j + 1:],
+                     cs[:j] + [own.sign(marks_link(link), EGRESS, w, r.randbytes(DIGEST_BYTES))] + cs[j + 1:]]
+            cs = r.choice(swaps if record is not None else [cs[::-1], *swaps])
         elif m == "cert-phase":
             cs[j] = certificates(w + 1)[j]
         elif m == "cert-ingress":

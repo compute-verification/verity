@@ -1,5 +1,5 @@
-"""`one_stage`'s Python held to SPOT's one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
-`ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), on sampled programs, sampling designs, records, samples and
+"""`one_stage`'s Python held to SPOT's one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`spot-one-stage`, a
+`ProtocolPort`), and its pieces through `spot-difftest` (`Port`s), on sampled programs, sampling designs, records, samples and
 verdicts, valid ones and one or two changes to each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
 
 The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
@@ -539,7 +539,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified", "verdicts")
+                               "certified", "verdicts", "window_values")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -647,12 +647,26 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
         _challenger(j["challenger"], window)
+    if "window_values" in j:
+        _window_values(j["window_values"], j["ports"], j["registered"] or {})
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
     if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
         raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
     return {**raw, "program": PROGRAMS[sha], "delta": delta}
+
+
+def _window_values(named, ports: dict, registered: dict) -> None:
+    """`OneStage.paramsParsed`'s `window_values`: a list of strings, none a port or a value the verifier expects
+    registered."""
+    if not isinstance(named, list):
+        raise D.Reject("window values are a list of strings")
+    for v in named:
+        if not isinstance(v, str):
+            raise D.Reject("window values are a list of strings")
+        if v in ports or v in registered:
+            raise D.Reject(f"window value {v}: a port or a registered value of the verifier's, not a window's")
 
 
 def _challenger(ch, window) -> ChallengerKey:
@@ -776,7 +790,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
-                             audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec),
+                             audit.held_reads(e["verdicts"], rec, p.get("window_values") or ()),
                              sorted(p.get("certified") or ()))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
@@ -1496,12 +1510,15 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 
 def _record_input(j) -> Fraction:
-    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `certified` a list of
-    strings when given; δ."""
+    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `certified` and
+    `window_values` lists of strings when given; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
-    _exactly(j, RECORD_INPUT_KEYS | ({"certified"} & set(j) if isinstance(j, dict) else set()), "the record's input")
+    _exactly(j, RECORD_INPUT_KEYS | ({"certified", "window_values"} & set(j) if isinstance(j, dict) else set()),
+             "the record's input")
     if not (isinstance(j.get("certified", []), list) and all(isinstance(v, str) for v in j.get("certified", []))):
         raise D.Reject("certified is not a list of strings")
+    if not (isinstance(j.get("window_values", []), list) and all(isinstance(v, str) for v in j.get("window_values", []))):
+        raise D.Reject("window_values is not a list of strings")
     reg, sample_ = j["registration"], j["draw"]
     if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
             and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
@@ -1528,10 +1545,11 @@ def _record_input(j) -> Fraction:
 
 def audit_record_of(j) -> dict:
     """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
-    roots the verdicts' own for the docket's values less those of its own ports at their own roots
-    (`Record.lessOwnReads`), and with `certified` each of those values held to have a reported read."""
+    roots the verdicts' own for the docket's values less those of its own ports at their own roots, with those of the
+    window values it names less the reads at their window entries' roots (`Record.heldReads`), and with `certified`
+    each of those values held to have a reported read."""
     delta = _record_input(j)
-    opened = audit.less_own_reads(audit.session_registered(j["verdicts"], j["registration"]), j["registration"])
+    opened = audit.held_reads(j["verdicts"], j["registration"], j.get("window_values") or ())
     return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
                               j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
                               opened, j.get("certified", ()))
@@ -1539,6 +1557,11 @@ def audit_record_of(j) -> dict:
 
 def record(j):
     return codec.canonical_json(audit_record_of(_json(j))).decode()
+
+
+def _named(params: dict) -> dict:
+    """`Run.audit`'s `window_values`: the params' window values, given only when there are some."""
+    return {"window_values": list(params["window_values"])} if params.get("window_values") else {}
 
 
 def _closure_map(closure):
@@ -1672,7 +1695,7 @@ def run(j):
     out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
                            "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
                            "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
-                           "verdicts": verdicts, "certified": sorted(p.get("certified") or ())})
+                           "verdicts": verdicts, "certified": sorted(p.get("certified") or ()), **_named(p)})
     accepted = out["accepted"] is True
     staged = {}
     if inner is not None:
@@ -1681,7 +1704,7 @@ def run(j):
             "delta": j.get("delta"), "draw": inner["draw"], "law": inner["law"], "proved_units": proved2,
             "instances": len(proved2) if it["instances"] is None else it["instances"], "receipt": inner["receipt"],
             "registration": it["record"], "served": it["served"], "session_roots": it["session_roots"],
-            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts})
+            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts, **_named(it["decoded"])})
         try:
             strata = P.strata(it["decoded"]["program"], it["decoded"]["query"])
         except (P.QueryRefused, ValueError) as e:
@@ -2556,7 +2579,7 @@ CASES = st.one_of(
               st.integers(0, 63)),
     JSON)
 
-ONE_STAGE = D.ProtocolPort("sampled-proofs-one-stage", answer, CASES, package=PACKAGE)
+ONE_STAGE = D.ProtocolPort("spot-one-stage", answer, CASES, package=PACKAGE)
 server = D.server_fixture(ONE_STAGE)
 
 
@@ -2616,7 +2639,7 @@ def test_an_accept_says_whether_every_verdict_ran(server):
         assert got["public"]["complete"] is complete and audit.answer_complete(got) is complete, (other, line)
 
 
-ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
+ONE_STAGE_V2 = D.ProtocolPort("spot-one-stage-zk", answer, CASES, package=PACKAGE)
 server_v2 = D.server_fixture(ONE_STAGE_V2)
 
 
@@ -3149,13 +3172,13 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
         for name, (other, work, kind) in uncovered.items():
-            a = audit_of(d, draw, coins, sampling_design=other, **({} if work is None else {"work_table": work}))
+            a = audit_of(d, draw, coins, law=other, **({} if work is None else {"work_table": work}))
             with pytest.raises(D.Reject) as refused:
                 decode_params_v2(a["params"])
             out = outcome(a)
             assert (str(refused.value), out["verdict"], out["reason"]) == (
                 subset_only(kind), "reject", f"params: {subset_only(kind)}"), (seed, name)
-        rate = audit_of(d, draw, coins, sampling_design="rate:3/5")
+        rate = audit_of(d, draw, coins, law="rate:3/5")
         assert decode_params_v2(rate["params"])["law"] == sampling_design and (python(rate), lean(rate)) == ("verdict", "verdict"), seed
         for name, (c, why) in unclosed(coins).items():
             a = audit_of(d, draw, c)
@@ -3295,7 +3318,7 @@ def fanout_cases(draw) -> dict:
     return case
 
 
-PIECES = "sampled-proofs-difftest"
+PIECES = "spot-difftest"
 
 
 def _audit_inputs(f, groups, most=1):
@@ -3795,7 +3818,7 @@ _PARAMS_CHANGES = {
 }
 
 
-#: A registered table's entry the auditor pins (`service._table_entry`): the tables' docket's for parameter ``w``.
+#: A registered table's entry the auditor pins (`service._table_entry`): the tables' registration's for parameter ``w``.
 _PINNED = {"value": "w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}
 
 
@@ -4136,9 +4159,9 @@ PUBLIC_ITEMS = [
     lambda c, x: {**c, "query": QUERIES[x % len(QUERIES)]},
     lambda c, x: {**c, "scheme": "frame-v3/blake3"},
     lambda c, x: {**c, "record": [None, "a record", [], 5][x % 4]},
-    lambda c, x: _record_with(c, sampling_design={"law": "stratified", "strata": [
+    lambda c, x: _record_with(c, law={"law": "stratified", "strata": [
         {"k": 1, "template": [PAIR.id, None, 5, True, "x", -2, [1], {"a": 1}, 0][x % 9]}, [TRIPLE.id, None, False, 7][x % 4]]}),
-    lambda c, x: _record_with(c, sampling_design={"law": "stratified", "strata": "s"}),
+    lambda c, x: _record_with(c, law={"law": "stratified", "strata": "s"}),
     lambda c, x: _record_with(c, roots=[[{"port": [1]}, {"port": {"a": 1}}, {"port": 5}, {"port": None}, {"root": "r"}, "x",
                                          {"port": "x", "call": 1, "root": "r"}][x % 7], *c["record"]["roots"]]),
     lambda c, x: _record_with(c, registered=[{"value": [["W"], {}, 1, None, "W", "out"][x % 6], "leaves": 1, "root": "r"}]),
@@ -5433,7 +5456,7 @@ def _read_opening(c: dict, x: int) -> dict:
     table; its root is left as a table's name, which is none of the verifier's bytes; round 1's record registers
     the root under another domain; the params record no read, the read at another count of rows, or another template
     alone as one; round 1's record registers the table at another count of leaves; the auditor's params pin the
-    tables (`Own.tables`, the tables' docket's entries) and round 1's record registers none, or both do, or the
+    tables (`Own.tables`, the tables' registration's entries) and round 1's record registers none, or both do, or the
     pin's root, domain id or count of leaves is another than the one the verifier fills; or its verdict reads the four
     bytes of 1, two 16-bit leaves."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))
@@ -6426,7 +6449,7 @@ def test_a_piece_agrees(pieces, port, examples):
 
 def test_the_callers_check_agrees(callers):
     """The caller's check (`VStar.Recursive.Caller.check`, `spot-flock-caller`) gives the Python's codes
-    (`caller.check`) on the registration piece's inputs: SPOT's check no longer makes these codes, so this port is the
+    (`caller.check`) on the docket piece's inputs: SPOT's check no longer makes these codes, so this port is the
     one that holds them."""
     stats = D.run(CALLER, examples=700, server=callers)
     assert stats.outputs > 175 and stats.rejects > 0, stats
@@ -6605,7 +6628,7 @@ def test_the_select_piece_samples_every_rule(pieces):
 
 
 def test_a_work_samples_design_is_cores(pieces):
-    """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfSamplingDesign`) the Python's
+    """Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfSamplingDesign`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -7564,6 +7587,126 @@ def test_the_record_holds_a_certified_value_to_a_reported_read(pieces):
                 assert rec["checks"].get("certified") == ({
                     "ok": False, "codes": ["certified"], "detail": {"certified": [v], "unread": unread}}
                     if failed else None), (s.program.fn.id, name)
+
+
+#: A window value's root, committed in the record's window and in no root or registered entry of it.
+WINDOW_VALUE_ROOT = "5d" * 64
+#: The setups whose values read nothing of the record's window, so a window that also commits a window value's entry
+#: registers them as it did.
+WINDOW_FREE_SETUPS = [s for s in REGISTERED_SETUPS if '"window"' not in json.dumps(getattr(s, "sup", {}))]
+
+
+def _window_value_audit(s: RegisteredSetup, named: list, entry: dict | None, reads: dict) -> dict:
+    """`_v2_audit` of `s` whose verifier names `named` window values (none: no `window_values`), whose record's window
+    holds `entry` in its `activations.values` under `st` (none: no `activations`), and whose verdict also reports
+    `reads`."""
+    a = _v2_audit(s, s.values[0])
+    rec = a["record"]
+    if entry is not None:
+        rec["window"] = {**rec["window"], "activations": {"values": {"st": entry}}}
+    if named is not None:
+        a["params"]["window_values"] = named
+    lean = a["evidence"]["verdicts"]["lean"]
+    a["evidence"] = {**a["evidence"], "receipt": R.receipt(rec, "v", received=RECEIVED),
+                     "verdicts": {"lean": {**lean, "registered": {**lean["registered"], **reads}}}}
+    return _json(a)
+
+
+def test_a_named_window_value_is_read_at_its_entrys_root(server):
+    """A window value the verifier names is held to the root of its entry in the record's `window.activations.values`:
+    a read at that root accepts, as does no read of it; a read at another root, under two roots, or of a named value
+    with no entry, or one whose entry names another value, rejects. Named nowhere, the same reads accept as on the
+    base, which reads none of a value the docket doesn't name. A name that is a port or a value the verifier
+    expects registered is refused with the parameters."""
+    at = lambda root: {"st.0": {"root": root, "value": "st"}}  # noqa: E731
+    entry = {"root": WINDOW_VALUE_ROOT, "value": "st"}
+    for s in WINDOW_FREE_SETUPS:
+        for named, ent, reads, want in (
+                (["st"], entry, at(WINDOW_VALUE_ROOT), "accept"),
+                (["st"], entry, {}, "accept"),
+                (["st"], entry, at("12" * 64), "reject"),
+                (["st"], entry, {**at(WINDOW_VALUE_ROOT), "st.1": {"root": "12" * 64, "value": "st"}}, "reject"),
+                (["st"], None, at(WINDOW_VALUE_ROOT), "reject"),
+                (["st"], {**entry, "value": "other"}, at(WINDOW_VALUE_ROOT), "reject"),
+                (["st"], {"value": "st"}, at(WINDOW_VALUE_ROOT), "reject"),
+                ([], entry, at("12" * 64), "accept"),
+                (None, entry, at("12" * 64), "accept"),
+                (None, None, at("12" * 64), "accept")):
+            kind, line = D.replay(ONE_STAGE, _json(_case(_window_value_audit(s, named, ent, reads))), server)
+            assert kind == want, (s.program.fn.id, named, ent, reads, line)
+        port, value = sorted(s.ports)[0], sorted(s.values[0])[0]
+        for named in ([port], [value], ["st", port], "st", [5]):
+            kind, line = D.replay(ONE_STAGE, _json(_case(_window_value_audit(s, named, entry, at(WINDOW_VALUE_ROOT)))),
+                                  server)
+            assert kind != "accept" and "window value" in line, (s.program.fn.id, named, line)
+
+
+def test_a_named_window_value_at_another_named_values_root_is_refused(server):
+    """With two window values named, each with its own entry, a read of one at the other's entry's root rejects: each
+    named value is held to its own entry, never to any named entry's root."""
+    a_root, b_root = WINDOW_VALUE_ROOT, "6e" * 64
+    entries = {"st": {"root": a_root, "value": "st"}, "su": {"root": b_root, "value": "su"}}
+    for s in WINDOW_FREE_SETUPS:
+        for reads, want in (({"st.0": {"root": a_root, "value": "st"}, "su.0": {"root": b_root, "value": "su"}}, "accept"),
+                            ({"st.0": {"root": b_root, "value": "st"}}, "reject"),
+                            ({"su.0": {"root": a_root, "value": "su"}}, "reject")):
+            a = _window_value_audit(s, ["st", "su"], None, reads)
+            a["record"]["window"] = {**a["record"]["window"], "activations": {"values": entries}}
+            a["evidence"]["receipt"] = R.receipt(a["record"], "v", received=RECEIVED)
+            kind, line = D.replay(ONE_STAGE, _json(_case(a)), server)
+            assert kind == want, (s.program.fn.id, reads, line)
+
+
+def _unnamed(j):
+    """`j` naming no window value (`window_values` empty), where it is an object."""
+    return {**j, "window_values": []} if isinstance(j, dict) else j
+
+
+def _base_held(verdicts, docket, window_values=()):
+    """The registered reads `audit_record` held before window values: the docket's own, less its ports' at their
+    own roots."""
+    return audit.less_own_reads(audit.session_registered(verdicts, docket), docket)
+
+
+#: The one refusal whose text names the keys it was given, which a `window_values` added to keys already wrong joins.
+KEYS_REFUSED = ("params: the keys of the parameters are not", "the keys of the record's input are not")
+
+
+def _same(port, got, unnamed, ok) -> None:
+    """`unnamed`'s outcome is `got`'s, byte for byte, but where `got` refused the keys it was given: then it refuses."""
+    reason = json.loads(got[1]).get("reason") if port is ONE_STAGE and got[0] != "error" else got[1]
+    if got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
+        assert unnamed[0] == got[0], (ok, got, unnamed)
+    else:
+        assert unnamed == got, (ok, got, unnamed)
+
+
+def test_naming_no_window_value_changes_no_outcome(server, pieces):
+    """Naming no window value changes nothing, reason included: on each sampled one-stage case and record-piece input of
+    the agreement tests, the mirror with the key absent gives the line it gives holding the reads as before window
+    values (`_base_held`), and Lean and the mirror with `window_values` empty give the lines they give with it absent,
+    but where the input's keys were already refused, a refusal that names them and refuses again."""
+    import hypothesis
+    seen: set[str] = set()
+
+    @hypothesis.settings(derandomize=True, database=None, deadline=None, max_examples=300,
+                         suppress_health_check=[hypothesis.HealthCheck.too_slow])
+    @hypothesis.given(CASES, RECORD_PORT.inputs)
+    def same(case, j):
+        named = {**case, "params": _unnamed(case["params"])} if isinstance(case, dict) and "params" in case else case
+        with mock.patch.object(audit, "held_reads", _base_held):
+            base, base_j = ONE_STAGE.python(case), RECORD_PORT.python(j)
+        assert ONE_STAGE.python(case) == base and RECORD_PORT.python(j) == base_j
+        lean = ONE_STAGE.lean(server, case)
+        seen.add(lean[0])
+        _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case)
+        _same(ONE_STAGE, base, ONE_STAGE.python(named), case)
+        _same(RECORD_PORT, RECORD_PORT.lean(pieces, j), RECORD_PORT.lean(pieces, _unnamed(j)), j)
+        _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j)
+        seen.add(f"record {base_j[0]}")
+
+    same()
+    assert {"accept", "reject", "record output", "record reject"} <= seen, seen
 
 
 def _accepted_record_case(kind: str, delta: float) -> dict:

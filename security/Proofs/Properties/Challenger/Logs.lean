@@ -124,11 +124,11 @@ theorem released_one {c : LiveCommitment} {label : String} {after : ByteArray} {
   obtain ⟨s, hs, hss⟩ := Entry.event_of_canon (good_releaseLine label after) hcb (by unfold MAX_LOG_LINE; omega)
   have hta : treeLine a = false :=
     Verity.Sampled.Lines.treeLine_plain
-      ⟨Verity.Sampled.sortedKeys_of_wf _ (wf_of_good (good_rootLine label after)), hca⟩
+      ⟨CanonRead.sortedKeys_of_wf _ (wf_of_good (good_rootLine label after)), hca⟩
       ⟨"root", rfl, by decide, by decide⟩
   have htb : treeLine b = false :=
     Verity.Sampled.Lines.treeLine_plain
-      ⟨Verity.Sampled.sortedKeys_of_wf _ (wf_of_good (good_releaseLine label after)), hcb⟩
+      ⟨CanonRead.sortedKeys_of_wf _ (wf_of_good (good_releaseLine label after)), hcb⟩
       ⟨"release", rfl, by decide, by decide⟩
   have hkr : keys? r = some #["event", "index", "label", "received_at", "root"] :=
     (Entry.same_keys? hsr).symm.trans (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide))

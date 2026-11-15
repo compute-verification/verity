@@ -20,6 +20,8 @@ from research.pods.nebius import slot_only as S
 
 NEBIUS = Path(S.__file__).resolve().parent
 REPO = NEBIUS.parents[5]
+#: the slot.py path a machine's own copy sits below: main's tree's, where every machine has it, not the tree's own
+INSTALLED = "tools/verity/check/slot.py"
 
 
 def test_only_a_command_that_runs_cmd_in_a_check_slot_counts():
@@ -104,7 +106,7 @@ def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monke
     seen = []
     monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r",
                                                                             "launch": {"runner_pid": 1}})
-    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--stay", "--project", "p", "--no-custody-r2", "--source", ".",
             "--pool", "research", "--as", "infra"]
     assert main([*argv, "--timeout", "40m", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
     timed, untimed = seen
@@ -136,8 +138,35 @@ def test_a_command_that_names_a_pool_and_the_trees_slot_py_names_the_machines_ow
                   ["env", f"CHECK_SLOTS={S.POOLS['research']}", "python3", "elsewhere/slot.py", "--", "true"], ["true"], []):
         assert S.node_copy(other) is None, other
     assert S.through_slot(["python3", S.NODE_SLOT, "--", "true"]) and not S.through_slot(["python3", S.NODE_SLOT, "--status"])
-    assert S.NODE_SLOT.startswith("/") and S.NODE_SLOT.endswith("/" + S.SLOT_PATHS[0]), "below slot.py's path in the repository"
+    assert S.NODE_SLOT == "/usr/local/lib/vy-monitoring/check-slot/" + INSTALLED and INSTALLED in S.TREE_SLOTS, (
+        "where every machine has its copy, below a slot.py path every reader knows")
     assert run_records.pool(own) == "research" and run_records.pool(["python3", S.NODE_SLOT, "--", "true"]) == run_records.OWN_POOL
+
+
+LOOK_ALIKES = ("x/tools/check/slot.py.bak", "tools/checks/slot.py", "tools/check/slot.pyc", "xtools/check/slot.py")
+
+
+def test_a_tree_with_the_check_at_tools_check_takes_its_slot_as_one_at_tools_verity_check_does():
+    """A tree whose check is at tools/check/ names tools/check/slot.py: the machine's rule takes it through a slot and a pool's
+    waiter by the machine's copy, and takes no look-alike path."""
+    pool = ["env", f"CHECK_SLOTS={S.POOLS['research']}"]
+    for slot in ("tools/check/slot.py", "tools/verity/check/slot.py"):
+        assert S.through_slot(["python3", slot, "--priority", "--by", "x", "--", "uv", "run", "python", "tools/check/check.py"]), slot
+        assert S.through_slot([*pool, "python3", slot, "--by", "x", "--", "true"]), slot
+        assert S.node_copy([*pool, "python3", slot, "--by", "x", "--", "true"]) == [*pool, "python3", S.NODE_SLOT, "--by", "x", "--", "true"]
+    for slot in LOOK_ALIKES:
+        assert not S.through_slot(["python3", slot, "--", "true"]), slot
+        assert S.node_copy([*pool, "python3", slot, "--by", "x", "--", "true"]) is None, slot
+    named = S.check_file("slot.py")
+    assert all(named.search(f"python3 {p} -- true") for p in ("tools/check/slot.py", "tools/verity/check/slot.py", S.NODE_SLOT))
+    assert not any(named.search(f"python3 {p} -- true") for p in LOOK_ALIKES)
+
+
+def test_the_copies_of_the_checks_directories_in_files_installed_alone_are_slot_onlys():
+    """node_ops.py is installed alone and run_records.py is sent alone, so each spells the check's directories itself."""
+    ops = ast.parse((NEBIUS / "node_ops.py").read_text())
+    dirs = [ast.literal_eval(n.value) for n in ops.body if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "CHECK_DIRS"]
+    assert dirs == [S.CHECK_DIRS] and run_records.CHECK_DIRS == S.CHECK_DIRS
 
 
 @pytest.fixture
@@ -310,8 +339,8 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     rows = [e for e in manifest["file"] if e.get("src") == S.SLOT_PATHS[0]]
     assert [e["path"] for e in rows] == [S.NODE_SLOT], "one copy a machine"
-    beside = S.NODE_SLOT.rsplit("/", 4)[0] + "/"               # .../check-slot/, which holds the copy below its repository path
-    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + S.SLOT_PATHS[0]
+    beside = S.NODE_SLOT.rsplit("/", INSTALLED.count("/") + 1)[0] + "/"   # .../check-slot/, which holds the copy below INSTALLED
+    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + INSTALLED
     assert [e["path"] for e in [*manifest["file"], *manifest.get("tree", [])]
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"
     (row,) = rows
@@ -436,7 +465,7 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     hosts = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
-    rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
+    rows = [{"src": e.get("template", ""), **e} for e in tomllib.loads((nebius / "deploy.toml").read_text())["file"]]
     on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
                                                                             "/vy-auditor-only.timer", "/11-vy-admin.conf"))}
     locked_cpu = [n for e in rows if e["path"] == "/usr/local/sbin/vy-lockout" for n in e["nodes"] if n.startswith("vy-nebius-cpu-")]
@@ -467,3 +496,24 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     for name in ("vy-challenger", "vy-auditor"):
         assert name not in (nebius / "peers").read_text()
         assert name not in (nebius.parents[5] / "infra/cluster/descriptions/nebius.toml").read_text()
+
+
+def test_a_run_file_that_does_not_parse_reads_as_empty_and_says_so_but_a_missing_one_is_quiet(tmp_path, capsys):
+    assert S._json(tmp_path / "launch.json") == {}
+    assert capsys.readouterr().err == ""
+    (tmp_path / "status.json").write_text("{torn")
+    assert S._json(tmp_path / "status.json") == {}
+    assert f"{tmp_path / 'status.json'} unread, read as empty (JSONDecodeError" in capsys.readouterr().err
+
+
+def test_a_process_it_may_not_renice_is_left_out_of_the_record_and_named(monkeypatch, capsys):
+    monkeypatch.setattr(S, "members", lambda run_dir, proc: [4242])
+    monkeypatch.setattr(S.os, "getpriority", lambda which, who: 0)
+
+    def refuse(which, who, nice):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(S.os, "setpriority", refuse)
+    rec = S.renice({"dir": Path("/nowhere"), "run": "r", "command": ["x"]}, 10)
+    assert rec["reniced"] == []
+    assert "slot_only: process 4242 not reniced (PermissionError)" in capsys.readouterr().err

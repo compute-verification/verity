@@ -71,6 +71,9 @@ PUBLIC = {
     "verity_vllm.engine.int8_ranks": "I1: the exact-int8 parts a process's engines build with, its tensor-parallel ranks "
                                      "included (register, EXTENSION), which the harness's engine and benchmarks/network_e2e's "
                                      "trace plugin register",
+    "verity_vllm.engine.int8_k_scales": "I1: the int8 attention's K scales, a calibrated parameter of the served "
+                                        "checkpoint: its manifest (MANIFEST), a revision's table (table) and a calibration's "
+                                        "entry (entry, with_entry), which benchmarks/ppl's calibration job writes",
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
                                    "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
                                    "benchmarks/network_e2e/encodings drives over recorded traces",
@@ -117,16 +120,19 @@ PUBLIC = {
                                                     "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
                                                     "value over the layers, which the harness's engine checks against its "
                                                     "declaration",
+    "verity_vllm.program.frontend.vllm_derive": "I7: a Program derived under the vLLM adapter's rules, its profiles' vocabulary "
+                                                "and its served seed and length rules (derive, derive_report), which "
+                                                "benchmarks/network_sim derives its served Program with",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
     "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
                                           "and b.egress rows by size class, a class's layout, record and files (Layout, "
-                                          "record, reopen), which verity/protocols/proofs/spot/prover/audit/two_stage.py registers",
+                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
                                           "computes where a response ends, and a stop class's stop record "
-                                          "(stop_registration, stop_record), which verity/protocols/proofs/spot/prover/audit/two_stage.py "
+                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
                                           "registers under the verifier's own rule",
     "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
                                              "scheduler that commits each window's finished requests by class "
@@ -138,13 +144,16 @@ PUBLIC = {
     "verity_vllm.pipeline.boundary_logits": "I1: a two-stage window's select inputs at serve: rank 0's hook on the sampler "
                                             "(SamplerHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
-                                            "benchmarks/serve_tax's plugin installs and verity/protocols/proofs/spot/prover/audit/two_stage.py "
+                                            "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
                                             "opens (load)",
     "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
                                           "(interior, register), the block parameters it registers as values, the "
                                           "verifier's (Supply) and the replay's own (Operand), and the challenger's "
                                           "copies of them (span_values, link_words, link_schemas, sources, history), which "
-                                          "verity/protocols/proofs/spot/prover/audit/two_stage.py registers",
+                                          "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.long_row": "I1: the check template of a two-stage window over one of DSA's long rows "
+                                     "(DsaTopKReadRowsCut, at the served statics SERVED and served) and the window's "
+                                     "class over it (layout), which benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
@@ -169,6 +178,10 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
+                                        "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
+    "verity_vllm.compiler.replay_chain": "I1: the replay chain's rows, windows and units (load, advance, close), which "
+                                         "benchmarks/network_e2e and benchmarks/network_traces run over their windows",
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
     "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
                                                  "that put them there, and the fields a registration holds at 0 with "
@@ -189,6 +202,11 @@ PUBLIC = {
     "verity_vllm.check.weights_of_record": "I7: the weights of record: a Commit's weights checked against the pinned "
                                            "checkpoint (build_record, check, compose), and the Program parameter the record "
                                            "is of (PARAM), which benchmarks/inference_only reads",
+    "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "
+                               "catalog with the Boolean-versions lookup (verity.circuits.ops.boolean.versions); it exports "
+                               "no name",
+    "verity_vllm.definitions.registry.catalog": "I7: the registry with every module loaded (load) and the packages it "
+                                                "loads by scope (SCOPES), which SPOT's audit and the benchmarks read",
     "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
@@ -244,9 +262,12 @@ PUBLIC = {
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, and a Stack attached to them (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.remote_bandwidth.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
+    "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
                                                      "weights it binds (model_weights, WeightRegion, Every), which "
                                                      "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
+    "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
+                                                     "pipeline.remote_session reaches through protocols.driver and "
+                                                     "benchmarks/remote_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }
@@ -263,9 +284,19 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.opening",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
+    # the compile slice and its pieces (`verity_vllm.compiler`), which the network certifier's drivers under `benchmarks/`
+    # imported from `verity` before the compiler's move into the adapter
+    "verity_vllm.compiler.cache_step",
+    "verity_vllm.compiler.cache_step_v3",
+    "verity_vllm.compiler.compile_slice",
+    "verity_vllm.compiler.compile_slice_v4",
+    "verity_vllm.compiler.compile_slice_v6",
+    "verity_vllm.compiler.compile_slice_v7",
+    "verity_vllm.compiler.served_rows",
+    "verity_vllm.compiler.served_statics",
+    "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
     # move into the adapter; vllm takes these down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov)
-    "verity.circuits.ops.boolean.versions",
     "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
@@ -297,7 +328,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.boolean_io_shell",
     "verity_vllm.definitions.registry.boolean_silu",
     "verity_vllm.definitions.registry.boolean_stop_rule",
-    "verity_vllm.definitions.registry.catalog",
     "verity_vllm.definitions.registry.cublas_bf16",
     "verity_vllm.definitions.registry.cuda_rmsnorm",
     "verity_vllm.definitions.registry.dead_free",
@@ -319,7 +349,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.lifted",
     "verity_vllm.definitions.registry.marlin_moe",
     "verity_vllm.definitions.registry.moe",
-    "verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile",
     "verity_vllm.definitions.registry.pouw_rows",
     "verity_vllm.definitions.registry.prims",
     "verity_vllm.definitions.registry.ref_prims",
@@ -381,19 +410,6 @@ KNOWN = frozenset({
     "verity_vllm.program.predict.batch",
     "verity_vllm.program.predict.build",
     "verity_vllm.program.predict.score",
-    "verity.protocols.accounting.pouw.prover.serving.h1",
-    "verity.protocols.accounting.pouw.prover.serving.h1.challenger",
-    "verity.protocols.accounting.pouw.prover.serving.h1.window",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.host",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.screen",
-    "verity.protocols.accounting.poub.prover.node_store.interface",
-    "verity.protocols.accounting.poub.prover.node_store.memory_map",
-    "verity.protocols.accounting.poub.prover.node_store.registry",
-    "verity_vllm.protocols.remote_bandwidth.registry",
-    "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.program_view",
 })
 
@@ -403,8 +419,31 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity.protocols.accounting.poub.prover.node_store.registry', '_page_blocks'),
 })
+
+_SHARED_WORDS = "until the shared word primitives move below both adapters"
+
+#: Single imports of a module neither PUBLIC nor KNOWN: (file, module) -> why it stands. Move the import and delete it.
+KNOWN_SITES = {
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py", "verity_vllm.definitions.registry.layer_norm"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _SHARED_WORDS,
+}
 
 
 @dataclass(frozen=True)
@@ -542,7 +581,7 @@ def test_outside_code_imports_only_public_names_and_known_modules():
             if s.name is not None and s.name not in exported(s.module):
                 bad.append(f"{s.file}:{s.line}: {s.name} is not in {s.module}.__all__ (import a listed name, or list it there "
                            "if it is part of that interface)")
-        elif s.module not in KNOWN:
+        elif s.module not in KNOWN and (s.file, s.module) not in KNOWN_SITES:
             public = ", ".join(sorted(PUBLIC))
             bad.append(f"{s.file}:{s.line}: imports {s.module}, which is not a public interface of {PACKAGE}: import from one of "
                        f"{public} (or grow the interface the import needs, with __all__ and annotations, and add it to PUBLIC in "
@@ -557,9 +596,12 @@ def test_the_allowlists_are_exact():
     private = {(s.module, s.name) for s in sites() if s.name is not None and s.name.startswith("_")}
     gone = sorted(KNOWN - reached)
     gone_private = sorted(KNOWN_PRIVATE - private)
-    assert not (gone or gone_private), ("nothing outside the integration imports these any more; delete them from tests/"
-                                        "test_vllm_public_api.py:\n" + "\n".join([*(f'    "{m}",' for m in gone),
-                                                                                *(f"    {p!r}," for p in gone_private)]))
+    gone_sites = sorted(set(KNOWN_SITES) - {(s.file, s.module) for s in sites()})
+    assert not (gone or gone_private or gone_sites), (
+        "nothing outside the integration imports these any more; delete them from tests/test_vllm_public_api.py:\n"
+        + "\n".join([*(f'    "{m}",' for m in gone), *(f"    {p!r}," for p in gone_private),
+                     *(f"    {p!r}: ...," for p in gone_sites)]))
+    assert not {m for _, m in KNOWN_SITES} & (KNOWN | set(PUBLIC)), "a KNOWN_SITES module is KNOWN or PUBLIC: delete its sites"
     assert not KNOWN & set(PUBLIC), f"a public module is not also KNOWN: delete {sorted(KNOWN & set(PUBLIC))} from KNOWN"
 
 

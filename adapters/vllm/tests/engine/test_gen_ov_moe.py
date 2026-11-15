@@ -348,7 +348,6 @@ def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
 
 
 def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
-    from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
     assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
     assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"

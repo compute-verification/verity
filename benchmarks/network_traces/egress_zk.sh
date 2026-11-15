@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # N2's egress bucket in zero knowledge (egress_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame, as warden_zk.sh runs warden_zk.py.
+# Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame, as network_certifier_zk.sh runs network_certifier_zk.py.
 # From a clone, in one of the network slots, as a job of at most 180 minutes:
 #   env EZ_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/egress_zk.sh
@@ -16,7 +16,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \

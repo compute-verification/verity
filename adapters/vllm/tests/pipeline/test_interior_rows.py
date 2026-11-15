@@ -224,8 +224,8 @@ def _first(world, spans, unit=UNIT, block=BLOCK, n_rho: int = N_RHO):
     and 2)."""
     draws = iter([[0, 2]])
     stream = S.Stream(_spec(spans["r0"].member, unit, block, n_rho), unit, replay=block, budget=1, delta=DELTA,
-                      challenger="challenger-test", clock=_Clock(), sampler=lambda law, n: next(draws) if law["law"] == "subset"
-                      else [i * n_rho for i in range(len(law["strata"]))])
+                      challenger="challenger-test", clock=_Clock(), sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset"
+                      else [i * n_rho for i in range(len(sampling_design["strata"]))])
     rec, ports, layer = _boundary(world, block)
     reg = stream.register(rec, ports, leaf_layer=layer)
     return stream, reg, stream.select(reg)

@@ -8,8 +8,8 @@ public import Definitions.Poub.RateAuditSketchLayout
 /-!
 # The rate audit with a sketch-then-hash tag (trusted)
 
-The game is `Security/Definitions/Poub/RateAuditSketch.lean`; proofs are in
-`Security/Proofs/Poub/RateAudit/Sketch.lean`, `SketchHonest.lean`, `SketchRank.lean` and `SketchTable.lean`. No
+The game is `security/Definitions/Poub/RateAuditSketch.lean`; proofs are in
+`security/Proofs/Poub/RateAudit/Sketch.lean`, `SketchHonest.lean`, `SketchRank.lean` and `SketchTable.lean`. No
 named assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at
 `c_tag` per tag and `c_enc` per rebuilt sector) and its class, a device that obtains sectors only whole and verbatim, define what the guarantees quantify over;
 a deployment premise carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
@@ -24,7 +24,7 @@ a deployment premise carries the class to a deployed device (`rate-sketch-verbat
 * `RateAuditTensorSketchRank`: the same priced by the signs' rank, `q/2^(8·r) + Pr_σ[∃ u, rank < r]`.
 
 The honest device (`RateSketchHonest`) and the table outside the verbatim class (`RateSketchTable`,
-`RateTensorSketchTable`) are lemmas: `Security/Proofs/Accounting/Lemmas/RateAuditSketch.lean`.
+`RateTensorSketchTable`) are lemmas: `security/Proofs/Poub/Lemmas/RateAuditSketch.lean`.
 -/
 
 @[expose] public section
@@ -79,7 +79,7 @@ def RateAuditSketch : Prop :=
         ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
 
 /-- **The sketch rate audit with interactive side sources that ignore the oracle.** `RateAuditSketch`'s bound, at its
-floor and its error, for an `InteractiveProver` (`Security/Definitions/Poub/RateAuditSketchInteractive.lean`):
+floor and its error, for an `InteractiveProver` (`security/Definitions/Poub/RateAuditSketchInteractive.lean`):
 its chip may send any number of bits, however they depend on the signs and on what it read, to side sources that answer
 each read with a whole sector of the store or of the certified stream, as it is, at an address picked from every bit
 sent so far. `L` bounds the sectors that came in over the side link (side sectors and stream sectors together, `w` bits
@@ -136,8 +136,8 @@ footprint reaches the floor except with probability
   `((k − 1)/N)^s + s/2^h + Pr_σ[¬ SectorsBind σ] + q/2^256`.
 
 **The reading.** At `k_s = 64` the signs bind but for the chance that some sector's `64 × 32` block of uniform signs
-has a column dependency, a number of the signs' distribution that is evaluated outside Lean. At `k_s = 16` no block binds, and
-the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
+has a column dependency, a number of the signs' distribution that is evaluated outside Lean. At `k_s = 16` no block
+binds, and the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketch`, from the two.
 
 Frozen (no-function, hash): like `RateAuditSketch`, a bound in the random-oracle model over abstract chip programs. -/
@@ -158,8 +158,8 @@ with probability
 
 **The reading.** It is the per-pass reading, `q·2^-8r + Pr_σ[∃ u, rank < r]`, as a theorem for the verbatim class.
 At `k_s = 16` no block binds (its rank is at most 16), and `r` trades the guess, `2^-8r` per query, against the chance
-that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' distribution evaluated outside
-Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
+that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' distribution evaluated
+outside Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
 session's passes and the grinding of their keys are not modeled here. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketchRank`, from `RateAuditSketch` and `SketchRankFiber`.
 

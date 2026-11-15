@@ -23,7 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # Flock's one-stage audit, end to end, under hidden outputs (trusted)
 
-`EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration production `--zk` runs (the default
+`EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration the prover's `--zk` runs (the default
 `--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenSampled` is `EndToEndSampled`'s, the same
 statement at the sampled proof blocks. Both read the circuit through its descriptor (`Flock.Desc`): the circuit file is read as
 a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` and `EndToEndHiddenDrawnFlat` are the two at a
@@ -66,7 +66,7 @@ $$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ unit
   program's outputs on them are the rows the public file commits is not stated here. The units are those of the key
   program of the circuit the verifier's descriptor unrolls to (`keyProg D.unroll hU n`, partitioned at
   `Layout.outsOf`), each read at its `--zk` site in the hidden-output table it is sampled into (`placeZHJ`);
-* `ε_ks = ksAvgStrictZ` and `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEnd`.
+* `ε_ks = ksAvgStrictZ` and `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEnd`.
 
 Its named assumptions, each a hypothesis, are `EndToEnd`'s:
 * A3 (`uniform/io-getrandombytes`, `Assumptions.UniformRandomBytes`): the verifier's bytes are uniform;
@@ -198,7 +198,7 @@ open Classical in
 with `EndToEndSampled`'s event: for every live prover `τ`,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
 with "wrong" `EndToEndHidden`'s (`incorrectRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
-fixed at registration), and `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss
+fixed at registration), and `ε_ks`, `ε_bind` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss
 term, so it holds whatever the verifier's bytes: it needs no A3, and the sample need not be uniform.
 
 Its named assumptions, each a hypothesis, are `EndToEndSampled`'s: `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`,

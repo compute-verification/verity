@@ -20,12 +20,10 @@ that connection and never waits on it.
 The headers and the watermark are the certifier's, sent to the server only. The link's frames, the network certifier's
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
-server sees itself. N, A and n are read back from the signed ingress records: the
-network certifier's `END` cells in record order and the bucket of each (`warden.Warden`), and on the active certifier's
-link request s in `active.Requests`' cut, which ends before s + 1 starts, so it is release s − 1
-(`benchmarks/network_traces/active_replay.ReleaseProxy`, which sends no bucket: it forwards a request's head before its
-last frame). A client's own release headers are dropped; bytes that aren't an HTTP/1 request with its whole head pass
-unchanged. A live shim that rebuilds the POST copies the headers onto it (`release_of`, `release_head`).
+server sees itself. N, A and n are read back from the signed ingress records: the network certifier's `END` cells in
+record order and the bucket of each (`network_certifier.NetworkCertifier`). A client's own release headers are dropped;
+bytes that aren't an HTTP/1 request with its whole head pass unchanged. A live shim that rebuilds the POST copies the
+headers onto it (`release_of`, `release_head`).
 
 The watermark's path is the network certifier's alone: it releases no client's request that opens as one to that path
 (`to_watermark`, read on the request's first cell and on the whole request at its `END`), which would reach the server

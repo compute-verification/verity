@@ -5,14 +5,14 @@ public import Definitions.Pouw.HeadlineDc.Encoding
 /-!
 # H200 (sm_90)'s headline instance: DS-90 and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
 
 * `classes`: the 50 instruction classes of the DS-90 census, in the order `Fin 50` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
-* `ds90`, `sheet`: the H200's data sheet (DS-90), `benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml` as
-  `Security/Definitions/Accounting/Sheets/H200.lean` states it: f_max 1980 MHz (EPS1 DC's measured f_max at default
+* `ds90`, `sheet`: the H200's data sheet (DS-90), `benchmarks/machine_model/data/devices/sm_90/sheet.toml` as
+  `security/Definitions/Registration/Sheets/H200.lean` states it: f_max 1980 MHz (EPS1 DC's measured f_max at default
   clocks; the sheet's TOPS are at 1830 MHz); each tensor class's dense MACs a warp instruction (sm_90's wgmma as one
   warp's quarter of its warpgroup instruction (`m·n·k/4`), a 2:4 sparse form at its dense twin's, its mma.sync whole,
   DMMA's at the f64 peak) and its operand type's dense MACs an SM clock; the Nsight Compute pipes ALU, IMAD, SHFL and
@@ -39,8 +39,8 @@ this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
   at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T = 0`; 4096 committed words a unit of honest
   work (an IGMMA_S8_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
-  routes' cheapest, cp-red2 on every word), no filler, and ε_skip's skippable work at FFMA's price, 0.858332% of ♭'s
-  bound (`eps_budget.design_skip` on DS-90).
+  routes' cheapest, cp-red2 on every word), no filler, and ε_skip's free compute at FFMA's price, 0.858332% of ♭'s bound
+  (`eps_budget.design_skip` on DS-90).
 * `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 1.000000).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
@@ -217,7 +217,7 @@ def flatWords : Sparse := [(23, 1, 1)]
 /-- ♭'s fold a unit: the lane fold for 4096 words, the fold routes' cheapest, cp-red2 on every word. -/
 def flatFold : Sparse := [(0, 67, 1), (30, 64, 1), (41, 2, 1)]
 
-/-- ♭'s skippable work a unit, at FFMA's price. -/
+/-- ♭'s free compute a unit, at FFMA's price. -/
 def flatSkip : Sparse := [(9, 17166648254, 14797263819)]
 
 /-- The floor program ♭, labelled. -/

@@ -65,9 +65,9 @@ COUNT_BITS = 130
 SEGMENT_BYTES = 1 << 25
 SEGMENT_LABELS = SEGMENT_BYTES // sw.LABEL_BYTES
 SEGMENTS = 1
-"""The leg's fill, in 32 MiB segments."""
+"""The subprotocol's fill, in 32 MiB segments."""
 LIMIT_NS = 20_000_000
-"""The leg's deadline a read: 20 ms, a socket round trip on one machine or a nearby one with room to spare."""
+"""The subprotocol's deadline a read: 20 ms, a socket round trip on one machine or a nearby one with room to spare."""
 TIER = "host-dram"
 EXPERIMENTAL = (
     "foreign_bits at eps = 2^-128 is Pous.Guarantees.StreamedWipeMeetsReads' threshold at the session's k and r = "
@@ -326,8 +326,8 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     if "prover_store" in where or "store_gaps" not in where:
         raise ValueError("the wipe's placement names the prover's store or has no store_gaps: it is of the format "
                          "before the placement named no device, so what the store leaves out isn't in it; run the "
-                         "leg again")
-    out = [] if wipe_party.holds(where) else [f"key custody: {where[wipe_party.PREMISE]}"]
+                         "subprotocol again")
+    out = [] if wipe_party.holds(where) else [f"key custody: {mc.premise(where)}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
                    "is vacuous")

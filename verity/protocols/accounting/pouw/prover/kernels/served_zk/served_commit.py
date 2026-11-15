@@ -258,7 +258,7 @@ LAYOUT = (
 )
 
 
-def law_of(params: dict, ell: int) -> dict:
+def sampling_design_of(params: dict, ell: int) -> dict:
     return items_of(params, ell, None)["sampling"]["law"]
 
 
@@ -274,7 +274,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.SamplingDesign(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
+                  selection=S.SamplingDesign(f"rate:{sampling_design_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -322,6 +322,13 @@ def install_tiles(scheme: Any) -> Callable[[], None]:
     """The batch forms of `scheme`'s tile checks installed for one commit, and what undoes them
     (`benchmarks/pouw/pearl_c_vllm/fast_tile.py`'s `install`), which `main` takes as `tiles`."""
     raise NotImplementedError(NEEDS_BENCHMARK.format("fast_tile.install", "benchmarks/pouw/served_zk/served_commit_run.py"))
+
+
+def lean_record(lean: bool | None = None) -> OR.Record:
+    """The checks of record with their Lean side (`benchmarks/pouw/served_zk/of_record_lean.py`'s `Record`), which
+    `main` takes as `record`: `of_record.Record` alone refuses its first check."""
+    raise NotImplementedError(NEEDS_BENCHMARK.format("of_record_lean.Record",
+                                                     "benchmarks/pouw/served_zk/served_commit_run.py"))
 
 
 def pinned_challenger_key(record: Path) -> Ch.ChallengerKey:
@@ -661,8 +668,8 @@ def core_params(params: dict) -> dict:
     return OR.core_params(params, check_item(params), R.query_digest(PT.template_instance_query(template(params["k"]))))
 
 
-def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
-          record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
+def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True, *,
+          record: OR.Record, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
     rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`: an
     `of_record.Record`, whose Lean side `of_record_lean.Record` supplies), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
@@ -678,12 +685,12 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         roots = {r["port"]: r for r in rec["roots"]}
         pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
             "the registered window domain is not the window's served domain"
-    r = OR.Record() if record is None else record
-    x = {"params": core_params(params), "commitment": r.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
-         "unit": unit, "pub": pub.hex(), "opening": op, **({} if salt is None else {"salt": salt.hex()})}
+    x = {"params": core_params(params), "commitment": record.hexed(rec),
+         "units": list(draw.get("units", ())) if drawn else None, "unit": unit, "pub": pub.hex(), "opening": op,
+         **({} if salt is None else {"salt": salt.hex()})}
     try:
-        out = r.opening(x)
-        return r.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
+        out = record.opening(x)
+        return record.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
     except OR.Disagree as e:
         return e.code
 
@@ -750,7 +757,7 @@ def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> d
     except ValueError as e:
         raise _refused("level", str(e)) from None
     window = {"kind": "served", "context": params["context"], "public": {**commitment["items"], **extra}}
-    rec = R.record(prog, q, law_of(params, ell), S.SCHEME, commitment["roots"], window)
+    rec = R.record(prog, q, sampling_design_of(params, ell), S.SCHEME, commitment["roots"], window)
     for v in (S.check_public(spec_of(params, ell), rec), public_problem(params, rec)):
         if not v.ok:
             raise S.Refused(v)
@@ -781,15 +788,15 @@ def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Ke
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
-def draw_bytes(key: Key, law: Mapping[str, Any], n: int) -> bytes:
+def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
-    if law.get("law") != "subset":
-        raise _refused("law", f"the window's draw is a subset law's, not {dict(law)}")
-    return key.stream("draw", 2 * law["k"] * CC.width(n) + 64)
+    if sampling_design.get("law") != "subset":
+        raise _refused("law", f"the window's draw is a subset law's, not {dict(sampling_design)}")
+    return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
 
 
-def python_sampler(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-    units = CC.stream_subset(law["k"], n, src)
+def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
+    units = CC.stream_subset(sampling_design["k"], n, src)
     if units is None:
         raise _refused("sampler", "the draw's stream ran out")
     return units
@@ -892,7 +899,7 @@ class Challenger:
     (`salts`), and `check` opens its sampled proof blocks under it."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
-                 clock: Callable[[], float] | None = None, record: OR.Record | None = None,
+                 clock: Callable[[], float] | None = None, *, record: OR.Record,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
                  opens: PS.WindowOpens | None = None) -> None:
@@ -929,7 +936,7 @@ class Challenger:
         self.opens = PS.WindowOpens() if opens is None else opens
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
-        self.record = OR.Record() if record is None else record
+        self.record = record
         self.core = core_params(params)
         self.witness: dict[str, list[dict]] = {}
         self.recorded: dict[str, bool] = {}
@@ -1021,11 +1028,11 @@ class Challenger:
         (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = S.selection_sampling_design(st.spec.selection, n)
+        sampling_design = S.selection_sampling_design(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
-        params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])
-        args = (rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
+        params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
+        args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
         codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
         if not codes:
             codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
@@ -1035,10 +1042,10 @@ class Challenger:
         if codes:
             raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))
 
-    def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:
+    def _keyed(self, sampling_design: Mapping[str, Any], n: int) -> list[int]:
         if self._key is None:
             raise _refused("coin", "no draw coin is open for this draw")
-        return self.sampler(law, n, draw_bytes(self._key, law, n))
+        return self.sampler(sampling_design, n, draw_bytes(self._key, sampling_design, n))
 
     def stream(self, name: str, ell: int, sampler: Callable[[Mapping[str, Any], int], list[int]]) -> S.Stream:
         if (name, ell) not in self.streams:
@@ -1073,7 +1080,7 @@ class Challenger:
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
         replayed = None if replay is None else self._drawn(replay)
-        sampler = self._keyed if replay is None else (lambda law, n: replayed.units)
+        sampler = self._keyed if replay is None else (lambda sampling_design, n: replayed.units)
         st = self.stream(stream, ell, sampler)
         if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
@@ -1156,8 +1163,8 @@ class Challenger:
         """`check` of execution phase `name`'s unit `unit` against its registration and sample, of record (`record`), under the salt
         its pass was checked against when it is certified (`salts`)."""
         _, reg = self._held(name)
-        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, self.record,
-                     self.salts.get(name))
+        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
+                     salt=self.salts.get(name))
 
     def select(self, name: str) -> S.Draw:
         """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `draw_key`;
@@ -1442,8 +1449,8 @@ def cmd_edit(a) -> int:
 
 def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
     """The execution phase's sample by Lean ``verity-verify-proof draw --stream``: the units of a subset sampling design over N, on the key's stream."""
-    def sample(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"]), "--stream", src.hex()],
+    def sample(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
+        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(sampling_design["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
         lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:
@@ -1475,6 +1482,7 @@ def cmd_challenger(a) -> int:
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
     Python's, to LOG/witness.jsonl (an execution phase that ends before its outcome keeps them there); it ends at end of input or
     ``{"op": "quit"}``."""
+    record = a.record(lean=False if a.python_record else None)
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
     if a.state:
@@ -1490,7 +1498,7 @@ def cmd_challenger(a) -> int:
     coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=a.record(lean=False if a.python_record else None))
+                    record=record)
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1516,8 +1524,7 @@ def _files(p: Path) -> dict[str, bytes]:
     return {q.relative_to(p).as_posix(): q.read_bytes() for q in sorted(p.rglob("*")) if q.is_file()} if p.is_dir() else {}
 
 
-def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, record: OR.Record | None = None
-           ) -> list[str]:
+def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, *, record: OR.Record) -> list[str]:
     """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
     coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
     a request wrote; empty when the replay is byte-identical.  A record whose parameters predate the registration
@@ -1547,8 +1554,9 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 
 def cmd_replay(a) -> int:
+    record = a.record(lean=False if a.python_record else None)
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   a.record(lean=False if a.python_record else None))
+                   record=record)
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1586,8 +1594,8 @@ def cmd_coin_variant(a) -> int:
 
 
 def cmd_check(a) -> int:
-    params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
     record = a.record(lean=False if a.python_record else None)
+    params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:
@@ -1655,11 +1663,11 @@ PYTHON_RECORD = ("PoUW's checks by their Python references alone, undoing the sw
                  "(`of_record`)")
 
 
-def main(argv=None, *, record: type[OR.Record] = OR.Record, tiles: Callable[[Any], Callable[[], None]] = install_tiles
-         ) -> int:
-    """The commands below; `record` is the checks of record the challenger, `replay` and `check` take (`of_record.Record`,
-    whose Lean side `of_record_lean.Record` supplies), and `tiles` installs a commit's batch tile checks
-    (`install_tiles`): `benchmarks/pouw/served_zk/served_commit_run.py` passes both."""
+def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
+         tiles: Callable[[Any], Callable[[], None]] = install_tiles) -> int:
+    """The commands below; `record` makes the checks of record the challenger, `replay` and `check` take (`lean_record`:
+    `of_record_lean.Record`), and `tiles` installs a commit's batch tile checks (`install_tiles`):
+    `benchmarks/pouw/served_zk/served_commit_run.py` passes both."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("params")

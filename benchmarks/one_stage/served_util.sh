@@ -51,6 +51,8 @@
 # and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
 # bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
+for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
 ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
@@ -80,7 +82,7 @@ if [ "${1:-}" != leased ]; then
   mkdir -p "$D"
   if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
     (cd "$TREE/adapters/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
-      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src \
+      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src \
       "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
@@ -125,7 +127,7 @@ fi
 ulimit -n "$(ulimit -Hn)"
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
 export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1

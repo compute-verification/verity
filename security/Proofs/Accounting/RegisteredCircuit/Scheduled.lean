@@ -2,10 +2,10 @@ module
 
 public import Proofs.Accounting.RegisteredCircuit.Requirement
 public import Properties.Accounting.RegisteredCircuit
-public import Proofs.Properties.Accounting.Remote.Schedule
+public import Proofs.Properties.Poub.Remote.Schedule
 
 /-!
-# A declared circuit's space and bandwidth at the committed steering cap, proved
+# A registered circuit's space and bandwidth at the committed steering cap, proved
 
 `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement`, the theorem of
 `Properties.RegisteredCircuit.ScheduledRequirement`: `Accounting.SecurityProofs.RegisteredCircuitRequirement`'s argument on
@@ -95,7 +95,7 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
   simp only [hy, ↓reduceDIte]
   exact hs c ⟨y, hy⟩
 
-/-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap**,
+/-- **A registered circuit's held and moved bits from an accepted stacked audit, at the committed steering cap**,
 `Properties.RegisteredCircuit.ScheduledRequirement`. -/
 theorem scheduledRequirement : ScheduledRequirement := by
   intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose dflt steer

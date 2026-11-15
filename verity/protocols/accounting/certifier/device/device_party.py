@@ -2,7 +2,7 @@
 `parties.NETWORK_CERTIFIER` of the certifier's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
 
 Its needs are the manifest's: its clock and coins are the runtime's sources, and its signing key the capability
-`signing-key` (`certificate.Signer`). Its parameters are the schedule's (`warden.WardenParams`, under ``params``), the
+`signing-key` (`certificate.Signer`). Its parameters are the schedule's (`network_certifier.NetworkCertifierParams`, under ``params``), the
 number of execution phases (``windows``) and the first one's opening on its clock in ns (``origin``).
 
 Its life is the methods its turns call:
@@ -16,7 +16,7 @@ Its life is the methods its turns call:
 `hand_out`, `hand_out_run` and `close` are written: they make the manifest's messages out of the documents the device
 keeps. `open_session`, `certify`, `sign` and `collect` raise `NotImplementedError` naming the goal
 `network/certifier-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
-the runtime has no form for yet (`device_needs`): the relay (`warden.Warden`), its pacer and its publisher process,
+the runtime has no form for yet (`device_needs`): the relay (`network_certifier.NetworkCertifier`), its pacer and its publisher process,
 started by the auditor device's relay session.
 """
 
@@ -27,10 +27,10 @@ from dataclasses import dataclass
 
 from verity.channel import Message
 from verity.party import Action, Finish, Identity, Params, Received, Send, Timer
-from verity.runtime.runner import ProtocolDef
+from verity.protocol import ProtocolDef
 
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 
 GOAL = "network/certifier-device-is-a-party"
 SENDS = {NC.WORKERS: (NC.OUT_OPENING, NC.RECORDS, NC.CELLS_SALTS),
@@ -90,14 +90,14 @@ class NetworkCertifier:
 
     def __init__(self) -> None:
         self.identity: Identity | None = None
-        self.schedule: WardenParams | None = None
+        self.schedule: NetworkCertifierParams | None = None
         self.windows = 0
         self.closes: tuple[int, ...] = ()
         self.next = 0
 
     def start(self, params: Params, identity: Identity) -> list[Action]:
         self.identity = identity
-        self.schedule = WardenParams(**params["params"])
+        self.schedule = NetworkCertifierParams(**params["params"])
         self.windows = params["windows"]
         span = self.schedule.window * self.schedule.bucket_ms * 1_000_000
         self.closes = tuple(params["origin"] + (w + 1) * span for w in range(self.windows))

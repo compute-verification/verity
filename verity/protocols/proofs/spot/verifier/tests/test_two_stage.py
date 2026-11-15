@@ -345,7 +345,7 @@ def _at_rows(s: dict, row) -> dict:
 
 def _own(second: S.Draw, shift: int = 0, port: str = "out") -> dict:
     """A registered read of the interior's own `port`, one row a slot: each slot's own, or the one `shift` on."""
-    r, = (r for r in second.registration.record["roots"] if r["port"] == port)
+    r, = (r for r in second.docket.record["roots"] if r["port"] == port)
     return {"value": port, "root": r["root"], "domain": r["domain"], "leaves": r["leaves"], "reads_from": 0,
             "reads": [(u + shift) % (Q * N_RHO) for u in range(Q * N_RHO)]}
 
@@ -563,7 +563,7 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     fields, and passes, refused only on the form."""
     stream = _stream()
     _, second = _stages(stream)
-    rec, (s,) = second.registration.record, stream.statements(second)
+    rec, (s,) = second.docket.record, stream.statements(second)
     h, n = s["header"], Q * N_RHO
     assert h["set"] == SS.set_name(RUN, 0) == f"served/{RUN}/m0" and rec["window"]["run"] == RUN
     assert h["frame_v3"]["bindings"] == {
@@ -615,10 +615,10 @@ def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):
     (`second-links`); the run of record, deriving its own, then disagrees."""
     stream = _stream()
     first, _ = _stages(stream)
-    assert SS.replay_links(P.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.registration.record) == \
+    assert SS.replay_links(P.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.docket.record) == \
         (SS.Link(TEMPLATE, "x", BX), SS.Link(TEMPLATE, "o0", BOUT))
     with pytest.raises(TypeError):
-        stream.register_interiors(first, *_interior(Q * N_RHO, first.registration.digest, D.proved(first.draw)), links=[])
+        stream.register_interiors(first, *_interior(Q * N_RHO, first.docket.digest, D.proved(first.draw)), links=[])
     monkeypatch.setattr(SS, "replay_links", lambda *a: None)
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s])
@@ -711,7 +711,7 @@ def _registered_codes(monkeypatch):
     values itself (``filled``) or the prover registers them."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
@@ -726,7 +726,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(SS.check_twin(True, o, [stmt]).codes)
+        return list(check(True, o, [stmt]).codes)
     return codes
 
 
@@ -879,7 +879,7 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
 
 
-#: The tables' docket's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
+#: The tables' registration's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
 PINNED = (("t", {"value": "t", "root": T_ROOT, "leaves": 8, "words": 2, "domain": T_DOMAIN}),
           ("u", {"value": "u", "root": U_ROOT, "leaves": 8, "words": 2, "domain": U_DOMAIN}))
 NO_RECORD = {"roots": []}
@@ -904,7 +904,7 @@ NO_RECORD = {"roots": []}
 ])
 def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(own, value):
     """`second_stage._one_table` beside round 1's record: a read's root and domain may be one table's of the tables
-    the auditor's params pin before any coin (`Own.tables`, the tables' docket's entries), so a read's row,
+    the auditor's params pin before any coin (`Own.tables`, the tables' registration's entries), so a read's row,
     salt and path pass with round 1's record registering no table, or with it registering one of two tables filled
     row by row and the params pinning the other. Refused, the row named, with `second_stage.INPUTS_WHY`: a table
     neither pinned nor registered, a pin whose root, domain id or count of leaves is another than the one the verifier
@@ -915,7 +915,7 @@ def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(o
 
 
 def test_the_params_pin_registered_tables_beside_the_circuit_files():
-    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' docket's
+    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' registration's
     entries by parameter, which it pinned before any coin; the verifier takes them in the parameters' order and the
     circuit files as without them, and refuses an entry not exactly the docket's form (`service._table_entry`)
     and tables that are not an object."""
@@ -1031,8 +1031,8 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
 
 def test_nothing_of_record_turns_the_wired_key_on():
     """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
-    `sampled-proofs-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
-    difftest names it: the service's run, the verifier of record and every script take the switch as the code holds it,
+    `spot-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
+    difftest names it: the service's run, the verifier and every script take the switch as the code holds it,
     off."""
     root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
     spot = root / "verity/protocols/proofs/spot/verifier"
@@ -1053,7 +1053,7 @@ def test_nothing_of_record_turns_the_wired_key_on():
             text = path.read_text(errors="replace")
             if any(s in text for s in ("wired_key=", "wired_key = ", "wiredKey :=")) and path not in allowed_set:
                 sets.append(path)
-            if "sampled-proofs-wired-key-dev" in text and path not in allowed_name:
+            if "spot-wired-key-dev" in text and path not in allowed_name:
                 names.append(path)
     assert sets == [] and names == [], (sets, names)
 
@@ -1185,10 +1185,10 @@ def test_the_rule_and_the_spec_state_one_form():
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
 
-def test_the_verifier_of_record_samples_both_stages():
+def test_the_verifier_samples_both_stages():
     """The verifier's executable (`Pieces.verifier`, `verifier.EXE`) samples a two-stage rule's first stage, `Q`
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
-    assert V.EXE == "sampled-proofs-verifier" and _spec().selection == RULE
+    assert V.EXE == "spot-verifier" and _spec().selection == RULE
     source = random.Random(1).randbytes(4096)
     first = {"rule": RULE.to_json(), "program": codec.encode_program(P.population_program(BLOCK, N)), "query": GRAIN,
              "work_table": None, "closure": None, "source": source.hex()}

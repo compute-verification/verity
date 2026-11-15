@@ -48,10 +48,9 @@ import pytest
 import torch
 import torch.nn as nn
 from verity_vllm.definitions.numerics.serve3_reference import materialize
-
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules import vllm_iface as vi
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 PROF = dict(mode="profile", profile="b1-eager")
 C = dict(T=3, NH=2, KVH=1, D=8, H=16, MAX_POS=16, POS0=2)
@@ -721,7 +720,7 @@ def _test_Y(cls):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
+# T: Bet A's SERVING carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
 # tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings/triton_launches.py`) decide from the pinned kernel
 # (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.

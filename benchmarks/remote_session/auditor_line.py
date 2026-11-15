@@ -45,7 +45,7 @@ for a host run. `--peer` overrides it, and a gate run whose record names none is
 the auditor's.
 
 The ledger's head, a gate session's read of the ledger and the *credited* and *pinned* checks below are the Lean
-verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
+verifier's answers (`spot-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
 `challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse. So are the
 ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify_periods`), the commit on main
 (`on_main_answer`), *complete* (`complete_answer`) and a served session's read (`served_session_answer`, past
@@ -348,7 +348,7 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
              link_bytes_per_s: float = RATES["link_bytes_per_s"], bursts: str = "stated") -> dict:
     """The node's rates `verifier.recorded_rates` takes beside the record's squarings: its disks' and links' ceilings,
     and with `bursts` stated `ledger.Node.stated`'s bursts (one rebuild batch on the chips, a second of the disks, one
-    link window: `verifier.ingress_bursts` in each form)."""
+    link burst: `verifier.ingress_bursts` in each form)."""
     if bursts not in BURSTS:
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
@@ -471,7 +471,8 @@ def session_error(session: dict) -> dict:
     beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
     2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
     `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
-    `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`); one written before them
+    `delta`) must sum to the total as the ledger adds them, exactly where the ledger writes them as ratio text and in
+    floats where an older record wrote floats, or there is no line (`Disagree`); one written before them
     gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
@@ -487,26 +488,26 @@ def session_error(session: dict) -> dict:
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
-    total = Fraction(totals.pop())
+    total = pooled.number(totals.pop())
     hiding = binding = rejection = None
     if (d := lg.get("delta")) is not None:
-        parts = [d.get(n, 0.0) for n in ledger.DELTA_PARTS]
+        parts = [d[n] for n in ledger.DELTA_PARTS if n in d]
         if all(type(x) is str for x in parts):
-            agree = sum(map(Fraction, parts), Fraction(0)) == total
+            agree = sum(map(pooled.number, parts), Fraction(0)) == total
         else:
             added = 0.0
             for x in parts:
-                added += x
+                added += float(pooled.number(x))
             agree = added == float(total)
         if not agree:
-            raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
-        profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
+            raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {line.text(total)}")
+        profile, slack, sketch = (pooled.number(d[n]) for n in ("profile", "slack", "sketch"))
         if "hiding" in d:
-            hiding = Fraction(d["hiding"])
+            hiding = pooled.number(d["hiding"])
         if "binding" in d:
-            binding = Fraction(d["binding"])
+            binding = pooled.number(d["binding"])
         if "rejection" in d:
-            rejection = Fraction(d["rejection"])
+            rejection = pooled.number(d["rejection"])
     else:
         profile = pooled.number(V.recorded_windows(session)[1])
         slack = Fraction(lg["inputs"]["passes"], 2 ** lg["inputs"].get("slack_log2", V.UNRECORDED_SLACK_LOG2))
@@ -1020,8 +1021,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                                       "period credits its window", bound)
             d = Path(c["dir"]) if Path(c["dir"]).is_dir() else ch_dir / c["session"]
         else:
-            row["credit"] = no_credit("its coins were flipped in the verifier's process: no challenger, no ledger", bound)
-            row["skipped"] = "no challenger log: coins flipped in the verifier's process"
+            row["credit"] = no_credit("its coins were drawn in the verifier's process: no challenger, no ledger",
+                                      bound)
+            row["skipped"] = "no challenger log: coins drawn in the verifier's process"
             continue
         try:
             log, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)

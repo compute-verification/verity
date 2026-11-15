@@ -17,7 +17,7 @@ each template's units the budget certifies.
   memory needs. No statement is smaller than k_log `PACK_LOG` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template samples k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
   The share is the least whose statements fit `slots` x `hours` of slot time. Each window then has fewer than
-  K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityPeriodLog`, delta split over the S windows), and its
+  K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityMonitoringPeriodLog`, delta split over the S windows), and its
   windows over any period fewer than that in all (`IntegrityHorizon`), as in `h200.py`.
 """
 from __future__ import annotations
@@ -54,7 +54,7 @@ def split(t: dict) -> tuple[int, int]:
     """(parts, k_log): the least number of parts ``t``'s unit proves in under 2^`K_MAX` bits, each its share of the ANDs
     and of every row's bytes, and a part's k_log."""
     if len(t["rows"]) > MAX_ROWS:
-        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a C-Flock block holds: cut its "
+        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a Flock block holds: cut its "
                          "unit into fewer rows")
     p = 1
     while (k := k_log([-(-b // p) for b in t["rows"]], -(-t["ands"] // p))) > K_MAX:

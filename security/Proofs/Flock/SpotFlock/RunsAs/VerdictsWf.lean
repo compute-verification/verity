@@ -68,11 +68,12 @@ theorem push_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {program
   split at h
   · obtain rfl := Except.ok.inj h
     exact hr.push (verdictJson_wf ..)
-  · split at h
-    · exact absurd h (throw_ne' _ _)
-    obtain ⟨units, -, h⟩ := bind_ok' h
-    obtain rfl := Except.ok.inj h
-    exact hr.push (verdictJson_wf ..)
+  · repeat' split at h
+    all_goals first
+      | exact absurd h (throw_ne' _ _)
+      | (obtain ⟨units, -, h⟩ := bind_ok' h
+         obtain rfl := Except.ok.inj h
+         exact hr.push (verdictJson_wf ..))
 
 theorem step_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {bs : Core.Blobs}
     {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
@@ -127,6 +128,7 @@ theorem runMembers_wf {slice : Spot.OneStageZk.Member → Json} {ms : Array Spot
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, -, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
+  obtain ⟨_, -, h⟩ := bind_ok' h
   obtain ⟨r₁, h₁, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
   obtain rfl : r₁ = r := Except.ok.inj h
@@ -141,6 +143,9 @@ theorem membersRun_wf {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.M
   unfold Spot.OneStageZk.membersRun at h
   obtain ⟨_, -, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
-  exact runMembers_wf h
+  obtain ⟨r₁, h₁, h⟩ := bind_ok' h
+  obtain ⟨_, -, h⟩ := bind_ok' h
+  obtain rfl : r₁ = r := Except.ok.inj h
+  exact runMembers_wf h₁
 
 end SpotFlock.RunsAs

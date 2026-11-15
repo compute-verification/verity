@@ -15,9 +15,11 @@ to the output count its request row states, the count a tied audit already count
 
 **The request row** (`request_fields`) is K slots as a struct of arrays, each field's elements in turn and each element
 least significant bit first, then zero bits to a whole 16-bit word (unread): `valid` K×1, `id` K×IW, `P` K×LW and
-`O` K×LW, the layout of `replay_chain.arrival_fields` for K arrival slots without a cap bit. A slot's `id` is the
-request's place N in the network certifier's release order, `P` its prompt's ids and `O` its outputs. A slot whose
-`valid` is 0 reads as empty whatever its other fields hold.
+`O` K×LW: the layout vLLM's compiler commits for K arrival slots, without a cap bit
+(`verity_vllm.compiler.replay_chain.arrival_fields`), to which
+`benchmarks/network_traces/tests/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
+in the network certifier's release order, `P` its prompt's ids and `O` its outputs. A slot whose `valid` is 0 reads as
+empty whatever its other fields hold.
 
 **The fails row** is `connection_rows`' (`SLOT`): slot k is u16 class ‖ u16 at, little-endian, (0, 0) where the
 connection ended in its `END` and in an empty slot, (1, n) where it ended in a `FAIL` after n `DATA` cells.
@@ -50,8 +52,8 @@ the gaps; a mux of `at` and `O`; and the verdict's comparison of `at` with `O`. 
         RB = `Shape.request_bits`: K·(1 + IW + 2·LW) rounded up to a multiple of 16
 
 Every array is of bits, least significant first. K is at least 1 and at most 2,730, so the outputs fit the widest
-public size class (32 + 96·K bits of at most `UNIT_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
-schedule with lengths rows is held to when its parameters are built (`WardenParams.stride_releases`). B is a cell
+public size class (32 + 96·K bits of at most `SIZE_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
+schedule with lengths rows is held to when its parameters are built (`NetworkCertifierParams.stride_releases`). B is a cell
 size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
 longest prompt's request below 2^32 bytes.
 
@@ -77,10 +79,10 @@ from verity.circuits.types import Array, Tuple
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_request as Q
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.id_form import ID_FIELD_BYTES
 from verity.protocols.accounting.certifier.verifier.connection_rows import Rows, Table
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 
 BIT = HC.BIT
 U16 = Array(16, BIT)
@@ -152,10 +154,10 @@ class Shape:
                              f"no lengths slot holds: a smaller LW")
 
     @classmethod
-    def of(cls, params: WardenParams, IW: int, LW: int) -> Shape:
+    def of(cls, params: NetworkCertifierParams, IW: int, LW: int) -> Shape:
         """The shape that reads a schedule's rows: its K and B. ValueError for a schedule without lengths rows."""
         if params.lengths is None:
-            raise ValueError("the schedule has no lengths rows (WardenParams.lengths)")
+            raise ValueError("the schedule has no lengths rows (NetworkCertifierParams.lengths)")
         return cls(params.stride_releases, params.cell_bytes, IW, LW)
 
     @cached_property
@@ -424,7 +426,7 @@ class Refused(ValueError):
 
 class Read(NamedTuple):
     """One registered read of a statement: the row as u16 words, its salt (the prover's) and the header's `registered`
-    entry, `{"value", "positions", "paths"}` (`warden_rows.Cells.statement`'s form)."""
+    entry, `{"value", "positions", "paths"}` (`network_certifier_rows.Cells.statement`'s form)."""
 
     words: list[int]
     salt: bytes

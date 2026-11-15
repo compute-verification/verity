@@ -601,7 +601,7 @@ def past_range(w: dict) -> str | None:
     if w["k"] <= K_MAX:
         return None
     return (f"the unit needs a slot of 2^{w['k']} witness bits ({w['ands']:,} ANDs and {w['port_bits']:,} port bits, read off its "
-            f"Definition); C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean Stmt.InRange): split the unit (e.g. PoUW's "
+            f"Definition); Flock's proved range is 2^{K_MAX} (Flock/Statement.lean Stmt.InRange): split the unit (e.g. PoUW's "
             f"lanes form, verity/protocols/accounting/pouw/verifier/leaf_lanes.py) or extend the proved range (proofs)")
 
 
@@ -684,7 +684,7 @@ def past_block(b: dict) -> str | None:
         return None
     return (f"the unit needs a block of 2^{b['k_log']} bits ({b['bits']:,}): its slot of 2^{b['unit_log']} ({b['useful']:,} cells "
             f"for {b['ands']:,} ANDs and its ports, read off its Definition), its {b['rows']} rows' {b['sha512x3']} sha512x3 and "
-            f"{b['hm96']} hm96 slots of 2^{SLOT_LOG}, and the mask; C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean "
+            f"{b['hm96']} hm96 slots of 2^{SLOT_LOG}, and the mask; Flock's proved range is 2^{K_MAX} (Flock/Statement.lean "
             f"Stmt.InRange): cut it into narrower units that each read fewer row bytes (a served row's column blocks or slices, "
             f"adapters/vllm/verity_vllm/pipeline/serving_templates.py), split the unit (e.g. PoUW's lanes form, "
             f"verity/protocols/accounting/pouw/verifier/leaf_lanes.py), or extend the proved range (proofs)")
@@ -748,7 +748,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
-    (the format line and META) are returned. The unit's circuit description goes from `ir_lower.netlist_pieces` into the file and
+    (the format line and META) are returned. The unit's circuit description goes from `ir_lower.circuit_description_pieces` into the file and
     into ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
     its digests' lengths and rewritten in place once the circuit description is."""
     for name, v in (("partition", partition), ("program", program)):
@@ -812,7 +812,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         from . import tmpl as TM
 
         if definition is not None:
-            raise ValueError(f"{low.name}: a unit class (META definition) has no templated statement: the verifier refuses one")
+            raise ValueError(f"{low.name}: a proof-block class (META definition) has no templated statement: the verifier refuses one")
         if template is None:
             template, stats = TM.emit(TM.of_layout(low.layout, low.name))
             order = stats["order"]
@@ -862,7 +862,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         unit_sha256 = low.sha256_of(unit)
     else:
         unit = None
-        unit_sha256 = "0" * 64 if template is None else _write_netlist(low)[0]
+        unit_sha256 = "0" * 64 if template is None else _write_circuit_description(low)[0]
     stage_texts = [_expanded(lay, f"{low.name}/tail/stage{i}") for i, lay in enumerate(stages)]
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": unit_sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
@@ -911,9 +911,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if template is None:
         lines = 1 + low.layout.useful
         _put(out, f"CIRCUIT unit {lines}\n")
-        unit_sha256, got = _write_netlist(low, out)
+        unit_sha256, got = _write_circuit_description(low, out)
         if got != lines:
-            raise AssertionError(f"{low.name}: the unit's netlist has {got} lines, not the {lines} its section names")
+            raise AssertionError(f"{low.name}: the unit's circuit description has {got} lines, not the {lines} its section names")
         stand_in = meta_json.encode()
         cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
         if not partition:
@@ -956,12 +956,12 @@ def _put(out: BinaryIO | None, s: str, h=None) -> None:
             out.write(b)
 
 
-def _write_netlist(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
-    """The unit's circuit description (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each
+def _write_circuit_description(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
+    """The unit's circuit description (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.circuit_description_pieces`), each
     piece hashed and written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256``
     (`Lowering.sha256_after`) and its lines."""
     h, lines = hashlib.sha256(), 0
-    for piece in IL.netlist_pieces(low.layout, low.name):
+    for piece in IL.circuit_description_pieces(low.layout, low.name):
         _put(out, piece, h)
         lines += piece.count("\n")
         del piece
@@ -987,7 +987,7 @@ def _file_digests(path: Path, head: str) -> dict:
 
 def _expanded(lay: IL.LoweredUnit, name: str) -> str:
     """A slot type's expanded circuit as ``flock-ir-unit/v2`` text (``ir_lower``'s writer)."""
-    return IL.netlist(lay, name, None, None)
+    return IL.circuit_description(lay, name, None, None)
 
 
 

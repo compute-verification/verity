@@ -30,7 +30,7 @@ The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-r
   kept on the H200's host and never on the certifier's. The relay writes ``load-heads.json`` (`heads_doc`) and
   ``load-relay.json`` (its counts and the sink's acknowledgements), and signs nothing.
 * **The signature** (`heads_of`, `sign_heads`, `load_doc`): the serving network certifier's one signer signs the
-  heads in its session before it serves (``warden_serve.py serve --load-heads``), so one LMS key and one session
+  heads in its session before it serves (``network_certifier_serve.py serve --load-heads``), so one LMS key and one session
   carry the load and the windows' transfers; it writes ``load.json``, the client's kept registrations of the load
   that the block record pins (`blocks.pins`' ``registrations``), which `check_load` reads as the verifier does.
 
@@ -104,7 +104,7 @@ SALT_BYTES = _INST.salt_bytes
 #: a chunk's bytes are at most this many
 CHUNK_BYTES = 1 << 23
 READ_BYTES = 1 << 23
-#: the seeded weights' seeds (`benchmarks.torch_gpu.p2_stage.served_weights`): the demo's public one and its fixture's
+#: the seeded weights' seeds (`verity.protocols.accounting.pous.prover.served_weights`): the demo's public one and its fixture's
 DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/test-seed"
 
 

@@ -15,7 +15,7 @@ meta import PouwCheck.CreditOnce
 Onsite's work component (`Core.Onsite.components`). A period is the windows the auditor's ledger lists between the
 period's open and its close, and it earns all or nothing: `Credit.periodCredit` credits it only when every one of its
 windows is credited (`Credit.window`), and a refused window refuses the period. `pouw-period` runs it through
-`Core.Protocol.main`, and `tests/test_period_difftest.py` holds it to its Python, `verity/core/protocols/pouw/period_check.py`.
+`Core.Protocol.main`, and `tests/test_period_difftest.py` holds it to its Python, `verity/protocols/accounting/pouw/verifier/period_check.py`.
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
 
@@ -38,7 +38,7 @@ window's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, sess
 record, round log, sample, descriptor, registered entries, each sampled proof block's proof outcome and its live evidence).
 
 **The check** first refuses, by name (`form: why`, `form`), every window in a form the period's proved guarantee
-(`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
+(`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
 `Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`.
@@ -128,7 +128,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   pure { pins := get j "pins", windows := get j "windows" }
 
 /-- The guarantee a credited period is proved under. -/
-def GUARANTEE : String := "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
+def GUARANTEE : String := "Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod"
 /-- A Pearl-C pass's evidence (`credit.PEARL_C_KEYS`). -/
 def PASS_KEYS : List String := ["context", "descriptor", "manifest", "session"]
 def TILE_ID : String := "PouwH1Tile_v"

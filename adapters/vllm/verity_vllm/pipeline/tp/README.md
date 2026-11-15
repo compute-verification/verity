@@ -21,4 +21,4 @@ and `request_program_dirs` of `rank_replay` (`program.predict`); and `load` of `
 Two reads go around the declared names: a driver calls the extension's methods by name over the engine's
 `collective_rpc`, as `benchmarks/served_commit/tp_decode.py` does for `tp2_commit_install`, and
 `benchmarks/one_stage/a10.py` reads `commit_replay`'s private `_of_record`. The package's other modules are read only
-inside it and by its tests.
+inside it and by its tests, and each of them declares its names in `__all__` too.

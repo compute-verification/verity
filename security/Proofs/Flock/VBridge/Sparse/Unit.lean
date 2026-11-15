@@ -79,7 +79,7 @@ theorem messagePorts_head (sh : RecSparse.Shape) : ∃ rest, RecSparse.messagePo
 /-- `h` is the first port, at 512 words. -/
 theorem ports_head (sh : RecSparse.Shape) : ∃ rest, RecSparse.ports sh = ("h", 512) :: rest :=
   ⟨_, by simp [RecSparse.ports, RecSparse.messagePorts, RecSparse.portWords, RecSparse.SKIP, RecSparse.F_WORDS,
-    RecSparse.ROW_BLOCK]; rfl⟩
+    RecSparse.ROW_CHUNK]; rfl⟩
 
 theorem h_le_inWords (sh : RecSparse.Shape) : 512 ≤ RecSparse.inWords sh := by
   obtain ⟨rest, hr⟩ := ports_head sh

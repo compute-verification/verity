@@ -244,7 +244,7 @@ class Committed:
     def row_of(self, m: dict) -> dict:
         r = self.rows.get(id(m))
         if r is None:
-            raise LookupError(f"{m['name']}: no Program row of record aligned with this Call (compare.json's record.alignment)")
+            raise LookupError(f"{m['name']}: no Program workload of record aligned with this Call (compare.json's record.alignment)")
         return r
 
     def entry(self, m: dict) -> dict:
@@ -278,7 +278,7 @@ class Committed:
         return out
 
     def operands(self, res, store, vals, m: dict) -> list[np.ndarray]:
-        """The Call's operands from its row of record (module docstring), each compared with the capture's."""
+        """The Call's operands from its workload of record (module docstring), each compared with the capture's."""
         from verity_vllm.check.replay import evaluate as EV
         from verity_vllm.commit.opened import OpeningNotVerified
         if id(m) in self._ops:

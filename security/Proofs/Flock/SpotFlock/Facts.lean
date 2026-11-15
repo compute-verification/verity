@@ -131,13 +131,13 @@ theorem iroots_fst (x : Msg) (v : Seen) (ρ : ℕ) :
 run shows, since the prover states them at round 1, reading only round 0's coin. -/
 theorem interiorFixed (h : Held) (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
-      iroots x (run H P (code h).V x ω (forkOn ((code h).stage2 x) r d)).seen v =
+      iroots x (run H P (code h).V x ω (forkOn ((code h).secondStage x) r d)).seen v =
         iroots x (run H P (code h).V x ω r).seen v := by
   intro x Ω P ω r d v
   rw [iroots_fst, iroots_fst]
   congr 1
   refine run_fst_take H P (code h).V x ω 1 _ _ fun t ht => ?_
-  have hn : t ∉ (code h).stage2 x := by
+  have hn : t ∉ (code h).secondStage x := by
     intro hmem
     have hlt : (order h x).first.val < t.val := (mem_filter.1 hmem).2
     have : (order h x).first.val = 0 := rfl
@@ -176,7 +176,7 @@ theorem partitionsOk_sound {P : Partition} {C : Prog} (hP : partitionsOk P C = t
   · have := hne u hu
     simpa using this
   · have := hw u hu
-    cases hcl : unitClass C u with
+    cases hcl : sizeClass C u with
     | none => simp [hcl] at this
     | some w =>
       rw [hcl] at this

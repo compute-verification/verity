@@ -10,7 +10,7 @@ testpaths = ["tests"]
 untraced = [
     "tests/test_auditor_load.py",
     "tests/test_auditor_rt4.py",
-    "tests/test_auditor_warden.py",
+    "tests/test_auditor_network_certifier.py",
     "tests/test_coin_link.py",
     "tests/test_serve.py",
 ]
@@ -23,6 +23,13 @@ inputs = ["verity/protocols/accounting/certifier/device/load_relay.py", "verity/
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/coins.py",
           "verity/protocols/proofs/spot/device/remote.py",
+          # test_auditor_network_certifier holds a network certifier run's published files to the certifier's manifest (its verifier's
+          # `parties.py`), a deployment-layer party over SPOT's; test_auditor_network_certifier_serve runs the certifier prover's
+          # `scan_zk`, which proves through SPOT's service
+          "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/protocols/proofs/spot/verifier/parties.py", "verity/protocols/proofs/spot/verifier/service.py",
+          "verity/protocols/proofs/spot/verifier/consumers.py", "verity/protocols/proofs/spot/verifier/schedule.py",
+          "verity/protocols/proofs/spot/verifier/second_stage.py", "verity/protocols/proofs/spot/verifier/window_place.py",
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/accounting/pouw/verifier",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",

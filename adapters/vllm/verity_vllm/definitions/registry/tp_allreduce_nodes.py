@@ -124,7 +124,7 @@ def check_node_record(rec, *, cited: bool = True) -> dict:
     dev = _fields("device", rec["device"], ("name", "compute_capability", "sms"))
     _text("device.name", dev["name"])
     cc = _text("device.compute_capability", dev["compute_capability"])
-    if len(cc.split(".")) != 2 or not all(p.isdigit() for p in cc.split(".")):
+    if len(cc.split(".")) != 2 or not all(p.isdecimal() for p in cc.split(".")):
         raise ValueError(f"node record: device.compute_capability {cc!r}, not major.minor")
     _int("device.sms", dev["sms"])
     world = _int("world", rec["world"], 2)

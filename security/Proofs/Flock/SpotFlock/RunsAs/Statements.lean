@@ -44,10 +44,11 @@ open Lean (Json)
 /-- **The running verifier's `Own` on what the model reads**: the fields the model's (`ownOf`) leaves at their defaults
 set to them: the reads the verifiers report (`reported`), what they name of each session (`verified`), the
 names of what the replay block returns (`returns`), the values the verifier supplies or fixes (`supplied`,
-`fixed`) and the templates the auditor's params record as reads (`reads`). Round 2's per-statement checks read none
-of these but `verified`. -/
+`fixed`), the templates the auditor's params record as reads (`reads`), the tables they pin (`tables`) and the
+replay's port widths (`widths`). Round 2's per-statement checks read none of these but `verified`. -/
 def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
-  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
+  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[],
+             tables := #[], widths := #[] }
 
 /-- **The running verifier holds what the model holds of the run**, at the run's statement `st`, round 1's record `rec`,
 the second stage's sample and round 0's coin: the replay sample, the parts, the two records, the second sample's units, the

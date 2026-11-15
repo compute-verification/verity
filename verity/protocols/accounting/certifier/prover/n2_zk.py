@@ -1,41 +1,47 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on an active network certifier's
-run: each execution phase committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof
+run: each execution phase committed, registered on the link's own stream (`service.TransferBlocks.stream`, the proof
 system's `Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`,
 both ends' head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
-decided by `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
-the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
-comparison to each verdict, which decides nothing.
+decided by `TransferBlocks.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
+the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear`, a run by hand's,
+adds the in-the-clear comparison to each verdict, which decides nothing and goes to ``--witness`` alone (it needs one),
+the public summary keeping the flag and the outcome the verifier receives carrying none of it.
+The public summary (``summary.json``) holds only the keys its list of released_keys.json declares; the run's path,
+the device, timings and memory, the references' failed parts and the scan's finds go to ``--witness``.
+The printed log is the summary's split too (`log`, `wlog`, `sides`): stdout carries only public lines, a failure as its
+name alone; the process's stdout and stderr, which every child it starts inherits, its tracebacks and failures' text and
+the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness`` nowhere.
 
     python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
-* **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
-  ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
-  certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
+* **The run** (``--warden-run``): an active network certifier's run (`network_certifier_serve.py`'s, or the gate's
+  ``warden-rehearse``'s), read by `network_certifier_chain`: its own certified records under its key and session, on the network
+  certifier link (`service.NetworkCertifierProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
-  what the node sent, so a member's summary says only whether it refused any (``certifier_refused``), and the phases
-  go to ``--witness`` alone.
+  what the node sent, so the public summary of a run whose signer refused any holds each member's
+  ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the network certifier's, its head failing its signed digest alone. The prover's references
-  (`head_check.reference_parts`, and the proof block's output word by the gates' references, `LinkWindows.outputs`) say
+  (`head_check.reference_parts`, and the proof block's output word by the gates' references, `TransferBlocks.outputs`) say
   beforehand which windows each member's proofs refuse (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
-  committed, then K of them sampled on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  committed, then K of them sampled on the verifier's own coins (`TransferBlocks.period_draw`), and only those
   registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
   stream's δ, on the Lean verifier's sample. ``tampered`` then changes every window (`every_count`), which any
   sample refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
-* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_block` lowered once (the registered unit with each
+* **The statement** (`stager`, `stage`). One circuit, `TransferBlocks.proof_block` lowered once (the registered unit with each
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
-  statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`,
-  `LinkWindows.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
+  statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`TransferBlocks.layout`,
+  `TransferBlocks.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
   once, held to the prover's reference and to the IR reference; each statement's salts come from a key of its own, and
   the verifier's opening of its ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
 * **A round** (`member`), per execution phase in order: register, select, one live `prove --zk` session behind the ZK
   server on the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window:
   prove (the session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier's run,
-  Lean included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
+  Lean included). Then the link's network verdict (`TransferBlocks.network_verdict`). The members' rounds run one after
   another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per execution phase, kept under ``<member>/verifier/`` (`RECEIVED`): the registration
   record (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
@@ -52,13 +58,16 @@ comparison to each verdict, which decides nothing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import gc
 import hashlib
 import json
 import os
 import socket
+import sys
 import time
+import traceback
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
@@ -69,7 +78,7 @@ from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import service as SVC
 from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
-from verity.protocols.accounting.certifier.verifier.service import LinkWindows
+from verity.protocols.accounting.certifier.verifier.service import TransferBlocks
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
@@ -82,18 +91,67 @@ ROUNDS = ("honest", "tampered")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the ZK server one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
-RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
+RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's sample",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
             "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
 
 
+#: where `log` writes inside `sides`: the stdout the process had, which the chain releases as ``n2.log``
+PUBLIC = None
+
+
 def log(msg: str) -> None:
-    print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+    print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", file=PUBLIC or sys.stdout, flush=True)
+
+
+@contextlib.contextmanager
+def sides(witness: Path | None):
+    """The process's stdout and stderr, which every child it starts inherits and where a traceback, a stray print or a
+    child's message lands, sent to ``n2.log`` beside ``witness``, or to nowhere without one; `log` writes to the
+    stdout the process had."""
+    global PUBLIC
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if witness is not None:
+        witness.parent.mkdir(parents=True, exist_ok=True)
+    sink = os.open(witness.with_name("n2.log") if witness is not None else os.devnull,
+                   os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    saved, streams = (os.dup(1), os.dup(2)), (sys.stdout, sys.stderr)
+    PUBLIC = os.fdopen(os.dup(1), "w", buffering=1)
+    os.dup2(sink, 1)
+    os.dup2(sink, 2)
+    sys.stdout = sys.stderr = os.fdopen(sink, "w", buffering=1)
+    try:
+        yield
+    finally:
+        sys.stdout.close()
+        sys.stdout, sys.stderr = streams
+        PUBLIC.close()
+        PUBLIC = None
+        for fd, kept in zip((1, 2), saved):
+            os.dup2(kept, fd)
+            os.close(kept)
+
+
+def wlog(a, msg: str) -> None:
+    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, and dropped without
+    one."""
+    if a.witness is None:
+        return
+    a.witness.parent.mkdir(parents=True, exist_ok=True)
+    with open(a.witness.with_name("n2.log"), "a") as f:
+        f.write(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}\n")
+
+
+def plog(a, msg: str) -> None:
+    """A line of public values that says something per execution phase: public, but on the witness side when the
+    signer refused any phase, as the public summary then holds nothing per window."""
+    (wlog if getattr(a, "refused_any", False) else lambda _a, m: log(m))(a, msg)
 
 
 def _no_coins(n: int) -> bytes:
-    raise AssertionError("Selection All draws every link-window and reads no coins")
+    raise AssertionError("Selection All samples every execution phase and reads no coins")
 
 
 #: the verifier's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
@@ -114,28 +172,39 @@ def _record_lean_runs(PF) -> None:
         PF.verify = recorded
 
 
+def _without_clear(body: dict) -> dict:
+    """The outcome record as the verifier receives it: without `--debug-clear`'s in-the-clear check, which is witness
+    (the window's ``clear``)."""
+    verdict = ((body.get("audit") or {}).get("verdicts") or {}).get(SVC.VERIFIER) or {}
+    if "clear" not in verdict:
+        return body
+    body = json.loads(json.dumps(body, default=str))
+    del body["audit"]["verdicts"][SVC.VERIFIER]["clear"]
+    return body
+
+
 # --- the run's execution phases ---------------------------------------------------------------------------------------
 
-def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
-    """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
+def network_certifier_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
+    """A network certifier run's link (`network_certifier_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
-    the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    WC = proof_drivers.drivers().warden_chain
+    the signer's refusals. A certifier rehearsal's run is refused by name (`network_certifier_chain.PROXY`)."""
+    WC = proof_drivers.drivers().network_certifier_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
     return lw, {"windows": dep["windows"], "syncs": [], "warden_run": dep["run_id"]}, certified, refused
 
 
-def link_windows(run: Path, edit=None) -> SimpleNamespace:
-    """Every execution phase of the active network certifier's run (`warden_link`) with both certified records, as the
-    prover holds it before it registers: its opening (fresh salts), the root it commits (`LinkWindows.root`), the proof
+def phases(run: Path, edit=None) -> SimpleNamespace:
+    """Every execution phase of the active network certifier's run (`network_certifier_link`) with both certified records, as the
+    prover holds it before it registers: its opening (fresh salts), the root it commits (`TransferBlocks.root`), the proof
     block's arguments under that root (None where the proof block takes no instance), each end's head check's failed
     parts (`head_check.reference_parts`) and the proof block's output word by the gates' references
-    (`LinkWindows.outputs`); and the network certifier's certificates, which the verifier receives from it, no sync
+    (`TransferBlocks.outputs`); and the network certifier's certificates, which the verifier receives from it, no sync
     declared. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
     verdict the verifier should reach on an honest proof of the opening."""
-    lw, plan, certified, refused = warden_link(run)
+    lw, plan, certified, refused = network_certifier_link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     out = []
     for w in range(plan["windows"]):
@@ -150,7 +219,7 @@ def link_windows(run: Path, edit=None) -> SimpleNamespace:
         insts = lw.head_checks(opening, root)
         args = lw.arguments(opening, root, syncs)
         word = lw.outputs(opening, root, syncs) if args is not None else None
-        others = lw.certified(w, certificates) and (lw.warden is not None
+        others = lw.certified(w, certificates) and (lw.network_certifier is not None
                                                     or (w < len(syncs) and syncs[w] in lw.sync_set))
         out.append(SimpleNamespace(
             window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
@@ -160,7 +229,7 @@ def link_windows(run: Path, edit=None) -> SimpleNamespace:
     return SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
 
 
-def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
+def one_count(lw: TransferBlocks, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
     """Window 0's egress head with one frame more in its first bucket that has frames and room (else its first with
     room), the certifier's salt and certificate unchanged: what a prover that changed one count commits."""
     if w != 0:
@@ -174,7 +243,7 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
     return CertifiedRecord(replace(egress.head, counts=tuple(counts)), egress.salt, egress.certificate), ingress
 
 
-def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
+def every_count(lw: TransferBlocks, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
     """Every window's egress head with one count more (`one_count`'s change, in each window): the tampered member of a
     sampled period (``--draw``), which refuses it whichever windows it samples."""
     return one_count(lw, 0, pair)
@@ -183,7 +252,7 @@ def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedR
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
     exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress
-    head (every window's, ``rd.every``) fails its signed digest alone, the warden link's counts being its schedule's.
+    head (every window's, ``rd.every``) fails its signed digest alone, the network certifier link's counts being its schedule's.
     The ingress heads fail nothing."""
     xs = rd.windows
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
@@ -234,10 +303,10 @@ def _one_stage():
     return SimpleNamespace(a0=d.a0, a8=d.a8, np=np, P=P, PF=PF, V2=V2, FC=d.circuit, CS=d.class_statement)
 
 
-def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
-    """The one circuit: `LinkWindows.proof_block` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
+def stager(M, lw: TransferBlocks, out: Path) -> SimpleNamespace:
+    """The one circuit: `TransferBlocks.proof_block` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
-    `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
+    `service.PORTS`, each the length the verifier opens (`TransferBlocks.bits`)."""
     rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(lw.partition, sort_keys=True))
@@ -339,21 +408,21 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def other_subset(drawn: dict) -> list[int]:
+def other_subset(sampled: dict) -> list[int]:
     """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
-    held = set(drawn["units"])
-    return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
+    held = set(sampled["units"])
+    return sorted(([w for w in range(sampled["population"]) if w not in held] + sampled["units"])[:sampled["k"]])
 
 
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
            coins=None, forge=None) -> dict:
     """The member's execution phases on its own stream, in order: register, select, prove the statement live behind the
-    ZK server, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
+    ZK server, deliver, and decide on the proof (`TransferBlocks.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
 
-    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root is
+    With ``a.draw`` K (> 0), the period is sampled (`TransferBlocks.period_draw`): every window's salted root is
     committed first, then `coins` sample K of the windows, and only those are registered, proved and
     decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
     with its ``wrong_units`` at the stream's δ (``a.delta``, by default `DELTA`), on the sample of
@@ -372,39 +441,39 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    drawn, windows, segment = None, rd.windows, None
+    sampled, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
+            sampled = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
-        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
-            f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        plog(a, f"{name}: sampled windows {sampled['units']} ({sampled['k']} of {sampled['population']}) on "
+             f"{len(sampled['read']) // 2} coin bytes after the period's commitment {sampled['commitment'][:16]}")
         if forge is not None:
-            drawn = {**drawn, "units": forge(drawn)}
-            log(f"{name}: the prover proves windows {drawn['units']} instead")
-        (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
-        windows = [rd.windows[u] for u in drawn["units"]]
+            sampled = {**sampled, "units": forge(sampled)}
+            plog(a, f"{name}: the prover proves windows {sampled['units']} instead")
+        (vdir / "period.json").write_text(json.dumps(sampled, indent=1, sort_keys=True))
+        windows = [rd.windows[u] for u in sampled["units"]]
     previous, rows = None, []
     for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = lw.register(stream, lw.registration(x.opening, previous), drawn)
+        reg = lw.register(stream, lw.registration(x.opening, previous), sampled)
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
-        draw = stream.select(reg)
-        if list(draw.units) != [0]:
-            raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the one unit")
+        sample = stream.select(reg)
+        if list(sample.units) != [0]:
+            raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
         record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)
-        late = stream.deliver(draw, delivered.sessions())
+        late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
+        outcome = late or lw.outcome(stream, sample, x.certificates, rd.syncs, delivered,
                                      circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
@@ -416,9 +485,9 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  and all(list(f.units) == [0] for f in findings),
                  "opened_word": None if args is None else SVC._opened(delivered, 0, lw.row(args, "pub"), lw.bits("pub")),
                  "certified": lw.certified(x.window, x.certificates)}
-        files = {"registration.json": reg.record, "draw.json": dict(draw.draw),
+        files = {"registration.json": reg.record, "draw.json": dict(sample.draw),
                  "certificates.json": [_certificate(c) for c in x.certificates],
-                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
+                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": _without_clear(body),
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
                                     "output": x.statement.output}}
         for f, v in files.items():
@@ -442,18 +511,18 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
                               and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
-        log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
-            f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
-            f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
-            f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
-            f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
-    network = lw.network_verdict(stream, rd.plan["windows"], drawn)
-    if drawn is not None:
+        plog(a, f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
+             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
+             f"{proof['opened_word']}; {'as expected' if row['as_expected'] else 'UNEXPECTED'}")
+        wlog(a, f"{name} window {x.window}: prove {row['prove']['session_s']} s (prove_total "
+             f"{row['prove']['prove_total_s']} s, {row['prove']['proof_bytes']} B), verify {verify_s} s")
+    network = lw.network_verdict(stream, rd.plan["windows"], sampled)
+    if sampled is not None:
         sel = network["selection"]
-        log(f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
-            f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
-                                                   "the windows proved are the draw of record's"))
-    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
+        plog(a, f"{name}: the sample of record ({sel['by']}) is windows {sel['units']}; proved "
+             f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
+                                                    "the windows proved are the sample of record's"))
+    return {"windows": rows, "network": network, **({} if sampled is None else {"period": sampled}),
             **({} if segment is None else {"segment": segment})}
 
 
@@ -483,23 +552,62 @@ def prove(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     run = Path(a.network_certifier_run)
     summary: dict = {"run": str(run), "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
+    # what the public summary leaves to --witness: the run's path, the prover's device, timings and memory, values in
+    # the clear, the prover's own reference parts and scan files, and which execution phases the signer refused
+    kept = ("run", "gpu", "instances_s", "staging/evaluate_s", "staging/reference_s", "staging/write_s",
+            "stager/lower_s", "members/*/issuer_refused", "members/*/reference/*/failed", "members/*/windows/*/failed",
+            "members/*/windows/*/prove", "members/*/windows/*/verify_s", "members/*/windows/*/clear",
+            "members/*/received/verifier_bytes", "members/*/received/verifier_found",
+            "members/*/received/public_pieces", "members/*/received/placed", "members/*/received/was",
+            "members/*/received/structured", "members/*/received/control/bytes",
+            "members/*/received/control/blobs_found", "members/*/received/control/missing")
+
+    def take(doc, segs: list[str], into: dict) -> None:
+        for k in (list(doc) if isinstance(doc, dict) else range(len(doc))) if segs[0] == "*" else [segs[0]]:
+            if isinstance(doc, dict) and k not in doc:
+                continue
+            if len(segs) == 1:
+                into[str(k)] = doc.pop(k)
+            elif isinstance(doc[k], (dict, list)):
+                take(doc[k], segs[1:], sub := into.setdefault(str(k), {}))
+                if not sub:
+                    del into[str(k)]
+
+    def write(summary: dict) -> None:
+        """The public summary, and the rest to --witness (a list's entries by their index). A run whose signer refused
+        an execution phase is public as each member's flag and its ok alone, so nothing public says where."""
+        full = json.loads(json.dumps(summary, default=str))
+        public, private = json.loads(json.dumps(full)), {}
+        for path in kept:
+            take(public, path.split("/"), private)
+        if any(m.get("certifier_refused") for m in public.get("members", {}).values()):
+            private |= {"members": full["members"], "link": {"windows": full["link"]["windows"]},
+                        **({"sampled": public.pop("sampled")} if "sampled" in public else {})}
+            public["members"] = {k: {"certifier_refused": True, **({"ok": m["ok"]} if "ok" in m else {})}
+                                 for k, m in public["members"].items()}
+            public["link"].pop("windows", None)
+        (out / "summary.json").write_text(json.dumps(public, indent=1, sort_keys=True))
+        if a.witness is not None:
+            a.witness.parent.mkdir(parents=True, exist_ok=True)
+            a.witness.write_text(json.dumps(private, indent=1, sort_keys=True))
+
     t = time.time()
-    members = {"honest": link_windows(run), "tampered": link_windows(run, edit=every_count if a.draw else one_count)}
+    members = {"honest": phases(run), "tampered": phases(run, edit=every_count if a.draw else one_count)}
     members["tampered"].every = bool(a.draw)
     n = len(members["honest"].windows)
     if a.draw and not 1 <= a.draw <= n:
-        raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {n} of the link's {n} windows")
+        raise SystemExit(f"--draw {a.draw}: a period sample takes 1 to {n} of the link's {n} windows")
     if a.draw and a.draw < n:
-        members[OTHER] = link_windows(run)
+        members[OTHER] = phases(run)
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
         "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": DELTA,
         "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
                   "verifier of record (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
     summary["warden_run"] = members["honest"].plan["warden_run"]
-    summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the link's "
+    summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the link's "
                                   "charge is 0",
-                         "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
+                         "counts": "the network certifier's schedule's (service.NetworkCertifierProfile), not a profile's"}
     members = {k: v for k, v in members.items() if k in a.rounds or k == OTHER}
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
@@ -508,24 +616,22 @@ def prove(a) -> int:
                        "windows": {k: len(v.windows) for k, v in members.items()},
                        "planned_windows": {k: v.plan["windows"] for k, v in members.items()}}
     summary["instances_s"] = round(time.time() - t, 1)
+    a.refused_any = any(rd.issuer_refused for rd in members.values())
     for name, rd in members.items():
         if rd.lw.partition != lw0.partition or rd.lw.program != lw0.program:
             raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
-            "certifier_refused": bool(rd.issuer_refused)}
-        log(f"{name}: {len(rd.windows)} link-windows, words {[x.word for x in rd.windows]}, expected verdicts "
-            f"{[x.expect for x in rd.windows]}, failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
+            "certifier_refused": bool(rd.issuer_refused), "issuer_refused": rd.issuer_refused}
+        plog(a, f"{name}: {len(rd.windows)} execution phases, words {[x.word for x in rd.windows]}, expected "
+             f"verdicts {[x.expect for x in rd.windows]}")
+        wlog(a, f"{name}: failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
         if not expected(name, rd):
             raise SystemExit(f"{name}: the references are not the {name} round's")
-    if a.witness is not None:
-        a.witness.parent.mkdir(parents=True, exist_ok=True)
-        a.witness.write_text(json.dumps({name: {"issuer_refused": rd.issuer_refused} for name, rd in members.items()},
-                                        indent=1, sort_keys=True, default=str))
     if not summary["link"]["pinned"]:
         raise SystemExit(f"a gate names no pinned circuit digest: {summary['link']['gates']}")
     if a.dry:
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        write(summary)
         log("dry: done")
         return 0
 
@@ -536,11 +642,12 @@ def prove(a) -> int:
     summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {lw0.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
-        f"pin {sg.st.pin[:16]}")
+    log(f"stager: {lw0.proof_block.id}, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, pin {sg.st.pin[:16]}")
+    wlog(a, f"stager: lowered in {sg.lower_s} s")
     summary["staging"] = stage(M, sg, members, os.urandom(32), out)
-    log(f"staged: {summary['staging']}")
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log(f"staged: {summary['staging']['statements']} statements")
+    wlog(a, f"staged: {summary['staging']}")
+    write(summary)
 
     def go(k: int, name: str) -> tuple[str, dict]:
         res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0,
@@ -568,17 +675,19 @@ def prove(a) -> int:
                 "audit": {"accepted": net["accepted"], "wrong_units": wu},
                 "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
                 else None}
-            log(f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of {sel['population']}: "
-                f"at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta {wu['delta']:.3g}"
-                + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
-        log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
-            f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
-            f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
-            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the public "
-            f"circuit holds left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
-            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            plog(a, f"member {name}: the sample of record ({sel['by']}) {sel['units']}, {sel['k']} of "
+                 f"{sel['population']}: at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta "
+                 f"{wu['delta']:.3g}" + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
+        plog(a, f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
+             f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}")
+        plog(a, f"member {name}: the verifier received {rec['files']} files, scanned for {rec['blobs']} witness "
+             f"pieces: leaked {rec['leaked'] or 'none'}, control holds all {rec['control']['holds_all']}; "
+             f"{'as expected' if good else 'UNEXPECTED'}")
+        wlog(a, f"member {name}: verifier received {rec['verifier_bytes']} bytes, witness pieces found there: "
+             f"{rec['verifier_found'] or 'none'} ({len(rec['public_pieces'])} pieces the public circuit holds left "
+             f"out), structured {rec['structured'] or 'none'}, control {rec['control']['blobs_found']}")
     summary["ok"] = ok
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    write(summary)
     log("done: " + ("ok" if ok else "FAILED"))
     return 0 if ok else 1
 
@@ -589,8 +698,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
     p.add_argument("--warden-run", dest="network_certifier_run", type=Path, required=True,
-                   help="an active network certifier's run (warden_serve.py's, or the gate's warden-rehearse's): "
-                        "its own certified records, no certifier rehearsal (warden_chain)")
+                   help="an active network certifier's run (network_certifier_serve.py's, or the gate's warden-rehearse's): "
+                        "its own certified records, no certifier rehearsal (network_certifier_chain)")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")
@@ -603,18 +712,34 @@ def main(argv=None) -> int:
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--draw", type=int, default=0,
-                   help="K: each member's period sampled, K of its windows drawn on the verifier's coins after every "
-                        "window's root is committed, and only those proved (LinkWindows.period_draw); tampered then "
+                   help="K: each member's period sampled, K of its windows sampled on the verifier's coins after every "
+                        "window's root is committed, and only those proved (TransferBlocks.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
-    p.add_argument("--witness", type=Path, help="where each member's execution phases its signer refused are written, "
-                                                "on the chain's private side")
+    p.add_argument("--witness", type=Path, help="where what the public summary leaves out is written, on the chain's "
+                                                "private side: the timings, the values in the clear, and each "
+                                                "member's execution phases its signer refused")
     a = ap.parse_args(argv)
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    return prove(a)
+    if a.debug_clear and a.witness is None:
+        raise SystemExit("--debug-clear writes the in-the-clear check to the witness side alone: it needs --witness")
+    if a.witness is not None and Path(a.out).resolve() in a.witness.resolve().parents:
+        raise SystemExit("--witness is under --out, which the chain releases: put it on the private side")
+    with sides(a.witness):
+        if a.witness is None:
+            log("no --witness asked for: what the public summary leaves out is not written (witness lines, stderr and "
+                "every child's output)")
+        try:
+            return prove(a)
+        except BaseException as e:  # noqa: BLE001 - any failure's text, an interrupt's too, stays off stdout
+            if isinstance(e, SystemExit) and e.code in (0, None):
+                return 0
+            traceback.print_exc()
+            log(f"failed: {type(e).__name__}")
+            return e.code if isinstance(e, SystemExit) and isinstance(e.code, int) else 1
 
 
 if __name__ == "__main__":

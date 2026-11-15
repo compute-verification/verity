@@ -29,9 +29,11 @@ each rule holds: every spot checked, and each passing.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
-this command's.  A Call over the partition's budget is partitioned by its callees (`checks.by_callees`, whose callees fail
-by name) or fails by its own name (``partition/unpartitioned``).  Redundant and dead gates, an
-unpinned or untyped lowering, a Definition over the partition's budget that is no Call, and a target no realization compared on a random
+this command's.  A Call over the partition's leaf budget or its cost target is partitioned by its callees (`checks.by_callees`,
+whose callees fail by name); otherwise one over the leaf budget fails by its own name (``partition/unpartitioned``).  Redundant
+and dead gates, an unpinned or untyped lowering, a Definition over the partition's cost target, a Call or not
+(``partition/over-cost-target``: its proof blocks are held to Flock's range by ``block``), one over the leaf budget that is no
+Call, and a target no realization compared on a random
 vector (``vectors/edge-only``, ``vectors/none``: `checks.vector_class`) are warnings, which never fail
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
 under ``unchecked`` by check, with counts, a line before the last counts the targets of each vector class (the summary's

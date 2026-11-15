@@ -67,7 +67,7 @@ from pathlib import Path
 
 from verity.protocols.proofs.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum, neg_log_escape
 from verity.protocols.proofs.spot.verifier.consumers import entropy_bits, exfiltration_bound
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
@@ -99,8 +99,8 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
-    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.size_class`, at
+    most `SIZE_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
     (m = k_log + nbl <= 35); `n_rho` proof blocks of it lie in each replay block of replay grain `grain`; and `kind` is its
@@ -126,10 +126,10 @@ class Candidate:
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
                 or min(self.work, self.influence, self.ands, self.commit_bits, self.commit_rows, *self.rows, 0) < 0 \
-                or unit_class(self.out_bits) is None or (bool(self.grain) != (self.n_rho > 0)) \
+                or size_class(self.out_bits) is None or (bool(self.grain) != (self.n_rho > 0)) \
                 or self.n_rho > self.units:
             raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs in a "
-                             f"size class (<= {UNIT_CLASS_MAX} bits), and n_rho in [1, units] with a replay grain")
+                             f"size class (<= {SIZE_CLASS_MAX} bits), and n_rho in [1, units] with a replay grain")
 
     @property
     def alternative(self) -> str:
@@ -199,7 +199,7 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
-    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityPeriod`'s
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityMonitoringPeriod`'s
     hidden window: one session, its k sampled proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay grains that build
@@ -1406,14 +1406,14 @@ def registration_sample(cells: list[Cell], k: Mapping[int, float], registration:
 
 
 def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class (<= {UNIT_CLASS_MAX} bits)")
+    if (w := size_class(ceil(bits))) is None:
+        raise ValueError(f"a proof block of {bits} bits fits no public size class (<= {SIZE_CLASS_MAX} bits)")
     return w
 
 
 def two_stage_strata(cells: Iterable[Cell], merged: int | str | None) -> list[Cell]:
     """The cells in the strata of a `two_stage_design` row whose `merged` is this: the public size classes
-    (`unit_class`) up to `merged` in stratum 0 and each wider class in the stratum of its bits; `merged` None, each
+    (`size_class`) up to `merged` in stratum 0 and each wider class in the stratum of its bits; `merged` None, each
     distinct width in a stratum of its own, named by the width's place among the cells' widths in increasing order; or
     `merged` "template", a by-template design's, each cell the stratum of its position."""
     cells = list(cells)
@@ -1433,7 +1433,7 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                      union: bool = False, registration: float = 0.0, fanout: int = 1,
                      sessions: str = "statements") -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
-    (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
+    (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`size_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
     narrowest class every class is its own stratum, and at the widest the design is the uniform one, so it is never
     worse.  A class's stratum is sampled at the rate its widest block asks, so with `widths` the family also holds the

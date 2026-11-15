@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Game
 
 * `SamplingBlock.accepted_sampledIncorrect_le_at`: one session's bound at the value layer of any values `Xv`
   (`zk_session_soundHJ_custody_sampled_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
-* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `δ_link`'s at every commit string no carried
+* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `ε_bind`'s at every commit string no carried
   leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
   (`CarriedBlocks.carriedE`).
 * `CarriedBlocks.monitoringPeriodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
@@ -111,8 +111,8 @@ theorem readP_nonneg (c : w.vb.Pos) : 0 ≤ w.readP c := div_nonneg (Nat.cast_no
 private theorem mul_add_le {π E K B g : ℝ} (hπ : 0 ≤ π) (h : E ≤ B + g) : π * (E + K) ≤ π * (B + K) + π * g := by
   nlinarith
 
-/-- **The binding errors against `Xv`, split**: at most `δ_link` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
-binding error is at most `δ_link`'s per-string term plus `g_c`. -/
+/-- **The binding errors against `Xv`, split**: at most `ε_bind` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
+binding error is at most `ε_bind`'s per-string term plus `g_c`. -/
 theorem errBound_le_of (R : w.Reg) (κ : Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R)
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
@@ -332,7 +332,7 @@ theorem Xcar_free (t : ℕ) (R : (S.W t).Reg)
   unfold Xcar
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **The binding error at `Xcar`, per commit string**: `δ_link`'s term where no carried leaf sits, under A2 for the
+/-- **The binding error at `Xcar`, per commit string**: `ε_bind`'s term where no carried leaf sits, under A2 for the
 session's link finders, and where one sits, its binding error at the leaf's value. -/
 theorem err_le_gAt (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
@@ -371,7 +371,7 @@ theorem sum_gAt (t : ℕ) (τ : Strategy (S.W t).game) :
     ring
   · simp only [hx, ↓reduceIte, mul_zero, Finset.sum_const_zero, zero_div, zero_mul]
 
-/-- **The binding errors at `Xcar`**: `δ_link` plus the carried term. -/
+/-- **The binding errors at `Xcar`**: `ε_bind` plus the carried term. -/
 theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
       (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') :
@@ -382,7 +382,7 @@ theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
   rw [S.sum_gAt s t τ]
 
 /-- **One session's stage**: accepted with a sampled proof block incorrect, each carried leaf read at its value, with probability
-at most `ε_ks + δ_link` plus the carried term. -/
+at most `ε_ks + ε_bind` plus the carried term. -/
 theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
     prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).sampledWrong) (S.W t).game τ ≤
       ((S.W t).ks + (S.W t).link) + ENNReal.ofReal (S.carriedE s t τ) := by
@@ -539,7 +539,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s) ≤
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by
   classical
   set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
@@ -577,7 +577,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     rw [← Finset.sum_filter]
     exact Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s)
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s)
       ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
           ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum)) (S.run s) := by
@@ -606,7 +606,7 @@ theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s) ≤
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I :=
   S.integrity_on_units s I hq (fun t ht _ => hqt t ht) hA3 hs hA2 M
 
@@ -659,7 +659,7 @@ theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
       exact S.stage_le s t τ hτ.2) S.T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
   have hB := monitoringPeriod_monitoringPeriod (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.sampledWrong)
-    WindowRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
+    SamplingBlockRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
     (fun t τ hτ => ⟨(S.incorrectSet s t τ).card, fun _ => rfl,
       ((S.W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
   have hxM : xq ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
@@ -667,16 +667,16 @@ theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
       ∑ b ∈ Finset.range S.B, S.err b := by
     simp only [zero_add]
     exact sum_range_start S.toServerBlocks (fun t => (S.W t).ks + (S.W t).link) S.B
-  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s)
+  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
-          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.incorrect).sum)) (S.run s) := by
+          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum)) (S.run s) := by
         refine value_mono (fun l hl => ?_) _
         by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
         · exact Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, Nat.ceil_le.2 hl.2⟩
     _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.incorrect).sum) (S.run s) :=
+          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum) (S.run s) :=
         value_or_le _ _ _
     _ ≤ (∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry) + ENNReal.ofReal δ := by
         refine add_le_add ?_ (hB.trans hxM)

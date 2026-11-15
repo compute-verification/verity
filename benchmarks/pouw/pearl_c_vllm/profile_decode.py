@@ -158,10 +158,9 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     run_cls = PPDR.PearlCDeviceRun
-    saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
+    saved = [(PPDR, n, getattr(PPDR, n)) for n in ("_steps", "screen_into", "excluded")]
     saved += [(run_cls, n, vars(run_cls).get(n)) for n in ("_shape", "_pipe", "end", "gemm")]  # None: a mixin's, undone by delattr
     saved += [(PPDR._Keys, "__call__", vars(PPDR._Keys)["__call__"]), (PPDR._Uploads, "put", vars(PPDR._Uploads)["put"])]
     steps = PPDR._steps

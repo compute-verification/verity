@@ -15,7 +15,8 @@ the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitme
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
 (`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
 without a GPU.  The kernels' builds, libraries and device streams are PoUW's, which this module takes from
-`verity.protocols.accounting.pouw.prover.serving`'s exports (`RowTableLibrary`, `row_table_host_lib`, `hm_tables`, ...).
+`verity.protocols.accounting.pouw.prover.serving`'s exports (`row_table_host_lib`, `hm_tables`, ...) and
+`verity_torch.pouw`'s (`RowTableLibrary`).
 """
 from __future__ import annotations
 
@@ -34,15 +35,23 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
 from verity.protocols.accounting.pouw.prover.serving import (
     ROW_TABLE_SEG_BYTES as SEG_BYTES,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     ROW_TABLE_TAB_WORDS as TAB_WORDS,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     RowTableArgs as Args,
-    RowTableLibrary as DeviceLibrary,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     hm_tables,
     leaf_prefixes,
-    row_table_host_lib as host_lib,
     table_width,
     u64_words,
 )
+from verity.protocols.accounting.pouw.prover.serving import (
+    row_table_host_lib as host_lib,
+)
+from verity_torch.pouw import RowTableLibrary as DeviceLibrary
 
 from . import row_tables as RTB
 

@@ -41,6 +41,7 @@ from verity_bench import prove_flock as PF
 from verity_bench import prove_records as R
 from verity_bench import spot_status
 from verity_bench import steady as S
+from verity_bench import steady_node as N
 from verity_bench.cli import main
 
 REPO = Path(__file__).resolve().parents[3]
@@ -606,6 +607,19 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert measured["status"] == "measured" and measured["verifier_seconds_per_token"] is None and measured["missing"] == []
     modeled = P.report(PF.Flock(unverified, SESSIONS, "art:card").table(P.Census.of(CENSUS)), 1.0)["totals"]
     assert modeled["status"] == "modeled" and modeled["missing"] == [] and modeled["steady_time_share"] < 1.0
+
+
+def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():
+    """Only steady-state and warm-session rows, every type priced from a run of its own: the total is still modeled,
+    since a statement proved from warm sessions on one card is not the steady state."""
+
+    both = P.Census.of({**CENSUS, "definitions": {k: CENSUS["definitions"][k] for k in (GEMM64, GEMM32)}})
+    rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
+    warm = (PF.Warm(P.definition_id(GEMM32), 19, 4, 4, 2.0, 1, 4, "r20261115-000000-0001", "gemm32"),)
+    doc = P.report(PF.Flock(rows, SESSIONS, "art:card", warm=warm).table(both), 1.0)
+    assert sorted(r["source"] for r in doc["rows"]) == [P.STEADY, P.WARM]
+    assert doc["totals"]["status"] == "modeled" and doc["totals"]["missing"] == []
+    assert doc["totals"]["steady_time_share"] < 1.0
 
 
 def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatch):
@@ -1261,18 +1275,19 @@ class Store:
         (root / name).write_text(json.dumps(doc))
         return self.art(kind, meta or {}, tree=root)
 
-    def ran(self, run: str, files: Path | None, *, rc: int = 0) -> None:
-        """A run's attempt on the remote, its files a run record (`files`: None for a run that kept none)."""
+    def ran(self, run: str, files: Path | None, *, rc: int = 0, tool: str = "bash", validation: str | None = None) -> None:
+        """A run's attempt on the remote, its files a run record (`files`: None for a run that kept none), recorded under
+        `tool`, its result's validation `validation`."""
 
         from research.store import canon
 
         record = self.art("run-record/v1", {}, tree=files) if files else None
         attempt = {
-            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "bash", "version": None},
+            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": None},
             "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T00:00:00Z"}, "cost": None,
-            "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": None},
+            "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
             "outputs": {"result": None, "run_record": record}, "telemetry": None,
         }
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
@@ -1675,6 +1690,114 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     s2.record(s2.doc("evidence/v1", "steady.json", {}, {"runs": [newest]}), R.STEADY)
     doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
     assert doc["inputs"][2]["targets"] == [newest] and doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324)
+
+
+#: what a steady-state point's verdict file holds of a row whose run's files didn't show it level, or its card clear
+FAILED_VERDICT = {"identity": "i" * 64, "point": "x-k1", "passed": False, "why": "fail: `level` (fail): ...",
+                  "verdict": {"type": "x", "provers": 1, "status": S.FAIL, "level": S.LEVEL, "checks": {
+                      **{name: {"status": S.PASS, "why": None} for name in S.CHECKS},
+                      "level": {"status": S.FAIL, "why": "its window isn't level"},
+                      "card_clear_start_end": {"status": S.CANNOT_TELL, "why": "no record of its card"}}}}
+
+
+def as_steady_point(s: Store, tmp: Path, run: str, validation: str | None, verdict: dict | None = None) -> None:
+    """A fixture run as a run of the harness's steady-state point: recorded under its tool, its result's validation
+    `validation`, and its files holding `verdict` as the point's verdict file where given."""
+
+    files = tmp / "point-files" / run
+    if not files.exists():
+        shutil.copytree(run_files(tmp, run), files)
+    if verdict is not None:
+        (files / N.VERDICT_FILE).write_text(json.dumps(verdict))
+    s.ran(run, files, tool=R.STEADY_POINT_TOOL, validation=validation)
+
+
+def test_the_steady_point_tool_and_its_verdict_file_are_the_harnesss():
+    from verity_bench import tool
+
+    assert R.STEADY_POINT_TOOL == tool.STEADY_POINT.name and N.VERDICT_FILE == "out/verdict.json"
+
+
+def test_a_labelled_steady_point_whose_own_verdict_failed_prices_nothing_and_is_named(tmp_path):
+    """A run of the harness's steady-state point that judged itself not passed: each of its rows is refused with the
+    run and the checks its verdict file names, whatever the six checks this reader holds a row to say, and every type
+    it measured is priced as with no such run (here, as with the run superseded). The run is named among the
+    measurements' inputs with why."""
+
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    s.label(newest, R.SUPERSEDED_BY, "r20991231-000000-0000")
+    without = R.build("spot", "glm53", store=s.fresh("without"), root=REPO)
+
+    s, _ = recorded(tmp_path / "point")
+    as_steady_point(s, tmp_path / "point", newest, "failed", FAILED_VERDICT)
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    why = (f"its own steady-state verdict failed: run {newest} didn't pass `card_clear_start_end` (cannot tell), "
+           "`level` (fail)")
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {newest: why}
+    assert not any(r.get("record") == newest for r in doc["rows"])
+    assert doc["sources"] == without["sources"]
+    assert [(r["block"], r["source"], r["seconds"]) for r in doc["rows"]] == [
+        (r["block"], r["source"], r["seconds"]) for r in without["rows"]]
+    assert doc["totals"]["gpus_per_serving_gpu"] == without["totals"]["gpus_per_serving_gpu"]
+    head, seconds = R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})
+    assert all(f"refused {newest}: {why}" in m["inputs"] for m in (head, seconds))
+    assert (head["mark"], head["value"]) == next((m["mark"], m["value"]) for m in R.measurements(
+        without, {"a/x": "gpus_per_serving_gpu"}))
+    assert f"- {newest} (`prove-glm53-flock-steady`): {why}" in R.render(doc)
+
+
+@pytest.mark.parametrize("validation, verdict, says", [
+    (None, None, "can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its result's "
+                 "validation is None)"),
+    ("not_run", None, "can't be told: run {run} is a steady-state point's, and its attempt carries no verdict (its "
+                      "result's validation is 'not_run')"),
+    ("failed", None, "failed: run {run} keeps no `out/verdict.json` naming the checks it didn't pass"),
+    ("failed", {"passed": False, "why": "refused, nothing timed: no lease", "verdict": None},
+     "failed: run {run} wasn't a passed point: refused, nothing timed: no lease"),
+])
+def test_a_steady_point_whose_verdict_cannot_be_read_or_names_no_check_is_refused(tmp_path, validation, verdict, says):
+    """A run of the point whose attempt carries no verdict can't be told and prices nothing, as a row whose fields
+    can't show a check; a failed one whose verdict file is missing, or names no check, is refused with what it says."""
+
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    as_steady_point(s, tmp_path, newest, validation, verdict)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {newest: "its own steady-state verdict " + says.format(run=newest)}
+    assert not any(r.get("record") == newest for r in doc["rows"])
+
+
+def test_a_passed_steady_point_and_a_run_with_no_verdict_of_its_own_are_priced_as_before(tmp_path):
+    """A run of the point that judged itself passed is read as any run: its rows are priced as the six checks find
+    them. A run under any other tool has no verdict of its own, so a failed validation of its result is no verdict on
+    its rows: they are priced as before. Either table is the one the same records gave before."""
+
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    before = R.build("spot", "glm53", store=s.fresh("before"), root=REPO)
+    as_steady_point(s, tmp_path, newest, "passed", {"passed": True, "why": None, "verdict": None})
+    assert R.build("spot", "glm53", store=s.fresh("passed"), root=REPO) == before
+    s.ran(newest, run_files(tmp_path, newest), validation="failed")
+    assert R.build("spot", "glm53", store=s.fresh("older"), root=REPO) == before
+    assert before["refused"] == [] and {x["source"]: x["block_types"] for x in before["sources"]}[P.STEADY] == 8
+
+
+def test_an_art_completing_a_failed_steady_points_rows_prices_none_of_them(tmp_path):
+    """An art holding a run's rows completed after it stands for that run, so the run's own verdict holds of them."""
+
+    newest = RUNS[-1]
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+    s = Store(tmp_path)
+    for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+        s.record(s.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
+    s.record(census_art(s), R.CENSUS)
+    as_steady_point(s, tmp_path, newest, "failed", FAILED_VERDICT)
+    art = s.record(s.tree("evidence/v1", R.ART_RATES, whole, {"runs": [newest]}), R.STEADY)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert [x["target"] for x in doc["refused"]] == [art]
+    assert doc["refused"][0]["why"].startswith(f"its own steady-state verdict failed: run {newest} didn't pass `card_")
+    assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
 
 
 def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path):
@@ -2173,10 +2296,8 @@ class Verifier:
                 {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
 
 
-#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest, and a made-up
-#: partition object
+#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest
 PROGRAM = {"schema": "made-up", "program_fn": RMSNORM, "definitions": {"Staged_v1{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
-PARTITION = {"format": "made-up", "program": "p", "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 #: the program's file, spelled as no canonical form is
 PROGRAM_FILE = json.dumps(PROGRAM, indent=1).encode()
 
@@ -2189,6 +2310,8 @@ def _sha512(prefix: bytes, obj: object) -> str:
 #: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
 PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
 UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
+#: a made-up partition object, naming `PROGRAM` as a bound statement's names its Program
+PARTITION = {"format": "made-up", "program": PROGRAM_SHA512, "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 
 
 def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:
@@ -2339,7 +2462,8 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     A partition file that isn't the bound object, or that the circuit binds nothing for, ends the command before any
     verifier process starts; under the provisional cover the verifier takes no partition object, so the bound cover is
     checked and not handed to it. The program is held to nothing the circuit states: the record says which was handed,
-    and only one that names another Definition than `stage.json`'s `word` is refused. An accept on the provisional
+    and only one that names another Definition than `stage.json`'s `word` is refused; but a held partition under
+    `PARTITION_V1` names its Program, and the program is then held to that digest instead. An accept on the provisional
     cover is labelled as holding no Program to the circuit. The circuit is held to `stage.json`'s `circuit_sha512`."""
 
     def measured(*argv: str) -> dict:
@@ -2356,7 +2480,7 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
 
     tree = kept_proof(tmp_path, rule=L.PARTITION_V1)
     program, partition, circuit, stage = (tree / "stage" / n for n in ("program-word.json", "partition.json", "circuit.txt", "stage.json"))
-    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 7)
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 8)
 
     # the program: any descriptor is handed on, since the circuit's `program_sha512` is no digest of it; the record
     # says which, by the digest the verifier computes (annotations in none) and the Definition it names
@@ -2379,7 +2503,15 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     # the bound partition object goes to the verifier; another is refused
     partition.write_text(json.dumps(PARTITION, indent=2))
     doc = measured()
-    assert doc["statement"]["bound"]["held"] == ["partition"] and doc["statement"]["bound"]["withheld"] == []
+    assert doc["statement"]["bound"]["held"] == ["partition", "program"] and doc["statement"]["bound"]["withheld"] == []
+    # under it the program is held to the one the partition object names, not to the stage's word: a bound statement's
+    # population Program names its population, and the verifier refuses any program but the partition's
+    stage.write_text(json.dumps({"word": "Another_v1{N=2}"}))
+    assert measured()["statement"]["bound"]["held"] == ["partition", "program"]
+    stage.unlink()
+    program.write_text(json.dumps(other))
+    refused(r"program-word\.json is not the Program the partition object names: its digest is .*: no verifier was started")
+    program.write_bytes(PROGRAM_FILE)
     assert doc["label"] == f"accepted at --zk, the circuit's partition under {L.PARTITION_V1}"
     assert verifier.calls[-1][verifier.calls[-1].index("--partition") + 1] == "key-partition.json"
     partition.write_text(json.dumps(PARTITION | {"program": "q"}))

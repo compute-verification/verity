@@ -13,7 +13,7 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
   (`InferenceOnlyCheck.Theta`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
-* `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
+* `partition`, the one-stage verifier's partition: `spot-difftest`'s `partition` (`Partition.units`, `strata`,
   the expanded sampling design and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
@@ -94,7 +94,7 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
 ~~~
 
 `flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile unit, step by step:
-`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
+`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `verity/protocols/accounting/pouw/prover/lowering/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
 `$OUT` gets build-K.json (the unit's ANDs, matrix entries, text bytes and its Program descriptor's size) and
@@ -123,7 +123,7 @@ units: `population.py` writes, per N, a population of about N units over a layer
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
 `Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
-`popOk_eq_popOkRanges`: no replay unit and no input gate is built), the one-stage check's call of it
+`popOk_eq_popOkRanges`: no replay block and no input gate is built), the one-stage check's call of it
 (`OneStageZk.popHeld`, compiled in `Spot/OneStageZkStatement.lean`, which imports `Spot.PopOrder` so that it runs from
 the ranges too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every
 unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s

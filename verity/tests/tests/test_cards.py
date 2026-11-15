@@ -424,7 +424,7 @@ def test_the_readings_of_the_tensors_clock() -> None:
             call()
 
 
-SHEET = Path(__file__).resolve().parents[3] / "security/Definitions/Accounting/Sheets/B200.lean"
+SHEET = Path(__file__).resolve().parents[3] / "security/Definitions/Registration/Sheets/B200.lean"
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
 

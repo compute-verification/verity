@@ -61,7 +61,7 @@ SUPPRESSED = "import sys  # noqa: F401"
 MOVE_CHECK = """\
 import importlib.util, subprocess, sys
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 for path in ("tools/move/rename.py", "tools/check/pins.py"):
     spec = importlib.util.spec_from_file_location(Path(path).stem, ROOT / path)
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
@@ -1497,7 +1497,7 @@ def callers_linted(repo) -> Repo:
 
 
 def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_fails_when_it_does_not(callers_linted):
-    """A command run only from benchmarks/, as weights-tie is from verity/protocols/proofs/spot/prover/audit/prove_path.sh: the base's P16 lint, run on
+    """A command run only from benchmarks/, as weights-tie is from benchmarks/prove_path/run.sh: the base's P16 lint, run on
     the change's tree, reads the change's public table, and the gate checks each caller the table gains (a new command's, or
     one moved to another file) as that lint finds a call."""
     callers_linted.commit("adds tie, run from benchmarks", {

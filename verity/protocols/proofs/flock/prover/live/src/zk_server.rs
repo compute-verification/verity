@@ -16,6 +16,23 @@ pub fn refused(what: impl std::fmt::Display) -> String {
     format!("ZK-SERVER-REFUSED: {what}")
 }
 
+/// The old and new prefixes of the ZK server's environment names.
+pub const RETIRED_ENV: [(&str, &str); 2] = [("FC_FIREWALL", "FC_ZK_SERVER"), ("FC_CORE_FIREWALL", "FC_CORE_ZK_SERVER")];
+
+/// The refusal of an environment that sets a ZK server control under its old name (`FC_FIREWALL<rest>`,
+/// `FC_CORE_FIREWALL<rest>`) and not under its new one: nothing reads the old name, so a job written for it would run as if
+/// the control were unset.
+pub fn retired_env<'a>(names: impl IntoIterator<Item = &'a str> + Clone) -> Option<String> {
+    let mut old: Vec<(&str, String)> = names.clone().into_iter()
+        .filter_map(|k| RETIRED_ENV.iter().find_map(|(o, n)| k.strip_prefix(o).map(|rest| (k, format!("{n}{rest}")))))
+        .collect();
+    old.sort_unstable();
+    old.into_iter().find_map(|(k, new)| {
+        (!names.clone().into_iter().any(|n| n == new))
+            .then(|| format!("{k} is set and {new} is not: the ZK server's controls are read under {new}; set {new} instead"))
+    })
+}
+
 /// What a zk_served rep's worker (the device prover, on a thread of its own: [`run_worker`]) asks the ZK server, which serves it
 /// on the session's thread.
 pub enum Ask<T> {
@@ -978,6 +995,16 @@ pub fn cpu_seconds() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_old_control_name_without_its_new_one_is_refused_by_the_new_name() {
+        let why = retired_env(["PATH", "FC_FIREWALL", "FC_FIREWALL_LEAN", "FC_ZK_SERVER_LEAN"]).expect("refused");
+        assert!(why.starts_with("FC_FIREWALL is set and FC_ZK_SERVER is not") && why.ends_with("set FC_ZK_SERVER instead"), "{why}");
+        assert_eq!(retired_env(["FC_FIREWALL", "FC_ZK_SERVER", "FC_ZK_SERVER_TAMPER"]), None);
+        assert_eq!(retired_env(["FC_ZK_SERVER", "FC_HOST_WITNESS"]), None);
+        let why = retired_env(["FC_CORE_FIREWALL"]).expect("refused");
+        assert!(why.starts_with("FC_CORE_FIREWALL is set and FC_CORE_ZK_SERVER is not"), "{why}");
+    }
 
     fn framed(f: impl FnOnce(&mut Framer<'_>)) -> Vec<(Vec<u8>, usize)> {
         let mut out = Vec::new();

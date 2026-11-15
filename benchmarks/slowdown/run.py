@@ -143,10 +143,10 @@ def certified_md(d: dict | None) -> list[str]:
         basis = "given directly (`ingress`)"
     elif d["declared"]:
         basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
-                 f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the network "
+                 f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket execution phase, at the network "
                  f"certifier form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect "
                  f"ingress unit's {fmt(d['incorrect_block_bits'])} bits are excluded, and 0 when every ingress unit is "
-                 f"drawn); line rate, {fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
+                 f"sampled); line rate, {fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
     else:
         basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:declared-ingress)"
     return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
@@ -169,8 +169,8 @@ def operating_md(points: list[operating.Point]) -> list[str]:
 def incorrect_md(reg: Registry, inc: operating.Row) -> list[str]:
     if math.isinf(inc.capacity):
         return ["Incorrect outputs: no SPOT, so nothing detects them.", ""]
-    drawn = "every unit proved" if inc.q >= 1 else f"steps SPOT samples at q = {fmt(inc.q)} a step"
-    head = (f"Incorrect outputs ({drawn}): {fmt(inc.capacity)} bits before the first detection, except with chance "
+    sampled = "every unit proved" if inc.q >= 1 else f"steps SPOT samples at q = {fmt(inc.q)} a step"
+    head = (f"Incorrect outputs ({sampled}): {fmt(inc.capacity)} bits before the first detection, except with chance "
             f"δ = {fmt(inc.delta)}.")
     out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]
     out += [f"| {n} | {fmt(reg[f'exfil.{n}.bits'])} | {fmt(p)} |" for n, p in inc.detect.items()]
@@ -254,7 +254,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
             f"`s_×` {s_times} (`structure.{st.name}`){premise}"),
            "", rests_md(r, terms), "", attack_md, "",
            (f"The envelopes fail, summed over subprotocols and server blocks, with probability at most δ_coin = "
-            f"{fmt(delta.coin)} (the coins' draws) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
+            f"{fmt(delta.coin)} (the coins' flips) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
             f"{prf}), plus Pr[Break] (a forgery of the logged coins, not bounded here); by subprotocol, coin + "
             f"crypto: {by or 'none'}."), "",
            "The lower bound from only the bounds and cuts at least as strong as: "

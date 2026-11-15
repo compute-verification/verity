@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Pouw.CostModel
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Game.Params
@@ -87,7 +87,7 @@ def B4 : Prop :=
       (Set.range fun r =>
         (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-          uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
+          uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 
 /-- **B4 at a covered location** (`B4` with the listed claim `certifier-coverage`): under the same premises and
 `Covered` — every boundary link of `X` certified, `β°_X = 0` — the uncertified term drops, and what the outside does

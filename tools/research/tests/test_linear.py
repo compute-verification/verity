@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 import pytest
 
 from research import linear, slack
-from test_slack import COORD, bells, fake, inbox, registry, routes_dirs, run  # noqa: F401  (Slack's fixtures)
+from test_slack import ACTING_AS, COORD, bells, fake, inbox, registry, routes_dirs, run  # noqa: F401  (Slack's fixtures)
 
 APP = {"LINEAR_CLIENT_ID": "dummy-client", "LINEAR_CLIENT_SECRET": "dummy-secret"}
 KEY = {"LINEAR_API_KEY": "dummy-key"}
@@ -1117,9 +1117,11 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     assert rc == 0 and out.strip() == "INF-1 commented as infra/LINTOOLS" and err == ""
     (_, v, _), = lin.sent("commentCreate")
     assert v["i"] == {"issueId": "I1", "body": "the trace is up", "createAsUser": "infra/LINTOOLS"}
-    rc, _, err = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--worker", "lintools-2")
-    assert rc == 0 and lin.sent("commentCreate")[-1][1]["i"]["createAsUser"] == "infra/lintools-2"
-    assert "a worker's comment rings no one, so @circuits won't hear of it" in err
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
+    monkeypatch.setattr(slack, "self_agent_id", lambda: None)
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--worker", "lintools-2")
+    assert rc == 1 and lin.sent("commentCreate")[-1][1]["i"]["createAsUser"] == "infra/lintools-2"
+    assert "not rung: @circuits. A worker's comment rings no one" in out and "--as LANE --poster BC_ID" in out
     assert bells(fake, infra) == [] and bells(fake, circuits) == []                                     # rings no one
     for argv, says in ((["comment", "INF-1", "x", "--worker", "W", "--as", "infra"], "never with --as"),
                        (["state", "INF-1", "Done", "--worker", "W"], "--worker goes with `comment` alone"),
@@ -1130,6 +1132,47 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "W")
     assert rc == 2 and "INF-1's team DAN has no handle in the registry" in err
     assert len(lin.sent("commentCreate")) == 2 and lin.moved == []
+
+
+def test_a_workers_comment_naming_handles_rings_none_and_says_so_and_how_its_lead_rings_them(
+        fake, registry, routes_dirs, capsys, lin, monkeypatch, tmp_path):
+    """Workers addressed other lanes by @name, read that the comment posted, and nobody heard of it until a lead re-rang
+    by hand: a stderr line was missed.  The comment still posts (a refusal costs re-sends), and the exit is 1."""
+    monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
+    monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
+    monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
+    me, lead = "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac", "bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef"
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{me}")
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
+    lin.subscribers["I1"] = []
+    boxes = {n: inbox(fake, routes_dirs, n) for n in ("infra", "circuits", "proofs")}
+    boxes["compute-accounting"] = inbox(fake, routes_dirs, "compute-accounting", holder=lead, posters=[me])
+    rung = lambda: {n: len(bells(fake, b)) for n, b in boxes.items()}  # noqa: E731
+    text = "@proofs @compute-accounting the trace is up"
+    rc, out, err = run(capsys, "linear", "comment", "INF-1", text, "--worker", "circuits/W", "--dry-run")
+    assert rc == 0 and "not rung: @proofs, @compute-accounting." in out and "posted" not in out
+    assert lin.sent("commentCreate") == []
+    rc, out, err = run(capsys, "linear", "comment", "INF-1", text, "--worker", "circuits/W")
+    assert rc == 1 and out.startswith("INF-1 commented as circuits/W\n") and err == ""
+    assert ("not rung: @proofs, @compute-accounting. A worker's comment rings no one, and this one is posted: don't post it "
+            "again. Return its text to your lead (@circuits) to ring, or have your lead grant this run with `research msg "
+            f"names open --as circuits --poster {me}` and post it with --as circuits. With --quiet-unrung it exits 0.") in out
+    assert rung() == dict.fromkeys(boxes, 0)
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", text, "--worker", "circuits/W", "--quiet-unrung")
+    assert rc == 0 and "not rung: @proofs, @compute-accounting" in out and rung() == dict.fromkeys(boxes, 0)
+    reg = json.loads(registry.read_text())
+    next(h for h in reg["handles"] if h["handle"] == "proofs")["branch_suffixes"] = ["98f5"]
+    registry.write_text(json.dumps(reg))
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: "98f5")                      # a proofs worker's checkout
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", text, "--worker", "W")
+    assert rc == 1 and "your lead (@proofs)" in out and "--as proofs --poster" in out
+    rc, out, err = run(capsys, "linear", "comment", "INF-1", "the trace is up", "--worker", "W")    # names none: unchanged
+    assert rc == 0 and out == "INF-1 commented as infra/W\n" and err == ""
+    assert len(lin.sent("commentCreate")) == 4 and rung() == dict.fromkeys(boxes, 0)
+    monkeypatch.setattr(slack, "acting_as", ACTING_AS)                               # the holder check, for real
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "@proofs @circuits the trace is up", "--as", "compute-accounting")
+    assert rc == 0 and "not rung" not in err and "route @proofs: rang" in err and "route @circuits: rang" in err
+    assert rung() == {"infra": 1, "circuits": 1, "proofs": 1, "compute-accounting": 0}        # a granted poster rings
 
 
 def test_a_worker_signs_as_its_own_lane_on_another_lanes_issue_and_its_branch_suffix_holds_it_to_it(

@@ -24,7 +24,7 @@ inputs = [
     "adapters/vllm/verity_vllm/pipeline/cut_plugin.py",
     "adapters/vllm/verity_vllm/settings.py",
     # `verity.protocols.accounting.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
-    # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
+    # the network certifier makes them, which the server's feed reads in a network certifier trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
     "verity/protocols/accounting/certifier/verifier/__init__.py",
@@ -32,7 +32,9 @@ inputs = [
     # `verity.protocols.accounting.certifier.verifier.pacer` (the probes' tests): the network certifier's clock, which its
     # probes read
     "verity/protocols/accounting/certifier/verifier/pacer.py", "verity/protocols/__init__.py",
-          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py"]
+          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py",
+    # the integration's `errors` re-exports `verity.errors.Refused`
+    "verity/errors.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -47,6 +49,6 @@ tests = [
     "tests/test_tick_corpus.py",
     "tests/test_tick_job.py",
     "tests/test_traffic.py",
-    "tests/test_warden_probes.py",
+    "tests/test_network_certifier_probes.py",
 ]
 paths = ["benchmarks/network_e2e/traces"]

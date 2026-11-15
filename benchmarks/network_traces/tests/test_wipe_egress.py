@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
@@ -26,11 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
-from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 
-SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
+SCAN = NetworkCertifierParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6
@@ -87,7 +87,7 @@ def egress(run: Path, t0: int, t1: int, pad: int = E.PAD_NS) -> dict:
     return E.record(E.read_run(run), t0, t1, pad)
 
 
-def test_a_link_window_carries_the_scan_schedules_cells() -> None:
+def test_a_phase_carries_the_scan_schedules_cells() -> None:
     assert E.capacity_bits(SCAN) == (SCAN.lanes * SCAN.slots + SCAN.lanes) * SCAN.window * SCAN.cell_bytes * 8 \
         == 2_621_440
     assert E.window_ns(SCAN) == 3_200_000_000
@@ -121,9 +121,9 @@ def test_a_window_past_the_sessions_end_or_before_its_origin_isnt_covered(tmp_pa
     late = egress(run, at(10_000), at(18_500))
     assert (late["windows"], late["covered"], late["egress_bits"], late["egress_mib"], late["K"]) == \
         ([2, 7], False, None, None, None)
-    assert late["why"] == [f"the window ends at link-window 7, past the session's {WINDOWS}"]
+    assert late["why"] == [f"the window ends at execution phase 7, past the session's {WINDOWS}"]
     early = egress(run, at(500), at(4_000))
-    assert not early["covered"] and early["why"] == ["the window starts at link-window -1, before the session's origin"]
+    assert not early["covered"] and early["why"] == ["the window starts at execution phase -1, before the session's origin"]
 
 
 def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tmp_path: Path) -> None:

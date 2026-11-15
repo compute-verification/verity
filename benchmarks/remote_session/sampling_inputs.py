@@ -614,7 +614,7 @@ def main() -> None:
     md.append(table(["", "measured unit", "deployed unit (modeled)"],
                     [["ANDs", f"{prices['ands']:,}", f"{prices['deployed_ands']:,.0f}"],
                      ["one fit", f"{prices['fit']:.4f}", f"{prices['fit_deployed']:.4f}"],
-                     ["device floor (firewall)", f"{prices['floor']:.4f}", f"{prices['floor_deployed']:.4f}"]]))
+                     ["device floor (ZK server)", f"{prices['floor']:.4f}", f"{prices['floor_deployed']:.4f}"]]))
 
     out = {"recorded": recorded, "uniform_checks": uniform, "prices": prices, "points": pts, "region": region,
            "sweep": sweep, "serve": serve, "per_coin": {"plans": coin_plans, "at_g1_rate": coin_fixed},

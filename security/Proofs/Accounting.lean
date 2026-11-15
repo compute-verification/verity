@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Pous.Memory
-public import Proofs.Accounting.Device
+public import Proofs.Pous.Accounting.Memory
+public import Proofs.Registration.Device
 public import Proofs.Accounting.Gates
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.Headline
@@ -13,39 +13,40 @@ public import Proofs.Accounting.Gates.ToCircuit
 public import Proofs.Poub.Bandwidth
 public import Proofs.Pouw.ChainWork
 public import Proofs.Accounting.Prob
-public import Proofs.Accounting.Joint
-public import Proofs.Accounting.JointBridge.WorkOfCreditedWords
-public import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
-public import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Proofs.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
-public import Proofs.Accounting.JointBridge.CommOfPooledLeakAccepted
-public import Proofs.Accounting.JointBridge.CommOfPooledLeakAcceptedHonest
-public import Proofs.Accounting.JointLive
-public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
-public import Proofs.Accounting.JointBridge.HonestH200
-public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityMonitoringPeriod
-public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityBlock
+public import Proofs.Compose.Joint
+public import Proofs.Certifier.JointBridge.WorkOfCreditedWords
+public import Proofs.Certifier.JointBridge.SpaceOfPeriodHeld
+public import Proofs.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Proofs.Certifier.JointBridge.CommOfMonitoringPeriodLeakAccepted
+public import Proofs.Certifier.JointBridge.CommOfPooledLeakAccepted
+public import Proofs.Certifier.JointBridge.CommOfPooledLeakAcceptedHonest
+public import Proofs.Compose.JointLive
+public import Proofs.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
+public import Proofs.Certifier.JointBridge.HonestH200
+public import Proofs.Certifier.JointBridge.IntegrityOfIntegrityMonitoringPeriod
+public import Proofs.Certifier.JointBridge.IntegrityOfIntegrityBlock
 public import Proofs.Pouw.Pouw
 public import Proofs.Pouw.PouwWork
 public import Proofs.Pouw.PouwWitness
 public import Proofs.Poub.BandwidthAudit
 public import Proofs.Poub.RateAudit
-public import Proofs.Poub.ReadUnit
-public import Proofs.Poub.ReadUnit.Gates
-public import Proofs.Poub.ReadUnit.Net
-public import Proofs.Poub.ReadUnit.Tie
-public import Proofs.Poub.ReadUnit.Frame
-public import Proofs.Poub.ReadUnit.Sha
-public import Proofs.Poub.ReadUnit.RowSeg
-public import Proofs.Poub.ReadUnit.Leaf
-public import Proofs.Poub.ReadUnit.Select
-public import Proofs.Poub.ReadUnit.Check
-public import Proofs.Poub.ReadUnit.Deployed
-public import Proofs.Poub.ReadUnit.Binding
-public import Proofs.Poub.ReadUnit.BitsPorts
-public import Proofs.Poub.ReadUnit.Witnesses
-public import Proofs.Pouw.BoundReceipt
-public import Proofs.Accounting.Capacity
+public import Proofs.Accounting.ReadUnit
+public import Proofs.Accounting.ReadUnit.Gates
+public import Proofs.Accounting.ReadUnit.Net
+public import Proofs.Accounting.ReadUnit.Tie
+public import Proofs.Accounting.ReadUnit.Frame
+public import Proofs.Accounting.ReadUnit.Sha
+public import Proofs.Accounting.ReadUnit.RowSeg
+public import Proofs.Accounting.ReadUnit.Leaf
+public import Proofs.Accounting.ReadUnit.Select
+public import Proofs.Accounting.ReadUnit.Check
+public import Proofs.Accounting.ReadUnit.Accepts
+public import Proofs.Accounting.ReadUnit.Deployed
+public import Proofs.Accounting.ReadUnit.Binding
+public import Proofs.Accounting.ReadUnit.BitsPorts
+public import Proofs.Accounting.ReadUnit.Witnesses
+public import Proofs.Poub.BoundReceipt
+public import Proofs.Pous.Accounting.Capacity
 public import Proofs.Accounting.RegisteredCircuit
 public import Proofs.Accounting.RegisteredCircuit.Tiles
 public import Proofs.Accounting.RegisteredCircuit.Credit
@@ -53,29 +54,28 @@ public import Proofs.Accounting.RegisteredCircuit.Slack
 public import Proofs.Accounting.RegisteredCircuit.Run
 public import Proofs.Accounting.RegisteredCircuit.Requirement
 public import Proofs.Accounting.RegisteredCircuit.Scheduled
-public import Proofs.Accounting.Remote
+public import Proofs.Poub.Remote
 public import Proofs.Pouw.PerRunTruncation
 public import Proofs.Pouw.PerRunPouw
 public import Proofs.Pouw.PerRunJoint
 public import Proofs.Pouw.PerRunNecessity
 public import Proofs.Pouw.PerRunPriced
 public import Proofs.Pouw.PerRunStop
-public import Proofs.Accounting.RemoteHeld
-public import Proofs.Accounting.RemoteHeld.Meets
-public import Proofs.Accounting.RemoteHeld.OverTime
-public import Proofs.Accounting.RemoteHeld.Draw
-public import Proofs.Accounting.RemoteHeld.DrawMeets
-public import Proofs.Accounting.RemoteHeld.Binding
-public import Proofs.Accounting.RemoteHeld.Sketch
-public import Proofs.Accounting.RemoteHeld.SketchLine
-public import Proofs.Accounting.RemoteHeld.SketchMeets
-public import Proofs.Accounting.RemoteHeld.SketchP2
-public import Proofs.Accounting.RemoteHeld.Line
-public import Proofs.Accounting.RemoteHeld.Subprotocol
+public import Proofs.Poub.RemoteHeld
+public import Proofs.Poub.RemoteHeld.Meets
+public import Proofs.Poub.RemoteHeld.OverTime
+public import Proofs.Poub.RemoteHeld.DrawMeets
+public import Proofs.Poub.RemoteHeld.Binding
+public import Proofs.Poub.RemoteHeld.Sketch
+public import Proofs.Poub.RemoteHeld.SketchLine
+public import Proofs.Poub.RemoteHeld.SketchMeets
+public import Proofs.Poub.RemoteHeld.SketchP2
+public import Proofs.Poub.RemoteHeld.Line
+public import Proofs.Poub.RemoteHeld.Subprotocol
 public import Proofs.Accounting.Requirement
 public import Proofs.Pouw.RequirementPouw
 public import Proofs.Accounting.Sanity
-public import Proofs.Accounting.Stacking
+public import Proofs.Poub.Stacking
 public import Proofs.Accounting.RegisteredCircuit.Witness
 public import Proofs.Accounting.RegisteredCircuit.WitnessPrefill
 public import Proofs.Accounting.Sketch
@@ -109,16 +109,16 @@ public import Proofs.Pouw.TS.Session.Tile.Computes
 public import Proofs.Pouw.TS.TileSound
 public import Proofs.Pouw.TS.PeriodSound
 public import Proofs.Accounting.Actual
-public import Proofs.Pous.Responder
-public import Proofs.Pous.Responder.Latency
+public import Proofs.Pous.Accounting.Responder
+public import Proofs.Pous.Accounting.Responder.Latency
 public import Proofs.Pouw.HMu
 public import Proofs.Pouw.CoinFlow
-public import Proofs.Accounting.Compose
-public import Proofs.Accounting.ComposeMonitoringPeriod
-public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
+public import Proofs.Compose.Compose
+public import Proofs.Compose.ComposeMonitoringPeriod
+public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Accounting.Served
 public import Proofs.Pous.Obligation
-public import Proofs.Accounting.Additive
+public import Proofs.Compose.Additive
 public import Proofs.Slowdown.Coverage
 public import Proofs.Slowdown.ServingBlocks
 public import Proofs.Slowdown.ServingBlocks.Witnesses
@@ -130,12 +130,12 @@ public import Definitions.Pous.P2.Cost
 # The proofs of resource accounting's guarantees
 
 `Accounting.SecurityProofs.X : Accounting.Guarantees.X` for the guarantees stated under
-`Security/Definitions/Accounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
+`security/Definitions/Accounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
 behind them, and the proofs of resource accounting's properties, the bridges that read each subprotocol's per-period
 guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
-locked in `Security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
+locked in `security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
 `Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`InferenceOnly.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
+`Slowdown.SecurityProofs.CapabilityFloor`. `security/lean-audit.json` pins each guarantee's theorem, so a
 change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where the top guarantees are proved
@@ -152,10 +152,10 @@ change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where to look
 
-* The statements and the vocabulary they read: `Security/Definitions/Accounting.lean`, whose module docstring lists the
+* The statements and the vocabulary they read: `security/Definitions/Accounting.lean`, whose module docstring lists the
   top guarantees with one line each.
-* The properties these proofs prove: `Security/Properties/Accounting/`.
-* Which of these statements protocol soundness rests on: `Security/README.md`.
+* The properties these proofs prove: `security/Properties/Accounting/`.
+* Which of these statements protocol soundness rests on: `security/README.md`.
 -/
 
 @[expose] public section

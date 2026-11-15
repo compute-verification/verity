@@ -82,10 +82,11 @@ def B4Under {L : Type u} {E : Type v} [LinearOrder L] [Fintype L] [Fintype E] (f
       (Set.range fun r =>
         (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-          uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
+          uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 
 /-- **B4 at the places a link may end at, on a registered Site.** For every Site `T`, `B4Under` with the Site's places
-as the leaves, its registered links as the table (`Site.placeEnds`, `Site.linkβ`) and its own link ends
+as the leaves, its registered links as the table (`Site.placeEnds`, and the rates `β`, which are the registered ones
+and exist at every link: `Site.RatedOn`, so a Site with a link that has no rate has no statement here) and its own link ends
 (`Site.linkPlace`, each device and memory leaf to its host through the Site's `host?`). It quantifies over no map of
 leaves: the link ends are a function of the Site, which the registration fixes before any coin, so a strategy, which
 is quantified after the Site, cannot choose where its signals count.
@@ -94,9 +95,17 @@ A link's alphabet is counted once at the host, over every leaf `Site.linkPlace` 
 a host is charged whichever device inside reads it, and a signal between two leaves of one host crosses no link and is
 charged nothing, which is right only because the host is inside the prover's boundary: the certifiers and the location
 are asked to hold each leaf with its host, and the host's routing is never trusted. On a Site whose every place is its
-own link end it is `B4` at the Site's places and links (`B4UnderId`). -/
+own link end it is `B4` at the Site's places and links (`B4UnderId`).
+
+**What the rated hypothesis costs.** `B4Under` chooses the location and the certifiers inside, so `β` is asked to be
+the registered rate at every link, and of a registered Site with any unrated link this says nothing. The registration's
+check does not discharge it: it asks a rate only of a link with no `unmediated` (stated beside `Properties.Core.Site`,
+not proved), the network check's `registered` holds only the one certifier link it is named to a rate
+(`Properties.Certifier.Registered.RegisteredLinkRated`), and an unmediated link may be unrated, and then no limit is
+stated across it. -/
 def B4Via : Prop :=
-  ∀ T : Verity.Site, B4Under.{0, 0, w} T.linkPlace T.placeEnds T.linkβ
+  ∀ (T : Verity.Site) (β : Fin T.links.length → ℕ), T.RatedOn β Set.univ →
+    B4Under.{0, 0, w} T.linkPlace T.placeEnds β
 
 /-- **`B4Under` at `f = id` is `B4`**: on every table, with each leaf its own link end, `B4Under`'s premises and
 conclusion are `B4`'s. -/

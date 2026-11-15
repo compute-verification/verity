@@ -3,7 +3,7 @@ the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family
 is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean verity-verify-proof --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
@@ -34,7 +34,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse its session: its
   proof, or, where the prover's self-check stopped it and no proof left, the session for want of one, which the
   negative names (``lean_read_no_proof``; `benchmarks/one_stage/forged_proofs.py` hands Lean the forged proof).
-* **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
+* **Statement form.** Each template is a flat statement (its unit's whole circuit description in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
   which `verify --zk` takes (`ProvedScope.served`): its scope and the sampled audit's knowledge-soundness form are
@@ -68,10 +68,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 sys.setrecursionlimit(100000)
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402

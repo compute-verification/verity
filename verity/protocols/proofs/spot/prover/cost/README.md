@@ -4,7 +4,7 @@ SPOT's cost model for one served workload under Flock: each file plans a workloa
 it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from the measured inputs under `benchmarks/sampling_plan/`
 (`inputs.json`, `glm53_blocks.json`, `served_window_inputs.json`, which `inputs.py` loads, `glm53.py` and
 `served_window.py` read), each with its source and status, measured or
-assumed. `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
+assumed. `benchmarks/prove_path/`'s `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
 
 Each row gives the cost model fitted from proving measurements, the cuts the candidate generator finds, the frontier of
 ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the break-even
@@ -38,35 +38,23 @@ their floor.
   dimension a flag). Every op is a proof block of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
   them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and the row ops (RMSNorm, the s8
   quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
-  chunked or recomputed. The harm is incorrect ANDs, the same whatever the cut, with the incorrect proof blocks (IntegrityPeriod's W)
+  chunked or recomputed. The harm is incorrect ANDs, the same whatever the cut, with the incorrect proof blocks (IntegrityMonitoringPeriod's W)
   beside it. It writes the frontier of expected Flock cost (every serve-time commitment and the replay in it) against
   certified incorrect ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
   20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one execution
-  phase (`IntegrityPeriod`) a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the
+  phase a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the
   `work:1` sampling design. Its tests are in SPOT's prover suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
-  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session sampling
-  `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
+  one lockstep block of 31 decode steps. Each subcircuit is one execution phase of `IntegrityMonitoringPeriod`, one `--zk` session sampling
+  `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityMonitoringPeriodLog) and
   the pooled bound over any period (IntegrityPooled) at δ = 1% and 1e-6. It prices each window's statements and sampled
   proof blocks, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
-- `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
-  6.35 s step, 32 steps a request, on the Definition map (the H200 demo's `plan.py`, in history at `5c095bb4ab70`: every subcircuit a
-  Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
-  (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
-  per execution phase. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
-  weighted at each budget by the least bound that budget certifies for it alone;
-  each point reports `certify`'s `free_compute` and `leak` from its one sample at δ = 1% and 1e-6, the tile stratum's ε
-  (`eps_at`), and the knee. The plan of record is proving within 1% of the execution phase's GPU time, for execution
-  phases of one server block, the least that affords a plan, a week, a month and a year, with its sample a subcircuit
-  and the commits beside it; then M3's uniform 8-unit sample against the block's GPU time, and each Definition's share
-  of the ANDs against the step's GPU time.
-
 - `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
   a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
   blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
@@ -83,7 +71,6 @@ uv run python verity/protocols/proofs/spot/prover/cost/int8_llama.py --out DIR [
 uv run python verity/protocols/proofs/spot/prover/cost/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 uv run python verity/protocols/proofs/spot/prover/cost/transformer.py --out DIR [--model large] [--share S] [--delta D]
 uv run python verity/protocols/proofs/spot/prover/cost/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad] [--card h200]
-uv run python verity/protocols/proofs/spot/prover/cost/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 ```
 
 - `glm53.py`: GLM-5.3 as served (vLLM, H200, TP8, FP8) as the planner's candidates, from its proof-block census
@@ -125,7 +112,7 @@ uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result rec
 
 ## The class circuit's size and its window's commit
 
-`../audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `class_rows.py` counts its rows by what fills them and
+`../audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `benchmarks/prove_path/class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
 census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
@@ -137,6 +124,6 @@ record (`native_host.schedule_stream_bound`), whole and without the attention in
 reads after the seal:
 
 ~~~text
-python verity/protocols/proofs/spot/prover/cost/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
+python benchmarks/prove_path/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
     [--measure-cpu SCRATCH] [--stream adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~

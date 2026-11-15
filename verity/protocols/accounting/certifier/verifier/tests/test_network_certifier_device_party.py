@@ -13,11 +13,12 @@ from verity.party import Finish, Identity, Received, Send, Timer
 from verity.protocols.accounting.certifier.device import device_party as D
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
+from verity.runtime.framing import decode, encode
 
 LINK = "node0/uplink0"
-SCHEDULE = WardenParams(window=4, bucket_ms=10)
+SCHEDULE = NetworkCertifierParams(window=4, bucket_ms=10)
 PARAMS = {"params": asdict(SCHEDULE), "windows": 2, "origin": 1_000}
 IDENTITY = Identity(NC.NETWORK_CERTIFIER, capabilities={"signing-key": object()})
 
@@ -76,7 +77,7 @@ def _encoded(actions) -> list[tuple[str, str]]:
     for a in actions:
         if isinstance(a, Send):
             types = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, a.channel)
-            assert types.decode(types.encode(a.message)) == a.message
+            assert decode(types, encode(types, a.message)) == a.message
             sent.append((a.channel, a.message.type))
     return sent
 

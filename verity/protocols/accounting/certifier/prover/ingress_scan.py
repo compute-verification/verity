@@ -4,11 +4,11 @@ egress view, its outputs beside an ok bit (the generator form); the scan's start
 bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
 Spec.
 
-**The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
+**The row** is `network_certifier_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
-are the network certifier's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes,
+are the network certifier's (`network_certifier.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes,
 `PAD` of none, each on the connection's ordinal q. A connection's ingress is one network-certifier-form id request
-(`id_form.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
+(`id_form.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `network_certifier.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **Fixed slots a timestep.** A timestep is EVERY buckets,
@@ -22,7 +22,7 @@ s + D + 1 > EVERY buckets, so the requests anchored at one boundary are in disti
 request the network certifier admits. Only EVERY and SLOTS are public: whether a slot carries a request, which, its
 arrival bucket and its prompt's length are values. Traffic past the slots is the network certifier's to refuse: a
 connection that finds every lane and queue place taken gets `REFUSED`, and the network certifier certifies no record of
-that window, so the period check refuses it (`warden`'s "Admission").
+that window, so the period check refuses it (`network_certifier`'s "Admission").
 
 **The state** (`layout`) is `now` (u32, the buckets the scan has taken), `phase` (`now` mod EVERY, u32) and `last`
 (u32, the last ordinal admitted), then NR = lanes request slots, each `live`, `done` (its request's `END` is in), `q`,
@@ -102,7 +102,7 @@ them.
 
 **The network certifier it serves** (`Class.serves`): a class takes every run of a network certifier whose B, r, lanes
 and slot stride `every` are its own (B, r, lanes and EVERY; the network certifier's window is whole slot strides,
-`WardenParams`), whose `ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in
+`NetworkCertifierParams`), whose `ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in
 S_{A−1}, or its ingress failed), whose delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most
 admitted + D, where its egress starts), whose `egress_cells` is at most KO + 1 (a response's ids fit `out`) and whose
 egress form is the id form, the egress record's (the cells `io_tie.parse_cell` reads, and no others leave). The
@@ -117,7 +117,7 @@ from one bucket's ingress to a later bucket's gates: each step reads the state t
 arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and each `prog<j>` are a registered read, an input port `Registered.checkPort` accepts:
-`row` the network certifier's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
+`row` the network certifier's signed row t (`network_certifier_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
 the slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as
 the scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a
 hidden-output statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's
@@ -156,7 +156,7 @@ from verity.protocols.accounting.certifier.prover import io_ids as II
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
-from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import END, NetworkCertifierParams
 
 BIT, BYTE = HC.BIT, HC.BYTE
 #: the state's head: `now`, `phase`, `last`
@@ -251,7 +251,7 @@ class Class:
         x -= self.EVERY if x >= self.EVERY else 0
         return (now + self.WITHIN + (self.EVERY - x if x else 0)) % (1 << 32)
 
-    def serves(self, params: WardenParams) -> None:
+    def serves(self, params: NetworkCertifierParams) -> None:
         """ValueError, naming the fix, unless the scan takes every run of the network certifier at `params` (the module
         docstring's "The network certifier it serves")."""
         need = {"cell_bytes": (params.cell_bytes == self.B, f"= B = {self.B}"),
@@ -265,7 +265,7 @@ class Class:
                 "egress": (params.egress == "id", "= id, the egress record's form")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
-            raise ValueError(f"{self} doesn't serve the warden at these parameters: set " + "; ".join(bad))
+            raise ValueError(f"{self} doesn't serve the network certifier at these parameters: set " + "; ".join(bad))
 
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
@@ -616,10 +616,10 @@ def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: in
     of `rows` (S_0, S_1, … as the proof blocks register them), row −1 the empty state's. ValueError, naming the fix,
     unless the execution phase is whole slot strides and `rows` reach its last."""
     if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
-        raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
+        raise ValueError(f"an execution phase starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
                          f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")
     if t0 + buckets - 1 > len(rows):
-        raise ValueError(f"the link-window from {t0} reads state rows up to {t0 + buckets - 2}: register "
+        raise ValueError(f"the execution phase from {t0} reads state rows up to {t0 + buckets - 2}: register "
                          f"{t0 + buckets - 1} rows, not {len(rows)}")
     if any(len(rows[t]) != state_bits(cls) for t in range(max(t0 - 1, 0), t0 + buckets - 1)):
         raise ValueError(f"a state row is {state_bits(cls)} bits")
@@ -893,7 +893,7 @@ def _append(C, cls: Class, sels: Sequence, writes: Sequence, ids: Sequence) -> l
 
 _STEP = ("each block continues the live slot on its ordinal or takes the lowest free slot (live and up to admitted + D "
          "+ floor(n / r) is held) as a new connection above `last`, its data cells are the next frames of the slot's "
-         "warden-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C, its prompt "
+         "network-certifier-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C, its prompt "
          "at most KI ids; a slot whose anchor is now and whose occupancy word occ has bit 0 set reads its entry, "
          "prog<j> for slot j (its read bit 1), and takes its n, at most KO, and KO output ids from it, a slot whose "
          "anchor is now and whose occ has bit 0 clear takes n and outputs zero, and every other entry is ignored; "
@@ -901,7 +901,7 @@ _STEP = ("each block continues the live slot on its ordinal or takes the lowest 
          "switch is computed from the state, the entries and the row")
 IngressScanBucket = _part(
     "IngressScanBucket", STATICS, _sig, _build,
-    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r warden cells of B bytes, a "
+    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network certifier cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' entries prog0 … prog<lanes − 1> (each "
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)

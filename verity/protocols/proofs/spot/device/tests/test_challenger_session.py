@@ -5,9 +5,6 @@ whole run (`Run.run`) at its select (`coins`). A toy window of two templates; an
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -16,10 +13,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
-
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -100,7 +94,7 @@ def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
     key = AC.Ch.ChallengerKey(4, 5, bytes(AC.Ch.PUBLIC_BYTES))
-    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.registration.digest), b"\x5a",
+    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.docket.digest), b"\x5a",
                            AC.lms_verify) == CC.DRAW_FORM
 
 

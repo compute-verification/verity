@@ -3,9 +3,9 @@ module
 public import Definitions.Slowdown.Threads
 
 /-!
-# The inference-only policy over threads: keyed reference circuits
+# The inference-only policy over threads: keyed reference training algorithms
 
-A structural class of reference circuits whose `(d, e)`-threading (`Threading.Threaded`) follows from their wiring and
+A structural class of reference training algorithms whose `(d, e)`-threading (`Threading.Threaded`) follows from their wiring and
 widths alone (`Slowdown.Guarantees.ThreadedOfLayered`).
 
 Each computed value of a thread has a *key*, one of its reads in the same thread, except at the *stops*:
@@ -38,7 +38,7 @@ inductive KeyPath {N : ℕ} (key : Fin N → Option (Fin N)) (stop : Finset (Fin
   | refl (a : Fin N) : KeyPath key stop a a
   | step {a k u : Fin N} : a ∉ stop → key a = some k → KeyPath key stop k u → KeyPath key stop a u
 
-/-- **A keyed reference circuit**: every computed thread value outside the roots and lookups has a key in its thread;
+/-- **A keyed reference training algorithm**: every computed thread value outside the roots and lookups has a key in its thread;
 each root has at least `d` fan-in reads whose key paths are disjoint; at most `e` counted multiplications have an
 activation whose key path reaches any one value, and at most `eLk` one that reaches any one lookup; each lookup reads an
 input of its thread and a column of fresh inputs at least `b` bits wide, disjoint from the columns of its thread's other

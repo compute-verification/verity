@@ -6,14 +6,14 @@ public import Definitions.Accounting.Requirement
 # A registered circuit's requirement, from what the audit credits (trusted)
 
 PoUB credits blocks of its store: the registered store and the memory map beside it (I3), and
-the blocks each pass's receipts cover. The program's theorem is about a registered circuit `W`'s requirement instead: the
-bits `W`'s execution keeps live and the bits it reads (`Definitions/Accounting/Requirement.lean`). These guarantees turn
-one into the other, at each engine step, once the store and the plan hold `W`'s credited blocks (`StoreMatches`,
+the blocks each pass's receipts cover. The program's theorem is about a registered circuit `W`'s requirement instead:
+the bits `W`'s execution keeps live and the bits it reads (`Definitions/Accounting/Requirement.lean`). These guarantees
+turn one into the other, at each engine step, once the store and the plan hold `W`'s credited blocks (`StoreMatches`,
 `PlanMatches`). Other blocks may be resident or planned too (filler, dead or another workload's): they earn `W`
 nothing. The audit credits the live values in complete blocks (`credited`): a KV block later steps fill, or one whose
 append's coin is still out (deferred residency, `Store.Placement.encoded`), is in no record yet. The first four bound
 what it credits, and the last two bound what it leaves out. Their proofs are in
-`Security/Proofs/Accounting/Requirement.lean`.
+`security/Proofs/Accounting/Requirement.lean`.
 
 * `RequirementHeld`: a device holding resident blocks `H` holds all of `W`'s credited live bits but at most a block's
   `b` bits for each resident block outside `H`.

@@ -34,9 +34,9 @@ at the coins it read (`OneStage.checkAt`), one-stage v2's on the verdicts its ow
 (`stage_zk_registered`), so its record keeps R2 (`stage_registered_at`): SPOT's params decode to no other form that
 accepts (the recursive form is refused by name, the two-stage form refuses while its switch is off). It
 reads SPOT's acceptance through the caller's check (`VStar.Recursive.Caller.gate`), whose emptiness gives the caller's
-facts (`Properties.Spot.CallerHeld`): `CallerCheckSound`, which `stage_held` and `acceptInferenceOnly` take, is the
-forward half of `CallerCheckMeans` (`callerCheckSound_of_means`), which `callerCheckMeans` proves from the check's
-steps.
+facts (`Properties.Spot.CallerHeld`): `CallerCheckSound`, which `stage_held` takes, is the forward half of
+`CallerCheckMeans` (`callerCheckSound_of_means`), which `callerCheckMeans` proves from the check's steps, so
+`acceptInferenceOnly` rests on no premise of the caller's (`callerCheckSound`).
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -111,7 +111,7 @@ theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnly
   · rw [ha, hn']
   · rw [hb, hd']
 
-/-- An expansion of the policy's instance, and what it parses to, carry the declared circuit's text. -/
+/-- An expansion of the policy's instance, and what it parses to, carry the registered circuit's text. -/
 theorem expands_program {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
     {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
@@ -170,7 +170,7 @@ theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
       Properties.Composition.digestOf Spot.OneStage.protocol b := rfl
 
-/-- What the policy's check accepts: a record naming the declared circuit, and a verdict of compliance of the check of
+/-- What the policy's check accepts: a record naming the registered circuit, and a verdict of compliance of the check of
 record. -/
 theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
     {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
@@ -470,7 +470,7 @@ theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
   · simp
   · rcases he : Spot.Docket.entryOf rec p.pin with _ | e <;>
       rcases ho : Spot.Docket.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
-    exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
+    all_goals exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
 /-- The pool's codes (`VStar.Recursive.Caller.poolMarks`) add none exactly when the window names the pool's reset, week
 and spent mark and no reset falls where the week's is spent before it. -/
@@ -594,13 +594,12 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     (digestOf_sampled _ _).symm.trans ((digestOf_ok hcS).trans (congrArg some hdS)), hp, hcI, heI, hchkI,
     nS, hpS, hS⟩
 
-/-- `AcceptInferenceOnly`, where the caller's check finds nothing only where the record keeps the caller's facts
-(`CallerCheckSound`). -/
-theorem acceptInferenceOnly (hm : CallerCheckSound) : AcceptInferenceOnly := by
+/-- `AcceptInferenceOnly`, on the proved caller's check (`callerCheckSound`). -/
+theorem acceptInferenceOnly : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, ⟨pub', prof', hchk⟩, nS, hpS, hS⟩ := remote_accept h
   exact ⟨kI, kW, kS, InferenceOnlyCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,
-    stage_held hm hpS hS⟩
+    stage_held callerCheckSound hpS hS⟩
 
 /-- **`AcceptInferenceOnly`'s nontrivial lemma**: its conclusion fails at no cases at all, `ev = []`, which a check that
 accepts every input accepts: they are not the three subprotocols' cases. -/

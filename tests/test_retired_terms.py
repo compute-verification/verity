@@ -138,7 +138,7 @@ DOC_TERMS = {
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
-    "integrity period": "execution phase (`IntegrityPeriod` stays in backticks until renamed)",
+    "integrity period": "execution phase",
     "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
@@ -217,7 +217,7 @@ HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
-    "N, the window's proof units": "a public item's reason in A5's Spec (`verity/protocols/proofs/spot/prover/audit/window_audit.py`): `Spec.digest` hashes it",
+    "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
     "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/accounting/certifier/prover/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
@@ -582,7 +582,8 @@ CERTIFIER_SPEC_REASONS = (
     "the warden's domain (`warden_rows.domain`), which binds the session, the ",
     "the warden's salted root over the window's bucket rows, its signed head's",
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
-    "the round's provenance: the group's link-windows of the warden's run",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
 )
 #: What keeps it, as the Glossary's row says: each kind's spellings and what ends it. A site is the first kind's that
 #: spells it: the row's own line first, and the quoted word alone after every spelling that holds it but the trace
@@ -765,9 +766,9 @@ def test_the_scan_reads_the_incorrect_ands():
 
 
 def test_the_doc_scan_reads_the_trace_and_phase_terms():
-    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityPeriod` stay."""
+    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityMonitoringPeriod` stay."""
     docs = {"a.md": "An integrity period, two integrity\nperiods and an execution-transcript; a proof's transcript, "
-                    "`IntegrityPeriod`.\n"}
+                    "`IntegrityMonitoringPeriod`.\n"}
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "integrity period"), ("a.md", 1, "integrity periods"), ("a.md", 2, "execution-transcript")]
 

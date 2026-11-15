@@ -86,14 +86,24 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving import (
+    H1_PROGRAM as PROGRAM,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    H1_SCHEME as SCHEME,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    GateSessions,
     drawn_reads,
     drawn_units,
-    GateSessions,
-    H1_PROGRAM as PROGRAM,
-    H1_SCHEME as SCHEME,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     window_units as units,
 )
+
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
@@ -292,18 +302,20 @@ class H1Windows:
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
                  draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter, receipts: bool = False, tie: Any = None) -> None:
-        from verity_vllm.protocols import pouw
-        from verity.protocols.accounting.pouw.prover.serving import h1_units
-        from verity_vllm.protocols.pouw import h1_hooks as PHK
-        from verity.protocols.accounting.pouw.prover.serving import Writer, kept_bytes
         from verity.protocols.accounting.pouw.prover.serving import (
+            Writer,
             declared_layout,
+            h1_units,
+            kept_bytes,
             register_weights,
             served_declared,
             unit_of,
             weights_of,
             write_program,
         )
+
+        from verity_vllm.protocols import pouw
+        from verity_vllm.protocols.pouw import h1_hooks as PHK
 
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
@@ -324,15 +336,15 @@ class H1Windows:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
         modules = {w: f"linear {w}" for w in range(len(self.layers))} | pouw._named(model, self.layers)
-        print(f"[serve-h1] declaring the window Program: {self.steps} steps of {len(shapes)} linears at T {self.rows}, "
-              f"{self.steps * len(shapes)} calls, {units(shapes, self.rows, self.steps)} tile units", flush=True)
+        logger.info("[serve-h1] declaring the window Program: %d steps of %d linears at T %d, %d calls, %d tile units",
+                    self.steps, len(shapes), self.rows, self.steps * len(shapes), units(shapes, self.rows, self.steps))
         t0 = time.perf_counter()
         self.program = served_declared(shapes, modules, self.rows, self.steps, unit=unit)
         t1 = time.perf_counter()
         self.digest = write_program(self.program, declared_layout(shapes, modules, self.rows, self.steps),
                                     self.out / "h1", rows=self.rows, steps=self.steps)
-        print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
-              f"{time.perf_counter() - t1:.1f} s", flush=True)
+        logger.info("[serve-h1] declared in %.1f s, its digest %s and %s in %.1f s", t1 - t0, self.digest[:16], PROGRAM,
+                    time.perf_counter() - t1)
         registered = None
         if model_key is not None:
             key, registered = model_key(self.digest)
@@ -362,9 +374,9 @@ class H1Windows:
         release's verdicts) and window 0's reserve ended (`GateSessions.settled`, made here unless made ahead already);
         ``readied``, with where each part's time went (``seconds``)."""
         from verity.protocols.accounting.pouw.prover.serving import ready_verifier
+        from verity_torch.pouw import Receipts, h1_tables_available
+
         from verity_vllm.protocols.pouw import h1_hooks as PHK
-        from verity.protocols.accounting.pouw.prover.serving import Receipts
-        from verity.protocols.accounting.pouw.prover.serving import h1_tables_available
 
         t0 = self.clock()
         PHK.weight_roots(self.layers)
@@ -385,10 +397,10 @@ class H1Windows:
         self.readied = {"tables": tables, "kernels": kernels, "session": session,
                         "seconds": {"roots": round(t1 - t0, 4), "tables": round(t2 - t1, 4), "kernels": round(t3 - t2, 4),
                                     "lean": round(t4 - t3, 4), "reserve": round(t5 - t4, 4)}}
-        print(f"[serve-h1] ready: weight roots in {t1 - t0:.1f} s, the call tables' GPU hasher {tables} in {t2 - t1:.1f} s, "
-              f"{kernels} z/y kernels compiled in {t3 - t2:.1f} s, the Lean verifier built in {t4 - t3:.1f} s"
-              + ("" if self.sessions is None else f", window 0's session {session or 'not reserved (its open reserves)'}"
-                                                  f" after {t5 - t4:.1f} s"), flush=True)
+        logger.info("[serve-h1] ready: weight roots in %.1f s, the call tables' GPU hasher %s in %.1f s, %s z/y kernels "
+                    "compiled in %.1f s, the Lean verifier built in %.1f s%s", t1 - t0, tables, t2 - t1, kernels, t3 - t2,
+                    t4 - t3, "" if self.sessions is None
+                    else f", window 0's session {session or 'not reserved (its open reserves)'} after {t5 - t4:.1f} s")
         return self.readied
 
     def describe(self) -> dict[str, Any]:
@@ -412,10 +424,12 @@ class H1Windows:
         """Window ``window``'s H1, on the open Commit period: its session (with ``sessions``, `GateSessions.take`), the
         tap on the committer, a fresh `Served`, and the option installed with the session's coins, else the epoch
         ``window``'s."""
+        from verity.protocols.accounting.pouw.prover.serving import Served
+        from verity_torch.pouw import Receipts
+
         from verity_vllm import protocols as PO
         from verity_vllm.acquire import h1_commit as HC
         from verity_vllm.protocols import pouw
-        from verity.protocols.accounting.pouw.prover.serving import Receipts, Served
 
         if self.comp is not None:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s H1 is open")
@@ -464,6 +478,7 @@ class H1Windows:
         """Window ``window``'s prover state once written (`pouw_h1_prover.Writer.wait`, which closes its directory, so it is
         waited for once, by its tie's command or else its release): its calls, bytes and waits. OSError as the writer's."""
         if window not in self._kept:
+            assert self.writer is not None, "a window's prover state is kept only with a prover directory"
             try:
                 self._kept[window] = self.writer.wait(self.prover_of(window))
             except OSError as e:
@@ -537,6 +552,7 @@ class H1Windows:
                 if self.draws is not None and not unserved:
                     drawn = self.drawn(window, run, held, error)
                 if held:
+                    assert self.sessions is not None, "a held session is a gate session"
                     end = self.sessions.ended(held["session"])
                     if isinstance(held.get("draw"), dict):
                         held["draw"]["end"] = self.sessions.ended(held["draw"]["session"])
@@ -585,9 +601,10 @@ class H1Windows:
     def layout(self) -> dict[str, Any]:
         """The window Program's layout as core's credit reads it from its descriptor (`credit.layout_of`), once."""
         if self._layout is None:
-            from verity.protocols.accounting.pouw.prover.serving import layout_of
-
-            from verity.protocols.accounting.pouw.prover.serving import descriptor
+            from verity.protocols.accounting.pouw.prover.serving import (
+                descriptor,
+                layout_of,
+            )
 
             layout, why = layout_of(descriptor(self.program))
             if why is not None:
@@ -599,13 +616,13 @@ class H1Windows:
         """The K a window is sampled at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
-        ValueError when the session joined no period or the ledger commits it no K."""
-        from verity.protocols.accounting.pouw.prover.serving import committed_k
-
-        from verity.protocols.accounting.pouw.prover.serving import draw_k
+        ValueError when the session joined no period, the ledger commits it no K, or its window commits no gate
+        session's open root."""
+        from verity.protocols.accounting.pouw.prover.serving import committed_k, draw_k
 
         if held is None:
             return draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
+        assert self.sessions is not None, "a held session is a gate session"
         period = held.get("period")
         if period is None:
             raise ValueError(f"session {held.get('session')} joined no period, so no period-open committed the K its "
@@ -619,7 +636,10 @@ class H1Windows:
                 raise ValueError(f"{why[0]}: {why[1]}")
             self._period_k[period] = k
         session = run.commits.get("session")                # None: no gate session carried the run's coins
-        return self._period_k[period], session.get("root") if session else None, f"period {period}'s open"
+        if session is None or session.get("root") is None:
+            raise ValueError(f"session {held.get('session')}'s window commits no gate session's open root, the stream its "
+                             "draw is taken on, so no draw can be formed")
+        return self._period_k[period], session["root"], f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:
@@ -630,9 +650,9 @@ class H1Windows:
 
         d, c = run.details, run.commits
         live_dump = None
-        if self.prover is not None and run.served is not None and run.served.live and d.get("steps_served"):
+        if (prover := self.prover_of(window)) is not None and run.served is not None and run.served.live and d.get("steps_served"):
             try:
-                live_dump = dump_live(run, self.prover_of(window) / "live")
+                live_dump = dump_live(run, prover / "live")
             except (KeyError, ValueError, OSError) as e:
                 live_dump = {"error": f"{type(e).__name__}: {e}"[:300]}
         roots1, gate, rc = d.get("roots1"), d.get("gate", {}), getattr(run.served, "receipts", None) if self.receipts else None
@@ -655,7 +675,7 @@ class H1Windows:
         if self.tie is not None:
             self.tie.stop()
         if self.closer is not None:
-            print(f"[serve-h1] stopping: {self.releasing} windows still releasing", flush=True)
+            logger.info("[serve-h1] stopping: %d windows still releasing", self.releasing)
             self.closer.shutdown(wait=True)
         if self.sessions is not None:
             self.sessions.drain()

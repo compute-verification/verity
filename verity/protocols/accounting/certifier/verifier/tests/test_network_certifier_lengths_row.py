@@ -1,4 +1,4 @@
-"""The lengths row's proof block (`lengths_row`): its request row is the arrival slots' layout, its bytes are the
+"""The lengths row's proof block (`lengths_row`): its request row is K slots as a struct of arrays, its bytes are the
 canonical id request's whatever the cell size, the Boolean Definition computes its reference's outputs bit for bit on
 rows of its form and on rows that are not, and on the network certifier's own releases, signed and registered
 (`connection_rows`), the prover's blocks return the signed lengths rows, which the verifier's registered reads accept,
@@ -17,12 +17,11 @@ import pytest
 import signers
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, PLAIN, traffic
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import run
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import run
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.prover import lengths_row as LR
@@ -101,14 +100,11 @@ def test_the_block_reads_two_rows_and_returns_the_lengths_row():
         assert [t.leaves for t in out.fields] == [16, 16, 96 * sh.K] and out.width_set() == frozenset({1})
 
 
-def test_the_request_row_is_the_arrival_slots_layout():
-    """The request row's fields are `replay_chain`'s K arrival slots without a cap bit (valid, id, P, O as a struct of
-    arrays, LW the bit length of the longest request), each element least significant bit first, zero-padded to whole
-    words."""
+def test_the_request_row_is_k_slots_as_a_struct_of_arrays():
+    """The request row's fields are K slots without a cap bit (valid, id, P, O as a struct of arrays, LW the bit length
+    of the longest request), each element least significant bit first, zero-padded to whole words."""
     sh = LR.Shape(3, 512, 7, 10)
-    chain = RC.Shape(R=1, W=1, A=1, L=1023, NB=1, IW=7, Q=1, D=1, P=1, K=3)
-    assert RC.widths(chain).LW == sh.LW
-    assert [(name.removeprefix("a_"), n, w) for name, n, w in RC.arrival_fields(chain)] == LR.request_fields(sh)
+    assert LR.request_fields(sh) == [("valid", 3, 1), ("id", 3, 7), ("P", 3, 10), ("O", 3, 10)]
     slots = [Request(1, 5, 700, 3), Request(0, 127, 1023, 1023), Request(1, 0, 1, 0)]
     bits = LR.request_row(sh, slots)
     assert len(bits) == sh.request_bits == 96
@@ -244,10 +240,10 @@ def signed(tmp_path_factory):
     registration read as the verifier reads it: by window, the opening, the head and domains the verifier derived,
     and the compute side's request rows, one a slot stride."""
     _, arrivals, answers = traffic()
-    warden, _, _ = run(answers, arrivals, params=LEN, windows=3)
+    network_certifier, _, _ = run(answers, arrivals, params=LEN, windows=3)
     issuer = Issuer(signers.signer(tmp_path_factory.mktemp("signer")), signers.SESSION)
     out = {}
-    for window, strides in dict(warden.lengths).items():
+    for window, strides in dict(network_certifier.lengths).items():
         opened, cert = CR.attest(issuer, LINK, window, strides, LEN, None)
         head, domains = CR.check_registration(CR.registration(opened.head, cert, LEN), issuer.signer.public_key(),
                                               signers.SESSION, LEN, LINK, window)
@@ -260,7 +256,7 @@ def signed(tmp_path_factory):
 
 def _refusal(opened, head, domains, table: str, rows, positions=range(T), reads_from=0) -> str | None:
     """The verifier's registered read of `rows` as the rows of `table` at `positions`, each under the network
-    certifier's salt and path for its position (`warden_rows.refusal` on `connection_rows.port`): None, or why not."""
+    certifier's salt and path for its position (`network_certifier_rows.refusal` on `connection_rows.port`): None, or why not."""
     reads = [LR.reads(opened.table(table), p) for p in positions]
     entry = {"value": reads[0].entry["value"], "positions": list(positions),
              "paths": [r.entry["paths"][0] for r in reads]}

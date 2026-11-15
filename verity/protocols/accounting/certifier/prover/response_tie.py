@@ -91,7 +91,7 @@ from n by the end row's class.
 
 Every array is of bits, least significant first. O is a class's size of ids released, a power of two from
 `content_rows.MIN_SIZE` to `content_rows.most_ids`, so the outputs fit the widest public size class (16 + 32·(O + 1)
-bits of at most `UNIT_CLASS_MAX`): `content_rows.check_ids` is that rule, which the shape is held to where it is
+bits of at most `SIZE_CLASS_MAX`): `content_rows.check_ids` is that rule, which the shape is held to where it is
 built. A shape is taken from a schedule only where the schedule can be tied (`tied`, by `content_rows.can_be_tied`:
 each P listed once, one O for every class, a response limit), and it is that one O's. The two forms are two
 Definitions, each with the one static O and no optional port: a statement's every port is a row each of its
@@ -187,7 +187,7 @@ class Shape:
         return {k: getattr(self, k) for k in STATICS}
 
 
-def tied(params: CT.WardenParams, stop: bool) -> Shape:
+def tied(params: CT.NetworkCertifierParams, stop: bool) -> Shape:
     """The shape of the proof block of a schedule's tied class, a stop class or a no-stop class: its row is the one
     O every class of the schedule has. ValueError for a schedule that can't be tied, saying what keeps it from it
     (`content_rows.untied`): none of its classes is tied, and no shape is taken from it."""

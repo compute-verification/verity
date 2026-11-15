@@ -129,18 +129,18 @@ private def doneLine (id : Nat) (v : Verdict) : String :=
   "{\"accepted\":" ++ (if v == .accept then "true" else "false") ++ ",\"done\":" ++ toString id ++ "}"
 
 /-- Window `w`'s verdict on its frames `bodies` in session `s`, with the number of openings it read. -/
-def windowCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Array (Nat × Nat))
+def windowCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (sampled : Array (Nat × Nat))
     (bodies : Array ByteArray) : Verdict × Nat :=
   let openings := Wire.openingsOf bodies
-  (checkWindowChunked chunk s.reg s.digest s.appends w drawn openings, openings.size)
+  (checkWindowChunked chunk s.reg s.digest s.appends w sampled openings, openings.size)
 
 /-- Window t's openings checked on a thread of its own, `emit`ting the done line once its verdict is known. -/
-def spawnCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Array (Nat × Nat))
+def spawnCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (sampled : Array (Nat × Nat))
     (bodies : Array ByteArray) (id : Nat) (emit : String → IO Unit) :
     BaseIO (Task (Except IO.Error (Verdict × Nat × Nat))) :=
   IO.asTask (prio := .dedicated) do
     let t0 ← IO.monoNanosNow
-    let (v, n) := windowCheck chunk s w drawn bodies
+    let (v, n) := windowCheck chunk s w sampled bodies
     emit (doneLine id v)
     let t1 ← IO.monoNanosNow
     return (v, n, t1 - t0)
@@ -149,7 +149,8 @@ private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
 /-- Session `s`, sampled `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
-or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it. -/
+or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it.
+-/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
   if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
   let set (i : Nat) : Except String Session.State :=
@@ -297,8 +298,8 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let bodies := ((srv.bodies.find? (·.1 == key)).map (·.2)).getD #[]
     let srv := { srv with bodies := srv.bodies.filter (·.1 != key) }
     let some s := srv.registry.running node k | pure (refusedJ, srv)
-    let some (w, drawn) := s.awaiting t | pure (refusedJ, srv)
-    let task ← spawnCheck srv.chunk s w drawn bodies id emit
+    let some (w, sampled) := s.awaiting t | pure (refusedJ, srv)
+    let task ← spawnCheck srv.chunk s w sampled bodies id emit
     pure (Json.mkObj [("spawned", .bool true)], { srv with checks := srv.checks.push { id, node, session := k, t, task } })
   | "settle" =>
     let id ← ofV (nat req "id")

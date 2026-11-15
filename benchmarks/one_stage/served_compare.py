@@ -1,4 +1,4 @@
-"""The served compare: a tied Pearl+ serve dir held to the row of record, on the CPU, once Pearl+'s piece wrote W.
+"""The served compare: a tied Pearl+ serve dir held to the workload of record, on the CPU, once Pearl+'s piece wrote W.
 
     served_compare.py --serve D --row ROW --class S,P,O --pearl-tables SCHEME --pred PRED --of-record PROGRAM:MANIFEST
         --window-record W --out DIR [--revision REV]
@@ -102,7 +102,7 @@ def lowered_facts(serve: Mapping[str, Any], row: str, config: str, cls: str, sch
     each as `phi` compares it, and the facts of the window circuit each lowers at class `cls` cut at Pearl+'s linears under
     `scheme` -> (the φ fields, the row's own revision among them, the served circuit's facts, the row's)."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
-    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
+    import prove_path as PP
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.pipeline.workload_file import workload_file
     from verity_vllm.program.predict import window_circuit as WC
@@ -215,7 +215,7 @@ def said(name: str, v: Mapping[str, Any], a: argparse.Namespace) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--serve", type=Path, required=True, help="the serve dir, holding its serve.json")
-    ap.add_argument("--row", required=True, help="the row of record's id (its workload file's name)")
+    ap.add_argument("--row", required=True, help="the workload of record's id (its workload file's name)")
     ap.add_argument("--class", dest="cls", required=True, help="the window class, SLOTS,PROMPT,OUTPUTS")
     ap.add_argument("--pearl-tables", required=True, help="Pearl+'s scheme, whose tables the circuit is cut at")
     ap.add_argument("--pred", type=Path, required=True, help="predict row's Build: its predicted.json and its copy of the checkpoint config")

@@ -14,7 +14,7 @@ set_option Elab.async false
 
 `flock_headline_exec` (`Integrate/Headline.lean`) for the statement main's prover writes
 (`hiddenOutputs = true`, `Stmt.setupHidden`). `flock_headline_exec_hidden` instantiates `flock_headline_hidden` at the
-production program `Placed.keyProg c hU n`, its returned outputs' bits for the program's outputs (`Layout.outsOf`), and
+proving program `Placed.keyProg c hU n`, its returned outputs' bits for the program's outputs (`Layout.outsOf`), and
 the one-table plan of the session's inputs (`planAtH`), with:
 * `pp := ppH`, `hConst := hConstH`, `hZero := hZeroH` (`Sites.lean`);
 * `lay := keyLayoutH` (`layAtH`) and `rs := keyRowsH` (`rsAtH`) at row widths `16 · words` (`KeyH.lean`), each row under
@@ -131,9 +131,9 @@ checks each output row holds its port's words, `ht`) and whose public file loads
 the JSON `dj S` (`x₀` one sample it sets up with `Stmt.setupHidden`). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
 session be the live-coin part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`,
-verity-verify-proof accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated
+verity-verify-proof accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated
 prover's committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with
-probability at most `miss(K) + ε_ks + δ_link`.
+probability at most `miss(K) + ε_ks + ε_bind`.
 
 Its hypotheses, past the session's inputs, are `flock_headline_exec`'s at the hidden tables:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: the plain headline's, or its rows each a

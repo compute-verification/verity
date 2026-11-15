@@ -27,7 +27,7 @@ finishes with `report` (private: what it signs is witness), refused by name, and
 leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of labels (`schema`);
 parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW` frames at a time,
 letting the prover take each window before the next, so neither side holds more of it than that. `PROTOCOL` declares
-its one role, and `start` how a deployment starts it on the auditor's host: first, in its state directory, its key,
+its one role, and `start` how a deployment starts it on the auditor's device: first, in its state directory, its key,
 refused unless the configuration pins it for the wipe (`onsite.signer`), then its session log and the wipe's request
 (`wipe_parties.deployed_request`).
 """
@@ -284,15 +284,15 @@ class MemoryChallengerParty:
         self._then: Callable[[], list[Any]] | None = None
 
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
-        caps = identity.capabilities
-        self.signer, self.log = caps["signer"], caps["log"]
+        given = identity.capabilities
+        self.signer, self.log = given["signer"], given["log"]
         if identity.clock not in (None, sw.CLOCK):
             return [Finish({"ended": None, "signed": None, "detail": (
                 f"the wipe's header names {sw.CLOCK}, and this challenger's clock source reads {identity.clock}: the run "
                 f"that starts it gives it sources={{{CHALLENGER!r}: {{'clock': RealClock(streamed_wipe.raw_clock_ns, "
                 "streamed_wipe.CLOCK)}}")}, "clock", kind="private")]
         try:
-            self.request, self.wp = dict(params), WP.params_of(params, caps.get("reads", WP.READS))
+            self.request, self.wp = dict(params), WP.params_of(params, given.get("reads", WP.READS))
         except ValueError:
             return self._finish("schema")
         self.phase = Phase("Coins")
@@ -386,7 +386,7 @@ class MemoryChallengerParty:
 
 
 def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
-    """The challenger's start on the auditor's host (`ProtocolDef.starts`, module docstring)."""
+    """The challenger's start on the auditor's device (`ProtocolDef.starts`, module docstring)."""
     signer = onsite.signer(state, onsite.pin(configuration, CHALLENGER, COMPONENT))
     if not (state / "sessions").exists():
         mc.SessionLog.create(state / "sessions")

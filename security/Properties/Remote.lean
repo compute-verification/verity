@@ -34,10 +34,9 @@ the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at th
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
   (`InferenceOnly.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
   bit wide, its bit-level expansion a `(ΓW, ⌊αΓW⌋)`-partition when they are at most `W` bits wide, with no assumption
-  that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program the form its params
-  name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
-  statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
-  registered circuit the policy checked and the program SPOT verifies have one SHA-512.
+  that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program
+  one-stage v2's verifier verifies the sessions against (`StageHeld`; SPOT refuses the recursive form by name). With one
+  digest for the two records, the registered circuit the policy checked and the program SPOT verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Slowdown.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other. `Slowdown.Guarantees.SlowdownRemote` reads the count
   verdict instead, `InferenceOnly.CompliesAtMost c k n d`, which a published `complies` of the count gives
@@ -135,7 +134,9 @@ verifier (the v1 part of its params, `Spot.OneStageZk.Params.base`), which it ve
 (`Properties.Spot.R2`). The record keeps the caller's facts against that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
 prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
 window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
-verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. -/
+verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. It has no
+clause for the two-stage form, which the verifier refuses while `SecondStage.FORM` is false; switching it on needs the
+two-stage clause first. -/
 def StageHeld (k : Case) : Prop :=
   ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧

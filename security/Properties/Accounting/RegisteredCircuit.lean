@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Accounting.Guarantees.RegisteredCircuit
-public import Properties.Accounting.Remote.Schedule
+public import Properties.Poub.Remote.Schedule
 
 /-!
-# A declared circuit's space and bandwidth at the committed steering cap
+# A registered circuit's space and bandwidth at the committed steering cap
 
 `Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
@@ -13,7 +13,7 @@ pass's plan) with that premise replaced by what the verifier checks: the schedul
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
 `audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
 which the spec doesn't; its theorem, `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
-`Security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
+`security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.Poub.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
 layout, `Properties.Poub.scheduleLayoutGap_code`).
 -/
@@ -26,7 +26,7 @@ open Accounting
 open Pous (pr)
 open scoped ENNReal
 
-/-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
+/-- **A registered circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
 
 `G` (`Accounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
 the bound as it states them) at the verifier's layout, with its premise `SteeredLayout layout steer` replaced by the

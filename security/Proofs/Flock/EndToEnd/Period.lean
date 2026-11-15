@@ -24,11 +24,11 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Proof of the integrity audit over a period, per sampling block and pooled
 
-* `Flock.SecurityProofs.IntegrityPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
+* `Flock.SecurityProofs.IntegrityMonitoringPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
   `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_incorrect_le`), with its
   knowledge term at the worst registration.
 * `Flock.SecurityProofs.IntegrityPooled`: a run in which every sampling block is accepted and the incorrect proof blocks total at
-  least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + δ_link,w)` by
+  least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + ε_bind,w)` by
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
   `monitoringPeriod_monitoringPeriod`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
@@ -154,7 +154,7 @@ open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
 /-- **The integrity audit over a period.** -/
-theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
+theorem IntegrityMonitoringPeriod : Flock.Guarantees.IntegrityMonitoringPeriod := by
   intro W T hA3 s hT hL
   have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
     monitoringPeriodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
@@ -166,9 +166,9 @@ theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
   simpa [Period.run] using h
 
 /-- **The integrity audit over a period, at `δ`.** -/
-theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
+theorem IntegrityMonitoringPeriodLog : Flock.Guarantees.IntegrityMonitoringPeriodLog := by
   intro W T q δ hq hδ hqt hK hA3 s hT hL
-  refine (IntegrityPeriod W T hA3 s hT hL).trans (Finset.sum_le_sum fun t ht => ?_)
+  refine (IntegrityMonitoringPeriod W T hA3 s hT hL).trans (Finset.sum_le_sum fun t ht => ?_)
   have ht' := Finset.mem_range.1 ht
   gcongr
   exact (W t).miss_le hq hδ (hqt t ht') (hK t ht')
@@ -192,14 +192,14 @@ theorem IntegrityPooled : Flock.Guarantees.IntegrityPooled := by
     (fun t τ hτ => (W t).accepted_drawnIncorrect_le τ hτ.2) T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
   have hB := monitoringPeriod_monitoringPeriod (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.sampledWrong)
-    WindowRec.incorrect (fun t τ => t < T ∧ (W t).CR τ) x hx
+    SamplingBlockRec.incorrect (fun t τ => t < T ∧ (W t).CR τ) x hx
     (fun t τ hτ => ⟨((W t).incorrectSet τ).card, fun _ => rfl,
       ((W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) T 0 s M hgood
   have hxM : x ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
-  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ))
+  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ))
         (Period.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
-          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.incorrect).sum)) (Period.run W T s) := by
+          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum)) (Period.run W T s) := by
         refine value_mono (fun l hl => ?_) _
         by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
@@ -207,7 +207,7 @@ theorem IntegrityPooled : Flock.Guarantees.IntegrityPooled := by
         · push_neg at hd
           exact Or.inr ⟨hd, Nat.ceil_le.2 hl.2⟩
     _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (Period.run W T s) +
-          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.incorrect).sum) (Period.run W T s) :=
+          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum) (Period.run W T s) :=
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, ((W t).ks + (W t).link)) + x ^ M := by
         gcongr

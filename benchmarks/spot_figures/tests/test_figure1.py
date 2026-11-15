@@ -10,7 +10,7 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.proofs.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
@@ -104,7 +104,7 @@ def test_a_line_at_zero_is_sampled_on_the_floor_and_captioned_and_coincident_lin
     assert _lines([refs[0] | {"style": "solid"}], "world year", 1.0) == [(100.0, "a", "solid")]
     assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(
-        " At 0, drawn along the axis's floor: zero.")
+        " At 0, sampled along the axis's floor: zero.")
     assert _zeros(refs, "world year") == [("zero", "dashed")] and _zeros(refs, "world week") == [("zero", "dashed")]
 
 
@@ -194,7 +194,7 @@ def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     vertical = cards.load("proof_overhead", "GLM-5.3")["value"]["model_overhead"]
     xs = [1.0, vertical, 1e14]
     card = envelope("infiltration", "GLM-5.3", {
-        "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Deferred interiors at a layer.",
+        "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Interior commitments at a layer.",
         "consumer": None, "series": [{"scope": s, "budget": b, "x": xs, "y": [1e3, 1e9, 1e15]}
                                      for s in SCOPES for b in (0.001, 0.01, 0.1)]})
     cards.write(card)
@@ -210,10 +210,10 @@ def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     head = next(s for s in out["panels"]["exfiltration"]["series"]
                 if (s["scope"], s["budget"], s["design"]) == ("world year", f.RATIO_BUDGET, "two-stage"))
     ratio = 1e9 / head["y"][head["x"].index(vertical)]
-    assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
+    assert caption.startswith("Interior commitments at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
-        " At 0, drawn along the axis's floor: no advice.")
+        " At 0, sampled along the axis's floor: no advice.")
     assert "no advice" not in out["scopes"]["world year"]["captions"]["exfiltration"]
     assert {"label": "a steering vector", "input": "references", "value": 98304.0, "main": True,
             "style": "dashed"} in inf["references"]
@@ -248,7 +248,7 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
 def test_a_one_stage_or_request_point_is_what_lean_certifies(world, monkeypatch):
     """Each one-stage and request-level point's design goes to Lean's checker in one run: a leak point becomes the bits
     Lean certifies, a point at the trivial bound has no design, and a design Lean refuses is an error.  Lean's answers
-    are stubbed; the sampled-proofs suite runs the checker on the planner's designs (`test_plancheck.py`)."""
+    are stubbed; the SPOT suite runs the checker on the planner's designs (`test_plancheck.py`)."""
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
     pts = [(m, d, t, f.point(m, d, t, 0.01 * s.gpu_seconds)) for d in ("one-stage", "request") for t in ("leak", "work")]
@@ -276,7 +276,7 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
     replay blocks and the planner's θ): every bit charged, or each replay block at most the bits it serves in the
     capped sets' form or the patterns'.  The count is the bits Lean certifies, rounded up to a float, with the
     planner's bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the
-    sampled-proofs suite runs it."""
+    SPOT suite runs it."""
     cells = (Cell(3, 16), Cell(1, 64, stratum=64))
     row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
     seen = []
@@ -591,7 +591,7 @@ def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
     keeps every token.  A schedule without a cap, or no certifier card, leaves every token served, and a cap it
     doesn't register is refused."""
     card = cards.load("certifier", "GLM-5.3")
-    schedule = WardenParams(**card["value"]["schedule"])
+    schedule = NetworkCertifierParams(**card["value"]["schedule"])
     c, every = f.cards("GLM-5.3"), f.cards("GLM-5.3", served="request")
     assert c["max_tokens_cap"].value == schedule.max_tokens_cap
     assert c["served_bits"].value == schedule.max_tokens_cap * 32 < every["served_bits"].value

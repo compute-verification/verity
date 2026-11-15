@@ -1,6 +1,6 @@
 """What the certifier's zero-knowledge drivers take from code `verity` does not load.
 
-The drivers (`scan_zk`, `egress_zk`, `warden_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
+The drivers (`scan_zk`, `egress_zk`, `network_certifier_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
 one-stage audit's benchmark drivers under `benchmarks/one_stage/`, Flock's own distribution and Flock's proof-format
 reader, and read a network certifier's run through the chain's reader under `benchmarks/network_traces/`. `verity` loads
 none of them, so they come in as one `ProofDrivers`, installed by the command line that runs a driver
@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 
 class ProofDrivers(Protocol):
-    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_draw``, ...
+    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_sample``, ...
     a0: Any
     #: the requirement audit's driver: ``M_MAX``, ``statement_checks``, ``frame_ports``, ``opens``, ``public_bcs``
     a7: Any
@@ -23,8 +23,10 @@ class ProofDrivers(Protocol):
     a8: Any
     #: the auditor's challenger's sessions: ``start``, ``RankCoins``, ``evidence``, ``negatives``, ``Replay``
     a5_coins: Any
-    #: the proof leg: ``frame_ports`` over a statement's tables
-    prove_leg: Any
+    #: the development challenger on this machine, which ``start`` takes for ``--challenger local``: ``Local``
+    local_challenger: Any
+    #: the proof subprotocol: ``frame_ports`` over a statement's tables
+    prove_subprotocol: Any
     #: Flock's circuit writer (``verity_flock.circuit``)
     circuit: Any
     #: Flock's unit stager (``verity_flock.class_statement``)
@@ -32,7 +34,7 @@ class ProofDrivers(Protocol):
     #: Flock's proof-format reader (``redigest``: ``layout``, and ``tc.R``, the reads it records)
     redigest: Any
     #: the chain's reader of a network certifier's run: ``pairs``, ``link``
-    warden_chain: Any
+    network_certifier_chain: Any
 
 
 _installed: ProofDrivers | None = None

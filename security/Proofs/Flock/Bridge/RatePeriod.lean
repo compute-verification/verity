@@ -10,7 +10,7 @@ import Proofs.Flock.EndToEnd.Period
 # The integrity audit pooled over a period, at a rate
 
 Seven statements about a period of `SamplingBlock`s take one share `q` for every window as a hypothesis,
-`q ≤ kd_t / n_t`: `IntegrityPeriodLog`, `IntegrityPooled`, `IntegrityBlock`, `IntegrityBlocks`,
+`q ≤ kd_t / n_t`: `IntegrityMonitoringPeriodLog`, `IntegrityPooled`, `IntegrityBlock`, `IntegrityBlocks`,
 `IntegrityPooledBlocks`, `IntegrityBlockCarried` and `IntegrityPooledCarried`. A window's `n_t` is the registration's,
 which the prover sizes, so under a fixed count `kd_t` the largest `q` that holds is the prover's. A `SamplingBlock`
 samples a uniform `kd`-subset of its `n` units (`SamplingBlock.L`), the design `subset kd`, which is what the rule
@@ -51,7 +51,7 @@ theorem samplingBlock_rate (w : SamplingBlock) {num den : ℕ} (hn : 0 < w.n)
 /-- **`IntegrityPooled` at a rate.** Over `T` windows as in `IntegrityPooled`, each with a unit and its design
 `subset kd_t` sampling at least `num/den` of the `n_t` units it registers (`RateOn`, which the count of a
 `rate:NUM/DEN[:T]` rule meets at every `n_t`: `rateOn_subset`), the probability that every window is accepted and the
-incorrect proof blocks total at least `ln(1/δ) · den/num` is at most `δ + Σ_t (ε_ks,t + δ_link,t)`. Its named
+incorrect proof blocks total at least `ln(1/δ) · den/num` is at most `δ + Σ_t (ε_ks,t + ε_bind,t)`. Its named
 assumptions are `IntegrityPooled`'s. -/
 theorem pooledIntegrity_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ : ℝ) (hnum : 0 < num) (hden : 0 < den)
     (hδ : 0 < δ) (hn : ∀ t < T, 0 < (W t).n) (hrate : ∀ t < T, RateOn num den (.subset (W t).kd) (W t).n)
@@ -64,7 +64,7 @@ theorem pooledIntegrity_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ :
       LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') :
     value (fun l => (∀ r ∈ l, r.accepted) ∧
-        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (Period.run W T s) ≤
+        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (Period.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link) :=
   Flock.SecurityProofs.IntegrityPooled W T ((num : ℝ) / den) δ (div_pos (Nat.cast_pos.2 hnum) (Nat.cast_pos.2 hden))
     hδ (fun t ht => samplingBlock_rate (W t) (hn t ht) (hrate t ht) hden) hA3 s hT hL
@@ -90,7 +90,7 @@ theorem pooledIntegrityCarried_rate (S : CarriedBlocks) (num den : ℕ) (δ : �
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) :
     value (fun l => (∀ r ∈ l, r.accepted) ∧
-        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s) ≤
+        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry :=
   Flock.SecurityProofs.IntegrityPooledCarried S ((num : ℝ) / den) δ
     (div_pos (Nat.cast_pos.2 hnum) (Nat.cast_pos.2 hden)) hδ

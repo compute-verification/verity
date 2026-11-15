@@ -10,7 +10,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   embedding, end in `AllReduce2_v1{H}`: each rank's partial row (one a token) and the other rank's, summed element by
   element, ``bf16_rn(f32(a) + f32(b))``. The stand-in step is layer 0's: the embedding's, o_proj's and down_proj's, at
   H = ``--hidden`` (2048, LLAMA32_1B's). The logits' `AllGather2_v1` is a copy, and the sampling
-  rank's units that read it are egress, a gate already (`a5_warden`).
+  rank's units that read it are egress, a gate already (`a5_network_certifier`).
 * **Request by request.** The step serves ``--requests`` requests, each its own ``--tokens`` token rows (positions 0 to
   T − 1 of its prefill). The registered compiler's TP2 request Programs read each collective's peer row as an Input of the
   request's own (``peers_k``, k = pass·34 + site: site 0 the embedding, 1 + 2L layer L's o_proj, 2 + 2L its down_proj), and
@@ -45,7 +45,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   request's partial as its peer's, naming a partial under another TP run's domain, and the other rank's docket as its
   own, each refused by `source`; rank r's ports built before the peer's docket is read, refused by `reads`; and the
   receiving port of request 0's c0 opened by the statement of each `TRANSFERS` kind, each refused by the host's read of
-  Lean's registered reads (`warden_rows.refusal`) by name.
+  Lean's registered reads (`network_certifier_rows.refusal`) by name.
 * **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, sample rank 1's q0c0 and be refused
   by Lean's registered reads by name: ``--altered``, rank 1's ``part0`` row 0 (rank 0's embedding partial of request 0 as
   rank 1 received it) one bit off, under rank 0's salt, the advice bit moved through the transfer, its sum computed from the
@@ -57,9 +57,9 @@ The run exits 0 when it is as expected: both ranks accepted with every negative 
 rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``--out`` holds the windows as committed
 (``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
-        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
+        [--zk-server flock-zk-server] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -77,13 +77,13 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E402
-from verity.protocols.accounting.certifier.prover.warden_zk import WardenRowIdentity  # noqa: E402
+from a5_network_certifier import composer as row_composer, free_ports, refusal  # noqa: E402
+from verity.protocols.accounting.certifier.prover.network_certifier_zk import WardenRowIdentity  # noqa: E402
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
@@ -107,7 +107,7 @@ RECEIVER = 1
 #: must span more than one SHA-512 block for the composer
 REST_BYTES = 128
 #: the receiving port's statement made for another read than the Program's (`statement`), and what Lean's registered reads,
-#: and the host's read of them (`warden_rows.refusal`), refuse it by
+#: and the host's read of them (`network_certifier_rows.refusal`), refuse it by
 MADE_FOR = {"swapped": "reads position", "other-collective": "not another value", "other-request": "not another value",
             "own": "not another value"}
 TRANSFERS = {"altered": "does not open", **MADE_FOR}
@@ -331,7 +331,7 @@ def source_of(mine: CS.Binding, r: int, regs: dict[int, dict]):
 
 def transfer_refusals(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """Rank r's q0c0 port of the sender's partial (``part<1 − r>``) opened by the statement of each `TRANSFERS` kind, read as
-    Lean's registered reads read it (`warden_rows.refusal`) against the verifier's own port: each refused by its reason."""
+    Lean's registered reads read it (`network_certifier_rows.refusal`) against the verifier's own port: each refused by its reason."""
     j, (q, k, m) = 1 - r, chunks(mine)[0]
     port = reads(mine, r, regs)[m.key]["ports"][f"part{j}"]
     dom = domain(j, q, k, dict(m.rows)["part0"], m.n)
@@ -422,12 +422,12 @@ def main(argv=None) -> int:
     ap.add_argument("--hidden", type=int, default=2048, help="H: each partial's bf16 words a token (LLAMA32_1B's 2048)")
     ap.add_argument("--requests", type=int, default=2, help="Q: the step's requests, each with partials of its own")
     ap.add_argument("--tokens", type=int, default=2, help="T: each request's token rows, each of its collectives' chunk's units")
-    ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work law")
+    ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work sampling design")
     ap.add_argument("--seed", type=int, default=0, help="the synthetic activations' seed")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+    ap.add_argument("--zk-server", help="a5.py's --zk-server: the core protocols' path, every session behind the ZK server; "
                     "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--challenger", choices=["local"], required=True, help="draw both ranks on one local challenger session's coins")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
@@ -445,8 +445,9 @@ def main(argv=None) -> int:
         ap.error("one refused statement a run: --altered or --made-for")
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
-    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    import a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)
@@ -459,7 +460,7 @@ def main(argv=None) -> int:
     sets = {tg: (composer(defs[tg], a.hidden, a.compose_cache), defs[tg]), rid: (row_composer(defs[rid], 8 * REST_BYTES), defs[rid])}
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
     port = a.port or free_ports(a5.RANK_PORTS * len(RANKS))
-    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main, local=LC.Local)
 
     def rank(r: int) -> dict:
         try:

@@ -1,10 +1,10 @@
 # spot_figures
 
-The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
+The SPOT post's Figures 1-4 for one model, derived from the SPOT planner
 (`verity.protocols.proofs.spot.prover.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
-(`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
+(`plancheck`, which builds `spot-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
 plots what Lean certifies, a two-stage one the bits at the θ Lean finds, with the planner's bits beside them
 (`figure1.lean_two`, which both forms call), and a design Lean refuses is an error. `--workers` processes (default
 every CPU) plan and check the points, each point one job (`figure1.processes`), and the JSON is the same at any
@@ -172,7 +172,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     blocks a verification phase samples, and the replay blocks whose first reads one commitment of the challenger's
     holds (`challenger.MAX_COINS` coins); Lean's bound on the chance the second stage then refuses an honest run at a
     first-stage coin the first stage accepts, K·Σ_t k_t·2^−64 (`SpotFlock.secondDraw_refused_le_first`); and that
-    bound added up over the replay blocks the scope samples. `total_cost.limits`' second draw is the same read with a
+    bound added up over the replay blocks the scope samples. `total_cost.limits`' second sample is the same read with a
     block type of under one proof block a replay block counted at the chance a replay block has it; `at_design`
     counts every cell, the theorem's condition.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
@@ -228,7 +228,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
       its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
-      the response cap of the model's `certifier` card, the network certifier's schedule (`WardenParams`), whose cap
+      the response cap of the model's `certifier` card, the network certifier's schedule (`NetworkCertifierParams`), whose cap
       ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
       of its tokens (`--served request` takes every token under a cap too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof

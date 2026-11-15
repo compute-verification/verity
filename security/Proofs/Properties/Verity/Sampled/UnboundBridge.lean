@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointLive
+public import Definitions.Compose.JointLive
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.FaultyRightC
 

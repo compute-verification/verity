@@ -345,7 +345,7 @@ def expected_sample_positions(served: Sequence[int], *, cap: int, A: int, eos: I
 
 
 def compare_sample_positions(expected: Sequence[int], sampled: Sequence[int]) -> dict[str, Any]:
-    """`sampled` = the positions the record's ledger shows a sample at (stoch_recompute's `draw_accounting`), in ledger order.  Every extra / missing / repeated /
+    """`sampled` = the positions the record's ledger shows a sample at (stoch_recompute's `sample_accounting`), in ledger order.  Every extra / missing / repeated /
     out-of-order position is a problem BY NAME; `ok` is their absence -- 'RNG advances iff r_t' measured literally."""
     exp = [int(p) for p in expected]
     got = [int(p) for p in sampled]

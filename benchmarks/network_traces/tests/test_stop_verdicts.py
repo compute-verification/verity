@@ -27,14 +27,14 @@ sys.path.insert(0, str(HERE))
 from verity.protocols.accounting.certifier.device import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from verity.protocols.accounting.certifier.prover import stop_verdicts as SV  # noqa: E402
-from verity.protocols.accounting.certifier.device.tests.verdict_records import (  # noqa: E402
+from verity.protocols.accounting.certifier.prover.tests.verdict_records import (  # noqa: E402
     TIE, FORMATS, UNDER, checked, names_under, SERVED, OTHERS, REGISTERED, COUNTS, streams, with_streams, four,
     the_controls, under, Store, jsonl, OTHER, ROWS)
 from verity.protocols.accounting.certifier.verifier import class_charge as CC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import connection_rows as C  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import content_rows as CT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 LINK = "responses"
@@ -46,12 +46,12 @@ def listed(monkeypatch):
     monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in FORMATS.items()})
 
 
-def schedule() -> WardenParams:
+def schedule() -> NetworkCertifierParams:
     """The lengths rows' cost runner's own schedule, with its content classes."""
     return CR.costed(CR.parser().parse_args(["cost", "--out", "x"]))
 
 
-def tied() -> WardenParams:
+def tied() -> NetworkCertifierParams:
     """The cost runner's schedule made one that can be tied (`content_rows.can_be_tied`): its largest O for every
     class, and that O its response limit."""
     own = schedule()

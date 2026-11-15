@@ -31,17 +31,17 @@ Two terms differ from Theorem 3 at the serving blocks:
   (`UncertifiedElementary`).
 
 Each guarantee has an honest and a nontrivial lemma
-(`Security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`): its premises hold together at a small
+(`security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`): its premises hold together at a small
 serving-block layout, and its conclusion fails at an explicit circuit once one named premise is dropped. The boundary
 term is needed: without it the bound fails at a circuit where every premise holds
-(`ServingBlockBound_nontrivial_overlap`, in `Security/Proofs/Slowdown/ServingBlocks/Witnesses.lean`).
+(`ServingBlockBound_nontrivial_overlap`, in `security/Proofs/Slowdown/ServingBlocks/Witnesses.lean`).
 `UncertifiedElementary` takes no premise: its cap is attained at the layout, and a tighter cap fails at an explicit
 circuit.
 
 `ServingBlockBoundRemote` is the remote case: no wipe or certifier, so `k_S` is unbounded and only the inference cap
 applies.
 
-The proofs are in `Security/Proofs/Slowdown/ServingBlocks.lean`.
+The proofs are in `security/Proofs/Slowdown/ServingBlocks.lean`.
 -/
 
 @[expose] public section

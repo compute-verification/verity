@@ -5,7 +5,7 @@ public import Definitions.Claims.SamplingGeneric
 /-!
 # Claims: two-stage sampling at the footprint
 
-The sampled audit's two-stage design (registered `{"rule": "two-stage", "grain": Q, "replay": LAW, "k": K}`), on
+The sampled audit's two-stage design (registered `{"rule": "two-stage", "grain": Q, "replay": DESIGN, "k": K}`), on
 `Claims.Sampling`'s statement, witness and commitment and `Claims.SamplingGeneric`'s compiled verifier, read as they
 stand, so neither changes. Replay blocks are the blocks of a replay partition that the proof-block partition refines.
 Serving commits every value read across a replay-block boundary (the registration, the statement's roots). The first
@@ -32,9 +32,9 @@ are the proof blocks, with `k = 1` and no interior registration.
    (`Design.Two.FirstRate`) and a second stage that samples each cell at rate `r₂` (`Design.Two.SecondRate`), and the
    replay blocks a footprint marks incorrect (`Design.Two.incorrectBlocks`).
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
-   replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
+   replay sample (`replaySample`). Its second stage is `Compiled.secondStage`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
-5. **The contract** (`CompiledTwo.Sessions`): `Compiled.Sessions` with its draw law split by stage and its openings
+5. **The contract** (`CompiledTwo.Sessions`): `Compiled.Sessions` with its sampling design split by stage and its openings
    read at a replay block. The first stage misses a set `T` of replay blocks with probability at most `P_a(T)`
    (`replaySamples`); at the first stage's coins, the second stage misses a set `X` of proof blocks with probability at
    most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell|, k_t)/C(n_{ρ,t}, k_t)` (`secondSamples`); the waits' bits cover the
@@ -241,7 +241,7 @@ open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo RInflTwo influenc
 
 /-- **A compiled two-stage sampled verifier over `A`**: a compiled sampled verifier (`Compiled`) with the two-stage
 design it evaluates on a statement (`two`) and the replay blocks the first stage samples at a run's coins
-(`replaySample`). Its second stage is `stage2`, the rounds after the interior registration, whose sample is the
+(`replaySample`). Its second stage is `secondStage`, the rounds after the interior registration, whose sample is the
 proof blocks `checked`; `iroots x v ρ` is the roots the run `v` shows for replay block `ρ`'s interior values. -/
 structure CompiledTwo (Coin : Type) (A : Arg Coin) extends Compiled Coin A where
   two : AuditStatement → Option Claims.Sampling.Design.Two
@@ -258,7 +258,7 @@ def Scope (L : CompiledTwo Coin A) (x : Msg) : Prop :=
 
 /-! ## 5. The contract -/
 
-/-- **The two-stage compiler's contract** at `H`: `Compiled.Sessions` with its draw law split by stage and its openings
+/-- **The two-stage compiler's contract** at `H`: `Compiled.Sessions` with its sampling design split by stage and its openings
 read at a replay block.
 
 * `replaySamples`: on a statement in scope, the first stage's sample misses a set `T` of replay blocks with probability
@@ -284,7 +284,7 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ ρ ∈ L.replaySample x r, ρ ∉ T) ≤ d.replay.Pa d.part T
   secondSamples : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
     ∀ (r : Fin (L.V.k x) → Coin) (X : Finset ℕ),
-      Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e), u ∉ X) ≤
+      Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r e), u ∉ X) ≤
         ∏ ρ ∈ (Finset.range d.part.blocks.length).filter (· ∈ L.replaySample x r),
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
@@ -295,13 +295,13 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
     L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen
   unions : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
     footBits Pt d ≤ L.nOut x ∧ ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (L.V.k x) → Coin),
-      (run H P L.V x ω (forkOn (L.stage2 x) r e)).out = .acc →
+      (run H P L.V x ω (forkOn (L.secondStage x) r e)).out = .acc →
         (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r e ρ,
-    L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
+    L.iroots x (run H P L.V x ω (forkOn (L.secondStage x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
   fixed : ∀ x r u, u ∈ L.checked x r →
-    L.rounds x u ⊆ L.stage2 x ∧ ∀ e, L.checked x (forkOn (L.rounds x u) r e) = L.checked x r
+    L.rounds x u ⊆ L.secondStage x ∧ ∀ e, L.checked x (forkOn (L.rounds x u) r e) = L.checked x r
   runs : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r u, u ∈ L.checked x r →
     ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ A.κ xS ≤ L.κb x u ∧ A.γ xS ≤ L.γb x u ∧
       A.V.k xS = (L.rounds x u).card ∧

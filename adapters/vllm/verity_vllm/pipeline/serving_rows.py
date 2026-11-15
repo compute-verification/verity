@@ -147,7 +147,7 @@ from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
                                                     SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
                                                     chain_ways, final_hits, part, template, unit_templates)
-from verity_vllm.pipeline.window_law import sampling_design_of, work_table_of
+from verity_vllm.pipeline.window_sampling_design import sampling_design_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
@@ -400,10 +400,10 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
     commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
     compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
-    tmpls, law = list(partition["templates"]), sampling_design_of(partition["law"])
+    tmpls, sampling_design = list(partition["templates"]), sampling_design_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
-        if q == P.Q_WORD[0] and law.get("law") == "stratified":
+        if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
             raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified law: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
@@ -423,11 +423,11 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
     program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
-    table = work_table_of(law, n_of, transfer_gates)
+    table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    law, table = SV.params_sampling_design(law["rate"], program, query, table) if "rate" in law else (law, table)
-    window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
+    sampling_design, table = SV.params_sampling_design(sampling_design["rate"], program, query, table) if "rate" in sampling_design else (sampling_design, table)
+    window = CS.Binding(program, query, sampling_design, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "

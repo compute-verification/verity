@@ -62,7 +62,7 @@ at every session a path runs, each proof of `pf` is accepted with an opening tha
 probability at most `δs + δ`.
 
 Under a sampled sample `ServedChecksHold` holds only for a relation that reads the sampled proof blocks alone, so there this
-bounds the sampled proof blocks' unsoundness; the bound on every unit (ε at δ) is the sampled-proofs statement's, not this
+bounds the sampled proof blocks' unsoundness; the bound on every unit (ε at δ) is the SPOT statement's, not this
 one's. Under full checking (`kd = n`) the relation may read every unit.
 
 Every served path today verifies with plain `verity-verify-proof --zk` and binds its served values through the public file

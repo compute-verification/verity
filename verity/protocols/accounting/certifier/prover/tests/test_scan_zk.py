@@ -9,9 +9,9 @@ or alters a transition, and tampered's egress member at the re-signed row ("does
 every read held and every output 1 but the unit's at a request's anchor with its slot entry unread, 0, their states
 and views the honest ones. The run's first execution phase starts from the empty state's row at the root the verifier
 pins, each later one from the record before's ``last/o1``, held to the verifier's log, and a stale start is refused.
-A warden_serve run's directory (`--warden-run`, here the synthetic run published as `warden_serve.Publisher`
+A network_certifier_serve run's directory (`--warden-run`, here the synthetic run published as `network_certifier_serve.Publisher`
 publishes a served one) is read under its deployment's key, its registration's ``rows/<direction>/<w>`` roots
-(`scan_zk.warden_roots`) the root and domain of each row registration in ``cells.jsonl``, and refused by name where a
+(`scan_zk.network_certifier_roots`) the root and domain of each row registration in ``cells.jsonl``, and refused by name where a
 row, the key or the schedule isn't the network certifier's. The honest round on the challenger's coins
 (``--challenger``): its flags refused by name where they can't sample, the root bound to the network certifier's signed
 execution phase, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
@@ -36,7 +36,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 
 from verity.protocols.accounting.certifier.prover import scan_zk as sz
-from verity.protocols.accounting.certifier.device import warden_serve as WS
+from verity.protocols.accounting.certifier.device import network_certifier_serve as WS
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
 from verity.protocols.accounting.certifier.verifier import scan_answer as SA
 
@@ -91,7 +91,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert all(sum((sz._bits(trs[j], sz.entry_at(cls, b * cls.EVERY)) for j in range(cls.NR)), [])
                == whole.chain.progs[b * cls.EVERY] for b in range(nb))
     blks = h.rounds["block-0"].members
-    assert [(m.name, m.base, m.n, m.lane, m.refused, m.outputs, m.warden) for m in blks] == [
+    assert [(m.name, m.base, m.n, m.lane, m.refused, m.outputs, m.network_certifier) for m in blks] == [
         (f"block-c{j}", j * nb, nb, j, None, None, {}) for j in range(cls.NR)]
     for j, (blk, tr) in enumerate(zip(blks, trs, strict=True)):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == last.ports[
@@ -282,7 +282,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     assert stale_round.at.claimed == ch.states[T] != sz._bits(stale_round.at.start, 0)
     assert not sz.REG.verify_read(sz.tree_domain(stale_round.at.start), stale_round.at.start.root, 0,
                                   stale.bcs["sin"][0], b"", v2)
-    with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
+    with pytest.raises(SystemExit, match="a group is 1 or more execution phases"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
 
@@ -676,7 +676,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = (), change=None) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
-    warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
+    network_certifier_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
     and salts), under a network certifier key of its own, beside its `deployment.json`, which carries the session's
     start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
     ``fails.records``). ``change`` (a record to the record kept) stands in for a network certifier that recorded the
@@ -703,10 +703,10 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
     return out
 
 
-def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
-    h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
+def test_a_network_certifier_runs_rows_are_read_under_its_deployments_key(tmp_path):
+    h = sz.host(tmp_path / "host", published(tmp_path / "run"), sample=16)
     assert list(h.rounds) == ["block-0", "honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
-    assert h.whole.run_id == "00" * 32 and "warden run" in h.whole.source
+    assert h.whole.run_id == "00" * 32 and "network certifier run" in h.whole.source
     assert h.whole.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.whole.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.whole.tampered.key_of == "the driver's own"
@@ -717,8 +717,8 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     assert all(m.refused is None and m.outputs in (None, [1] * m.n) for m in honest)
     regs = {d["registration"]["direction"]: d["registration"] for d in map(json.loads, (
         tmp_path / "run" / "cells.jsonl").read_text().splitlines()) if d["registration"]["window"] == 0}
-    assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.warden_roots(
-        [{"network_certifier": m.warden} for m in honest])} == {
+    assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.network_certifier_roots(
+        [{"network_certifier": m.network_certifier} for m in honest])} == {
         f"rows/{d}/0": (regs[d]["root"], regs[d]["domain"], sz.PARAMS.window) for d in ("ingress", "egress")}
 
 
@@ -728,7 +728,7 @@ def _cells(run: Path) -> dict[tuple[str, int], dict]:
             for d in map(json.loads, (run / "cells.jsonl").read_text().splitlines()) if "registration" in d}
 
 
-def test_each_registration_names_its_execution_phases_warden_rows_its_ports_read(tmp_path):
+def test_each_registration_names_its_execution_phases_network_certifier_rows_its_ports_read(tmp_path):
     """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
     and domain): of a G = 2 run, each execution phase's honest round names, as ``rows/<direction>/<w>``, its own two
     row registrations of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them), and
@@ -742,26 +742,26 @@ def test_each_registration_names_its_execution_phases_warden_rows_its_ports_read
     regs = _cells(run)
     for w in range(G):
         honest = h.rounds[f"honest-{w}"].members
-        roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest])
+        roots = sz.network_certifier_roots([{"network_certifier": m.network_certifier} for m in honest])
         assert roots == [
             {"port": f"rows/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
             for d in ("egress", "ingress")]
         verdicts = {f"lean-verify/{m.name}": {"of_record": True, "accepted": True, "registered": {
-            p: {"value": d["value"], "root": d["root"]} for p, d in m.warden.items()}} for m in honest}
+            p: {"value": d["value"], "root": d["root"]} for p, d in m.network_certifier.items()}} for m in honest}
         assert {e["value"] for v in verdicts.values() for e in v["registered"].values()} == {
             f"warden/{d}/{w}" for d in ("egress", "ingress")}
         assert sz.AU.session_registered(verdicts, {"roots": roots}) == {}
     w = h.whole.tampered.window
-    tampered = sz.warden_roots([{"network_certifier": m.warden} for m in h.rounds[f"tampered-{w}"].members])
+    tampered = sz.network_certifier_roots([{"network_certifier": m.network_certifier} for m in h.rounds[f"tampered-{w}"].members])
     assert [r["port"] for r in tampered] == [f"rows/egress/{w}"]
     assert tampered[0]["root"] == h.whole.tampered.registration["root"] != regs["egress", w]["root"]
 
 
-def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
+def test_lean_reads_each_network_certifier_port_at_the_root_the_network_certifier_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
     passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and
-    domain of the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from
-    the run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
+    domain of the row registration the deployment's key signed (`network_certifier_rows.check_registration`, read here afresh from
+    the run's ``cells.jsonl``), the root `network_certifier_roots` registers for that direction and execution phase. A member whose
     rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
     (`header_refusal`, `Flock.Registered.check`)."""
@@ -769,19 +769,19 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     dep = json.loads((run / "deployment.json").read_text())
-    key, session, params = RF.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
+    key, session, params = RF.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.NetworkCertifierParams(**dep["params"])
     signed = {}
     for (d, w), doc in _cells(run).items():
         head, dom = sz.WR.check_registration(doc, key, session, params, RC.LINK, sz.Direction(d), w)
         signed[f"rows/{d}/{w}"] = (head.root.hex(), dom.domain_id.hex())
     assert len(signed) == 2 * G
     honest = [m for w in range(G) for m in h.rounds[f"honest-{w}"].members]
-    roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest])
+    roots = sz.network_certifier_roots([{"network_certifier": m.network_certifier} for m in honest])
     assert {r["port"]: (r["root"], r["domain"]) for r in roots} == signed
     read: dict[str, set] = {}
     for m in honest:
         ports = sz.registered_file(m)["ports"]
-        for p, doc in m.warden.items():
+        for p, doc in m.network_certifier.items():
             read.setdefault(f"rows/{doc['direction']}/{doc['window']}", set()).add((ports[p]["root"], ports[p]["domain"]))
     assert read == {r: {x} for r, x in signed.items()}
 
@@ -795,7 +795,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
                                                                                              "cells": mine})}})
     mb = next(mb for mb in sz.members_of(sz.TEMPLATES, h.T) if mb.template == "egress")
     m = sz.member(forged, f"honest-{w}", mb)
-    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"network_certifier": m.warden}])[0]["root"]) == (
+    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.network_certifier_roots([{"network_certifier": m.network_certifier}])[0]["root"]) == (
         signed[f"rows/egress/{w}"][0],) * 2
     assert m.refused == "registered reads: table row 0 does not open the registered root at position 0"
 
@@ -829,8 +829,8 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     reg = R.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
-    draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
-    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     a = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
@@ -843,7 +843,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog0", "prog1"]}
     (level,) = CC.integrity(a["profile"])["levels"]
     assert level["draw"]["law"] == "stratified" and sum(s["k"] for s in level["draw"]["strata"]) == N == level["size"]
-    why = "the scan's audit of link-window 1 refused: egress-0: registered reads: table row 3 does not open"
+    why = "the scan's audit of execution phase 1 refused: egress-0: registered reads: table row 3 does not open"
     r = SA.window_answer(reg, None, sz.Fraction(1, 100), why)
     assert CC.answer_of(r)["verdict"] == "reject" and r["reason"] == why and r["commitment"] == a["commitment"]
     with pytest.raises(SystemExit, match="another registration"):
@@ -866,7 +866,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
                                   "failed": {"registered": ["registered"]}}
     ats = [h.rounds[f"honest-{w}"].at for w in range(G)]
     got = sz.answers(ats, out, results, sz.Fraction(1, 100))
-    why = "the scan's audit of link-window {} refused: check registered: registered"
+    why = "the scan's audit of execution phase {} refused: check registered: registered"
     assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": R.digest(regs[w])}
                    for w in range(G)}
     doc = json.loads((out / "answers.json").read_text())
@@ -897,13 +897,13 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert list(refused) == sz.targets(r.at, r.name) == ["egress-0"]
     assert refused["egress-0"] == f"registered reads: table row {b} does not open the registered root at position {b}"
     assert sz.wired(r.members) == []
-    with pytest.raises(SystemExit, match=re.escape("the warden failed a connection in link-windows [0], which the "
+    with pytest.raises(SystemExit, match=re.escape("the network certifier failed a connection in execution phases [0], which the "
                                                    "scan refuses")):
         sz.host(tmp_path / "two", run, setup=sz.TEST, group=2)
 
 
 @pytest.mark.slow
-def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
+def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkCheck.Period`; its Lean checks
     the case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase
     0, and its schedule (its integer fields, the id egress form's), the registered Program and its
@@ -967,7 +967,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     oks = [{"port": f"{m.name}/o0", "root": m.ports["o0"]["root"], "leaves": m.n, "domain": m.ports["o0"]["domain"]}
            for m in honest if m.template != "start"]
     assert PC.scan_ok.held(PC.scan_ok.constants(T), {"roots": oks})
-    roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest]) + [
+    roots = sz.network_certifier_roots([{"network_certifier": m.network_certifier} for m in honest]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
     law = sz.DR.parse_design(f"stratified:{N}")
 
@@ -985,8 +985,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     for name, r in (("tampered-0", other), ("chain-0", chain)):
         (scan / name).mkdir()
         (scan / name / "registration.json").write_text(json.dumps(r))
-    draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
-    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
@@ -1053,13 +1053,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                                                for r in reg["roots"]] for d in x["registrations"])
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
+    # the scan's start is its state's full width, the start unit's sin; the period begins the run, so it charges none
     assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["ingress"]["o1"] + bits["ingress"]["o2"],
-                                        16 + bits["egress"]["o1"], E * bits["ingress"]["prog0"])
+                                        16 + bits["egress"]["o1"], E * bits["ingress"]["prog0"], bits["start"]["sin"])
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, N), out
+    assert out["public"]["start"] == 0
     assert p["circuit"] == audit["registration"]["program"]
     window_record = tmp_path / "window-circuit.json"
     window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
@@ -1246,7 +1248,7 @@ def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(t
 
 
 @pytest.mark.parametrize("name", sorted(sz.SETUPS))
-def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name):
+def test_schedule_prints_the_classs_schedule_as_network_certifier_serves_flags(capsys, name):
     """Its integer fields, which `rehearse --ids` runs in the id egress form: the class's schedule whole."""
     assert sz.main(["schedule", "--class", name]) == 0
     flags = capsys.readouterr().out.split()
@@ -1321,8 +1323,8 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     grid[t][j] = bytes(frame)
     _rewrite(run / "responses.records", [RF.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
-    with pytest.raises(SystemExit, match="egress link-window 0's record under cells.salts isn't the rows whose root "
-                                         "the warden signed"):
+    with pytest.raises(SystemExit, match="egress execution phase 0's record under cells.salts isn't the rows whose root "
+                                         "the network certifier signed"):
         sz.host(tmp_path / "h1", run)
 
     run = published(tmp_path / "run2")
@@ -1330,7 +1332,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     dep = json.loads((run / "deployment.json").read_text())
     dep["key"] = json.loads((other / "deployment.json").read_text())["key"]
     (run / "deployment.json").write_text(json.dumps(dep))
-    with pytest.raises(SystemExit, match="ingress link-window 0's registration doesn't verify under the deployment's "
+    with pytest.raises(SystemExit, match="ingress execution phase 0's registration doesn't verify under the deployment's "
                                          "key and session"):
         sz.host(tmp_path / "h2", run)
 
@@ -1338,7 +1340,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     dep["params"] = asdict(replace(sz.PARAMS, delay=20))
     dep["digest"] = replace(sz.PARAMS, delay=20).digest.hex()
     (other / "deployment.json").write_text(json.dumps(dep))
-    with pytest.raises(SystemExit, match="warden_serve.py rehearse at scan_zk's schedule"):
+    with pytest.raises(SystemExit, match="network_certifier_serve.py rehearse at scan_zk's schedule"):
         sz.host(tmp_path / "h3", other)
 
 
@@ -1354,7 +1356,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
                                                              "connection 7: fail, HTTP None, complete False"]}))
     _rewrite(run / "fails.records", [RF.pack_record(replace(rec, grid=grid, window=0))])
-    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the warden's fails record has a "
+    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the network certifier's fails record has a "
                                                    f"reason in buckets [{t}], not the same: a failed connection's "
                                                    "reason is in its FAIL's bucket (connection 7 failed closed (late) "
                                                    "at egress cell 2)")):
@@ -1370,15 +1372,15 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (["--challenger", "gate:research@h", "--draw", "16", "--main", "m.txt", "--peer", "p"],
      "needs --peer and --challenger-key"),
     (["--challenger", "local", "--draw", "16"], "needs --main"),
-    (["--group", "0"], "--group is 1 or more link-windows"),
+    (["--group", "0"], "--group is 1 or more execution phases"),
 ])
-def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+def test_a_challenger_sample_that_cant_sample_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
     with pytest.raises(SystemExit):
         sz.main(["prove", "--dry", "--out", str(tmp_path / "out"), *flags])
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
 
 
-def test_the_window_root_is_the_wardens_signed_execution_phase(tmp_path):
+def test_the_window_root_is_the_network_certifiers_signed_execution_phase(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
     read from its published registrations alone, and each execution phase of a group has its own."""
     def phase(whole, w: int = 0) -> SimpleNamespace:

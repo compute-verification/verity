@@ -37,13 +37,13 @@ CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/us
 for f in "$FA3" "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 
-# the CPU side's builds, in the background: the tree's venv, Lean's verity-verify-proof, flock-firewall and sampled-proofs-verifier, M0
+# the CPU side's builds, in the background: the tree's venv, Lean's verity-verify-proof, flock-zk-server and spot-verifier, M0
 ( export PATH=$CLEAN_PATH; unset PYTHONPATH PY PY312 VIRTUAL_ENV; cd "$TREE" || exit 1
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
-  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) || exit 7
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) || exit 7
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) || exit 7
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) || exit 7
   RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
@@ -55,7 +55,7 @@ fi
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-sha512}
 export VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED SERVING_ROWS
@@ -109,7 +109,7 @@ echo "$(date -u +%H:%M:%SZ) builds rc=$pb" | tee -a "$OUT/steps.txt"
 [ "$pb" = 0 ] || { tail -30 "$OUT/prebuild.log"; stop "the builds (rc $pb, prebuild.log)" 16; }
 ( export PATH=$CLEAN_PATH; unset PYTHONPATH PY PY312 VIRTUAL_ENV; cd "$TREE" || exit 1
   OUT=$OUT/a5 COMMIT_SCHEME=rows-sha512 WINDOW=served A5_ROW_DIR=$D A5_PARTITION=$PART A5_WINDOW=$WD A5_FLOCK_WORK=$FW \
-    bash verity/protocols/proofs/spot/prover/audit/window_audit.sh ) > "$OUT/a5.out" 2>&1
+    bash benchmarks/one_stage/a5.sh ) > "$OUT/a5.out" 2>&1
 ar=$?
 echo "$(date -u +%H:%M:%SZ) a5 rc=$ar" | tee -a "$OUT/steps.txt"
 

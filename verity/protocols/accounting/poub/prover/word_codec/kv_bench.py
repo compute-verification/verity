@@ -465,7 +465,7 @@ def store_rates(lib: Lib, torch, store, ks, sms: int, reps: int, read_gbps: floa
                   "decode_times_s": best[2], "decode_gbps": gbps, "decode_over_read": read_gbps / gbps}
         log(f"store {lib.name} k={k}: encode {n / enc:.3e} words/s ({store.numel() / enc / 1e9:.2f} GB/s), "
             f"read-and-decode {gbps:.0f} GB/s ({read_gbps / gbps:.2f}x the read)")
-    del y
+    y = None
     return out
 
 
@@ -490,7 +490,7 @@ def token_encode(lib: Lib, torch, ks, batches, reps: int, enc_rates: dict, log) 
         log(f"token {lib.name} k={k}: " + ", ".join(
             f"B={b} {r['latency_s'] * 1e6:.0f} us latency, {r['sm_s'] * 1e6:.0f} us at the compute-only rate"
             for b, r in out[k].items()))
-    del words, y
+    words = y = None
     return out
 
 
@@ -603,7 +603,7 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
             else:
                 log(f"attention {lib.name} k={k} B={b} ctx={ctx}: gate FAIL {gate}")
             out[f"b{b}_ctx{ctx}"] = cell
-            del plain, enc, q, part, o_p, o_e, kvl
+            plain = enc = q = part = o_p = o_e = kvl = None
             torch.cuda.empty_cache()
     return out
 
@@ -632,7 +632,7 @@ def native_70b(torch, batches, reps: int, log) -> dict:
             ts = timed(torch, arm, reps)
             out.setdefault(b, {})[name] = {"m_padded": mpad, "copies": copies, "call_s": statistics.median(ts) / copies,
                                            "gbps": n * kd * copies / statistics.median(ts) / 1e9}
-        del w, wts
+        w = wts = None
         torch.cuda.empty_cache()
     for b in batches:
         step = K.LAYERS * sum(out[b][s]["call_s"] for s in SHAPES_70B)

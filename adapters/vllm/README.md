@@ -98,7 +98,7 @@ finish inside one served window. The parts, in the order they run:
   registration's digest. Until a size class's request Definition lands, the replay block is a stand-in: instances of
   one check template, in the two-stage serve one token-select check for each served id. So the interior holds the
   token selection and not the model's layers.
-- **The stages around it** (`verity/protocols/proofs/spot/prover/audit/two_stage.py`). `first` registers each size class's boundary
+- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
   stage. The verifier refuses every two-stage run at its last check (`FORM` in
@@ -140,7 +140,7 @@ verity_vllm/
   commit/            the Commit: the GPU committer (committer/) and the rows-sha512 scheme (step_rows.py)
   commitments/       the vllm-v1 scheme's hashlib reference, PROTOCOL.md and vectors (vllm_v1/); its leaf tree (leaves.py)
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
-  protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
+  protocols/         the subprotocols' adapters: SPOT, PoUS, PoUB's node store on the engine (poub/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
   records/           typed stage records, one for each kind one stage writes and another reads
   ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment

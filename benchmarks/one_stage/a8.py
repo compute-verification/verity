@@ -32,7 +32,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   a piece the zero-knowledge drivers' one rule reads ``leaked`` (`leak_scan.scan`). The prover's input file
   (``inst-*.bin``) is the positive control.
 * **Cost** (``--points``): sessions on the honest statement whose verifier samples its first k proof blocks, cold (one prover
-  process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the ZK server's send check, `FC_FIREWALL=1`, the design's
+  process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the ZK server's send check, `FC_ZK_SERVER=1`, the design's
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
   stages only the honest statement and runs the points, Lean verifying each arm's session at the largest k. ``--lease``
@@ -62,7 +62,7 @@ sys.path.insert(0, str(HERE))
 #: the directory of Flock's proof-format reader, `redigest.py`, which the leak scan reads proof streams with
 sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proofs/flock/prover/agreement"))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 import a7  # noqa: E402
 import redigest  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS  # noqa: E402
@@ -259,7 +259,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     sampling_design = D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": "the openings of one window of a PoUB session (a8.py), on a "
+    win = {"kind": "stand-in", "of": "the openings of one window of a remote bandwidth session (a8.py), on a "
                                       f"{rs.store.registration.blocks}-chunk registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
@@ -397,8 +397,8 @@ def cost(a, m: dict, out: Path, port: int) -> list[dict]:
     rows = []
     ks = sorted({k for k in a.points if 1 <= k <= m["n"]})
     for arm in a.arms:
-        env = {"FC_FIREWALL": "1" if arm == "fw" else "0", **({"FC_HOST_WITNESS": "1"} if a.gpu else {}),
-               **(a0.firewall_env(m) if arm == "fw" else {})}
+        env = {"FC_ZK_SERVER": "1" if arm == "fw" else "0", **({"FC_HOST_WITNESS": "1"} if a.gpu else {}),
+               **(a0.zk_server_env(m) if arm == "fw" else {})}
         for k in ks:
             for rep in range(a.cold):
                 sdir = out / f"{arm}-k{k}-r{rep}"

@@ -40,13 +40,14 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import os
 import subprocess
+import sys
 import tomllib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .. import settings
 from ..notes_sync import remote_target
 
 FILE = "budgets.toml"
@@ -68,7 +69,8 @@ def parse_time(s: Any) -> float | None:
         return s.timestamp() if s.tzinfo else None
     try:
         d = dt.datetime.fromisoformat(str(s).strip())
-    except ValueError:
+    except ValueError as e:
+        print(f"budgets: {str(s)[:40]!r} is not a time ({e})", file=sys.stderr)
         return None
     return d.timestamp() if d.tzinfo else None
 
@@ -222,21 +224,21 @@ def load(source: Path) -> tuple[Budgets, str]:
 
 
 def default_source() -> Path:
-    return Path(os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes").expanduser()
+    return Path(settings.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes").expanduser()
 
 
 # ---- the create gate ---------------------------------------------------------------------------------------------------------------------
 
 def guard_host() -> str:
     """The budgets guard's host, the control pod: $RESEARCH_GUARD_HOST, else GUARD_HOST; `local` when this machine is it."""
-    return os.environ.get("RESEARCH_GUARD_HOST") or GUARD_HOST
+    return settings.get("RESEARCH_GUARD_HOST") or GUARD_HOST
 
 
 def read_guard_state(host: str | None = None, path: str | None = None) -> tuple[dict[str, Any], float]:
     """(the guard's state, the host's clock) from the guard's host: one ssh call, the gate's `budgets-state` there (pods/door.py;
     `cat STATE; date +%s` to a pod that has no door yet).  `local` reads it here."""
     host = host or guard_host()
-    path = path or os.environ.get("RESEARCH_GUARD_STATE") or GUARD_STATE
+    path = path or settings.get("RESEARCH_GUARD_STATE") or GUARD_STATE
     if host == "local":
         import time
 

@@ -44,13 +44,13 @@ GUARD_PARAMS = {"key": "00" * 24, "link": "eth0", "lms": {"H": 1, "N": 8, "W": 8
                 "schedule": schedule_json(GUARD), "session": "00" * 32}
 #: The registered hardware of the Lean's `#guard`s (`guardSite`): `eth0` joins the host `node0` and the network
 #: certifier `cert0`, which registers the parameters' key, and `out0` is the certifier's other half, to the outside.
+_GUARD_LOC = {"bw": None, "bytes": 0, "chip": None, "drift": None, "key": "", "owner": "prover", "parent": None,
+              "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None, "timebase": None}
 GUARD_SITE = {
-    "links": [{"beta": 100, "ends": ["node0", "cert0"], "id": "eth0", "latency": 1},
-              {"beta": 100, "ends": ["cert0", "outside"], "id": "out0", "latency": 1}],
-    "locs": [{"bytes": 0, "id": "node0", "key": "", "kind": "host", "owner": "prover", "parent": None, "sheet": "",
-              "tier": None},
-             {"bytes": 0, "id": "cert0", "key": "00" * 24, "kind": "certifier", "owner": "auditor", "parent": None,
-              "sheet": "", "tier": None}],
+    "links": [{"beta": 100, "ends": ["node0", "cert0"], "id": "eth0", "latency": 1, "unmediated": None},
+              {"beta": 100, "ends": ["cert0", "outside"], "id": "out0", "latency": 1, "unmediated": None}],
+    "locs": [_GUARD_LOC | {"id": "node0", "kind": "host"},
+             _GUARD_LOC | {"id": "cert0", "key": "00" * 24, "kind": "certifier", "owner": "auditor"}],
     "sheets": []}
 #: The SHA-512 of `guard_mark(5, 1)`'s certificate's bytes, which the Lean's `#guard` holds too.
 GUARD_START = ("37ccc33e0f5191d268bc91c122be57358555be87a54a8b0fa8384ca157a82be17d31e4d6bae5b7c54bc387c9e7d6f8d0"
@@ -109,19 +109,21 @@ def test_each_rejection_has_its_own_reason(server):
     leaves one it faulted or refused a connection in; an egress or a fails certificate on another link name, at
     another execution phase, an ingress one or one that does not verify; and an egress cells' head that names another
     schedule, or is another execution phase's, link's, session's or key's. Neither reason holds a number: none names
-    an execution phase."""
-    whats, both = Counter(), ("cert-link", "cert-phase")
-    for m, (lean_why, mirror_why) in REASONS.items():
-        for n in range(3 if m in both else 2):
-            case = build(m, n)
-            assert mirror_why in reference(case)["reason"], (m, n, reference(case))
-            verdict, out = D.replay(PORT, case, server)
-            reason = json.loads(out)["reason"]
-            assert verdict == REJECT and lean_why in reason, (m, n, out)
-            assert not numbered(reason, case), (m, n, out)
-            whats[(m, next((w for w, _ in span.records("") if f"the {w} certificate" in reason), None))] += 1
-    for m in both:
-        assert all(whats[(m, w)] for w, _ in span.records("")), whats
+    an execution phase. A certificate on another link name or at another execution phase is named by its record, an
+    egress and a fails one each."""
+    both = ("cert-link", "cert-phase")
+    cases = [(m, n, None) for m in REASONS for n in range(3 if m in both else 2)]
+    cases += [(m, 0, j) for m in both for j in range(len(span.records("")))]
+    for m, n, record in cases:
+        lean_why, mirror_why = REASONS[m]
+        case = build(m, n, record=record)
+        assert mirror_why in reference(case)["reason"], (m, n, record, reference(case))
+        verdict, out = D.replay(PORT, case, server)
+        reason = json.loads(out)["reason"]
+        assert verdict == REJECT and lean_why in reason, (m, n, record, out)
+        assert not numbered(reason, case), (m, n, record, out)
+        if record is not None:
+            assert f"the {span.records('')[record][0]} certificate" in reason, (m, record, out)
 
 
 @lean

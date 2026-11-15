@@ -3,7 +3,7 @@
 Checked today, against ``allowlists/p09_layering.json``:
 
 * ``layer``: an import from a lower layer into a higher one, with every module placed in the layer of its package
-  (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
+  (``_imports.LAYER``; order ``pipeline`` > ``check`` > ``acquire`` > ``observe|commit`` > ``engine`` >
   ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
   module pair.
 * ``package-cycle``: two top-level packages importing each other (``engine.hooks``, ``engine.env`` and
@@ -69,7 +69,7 @@ LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_
 PACKAGE_OF = {
     "verity_vllm.protocols": "protocol_options",
     "verity_vllm.protocols.linear": "linear",
-    "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.protocols.poub": "store",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.engine.runner_step": "runner_step",
@@ -297,7 +297,7 @@ def test_layer_map_names_existing_modules() -> None:
 
 
 def test_detectors_on_examples() -> None:
-    assert I.RANK["pipeline"] > I.RANK["check|properties"] > I.RANK["acquire"] > I.RANK["observe|commit"] \
+    assert I.RANK["pipeline"] > I.RANK["check"] > I.RANK["acquire"] > I.RANK["observe|commit"] \
         > I.RANK["engine"] > I.RANK["query|correspondence"] > I.RANK["program"] > I.RANK["collectives"] \
         > I.RANK["config"] > I.RANK["core"]
     assert I.layer_of("verity_vllm.engine.vllm_adapter") == "engine"

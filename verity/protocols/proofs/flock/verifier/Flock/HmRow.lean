@@ -199,13 +199,13 @@ def byteAt (p : Port) (byte : Nat) : Nat × Nat :=
 
 /-- Column `t` of a message block's 1024 (word `t / 64`, its bit `t % 64`; the block's bytes big-endian per word) as the
 block's byte and the byte's bit. -/
-def blockBit (t : Nat) : Nat × Nat := (8 * (t / 64) + 7 - t % 64 / 8, t % 8)
+def chunkBit (t : Nat) : Nat × Nat := (8 * (t / 64) + 7 - t % 64 / 8, t % 8)
 
 /-- Bit `t` (a block column) of block `k` of row `p`'s message after the prefix: `none` for a row bit (`8 j + b < bits`), else
 the constant there (a fill bit of the last row byte, zero, or SHA-512's padding `tl`). -/
 def constBit (p : Port) (tl : ByteArray) (k t : Nat) : Option Bool :=
-  let j := 128 * k + (blockBit t).1
-  let b := (blockBit t).2
+  let j := 128 * k + (chunkBit t).1
+  let b := (chunkBit t).2
   if 8 * j + b < p.bits then none
   else some (decide (p.bytes ≤ j) && ((tl.get! (j - p.bytes)).toNat >>> b) % 2 == 1)
 
@@ -219,7 +219,7 @@ inductive MsgBit where
   deriving BEq, Repr
 
 def msgBit (p : Port) (k t : Nat) : MsgBit :=
-  let (o, b) := blockBit t
+  let (o, b) := chunkBit t
   match p.segs with
   | none => match constBit p (tailOf p) k t with
     | some v => .const v
@@ -1214,7 +1214,7 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     match TemplateQuery.locate rs i with
     | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the unit class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
+  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
 
 /-- `Q_word` v1's or v2's units, derived from the verifier's own program: the program is the object's, the query evaluates on
@@ -1797,7 +1797,7 @@ the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a templ
 -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
-  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
+  if J.has mj "definition" then throw "META definition: a proof-block class has no templated statement"
   let ctx := "templated statement META"
   let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)

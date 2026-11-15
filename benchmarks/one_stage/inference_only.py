@@ -1,4 +1,4 @@
-"""A served run's inference-only verdict: its declared circuit accepted as at most n (c, k)-inference blocks, or refused,
+"""A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
 by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
@@ -18,7 +18,7 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
   description (`class_doc`), whose one block Definition is a slot's session over every position (`block_counts.session`);
 - c, that Definition's Boolean gates by the gate table (`table_of`), and k, its fresh-input bits (`block_counts.fresh`) with
   θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
-  the weights docket pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
+  the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
   than k and is refused. B's own c is the templates' gates, not the table's Boolean gates the count rule reads;
 - k by kind (``k_by_kind``, `KINDS`), from the same count: ``linears``, the bits of the outputs of the linears a PoUW cut
   leaves outside the circuit (Pearl+'s y), and ``scan_state``, the bits of the scan state row. A kind's bits are what
@@ -39,9 +39,9 @@ its Boolean version where it has one, and otherwise by an explicit circuit of it
 evaluates against the primitive. Any other primitive the table can't price leaves the count undecided, and the verdict
 refuses (`gate-table`).
 
-**The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's declared circuit: the picked window's circuit record at the
+**The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's registered circuit: the picked window's circuit record at the
 policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is the run's block Definition, its gates
-by the table, and its fresh bits at the verifier's pins (``--pins``, the weights docket) and the window's roots
+by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
 are `InferenceOnlyCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
@@ -226,7 +226,7 @@ def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> 
     member stated, which is work per template the counts don't read), and the parameters it registers; `Undecided` where
     the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
-    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
+    import prove_path as PP
     from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.window_circuit import class_circuit
     from verity_vllm.program.predict.window_class import PearlTables

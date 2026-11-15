@@ -44,15 +44,15 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
     malformed one, and blocks in a record that lists its members. Two periods of the class, under other runs, record
     byte-identical blocks."""
     plan = "ab" * 32
-    win = I.Window(blocked(chain_blocks(plan=plan)), RUN, TI.LAW, 2)
+    win = I.Window(blocked(chain_blocks(plan=plan)), RUN, TI.SAMPLING_DESIGN, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert doc["blocks"] == win.circuit.blocks_record() == {
         "format": I.BLOCKS, "proof": {"units": 8, "partition": doc["partition"], "plan": plan},
         "inference": {"slots": 2, "steps": 2, "entries": [{"template": GID, "at": 0, "radix": [2, 2, 2],
                                                            "axes": ["-", "step", "slot"], "step": 0}]}}
     by_id = {GID: TI.GEMM}.__getitem__
-    assert I.window_of_record(doc, TI.LAW, by_id).members == win.window.members
-    other = I.Window(blocked(chain_blocks(plan=plan)), "cd" * 64, TI.LAW, 2)
+    assert I.window_of_record(doc, TI.SAMPLING_DESIGN, by_id).members == win.window.members
+    other = I.Window(blocked(chain_blocks(plan=plan)), "cd" * 64, TI.SAMPLING_DESIGN, 2)
     assert I.circuit_bytes(other.circuit_record()["blocks"]) == I.circuit_bytes(doc["blocks"])
     b = doc["blocks"]
     for bad, why in [({**b, "proof": {**b["proof"], "units": 9}}, "not the record's"),
@@ -65,13 +65,13 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
                      ({**b, "inference": {**b["inference"], "slots": 3}}, "the class's 3 slots"),
                      ({**b, "server": []}, "which host runs which units is private")]:
         with pytest.raises(ValueError, match=why):
-            I.window_of_record({**doc, "blocks": bad}, TI.LAW, by_id)
+            I.window_of_record({**doc, "blocks": bad}, TI.SAMPLING_DESIGN, by_id)
     listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)])))
     with pytest.raises(ValueError, match="one or the other"):
-        I.window_of_record({**listed, "blocks": b}, TI.LAW, by_id)
+        I.window_of_record({**listed, "blocks": b}, TI.SAMPLING_DESIGN, by_id)
     with pytest.raises(ValueError, match="stated with a cap"):
         I.circuit_record(win.window, "chain", [(GID, 8)], blocks=b)
-    assert "blocks" not in I.Window(TI.chain(), RUN, TI.LAW, 2).circuit_record()
+    assert "blocks" not in I.Window(TI.chain(), RUN, TI.SAMPLING_DESIGN, 2).circuit_record()
 
 
 def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_classs_slots_and_steps():
@@ -209,6 +209,6 @@ def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_a
     assert [(m.base, m.n) for m in I.members(plain, cap) if m.template == OID] == [(base[OID], 2 * H * T * S)]
     rec = I.descriptor_record(plain, cap)
     for run in ("ab" * 64, "cd" * 64):
-        w = I.window_of_record({**rec, "run": run, "context": ""}, TI.LAW, I.resolve)
+        w = I.window_of_record({**rec, "run": run, "context": ""}, TI.SAMPLING_DESIGN, I.resolve)
         assert w.members == I.members(plain, cap)
     assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record())

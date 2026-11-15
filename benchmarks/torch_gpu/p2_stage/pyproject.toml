@@ -8,7 +8,8 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_sketch.py"]
-# layout.py and stage.py read the store's load (the prover's p2_store/load.py), which reads the registered scheme
+# layout.py and stage.py (PoUB's prover's p2_stage/, which the tests load by path) read the store's load (the
+# prover's p2_store/load.py), which reads the registered scheme
 # (verity.protocols.accounting.pous.verifier.schemes.p2), the P2 spec's reference (the verifier's p2_v1/reference.py, pinned by
 # vectors.json) and the library's wrapper (the prover's gpu.py); the toy test reads P2's toy store
 # (p2_store/store-toy); gemm.py's check evaluates
@@ -25,7 +26,7 @@ inputs = ["tools/config/verity_config",
           "verity/channel.py",
           "verity/protocols/accounting/poub/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/audit_prover.py",
-          "verity/protocols/accounting/poub/prover/p2_prover.py",
+          "verity/protocols/accounting/poub/prover/p2_prover.py", "verity/protocols/accounting/poub/prover/p2_stage",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/commitments/identity", "verity/commitments/randomness",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
@@ -47,4 +48,4 @@ inputs = ["tools/config/verity_config",
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_p2_stage.py"]
-paths = ["benchmarks/torch_gpu/p2_stage/served_weights.py"]
+paths = ["verity/protocols/accounting/pous/prover/served_weights.py"]

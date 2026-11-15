@@ -2,7 +2,7 @@
 kept outputs: each piece's case, ``case.json``, the ``{"commitment", "evidence", "params"}`` its Lean component's
 ``serve`` reads (the commitment and evidence hex, no blobs), and that component's own answer on it, ``answer.json``,
 whose commitment is the component's digest of the case's commitment: its Lean's with ``--exe``; else PoUS's Python's,
-which its Lean is difftested against, and the wipe's leg's own. Both go to the piece's private directory (0700, its files 0600), which is then the
+which its Lean is difftested against, and the wipe's subprotocol's own. Both go to the piece's private directory (0700, its files 0600), which is then the
 directory composite.py takes as ``--piece``.
 
     served_case.py --window DIR [--private P] [--exe LEAN] [--hf-home H] [--p2-lib LIB] [--device cuda]
@@ -17,7 +17,7 @@ directory composite.py takes as ``--piece``.
   commitment to ``W``, the salt and ``C*``. ``C*`` is encoded again from the served snapshot at the kept salt
   (`reencode`), on ``--device`` as the piece encoded it (the vLLM adapter; ``libp2v1.so`` from ``--p2-lib`` on a GPU),
   and is refused unless it gives the kept commitment, root and table.
-* **The wipe** (`verity/wipe/v0`, `streamed_wipe/served_wipe.sh`): ``DIR/answer.json`` and the case its leg wrote,
+* **The wipe** (`verity/wipe/v0`, `streamed_wipe/served_wipe.sh`): ``DIR/answer.json`` and the case its subprotocol wrote,
   ``wipe.case.json``, in the private directory or else in ``DIR``. The private directory is by default
   ``SERVE_DIR/private/wipe``, ``SERVE_DIR`` the one ``DIR/served.json`` names.
 
@@ -285,14 +285,14 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     return write(private, case, got), got
 
 
-#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_run.leg` holds them (the reasons may differ)
+#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_run.subprotocol` holds them (the reasons may differ)
 WIPE_FIELDS = ("commitment", "protocol", "public", "verdict")
 
 
 def wipe_piece(window: Path, private: Path | None = None, *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
                exe: str | os.PathLike | None = None) -> tuple[Path, dict[str, Any]]:
     """The wipe's piece from its public ``window`` and its kept case (module docstring). The answer written is the
-    leg's own, the public one without the placement the run added to its profile (the Lean's when the leg ran its
+    subprotocol's own, the public one without the placement the run added to its profile (the Lean's when the subprotocol ran its
     judge), or with ``exe`` the Lean's now (`judged`). Returns the private directory and that answer."""
     public = _json(window / ANSWER)
     served = _json(window / "served.json") if (window / "served.json").is_file() else {}
@@ -320,7 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True, help="the piece's public directory (its answer.json)")
     ap.add_argument("--private", type=Path, help="its private directory (default: the one the run kept)")
     ap.add_argument("--hf-home", type=Path, help="PoUS (required): the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda", help="PoUS: where C* is encoded again")
     ap.add_argument("--exe", help="the component's Lean (pous-run-protocol, wipe-protocol), whose answer is written")
     a = ap.parse_args(argv)

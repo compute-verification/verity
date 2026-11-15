@@ -96,7 +96,7 @@ inputs = [
     "verity/protocols/policy/inference_only/verifier/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
-    "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
     # `flock-zk-server live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
@@ -110,6 +110,11 @@ parallel = true
 worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
+# check runs it as six parts by test id (`lean-suites:verity-flock:K/6`, `suites.py`'s `id_part_of`), each collecting every
+# file and running the tests whose node id hashes to K, so that ci.toml's plans put two parts beside the security analysis's
+# audit and four beside the Lean build, the four as one run: whole, on the workers a shard's memory gives it, it ran longest
+# of any step after the Lean build
+parts = 6
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
@@ -124,6 +129,11 @@ artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-veri
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
+tests = ["tests/test_recorded_texts.py"]
+# the source of each file that writes a pinned text
+paths = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/test_backend.py"]
 paths = ["verity/protocols/proofs/flock/prover/python/verity_flock"]
 
@@ -133,7 +143,7 @@ paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_challenger_audit.py"]
-# `lake build sampled-proofs-difftest`: its package and those it requires by path
+# `lake build spot-difftest`: its package and those it requires by path
 paths = [
     "verity/circuits/base",
     "verity/circuits/lean",

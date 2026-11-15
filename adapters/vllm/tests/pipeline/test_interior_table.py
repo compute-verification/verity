@@ -142,7 +142,7 @@ def _first(tables):
     boundary = _boundary()
     stream = S.Stream(_spec(), [RD], span_values=IR.span_values(LINKS), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
-                      sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
+                      sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     c = CS.commit(boundary, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                               "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
     rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
@@ -376,7 +376,7 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
     it = honest
     assert [len(v) for v in it.published.values()] == [C, C]
-    zero = np.zeros(2, np.uint16)
+    zero: np.ndarray = np.zeros(2, np.uint16)
     for t in drawn:
         for k in (C - 1, C, CAP - 1):
             r = IR.table_reads(t, [k])

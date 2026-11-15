@@ -18,7 +18,7 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
-  `LiveChallenger.open_tree` in `verity/core/protocols/spot/challenger.py`), each line its value's
+  `LiveChallenger.open_tree` in `verity/protocols/proofs/spot/device/challenger.py`), each line its value's
   `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
   (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
 * **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
@@ -1085,7 +1085,7 @@ them in a play (`ledger_le`). `draws` are the bits it samples at the close, and 
 A deployment opens only the auditor's live window: the window its ledger's open names (`OpensOn`'s `w`) is the one the
 auditor runs, never one the prover's side chooses, since nothing the verifier keys on comes from the prover's side.
 Here `opens θ a` reads the prover's request `a`, and nothing in this structure ties the window it opens to the
-auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the leg's
+auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the subprotocol's
 assembly takes the live-window rule as a hypothesis or a field. -/
 structure Deployment where
   run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup

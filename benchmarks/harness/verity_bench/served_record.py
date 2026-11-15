@@ -15,7 +15,7 @@ taken too, and then the run's id and commit are not read). Only the second stage
 * The **second stage** publishes ``second.json``, its summary's verifier-side fields (a stand-in run, which serves
   nothing, writes ``summary.json`` whole): `SECOND`.
 * The **first stage** publishes ``stage1.json`` (the class's commitment and layout, the rule, the registration, the
-  sample) and ``check.txt`` (the check of its record and its coins): `STAGE1`, `CHECK`.
+  sample) and ``check.txt`` (the check of its record and its coins): `FIRST_STAGE`, `CHECK`.
 * The **serve** publishes each class's ``commit.json`` (`COMMITS`). Its load (`verity bench serve_tax`'s
   ``meta.json``: its ``wall_s`` and its ``gpu.gpus``) stays on the serving node; where it can be read it is
   ``--serving``, and stock vLLM's on the same load ``--stock``. Without ``--stock``, a serving cost and its source
@@ -56,7 +56,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, overload
 
 from verity_bench import exfiltration as E
 
@@ -70,7 +70,7 @@ SOURCE = E.PROVE_SOURCE
 SOURCES = {"busy": "busy_s", "session": "session_s"}
 #: where a run's directory holds each file, the first that exists
 SECOND = ("out/second.json", "out/second/summary.json", "second/summary.json", "second.json", "summary.json")
-STAGE1 = ("out/stage1/*/stage1.json", "out/first/*/stage1.json", "stage1/*/stage1.json", "first/*/stage1.json",
+FIRST_STAGE = ("out/stage1/*/stage1.json", "out/first/*/stage1.json", "stage1/*/stage1.json", "first/*/stage1.json",
           "stage1.json")
 CHECK = ("out/check.txt", "check.txt")
 COMMITS = ("out/boundary/*/*/commit.json", "boundary/*/*/commit.json", "commit.json")
@@ -93,6 +93,10 @@ def _json(path: Path | None) -> Any:
     return None if path is None else json.loads(path.read_text())
 
 
+@overload
+def _find(directory: Path, patterns: Sequence[str], what: str) -> Path: ...
+@overload
+def _find(directory: Path | None, patterns: Sequence[str], what: str) -> Path | None: ...
 def _find(directory: Path | None, patterns: Sequence[str], what: str) -> Path | None:
     """A run's file: ``directory`` itself where it is a file, else the first of ``patterns`` it holds."""
 
@@ -177,7 +181,7 @@ def _class(path: Any, within: Path | None = None) -> str | None:
     return None if within is not None and parent == Path(within) else parent.name or None
 
 
-def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any,
+def ties(summary: Mapping, handoff: Mapping | None, check: Mapping | None, published: Any,
          first_class: str | None = None) -> list[dict]:
     """What holds the runs' files to each other, each with whether it does (None: a file it reads is not given).
     ``published`` is the serve's ``commit.json`` for the first stage's class: the object, False where the serve
@@ -185,8 +189,8 @@ def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publis
     names its file by."""
 
     first = summary.get("first_stage") or {}
-    registration = None if stage1 is None else stage1.get("registration")
-    sampled = None if stage1 is None else (stage1.get("draw") or {}).get("units")
+    registration = None if handoff is None else handoff.get("registration")
+    sampled = None if handoff is None else (handoff.get("draw") or {}).get("units")
     short = None if check is None else check.get("registration")
 
     def same(*values: Any) -> bool | None:
@@ -198,9 +202,9 @@ def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publis
              "holds": same(_class(summary.get("stage1")), first_class)},
             {"what": "both stages name the same sampled spans", "holds": same(first.get("units"), sampled)},
             {"what": "the first stage's check is of that registration",
-             "holds": None if None in (short, registration) else registration.startswith(short)},
+             "holds": None if short is None or registration is None else registration.startswith(short)},
             {"what": "the first stage's class is the serve's published one, field for field",
-             "holds": None if stage1 is None or published is None else published is not False}]
+             "holds": None if handoff is None or published is None else published is not False}]
 
 
 def served_class(commit: Path | None, name: str | None) -> str | None:
@@ -213,7 +217,7 @@ def served_class(commit: Path | None, name: str | None) -> str | None:
     return full if commit.parent.name == name and E.CLASS_NAME.match(full) else None
 
 
-def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any, machine: Path | None,
+def shown(summary: Mapping, handoff: Mapping | None, check: Mapping | None, published: Any, machine: Path | None,
           first_class: str | None = None, commit: Path | None = None) -> dict:
     """What the audit showed, as its files hold it: counts and codes, no verdict of the reader's own. Its ``class``
     is the one the second stage's summary names its first stage's file by, else the first stage's run's
@@ -243,9 +247,9 @@ def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publi
         values = [read(s) for s in sessions]
         return None if not values or any(v is None for v in values) else float(sum(values))
 
-    layout = (stage1 or {}).get("commit") or (published if isinstance(published, Mapping) else None)
+    layout = (handoff or {}).get("commit") or (published if isinstance(published, Mapping) else None)
     interior = summary.get("interior") or {}
-    draw = (stage1 or {}).get("draw") or {}
+    sample = (handoff or {}).get("draw") or {}
     server = audit.get("proof_server") or {}
     cards = {str(p["device"]): {"sessions": p.get("sessions"), "seconds": p.get("seconds")}
              for p in (server.get("busy") or {}).values() if isinstance(p, Mapping) and p.get("device") is not None}
@@ -259,10 +263,10 @@ def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publi
     return {
         "class": name, "served_class": served_class(commit, name),
         "registration": (summary.get("first_stage") or {}).get("registration"),
-        "ties": ties(summary, stage1, check, published, first_class),
-        "first_stage": None if stage1 is None else {
-            "registration": stage1.get("registration"), "rule": (stage1.get("rule") or {}).get("replay"),
-            "sampled": draw.get("units"), "of": draw.get("population"),
+        "ties": ties(summary, handoff, check, published, first_class),
+        "first_stage": None if handoff is None else {
+            "registration": handoff.get("registration"), "rule": (handoff.get("rule") or {}).get("replay"),
+            "sampled": sample.get("units"), "of": sample.get("population"),
             "check": None if check is None else {k: check.get(k) for k in ("error", "session_error", "coins_reason", "said")}},
         "layout": None if layout is None else {k: layout[k] for k in LAYOUT if k in layout}
         | {"values": sorted(layout.get("values") or {})},
@@ -340,7 +344,7 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
             lacks("staging.gpus", "`audit.staging` holds its seconds and not the GPUs it held (`gpus`)")
 
     own = _find(replay, REPLAY, "a replay's run")
-    parts = {}
+    parts: dict[str, list[dict] | None] = {}
     for field, key in (("replay", "replay"), ("interior", "interior_commit")):
         held = summary.get(key)
         parts[field] = None
@@ -351,17 +355,18 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
                     lacks(f"{field}.{k}", f"`{key}` holds no `{k}`")
         elif field == "replay" and own is not None:
             its = json.loads(own.read_text())
-            parts[field] = [_entry(its.get("replay_wall_s"), its.get("gpus"))]
+            replayed = _entry(its.get("replay_wall_s"), its.get("gpus"))
+            parts[field] = [replayed]
             for k, why in (("seconds", "the replay's own file holds no `replay_wall_s`"),
-                           ("gpus", "the replay's own file holds its seconds (`replay_wall_s`) and not the GPUs its "
-                                    "engine held (`gpus`)")):
-                if parts[field][0][k] is None:
+                           ("gpus", ("the replay's own file holds its seconds (`replay_wall_s`) and not the GPUs its "
+                                     "engine held (`gpus`)"))):
+                if replayed[k] is None:
                     lacks(f"replay.{k}", why, own)
         else:
             lacks(field, f"`{key}` is absent: the two-stage audit reads no clock over it")
 
-    its = _find(first, STAGE1, "a first stage's run")
-    stage1 = _json(its)
+    its = _find(first, FIRST_STAGE, "a first stage's run")
+    handoff = _json(its)
     check = None
     if first is not None and Path(first).is_dir():
         check = check_of(next((p for pattern in CHECK for p in sorted(Path(first).glob(pattern))), None))
@@ -371,7 +376,7 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
                    [p for pattern in COMMITS for p in sorted(Path(serve).glob(pattern))])
         if not commits:
             raise ValueError(f"{serve} holds none of {', '.join(COMMITS)}: it is not a serve's run")
-        wanted = (stage1 or {}).get("commit")
+        wanted = (handoff or {}).get("commit")
         found = next(((p, c) for p, c in ((p, _json(p)) for p in commits) if wanted is None or c == wanted), None)
         published = False if found is None else found[1]
         at = None if found is None or wanted is None else found[0]
@@ -381,8 +386,8 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
               **parts, "serving": _load(serving, "serving", absent), "stock": _load(stock, "stock", absent)}
     if record["stock"] is None and serving_cost is not None:
         record |= {"serving_cost": serving_cost, "serving_cost_source": serving_cost_source}
-    record["audit"] = shown(summary, stage1, check, published, machine,
-                            None if its is None or Path(first).is_file() else _class(its, Path(first)), at)
+    record["audit"] = shown(summary, handoff, check, published, machine,
+                            None if first is None or Path(first).is_file() else _class(its, Path(first)), at)
     return record, absent
 
 

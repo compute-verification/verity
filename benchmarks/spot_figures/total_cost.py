@@ -4,7 +4,7 @@ deployment costs as a share of serving compute, one line per server configuratio
 that bounds it, skipped work.
 
 A configuration (`CONFIGURATIONS`) is what serving commits at serve time, the replay block that follows from it and the
-design the audit samples with.  Its serve tax, what that change to the production server costs on every token, is one
+design the audit samples with.  Its serve tax, what that change to serving costs on every token, is one
 number in the model's `serve_tax` card, priced (`priced_card`) or measured.  A line's x is its tax plus β, the share
 of the scope's compute the audit spends on replays, interior commitments and proofs of the sampled proof blocks, and
 its y the bound at β on Figure 1's model (`figure1.model`).  So each line starts at its own tax.  Every line prices a
@@ -111,7 +111,7 @@ PANELS = ("exfiltration", "infiltration", "skipped_work")
 TICKS = (0.984, 0.960)
 #: a request's lifetime over the 600 s window, the share of its K/V alive at an edge: the central, least and most
 LIVE = (0.15, 0.05, 0.5)
-#: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`verity/protocols/proofs/spot/prover/cost/window_cost.py`'s `RATES`)
+#: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`benchmarks/prove_path/window_cost.py`'s `RATES`)
 HASH_RATES = (4096 / 44 * 4.79e9, 4096 / 44 * 3.1e9)
 #: the pause at a replay block's edge, seconds, measured on GLM-5.3 at TP8 over 21 edges (rank 0's copy of its 37.26 GB
 #: KV pool to pinned host memory, each rank's SHA-512 rows of its own, the runner rows and the scheduler state): the
@@ -662,7 +662,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     sizes: dict = {}
     for c in split:
         sizes[c.stratum] = sizes.get(c.stratum, 0.0) + c.n
-    draw = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * sample_width(ceil(n)) + 64) for t, n in sizes.items())
+    sample = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * sample_width(ceil(n)) + 64) for t, n in sizes.items())
     tables = ceil(row["tables"] - 1e-9)
     past = [f"{what} {n:,}" for n, what in TABLE_LIMITS if tables > n]
     limit = None
@@ -672,10 +672,10 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     elif lines > LOG_LINES:
         limit = (f"its sessions write at least {lines:,.0f} lines of session coins, and one challenger session's "
                  f"release log holds {LOG_LINES:,}")
-    elif draw > DRAW_BYTES:
-        limit = (f"its second draw reads {draw:,.0f} bytes of live coins, and one layout of the challenger's holds "
+    elif sample > DRAW_BYTES:
+        limit = (f"its second sample reads {sample:,.0f} bytes of live coins, and one layout of the challenger's holds "
                  f"{DRAW_BYTES:,}")
-    return {"lines": lines, "draw_bytes": draw, "limit": limit}
+    return {"lines": lines, "draw_bytes": sample, "limit": limit}
 
 
 def session_designs(cells: list, g: Grain, m: f1.Model, budget: float, form: str, span: float, served: float) -> dict:
@@ -806,7 +806,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                 f"verification phase it fits (one machine's {least * window / 3600:,.3g} hours);{beside()}")
 
     head = (f"{f1.ROLES} {f1.TRUST} "
-            "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
+            "x is the serve tax, what each configuration's change to serving costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
@@ -850,7 +850,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"the CPU prover and in the Lean verifier, {TABLE_LIMITS[2][0]} in the challenger's coin commitment or "
              f"{SESSION_TABLES} in the proved scope; more lines of session coins than one challenger session's "
              f"release log holds ({LOG_LINES:,}, a session writing at least 2 and {TABLE_LINES} a table); or a second "
-             f"draw of more bytes of live coins than one layout holds ({DRAW_BYTES:,}). Its bound is then the cost "
+             f"sample of more bytes of live coins than one layout holds ({DRAW_BYTES:,}). Its bound is then the cost "
              "model's alone, of a deployment no code runs. "
              "The verification phase, its K and its statements' split are the "
              "protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "

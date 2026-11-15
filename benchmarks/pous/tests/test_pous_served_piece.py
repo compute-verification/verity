@@ -6,7 +6,7 @@ model in the BF16 pin's form, each linear bf16 [N, K] with no scale. P2 runs at 
 1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
 over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
-(`served_verdicts.piece_row`, `block_record.leg`).
+(`served_verdicts.piece_row`, `block_record.subprotocol`).
 """
 from __future__ import annotations
 
@@ -321,8 +321,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-    leg = BR.leg("pous", row, server=NODE, runs=[])
-    assert leg["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
+    subprotocol = BR.subprotocol("pous", row, server=NODE, runs=[])
+    assert subprotocol["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
 
     prof = answer["profile"]
     w_bytes = sum(n * k for n, k in SHAPES.values()) * LAYERS
@@ -365,6 +365,15 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] != "ab" * 64
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
+
+
+def test_the_line_reads_a_placement_recorded_before_the_rename():
+    """An answer recorded before the assumption's id was renamed names its premise under `mc.PREMISE_BEFORE`: its line
+    says the same premise as the answer under `trusted-device`."""
+    premise = f"holds: the session is signed under the key configuration {CONF} pins; the memory challenger ran on x"
+    answer = {"verdict": "accept", "public": {}, "profile": {"weights": {}, "placement": {CS.PREMISE: premise}}}
+    before = answer | {"profile": {"weights": {}, "placement": {mc.PREMISE_BEFORE: premise}}}
+    assert SP.line(before) == SP.line(answer) and f"; {CS.PREMISE} {premise}; " in SP.line(answer)
 
 
 def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(served_bf16, tmp_path, monkeypatch):

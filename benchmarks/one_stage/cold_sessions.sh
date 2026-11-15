@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# One cold session a member of a kept window behind the ZK server, on one card and on the CPU prover in turn
+# One cold session a member of a kept window behind the ZK server, on one card, then on the CPU prover
 # (cold_sessions.py), with the builds as zk_cost.sh makes them. Run from the verity tree on a GPU node, as a GPU host job:
 #   bash benchmarks/one_stage/cold_sessions.sh COLD_STAGE=probe|build|run COLD_ARCHIVE=FILE COLD_MEMBERS=K,K,... COLD_CARD=I
 # env: COLD_ARCHIVE (a .tar.zst holding audit/window/{m<k>/,session-m<k>/ (its sample),partition.json,program.json,summary.json}
 #        and window/circuit.json, the window's registered circuit record)
-#      COLD_MEMBERS (run in this order, each member's arms one after the other)  COLD_ARMS=gpu,cpu  COLD_CARD (an index)
+#      COLD_MEMBERS (run in this order, every member on one arm before the next arm, so the card is held only while the
+#        gpu arm runs)  COLD_ARMS=gpu,cpu  COLD_CARD (an index; only a gpu arm reads it)
 #      COLD_CPUS=0-9 (every session's processes)  COLD_LEAN_CPUS=10-11 (the Lean verdicts, one at a time, beside the sessions)
 #      COLD_OPEN (epoch: the run sleeps on one CPU until then)  COLD_END (epoch: no session starts whose estimate ends after
-#        it; the estimate is COLD_EST_<arm>_<k> seconds, else COLD_EST_<arm>, default 1800)
+#        it; COLD_END_<arm> for that arm's sessions alone, as the end of the card's row; the estimate is
+#        COLD_EST_<arm>_<k> seconds, else COLD_EST_<arm>, default 1800)
 #      COLD_SCRATCH=/dev/shm/proofs-cold (the window unpacked and the sessions' files; removed at the end)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput, PT_WORK=/workspace/cache/proof-throughput (the builds, as zk_cost.sh's)
 #      a file $FLOCK_WORK/cold.stop stops the run before its next session
@@ -44,7 +46,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 COLD() { "$PY" benchmarks/one_stage/cold_sessions.py "$@"; }
 
 W=$SCR/window/audit/window; IFACE=$SCR/window/window/circuit.json
@@ -144,49 +146,58 @@ done
 sha256sum "$BIN" "$LEAN" "$LOOP" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 [ "$STAGE" = build ] && { log "build: done"; exit 0; }
 
-card_free || exit 11
-trap 'rm -rf "$SCR"' EXIT
+ARMS=${COLD_ARMS:-gpu,cpu}
+case ",$ARMS," in *,gpu,*) card_free || exit 11 ;; esac
+# the stamping wrappers are scripts: on /workspace, since a node may mount /dev/shm noexec
+STAMPED=$FLOCK_WORK/cold-stamped/${RESEARCH_RUN_ID:-$$}
+trap 'rm -rf "$SCR" "$STAMPED"' EXIT
 unpack || exit 1
 S=$SCR/sessions; mkdir -p "$S"
-read -r WBIN WLEAN WLOOP < <("$PY" benchmarks/one_stage/member_seconds.py wrap "$SCR/stamped" "$BIN" "$LEAN" "$LOOP" | tr '\n' ' ')
+read -r WBIN WLEAN WLOOP < <("$PY" benchmarks/one_stage/member_seconds.py wrap "$STAMPED" "$BIN" "$LEAN" "$LOOP" | tr '\n' ' ')
+findmnt -no OPTIONS --target "$STAMPED" | grep -qw noexec && { log "$STAMPED is on a noexec mount: its wrappers can't run"; exit 1; }
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/cold-sessions/${RESEARCH_RUN_ID:-local}}
 END=${COLD_END:-$(( $(date +%s) + 86400 ))}
 est() { local v="COLD_EST_$1_$2" w="COLD_EST_$1"; echo "${!v:-${!w:-1800}}"; }
+end_of() { local v="COLD_END_$1"; echo "${!v:-$END}"; }
 keep() {
   (cd "$S" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
     \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/sessions/")
-  cp "$SCR/stamped/stamps.txt" "$O/" 2>/dev/null
+  cp "$STAMPED/stamps.txt" "$O/" 2>/dev/null
 }
 mkdir -p "$O/sessions"
 VQ=$SCR/verify.lock
 # Lean's verdict (`a0.lean_verify`, which starts the verifier in `verifier_env`) on the Lean CPUs
 VERDICT() { taskset -c "$LCPUS" "$PY" benchmarks/one_stage/cold_sessions.py verify "$@"; }
 rc=0
-log "run: members $COLD_MEMBERS, arms ${COLD_ARMS:-gpu,cpu}, card $COLD_CARD, until $(date -u -d "@$END" +%H:%MZ)"
-for k in ${COLD_MEMBERS//,/ }; do
-  for arm in ${COLD_ARMS//,/ }; do
+log "run: members $COLD_MEMBERS, arms $ARMS, card ${COLD_CARD:-none}, until $(date -u -d "@$END" +%H:%MZ)"
+for arm in ${ARMS//,/ }; do
+  ae=$(end_of "$arm")
+  for k in ${COLD_MEMBERS//,/ }; do
     [ -e "$FLOCK_WORK/cold.stop" ] && { log "stopped by $FLOCK_WORK/cold.stop"; break 2; }
     e=$(est "$arm" "$k"); now=$(date +%s)
-    if [ $(( now + e )) -gt "$END" ]; then log "m$k $arm: skipped, its estimate ${e} s would end past $(date -u -d "@$END" +%H:%MZ)"; continue; fi
+    if [ $(( now + e )) -gt "$ae" ]; then log "m$k $arm: skipped, its estimate ${e} s would end past $(date -u -d "@$ae" +%H:%MZ)"; continue; fi
     args=(--window "$W" --interface "$IFACE" --member "$k" --arm "$arm" --out "$S")
-    mm=$(( (e + 59) / 60 + 15 )); left=$(( (END - now) / 60 )); [ "$mm" -gt "$left" ] && mm=$left
+    mm=$(( (e + 59) / 60 + 15 )); left=$(( (ae - now) / 60 )); [ "$mm" -gt "$left" ] && mm=$left
     log "m$k $arm: start (estimate ${e} s, limit ${mm} min)"
     if [ "$arm" = gpu ]; then
-      card_free || { rc=11; break 2; }
+      card_free || { rc=11; break; }
       "${LEASE[@]}" 1 --on "$COLD_CARD" --cores "$CPUS" --max-min "$mm" -- bash -c '"$@" --device "$CUDA_VISIBLE_DEVICES" --card "$GPU_LEASE_UUID"' _ \
         "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --zk-server "$WLOOP" \
-        --stamps "$SCR/stamped/stamps.txt" --timeout $(( mm * 60 - 30 )) >> "$O/cold.log" 2>> "$O/cold.err"
+        --stamps "$STAMPED/stamps.txt" --timeout $(( mm * 60 - 30 )) >> "$O/cold.log" 2>> "$O/cold.err"
       x=$?
     else
       taskset -c "$CPUS" "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --zk-server "$WLOOP" \
-        --stamps "$SCR/stamped/stamps.txt" --timeout $(( mm * 60 )) >> "$O/cold.log" 2>> "$O/cold.err"
+        --stamps "$STAMPED/stamps.txt" --timeout $(( mm * 60 )) >> "$O/cold.log" 2>> "$O/cold.err"
       x=$?
     fi
-    log "m$k $arm: exit $x; $(grep -c "^COLD .*\"k\": $k, .*\"arm\": \"$arm\"" "$O/cold.log") record"
-    [ "$x" = 75 ] && { log "the lease refused card $COLD_CARD (75)"; rc=11; break 2; }
+    n=$(grep -c "^COLD .*\"k\": $k, .*\"arm\": \"$arm\"" "$O/cold.log")
+    log "m$k $arm: exit $x; $n record"
+    [ "$n" = 0 ] && [ "$rc" = 0 ] && rc=1
+    [ "$x" = 75 ] && { log "the lease refused card $COLD_CARD (75)"; rc=11; break; }
     # the verdict on the Lean CPUs, one at a time, beside the next session
     ( flock 7; VERDICT "${args[@]}" --lean "$WLEAN" >> "$O/cold.log" 2>> "$O/cold.err" ) 7> "$VQ" &
   done
+  [ "$arm" = gpu ] && log "card $COLD_CARD: the gpu arm is over, no session of this run holds it from here"
 done
 log "sessions done; waiting for the verdicts"
 wait

@@ -208,57 +208,10 @@ theorem verdictAccepts : VerdictAccepts := by
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hd ht
   exact ⟨hco.1.1, ⟨o, hmem, hoj, hco.1.2, hco.2⟩, hd.1, hd.2, ht.1, ht.2⟩
 
-theorem forIn'_yield_self {α σ : Type} (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ))
-    (hf : ∀ a h b, f a h b = pure (.yield b)) (init : σ) : forIn' l init f = pure init := by
-  induction l generalizing init with
-  | nil => rfl
-  | cons a as ih =>
-    rw [List.forIn'_cons, hf a List.mem_cons_self, pure_bind]
-    exact ih _ (fun a' m b => hf a' _ b) init
-
-private theorem commitment_beq_self (a : ChallengePhaseCommitment) : (a == a) = true := by
+theorem commitment_beq_self (a : ChallengePhaseCommitment) : (a == a) = true := by
   cases a
   simp only [BEq.beq]
   simp [instBEqChallengePhaseCommitment.beq]
-
-private theorem pre_eq_empty (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase)
-    (c : ChallengePhaseCommitment) (p : Lms.Params) (hp : schemes.lookup s.scheme = some p) (ht : s.publicKey ∈ trusted)
-    (m : ByteArray) (hm : s.message = .ok m) (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
-    (hc : s.commitment = c) (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k) :
-    pre schemes trusted s c = #[] := by
-  subst hc
-  unfold pre
-  have hb : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true := by
-    simp [hm, hv, bind, Except.bind]
-  simp [hp, ht, hb, he, hn, commitment_beq_self, Id.run]
-  rfl
-
-/-- **The converse of `VerdictAccepts`**: a session signed under an accepted scheme by a trusted key, whose signature
-verifies over its message, whose header is the commitment, ended complete after `c.k` rounds, and each of whose rounds
-is its committed coin, the expected digest of a block of `C` and on time, is accepted. -/
-theorem verdict_accepted_of (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
-    (s : SignedChallengePhase) (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (p : Lms.Params)
-    (hp : schemes.lookup s.scheme = some p) (ht : s.publicKey ∈ trusted) (m : ByteArray) (hm : s.message = .ok m)
-    (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
-    (hc : s.commitment = c) (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k)
-    (hr : ∀ j (hj : j < s.rounds.size),
-      (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
-        verifyCoin c o = true) ∧
-      s.rounds[j].index < c.blocks ∧ expected s.rounds[j].index = some s.rounds[j].digest ∧
-      0 ≤ s.rounds[j].elapsedNs ∧ s.rounds[j].elapsedNs ≤ c.limitNs) :
-    (verdict schemes trusted expected s c openings).accepted = true := by
-  rw [verdict_eq, pre_eq_empty schemes trusted s c p hp ht m hm hv hc he hn]
-  unfold tail
-  simp only [Id.run]
-  rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_yield_self, pure_bind]
-  · rfl
-  intro j hj b
-  have hj' : j < s.rounds.size := by
-    simp [Std.Legacy.Range.size] at hj
-    omega
-  obtain ⟨⟨o, ho, hrj, hoi, hvc⟩, hb, hd, h0, hl⟩ := hr j hj'
-  simp only [ho]
-  simp [hrj, hoi, hvc, hb, hd, h0, hl]
 
 theorem judgeAccepts : JudgeAccepts := by
   intro r hj
@@ -290,8 +243,8 @@ private theorem forIn'_fix {α σ : Type} (l : List α) (f : (a : α) → a ∈ 
     rw [List.forIn'_cons, hf a List.mem_cons_self]
     exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m => hf a' _)
 
-private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession}
-    {c : SessionCommitment} {p : Lms.Params} {m : ByteArray} (hp : schemes.lookup s.scheme = some p)
+private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedChallengePhase}
+    {c : ChallengePhaseCommitment} {p : Lms.Params} {m : ByteArray} (hp : schemes.lookup s.scheme = some p)
     (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
     (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
     (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k) : pre schemes trusted s c = #[] := by
@@ -300,7 +253,7 @@ private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s :
   simp [hp, ht', hm, hv, hc, he, hn, bind, Except.bind, Id.run]
   rfl
 
-private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : SignedSession} {c : SessionCommitment}
+private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : SignedChallengePhase} {c : ChallengePhaseCommitment}
     {openings : Array CoinOpening}
     (h : ∀ j (hj : j < s.rounds.size),
       (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
@@ -324,7 +277,7 @@ names, a trusted key whose signature over the session's message verifies, the co
 rounds, and each round's index its committed coin (the last opening for its `j`), its digest the expected one, on
 time. -/
 theorem verdict_accepted_of {schemes : Schemes} {trusted : List ByteArray} {expected : Nat → Option ByteArray}
-    {s : SignedSession} {c : SessionCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
+    {s : SignedChallengePhase} {c : ChallengePhaseCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
     (hp : schemes.lookup s.scheme = some p) (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
     (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
     (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k)

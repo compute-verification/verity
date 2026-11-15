@@ -22,7 +22,8 @@ its openings coin at W + t, and the append coins in the order sampled). Each eve
 * `close(t)`: the window's samples, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the samples); rejected `malformed` on a window with
-  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
+  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any
+  window.
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
@@ -86,7 +87,7 @@ structure State where
   digest : ByteArray
   coins : Array ByteArray
   appendCoins : Array ByteArray
-  appendDrawn : Nat := 0
+  appendSampled : Nat := 0
   notBeforeNs : Nat
   windows : Array Win := #[]
   filling : Nat := 0
@@ -174,12 +175,12 @@ def append (s : State) (root : ByteArray) (count : Int) : Except String (Result 
     return s.fail s.filling .append
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
-  let some coin := s.appendCoins[s.appendDrawn]? | throw "the append coins ran out"
+  let some coin := s.appendCoins[s.appendSampled]? | throw "the append coins ran out"
   let first := s.extent
   let n := count.toNat
   return (.appended first coin,
     { s with
-      appendDrawn := s.appendDrawn + 1
+      appendSampled := s.appendSampled + 1
       appends := s.appends.push ⟨first, n, root, coin⟩
       head := some (appendHead s.head first n root)
       extent := first + n })
@@ -278,19 +279,19 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   let s := { s with windows := s.windows.modify t ({· with final := true}) }
   if w.roots.size < s.params.minPasses then return s.fail t .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
-  let some drawn := receiptSample s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
+  let some sampled := receiptSample s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
     | throw "the openings' draw ran past its reads"
-  return (.drew drawn, { s with windows := s.windows.modify t ({· with drawn := some drawn, openedNs := some now}) })
+  return (.drew sampled, { s with windows := s.windows.modify t ({· with drawn := some sampled, openedNs := some now}) })
 
 def verify (s : State) (t : Int) (openings : Array Opening) : Result × State := Id.run do
   if let some r := live s then return (r, s)
   if t < 0 || t ≥ s.windows.size then return (.refused "the window has no draws awaiting openings", s)
   let t := t.toNat
   let w := s.windows[t]!
-  let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
+  let some sampled := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
-  if drawn.isEmpty then return s.fail t .malformed
-  let v := checkWindow s.reg s.digest s.appends (s.record t) drawn openings
+  if sampled.isEmpty then return s.fail t .malformed
+  let v := checkWindow s.reg s.digest s.appends (s.record t) sampled openings
   if v = .accept then return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   return s.fail t v.rejection.failure v.rejection.at?
 
@@ -299,9 +300,9 @@ digest, the appends, the window's record and its samples (`none` where `verify` 
 def State.awaiting (s : State) (t : Int) : Option (WindowRecord × Array (Nat × Nat)) := do
   if s.failed.isSome || t < 0 || t ≥ s.windows.size then none
   let w := s.windows[t.toNat]!
-  let drawn ← w.drawn
+  let sampled ← w.drawn
   if w.verdict.isSome then none
-  pure (s.record t.toNat, drawn)
+  pure (s.record t.toNat, sampled)
 
 /-- `verify` with the window's verdict `check` computed on its samples: `verify s t openings` is
 `verifyBy s t (checkWindow s.reg s.digest s.appends (s.record t.toNat) · openings)` (`verify_eq_verifyBy`). -/
@@ -310,10 +311,10 @@ def verifyBy (s : State) (t : Int) (check : Array (Nat × Nat) → Verdict) : Re
   if t < 0 || t ≥ s.windows.size then return (.refused "the window has no draws awaiting openings", s)
   let t := t.toNat
   let w := s.windows[t]!
-  let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
+  let some sampled := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
-  if drawn.isEmpty then return s.fail t .malformed
-  let v := check drawn
+  if sampled.isEmpty then return s.fail t .malformed
+  let v := check sampled
   if v = .accept then return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   return s.fail t v.rejection.failure v.rejection.at?
 

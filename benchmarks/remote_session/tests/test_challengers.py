@@ -318,7 +318,8 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         source = host.gate(tmp_path / "out")
     else:
         (tmp_path / "served").mkdir()
-        serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+        serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+                 str(LIVE / "serve.py"), "--keygen-workers", "1")
         source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
     (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
@@ -453,8 +454,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert "store bound: yes, to synthetic-bf16" in al.table(doc).splitlines()
         assert honest["error"] == al.session_error(sessions[0]) and "error" not in dropper
         lg = sessions[0]["ledger"]
-        assert honest["error"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
-        assert [honest["error"][f"delta_{n}"] for n in al.ledger.DELTA_PARTS] == [
+        assert honest["error"]["exact"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
+        assert [honest["error"]["exact"][f"delta_{n}"] for n in al.ledger.DELTA_PARTS] == [
             lg["delta"][n] for n in al.ledger.DELTA_PARTS]
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
@@ -573,7 +574,7 @@ LINE_PIECES = ["challenger_head", "challenger_credited", "challenger_pinned", "c
 
 
 def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_none(host, tmp_path, monkeypatch):
-    """`auditor_line` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, each gate session's
+    """`auditor_line` asks the Lean verifier (`spot-verifier`) for the ledger's head, each gate session's
     *credited* and *pinned* checks and its read of the ledger, and acts on its answers: an honest session the Python
     credits is credited where the Lean agrees. Where the Lean refuses the head, or answers it otherwise than the Python,
     the run's line is refused; where it does so for the credit, the pin or the session's read of the ledger, the
@@ -636,7 +637,8 @@ def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_
     and not refused as `coins`."""
     lean_stands_in.unwritten(monkeypatch)
     (tmp_path / "served").mkdir()
-    serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+    serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+             str(LIVE / "serve.py"), "--keygen-workers", "1")
     source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,
                                 defer_openings=False)
@@ -898,7 +900,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
     fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
     def session(profile: float, passes: int, sketch: float, *, charged: bool = True) -> dict:
-        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": al.ledger.hiding_over(passes),
+        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": float(al.ledger.hiding_over(passes)),
              "sketch": sketch}
         if charged:
             d["rejection"] = 48 * passes * 2.0 ** -64
@@ -933,6 +935,16 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     bad["ledger"]["delta"]["sketch"] = 2.0 ** -31
     with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
         al.session_error(bad)
+    texts = json.loads(json.dumps(a))
+    texts["ledger"]["delta"] = {n: str(Fraction(x)) for n, x in a["ledger"]["delta"].items()}
+    exact = sum(map(Fraction, texts["ledger"]["delta"].values()), Fraction(0))
+    for m in texts["ledger"]["declared"]["memory"].values():
+        m.update({"delta": str(exact)} if "delta" in m else {})
+    assert al.session_error(texts)["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(exact)}, (
+        "a ledger that writes its δ and parts as ratio text is read exactly: the hiding part is in the total")
+    texts["ledger"]["delta"]["sketch"] = str(Fraction(1, 2 ** 31))
+    with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
+        al.session_error(texts)
     two = json.loads(json.dumps(a))
     two["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"] *= 2
     with pytest.raises(al.Disagree, match="the ledger computes one"):

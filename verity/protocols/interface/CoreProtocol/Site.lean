@@ -355,6 +355,12 @@ def Composite.onsite : Composite :=
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
+/-- **Remote's plain sibling**, the spec's `Verity.Registration.Composite.plain`: remote's list with the inference-only
+policy's rows check in place of v0. No composite the code builds is this list: `Core.Composites.ofIds` refuses it by
+name. -/
+def Composite.plain : Composite :=
+  ["verity/inference-only/rows/v1", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
+
 /-- The digests the log names things by: a sheet's, an entry's, and the head of a composite's empty log. -/
 structure Digests where
   sheet : Sheet → String
@@ -566,7 +572,7 @@ def hostsOf (i : String) : List String :=
 
 end Site
 
-/-! ## The JSON `verity.core.site` writes, and the deployed digests -/
+/-! ## The JSON `verity.device` writes, and the deployed digests -/
 
 namespace Site
 
@@ -594,19 +600,19 @@ def Tier.name : Tier → String
 def Owner.name : Owner → String
   | .prover => "prover" | .auditor => "auditor"
 
-/-- A composite's name in `verity.core.site` (`COMPOSITES`): onsite's and remote's. No other list has a name there, so
+/-- A composite's name in `verity.device` (`COMPOSITES`): onsite's and remote's. No other list has a name there, so
 it is named by its ids, comma-separated, and no log read from JSON is registered for it (`Registration.Composite.ofJson`
 reads the two names). -/
 def Registration.Composite.name (c : Registration.Composite) : String :=
   if c = .onsite then "onsite" else if c = .remote then "remote" else ",".intercalate c
 
-/-- A refusal's name in `verity.core.site` (`REFUSALS`): the constructor's, in kebab case. -/
+/-- A refusal's name in `verity.device` (`REFUSALS`): the constructor's, in kebab case. -/
 def Registration.Refusal.name : Registration.Refusal → String
   | .previous => "previous" | .duplicateId => "duplicate-id" | .unknownRef => "unknown-ref" | .kind => "kind"
   | .sheetDigest => "sheet-digest" | .figures => "figures" | .capacity => "capacity" | .owner => "owner"
   | .inventory => "inventory" | .uncertified => "uncertified" | .challengerReach => "challenger-reach"
 
-/-- An operand class's name in `verity.core.site` (`OPERAND_CLASSES`): the constructor's, in kebab case. -/
+/-- An operand class's name in `verity.device` (`OPERAND_CLASSES`): the constructor's, in kebab case. -/
 def OperandClass.name : OperandClass → String
   | .uniformS8 => "uniform-s8" | .uniformS2 => "uniform-s2" | .uniformU2 => "uniform-u2" | .uniformU4 => "uniform-u4"
   | .zero => "zero"
@@ -649,7 +655,7 @@ def toJson (S : Site) : Json :=
   Json.mkObj [("links", .arr (S.links.map Link.toJson).toArray), ("locs", .arr (S.locs.map Loc.toJson).toArray),
     ("sheets", .arr (S.sheets.map Sheet.toJson).toArray)]
 
-/-- The deployed digests: SHA-512 over the JSON `verity.core.site` writes, under the registration log's tags. -/
+/-- The deployed digests: SHA-512 over the JSON `verity.device` writes, under the registration log's tags. -/
 def Registration.sha512 : Registration.Digests where
   sheet k := tagged SHEET k.toJson
   entry e := tagged SITE e.toJson

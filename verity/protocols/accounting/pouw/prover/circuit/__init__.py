@@ -13,7 +13,7 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the execution phase's refusal of a repeated call index.
-* `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
+* `plan`: closure samples behind a sampling-design seam (`CountSamplingDesign`, and `WorkSamplingDesign`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
 * `tile_units`: what the tile checks share: their emitter, the ok word, the digest families, the row cut's shape
   (`RowK`), the unit roles and the cut of a root into units (`units`, `unit_cut`).
 * `pc8`: Pearl-C's (FP8, forming v1) tile check as a Program, cut into row and tile units, and its hiding Program
@@ -121,7 +121,7 @@ class Traced:
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
-    def draw(self, law, anchors, ledger):
+    def draw(self, sampling_design, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
         ``ledger``, the execution phase's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
@@ -137,7 +137,7 @@ class Traced:
         ledger.check_draw()
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
-        return plan.draw(ledger.key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+        return plan.draw(ledger.key, self.layout(), sampling_design, index if isinstance(index, tuple) else (index,))
 
     def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under

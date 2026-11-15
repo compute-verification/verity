@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 from types import SimpleNamespace
+from typing import TypedDict
 
 import numpy as np
 import pytest
@@ -43,8 +44,14 @@ LAT = descriptor_id(bind(BDN.DsaLatentRowV2, KVL=KVL, R=R, EPS=EPS))
 READ = descriptor_id(EMB.read(HT.CAPACITY, WORDS))
 TMPLS, CAPS = [LAT, READ], {LAT: 4, READ: 3}
 PROGRAM, RUN = "ab" * 64, "cd" * 32
+class Window(TypedDict):
+    step: int
+    tokens: int
+    reads: list[tuple[int, int, list[int]]]
+
+
 #: each window's steps: its latent rows' tokens, and its long rows, each (layer, its token, its keys)
-WINDOWS = [
+WINDOWS: list[Window] = [
     {"step": 0, "tokens": 5, "reads": [(3, 3, [0, 2, 3, 9]), (3, 4, [1, 3, 4, 0]), (5, 3, [3, 2, 1, 0]), (5, 4, [4, 4, 0, 7])]},
     {"step": 1, "tokens": 1, "reads": [(5, 0, [5, 0, 3, 2])]},
 ]
@@ -64,7 +71,9 @@ def build(monkeypatch) -> SimpleNamespace:
     store of their served latent rows (each its `LATENT` on its kv, the layer's norm weight and its cache row) and every latent
     row by (layer, position); the serving rows read their operands from here on."""
     rng = np.random.default_rng(0xD5A)
-    ops, held, latent, windows, i = {}, {}, {}, [], 0
+    held: dict[tuple[int, str, int], np.ndarray] = {}
+    latent: dict[tuple[int, int], np.ndarray] = {}
+    ops, windows, i = {}, [], 0
     norm = {layer: _bf16(rng, KVL, 0.05, 1.0) for layer in LAYERS}
     for layer in LAYERS:
         ops[json.dumps([["p", layer, 0, KVL]])] = norm[layer]
@@ -181,13 +190,15 @@ def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
 def windows(served, commit=None):
     """Both windows over one committer's tables, each window's members and what it commits (`serving_rows.window_values`),
     checked as the module docstring says; ``commit`` (members, values) -> what else to check of the window."""
-    hs, held = H.Histories(PROGRAM), {}
+    hs = H.Histories(PROGRAM)
+    held: dict[str, list[bytes]] = {}
     for k, rows in enumerate(served.windows):
         plan, ms = cut(rows)
-        edges = {key: hs.edge(*key) for key in plan.keys()}
+        tables = plan.keys()
+        edges = {key: hs.edge(*key) for key in tables}
         got = SRW.window_values((commit or {}).get("window", light)(ms), rows, served.store, None, histories=hs, on=True)
         data, entries, roots, salts_of, strings_of, _idx, hreg = got
-        assert {key: hs.edge(*key) for key in plan.keys()} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
+        assert {key: hs.edge(*key) for key in tables} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
         for key, t in hs.tables.items():
             assert all(np.array_equal(t.rows[p], served.latent[(key[1], p)]) for p in range(len(t.rows)))
         base = min(x.base for x in ms if x.template == READ)
@@ -205,9 +216,9 @@ def windows(served, commit=None):
                 assert d["outs"]["o0"][i].tolist() == want.tolist()
         writers = sorted((m for m in ms if m.template == LAT), key=lambda m: m.base)
         assert b"".join(strings_of[m.port("o0")] for m in writers) == b"".join(
-            hs.strings("r0", key[1], range(edges[key], hs.edge(*key))) for key in plan.keys())
-        assert roots == {H.name(*key): hs.tables[key].root.hex() for key in plan.keys()}
-        assert [h.name for h in hreg.histories] == [H.name(*key) for key in plan.keys()]
+            hs.strings("r0", key[1], range(edges[key], hs.edge(*key))) for key in tables)
+        assert roots == {H.name(*key): hs.tables[key].root.hex() for key in tables}
+        assert [h.name for h in hreg.histories] == [H.name(*key) for key in tables]
         assert [h.runs[0].get("held") for h in hreg.histories] == [h.name if k else None for h in hreg.histories]
         for h in hreg.histories:
             bcs = recomputed(h, ms, strings_of, held)

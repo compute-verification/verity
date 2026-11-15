@@ -345,6 +345,30 @@ class LmsSigner:
             return lms.sign(self.key, state, lms.memory_challenger_message(self.key.I, session, record)).encode()
 
 
+SEED_BYTES = lms.DEPLOYED.N
+"""The length of an S1 key's seed at `lms.DEPLOYED`."""
+
+
+def deployed_key(seed: bytes, tree: bytes | None = None, *, workers: int = 1) -> lms.PrivateKey:
+    """S1's key at `lms.DEPLOYED` from its `seed`: its tree computed in `workers` processes, or read back from `tree`,
+    the bytes `key_tree` gave of it."""
+    p = lms.DEPLOYED
+    if tree is None:
+        return lms.keygen(p, seed, workers)
+    nodes = (b"", *(tree[p.N * r:p.N * (r + 1)] for r in range(2 ** (p.H + 1) - 1)))
+    return lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, nodes)
+
+
+def key_tree(key: lms.PrivateKey) -> bytes:
+    """`key`'s tree as `deployed_key` reads it back."""
+    return b"".join(key.tree[1:])
+
+
+def create_leaf_state(path: str | os.PathLike, key: lms.PrivateKey) -> None:
+    """`key`'s leaf state at `path`, every leaf unused (`lms.LeafState`)."""
+    lms.LeafState.create(path, lms.public_key(key), key.params.H)
+
+
 _SCHEMES: dict[str, Verify] = {LMS: lms_verify(lms.DEPLOYED)}
 SCHEMES: Mapping[str, Verify] = MappingProxyType(_SCHEMES)
 """The signature schemes a session is accepted under: S1's (`LMS`) and nothing else."""
@@ -358,6 +382,8 @@ def register(scheme: str, verify: Verify) -> None:
 
 
 PREMISE = "trusted-device"
+#: `PREMISE`'s key in a placement recorded before the assumption's id was renamed, which `premise` reads after it
+PREMISE_BEFORE = "trusted-host"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 COMMITTED = Path(__file__).resolve().parents[5] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
@@ -392,9 +418,14 @@ def trusted_device(pins: Sequence[Mapping[str, str]], party: str, protocol: str,
     return f"{REHEARSAL} ({under}); {names}"
 
 
+def premise(where: Mapping[str, Any]) -> str:
+    """A placement's premise: under `PREMISE`, or under `PREMISE_BEFORE` in a placement recorded before the rename."""
+    return where[PREMISE] if PREMISE in where else where[PREMISE_BEFORE]
+
+
 def holds(where: Mapping[str, Any]) -> bool:
     """Whether a placement's `PREMISE` holds (`trusted_device`)."""
-    return where[PREMISE].startswith("holds: ")
+    return premise(where).startswith("holds: ")
 
 
 @dataclass(frozen=True, slots=True)
@@ -846,7 +877,8 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "PREMISE",
-           "PROTOCOL", "REHEARSAL", "UNCOMMITTED", "committed", "holds", "pinned", "trusted_device",
+           "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
+           "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",

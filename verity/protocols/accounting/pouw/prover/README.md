@@ -8,7 +8,11 @@ Program and sampling design, and the leaves, seeds and anchors a call's rows are
 `schemes/` holds the named schemes (NCP, Pearl's FP8 scheme and Pearl-C), each a
 `verity.protocols.accounting.pouw.verifier.protocol.PoUWScheme`, and Pearl-C's device record. `serving/` is what runs
 beside a served model, one directory a scheme (its README): a workload's adapter reaches it through `run_matmul` and
-`observe_matmul` and the other names `serving` exports, and through no deeper module. A caller imports a module by its own
+`observe_matmul` and the other names `serving` exports, and through no deeper module. `lowering/` is H1's lowering, staged
+by Flock's `class_statement.UnitStager`: the H1 tile unit's statement and the execution phase's commitments it is opened
+against (`h1unit.py`, its tile and statement form passed in), the stagers the sampled prover is handed (`stagers.py`), and
+the live units' statements with the verifier's own files of them (`live.py`); the vLLM adapter's `pouw_h1_circuits`
+commits its circuit files, and `benchmarks/pouw/h1_prove/` drives it. A caller imports a module by its own
 name and takes the names its `__all__` lists: `schemes.get(name)` returns a configured scheme, and
 `circuit.traced_as(scheme, m, k, n)` its traced circuit. Target, not yet: every name another file reads is in its
 module's `__all__`. Four modules of `schemes/` state none, and five lists are short of what is read (`circuit.h1tile`,
@@ -19,9 +23,13 @@ Pearl-C4 (`pearl-c-nvfp4-v0`) is experimental: `SCHEMES` names it and raises unt
 verifier's parameters: it imports `verity.circuits`, `verity_vllm.definitions`, `verity.commitments`,
 `verity.protocols.accounting.pouw.verifier` and SPOT's verifier (`verity.protocols.proofs.spot.verifier`, for a window's Program and
 sampling design), with `verity.errors`, and nothing else of the workspace, except that `serving/` also imports SPOT's
-device code, torch and `verity_flock` (inside functions, and torch at import in `serving/h1/receipts.py`). It reads no environment variable outside `kernels/`, and nothing under
-`benchmarks/` or `adapters/`; outside `kernels/` and `serving/` it reads no file. Its tests are in `tests/` and in
-`verity/protocols/accounting/pouw/verifier/tests/`; the vLLM adapter's own tests drive `serving/` on its engine.
+device code and `verity_flock` (inside functions), and no tensor library: the workload hands `serving/` its tensors and H1's
+device (`serving/tensors.py`; the device adapter does, at import), and `lowering/` imports `verity_flock`, its own
+distribution's row in `tests/import_order.toml` until `verity_flock` joins `verity`. It reads no environment variable
+outside `kernels/`, and nothing under `benchmarks/` or `adapters/`; outside `kernels/`, `serving/` and `lowering/` it reads
+no file. Its tests are in `tests/` and in
+`verity/protocols/accounting/pouw/verifier/tests/`; the device adapter's own tests cover the device code
+it hands in, and the vLLM adapter's own tests drive `serving/` on its engine.
 
 `kernels/` holds the device code, one directory each:
 

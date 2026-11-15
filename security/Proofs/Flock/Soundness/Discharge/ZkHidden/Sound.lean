@@ -22,10 +22,10 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 /-!
 # The soundness of one hidden-output `--zk` sampled session
 
-`zk_session_soundH`: `Composed.zk_session_sound` for the sessions production `--zk` writes, whose tables
+`zk_session_soundH`: `Composed.zk_session_sound` for the sessions the prover's `--zk` writes, whose tables
 `Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`, `HmOut`), at the
 same sampling design and parameters, with the same proof. For any live prover `τ` of a hidden-output one-table `--zk` session,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
 partition (`keyProg c hU n`), each read at its `--zk` site in its hidden-output table and bound to the rows it commits,
 input or output (`placeZH`, `rsZH`: HiddenExec's `keyLayoutH` and `keyRowsH` moved to the `--zk` tables): the compiled
 `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_atH`) at the simulated prover `simZ … τ`, with `δ_tree = 0`,
@@ -33,7 +33,7 @@ carried to verity-verify-proof's acceptance by `zk_headline_exec_on`. `RunsZC` a
 `TablesAtZKHLive` (`tablesAtZKH_live`), the tags (`TagsOkH`), the challenger's record of the live session
 (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`SampleOkZKH`).
 
-What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and the challenger
+What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `ε_bind`), A3 (`hA3`), A6 and the challenger
 (`RecordsLiveZK`, and `SampleOkZKH` at each of the sampling design's samples), as `zk_session_sound`. Its circuit hypotheses are the
 hidden-output path's: `HmOut.parse` and `HmOut.loadPublic` for `HmRow.parse` and `HmRow.loadPublic`; the unit
 returning the outputs comes from `scopeOk`. verity-verify-proof refuses a statement failing any of them (`Flock.ProvedScope`), and

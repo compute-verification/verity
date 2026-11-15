@@ -8,8 +8,8 @@ Its sampled sessions are SPOT[Flock]'s on its own, in its three roles: serving c
 each sampled session's prover runs `flock-circuit prove --zk` itself (the proof server: `a0.DIRECT`, `zk_cost.py`'s `dev` arm, which
 Figure 1 prices); and the challenger's live coins, its signed log and the Lean verifier decide (the verifier). There is no ZK
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
-`--firewall` on SPOT's `window_audit.py`, its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
-certifier, where a run has one (`a5_warden.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
+`--zk-server` on SPOT's `window_audit.py`, its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
+certifier, where a run has one (`a5_network_certifier.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
 input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A0's and A5's are SPOT's
@@ -36,7 +36,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
   `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
   art id, so the run can be verified again from the store.
-- `expert_tables_tp.sh`: the committer's per-expert tables docket of a TP model, one file a rank (`verity-vllm
+- `expert_tables_tp.sh`: the committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm
   tp-register-tables --served`): each rank's expert stacks composed from the checkpoint of record, held to a capture's served
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).
@@ -53,17 +53,17 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   step blocks, and the select chunks only where every split count's are (`A5_TOPP`, the script's `--v`, `--splits` and
   `--rows`). `--select-only` holds the select chunks alone, composed at any V, each wired to the chunk before it, with the
   rows they read from the step blocks committed as plain input rows that no unit of the window writes.
-- `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
+- `a5_network_certifier.py` (`a5_tp.sh` with `STANDIN=network_certifier`, `network_certifier:altered`, `network_certifier:pad`, `network_certifier:pad-named` or `network_certifier:swapped`):
   A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy unit whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the certifier's
   salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
-  own. The units' wiring is the Program's (`warden_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
+  own. The units' wiring is the Program's (`network_certifier_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
   cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the certifier signed,
   named by the units' value and each unit's read (connection, cell) placed by the wiring the certifier signed
-  (`warden_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
+  (`network_certifier_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another units' wiring (a pad in a data cell's place,
   its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
-  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
+  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_certifier_replay.py`'s: a served window's requests through the
   network certifier, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
@@ -86,8 +86,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
 - `cold_sessions.sh` (`cold_sessions.py`): one cold session a member of a kept audit window behind the ZK server, on one
   card (`prove --zk --gpu`, a lease a session, after a check that no other run's lease or compute process is on the card)
-  and on the CPU prover in turn, each on a proof server of its own and the member's own sample from the audit, then Lean's
-  verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
+  then on the CPU prover (every member on one arm before the next, so the card is held only while the gpu arm runs, until
+  its own end hour `COLD_END_gpu`), each on a proof server of its own and the member's own sample from the audit, then
+  Lean's verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
   clock's witness, proving and wait, and the ZK server's rest of it), its host and card peak memory, or its refusal's
   text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
   `window_audit.py --gpus` hands an audit's proof server the same devices.
@@ -108,7 +109,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the docket's
   pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
-  Then comes the records audit (`verity/protocols/proofs/spot/prover/audit/prove_path.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
+  Then comes the records audit (`benchmarks/prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
   and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
@@ -210,7 +211,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   memory, or a session that ran another statement version than the row's is void: no rate, its reasons in `void`, a
   `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
-  `verity/protocols/proofs/spot/prover/audit/prove_path.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
+  `benchmarks/prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
   spends on one sampled statement of a block's sample.
 - `phase_profile.sh` (with `phase_profile.py`): one GPU prover phase (`PHASE`, default `t.ligerito`) on a pod of its own: the
@@ -254,13 +255,16 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
-  row itself when it fits Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
+  row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
+  of its split at its coarsest fitting unit, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
   width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `verity/protocols/proofs/spot/prover/cost/glm53.py`).
+  `verity/protocols/proofs/spot/prover/cost/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `census-rank<r>.json`) with this tree's unit templates, sizing and `block_census.py`, for a change to the cut or to a
+  family's units that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
   `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
@@ -277,9 +281,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
-- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It names PoUS's and the wipe's composite cases as
-  their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's and onsite's Lean verdicts on the run's cases
-  (soundness's composite reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`.
+- `served_composite.sh`: `served_verdicts.sh`'s composite: in the compose follow-on, on an auditor device off the served
+  node, the step before the final record, whose verdict is its product's compiled Lean answer there when the
+  composite names the record's window (`served_verdicts.py record --composite`); in a deferral's follow-on, on a
+  prover node, and on the served node, a development check that leaves the record pending (`COMPOSE_DEVELOPMENT`). It
+  names PoUS's and the wipe's composite cases as their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's
+  and onsite's Lean verdicts on the run's cases (soundness's composite reader). Only the verdict lines reach the run's
+  `verdicts.txt`.
 - `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
   year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
@@ -311,7 +319,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
   (`served_shares.pearlplus_shares`), and why it credits nothing.
 - `served_compare.py`: the served compare, `served_verdicts.sh`'s step under `PEARLPLUS_TIE` once Pearl+'s piece wrote W
-  and before the record, on the CPU. It holds the serve to the row of record: serve.json's φ is the row's declared φ,
+  and before the record, on the CPU. It holds the serve to the workload of record: serve.json's φ is the row's declared φ,
   taken at the run's `REV` (`--revision`; another revision the manifests pin of the row's model, its PHI line and last
   line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
@@ -321,14 +329,15 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
   gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served
   window's close reads of it (`rehearsal_window.py`), the harness's policy step and its limits, the policy's Lean check
-  on the class's own Program with the settings' `ALPHA`, `GAMMA` and `DAY_PROGRAM` held to what it answers
-  (`rehearsal_limits.py`), the day's declaration, the Lean the verbs run, and Pearl+ against this tree's own gate code.
+  on the class's own Program with the settings' `ALPHA`, `GAMMA` and `DAY_PROGRAM` held to what it answers and
+  `HELD_ALPHA` and `HELD_GAMMA` to the record form's pair of the class (`rehearsal_limits.py`), the day's declaration,
+  the Lean the verbs run, and Pearl+ against this tree's own gate code.
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
 inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that tree. The drivers' checks go through the verifier
-(`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
+(`one_stage.verifier`), which builds the SPOT Lean in the run's tree on its first check, hence `--cwd clone`:
 
 ~~~sh
 bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent

@@ -16,11 +16,11 @@ attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
 * **Decode** (`decoder`): a tensor's bytes from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the
   CPU (`Store.decode_cpu`).
-* **The period** (`answer`, `audit`, `leg`): `period_prover.audit` of what setup published, the prover answering each index
+* **The period** (`answer`, `audit`, `subprotocol`): `period_prover.audit` of what setup published, the prover answering each index
   from ``C*`` where it is held, the memory challenger at ``period.json``'s ``challenger_host``, and the Lean answering
   where the period's tools name it.
 
-It imports no torch at load (only inside the functions that touch tensors) and nothing of a serving system.
+It imports no torch and nothing of a serving system: what touches a tensor is its P2 store's (`p2_store.tensors`).
 """
 from __future__ import annotations
 
@@ -72,14 +72,13 @@ def load_package(name: str, directory: Path) -> None:
 
 
 def p2_module(module: str) -> Any:
-    """``store`` or ``load``, a module of the package `P2_STORE` names (as ``p2_store.store``, ``p2_store.load``)."""
+    """``store``, ``load`` or ``tensors``, a module of the package `P2_STORE` names (as ``p2_store.store``)."""
     load_package(P2_STORE.name, P2_STORE)
     return importlib.import_module(f"{P2_STORE.name}.{module}")
 
 
 def flat(t: Any) -> Any:
-    import torch
-    return t.detach().reshape(-1).view(torch.uint8)
+    return p2_module("tensors").flat(t)
 
 
 def layout_of(scheme: str, tensors: Mapping[str, Any]) -> Any:
@@ -212,7 +211,6 @@ class Blocks:
 def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: bytes, salt_source: str,
             lib: str | None) -> Store:
     """``C*`` of ``W`` under ``salt`` on the weights' device, each segment's encode checked (module docstring)."""
-    import torch
     from verity.protocols.accounting.pous.device import memory_challenger as mc
     from verity.protocols.accounting.pous.verifier import period
     from verity.protocols.accounting.pous.verifier import run as R
@@ -222,7 +220,7 @@ def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: byt
         VerifierKey,
     )
 
-    S = p2_module("store")
+    S, T = p2_module("store"), p2_module("tensors")
     q = layout.params
     n, nb, pb = q.blocks_per_segment, q.block_bytes, q.payload_bytes
     device = next(iter(tensors.values())).device
@@ -230,11 +228,11 @@ def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: byt
         if not lib:
             raise ValueError("the weights are on a GPU and no p2_lib names libp2v1.so's directory "
                              "(verity/protocols/accounting/pous/prover/p2/p2_store/Makefile builds it)")
-        enc = S.GpuEncoder(q, salt, str(lib), torch.cuda.current_device() if device.index is None else device.index)
+        enc = S.GpuEncoder(q, salt, str(lib), T.device_index(device))
     else:
         enc = S.CpuEncoder(q, salt)
     prefix, flats = expand_prefix(q, salt), {name: flat(t) for name, t in tensors.items()}
-    rows = torch.empty(q.blocks, nb, dtype=torch.uint8, device=device)
+    rows = T.rows(q.blocks, nb, device)
     digests, device_s, t0 = bytearray(), 0.0, time.perf_counter()
     for s in range(q.segments):
         w_seg = segment(layout, flats, s)
@@ -243,7 +241,7 @@ def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: byt
         for j in S.spot_blocks(salt, s, n):
             if S.decode_block(q, prefix, s * n + j, c_seg[j * nb:(j + 1) * nb]) != w_seg[j * pb:(j + 1) * pb]:
                 raise RuntimeError(f"segment {s} block {j}: the reference decode of C* is not W's payload")
-        rows[s * n:(s + 1) * n].copy_(torch.frombuffer(bytearray(c_seg), dtype=torch.uint8).view(n, nb))
+        T.put(rows, s * n, c_seg, nb)
         digests += b"".join(mc.block_digest(c_seg[i * nb:(i + 1) * nb]) for i in range(n))
     encode_s = time.perf_counter() - t0
     root = VerifierKey.from_row_digests(q, salt, [bytes(digests[DIGEST_BYTES * i:DIGEST_BYTES * (i + 1)])
@@ -257,8 +255,6 @@ def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: byt
 
 def decoder(store: Store, lib: str | None) -> Callable[[Any, Any], None]:
     """``decode(placement, out)``: the placed tensor's bytes from ``C*`` into ``out`` (flat uint8, on ``C*``'s device)."""
-    import torch
-
     if store.rows.device.type == "cuda":
         from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
 
@@ -271,9 +267,11 @@ def decoder(store: Store, lib: str | None) -> Callable[[Any, Any], None]:
             store.staged.check()
         return decode
 
+    T = p2_module("tensors")
+
     def decode_host(p: Any, out: Any) -> None:
         if p.size:
-            out.copy_(torch.frombuffer(bytearray(store.decode_cpu(p.offset, p.size)), dtype=torch.uint8))
+            T.fill(out, store.decode_cpu(p.offset, p.size))
     return decode_host
 
 
@@ -293,10 +291,10 @@ def audit(store: Store, node: str, coins: bytes, **kw: Any) -> Any:
     return period_prover.audit(node, store.held(), coins, **kw)
 
 
-def leg(store: Store | None, period_dir: str | Path, node: str, out: str | Path, *, audit: Callable[..., Any],
+def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str | Path, *, audit: Callable[..., Any],
         side_of: Callable[..., Any], fresh: bool, answered: Callable[[], int],
         schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
-    """One period's PoUS of ``store``, as `period_prover.leg` runs it for a node's records: the memory challenger at
+    """One period's PoUS of ``store``, as `period_prover.subprotocol` runs it for a node's records: the memory challenger at
     ``period.json``'s ``challenger_host`` (``side_of``, the runtime's ``Side.of``, its side's key and session log in
     ``pous-challenger`` beside the periods when it is this node), fresh coins handed to ``audit`` (the holder's
     `audit`), and the Lean's answer where the period's tools name ``pous-run-protocol`` (and, at the first period,

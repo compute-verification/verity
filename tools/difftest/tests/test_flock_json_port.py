@@ -1,4 +1,4 @@
-"""C-Flock's JSON parser (`Flock.JsonParse.parse`, `../../verity/circuits/difftest/FlockJsonDifftest.lean`) and Lean core's `Lean.Json.parse`, which
+"""Flock's JSON parser (`Flock.JsonParse.parse`, `../../verity/circuits/difftest/FlockJsonDifftest.lean`) and Lean core's `Lean.Json.parse`, which
 it reads as, against `parse`, their Python mirror: the same value, or the same refusal (`offset N: why`, at the same
 UTF-8 byte offset). Both Lean functions are held to the one mirror, so the run also shows the two agree on every text
 sampled. A refusal is an output (`["error", why]`), so its text is compared, not only the fact of it."""
@@ -368,14 +368,16 @@ def test_recorded_public_headers(server):
         assert D.replay(PARSE_CORE, case, server) == got, p
 
 
-#: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories.
+#: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories, and the
+#: served inner session SPOT's Lean `innerTreesReason` reads in Flock's prover tests.
 VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
     "verity/protocols/accounting/certifier/verifier/network/tests/fixtures",
     "verity/protocols/accounting/certifier/verifier/tests/fixtures",
     "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
     "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
-    "verity/protocols/proofs/recursion/verifier/firewall/tests/fixtures",
-    "verity/protocols/proofs/spot/verifier/lean/tests/fixtures", "verity/protocols/proofs/spot/verifier/tests/fixtures"))
+    "verity/protocols/proofs/recursion/verifier/zk_server/tests/fixtures",
+    "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served",
+    "verity/protocols/proofs/spot/verifier/tests/fixtures"))
 
 
 def _has_float(v) -> bool:

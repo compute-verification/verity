@@ -265,7 +265,7 @@ def test_registration_refusals():
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
-def test_the_window_runs_its_days_declared_circuit():
+def test_the_window_runs_its_days_registered_circuit():
     """R2 holds the record's program to the one circuit the registration log declares for the window's day, read off the
     accepted log's view: another day's program is `R2-declared`, a day the log declares nothing for `R2-undeclared`, and
     a day declared twice, which the log's own check refuses, `R2-declared-twice`. A verifier passes the day and the
@@ -374,13 +374,13 @@ def test_profile_counts_wrong_units():
     assert 0 < p.bound() < 6
 
 
-def _v0(registration, draw, delta):
+def _v0(docket, draw, delta):
     """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
     6746f408), kept as the oracle for the bytes recorded runs hold, but for a Bernoulli sampling design's bound: then the linear
     relaxation (`worst_case`), now the exact one the Lean computes (`Bernoulli.count_bound`, `Bound.bernoulliBound`)."""
     from verity.circuits.partition import Level
     from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-    n, sampling_design = registration["population"], D.sampling_design_of(draw)
+    n, sampling_design = docket["population"], D.sampling_design_of(draw)
     core = (Stratified.uniform(n, sampling_design["k"]) if sampling_design["law"] == "subset" else Stratified(tuple(
         Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in sampling_design["strata"]))
         if sampling_design["law"] == "stratified" else None)
@@ -390,9 +390,9 @@ def _v0(registration, draw, delta):
         prof = {**core.to_json(), "delta": delta, "drawn": drawn}
         single = None
     else:
-        single = IntegrityProfile((Level("unit", registration["partition"]),), (n,),
+        single = IntegrityProfile((Level("unit", docket["partition"]),), (n,),
                                   {"unit": Subset(draw["k"]) if draw["law"] == "subset" else Bernoulli(Fraction(draw["p"]))},
-                                  delta, programs=(registration["program"],), drawn={"unit": len(draw["units"])})
+                                  delta, programs=(docket["program"],), drawn={"unit": len(draw["units"])})
         prof = single.to_json()
     out = {"delta": delta, "of": n}
     rule = "except with probability delta, an accepted transcript has at most `bound` wrong units"
@@ -531,7 +531,7 @@ def test_a_record_over_an_explicit_partition_object():
     assert "R2-program" in R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
 
 
-def test_the_wrong_unit_bound_matches_worst_case_and_scales():
+def test_the_incorrect_block_bound_matches_worst_case_and_scales():
     """The profile's Subset(k) bound is the exact count, the generic worst_case rounded down, and serves N = 183,680."""
     from verity.circuits.partition import Level
     from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset

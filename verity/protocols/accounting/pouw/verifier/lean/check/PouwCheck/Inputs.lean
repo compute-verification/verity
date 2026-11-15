@@ -212,7 +212,7 @@ refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its
 deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.SamplingDesign
 
 /-- `parse_design`'s spelling. -/
-def lawName : Flock.Draw.SamplingDesign → String
+def samplingDesignName : Flock.Draw.SamplingDesign → String
   | .subset k => s!"subset:{k}"
   | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
@@ -244,7 +244,7 @@ def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array (Flock.Draw.Stra
     strata := strata.push (← stratumOf work s s!"{ctx}.strata[{strata.size}]")
   pure strata
 
-/-- A bernoulli sample's `p`: `num/den`, each a natural number in canonical decimal, so `lawName` writes it as written. -/
+/-- A bernoulli sample's `p`: `num/den`, each a natural number in canonical decimal, so `samplingDesignName` writes it as written. -/
 def pOf (s ctx : String) : V (Nat × Nat) :=
   let canon (t : String) : Option Nat := t.toNat?.bind fun n => if toString n == t then some n else none
   match s.splitOn "/" with
@@ -253,7 +253,7 @@ def pOf (s ctx : String) : V (Nat × Nat) :=
     | _, _ => throw s!"{ctx}.p: not num/den"
   | _ => throw s!"{ctx}.p: not num/den"
 
-/-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
+/-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s sampling designs with exactly its keys (`check_draw`'s), and optionally a
 live execution phase's `salt` (`saltOf`). -/
 def drawOf (j : Json) : V Flock.Draw.UnitSample := do
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
@@ -266,7 +266,7 @@ def drawOf (j : Json) : V Flock.Draw.UnitSample := do
     | "bernoulli" => pure ["law", "p", "population", "units"]
     | "stratified" => pure ["k", "law", "population", "strata", "units"]
     | "work" => pure ((if Flock.J.has d "closure" then ["closure"] else []) ++ ["k", "law", "population", "strata", "units"])
-    | _ => throw s!"{ctx}.samplingDesign: not subset, bernoulli, stratified or work"
+    | _ => throw s!"{ctx}.law: not subset, bernoulli, stratified or work"
   keysAre d ks ctx
   let population ← Flock.J.nat d "population" ctx
   let (l, closure) ← match samplingDesign with

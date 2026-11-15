@@ -18,7 +18,7 @@ from verity.channel import Message, Refused
 from verity.runtime.framing import HEADER, decode, encode, parse
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.tests import signers as S
 from verity.protocols.proofs.spot.verifier import parties as SP
 
@@ -101,7 +101,7 @@ def test_an_output_value_goes_as_its_two_messages(out) -> None:
 
 
 def _sent(channel, message: Message) -> Message:
-    return channel.decode(channel.encode(message))
+    return decode(channel, encode(channel, message))
 
 
 #: what the device's run hands out beside the output value, each with a stand-in body, by the channel that carries it
@@ -122,7 +122,7 @@ def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrat
             got = _sent(to, message)
             assert (got.type, got.fields, got.body) == (message.type, message.fields, message.body)
             with pytest.raises(Refused) as e:
-                wrong.encode(message)
+                encode(wrong, message)
             assert e.value.name == "unknown-type", message.type
     salts, wiring = WR.read_witness(RUN[NC.WORKERS][-1].body)
     assert (len(salts), len(wiring)) == (3, WR.WIRING_SALT_BYTES)
@@ -166,5 +166,11 @@ def test_its_id_and_its_check_are_the_leans() -> None:
     lake = (LEAN / "lakefile.toml").read_text(encoding="utf-8")
     root = re.search(rf'^name = "{re.escape(exe)}"\nroot = "([\w.]+)Main"$', lake, re.MULTILINE)
     assert root, f"{exe} is no executable of {LEAN.name}/lakefile.toml"
-    text = (LEAN / (root[1].replace(".", "/") + ".lean")).read_text(encoding="utf-8")
-    assert f'def protocolId : String := "{NC.ID}"' in text
+    def text(module: str) -> str:
+        return (LEAN / (module.replace(".", "/") + ".lean")).read_text(encoding="utf-8")
+    check = root[1]
+    own = dict.fromkeys([check, *re.findall(rf"^(?:public |meta )*import ({re.escape(check)}\.[\w.]+)$", text(check),
+                                            re.MULTILINE)])
+    ids = [(m, i) for m in own for i in re.findall(r'^def protocolId : String := "(.*)"$', text(m), re.MULTILINE)]
+    assert [i for _, i in ids] == [NC.ID], (
+        f"{check} and the modules it imports under it ({', '.join(own)}) declare protocolId {ids}, not once as {NC.ID}")

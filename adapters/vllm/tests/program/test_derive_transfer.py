@@ -12,9 +12,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-IMPORTER_NAME = "verity_torch.frontend.derive.derive"
+IMPORTER_NAME = "verity_vllm.program.frontend.vllm_derive.derive"
 
 OUT_PATH = os.environ.get("XFER_OUT") or "/tmp/xfer/transfer-derive.jsonl"
+
+
 def _git_head() -> str:
     if os.environ.get("XFER_HEAD"):
         return os.environ["XFER_HEAD"]
@@ -48,13 +50,13 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     family rule claims `Serve_v1{B0,LP=32,STEPS=15}`, the digest equals the certificate of record's, and this file's
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
     from verity_vllm.definitions.registry.b1 import B0_CONFIG
+    from verity_vllm.program.frontend import derive_examples as dex
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     from tests.program.test_derive_negative import (
         check_cache_ownership,
         check_cache_ownership_by_kind,
     )
-    from verity_vllm.program.frontend import derive_examples as dex
-    from verity_vllm.program.frontend.vllm_derive import derive_report
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
     assert rep.ok, rep.unsupported

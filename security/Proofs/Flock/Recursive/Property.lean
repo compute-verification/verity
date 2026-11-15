@@ -58,7 +58,7 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
   to.
 
 Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
-in `Security/Properties/`.
+in `security/Properties/`.
 -/
 
 @[expose] public section
@@ -175,7 +175,7 @@ abbrev sampleDesign {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω
 
 (i) For every inner statement `st`, with its class, regions and schedule `execClassAt st`, and every prover `σ` of the
 recursive audit with Flock's compiled table there as its inner protocol (`innerAt`): V*'s statements `Vs`, as many
-as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VLaw`:
+as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VSamplingDesign`:
 the full sample on the operating system's bytes, `--draw subset:<units>`), V*'s sessions `zr R ω t R₂ j` under
 their sampling designs as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
 assumed of what the inputs parse to), their records' custody `_hCust`, the verifier's own inputs to them

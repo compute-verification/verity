@@ -64,7 +64,7 @@ host runs `recordingCode bitFmt`.
 **The exclusion.** The two secrets are the connection's admission bucket (`admSched`), which `bitFmt`'s record does
 not hold, at a server that is never late: the client reads the secret off the cell's bucket (`adm_channel`), both runs
 write the same record (`adm_obs`), so no reader takes the record to both views under a parameter that allows both
-schedules (`adm_not_readsBy`), and both secrets are counted against `#Θ · windowsCount = 1` (`pos_count`).
+schedules (`adm_not_readsBy`), and both secrets are counted against `#Θ · executionPhasesCount = 1` (`pos_count`).
 
 **The premises together.** At the same window, under the one schedule `oneSched` and a server that is not late, the
 record reads back under the registered parameter (`RecordFormat.readsBy_comp`), the network certifier registers its
@@ -193,23 +193,23 @@ theorem pos_registers (H : Msg → Msg) (b : Bool) (op : ℕ → List (Obs 1 1 1
     rw [h, certVal0]
     exact hop
 
-theorem pos_empty_mem : (∅ : Finset ℕ) ∈ faultySets (⟨[.all]⟩ : Design) notPart 0 := by
+theorem pos_empty_mem : (∅ : Finset ℕ) ∈ incorrectSets (⟨[.all]⟩ : Design) notPart 0 := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset]
   refine ⟨Finset.empty_subset _, ?_, Finset.disjoint_empty_left _⟩
   show (0 : ℝ) < Design.Pa ⟨[.all]⟩ notPart ∅
   simp [Design.Pa, notPart, classesPa, OneStage.Pa, window]
 
-theorem pos_faulty_empty {F : Finset ℕ} (hF : F ∈ faultySets (⟨[.all]⟩ : Design) notPart 0) : F = ∅ := by
+theorem pos_faulty_empty {F : Finset ℕ} (hF : F ∈ incorrectSets (⟨[.all]⟩ : Design) notPart 0) : F = ∅ := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
   obtain ⟨hsub, -, hdis⟩ := hF
   refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
   have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
   obtain rfl : v = 0 := by omega
   exact Finset.disjoint_left.1 hdis hv (by decide)
 
-theorem pos_faultySets : faultySets (⟨[.all]⟩ : Design) notPart 0 = {∅} :=
+theorem pos_incorrectSets : incorrectSets (⟨[.all]⟩ : Design) notPart 0 = {∅} :=
   Finset.eq_singleton_iff_unique_mem.2 ⟨pos_empty_mem, fun _ h => pos_faulty_empty h⟩
 
 /-- **What the network certifier registers at `posStmt b` is accepted**, at every operator: the openings hold the
@@ -229,7 +229,7 @@ theorem pos_acc (H : Msg → Msg) (b : Bool) (ρ : ℕ → Bool) (op : ℕ → L
   have hin : ingressUpTo op o 0 = [[b]] := by
     have h : ingressUpTo op o 0 = [op 0 []] := rfl
     rw [h, hop']
-  show o.length = 1 ∧ (∀ y ∈ o, y.jitter < 1) ∧ ∃ F ∈ faultySets (⟨[.all]⟩ : Design) notPart 0,
+  show o.length = 1 ∧ (∀ y ∈ o, y.jitter < 1) ∧ ∃ F ∈ incorrectSets (⟨[.all]⟩ : Design) notPart 0,
     AcceptedChecked notProg notPart notLay 1 (AsReg notProg notLay 1 ∅ ρ) (fun _ => True ∧ True) F op o
   refine ⟨hlen, hj, ∅, pos_empty_mem, fun _ => false,
     ⟨fun g hg _ => absurd hg (Finset.notMem_empty g), fun _ _ => rfl⟩, fun _ => none, fun g c hg => by simp at hg,
@@ -265,7 +265,7 @@ theorem pos_good {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (
     exact Nat.one_pos
 
 theorem pos_placed {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :
-    WindowsPlaced (posL Coin).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) :=
+    ExecutionPhasesPlaced (posL Coin).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) :=
   ⟨fun _ => rfl, fun _ F hF => by
     rw [pos_faulty_empty hF]
     simp [faultyBits]⟩
@@ -281,15 +281,15 @@ theorem pos_checkedUnique :
   obtain rfl : u = u' := by simpa using hins 0 (Nat.zero_le t)
   rfl
 
-theorem pos_windowsCount :
-    windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1 (fun _ : Fin 1 => posStmt false)
+theorem pos_executionPhasesCount :
+    executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1 (fun _ : Fin 1 => posStmt false)
       (fun _ => notPart) (fun _ => 0) = 1 := by
   have hfree : (freeInputs notProg notLay 1 \ (∅ ∪ ∅)).card = 0 := by decide
-  unfold windowsCount
+  unfold executionPhasesCount
   rw [Fin.prod_univ_one]
-  show 2 ^ (freeInputs notProg notLay 1 \ (∅ ∪ ∅)).card * (faultySets (⟨[.all]⟩ : Design) notPart 0).card * 2 ^ 0 *
+  show 2 ^ (freeInputs notProg notLay 1 \ (∅ ∪ ∅)).card * (incorrectSets (⟨[.all]⟩ : Design) notPart 0).card * 2 ^ 0 *
     1 ^ 1 = 1
-  rw [hfree, pos_faultySets]
+  rw [hfree, pos_incorrectSets]
   simp
 
 theorem posDec_obs (z : Bool) : posDec (fun _ => [posObs z]) = z := by cases z <;> rfl
@@ -299,9 +299,9 @@ theorem posDec_obs (z : Bool) : posDec (fun _ => [posObs z]) = z := by cases z <
 theorem two_not_le_one : ¬ (2 : ℕ∞) ≤ 1 := by simp
 
 theorem pos_count :
-    ({()} : Set Unit).encard * ((windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
+    ({()} : Set Unit).encard * ((executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
       (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) : ℕ) : ℕ∞) = 1 := by
-  rw [pos_windowsCount]
+  rw [pos_executionPhasesCount]
   simp
 
 /-- A lane of one cell with no data: the fail cell where its end is late for the bucket, else padding. -/
@@ -374,16 +374,16 @@ theorem adm_not_readsBy (rd : Unit → (Fin 1 → List (Obs 1 1 1)) → Unit →
 
 /-- **Without the read-back, `MonitoringPeriodLeakChecked`'s count fails.** At `posL`, one window, a server that is never late and
 the format `bitFmt`, with the secret the connection's admission bucket: the coins are a nonempty type and `δ = 0` is
-nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning, `TrustedHost` at a
+nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning, `TrustedDevice` at a
 host that runs the network certifier's code, and the channel all hold; the network certifier registers its
 observations at both secrets, at an operator that reads nothing; no reader reads the record back under the one
 registered parameter; and the two secrets, each of whose windows meets its good event, are counted against
-`#Θ · windowsCount = 1`. -/
+`#Θ · executionPhasesCount = 1`. -/
 theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
-      WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
+      ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
-      Verity.Assumptions.TrustedHost ()
+      Verity.Assumptions.TrustedDevice ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Unit) => recordingCode bitFmt p.1 (bitArr false))
         (fun p => recordingCode bitFmt p.1 (bitArr false)) ∧
       MonitoringPeriodChannelReg bitFmt (fun (_ : Unit) (_ : CertifierSchedule Unit) => True) {()} (Set.univ : Set Bool) admSched
@@ -397,7 +397,7 @@ theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
             ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
               (fun _ _ => True ∧ True) 1 (posStmt false) (fun _ => false) posTops (posX false) ⟨[]⟩
               ((recordingCode bitFmt (admSched z) (bitArr false)).2 i)}.encard ≤
-          ({()} : Set Unit).encard * ((windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
+          ({()} : Set Unit).encard * ((executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
             (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) : ℕ) : ℕ∞) := by
   refine ⟨⟨true⟩, le_rfl, posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl, adm_channel,
     fun z i s hs => ?_, adm_not_readsBy, fun hc => ?_⟩
@@ -418,16 +418,16 @@ theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
 
 /-- **`MonitoringPeriodLeakChecked`'s premises hold together at a monitoring period of one placed window that meets its good
 event**, at a verifier that rejects every run: they are consistent there, and no honest run passes. At `posL`, the format `bitFmt`, the one schedule `oneSched` and the one secret of a server that is not late:
-`Compiled.KS`, the commitment's binding, the window's placement (`WindowsPlaced`), its check's pinning at no checked
-input (`CheckedUnique`), `TrustedHost` at a host that runs the network certifier's code, the read-back under the one
+`Compiled.KS`, the commitment's binding, the window's placement (`ExecutionPhasesPlaced`), its check's pinning at no checked
+input (`CheckedUnique`), `TrustedDevice` at a host that runs the network certifier's code, the read-back under the one
 registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`MonitoringPeriodChannelReg`); the network certifier
 registers the window's observations at the operator whose move is the unset bit (`CertifierRegisters`); and the window
 meets its good event (`ExecutionPhaseGoodChecked`), at the check every run passes. -/
 theorem MonitoringPeriodLeakChecked_placed :
     (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
-      WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
+      ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
-      Verity.Assumptions.TrustedHost ()
+      Verity.Assumptions.TrustedDevice ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
         (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧

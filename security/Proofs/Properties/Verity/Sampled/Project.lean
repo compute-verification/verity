@@ -685,7 +685,7 @@ def Decodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (A : Liv
       P (CoinTape.run (V.game θ F c) σ o.2) →
     FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own o.1
 
-/-- **The leg's constructions with the projection** at the readings `rd`, the decoders `D` and the coin maps `M`: the
+/-- **The subprotocol's constructions with the projection** at the readings `rd`, the decoders `D` and the coin maps `M`: the
 coins are `M`'s widening and the projection `projectOf`; `K`'s finders and forger. -/
 noncomputable def Constructions.withProject (K : Constructions V) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →

@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Digest
 /-!
 # SPOT's coupling, assembled from its pieces
 
-`CouplingTarget` at the leg's constructions with the binding's read finder and forger (`Binding.withBinding`), the
+`CouplingTarget` at the subprotocol's constructions with the binding's read finder and forger (`Binding.withBinding`), the
 bound digests' two-continuation finder (`Constructions.withBind`), the projection at the sample-coupled coin maps
 (`Constructions.withProject` at `sampleMaps`) and the messages' two-continuation finders (`Constructions.withMessages`),
 cut at the binding's property of the play, the log v2's check read is the device's (`Binding.Logged Binding.readsV2`)
@@ -242,7 +242,7 @@ theorem coupled_sample_coins_v2 {V : Vocab d α} {k : Verity.Registration.Compos
     (sample_of_drew hd A ω.1 (samplingDesign_of_setsUp hA hv.2.1 hθ hd hn) hn
       (List.IsPrefix.trans hs (by rw [hsrc]; exact fresh_prefix_coinBytes hp)))⟩
 
-/-- **The leg's constructions, assembled**: `K`'s with the binding's read finder and forger at the pinned tables'
+/-- **The subprotocol's constructions, assembled**: `K`'s with the binding's read finder and forger at the pinned tables'
 registered files `T` and the device's history `dev`, the bound digests' finder at composite `k`, the projection at
 the readings `rd`, the decoders `D` and the sample-coupled coin maps at the sample's family `label`, its digest
 `after` and the coins `κ`, and the messages' two-continuation finders at `rd`. -/

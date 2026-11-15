@@ -504,7 +504,7 @@ def test_llm_installs_h1_from_its_public_parameters_with_its_engines_runner(engi
     runner, model = engine["runner"], engine["model"]
     assert getattr(runner.execute_model, "__func__", None) is not Runner.execute_model and hooks.live(_entry())
     run = pouw.h1_run(_entry())
-    assert (run.rows, run.steps, run.coin_source) == (64, 3, "in-process")
+    assert (run.rows, run.steps, run.coins_from) == (64, 3, "in-process")
     runner.execute_model(_so(("a", [5], 4)))
     x = (torch.randn(1, K, generator=torch.Generator().manual_seed(3)) * 3).bfloat16()
     model.layers[0].quant_method.apply(model.layers[0], x)
@@ -953,11 +953,11 @@ def test_the_batch_order_is_model_runner_v2s():
     has one."""
     so = SimpleNamespace(num_scheduled_tokens={"p": 5, "d": 1, "v": 3, "x": 2, "e": 1},
                          scheduled_spec_decode_tokens={"v": [7, 8]})
-    assert RQ.batch_order(Runner(), so) == [("v", 3), ("d", 1), ("e", 1), ("x", 2), ("p", 5)]
+    assert PHK.batch_order(Runner(), so) == [("v", 3), ("d", 1), ("e", 1), ("x", 2), ("p", 5)]
     own = type("ModelRunner", (), {"__module__": __name__, "decode_query_len": 1})()
     globals()["sort_batch_req_ids"] = lambda tokens, drafts, q: sorted(tokens)
     try:
-        assert [r for r, _n in RQ.batch_order(own, so)] == ["d", "e", "p", "v", "x"]
+        assert [r for r, _n in PHK.batch_order(own, so)] == ["d", "e", "p", "v", "x"]
     finally:
         del globals()["sort_batch_req_ids"]
 
@@ -1410,7 +1410,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
 
 
 @pytest.mark.slow
-def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
+def test_the_challenger_setting_is_where_h1s_coins_come_from(tmp_path, monkeypatch):
     """``challenger`` is HOST:PORT, the challenged schemes' only, never beside in-process ``coins`` or ``rounds`` and never at capture; a pipeline
     that is its own auditor adds no in-process coins beside it; a challenger whose layout isn't a live window of at least S
     rounds is refused at install, with its challenge phase closed."""

@@ -34,7 +34,7 @@ reference, which no finder at a budget computes, so `stage_bind` bounds that pro
   the candidate;
 * `psiCandZC`, `candTrialZC`, `candTermZC`: the trace at `c`, the trial's mass of it, and the term
   `(Σ_c π_c·(candTrialZC c + k/(eR_w)))/(1 − ρ)`;
-* `zk_flock_candValsC`: `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit is not wv's] ≤ ε_ks + δ_link +
+* `zk_flock_candValsC`: `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit is not wv's] ≤ ε_ks + ε_bind +
   candTermZC`;
 * `openingsOf`, `trialFinderZC`, `candWeightZC`, `candSlackZC`, `candTermZC_le`: the term in `stage_bind`'s form, the
   value binding's openings, the trial for `c` as a finder of the openings of `c` it reads, and
@@ -264,7 +264,7 @@ theorem cand_knowledgeSoundZC
     (tab (L.draw ω) R u)
 
 /-- **The candidate link theorem**: at the plurality value layer, the candidate analysis's binding error is at most
-`δ_link + candTermZC`, `linkBoundZC` under A2 for the link finders, prover by prover. -/
+`ε_bind + candTermZC`, `linkBoundZC` under A2 for the link finders, prover by prover. -/
 theorem zk_linkSoundCandC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -388,8 +388,8 @@ theorem zk_linkSoundCandC
 /-- **The compiled `--zk` audit's sampled proof blocks agree with a candidate, but for the trial's readings off it.** With each
 sampled proof block read from its table at its place (`place`), the committed values the plurality value layer of `vb`, and a
 candidate value `wv c` at each commit string `c` of `Sk`: `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit
-is not the candidate's] ≤ ε_ks + δ_link + candTermZC`, with `ε_ks = ksAvgStrictZ` under A1 for every table's finders
-after each sample (`hCR`) and `δ_link = linkBoundZC` under A2 for the link finders. -/
+is not the candidate's] ≤ ε_ks + ε_bind + candTermZC`, with `ε_ks = ksAvgStrictZ` under A1 for every table's finders
+after each sample (`hCR`) and `ε_bind = linkBoundZC` under A2 for the link finders. -/
 theorem zk_flock_candValsC (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (Sk : Finset vb.Pos)
@@ -543,7 +543,7 @@ theorem candTermZC_le (k Rw : ℕ) {ρ : ℝ} (hρ : ρ < 1) :
 /-- **A stage's transfer for the compiled `--zk` audit, in `stage_bind`'s form** (`htr`): with the openings of `vb`
 (`openingsOf`), the digest of commit string `c` the registration's (`vb.cs`), and at each `c` the trial for it
 (`trialFinderZC`), `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit is not the candidate's] ≤
-ε_ks + δ_link + slack + Σ_c κ_c·Pr[the trial for c opens c's digest to a value other than wv c]`. -/
+ε_ks + ε_bind + slack + Σ_c κ_c·Pr[the trial for c opens c's digest to a value other than wv c]`. -/
 theorem zk_flock_candTransferC (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (Sk : Finset vb.Pos)

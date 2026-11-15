@@ -91,34 +91,36 @@ private theorem form_members_spec (j : Json) :
 private theorem form_values_spec (j : Json) (w : String) :
     ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.valuesOf j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-open Spot.OneStageZk (exactly)
+private theorem members_keys_spec (pr : Json) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.membersKeysHeld pr ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-private theorem members_exactly_spec (j : Json) (ks : Array String) (w : String) :
-    ⦃⌜True⌝⦄ exactly j ks w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+private theorem members_wiring_spec (pr : Json) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.membersWiringOf pr ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 private theorem members_of_spec (o : Spot.OneStageZk.Own) (j : Json) :
     ⦃⌜True⌝⦄ Spot.OneStageZk.membersOf o j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-private theorem v2_deployed_spec (j : Json) :
-    ⦃⌜True⌝⦄ Spot.OneStageZk.paramsOfJson j
+private theorem parsed_deployed_spec (j : Json) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.paramsParsed j
       ⦃⇓? a => ⌜∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed⌝⦄ := by
-  cases hx : Spot.OneStageZk.paramsOfJson j
+  cases hx : Spot.OneStageZk.paramsParsed j
   · exact fun _ => True.intro
-  · exact fun _ => Limits.paramsOfJson_deployed hx
+  · exact fun _ => Limits.paramsParsed_deployed hx
 
 /-- The per-member form's parameters name a challenger key at the deployed LMS parameters, as the one statement's
-do (`Limits.paramsOfJson_deployed`). -/
+do (`Limits.paramsParsed_deployed`). -/
 theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
     ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
   refine of_triple
     (Q := fun a => ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed) ?_ h
   clear h
-  mvcgen -trivial [Spot.OneStageZk.membersParamsOfJson, -Spec.throw_Except, throw_spec, members_exactly_spec,
-    members_of_spec, v2_deployed_spec]
+  mvcgen -trivial [Spot.OneStageZk.membersParamsOfJson, -Spec.throw_Except, throw_spec, members_keys_spec,
+    members_of_spec, members_wiring_spec, parsed_deployed_spec]
   all_goals first
     | exact True.intro
     | assumption
+    | (obtain ⟨k, l, h1, h2⟩ := ‹∃ key label, _›; exact ⟨k, l, h1, h2⟩)
 
 -- `paramsParsed` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
@@ -277,7 +279,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 theorem cutBound_shown (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ) (hS : FirstCoinsShown θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     (hs : SignsPlay V dev θ F c) : CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ) :=
   cutBound_read V k dev θ F c σ hw (firstReads_of_shown θ hS) hP hs
 

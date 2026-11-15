@@ -35,7 +35,6 @@ from __future__ import annotations
 import glob
 import gzip
 import json
-import os
 import struct
 import time
 from dataclasses import dataclass
@@ -45,7 +44,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.check.replay import launch_args
-from verity_vllm.check.replay.fork import fork_pool
+from verity_vllm.check.replay.fork import cpu_quota, fork_pool
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
@@ -59,8 +58,6 @@ VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temp
            "+ argmax/gather; torch.multinomial not used")
 #: the prefix of a record entry naming an input file that is there but couldn't be read
 UNREADABLE = "unreadable: "
-#: the cgroup v2 file that states this process's CPU quota: `<quota> <period>`, or `max <period>` where it has none
-CGROUP_CPU_MAX = "/sys/fs/cgroup/cpu.max"
 
 
 def _f32_bits(x: float) -> int:
@@ -169,25 +166,13 @@ EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTo
                          "held word-equal to the lane walk by tests/program/test_sampling_rows.py and by the reference rows of this run"}
 
 
-def _cpu_quota() -> int:
-    """The CPUs this process may use: the cgroup's quota where it states one (`CGROUP_CPU_MAX`), else os.cpu_count(): the file is
-    absent (no cgroup v2 CPU controller), cannot be read, says `max` or is not `<quota> <period>` in integers."""
-    try:
-        q, per = Path(CGROUP_CPU_MAX).read_text().split()
-        if q != "max":
-            return max(1, int(q) // int(per))
-    except (OSError, ValueError):
-        pass
-    return os.cpu_count() or 1
-
-
 def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane") -> list[tuple[int, np.ndarray, float]]:
     """Evaluate every pending row; `n_jobs` worker processes (fork; default min(32, the cgroup's CPU quota)) when there is more than one
     row.  `evaluator`: 'lane' (the interpreter, the path of record) or 'rows' (the vectorised twins; one row is milliseconds, so no pool)."""
     fn = EVALUATORS[evaluator]
     if evaluator == "rows":
         return [fn(j) for j in jobs]
-    n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
+    n = int(n_jobs) if n_jobs else min(32, cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
     with fork_pool(min(n, len(jobs))) as pool:
@@ -270,13 +255,13 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
     return None, unread or "not attested (async_scheduling absent from the record's engine_kwargs)"
 
 
-def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set | None) -> tuple[list[int] | None, dict]:
+def expected_executed_slots(served: list, max_tokens: int, A: int | None, eos_ids: set | None) -> tuple[list[int] | None, dict]:
     """[R3's one mechanism] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
-    its SERVED tokens (sample k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
+    its SERVED tokens (sample k serves slot k + 1), its max_tokens C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
     min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as `verity_vllm.program.lifting.continuation.recurrence` /
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
-    None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than the cap, or an EOS before the cap
+    None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than max_tokens, or an EOS before max_tokens
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
     # continuation loads the core `verity`, which importing this module does not
     from verity_vllm.program.lifting import continuation
@@ -284,41 +269,41 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
     if eos_ids is None:
-        if len(served) < cap:
+        if len(served) < max_tokens:
             return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop"}
         eos_ids, t_eos = set(), None
     else:
-        t_eos = next((k + 1 for k, y in enumerate(served[:cap]) if y is not None and int(y) in eos_ids), None)
-    if t_eos is not None and t_eos < cap and A is None:
-        return None, info | {"unjudged": f"EOS served at slot {t_eos} before the cap {cap} and the scheduler profile (eos_lag_rows / "
+        t_eos = next((k + 1 for k, y in enumerate(served[:max_tokens]) if y is not None and int(y) in eos_ids), None)
+    if t_eos is not None and t_eos < max_tokens and A is None:
+        return None, info | {"unjudged": f"EOS served at slot {t_eos} before max_tokens {max_tokens} and the scheduler profile (eos_lag_rows / "
                                          f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
         return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (LAG in (0, 1)); the recurrence refuses it"}
-    # served[:cap]: the recurrence runs over the C slots (`expected_sample_positions` does the same); samples past C are EXTRA positions for
-    # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
+    # served[:max_tokens]: the recurrence runs over the C slots (`expected_sample_positions` does the same); samples past C are EXTRA positions for
+    # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before max_tokens: the lag term is
     # then never reached, so the profile does not matter.
-    slots = continuation.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
+    slots = continuation.recurrence([None if y is None else int(y) for y in served[:max_tokens]], cap=max_tokens, A=int(A) if A is not None else 0, eos=eos_ids)
     exp = [int(t) for t in continuation.executed_slots(slots)]
     info["t_eos"] = t_eos
     info["n_executed"] = len(exp)
     return exp, info
 
 
-def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | None, build_dir: str | Path | None,
-                    lag_attested: tuple[int | None, str] | None = None) -> dict:
+def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path | None, build_dir: str | Path | None,
+                      lag_attested: tuple[int | None, str] | None = None) -> dict:
     """The sample LEDGER of the record, per request, measured --
-    not stated: 'RNG advances iff r_t' read LITERALLY as an ordered-set comparison of the DRAWN positions against the positions the
+    not stated: 'RNG advances iff r_t' read LITERALLY as an ordered-set comparison of the SAMPLED positions against the positions the
     Program's rule says are executed:
 
       * sample k of a request (its k-th sampled row, k from 0; slot t = k + 1) is the TopPTokenSelect at pos = prompt_len - 1 + k (the query
         position whose logits are sampled; the Philox counter is (seed, pos), no state);
-      * the rule (`expected_executed_slots`, R3's one mechanism): every slot up to the cap C executes while no served token is an EOS; the
+      * the rule (`expected_executed_slots`, R3's one mechanism): every slot up to max_tokens C executes while no served token is an EOS; the
         first EOS at slot t < C is followed by exactly min(A, C - t) lag slot(s) (A = the record's attested async_scheduling, 0/1) and
         nothing after; a request that runs to C has no lag slot (nothing is scheduled past the length bound);
       * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every sampled position not in the set is 'the RNG advanced without r_t'
-        (a sample past the cap without an EOS, a second sample after the lag slot, a sample for another row's counter), every expected position
+        (a sample past max_tokens without an EOS, a second sample after the lag slot, a sample for another row's counter), every expected position
         not sampled is 'an executed slot did not sample' (a deleted step); one sample per engine step, in order;
-      * an undeclared stop rule with an early stop, or an EOS before the cap with the profile unattested, leaves the request UNJUDGED --
+      * an undeclared stop rule with an early stop, or an EOS before max_tokens with the profile unattested, leaves the request UNJUDGED --
         named, never a pass.
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
@@ -331,52 +316,52 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     if workload is not None:
         try:
             for r in Workload.load(workload_file(workload)).requests:
-                wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "cap": r.max_tokens}
+                wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "max_tokens": r.max_tokens}
         except (OSError, ValueError) as e:
-            out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
+            out["problems"].append(f"sample ledger: the workload manifest could not be read ({e!r}): prompt_len / max_tokens unknown, the ledger is unjudged")
     sr = _stop_rule(build_dir)
     if sr.get("error"):
-        out["problems"].append(f"draw ledger: {UNREADABLE}the Program's stop rule {sr['source']} ({sr['error']}): its EOS ids and declared lag are unknown")
+        out["problems"].append(f"sample ledger: {UNREADABLE}the Program's stop rule {sr['source']} ({sr['error']}): its EOS ids and declared lag are unknown")
     eos_ids = set(int(x) for x in sr["eos_token_ids"]) if sr.get("eos_token_ids") else None
     # the lag: the RECORD's attestation of async_scheduling (the same fact GM-01 G6 reads), the Program's declared
     # stop_rule.eos_lag_rows beside it when it carries one; a disagreement is GM-01's to fail, named here
     lag_rec, lag_src = lag_attested if lag_attested is not None else (None, "not read")
     if lag_rec is None and str(lag_src).startswith(UNREADABLE):
-        out["problems"].append(f"draw ledger: the record's lag attestation is {lag_src}")
+        out["problems"].append(f"sample ledger: the record's lag attestation is {lag_src}")
     lag_decl = sr.get("eos_lag_rows")
     lag = lag_rec if lag_rec is not None else (int(lag_decl) if lag_decl is not None else None)
     out["stop_rule"] = {"eos_token_ids": sorted(eos_ids) if eos_ids else None, "eos_ids_source": sr.get("source"),
                         "eos_lag_rows": lag, "eos_lag_rows_attested": lag_rec, "eos_lag_source": lag_src, "eos_lag_rows_declared": lag_decl,
                         "attested": eos_ids is not None}
     if lag_rec is not None and lag_decl is not None and int(lag_decl) != lag_rec:
-        out["problems"].append(f"draw ledger: the Program declares stop_rule.eos_lag_rows {lag_decl} but the record attests {lag_src} -> {lag_rec}")
+        out["problems"].append(f"sample ledger: the Program declares stop_rule.eos_lag_rows {lag_decl} but the record attests {lag_src} -> {lag_rec}")
     if lag is not None and int(lag) not in (0, 1):
-        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (check_lag: one rule, no other profile)")
+        out["problems"].append(f"sample ledger: scheduler profile A = {lag} is not 0 or 1 (check_lag: one rule, no other profile)")
     probs = out["problems"]
-    for rid, dr in sorted(draws_seen.items()):
+    for rid, dr in sorted(samples_seen.items()):
         dr = sorted(dr, key=lambda x: (x["step"], x["row"]))
         w = wl_req.get(rid)
         ent: dict = {"draws": len(dr), "first_step": dr[0]["step"], "last_step": dr[-1]["step"], "first_pos": dr[0]["pos"], "last_pos": dr[-1]["pos"],
-                     "prompt_len": w["prompt_len"] if w else None, "cap": w["cap"] if w else None}
+                     "prompt_len": w["prompt_len"] if w else None, "cap": w["max_tokens"] if w else None}
         steps = [x["step"] for x in dr]
         ent["one_draw_per_step"] = len(set(steps)) == len(steps)
         if not ent["one_draw_per_step"]:
-            probs.append(f"draw ledger {rid}: two sampled rows in one engine step ({[s for s in steps if steps.count(s) > 1][:3]}): a request draws once per step")
+            probs.append(f"sample ledger {rid}: two sampled rows in one engine step ({[s for s in steps if steps.count(s) > 1][:3]}): a request samples once per step")
         if not w:
             out["requests"][rid] = ent
             continue
-        L, T = w["prompt_len"], w["cap"]
-        drawn = [int(x["pos"]) for x in dr]
-        ent["positions_in_order"] = drawn == sorted(drawn) and len(set(drawn)) == len(drawn)
+        L, T = w["prompt_len"], w["max_tokens"]
+        sampled = [int(x["pos"]) for x in dr]
+        ent["positions_in_order"] = sampled == sorted(sampled) and len(set(sampled)) == len(sampled)
         if not ent["positions_in_order"]:
-            probs.append(f"draw ledger {rid}: drawn positions are not strictly increasing with the engine step ({drawn[:6]}): a draw repeated or out of order")
+            probs.append(f"sample ledger {rid}: sampled positions are not strictly increasing with the engine step ({sampled[:6]}): a sample repeated or out of order")
         served = [x["served"] for x in dr]
         exp_slots, info = expected_executed_slots(served, T, lag, eos_ids)
         ent["rule"] = info
         if exp_slots is None:
             ent["finish"] = "unjudged"
             out["requests_unjudged"] += 1
-            probs.append(f"draw ledger {rid}: {len(dr)} draws for cap {T} -- {info['unjudged']}")
+            probs.append(f"sample ledger {rid}: {len(dr)} samples for max_tokens {T} -- {info['unjudged']}")
             out["requests"][rid] = ent
             continue
         t_eos = info.get("t_eos")
@@ -388,17 +373,17 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         if any(y is None for y in served[:T]):
             ent["finish"] = "unjudged"
             out["requests_unjudged"] += 1
-            probs.append(f"draw ledger {rid}: a sampled row without its served token: the rule cannot be read for this request")
+            probs.append(f"sample ledger {rid}: a sampled row without its served token: the rule cannot be read for this request")
             out["requests"][rid] = ent
             continue
         pad_pos = continuation.expected_sample_positions([int(y) for y in served[:T]], cap=T, A=int(lag) if lag is not None else 0,
                                              eos=eos_ids if eos_ids is not None else set(), prompt_len=L)
         expected = [int(p) for p in pad_pos["positions"]]
         if pad_pos["slots"] != exp_slots:
-            probs.append(f"draw ledger {rid}: expected_sample_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
+            probs.append(f"sample ledger {rid}: expected_sample_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
         ent["lag_positions"] = pad_pos["lag_positions"]
         ent["first_forbidden_position"] = pad_pos["first_forbidden_position"]
-        cmp = continuation.compare_sample_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
+        cmp = continuation.compare_sample_positions(expected, sampled)        # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
         extra, missing = cmp["extra"], cmp["missing"]
         ent["expected_executed_slots"] = {"n": len(exp_slots), "first": exp_slots[0], "last": exp_slots[-1]}
         ent["expected_positions"] = {"n": len(expected), "first": expected[0], "last": expected[-1]}
@@ -408,7 +393,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         ent["ordered_set_equal"] = cmp["ok"]
         ent["compare"] = "verity_vllm.program.lifting.continuation.compare_sample_positions"
         if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
-            probs.extend(f"draw ledger {rid}: {p}" for p in cmp["problems"])
+            probs.extend(f"sample ledger {rid}: {p}" for p in cmp["problems"])
         n_lag = 0                                                 # the lag slots the rule expects: none unless an EOS is served early
         if t_eos is None or t_eos >= T:
             ent["finish"] = "length" if t_eos is None else "eos-at-cap"
@@ -429,16 +414,16 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
                                "bounded_by_cap": n_lag < int(profile),
                                "draws": [{"slot": t_eos + 1 + j, "pos_expected": L + k_eos + j, "pos": x["pos"], "step": x["step"],
                                           "pos_ok": x["pos"] == L + k_eos + j} for j, x in enumerate(after)],
-                               "measured": drawn == expected}
+                               "measured": sampled == expected}
         if extra:
-            what = ("a draw past the length bound without an EOS" if t_eos is None else
-                    ("a draw past the EOS's lag slot" if all(p > expected[-1] for p in extra) else "a draw at a position the rule does not execute"))
-            probs.append(f"draw ledger {rid}: {len(extra)} drawn position(s) {extra[:4]} outside the executed set (slots 1..{exp_slots[-1]} of cap {T}"
+            what = ("a sample past the length bound without an EOS" if t_eos is None else
+                    ("a sample past the EOS's lag slot" if all(p > expected[-1] for p in extra) else "a sample at a position the rule does not execute"))
+            probs.append(f"sample ledger {rid}: {len(extra)} sampled position(s) {extra[:4]} outside the executed set (slots 1..{exp_slots[-1]} of max_tokens {T}"
                          + (f", EOS at slot {t_eos}, {n_lag} lag slot(s)" if t_eos is not None and t_eos < T else "")
                          + f"): {what} -- the RNG advanced without r_t")
         if missing:
-            probs.append(f"draw ledger {rid}: {len(missing)} executed slot(s) did not draw (positions {missing[:4]} of the expected "
-                         f"{expected[0]}..{expected[-1]}): a deleted step" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
+            probs.append(f"sample ledger {rid}: {len(missing)} executed slot(s) did not sample (positions {missing[:4]} of the expected "
+                         f"{expected[0]}..{expected[-1]}): a deleted step" + (" -- the lag slot did not sample" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
         out["requests"][rid] = ent
     n_ex = out["requests_with_eos_before_cap"]
     out["measured"] = (f"R5 MEASURED on this record: {n_ex} request(s) stopped at EOS before the cap; the drawn positions of every request equal "
@@ -713,9 +698,9 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
     s_ok = not s_disagree
     s_checked = sum(1 for r in rows if r.get("S_agree") is True)
     reasons.extend(chain_absent)
-    # the sample ledger: one sample per request per step at pos = prompt_len - 1 + k, samples == cap or
-    # EOS + exactly eos_lag_rows lag draw(s) and none after; a ledger problem is a FAIL reason by name
-    ledger = draw_accounting(samples_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
+    # the sample ledger: one sample per request per step at pos = prompt_len - 1 + k, samples == max_tokens or
+    # EOS + exactly eos_lag_rows lag sample(s) and none after; a ledger problem is a FAIL reason by name
+    ledger = sample_accounting(samples_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
     reasons.extend(ledger["problems"])
     complete = checked == sampled_rows_total and not chain_absent
     if not complete:
@@ -747,7 +732,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
             "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (adapters/vllm/verity_vllm/definitions/registry/sampling.py)",
             # WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
             "evaluator": {"name": evaluator, "what": EVALUATOR_DOC[evaluator], "eval_seconds_total": eval_seconds_total,
-                          "reference": ref_check, "jobs": jobs, "cpu_quota": _cpu_quota()},
+                          "reference": ref_check, "jobs": jobs, "cpu_quota": cpu_quota()},
             # the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
             # (executed, unserved) samples Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
             # and nothing else moves; a wrong pos on a device row is a mismatch by name above

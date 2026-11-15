@@ -1,9 +1,9 @@
 """The suite's step: the lf model's tiny training step (`adapters/torch/tests/frontend/train_step_lf.py`, loaded by its path)
 with its log-free loss, derived by the training-step frontend at the step's batch shape and at the structure's, and handed
 over as a lane hands it over (`grader.write_handover`); at a compute capability `cc`, the step's bf16 linears' GEMMs are lowered
-to the routes `ROUTES` stands in for that GPU's cuBLAS and its attention to that GPU's flash attention at the stand-in shape
-`SDPA`, under deterministic algorithms, and the structure is that GPU's step as a structure Program (`structure_program`), which
-reads no route."""
+to the routes `ROUTES` stands in for that GPU's cuBLAS and its attention to that GPU's flash attention heads at the stand-in
+block size (`step_rules`), under deterministic algorithms, and the structure is that GPU's step as a structure Program
+(`structure_program`), which reads no route."""
 from __future__ import annotations
 
 import collections
@@ -17,10 +17,10 @@ import pytest
 import torch
 
 import grader as G
-from verity_vllm.definitions.registry import cublas_bf16 as CB
-from verity_vllm.definitions.registry import fa2_train as FT
-from verity_vllm.definitions.registry import fa2_train_bwd as FTB
+from verity_torch.frontend.rules.training import training_rules
+from verity_torch.frontend.rules.training_attention import FlashSdpa, FlashSdpaBackward
 from verity_torch.frontend.train_step import AdamW, export_step, primitives, step_report
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 
 LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "frontend" / "train_step_lf.py"
 #: the step's batch and the structure Program's, as rows of tokens: the structure's attention at a T of 32 (its tokens less
@@ -37,9 +37,17 @@ ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64,
           (32, 64, 64, "fwd"): {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
           (32, 192, 64, "fwd"): {"kernel": "serialk", "SPLIT_K": 5, "align": 8, "tile_k": 32},
           (32, 64, 192, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16", "align": 8, "tile_k": 16}}
-#: the tiny step's attention [B, H, T, D] at the step's batch, which no capture of torch's flash attention covers, as a shape
-#: of both its kernels: the forward unsplit over key blocks of 16, the backward over blocks of 16 rows and 16 keys
-SDPA = (2, 2, 16, 32)
+
+
+def step_rules(tf32: bool, deterministic: bool):
+    """The step's rules at `CC` and its two settings (`training_rules`), but for its attention: the tiny step's [B, H, T, D] =
+    [2, 2, 16, 32], which no capture of torch's flash attention covers, lowered to the heads at the stand-in block size
+    (`training_attention.STAND_IN`), the forward unsplit over key blocks of 16 and the backward over blocks of 16 rows and 16
+    keys with one dQ buffer, which a structure derivation's attention rules bind at any shape."""
+    stand_in = {FlashSdpa: FlashSdpa(CC, structure=True), FlashSdpaBackward: FlashSdpaBackward(CC, structure=True)}
+    rules = training_rules(cc=CC, tf32=tf32, deterministic=deterministic)
+    rules.rules = [stand_in.get(type(r), r) for r in rules.rules]
+    return rules
 
 
 def _lf():
@@ -75,9 +83,9 @@ def _derive(dtype, rows: int, tokens: int, cc: tuple[int, int] | None = None, st
         if step:
             for key, route in ROUTES.items():
                 mp.setitem(CB.TRAIN_ROUTES, key, route)
-            mp.setitem(FT.TRAIN_SDPA, SDPA, ("unsplit", 16))
-            mp.setitem(FTB.TRAIN_SDPA_BWD, SDPA, (16, 16))
-        rep = step_report(model, LF.square_loss, opt, batch, exported=ex, cc=cc, structure=structure)
+            rep = step_report(model, LF.square_loss, opt, batch, exported=ex, rules=step_rules(ex[2].tf32, ex[2].deterministic))
+        else:
+            rep = step_report(model, LF.square_loss, opt, batch, exported=ex, cc=cc, structure=structure)
     assert rep.program is not None, rep.unsupported
     return rep.program, ex[0]
 

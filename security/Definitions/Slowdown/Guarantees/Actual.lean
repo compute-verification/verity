@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Core.Partition
 public import Definitions.InferenceOnly.Reads
 public import Definitions.InferenceOnly.Assumptions
@@ -20,7 +20,7 @@ declaration the inference-only policy's statements are about.
   gates into `n ⌈t/ω⌉` inference blocks, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
   `M_X + β_X ω` fresh input bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
 
-The proofs are in `Security/Proofs/Accounting/Actual/`.
+The proofs are in `security/Proofs/Accounting/Actual/`.
 -/
 
 @[expose] public section

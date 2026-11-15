@@ -4,7 +4,7 @@ PoUS's window is `served_piece.py`'s, run on the CPU over the tiny int8 checkpoi
 signer (`test_pous_served_piece`'s fixture, and its BF16 one); the builder encodes ``C*`` again from the same snapshot on
 the CPU. The wipe's
 is one wipe in this process at a small fill (`wipe_run.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
-``answer.json`` with the run's placement in its profile, ``served.json`` and the leg's ``wipe.case.json``. Each piece is
+``answer.json`` with the run's placement in its profile, ``served.json`` and the subprotocol's ``wipe.case.json``. Each piece is
 held to the composite's form (`benchmarks/one_stage/composite.py`'s ``piece``: a case of commitment, evidence and params,
 an answer whose commitment is the digest of the case's commitment), and a kept output that was changed after the run is
 refused with its reason before anything is written.
@@ -210,8 +210,8 @@ def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | N
     return window, serve, w
 
 
-def test_the_wipe_case_is_the_legs_and_its_answer_the_legs_own(tmp_path):
-    """The case is the one the leg wrote, its answer the public one without the run's placement; both go to the serve
+def test_the_wipe_case_is_the_subprotocols_and_its_answer_the_subprotocols_own(tmp_path):
+    """The case is the one the subprotocol wrote, its answer the public one without the run's placement; both go to the serve
     dir's private wipe directory, and the public directory gains nothing."""
     window, serve, w = _wipe_window(tmp_path)
     public = _listing(window)

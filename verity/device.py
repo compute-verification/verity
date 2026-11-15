@@ -184,7 +184,7 @@ SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
 OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
-"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands drawn uniformly over
+"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands sampled uniformly over
 [-128, 127], [-2, 1], [0, 3] and [0, 15], and the one value 0."""
 REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "figures", "capacity", "owner",
             "inventory", "uncertified", "challenger-reach")
@@ -908,8 +908,8 @@ class Registration:
         front of the node without splitting its interface (a process on another machine, say). It adds the certifier
         and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
         stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
-        say nothing of it. A certifier on a node none of whose interfaces has a rate is refused, since its links would
-        have none. A certifier splits one host's way out, so each node names its own, and the key and scheme are the
+        say nothing of it. A certifier on a node any of whose interfaces has no rate is refused, by its id, since its
+        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A certifier splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
         `certifier_host` is the auditor's device the certifier runs in (`auditor_host`'s location, which states its
@@ -930,10 +930,12 @@ class Registration:
                 raise Malformed(f"`certifier_host` is an auditor's device at site {site} (`auditor_host`'s location), "
                                 f"not {certifier_host!r}")
         rates = [bw for _, bw, split in n.ways if split and bw is not None]
-        if certifier is not None and not rates:
-            raise Malformed(f"no interface the node file states has a rate ({[i for i, _, split in n.ways if split]})"
-                            ", so a network certifier's links would have none: an interface that reads no line rate "
-                            "takes no certifier. Register the node without one")
+        unrated = [i for i, bw, split in n.ways if split and bw is None]
+        if certifier is not None and unrated:
+            name = certifier[0] if isinstance(certifier, (tuple, list)) and certifier else certifier
+            raise Malformed(f"network certifier {name!r}: the interfaces {unrated} the node file states have no rate, "
+                            "so its links' rate, the interfaces' summed, would be below what it splits: an interface "
+                            "that reads no line rate takes no certifier. Register the node without one")
         sheet = Sheet.of_file(card)
         if sheet.sku != n.sku:
             raise Malformed(f"the node's devices are {n.sku!r}, and the card given is {sheet.sku!r}'s")

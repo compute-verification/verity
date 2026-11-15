@@ -20,7 +20,7 @@ public import Proofs.Accounting.Actual.Sampler
 /-!
 # The actual circuit's guarantees
 
-The model of `Security/Definitions/Accounting/Actual.lean`:
+The model of `security/Definitions/Accounting/Actual.lean`:
 
 * `Actual/Split.lean`: what a region reads from outside itself is what its location carried in plus what crossed its
   boundary, and so in any set of gates.
@@ -32,7 +32,7 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
   `G = univ`, inference blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` fresh input bits.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
-  contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
+  contains a threaded reference training algorithm, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
   plus its ingress, from `ServerBlocksAt` pulled back through the containment and the inference-only policy's `ThreadedReads` per window;
   `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted

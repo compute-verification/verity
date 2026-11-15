@@ -63,7 +63,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     H1Run,
     HM96,
     HM96_WEIGHTS,
-    hook_steps,
     host_array,
     in_process_draw,
     LEAD_BACKEND,
@@ -84,8 +83,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     pearl_c_schedule,
     pearl_c_scheme,
     PEARL_C_SCHEMES,
-    pearl_c_weight_roots,
-    PearlCDeviceRun,
     PearlCKernel,
     program_salt,
     quantize,
@@ -96,36 +93,19 @@ from verity.protocols.accounting.pouw.prover.serving import (
     SCHEDULES,
     Shape,
     traced_as as _traced_as,
-    use_h1_device,
     use_int8_arm,
-    use_tensors,
     verifier_coins,
     weight_binding,
     weights_root,
     Workload,
 )
 
+from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
-
-def _tensors() -> Any:
-    from verity.protocols.accounting.pouw.prover.serving.tensors_device import TENSORS
-
-    return TENSORS
-
-
-def _h1_device() -> Any:
-    from verity.protocols.accounting.pouw.prover.serving.h1.h1_device import H1
-
-    return H1
-
-
-#: PoUW's serving code reads and allocates the served buffers, and runs H1's device half, through the PyTorch adapter's
-use_tensors(_tensors)
-use_h1_device(_h1_device)
 
 __all__ = ["challenged", "h1_run"]
 
@@ -176,7 +156,7 @@ class Settings:
     coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the execution phase's work-law budget K, each call sampling its share (`plan.window_laws`); None is
+    #: ``ncp-v2``'s replay: the execution phase's work sampling design's budget K, each call sampling its share (`plan.window_sampling_designs`); None is
     #: `RECORD_K`
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first
@@ -199,7 +179,7 @@ class Settings:
     rows: int | None = None
     steps: int | None = None
     #: H1's admissions and rounds (`pouw_h1.H1Run.admit`): the engine's model runner (Model Runner V2, whose
-    #: ``decode_query_len`` orders a step's rows, `pouw_h1_requests.batch_order`), whose ``execute_model`` gets each step's
+    #: ``decode_query_len`` orders a step's rows, `h1_hooks.batch_order`), whose ``execute_model`` gets each step's
     #: scheduler output, the requests it admits and schedules among it; and the execution phase's round coins, a `LiveRecord` over a
     #: live challenger's round family (`verity.protocols.accounting.pouw.verifier.window.live_challenger`), which opens round s's coin
     #: after round s's root.  Pearl-C's device path ends each pass at that ``execute_model`` too
@@ -584,7 +564,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     source = H1_CHALLENGER if session is not None else "in-process"
     run = H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
                    transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
-                   admission=settings.admission or ROUND0, coin_source=source, opener=opener, served=settings.served,
+                   admission=settings.admission or ROUND0, coins_from=source, opener=opener, served=settings.served,
                    session=session.reserved["session"] if session is not None else None, graphs=settings.graphs,
                    commit_record=settings.commit_record)
     run.commits.update(weights_root=wroot.hex(), coin_source=source)

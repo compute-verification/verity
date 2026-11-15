@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Served
-public import Properties.Accounting.Compose
+public import Properties.Compose.Compose
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -45,12 +45,12 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
 
 * **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`, in
   the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check for `yOpen`,
-  neither variant written yet) on the gates `[start c, start (c + 1))` of the declared circuit; each non-input gate lies
+  neither variant written yet) on the gates `[start c, start (c + 1))` of the registered circuit; each non-input gate lies
   in the gate span of a proof block of that Program's layout, and its declared unit is that proof block's number
   shifted by the call's first position (`Shape.base`); each input slot's gate is an input; and every proof block's
   number is below the call's unit count (`Shape.unitsOf`), so the calls' units tile the window's positions without
   overlap (W-a);
-* **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the declared circuit's units are
+* **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the registered circuit's units are
   the window's `population`;
 * **the sample** (`SampleMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
   (`Spot.Draw.sampleUnits`, what `verity-verify-proof draw --population N --k K` runs) misses a set `U` no more often
@@ -87,8 +87,8 @@ def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (
       start c + b.gates.1 < start (c + 1) ∧ (Cd.binding (start c + b.gates.1)).isSome) ∧
     (∀ b ∈ l.blocks.toList, ∀ u, b.unit = some u → u < L.unitsOf (L.linearOf c))
 
-/-- **The declared circuit's units are the served window's, call by call**: linear `w`'s Program `prog w` under
-`query w` has `unitsOf w` units; the declared circuit has the window's `population` of units; each gate lies in its
+/-- **The registered circuit's units are the served window's, call by call**: linear `w`'s Program `prog w` under
+`query w` has `unitsOf w` units; the registered circuit has the window's `population` of units; each gate lies in its
 call site's gate range `[start c, start (c + 1))`; and every call site's gates are its Program's (`CallUnits`), wherever
 that Program's layout is defined. -/
 def ServedUnits {ι : Type} (L : Shape) (Cd : Declared ι) (prog : ℕ → Spot.Program) (query : ℕ → Json)
@@ -109,7 +109,7 @@ def SampleMissesSubset : Prop :=
           ∀ u ∈ U, u ∉ r.1) ≤
       prob (fun β : Equiv.Perm (Fin N) => ∀ t ∈ Pouw.Window.subsetDraw K β, t.val ∉ U)
 
-/-- **`UnitsOfLayout`'s seeded schedule and `LayerCommitted` exclude each other** on a well-formed declared circuit with
+/-- **`UnitsOfLayout`'s seeded schedule and `LayerCommitted` exclude each other** on a well-formed registered circuit with
 a run input that some gate reads: `UnitsOfLayout` commits the run input at the sample, and `LayerCommitted` needs it by
 its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the live
 statements can't take `UnitsOfLayout` as written. -/
@@ -119,7 +119,7 @@ def SeededScheduleNotLive : Prop :=
     Spot.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
       (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
 
-/-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
+/-- **The served hypothesis**: registered circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
 units are the per-call Programs' (`ServedUnits`), and the verifier's sample over its population misses as a uniform
 subset does (`SampleMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
 (`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and sample, per call. -/

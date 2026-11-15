@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Remote's and onsite's Lean verdicts on a served run's cases, `served_verdicts.sh`'s step after its record, with the tree
-# as cwd (a clone: it builds Lean in it):
+# Remote's and onsite's Lean verdicts on a served run's cases, with the tree as cwd (a clone: it builds Lean in it):
+# off the served node `served_verdicts.sh`'s step before its final record, which takes its product's answer from
+# OUT/composite as the record's verdict (`served_verdicts.py record --composite`); on the served node its step after it:
 #
 #   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
 #
@@ -15,7 +16,9 @@
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
+# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
+# or, on a serve with no H1 log, the serve's own records walked back from R's previous to its first (on a
+# serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
@@ -50,8 +53,9 @@
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
-# --development). The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's
-# copies) are no product's.
+# --development). COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its reason: a deferral's
+# follow-on sets it, since it composes on a prover node. The cases under the serve dir's private/compose and
+# private/deferred (a hand-off's or a deferral's copies) are no product's.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -62,7 +66,10 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 dev=()
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
+  dev=(--development "$COMPOSE_DEVELOPMENT")
+  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
+elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
   if [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \

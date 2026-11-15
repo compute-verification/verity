@@ -48,7 +48,7 @@ of the incorrect proof blocks at the value it takes over the whole horizon leave
 (`valOver_hold`, `rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
 bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit
 per committed gate of the incorrect proof blocks, and the jitter code, summed over the possible incorrect sets
-(`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible incorrect set is empty (`eq_empty_of_mem_faultySets`).
+(`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible incorrect set is empty (`eq_empty_of_mem_incorrectSets`).
 -/
 
 @[expose] public section
@@ -370,10 +370,10 @@ theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : BoundaryGates
 
 /-- At `δ ≥ miss(1)` the only possible incorrect set is empty: a non-empty set of slots is accepted with probability at
 most `miss(1)`, so it is not in `M_δ`. -/
-theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ : d.miss P 1 ≤ δ) {F : Finset ℕ}
-    (hF : F ∈ faultySets d P δ) : F = ∅ := by
+theorem eq_empty_of_mem_incorrectSets (d : Design) (P : Partition) {δ : ℝ} (hδ : d.miss P 1 ≤ δ) {F : Finset ℕ}
+    (hF : F ∈ incorrectSets d P δ) : F = ∅ := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
   obtain ⟨hsub, hM, -⟩ := hF
   by_contra hne
   have hcard : 1 ≤ F.card := Finset.card_pos.mpr (Finset.nonempty_iff_ne_empty.mpr hne)
@@ -387,18 +387,18 @@ theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ 
 
 theorem encard_accSeqsSampled_le (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (hfits : lay.Fits C n) (δ : ℝ) (As : Set (ℕ → Bool)) (c : ℕ) (hAs : As.encard ≤ ((2 ^ c : ℕ) : ℕ∞)) (β : ℕ)
-    (hβ : ∀ F ∈ faultySets d P δ, faultyBits C P F ≤ β) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
+    (hβ : ∀ F ∈ incorrectSets d P δ, faultyBits C P F ≤ β) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
     (AccSeqsSampled C P d lay n As δ op D).encard ≤
-      ((2 ^ c * (faultySets d P δ).card * 2 ^ β * D ^ n : ℕ) : ℕ∞) := by
+      ((2 ^ c * (incorrectSets d P δ).card * 2 ^ β * D ^ n : ℕ) : ℕ∞) := by
   classical
   let Sq : Finset ℕ → Set (List (Obs L K S)) := fun F =>
     {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedFaulty C P lay n As F op o}
-  have hsub : AccSeqsSampled C P d lay n As δ op D ⊆ ⋃ F ∈ faultySets d P δ, Sq F := by
+  have hsub : AccSeqsSampled C P d lay n As δ op D ⊆ ⋃ F ∈ incorrectSets d P δ, Sq F := by
     rintro o ⟨hl, hD, F, hF, hacc⟩
     exact Set.mem_biUnion hF ⟨hl, hD, hacc⟩
-  calc _ ≤ (⋃ F ∈ faultySets d P δ, Sq F).encard := Set.encard_le_encard hsub
-    _ ≤ ∑ F ∈ faultySets d P δ, (Sq F).encard := encard_biUnion_le _ _
-    _ ≤ ∑ _F ∈ faultySets d P δ, ((2 ^ c * (2 ^ β * D ^ n) : ℕ) : ℕ∞) := by
+  calc _ ≤ (⋃ F ∈ incorrectSets d P δ, Sq F).encard := Set.encard_le_encard hsub
+    _ ≤ ∑ F ∈ incorrectSets d P δ, (Sq F).encard := encard_biUnion_le _ _
+    _ ≤ ∑ _F ∈ incorrectSets d P δ, ((2 ^ c * (2 ^ β * D ^ n) : ℕ) : ℕ∞) := by
         apply Finset.sum_le_sum
         intro F hF
         calc (Sq F).encard ≤ As.encard * ((2 ^ faultyBits C P F * D ^ n : ℕ) : ℕ∞) :=

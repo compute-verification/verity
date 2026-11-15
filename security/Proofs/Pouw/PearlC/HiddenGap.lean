@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
-public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+public import Proofs.Pouw.PearlC.DeviceInertBoundRev1Gap
 public import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Core.Game.Prob
 
@@ -13,7 +13,7 @@ public import Proofs.Core.Game.Prob
   at most `GGapSampled`'s plus, over the `t` samples, `TileProofSound`'s per-draw error.
 * **Every prover in the class** (`gapHidden_of_sampled_all`): `GGapSampled` and the open obligation
   `TileProofSoundAll` give `GGapHidden`, at `t·δzk(q)` more error, for any hidden audit and every opening.
-* **The headline, conditional** (`pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`): v1 under rev1 per tile at 1/1,000,
+* **The headline, conditional** (`pearlCHiddenSm120v1LoopCast8p72Rev1InertShare1000_8192`): v1 under rev1 per tile at 1/1,000,
   8192³, 0.36949% under the hidden audit at W1, for a free hidden audit and `δzk`; nothing about Flock until its
   instance lands.
 -/
@@ -123,7 +123,7 @@ the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`, from `TTOutTileP
 Conditional: `HA` and `δzk` are free, and the open obligation `TileProofSoundAll` holds at a degenerate hidden audit
 (`Bounded := fun _ _ _ _ _ => False`, an empty class) for any `δzk ≥ 0`, so this says nothing about Flock until
 Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
-theorem pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S)
+theorem pearlCHiddenSm120v1LoopCast8p72Rev1InertShare1000_8192 (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S)
     (HA : HiddenAudit Q R S) (δzk : ℕ → ℝ)
     (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop)
       sem (1 / 1000))
@@ -136,6 +136,6 @@ theorem pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 (sha fetch : ℚ) (salt 
       (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) HA
       ((1648180439 / 446072750000 : ℚ) : ℝ) δPearlC δzk :=
   gapHidden_of_sampled_all _ _ _ _ HA _ _ δzk
-    (pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192 _ sem (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)) hzk
+    (pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_8192 _ sem (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)) hzk
 
 end Pouw.PearlC

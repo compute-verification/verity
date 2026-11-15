@@ -37,8 +37,8 @@ import pytest
 
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.warden import (
-    END, FAIL, Warden as Certifier, WardenParams as Parameters, cells, read_cell,
+from verity.protocols.accounting.certifier.verifier.network_certifier import (
+    END, FAIL, NetworkCertifier as Certifier, NetworkCertifierParams as Parameters, cells, read_cell,
 )
 
 HERE = Path(__file__).resolve().parents[1]

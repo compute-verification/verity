@@ -219,7 +219,7 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
         rw [List.length_eq_zero_iff.1 hm0]
         rfl
       exact (Nat.le_zero.1 (hN0 ▸ hle)).trans_le (Nat.zero_le _)
-    obtain ⟨r', hr'⟩ : ∃ r', r' = forkOn (((base h).atOrder (order h)).stage2 x) r e := ⟨_, rfl⟩
+    obtain ⟨r', hr'⟩ : ∃ r', r' = forkOn (((base h).atOrder (order h)).secondStage x) r e := ⟨_, rfl⟩
     rw [← hr'] at hacc
     obtain ⟨as, has, hne⟩ := run_acc_coins H P ((base h).atOrder (order h)).V x ω r' (h.stage + 2) (Nat.succ_pos _)
       (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
@@ -244,7 +244,7 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     have hc0 : coinSeq r' 0 = r (order h x).first := by
       have h0 : 0 < ((base h).atOrder (order h)).V.k x := by show 0 < off h h.ms.length + 1; omega
       have e0 : coinSeq r' 0 = r' ⟨0, h0⟩ := dite_eq_left h0
-      have hnot : (⟨0, h0⟩ : Fin _) ∉ ((base h).atOrder (order h)).stage2 x := fun hm' =>
+      have hnot : (⟨0, h0⟩ : Fin _) ∉ ((base h).atOrder (order h)).secondStage x := fun hm' =>
         lt_irrefl _ (mem_filter.1 hm').2
       rw [e0, hr']
       exact ite_eq_right hnot

@@ -42,7 +42,8 @@ the ones here.
   `Formalism` (`(c, k)`-partitions and local description length).
 * What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
   (the registered hardware and its registration), `SiteSubtree` (a subtree of the Site, its places and its links as
-  the hardware model's).
+  the hardware model's). What an accepted registration gives the theorems is registration's, an accounting protocol
+  (`Definitions.Accounting.Registration`).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
@@ -52,7 +53,7 @@ the ones here.
 The guarantees are in `Guarantees` (read `Verity.Guarantees.SampleAfterRecorded` and `Verity.Guarantees.SoundBatch`
 first) and the named assumptions in `Assumptions`. This module, `Assumptions` and `Guarantees` are the spec: they import
 only one another and Mathlib, so their diff is everything a statement reviewer reads. The proofs and their lemmas are in
-`Security/Proofs/Core/`.
+`security/Proofs/Core/`.
 -/
 
 @[expose] public section

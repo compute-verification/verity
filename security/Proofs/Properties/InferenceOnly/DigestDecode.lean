@@ -5,7 +5,6 @@ public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.Complete.Json.Value
 import Base.Sizes
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
@@ -304,14 +303,21 @@ theorem natJ_jsonEquiv {a b : Json} (h : JsonEquiv a b) : natJ? a = natJ? b := b
 theorem intJ_jsonEquiv {a b : Json} (h : JsonEquiv a b) : intJ? a = intJ? b := by
   cases a <;> cases b <;> simp_all [JsonEquiv, jsonForm, intJ?]
 
+theorem except_bind_ok {ε α β : Type} {m : Except ε α} {f : α → Except ε β} {b : β} (h : (m >>= f) = .ok b) :
+    ∃ a, m = .ok a ∧ f a = .ok b := by
+  cases m with
+  | error e => exact absurd h (by intro h; injection h)
+  | ok a => exact ⟨a, rfl, h⟩
+
 /-- What `paramsOf` accepts holds no object. -/
 theorem paramsOf_objFree {j : Json} {what : String} {ps : Array (String × Ty)} (h : paramsOf j what = .ok ps) :
     ObjFree j := by
   unfold paramsOf at h
   split at h
   · rename_i xs
+    obtain ⟨ps', hm, -⟩ := except_bind_ok h
     refine .arr fun x hx => ?_
-    obtain ⟨q, -, hq⟩ := array_mapM_mem' _ xs ps h x hx
+    obtain ⟨q, -, hq⟩ := array_mapM_mem' _ xs ps' hm x hx
     rcases x with _ | _ | _ | _ | ⟨⟨_ | ⟨a, _ | ⟨t, _ | ⟨c, l⟩⟩⟩⟩⟩ | _
     all_goals first | cases hq | skip
     cases a with

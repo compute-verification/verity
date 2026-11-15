@@ -65,7 +65,7 @@ HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.proofs.spot.prover.cost import glm53  # noqa: E402
+import glm53  # noqa: E402
 
 INNER = 8
 #: --whole --nvtx: each arm's ranged forwards; lanes reads all but the first and the last
@@ -250,7 +250,7 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     from verity.protocols.accounting.pouw.verifier import verifier
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     dev = torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261023)
@@ -486,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--nvtx", action="store_true", help="--whole: each arm's NVTX-ranged forwards after its timed reps (under nsys)")
     a = p.parse_args(argv)
     import torch
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs import GRAPH_ROWS
+    from verity_torch.pouw.pearl_c.graphs import GRAPH_ROWS
     from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import whole_options
 
     out, dev, model = Path(a.out), torch.device("cuda"), importlib.import_module(a.model)

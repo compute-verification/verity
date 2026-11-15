@@ -53,7 +53,7 @@ VLLM_DIR = HERE.parent / "pearl_c_vllm"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(VLLM_DIR))
 
-from verity.protocols.proofs.spot.prover.cost import glm53  # noqa: E402
+import glm53  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -69,7 +69,7 @@ def capture(a) -> int:
     import torch
     from verity.protocols.accounting.pouw.verifier.audit import weights_root
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     out, dev = Path(a.out), torch.device("cuda")
     shapes = ([tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes

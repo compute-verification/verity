@@ -1,5 +1,5 @@
 """The chain's stages (`chain.py`) on fakes: the advice read in each of its forms (I1 v0's JSON and bytes, and a prove-path
-stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per link-window, v0's
+stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per execution phase, v0's
 summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
 whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
 advice, with a forged arm that passes only when Lean refused its unit; and the endpoint's own advice, bound to the
@@ -256,15 +256,15 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
     assert (f"| w1 served | 1 | {commits[1]['run_id']} | {commits[1]['run_root'][:16]}… | True | True | True | "
             f"{apart[:16]}… | {row[1]['v0_bits']} | False | True | True | True | after serving, by the lane (r-reg), "
             "1503.6 s after its Commit window closed, 1502.9 s after the next window closed, 852.6 s before the first "
-            "draw |") in md
+            "sample |") in md
     assert f"| w0 served | 0 | {commits[0]['run_id']} |" in md
     assert md.count("| — | True | True | True | by vllm at serve time, 0.5 s before its Commit window closed, before "
-                    "its draw and 1.2 s before the next window closed |") == 2
+                    "its sample and 1.2 s before the next window closed |") == 2
     stub = [x for x in chain.stubs({"chain": {"advice": info, "bits": b, "prove_path": got}}, True)
             if x.startswith("Prove path")]
     assert stub == [f"Prove path: the served run's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
                     "was registered after serving, by the lane (r-reg), 1503.6 s after its Commit window closed, "
-                    "1502.9 s after the next window closed, 852.6 s before the first draw, not by the endpoint while "
+                    "1502.9 s after the next window closed, 852.6 s before the first sample, not by the endpoint while "
                     "serving; the advice w1's arms committed is a registration of its own, held to the report's advice "
                     "by its opening, which the report reads in the clear."]
 
@@ -332,21 +332,21 @@ def test_at_serve_time_is_before_its_sample_and_no_later_than_the_next_windows_c
 
     assert round(closed[2] - closed[1], 1) == 0.7
     assert registered("in-time", 1, closed[1] + 0.5, True, True) == (
-        True, "by vllm at serve time, 0.5 s after its Commit window closed, before its draw and 0.2 s before the next "
+        True, "by vllm at serve time, 0.5 s after its Commit window closed, before its sample and 0.2 s before the next "
               "window closed")
     assert registered("before-close", 1, closed[1] - 3.0, True) == (
-        True, "by vllm at serve time, 3.0 s before its Commit window closed, before its draw and 3.7 s before the next "
+        True, "by vllm at serve time, 3.0 s before its Commit window closed, before its sample and 3.7 s before the next "
               "window closed")
     assert registered("after-the-draw", 1, closed[1] + 0.5, True, False) == (
-        False, "after serving, by vllm, 0.5 s after its Commit window closed, after its draw")
+        False, "after serving, by vllm, 0.5 s after its Commit window closed, after its sample")
     assert registered("after-the-draw-one-missing", 1, closed[1] + 0.5, False, None) == (
-        False, "after serving, by vllm, 0.5 s after its Commit window closed, after its draw")
+        False, "after serving, by vllm, 0.5 s after its Commit window closed, after its sample")
     assert registered("after-the-next", 1, closed[2] + 3.0, True) == (
         False, "after serving, by vllm, 3.7 s after its Commit window closed, 3.0 s after the next window closed")
     assert registered("just-after-the-next", 1, closed[2] + 0.01, True)[0] is False
     assert registered("no-receipt", 1, closed[1] + 0.5, True, None) == (
         None, f"by vllm at {chain._utc(closed[1] + 0.5)}, 0.5 s after its Commit window closed; whether at serve time "
-              "is unknown: no draw receipt orders it against its draw")
+              "is unknown: no sample receipt orders it against its sample")
     assert registered("last", 2, closed[2] + 0.5, True) == (
         None, f"by vllm at {chain._utc(closed[2] + 0.5)}, 0.5 s after its Commit window closed; whether at serve time "
               "is unknown: the next window's close isn't in the endpoint's records")
@@ -391,7 +391,7 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
     ok, g, label = registered("stamped", 1, c2 + 5.0, [(1, s2 - 1.0, root[1])])
     assert ok is True and g["at"] == chain._utc(s2)
     assert g["attested"] == {"stamp": stamp(s2 - 1.0), "record": str(rec), "within": True}
-    assert label == (f"by vllm at serve time, no later than {chain._lag(round(s2 - c1, 1))}, before its draw and at "
+    assert label == (f"by vllm at serve time, no later than {chain._lag(round(s2 - c1, 1))}, before its sample and at "
                      f"least {round(c2 - s2, 1)} s before the next window closed (its run record's stamp, "
                      f"{stamp(s2 - 1.0)} to the second)")
     ok, g, label = registered("to-the-second", 1, c2 - 0.1, [(1, c2, root[1])])
@@ -409,7 +409,7 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
     ok, g, label = registered("ended", 2, c2 + 1.5, last, ended=c2 + 60.0)
     end = float(int(c2 + 2.0)) + 1.0
     assert ok is True and g["session_end"] == chain._utc(c2 + 60.0) and g["next_closed"] is None
-    assert label.endswith(f"before its draw and at least {round(c2 + 60.0 - end, 1)} s before its session ended, with "
+    assert label.endswith(f"before its sample and at least {round(c2 + 60.0 - end, 1)} s before its session ended, with "
                           f"no window after it (its run record's stamp, {stamp(c2 + 2.0)} to the second)")
     assert registered("later-window", 2, c2 + 1.5, last + [(3, c2 + 9.0, root[1])], ended=c2 + 60.0)[0] is None
     ok, _, label = registered("after-the-end", 2, c2 + 5.0, [(1, c1 + 0.5, root[1]), (2, c2 + 5.0, root[2])],
@@ -421,7 +421,7 @@ def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_
     """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
     mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
-    not bound when a window falls outside the run's link-windows, holds a request the run didn't certify, opens another
+    not bound when a window falls outside the run's execution phases, holds a request the run didn't certify, opens another
     root or names another Commit, or has no advice; not rebuilt when a certified output breaks the stop rule."""
     io = json.loads((EP / "io.json").read_text())["requests"]
     first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))

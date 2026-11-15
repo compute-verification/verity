@@ -657,14 +657,19 @@ def _address(text: str) -> tuple[str, int]:
     return host, int(port)
 
 
+def _premise(where: Mapping[str, Any]) -> str | None:
+    return mc.premise(where) if mc.PREMISE in where or mc.PREMISE_BEFORE in where else None
+
+
 def line(answer: Mapping[str, Any]) -> str:
-    pub = answer.get("public") or {}
+    # said of the certified bits until an answer names its tier and leaf
+    pub = f"{answer.get('public') or {}} through the device model, not the answer"
     w = (answer.get("profile") or {}).get("weights") or {}
     if answer["verdict"] == "accept":
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
                 f"{w.get('bytes')} B of the checkpoint's {w.get('checkpoint_bytes')} in {w.get('used_blocks')} of "
                 f"{w.get('blocks')} blocks; certifies {pub}; "
-                f"{CS.PREMISE} {(answer['profile'].get('placement') or {}).get(CS.PREMISE)}; {CS.SETUP}")
+                f"{CS.PREMISE} {_premise(answer['profile'].get('placement') or {})}; {CS.SETUP}")
     return f"POUS: {answer['verdict']}: {answer['reason']}"
 
 
@@ -674,7 +679,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("window", type=int)
     ap.add_argument("out", type=Path)
     ap.add_argument("--hf-home", type=Path, required=True, help="the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="libp2v1.so's directory (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--node", help="the developer's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")

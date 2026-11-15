@@ -12,7 +12,7 @@ schedule has only where it sets them, and what the check says of a schedule with
 
 namespace NetworkCheck.Period
 
-/-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `active.ID_FIELD_BYTES`):
+/-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `id_form.ID_FIELD_BYTES`):
 with lengths rows a cell's payload holds at least this much, so a request's head and first prompt id are in its first
 cell, each field at its place (`io_request.layout` raises for a smaller cell). -/
 def firstPromptEnd : Nat := 378
@@ -33,7 +33,7 @@ def mostClassesWords : Nat := 16383
 /-- ⌈a / b⌉, and 0 at b = 0. -/
 def divCeil (a b : Nat) : Nat := (a + b - 1) / b
 
-/-- The keys a schedule has only where it sets them (`warden.OPTIONAL_FIELDS`). -/
+/-- The keys a schedule has only where it sets them (`network_certifier.OPTIONAL_FIELDS`). -/
 def optionalScheduleKeys : List String := ["content", "lengths", "max_tokens_cap", "request_words"]
 
 /-- A class's size, of prompt ids or of ids released: a power of two of at least 2 (`content_rows.check_size`). -/

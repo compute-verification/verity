@@ -3,6 +3,7 @@
 
     python3 tools/move/layout.py              move and rewrite, then `uv lock` (the uv pod_setup.sh pins); prints what it changed
     python3 tools/move/layout.py --dry-run    print what it would change, and change nothing
+    python3 tools/move/layout.py --only FILE  rewrite only the files FILE lists (and what moves): a carry of a merge
     python3 tools/move/layout.py --modules    print the module renames that [paths] and [roots] imply ([modules] must equal it)
     python3 tools/move/layout.py --resolve M  the name module M has after the move (for readers of recorded data)
 
@@ -631,6 +632,7 @@ class Run:
         self.leftover: list[str] = []               # the `__init__.py` files left in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
         self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
+        self.only: set[str] | None = None           # `--only`: the old paths the rewrite reads, beside what the run moves
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
@@ -808,18 +810,26 @@ class Run:
 
     # ------------------------------------------------------------------------------------------------ rewriting
 
+    def in_scope(self) -> set[str]:
+        """The new paths the rewrite reads: every file of the moved tree, or under `--only`, the files it names (at their
+        paths before the move) and the files this run moves or creates."""
+        if self.only is None:
+            return self.new_files
+        return {p for p in self.new_files if p in self.only or self.old_of.get(p, p) in self.only or p in self.moved}
+
     def rewrite_all(self):
+        scope = self.in_scope()
         lean_before = {}
-        for p in sorted(self.new_files | set(self.texts)):
+        for p in sorted(scope | set(self.texts)):
             if p.endswith("lean-audit.json"):
                 lean_before[p] = self._lean_records(self._read(p), self.lean_mods)
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
-                       for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
+                       for p in scope if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
         lake_before = {p: self._lake_packages(self.old_of.get(p, p), self._read(p) or "", self.tracked_old)
-                       for p in self.new_files if posixpath.basename(p) in LAKE_FILES}
+                       for p in scope if posixpath.basename(p) in LAKE_FILES}
         created = set(self.L.data.get("create", {}))
-        for p in sorted(self.new_files - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
+        for p in sorted(scope - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
             if p == "pyproject.toml":
                 self._dependents()
             old = self.old_of.get(p, p)
@@ -1338,8 +1348,8 @@ class Run:
         if path == old and new_target == target and not self._through_moved(posixpath.dirname(old), t):
             return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, base_new or ".")
-        if t.startswith("./") and not rel.startswith("."):
-            rel = "./" + rel
+        if t.startswith(("./", "../")) and not rel.startswith("."):
+            rel = "./" + rel                            # still read as relative (`move_check.py`'s `RELATIVE`, `MD_RELATIVE`)
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
         return rel + ("/." if dot else "") + ("/" if slash else "")
@@ -2012,18 +2022,17 @@ def rust_literals(text: str) -> list[tuple[int, int]]:
 
 
 def py_string_spans(text: str) -> list[tuple[int, int]]:
-    """The offsets of each string literal of Python source ``text``, in order (none when it doesn't tokenize); an f-string's
+    """The offsets of each string literal of Python source ``text``, in order (none when it doesn't parse); an f-string's
     replacement fields are code."""
+    if parsed(text) is None:
+        return []
     lines = io.StringIO(text).readlines()
     starts = [0]
     for line in lines:
         starts.append(starts[-1] + len(line))
     kinds = {tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
-    try:
-        return [(starts[t.start[0] - 1] + t.start[1], starts[t.end[0] - 1] + t.end[1])
-                for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type in kinds]
-    except (SyntaxError, ValueError, tokenize.TokenError, IndexError):
-        return []
+    return [(starts[t.start[0] - 1] + t.start[1], starts[t.end[0] - 1] + t.end[1])
+            for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type in kinds]
 
 
 def _inside(spans: list[tuple[int, int]], at: int) -> bool:
@@ -2269,6 +2278,11 @@ def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
     return {**merged, "modules": modules}
 
 
+def only_paths(path: Path) -> set[str]:
+    """The paths `--only FILE` names: one a line, blank lines left out."""
+    return {ln.strip() for ln in path.read_text().splitlines() if ln.strip()}
+
+
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
@@ -2296,6 +2310,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--report-splits", action="store_true",
                     help="note references to a split directory that [split] doesn't acknowledge, instead of failing (restack.py "
                          "on a branch: its own references are its owner's to check)")
+    ap.add_argument("--only", type=Path, metavar="FILE",
+                    help="rewrite only the files FILE names, one path a line, and those the run moves: a rerun over what a "
+                         "merge brought (every file still moves, and the rest of the tree is neither read nor rewritten)")
     a = ap.parse_args(argv)
     layout = load(a.map)
     if a.resolve:
@@ -2321,6 +2338,8 @@ def main(argv: list[str] | None = None) -> int:
     if (rows := rows_path(a.map)).is_file():
         layout = Layout(with_rows(layout.data, rows, root))
     run = Run(root, layout, a.dry_run)
+    if a.only:
+        run.only = only_paths(a.only)
     try:
         moves = run.plan()
     except NoRow as e:

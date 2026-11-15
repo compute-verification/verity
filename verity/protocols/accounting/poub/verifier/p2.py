@@ -8,8 +8,8 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              sampled after the commitment (`setup.sample_salt`) and the root the verifier built from the C* it decoded to
-              the committed W (`setup.verifier_key_from_encoding`)
+              sampled after the commitment (`setup.sample_salt`) and the root the verifier built from the C* it decoded
+              to the committed W (`setup.verifier_key_from_encoding`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
               u32be k_s),  REGISTRATION_DOMAIN = "verity/remote-bandwidth/p2-registration/v0\\0"

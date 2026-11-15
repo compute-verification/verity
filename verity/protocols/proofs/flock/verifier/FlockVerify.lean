@@ -668,7 +668,7 @@ record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
   let [f] := args | IO.eprintln "usage: verity-verify-proof rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
-  let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the coin server's record format"; return 1
+  let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the challenger's live-coin part's record format"; return 1
   let hex := fun (b : List UInt8) =>
     Lean.Json.str ((RecRecord.hexW b).foldl (fun s c => s.push (Char.ofNat c.toNat)) "")
   let arr := fun {α : Type} (f : α → Lean.Json) (l : List α) => Lean.Json.arr (l.map f).toArray
@@ -792,7 +792,7 @@ def plainCoinsArg (arg : Option String) (tables : Array String) : Option Coins :
   | some "tree" => some (.tree (Zk.coinSpec tables))
   | some _ => none
 
-def COINS_USAGE : String := "--coins is tree, the challenger's keyed coin tree (the one coin source a session may have)"
+def COINS_USAGE : String := "--coins is tree, the challenger's keyed coin tree (the one origin of coins a session may have)"
 
 /-- `coin-tree-check FILE`: R7 and the record's `coin_tree` for the keyed coin tree (`Flock.CoinTree`), on `{"hello": the
 verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in
@@ -1266,7 +1266,7 @@ def verifyMembersCmd (args : List String) : IO UInt32 := do
   | .error e => IO.eprintln e; return 2
 
 /-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
-(`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
+(`verity/protocols/proofs/flock/prover/agreement/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
 refusals, in `verify`'s order, on plain sessions whose proof files are upstream's form (the file then the zk patch's
 `None` tag, `verifyFiles (plainBytes true)`; `Tags.upstreamPlain`), which `verify` refuses. For each session it prints one
 line, `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}`, with `verify`'s findings and no `accepted`:
@@ -1623,7 +1623,7 @@ def registeredSamplingDesign (args : List String) : IO (Except String (Option (L
 def heldToRegistration (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Lean.Json × Nat → Option String
   | (reg, n) =>
     if samplingDesign.toJson.compress != reg.compress then
-      some s!"the law {samplingDesign.toJson.compress} is not the registered samplingDesign {reg.compress}"
+      some s!"the law {samplingDesign.toJson.compress} is not the registered law {reg.compress}"
     else if pop != n then some s!"the population {pop} is not the registered {n}"
     else none
 

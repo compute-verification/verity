@@ -192,7 +192,7 @@ class ServedCheck:
         req = {r["request_id"]: r for r in plan["requests"]}
         spans = [(r, lo, hi) for r, lo, hi in st.rows]
         every = np.arange(n)
-        local = {r: self._draw(hi - lo) for r, lo, hi in spans}
+        local = {r: self._sample_rows(hi - lo) for r, lo, hi in spans}
         self.picks[st.step] = {r: [int(i) for i in v] for r, v in local.items()}
         some = np.concatenate([lo + local[r] for r, lo, _hi in spans]) if spans else every
         self._inputs(out, V, spans, req)
@@ -229,7 +229,7 @@ class ServedCheck:
             self.log(f"step {st.step} {plan['mode']} n={n}: {len(out) - len(bad)}/{len(out)} exact" + (f", FAIL {bad[:6]}" if bad else ""))
         return out
 
-    def _draw(self, n: int) -> np.ndarray:
+    def _sample_rows(self, n: int) -> np.ndarray:
         if self.rng is None or n <= self.k:
             return sample(n, self.k)
         return np.sort(self.rng.choice(n, self.k, replace=False))

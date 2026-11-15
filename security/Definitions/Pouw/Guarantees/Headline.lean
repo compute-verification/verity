@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Registration.Assumptions.Sheet
 public import Definitions.Pouw.Headline
 public import Definitions.Pouw.Headline.Sm120Measured
 import Mathlib.Algebra.Order.Floor.Extended
@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 
 One statement per family and reading: the family's credited work is at least `1 − ε` of its credit, `ε` the reading's
 headline, on one device's machine, one design's TS model on it and its floor program ♭, all exact data
-(`Definitions.Pouw.Headline`). Each is `Definitions.Accounting.Guarantees.Sheet`'s `SheetDIdealFloor` at that data
+(`Definitions.Pouw.Headline`). Each is `Definitions.Registration.Guarantees.Sheet`'s `SheetDIdealFloor` at that data
 with fold skippers charged (below), its parameters fixed (`π*`, `p`, `p₀`, `S`, `δ`), with every hypothesis that the
 data discharge gone and the rest left as they are: the named assumptions of `Definitions.Accounting.Assumptions` and the
 proof layer's pieces. A measured reading is `Definitions.Pouw.Guarantees.TS`'s `DIdealFloor` at its data the same
@@ -52,7 +52,7 @@ of the credited work, with the device that did it left to the attribution layer.
 against `T_cred`, the credited work priced on one device's machine, and nothing ties a committed tile to the GPU that
 computed it: the transcript commits tile digests, so a helper can supply whole tiles. A per-GPU reading needs LOC's host
 deduction (what the host CPU can compute of the credited work is deducted) and the peer-GPU premise, every billable GPU
-on the node credited each window or the node as the unit (`benchmarks/pouw/machine_model/README.md`, "The headline is
+on the node credited each window or the node as the unit (`benchmarks/machine_model/README.md`, "The headline is
 per node"). Counted per GPU without them, the host's AMX and AVX-512 (and NVLink peers) take every device over 1% on
 some real host.
 

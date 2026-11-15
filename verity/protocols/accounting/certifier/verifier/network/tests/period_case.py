@@ -12,13 +12,13 @@ session's signed start (`certifier.certificate`'s `CertifiedStart.refusal`, unde
 `_start_check`: an entry whose start is not where its session's signed base puts it after its key's first listed entry
 is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
 `registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule
-(`warden.WardenParams`), the verifier's read of each row registration
-(`warden_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
+(`network_certifier.NetworkCertifierParams`), the verifier's read of each row registration
+(`network_certifier_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
 phase (`scan_ok.constants` and `held`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
 check reads: parameters naming a `sync_set` (the clock form's) are refused before anything else is read. Public is `K`
-and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' scans, all at one δ), each with its
+and its terms over `MonitoringPeriodLeakAccepted`'s windows (the execution phases' scans, all at one δ), each with its
 `delta`, and `eps`, the union of those deltas as an exact ratio string, and the schedule's response cap
 (`max_tokens_cap`) when it has one.
 
@@ -26,8 +26,8 @@ and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' s
 parameters, commitments, evidence and cases). Its parameters list the signer's entry (its key, its session and the
 start of its stretch, at or before `first`, so the signer's numbers are the period's less that start), alone in a
 small period and otherwise among up to two more whose stretches hold none of the period's execution phases; `second-key`
-lists the signer second of two, and `two-stretches` two entries whose stretches each hold some of the period's execution
-phases, each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn,
+lists the signer second of two, and `two-stretches` two entries, the period's one execution phase the second's
+stretch's first, signed by that entry at its number 0. Refused: two listed entries that sign in turn,
 each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); a certificate or a
 rows registration under the other listed entry, outside its stretch (`cert-outside-stretch`, `reg-outside-stretch`),
 under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the other entry's session
@@ -37,13 +37,15 @@ out of order or with one start, one session twice, two keys under one key identi
 first entry, or the earlier forms `"key"`, `"session"` and `"sessions"`. A period's evidence shows each listed entry's
 session's signed start, its base on its key's life sampled for a key's first listed entry and, for a later one, as many
 of the schedule's execution phases on as its start is, and its ordinal among its key's sessions, sampled for a key's
-first listed entry and the next for each later one. `restart` lists the signer's key in two sessions, each stretch
-holding some of the period, and is accepted. Refused: that list with the second session's base another
-(`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a shown start that is not its session's
+first listed entry and the next for each later one. `two-sessions` lists the signer's key in two sessions, the period's
+one execution phase in the second's stretch, and is accepted. Refused: that list with the second session's base
+another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a period of two execution phases,
+one in each of the two sessions' stretches (`restart`), as a period is one execution phase (`startCarriedRefusal`);
+a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
-shows a start too few or too many, or none (`start-count`). The link-windows of one link from the execution phase
-`first`, each link-window's ingress and egress rows committed and registered under a small sampled schedule
-(`warden_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
+shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
+`first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
+(`network_certifier_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
@@ -93,6 +95,12 @@ So is one with a stratum that samples more than the stratum holds in a level who
 moved to the other (`tied-stratum-oversampled`). So is one whose strata's sizes do not sum to its level's
 (`STRATA_SIZES`): that audit with a stratum holding more than it samples, each holding twice as many, or one holding
 and sampling one fewer (`tied-strata-sizes`).
+Every accepted answer's profile is the sample its registration states, its `population` under its sampling design:
+an answer is refused whose registration states no sample (`NO_SAMPLE`: `answer-unsampled`, `_unsample`) or whose
+profile is another sample of its level than the registration's (`NOT_REGISTERED`: `answer-unregistered`,
+`_resample`). An answer's count of incorrect proof blocks is the larger of its `bound` and that sample's bound at its
+δ (`_sample_bound`), and none is refused for its `bound`: the answers' bounds are picked below their samples' as well
+as above.
 `case(kind, seed)` is a small period aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed)` one of
 each with its answer, as a composition's difftest takes a real component's cases.
 
@@ -114,15 +122,16 @@ from pathlib import Path
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.protocols.accounting.certifier.verifier import content_rows, io_request, scan_ok
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
                                                                         start_digest, start_link)
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkCertifierParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
+from verity.protocols.proofs.spot.verifier.profile import Stratified
 from verity.circuits import boolean as BL, codec, population
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.defs import REGISTRY
@@ -273,7 +282,7 @@ class Params:
     program: str
     windows: int
     #: the schedule and the scan's terms, read off its Program
-    schedule: WardenParams
+    schedule: NetworkCertifierParams
     scan: Scan
     #: the class circuit, its window circuit's Program's SHA-512
     circuit: str | None = None
@@ -312,9 +321,18 @@ class Window:
 @dataclasses.dataclass(frozen=True)
 class Facts:
     units: int
-    drawn: int
+    sampled: int
     delta: Fraction
     wrong: int
+    #: `design`: the sample's design as a profile's level writes it, the registered one (`_facts`), off which `at`
+    #: reads the bound at another δ; None where none is read (`subset 0`), at which every unit may be incorrect
+    design: dict | None = None
+
+    def at(self, delta: Fraction) -> Facts:
+        """`Facts.readAt`: the same sample read at `delta`, its count the larger of the facts' own and the sample's
+        bound there (`_sample_bound`), no second sample."""
+        bound = _sample_bound(self.units, {"subset": 0} if self.design is None else self.design, delta)
+        return dataclasses.replace(self, delta=delta, wrong=max(self.wrong, bound))
 
 
 def _exactly(j, keys: list[str], ctx: str) -> None:
@@ -336,19 +354,19 @@ def _of(v, kind, ctx: str):
     return v
 
 
-def rows_wf(s: WardenParams, windows: int) -> bool:
+def rows_wf(s: NetworkCertifierParams, windows: int) -> bool:
     """`rowsWf`: a cell's B bytes are under 2^32, so its payload's length is a u32, and the period's
     `lanes · windows · window` connections, the k-th at ordinal k + 1, have distinct u32 ordinals."""
     return s.cell_bytes < U32 and s.lanes * windows * s.window < U32
 
 
-def rows_wf_refusal(s: WardenParams, windows: int) -> str:
+def rows_wf_refusal(s: NetworkCertifierParams, windows: int) -> str:
     return (f"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = "
             f"{s.lanes * windows * s.window} connections and a cell's {s.cell_bytes} bytes must each be under 2^32, or "
             "two frames could encode alike (rowsWf)")
 
 
-def connection_rows(s: WardenParams) -> bool:
+def connection_rows(s: NetworkCertifierParams) -> bool:
     """`Schedule.connectionRows`: whether the schedule registers connection rows, its lengths rows, which a schedule
     with content rows has too, as one with request words has content rows. Each is asked, as the Lean asks it."""
     return s.lengths is not None or s.content is not None or s.request_words is not None
@@ -360,10 +378,10 @@ def _classes(j) -> tuple[tuple[int, ...], ...]:
                  for c in _of(j, list, "schedule.content"))
 
 
-def _schedule(j) -> WardenParams:
-    """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
+def _schedule(j) -> NetworkCertifierParams:
+    """`scheduleOf`: `NetworkCertifierParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
-    `WardenParams` holds it. `request_words` is the JSON `true` or it is refused: `WardenParams` reads `None` as
+    `NetworkCertifierParams` holds it. `request_words` is the JSON `true` or it is refused: `NetworkCertifierParams` reads `None` as
     unset, and `scheduleOf` refuses a key that is there and not `true`."""
     keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
@@ -372,7 +390,7 @@ def _schedule(j) -> WardenParams:
     values = {k: _classes(j[k]) if k == "content" else j[k] if k == "request_words" else _nat(j[k], "schedule")
               for k in keys}
     try:
-        s = WardenParams(**values)
+        s = NetworkCertifierParams(**values)
     except ValueError as e:
         raise D.Reject(f"schedule: {e}") from None
     if not (s.cell_bytes < U32 and s.lanes * s.slots < U32 and s.window < U32):
@@ -639,7 +657,7 @@ def _audit(a, ctx: str) -> Audit:
     return Audit(free, steps, program_sha512(j), sum(units), entries)
 
 
-def _scan(j, program: str, s: WardenParams) -> Scan:
+def _scan(j, program: str, s: NetworkCertifierParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's execution phase in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`): the start unit, T
     ingress buckets and T egress buckets. An egress template with a row among its parameters (the checker form) is
@@ -698,7 +716,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: an input gate that is no template's row, state or egress parameter, nor one of the slot "
                        "entries")
     if not _walkable(j):
-        raise D.Reject("scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks "
+        raise D.Reject("scan: not laid out as Flock's decoder lays a Program out, or past what its resolution walks "
                        "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)")
     ke = max(k for k, x in enumerate(nodes) if defs[callees[x["fn"]]]["form"] != "primitive")
     if not any(a[:3] == ("n", ke, 0) and T * leaves_of(be["ret_type"]) <= a[3]
@@ -820,7 +838,7 @@ def params(j) -> Params:
     scan = _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
-        raise D.Reject("windows: a period has at least one link-window")
+        raise D.Reject("windows: a period has at least one execution phase")
     if not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
     if list(cells) != schedule.rows_cells(windows):
@@ -846,7 +864,7 @@ def commitment(b: bytes) -> Commitment:
     j = P.canonical_json(b)
     _exactly(j, ["audits", "windows"], "the object")
     return Commitment([_registration(x, "an audit's registration") for x in _of(j["audits"], list, "audits")],
-                      [_registration(x, "a link-window's registration") for x in _of(j["windows"], list, "windows")], b)
+                      [_registration(x, "an execution phase's registration") for x in _of(j["windows"], list, "windows")], b)
 
 
 def _answer(j, ctx: str) -> dict:
@@ -906,7 +924,7 @@ def evidence(b: bytes) -> tuple[list[dict], list[Window], list[CertifiedStart]]:
     if not shown:
         _exactly(j, ["audits", "windows"], "the object")
     answers = [_answer(a, "an audit's answer") for a in _of(j["audits"], list, "audits")]
-    windows = [_window(x, "a link-window") for x in _of(j["windows"], list, "windows")]
+    windows = [_window(x, "an execution phase") for x in _of(j["windows"], list, "windows")]
     starts = [_start(x, "a start") for x in _of(j["starts"], list, "starts")] if shown else []
     if shown and not starts:
         raise D.Reject('starts: none: evidence that shows no session\'s start has no "starts"')
@@ -1024,7 +1042,7 @@ def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
 
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
-    """`rowsCheck`: the verifier's own read of the registration (`warden_rows.check_registration`) under the entry the
+    """`rowsCheck`: the verifier's own read of the registration (`network_certifier_rows.check_registration`) under the entry the
     period's execution phase `w` picks: its key, its session, which the registration's domain binds, and that session's
     number for the execution phase, `w` less the entry's start, which its value, window, layout, domain and head name. A
     signer that is another listed key, outside its stretch, or that the parameters don't list is refused by name."""
@@ -1251,12 +1269,12 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
-def lane_tied(s: WardenParams, t) -> bool:
+def lane_tied(s: NetworkCertifierParams, t) -> bool:
     """`laneTied`: an entry under `TIED_KEY` that names a lane's Programs' rows (`prog_params`)."""
     return isinstance(t, str) and t in prog_params(s.lanes)
 
 
-def tied_input_wired(s: WardenParams, a: dict) -> bool:
+def tied_input_wired(s: NetworkCertifierParams, a: dict) -> bool:
     """`tiedInputWired`: the answer's public outputs have no `TIED_KEY`, or under it a list whose every entry is a
     lane's name (`lane_tied`), in any order, a lane's more than once or not at all."""
     pub = a["public"]
@@ -1265,7 +1283,7 @@ def tied_input_wired(s: WardenParams, a: dict) -> bool:
     return isinstance(pub[TIED_KEY], list) and all(lane_tied(s, t) for t in pub[TIED_KEY])
 
 
-def tied_unheld(s: WardenParams, a: dict) -> str:
+def tied_unheld(s: NetworkCertifierParams, a: dict) -> str:
     """`tiedUnheld`: what an answer `tied_input_wired` refuses holds under `TIED_KEY`, as Lean's refusal words it: the
     first entry that is no lane's name, or the key's value where it is no list, beside the lanes' names."""
     pub = a["public"]
@@ -1321,37 +1339,96 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
     if not _prog_tied(audits, reg):
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
-    f = _facts(what, prof, pub)
+    f = _facts(what, reg, prof, pub)
     if f.units != 2 * p.schedule.window + 1:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not the scan's 2T + 1")
     return f, sum(p.audits[i].free for i in _tied_audits(audits, reg))
 
 
-def _facts(what: str, prof: dict, pub) -> Facts:
+def _sample_of(reg) -> tuple[int, dict] | None:
+    """`sampleOf`: the sample a registration states, its `population` under its sampling design as a profile's
+    level writes it (a stratum named by its template, its size its ranges' total); None where it names no
+    `subset:k` or stratified sample."""
+    def get(j, k):
+        return j.get(k) if isinstance(j, dict) else None
+
+    def integer(v) -> bool:
+        return isinstance(v, int) and not isinstance(v, bool)
+
+    def nat(v):
+        return v if integer(v) and v >= 0 else None
+
+    n, stated = nat(get(reg, "population")), get(reg, "law")
+    kind = get(stated, "law")
+    if n is None or not isinstance(kind, str):
+        return None
+    if kind == "subset":
+        k = nat(get(stated, "k"))
+        return None if k is None else (n, {"subset": k})
+    if kind not in ("stratified", "work") or not isinstance(strata := get(stated, "strata"), list):
+        return None
+    out = []
+    for s in strata:
+        t, rs, k = get(s, "template"), get(s, "units"), nat(get(s, "k"))
+        if not (isinstance(t, str) and isinstance(rs, list) and rs and k is not None and all(
+                isinstance(x, list) and len(x) == 2 and integer(x[0]) and integer(x[1]) and x[0] < x[1] for x in rs)):
+            return None
+        out.append({"name": t, "size": sum(hi - lo for lo, hi in rs), "k": k})
+    return n, {"law": "stratified", "strata": out}
+
+
+def _subset_bound(n: int, k: int, delta: Fraction) -> int:
+    """`Spot.Bound.boundOf n (.subset k) δ` for `k ≤ n`: one-stage's own bound of a uniform k-subset of n units
+    (`Stratified.count_bound` of the one stratum) where 0 < δ < 1, and outside it what the Lean's fill returns: every
+    unit the sample can miss at δ = 0, all n at δ = 1 when nothing is sampled, and none otherwise."""
+    if 0 < delta < 1:
+        return Stratified.uniform(n, k).count_bound(delta)
+    if delta == 0:
+        return n - k
+    return n if delta == 1 and k == 0 else 0
+
+
+def _sample_bound(n: int, design: dict, delta: Fraction) -> int:
+    """`sampleBound`: a `subset:k`'s bound at δ, and a stratified sample's the sum of its strata's own, each stratum
+    one `subset:k_s` of its `n_s` units at δ split equally over the strata."""
+    if "subset" in design:
+        return _subset_bound(n, design["subset"], delta)
+    strata = design["strata"]
+    return sum(_subset_bound(s["size"], s["k"], delta / len(strata)) for s in strata)
+
+
+def _facts(what: str, reg, prof: dict, pub) -> Facts:
     """`factsOf`: one level sampled `subset:k` or stratified, sampling no more than the level holds and no more of a
-    stratum than the stratum holds, its strata's sizes summing to the level's, and the public's bound."""
+    stratum than the stratum holds, its strata's sizes summing to the level's; the level its registration's sample
+    (`_sample_of`); and its count the larger of the public's bound and that sample's (`_sample_bound`)."""
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
-    draw = lv["draw"]
-    if isinstance(draw, dict) and "subset" in draw:
-        drawn = draw["subset"]
-    elif isinstance(draw, dict) and draw.get("law") == "stratified":
-        drawn = sum(s["k"] for s in draw["strata"])
+    design = lv["draw"]
+    if isinstance(design, dict) and "subset" in design:
+        sampled = design["subset"]
+    elif isinstance(design, dict) and design.get("law") == "stratified":
+        sampled = sum(s["k"] for s in design["strata"])
     else:
-        raise Finding(REJECT, f"{what}: profile: not a subset or stratified draw")
-    if drawn > lv["size"]:
-        raise Finding(REJECT, f"{what}: profile: {drawn} sampled of {lv['size']} units: {OVERSAMPLED}")
-    for s in draw.get("strata", ()):
+        raise Finding(REJECT, f"{what}: profile: not a subset or stratified sample")
+    if sampled > lv["size"]:
+        raise Finding(REJECT, f"{what}: profile: {sampled} sampled of {lv['size']} units: {OVERSAMPLED}")
+    for s in design.get("strata", ()):
         if s["k"] > s["size"]:
             raise Finding(REJECT, f"{what}: profile: stratum '{s['name']}': {s['k']} sampled of {s['size']} units: "
                                   f"{STRATUM_OVERSAMPLED}")
-    if "strata" in draw and (held := sum(s["size"] for s in draw["strata"])) != lv["size"]:
+    if "strata" in design and (held := sum(s["size"] for s in design["strata"])) != lv["size"]:
         raise Finding(REJECT, f"{what}: profile: strata of {held} units in a level of {lv['size']}: {STRATA_SIZES}")
+    if (sample := _sample_of(reg)) is None:
+        raise Finding(REJECT, f"{what}: {NO_SAMPLE}: it names no subset or stratified sample of a population")
+    if sample != (lv["size"], design):
+        raise Finding(REJECT, f"{what}: profile: {NOT_REGISTERED}: its level of {lv['size']} units and its sampling "
+                              f"design are not the registration's {sample[0]} units and theirs")
     bound = pub.get("bound") if isinstance(pub, dict) else None
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
-    return Facts(lv["size"], drawn, prof["delta"], bound)
+    count = max(bound, _sample_bound(lv["size"], design, prof["delta"]))
+    return Facts(lv["size"], sampled, prof["delta"], count, design)
 
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
@@ -1361,7 +1438,7 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
     if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
     prof, pub = _answered(what, reg, a)
-    f = _facts(what, prof, pub)
+    f = _facts(what, reg, prof, pub)
     if f.units != audit.units:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not its Program's {audit.units}")
     return f
@@ -1373,10 +1450,16 @@ OVERSAMPLED = "more than the level holds"
 STRATUM_OVERSAMPLED = "more than the stratum holds"
 #: `factsOf`'s refusal of a profile whose strata's sizes do not sum to its level's, after the two sizes.
 STRATA_SIZES = "their sizes do not sum to the level's"
+#: `factsOf`'s refusal of an answer whose registration states no subset or stratified sample.
+NO_SAMPLE = "registration: no sample"
+#: `factsOf`'s refusal of a profile whose level is not the sample its registration states.
+NOT_REGISTERED = "not the registration's sample"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
+#: `tiedDelta`: δ_i, the δ at which the rows form reads a tied audit's sample (`chargedOf`), fixed before any coin.
+TIED_DELTA = Fraction(1, 2**64)
 #: `tiedInputCheck`'s refusal, after its window's number and before what the answer holds instead (`tied_unheld`).
 TIE_UNHELD = "the scan's answer rests on a tie this check does not hold"
 
@@ -1400,7 +1483,8 @@ def _start_refusal(w: int, i: int, reg: dict) -> str | None:
     """`scanStartCheck`'s refusal of execution phase `w`'s scan, the `i`-th of its period: none when it is its period's
     first and, where it is the run's first, execution phase 0, its scan starts from the empty state (`_start_empty`).
     A period's first that is not the run's first starts from a state the check holds to nothing, and is charged
-    (`public`'s ``start``)."""
+    (`public`'s ``start``). A period is one execution phase: a later one is refused (`CARRIED`), so a period spanning a
+    restart is too, though its device restarted honestly."""
     if i != 0:
         return CARRIED
     return None if w != 0 or _start_empty(reg) else UNPINNED
@@ -1425,7 +1509,7 @@ def at_most(n: int, b: int) -> int:
 
 
 def _facts_json(f: Facts) -> dict:
-    return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
+    return {"delta": str(f.delta), "drawn": f.sampled, "units": f.units, "wrong_units": f.wrong}
 
 
 def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None) -> dict:
@@ -1439,16 +1523,17 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], charged: list[Facts] = (),
            start: int = 0) -> dict:
-    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the link-windows' scans (`scans`, each its facts,
+    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the execution phases' scans (`scans`, each its facts,
     its tied audits' free inputs and its `β_w`), where a compute audit's own terms are in none, a tied audit's free
-    inputs are in its link-window's `free` and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit
-    sampled in part (`charged`) is in `eps`, and the period's first start, where it is not the run's first, is charged
-    ``start``, the state's full width, once."""
+    inputs are in its execution phase's `free` and its incorrect proof blocks in its `faulty_entries`, a tied audit
+    sampled in part, read at `TIED_DELTA` (`charged`), is in the public's `charged` and its δ_i in `eps`, and the
+    period's first start, where it is not the run's first, is charged ``start``, the state's full width, once."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     s = p.scan
     units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
     schedules = cells
-    out = {"audits": [_facts_json(f) for f in facts], "scans": units, "start": start}
+    out = {"audits": [_facts_json(f) for f in facts], "charged": [_facts_json(f) for f in charged], "scans": units,
+           "start": start}
     if p.schedule.max_tokens_cap is not None:
         out["max_tokens_cap"] = p.schedule.max_tokens_cap
     K = schedules + cells + start + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
@@ -1460,11 +1545,11 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], c
 def check(p: Params, c: Commitment, e) -> tuple:
     audits, windows, starts = e
     if len(c.windows) != p.windows:
-        return REJECT, "the commitment registers another number of link-windows"
+        return REJECT, "the commitment registers another number of execution phases"
     if len(c.audits) != len(p.audits):
         return REJECT, "the commitment registers another number of audits"
     if len(windows) != len(c.windows):
-        return REJECT, "evidence: another number of link-windows"
+        return REJECT, "evidence: another number of execution phases"
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts, scans = _start_checks(p, starts), [], []
@@ -1487,8 +1572,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         except Finding as x:
             findings.append(x)
         else:
-            if tied and f.drawn < f.units:
-                charged[i] = f
+            if tied and f.sampled < f.units:
+                charged[i] = f.at(TIED_DELTA)
     findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
                  if not _wired(p, c.audits, reg)]
     findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
@@ -1544,8 +1629,8 @@ def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
 
 EXPECT = {
     "rows-honest": ACCEPT, "rows-second-key": ACCEPT, "rows-two-stretches": ACCEPT, "rows-two-signers": REJECT,
-    "rows-restart": ACCEPT, "rows-start-not-signed": REJECT, "rows-start-uncertified": REJECT,
-    "rows-start-count": REJECT, "rows-start-skipped": REJECT,
+    "rows-two-sessions": ACCEPT, "rows-restart": REJECT, "rows-start-not-signed": REJECT,
+    "rows-start-uncertified": REJECT, "rows-start-count": REJECT, "rows-start-skipped": REJECT,
     "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
     "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
@@ -1562,14 +1647,14 @@ EXPECT = {
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-answer-tied-unheld": REJECT,
-    "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-answer-unsampled": REJECT, "rows-answer-unregistered": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
     "rows-start-unpinned": REJECT, "rows-start-carried": REJECT, "rows-start-charged": ACCEPT, "rows-circuit-swapped": REJECT,
     "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
-    "rows-audit-oversampled": REJECT, "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT,
-    "rows-tied-strata-sizes": REJECT,
+    "rows-audit-oversampled": REJECT, "rows-audit-unsampled": REJECT, "rows-audit-unregistered": REJECT,
+    "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT, "rows-tied-strata-sizes": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
     "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT, "case": REJECT,
@@ -1581,15 +1666,18 @@ MUTATIONS = list(EXPECT)
 #: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
 #: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
 #: outside its stretch, and at the period's number where the session's belongs. The check reads each session's
-#: signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
-#: second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second session's
-#: base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`). `case` aims at none
-#: (`AIMS`), so its period lists the one entry that signs it.
+#: signed start: accepted, one key listed in two sessions, the period's one execution phase in the second's stretch, the
+#: second starting where the two sessions' signed bases put it (`two-sessions`); refused, that list with the second
+#: session's base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`), and a period of
+#: two execution phases, one in each session's stretch (`restart`): a period is one execution phase, so one spanning a
+#: restart is refused (`startCarriedRefusal`). `case` aims at none (`AIMS`), so its period lists the one entry that
+#: signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number",
-         "restart", "start-not-signed", "start-skipped")
-#: The changes whose parameters list one key in two sessions, each stretch holding some of the period
-RESTARTS = ("restart", "start-not-signed", "start-skipped")
+         "two-sessions", "restart", "start-not-signed", "start-skipped")
+#: The changes whose parameters list the signer's key in two sessions, the period's one execution phase in the second's
+#: stretch, the signer's; `restart` lists it so too, its period two execution phases, one in each stretch
+RESTARTS = ("two-sessions", "start-not-signed", "start-skipped")
 #: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
 #: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
@@ -1628,10 +1716,10 @@ def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta:
     """One-stage's answer accepting `k` of `size` units sampled `subset:k`, or sampled stratified over `strata` (each
     `{k, name, size}`, k and size their sums), as `OneStage.check`'s public and profile have it."""
     units = list(range(k))
-    draw = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
+    sample = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
     return {"commitment": digest.hex(),
             "profile": {"covered": [], "delta": delta, "drawn": {UNIT: k},
-                        "levels": [{"draw": draw, "name": UNIT, "query": query, "size": size}],
+                        "levels": [{"draw": sample, "name": UNIT, "query": query, "size": size}],
                         "linked": False, "prescribed": [], "programs": [program]},
             "protocol": ONE_STAGE, "public": {"bound": bound, "drawn": units, "per_template": None, "proved": units},
             "reason": None, "verdict": ACCEPT}
@@ -1647,7 +1735,7 @@ SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
-def schedule_json(s: WardenParams) -> dict:
+def schedule_json(s: NetworkCertifierParams) -> dict:
     """The schedule as the parameters hold it: its integer fields, and each optional field it sets."""
     optional = {k: getattr(s, k) for k in OPTIONAL_SCHEDULE_KEYS if getattr(s, k) is not None}
     if s.content is not None:
@@ -1662,13 +1750,13 @@ CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
 LENGTHS_CELL = HEADER.size + io_request.layout(1 << 12).start + ID_FIELD_BYTES
 
 
-def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> WardenParams:
+def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> NetworkCertifierParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T 2 or 3 (2 if
     `small`: the least a scan has, `scan_ok.constants`) or the `T` asked for, and a timestep `every` that divides T;
     `capped`: with a response cap, B just past the least cell that holds an id request's `max_tokens`
     (`CAPPED_CELL`)."""
     T = r.randint(2, 2 if small else 3) if T is None else T
-    s = WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
+    s = NetworkCertifierParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                      delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
                      ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
                      every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
@@ -2212,6 +2300,63 @@ def _oversample(r: random.Random, size: int, k: int, strata: list[dict] | None) 
     return k + over
 
 
+def _resample(r: random.Random, size: int, k: int, strata: list[dict] | None) -> tuple[int, list[dict] | None]:
+    """A profile's sample of a level of `size` units, `k` of them sampled `subset:k` or over `strata`, changed to
+    another sample of the same level, as `(k, strata)`: one that samples no more than the level or a stratum holds,
+    with strata the level's size, so that the period check refuses it only for not being its registration's
+    (`answer-unregistered`, `audit-unregistered`). A subset sample at another `k`, or as one stratum; a stratified
+    one with a stratum renamed, a stratum sampled otherwise, a unit moved from one stratum to another, or as the
+    subset of its total."""
+    if strata is None:
+        if r.random() < 0.3:
+            return k, [{"k": k, "name": UNIT, "size": size}]
+        return r.choice([x for x in range(size + 1) if x != k]), None
+    strata = [dict(s) for s in strata]
+    ways = ["rename", "subset"]
+    ways += ["sample"] if any(s["size"] for s in strata) else []
+    ways += ["move"] if len(strata) > 1 and any(s["k"] < s["size"] for s in strata) else []
+    how = r.choice(ways)
+    if how == "subset":
+        return k, None
+    if how == "rename":
+        r.choice(strata)["name"] += "x"
+    elif how == "sample":
+        s = r.choice([s for s in strata if s["size"]])
+        s["k"] = r.choice([x for x in range(s["size"] + 1) if x != s["k"]])
+    else:
+        src = r.choice([s for s in strata if s["k"] < s["size"]])
+        src["size"] -= 1
+        r.choice([s for s in strata if s is not src])["size"] += 1
+    return sum(s["k"] for s in strata), strata
+
+
+def _unsample(r: random.Random, rec: dict) -> dict:
+    """The registration record `rec` stating no sample (`answer-unsampled`, `audit-unsampled`): without its sampling
+    design or its population, with a Bernoulli design, or with a design or a population one-stage's profile reads no
+    sample of (a count that is no natural number, strata that are no list, a stratum without its template, its units
+    or its count, or with an empty range)."""
+    stated = rec["law"]
+    kind, strata = stated["law"], stated.get("strata")
+    others = [None, {"law": "bernoulli", "p": "1/2"}, {"law": "two-stage", "k": stated["k"]}, stated | {"law": None},
+              {k: v for k, v in stated.items() if k != "law"}]
+    if kind == "subset":
+        others += [{"law": "subset"}, stated | {"k": -1}, stated | {"k": str(stated["k"])}, stated | {"k": True}]
+    else:
+        j = r.randrange(len(strata))
+        one = strata[j]
+        at = lambda s: stated | {"strata": strata[:j] + [s] + strata[j + 1:]}  # noqa: E731
+        lo, hi = one["units"][0]
+        others += [stated | {"strata": None}, stated | {"strata": {"0": one}},
+                   at({k: v for k, v in one.items() if k != "template"}), at(one | {"template": 0}),
+                   at(one | {"units": []}), at(one | {"units": [[hi, lo]]}), at(one | {"units": [[lo, lo]]}),
+                   at(one | {"units": [lo, hi]}), at(one | {"units": [[lo, hi, hi]]}), at(one | {"k": -1}),
+                   at({k: v for k, v in one.items() if k != "k"})]
+    n = rec["population"]
+    return r.choice([rec | {"law": x} for x in others]
+                    + [{k: v for k, v in rec.items() if k != gone} for gone in ("law", "population")]
+                    + [rec | {"population": x} for x in (None, -1, str(n), True, [n])])
+
+
 def _stratum_oversample(r: random.Random, strata: list[dict]) -> None:
     """One of a profile's `strata` raised past its own size, by one to three, and the others lowered by as much, so the
     level's sample is what it was: what no sample of that stratum gives, in a level whose total still holds
@@ -2244,7 +2389,7 @@ def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few link-windows
+    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few execution phases
     and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
@@ -2261,33 +2406,34 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
     link = r.choice(["eth0", "a", "d-e"])
     carry = rp.choice(CARRIES) if m == "start-carried" else None
-    least_windows = 2 if m in ("undecided-and-reject", "delta", "two-stretches", *RESTARTS) or carry else 1
+    least_windows = 2 if m in ("undecided-and-reject", "delta", "restart") or carry else 1
     least_audits = 2 if m == "state-untied" else \
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     # a rows period is one execution phase (`scanStartCheck`): more only where the change asks, refused, and a later one
     # than the run's first only where the change asks, charged its start
     n_windows = r.randint(least_windows, least_windows if small or not carry else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a link-window's own audit, and at times one no link-window ties, which may leave units unsampled
+    # an execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1)))
     first = r.choice([0, 0, r.randrange(1, 6)])
-    if (m in SECOND or carry == "later" or m == "start-charged") and first == 0:
+    if (m in (*SECOND, *RESTARTS, "two-stretches", "start-charged") or carry == "later") and first == 0:
         first = rk.randrange(1, 6)
     elif m == "start-unpinned" or carry == "more":
         first = 0
     # the entries the parameters list, by their stretches' starts, the signer's (`key`, `session`) among them, its
-    # numbers the period's less its start; seed 1's key is never listed. Two entries whose stretches each hold some of
-    # the period's execution phases, the signer's from one of them on (`two-stretches`); two, the period in the second's
-    # stretch, the signer's (`SECOND`); else the signer's, alone in a small period, or among up to two more whose
+    # numbers the period's less its start; seed 1's key is never listed. Two, the period's one execution phase the
+    # second's stretch's first, the signer's (`two-stretches`); two of the signer's key, each stretch holding one of the
+    # period's two execution phases (`restart`); two, the period in the second's stretch, the signer's (`SECOND`, and
+    # `RESTARTS` under the signer's key); else the signer's, alone in a small period, or among up to two more whose
     # stretches hold none of the period's execution phases, before the signer's or after the period
     other = lambda k, start: Stretch(k, rk.randbytes(lms.SESSION_BYTES), start)  # noqa: E731
-    if m == "two-stretches" or m in RESTARTS:
-        # two stretches under two keys, or under the signer's key in two sessions
-        listed = [other(key if m in RESTARTS else _key(ki, 2), rk.randint(0, first)),
-                  Stretch(key, session, first + rk.randrange(1, n_windows))]
-    elif m in SECOND:
+    if m == "two-stretches":
+        listed = [other(_key(ki, 2), rk.randrange(first)), Stretch(key, session, first)]
+    elif m == "restart":
+        listed = [other(key, rk.randint(0, first)), Stretch(key, session, first + 1)]
+    elif m in SECOND or m in RESTARTS:
         start = rk.randint(1, first)
-        listed = [other(_key(ki, 2), rk.randrange(start)), Stretch(key, session, start)]
+        listed = [other(key if m in RESTARTS else _key(ki, 2), rk.randrange(start)), Stretch(key, session, start)]
     else:
         start = rk.randint(0, first)
         more = [] if small else [_key(ki, 2), _key(ki, 3)][:rk.randrange(3)]
@@ -2360,7 +2506,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         s = e.session if s is None else s
         return dataclasses.replace(c, signature=lms.sign_at(k, n % 2 ** k.params.H, c.message(s)).encode())
 
-    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes | None = None,
+    def registrations(w: int, s: NetworkCertifierParams | None = None, on: str = link, ses: bytes | None = None,
                       e: Stretch | None = None, num: int | None = None) -> list[dict]:
         """Link `on`'s ingress and egress rows for the period's execution phase `w`, each committed under schedule `s`
         (the period's) by the entry `e`, or the one whose turn it is: in its session, or `ses`, at that session's number
@@ -2500,6 +2646,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             {"k": s["k"], "template": s["name"], "units": [[lo, hi]]} for s, lo, hi in zip(strata, cuts, cuts[1:])]}
         if aimed and m == "answer-oversampled":
             k = _oversample(r, units, k, strata)
+        elif aimed and m == "answer-unregistered":
+            k, strata = _resample(r, units, k, strata)
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
@@ -2522,6 +2670,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 ro.shuffle(rec[into])
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
+        elif aimed and m == "answer-unsampled":
+            rec = _unsample(r, rec)
         digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
@@ -2615,6 +2765,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             _stratum_oversample(r, strata)
         elif halves:
             k = _strata_resize(r, strata, seed)
+        elif i == a and m == "audit-unregistered":
+            k, strata = _resample(r, units, k, strata)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         rec["roots"] = _output_entries(rp, i, ties, sched.window // sched.every, first + t, untie, unwire, hit)
@@ -2637,6 +2789,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             else:
                 desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),),
                                                    entries, renamed, i in selects, scan_slots))
+        elif i == a and m == "audit-unsampled":
+            rec = _unsample(r, rec)
         digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            wrong, strata)
@@ -2839,7 +2993,7 @@ def _words_schedule(s: dict) -> dict:
 def connection_rows_params(p: dict) -> list[dict]:
     """Rows-form parameters whose schedule has connection rows, each one change to `p`'s uncapped schedule
     (`_lengths_schedule`): lengths rows of each form, content rows of the form's classes with them, and request
-    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `WardenParams` builds it, and
+    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `NetworkCertifierParams` builds it, and
     one the check refuses by name (`CONNECTION_ROWS`)."""
     s = _lengths_schedule(p["schedule"])
     return [p | {"schedule": s | rows} for rows in (
@@ -2859,7 +3013,7 @@ def bad_lengths(p: dict) -> list[dict]:
     s = _lengths_schedule(p["schedule"])
     words = _words_schedule(s)
     one, two = s | {"lengths": 1}, s | {"lengths": 2}
-    slots = s["window"] // s["every"] * WardenParams(**one).stride_releases
+    slots = s["window"] // s["every"] * NetworkCertifierParams(**one).stride_releases
     past = 1 << (s["ingress_cells"] * (s["cell_bytes"] - HEADER.size)).bit_length()
     schedules = [s | {"lengths": form} for form in (0, 3, True, "1", [1])] + [
         one | {"ingress_buckets": 2}, one | {"egress_cells": s["slots"] * s["window"] + 1},
@@ -3163,7 +3317,7 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0) -> dict:
-    """A small period (`build(..., small=True)`: the toy key, as few link-windows and audits as its change needs) aimed
+    """A small period (`build(..., small=True)`: the toy key, as few execution phases and audits as its change needs) aimed
     at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)

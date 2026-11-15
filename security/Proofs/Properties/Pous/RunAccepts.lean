@@ -217,14 +217,9 @@ def honestRound (digests : ByteArray) (j : Nat) : Round := ⟨j, 0, 0, 0, PousCh
 def honestRounds (digests : ByteArray) : Array Round := (Array.range 105).map (honestRound digests)
 
 /-- The session's commitment, bound to the setup's root `root`. -/
-def honestCommitment (root : ByteArray) : SessionCommitment :=
+def honestCommitment (root : ByteArray) : ChallengePhaseCommitment :=
   ⟨honestSid, honestCoinRoot, honestCoinKey, PousCheck.P2.Params.deployed.blocks, 105,
     PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root⟩
-
-theorem commitment_beq_self (c : SessionCommitment) : (c == c) = true := by
-  cases c
-  simp only [BEq.beq]
-  simp [instBEqSessionCommitment.beq]
 
 theorem verifyCoin_honest (root : ByteArray) {j : Nat} (hj : j < 105) :
     verifyCoin (honestCommitment root) (honestOpening j) = true := by
@@ -260,8 +255,20 @@ theorem mapM_ok {α β ε : Type} (f : α → Except ε β) :
     obtain ⟨bs, hbs⟩ := mapM_ok f l fun x hx => h x (List.mem_cons_of_mem _ hx)
     exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs, bind, Except.bind, pure, Except.pure]⟩
 
-theorem message_honest (root digests : ByteArray) :
+/-- A table of the deployed parameters' `blocks` rows has its row 0 whole. -/
+theorem size_le_of_table {digests : ByteArray}
+    (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST) : 64 ≤ digests.size := by
+  rw [hd]
+  first
+    | decide
+    | simp [PousCheck.P2.Params.deployed, PousCheck.Merkle.DIGEST]
+
+/-- The honest rounds' message exists when `digests` holds row 0 whole: `Round.value` takes only a 64-byte digest. -/
+theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
     ∃ m, message (honestCommitment root) COMPLETE (honestRounds digests) = .ok m := by
+  have h64 : (PousCheck.Run.row digests 0).size = 64 := by
+    simp only [PousCheck.Run.row, ByteArray.size_extract, PousCheck.Merkle.DIGEST]
+    omega
   obtain ⟨vs, hvs⟩ : ∃ vs, (honestRounds digests).mapM Round.value = .ok vs := by
     rw [Array.mapM_eq_mapM_toList]
     obtain ⟨bs, hbs⟩ := mapM_ok Round.value (honestRounds digests).toList fun a ha => by
@@ -269,9 +276,9 @@ theorem message_honest (root digests : ByteArray) :
       obtain ⟨j, hj, rfl⟩ := ha
       have h32 : j < 4294967296 := by omega
       unfold Round.value
-      simp [beN, honestRound, h32, bind, Except.bind, pure, Except.pure]
+      simp [beN, honestRound, h32, h64, bind, Except.bind, pure, Except.pure]
     exact ⟨bs.toArray, by rw [hbs]; rfl⟩
-  unfold message recordsRoot
+  unfold message recordsDigest recordsStream
   simp only [hvs, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
@@ -309,7 +316,7 @@ theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : By
   obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed (I := PousCheck.Prim.zeros 16) rfl
     (PousCheck.Prim.zeros 64)
   obtain ⟨hIs, hps, hpI⟩ := pub_spec hk
-  obtain ⟨m, hm⟩ := message_honest pub.root digests
+  obtain ⟨m, hm⟩ := message_honest pub.root digests (size_le_of_table hd)
   obtain ⟨σ, hσs, hσv⟩ := signs hk
     (Flock.Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++ field (field honestSid) ++
       field m))

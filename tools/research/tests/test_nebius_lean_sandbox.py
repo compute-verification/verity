@@ -15,11 +15,13 @@ import stat
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from research import settings
 
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
 CHECK = Path(__file__).resolve().parents[3] / "tools/check"
@@ -42,7 +44,7 @@ def _load(name: str, path: Path):
 S = _load("nebius_lean_sandbox", NEBIUS / "lean_sandbox.py")
 LS = _load("check_lean_slot_for_sandbox", CHECK / "lean_slot.py")
 
-NOW = datetime(2026, 10, 3, 6, 15, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 3, 6, 15, tzinfo=UTC)
 
 USERS = {"lean-build": (990, 990), "research": (1001, 1001), "toor": (0, 0), "dock": (991, 991)}
 GROUPS = [SimpleNamespace(gr_name="root", gr_gid=0, gr_mem=[]), SimpleNamespace(gr_name="research", gr_gid=1001, gr_mem=[]),
@@ -252,7 +254,7 @@ def test_a_stopped_wrapper_stops_its_unit_and_ends_with_the_signals_status(tmp_p
               f"sys.modules['m'] = m; s.loader.exec_module(m)\n"
               f"m.systemd_run(['sh', '-c', {unit!r}], False, 'vy-lean-sandbox-build-t')\n")
     p = subprocess.Popen([sys.executable, "-c", driver], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         text=True, env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}, start_new_session=True)
+                         text=True, env={**os.environ, "PATH": f"{bin_}:{settings.need('PATH')}"}, start_new_session=True)
     assert p.stdout.readline() == "ready\n"
     p.send_signal(signal.SIGTERM)
     _, err = p.communicate()

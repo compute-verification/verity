@@ -47,6 +47,8 @@ import rename  # noqa: E402
 MAP = HERE / "draw_bare_map.toml"
 SCOPE = [f"security/{t}/{a}{s}" for t in ("Definitions", "Proofs", "Properties", "Proofs/Properties")
          for a in ("Accounting", "Pous", "Poub") for s in ("/*.lean", ".lean")]
+SCOPE += [f"security/{t}/Compose/{f}" for t in ("Definitions", "Proofs", "Properties", "Proofs/Properties")
+          for f in ("Remote*", "Assumptions/Remote*", "Guarantees/Remote*", "Stacking*", "Guarantees/Stacking*")]
 SCOPE += [f"verity/protocols/accounting/{p}/*.{e}" for p in ("pous", "poub") for e in ("lean", "py")]
 #: PoUW's files in the accounting area, its lane's own
 POUW = re.compile(r"^security/(?:Definitions|Properties|Proofs|Proofs/Properties)/Accounting/"
@@ -61,6 +63,7 @@ DECL = re.compile(r"^\s*(?:@\[[^\]]*\]\s*)*(?:(?:private|protected|public|noncom
                   r"local|meta)\s+)*(?:def|theorem|lemma|abbrev|structure|inductive|class|instance|opaque|axiom)\s+"
                   r"([^\s(:{\[]+)", re.M)
 LEAN_FIELD = re.compile(r"^\s+(\w+)\s*:", re.M)
+HYPOTHESIS = re.compile(r"^\s*(?:from|import)\s+hypothesis\b", re.M)
 SERIALIZES = re.compile(r"\basdict\(|\bfields\(|__dict__|\bvars\(")
 
 
@@ -190,16 +193,13 @@ def lean_declares(f: str, module: str = "") -> set[str]:
     return (out | set(module.split("."))) & WORDS
 
 
-def py_tree(f: str) -> ast.AST | None:
-    try:
-        return ast.parse(text(f))
-    except SyntaxError:
-        return None
+def py_tree(f: str) -> ast.AST:
+    return ast.parse(text(f), filename=f)
 
 
 def py_declares(f: str) -> set[str]:
     out: set[str] = set()
-    for n in ast.walk(py_tree(f) or ast.Module(body=[], type_ignores=[])):
+    for n in ast.walk(py_tree(f)):
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             out.add(n.name)
         elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name):
@@ -213,7 +213,7 @@ def py_declares(f: str) -> set[str]:
 
 def py_imports(f: str) -> set[str]:
     out: set[str] = set()
-    for n in ast.walk(py_tree(f) or ast.Module(body=[], type_ignores=[])):
+    for n in ast.walk(py_tree(f)):
         if isinstance(n, ast.Import):
             out |= {a.name for a in n.names}
         elif isinstance(n, ast.ImportFrom) and n.module and not n.level:
@@ -288,6 +288,8 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
                 for w in sorted(words - set(why)):
                     if spells(g, w):
                         why[w] = f"{g}, not ours, imports it and spells `{w}`"
+            if "draw" in words and HYPOTHESIS.search(text(f)):
+                why.setdefault("draw", "Hypothesis's `draw`, the library's name, kept")
             if SERIALIZES.search(text(f)):
                 for w in sorted(words & py_declares(f)):
                     why.setdefault(w, f"serializes its records by field name and declares `{w}`")
@@ -303,6 +305,13 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
             out |= {g for g in whys if g.endswith(".py") and any(by_module.get(m) == f for m in py_imports(g))}
         return {g for g in out if g in whys and g != f}
     links = {f: linked(f) for f in whys}
+    by_last: dict[str, set[str]] = defaultdict(set)
+    for g in whys:
+        if g in module_of:
+            by_last[module_of[g].rsplit(".", 1)[-1]].add(g)
+    for f, (words, _) in whys.items():
+        for q in re.findall(rf"\b([A-Z]\w*)\.(?:{'|'.join(map(re.escape, words))})\b", text(f)):
+            links[f] |= by_last.get(q, set()) - {f}
     declares = {f: (lean_declares(f, module_of.get(f, "")) if f.endswith(".lean") else py_declares(f)) for f in whys}
     changed = True
     while changed:

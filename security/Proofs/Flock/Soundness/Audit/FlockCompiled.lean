@@ -45,7 +45,7 @@ from `table_knowledge_sound_joint_tight`, with no named assumption. The binding 
 stays a named hypothesis (`BindSound`) until the link theorem, under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
-`flock_compiled_count`: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
+`flock_compiled_count`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
 -/
 
 @[expose] public section
@@ -263,34 +263,34 @@ theorem flock_compiled_knowledgeSound
   exact avg_mono fun ω => (atTgt_le_const _ _ _).trans
     (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E Kr hK _))
 
-/-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`, with
-`ε_ks` the table theorem's bound averaged over the sample, and `δ_link` named. -/
+/-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`, with
+`ε_ks` the table theorem's bound averaged over the sample, and `ε_bind` named. -/
 theorem flock_compiled_count
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
-    {δlink : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound δlink) (K : ℕ)
+    {εbind : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
+    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound εbind) (K : ℕ)
     (σ : Strategy (audit L Reg (sessionC H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit L Reg (sessionC H E plan)) σ ≤
-      L.miss K + ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) := by
+      L.miss K + ksAvg H E plan Kr (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
   show prob (fun o => o.1 = true ∧ K ≤ ((P.analysisC H E plan decode Xc Kr hlow).incorrect
     ((P.analysisC H E plan decode Xc Kr hlow).committedOf σ)).card) _ σ ≤ _
   exact extraction_audit_count (P.analysisC H E plan decode Xc Kr hlow)
     (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink K σ
 
-/-- **Sampled proof blocks of the compiled Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
+/-- **Sampled proof blocks of the compiled Flock audit** are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_compiled_sampled
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
-    {δlink : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound δlink)
+    {εbind : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
+    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound εbind)
     (σ : Strategy (audit L Reg (sessionC H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (sessionC H E plan)) σ ≤
-      ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
+      ksAvg H E plan Kr (reg σ) (cont σ) + εbind (reg σ) (cont σ) :=
   extraction_audit_sampled (P.analysisC H E plan decode Xc Kr hlow)
     (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink σ
 

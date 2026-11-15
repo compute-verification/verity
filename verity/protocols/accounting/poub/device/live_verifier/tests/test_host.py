@@ -27,9 +27,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[7]
-RS = ROOT / "benchmarks" / "remote_session"
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))
 
 from verity.protocols.accounting.poub.verifier import timing  # noqa: E402
@@ -377,17 +375,6 @@ def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_las
     assert [(p["line"], p["commit"]) for p in json.loads(out)["pins"]] == [(0, PIN), (1, "d" * 40), (2, PIN)]
 
 
-def test_the_provers_tunnel_client_asks_no_pty_and_the_challengers_forces_one():
-    """ssh ends a session whose forced pty (`-tt`) the server refuses (OpenSSH 9.6, checked against a real sshd), so the
-    prover's key, whose client is run.sh's `ssh -T`, has no `pty`, and the challenger's keeps it only while serve.py
-    forces one; infra's packaging test holds the keys `setup.sh` writes to the same."""
-    verifier_host = (RS / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
-    assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
-    serve = (ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "serve.py").read_text()
-    assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
-        "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
-
-
 def test_fetch_reads_a_run_and_nothing_else(svc):
     for words in (["fetch"], ["fetch", RUN, "--all"], ["fetch", RUN, "--transcripts", "x"]):
         assert refused(call(svc, words, key="-")) == "fetch RUN [--transcripts]"
@@ -411,9 +398,6 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     "print(host.replay_module().__file__)",
     "sys.path.insert(0, str(host.RESEARCH)); from research.store import local; print(local.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
-    "sys.argv = ['auditor_line.py', '--help']; "
-    "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
-    "run_name='__main__')",
 ])
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
     """The host runs its units with its own python3 (`-I`), where neither `verity` nor any other package is installed:
@@ -432,8 +416,8 @@ def names(tar: tarfile.TarFile) -> set[str]:
 def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_ships_and_replay_replays(
         svc, tmp_path):
     """The one test that runs a session (with the Lean verdict, so it builds the Lean verifier and the difftest): what
-    the cheaper tests can't show is that the runner's out/ is the one `auditor_line.py` and `replay.py` read, from a
-    real transcript, gzipped, summed and shipped."""
+    the cheaper tests can't show is that the runner's out/ is the one `replay.py` reads, from a real transcript, gzipped,
+    summed and shipped (that `auditor_line.py` reads it is `benchmarks/remote_session/tests/test_live_verifier_host.py`'s)."""
     units = Units()
     rc, out = call(svc, [*BASE, "--paced", "2:8:40:2"], units)
     assert rc == 0, out
@@ -461,12 +445,6 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     rc, st = call(svc, ["status", RUN], units, key="-")
     st = json.loads(st)
     assert rc == 0 and st["listening"] and not st["active"] and st["end"]["rc"] == 0 and st["replay"] is None
-
-    import auditor_line
-    line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
-    assert line["registration"] == v["registration"]["digest"]
-    assert [(r["k"], r["accepted"], r["skipped"]) for r in line["sessions"]] == [
-        (0, True, "no challenger log: coins flipped in the verifier's process")]
 
     rc, shipped = call(svc, ["fetch", RUN], units, key="-")
     assert rc == 0
@@ -532,11 +510,11 @@ def test_bw_party_holds_the_store_the_block_challenger_kept_for_a_pous_session_o
     whose forced command dropped `--pous-session`, so the party held the fixture's store and refused the session's node."""
     sid = "0f" * 32
     (rc, _), ran = party(svc, ["bw_party", "--pous-session", sid, "--minutes", "8"])
-    assert rc == 0 and ran[0][-11:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-11:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                         "--listen", "0.0.0.0:47612", "--pous-record", str(svc.parties / "pous"),
                                         "--pous-session", sid, "minutes=8"]
     (rc, _), ran = party(svc, ["bw_party", "--fixture"])
-    assert rc == 0 and ran[0][-9:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-9:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", *H.PARTY_FIXED["bw_party"], "minutes=60"]
     assert (H.TREE / H.PARTY_FIXED["bw_party"][1]).is_file()
     for words in (["bw_party"], ["bw_party", "--minutes", "10"]):
@@ -604,6 +582,9 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
             "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
+    p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", H.PARTY_CODE["bw_party"], "--help"], capture_output=True,
+                       text=True, cwd=ROOT)
+    assert p.returncode == 0 and "--challenger" in p.stdout, p.stderr[-2000:]
 
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
@@ -668,7 +649,7 @@ def test_a_party_answers_only_a_caller_from_a_registered_node(svc):
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
-    assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_parties", "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-9:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
     assert "bw_party takes (--pous-session SID | --fixture) [--session SID]" in refused(
@@ -919,7 +900,7 @@ def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp
 
 def test_a_compose_answers_no_byte_a_link_in_its_out_points_at(composer, tmp_path):
     """The answer is $OUT's own files: a link there, to a file or a directory outside it, is named and never followed,
-    so no byte of the auditor's host outside $OUT reaches the caller."""
+    so no byte of the auditor's device outside $OUT reaches the caller."""
     (tmp_path / "secret").write_text("SECRET\n")
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets" / "key").write_text("KEY\n")

@@ -1582,7 +1582,7 @@ impl Server {
         (&self.prime, self.prime_before_commit)
     }
 
-    /// A server rebuilt from a record ([`Server::from_record`]) has no coin source: the points it samples while replaying
+    /// A server rebuilt from a record ([`Server::from_record`]) has no live coins: the points it samples while replaying
     /// `Commit` are zeros, replaced at once by the recorded ones, and it never answers a prover.
     fn urandom(&mut self, b: &mut [u8]) {
         match self.urandom.as_mut() {
@@ -2644,7 +2644,7 @@ mod replay_tests {
 }
 
 #[cfg(test)]
-mod coin_server_tests {
+mod live_coin_part_tests {
     use super::*;
 
     struct NoProofs;

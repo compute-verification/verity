@@ -1,14 +1,14 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Window.Leg
+public import Proofs.Properties.Verity.Sampled.Window.Subprotocol
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.Window.FilesSent
 public import Proofs.Properties.Verity.Sampled.Digest
 
 /-!
-# SPOT's leg over a window, assembled from its pieces
+# SPOT's subprotocol over a window, assembled from its pieces
 
-`executionPhaseSpotSound_of_sample` at the cut the one-session leg uses (`couplingTarget_assembled`): the log v2's check read
+`executionPhaseSpotSound_of_sample` at the cut the one-session subprotocol uses (`couplingTarget_assembled`): the log v2's check read
 is the device's (`Binding.Logged Binding.readsV2`), v2 reads each pinned table at its registered file (`TablesSent`)
 and each member's files at its registered files (`FilesSent`), and v2 samples at the strategy's `afterAt`
 (`SampledDigest`). The binding, the digest and the sample's coins are stated of the period's game and not of a
@@ -71,14 +71,15 @@ theorem executionPhaseBindFinder_calls : ∀ (W : ExecutionPhase) (θ : ByteArra
 the device's history `dev` (`executionPhaseReadFinder`, `Binding.forger`) and the bound digests' finder at composite `k`
 (`executionPhaseBindFinder`). -/
 noncomputable def ExecutionPhaseConstructions.withBinding {V : Vocab d α} (K : ExecutionPhaseConstructions V)
-    (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite) : ExecutionPhaseConstructions V :=
+    (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite) :
+    ExecutionPhaseConstructions V :=
   { K with
-    readFinder := executionPhaseReadFinder V dev
+    readFinder := executionPhaseReadFinder V T dev
     forger := Binding.forger V dev
     bindFinder := executionPhaseBindFinder V k
     bind_calls := executionPhaseBindFinder_calls V k }
 
-/-- **SPOT's leg over a window of several members, assembled from its pieces**: `executionPhaseSpotSound_of_sample` at the
+/-- **SPOT's subprotocol over a window of several members, assembled from its pieces**: `executionPhaseSpotSound_of_sample` at the
 binding's cut and the digest's. Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S` and the
 constructions with the binding's finders at the device's history `dev`, the window's projection at the readings `rd`,
 the members' decoders `D` and the sample-coupled coin maps at the family `label`, the strategy's `afterAt` and the
@@ -89,12 +90,12 @@ picks only openings (`hR`); and the members' steps hold off the openings' empty 
 `MemberSteps`) at accepted plays whose log v2 read is the device's, whose blobs sent hold each pinned table and each
 member's files at their registered files and whose sample answers the strategy's `afterAt`. -/
 theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
-    (dev : Exchange → Properties.Challenger.History)
+    (T : PinnedTables) (dev : Exchange → Properties.Challenger.History)
     (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (nc : ℕ)
     {S : ByteArray → Array ByteArray → Option ExecutionPhase}
-    (hD : ExecutionPhaseDeployed V ((K.withBinding dev k).withProject V rd D
+    (hD : ExecutionPhaseDeployed V ((K.withBinding T dev k).withProject V rd D
       (executionPhaseSampleMaps e V rd label (afterAt V k) fun W => W.srcCoinsAt nc)) S)
     (hCov : ExecutionPhaseCovers V k S)
     (I : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
@@ -107,18 +108,18 @@ theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
       ∃ i s n, fr = .opening i s n)
     (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       MemberSteps V θ F c k
-        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o) ∧
+        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o) ∧
           SampledDigest k o.sent (afterAt V k θ F c σ))
         W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
         (executionPhaseSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
         (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
         (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k :=
-  executionPhaseSpotSound_of_sample V k e rd (K.withBinding dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
-    (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o)
+  executionPhaseSpotSound_of_sample V k e rd (K.withBinding T dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
+    (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o)
     (fun θ F c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) I
     (fun θ F W hW H => ExecutionPhase.avg_srcCoinsAt (hL θ F W hW) H)
-    (fun θ F W hW c σ => logged_files_le V k dev θ F c σ
+    (fun θ F W hW c σ => logged_files_le V T k dev θ F c σ
       (Binding.binds_of_prints V k dev θ (hP θ F W hW)) (hS θ F W hW c))
     (fun θ F W _ c σ => prob_not_sampledDigest_le V k θ F c σ (2 * V.cost θ F c σ + 2 * W.h))
     hR hm

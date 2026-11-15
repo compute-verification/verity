@@ -4,21 +4,22 @@
 A workload reaches it only through the names this module exports. Per call there are two:
 
 * `run_matmul(run, site, x, weight, bias)`: run this matrix multiply under PoUW, y = x weightᵀ (+ bias), served and
-  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`), Pearl-C (`PearlCDeviceRun`)
-  and the lead (`LeadRun`, whose ``x`` is the arm's `QuantizedRows` and ``weight`` the linear its backend loaded).
+  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`), the lead (`LeadRun`, whose
+  ``x`` is the arm's `QuantizedRows` and ``weight`` the linear its backend loaded), or a workload's own (Pearl-C's run on
+  the device is the workload's).
 * `observe_matmul(run, site, x, weight, y, ...)`: a matrix multiply the workload served itself, recorded by ``run`` (a
   `MatmulObserver`), which computes nothing: H1 (`H1Run`), whose ``x`` is the int8 arm's s8 rows. The workload hands
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
 
 ``site`` is the linear's ordinal in the forward pass (its weight id), the same at every forward. The buffers are the
 caller's own, on its device, and this package names no tensor library: the workload hands in how its buffers are read,
-written and allocated (`use_tensors`, `tensors.Tensors`) and H1's device half (`use_h1_device`, `tensors.H1Device`), and
-every other name loads its module when first read. A run closes with ``finish()``; its ``commits`` and ``details`` are what it publishes.
+written and allocated (`use_tensors`, `tensors.Tensors`) and H1's device half (`use_h1_device`, `tensors.H1Device`);
+without them the host paths run. Every other name loads its module when first read. A run closes with ``finish()``; its ``commits`` and ``details`` are what it publishes.
 
 To manage a window: `in_process_coins` (coins held in this process, which credit nothing), `reserve_salt` and `gate_of`
 (a salt session at infra's gate), `PearlCKernel` (Pearl-C's kernel, loaded), `ready_verifier` (the Lean verifier's
 executable, built), and `served_passes`, `coins_of` and `SERVED_SCHEMA` (what a served Pearl-C window records). A
-workload's own GPU commitments build on the row-table kernels: `RowTableLibrary`, `row_table_host_lib`, `hm_tables`,
+workload's own GPU commitments build on the row-table kernels: `row_table_host_lib`, `row_table_nvcc`, `hm_tables`,
 `leaf_prefixes` and the other ``row_table``/``ROW_TABLE`` names. The rest of `__all__` names the runs, their schemes and
 settings."""
 from __future__ import annotations
@@ -46,7 +47,6 @@ _LAZY = {
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
     "LeadRun": (f"{_SERVING}.lead", "LeadRun"),
-    "PearlCDeviceRun": (f"{_SERVING}.pearl_c.run_device", "PearlCDeviceRun"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
     "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
@@ -85,7 +85,6 @@ _LAZY = {
     "Served": (f"{_SERVING}.h1.served", "Served"),
     "Shape": (f"{_POUW}.verifier.protocol", "Shape"),
     "Workload": (f"{_POUW}.verifier.audit", "Workload"),
-    "batch_order": (f"{_SERVING}.h1.requests", "batch_order"),
     "challenger_address": (f"{_SERVING}.h1.challenger", "address"),
     "closed_on_error": (f"{_SERVING}.h1.window", "closed_on_error"),
     "commit_committed": (f"{_SERVING}.h1.commit", "committed"),
@@ -94,19 +93,16 @@ _LAZY = {
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.h1.window", "finish"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
-    "hook_steps": (f"{_SERVING}.pearl_c.passes", "hook_steps"),
     "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
     "lead_refusals": (f"{_SERVING}.lead", "refusals"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
     "live_epoch_reason": (f"{_POUW}.verifier.window", "live_epoch_reason"),
     "ncp_scheme": (f"{_PROVER}.schemes", "get"),
-    "new_requests": (f"{_SERVING}.h1.requests", "new_requests"),
     "numpy_of": (f"{_SERVING}.h1", "numpy_of"),
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
     "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "new_salt_key"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
     "pearl_c_scheme": (f"{_SERVING}.pearl_c", "scheme_of"),
-    "pearl_c_weight_roots": (f"{_SERVING}.pearl_c.run_device", "weight_roots"),
     "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
     "period_setting": (f"{_SERVING}.h1.window", "period_setting"),
     "program_salt": (f"{_SERVING}.h1", "program_salt"),
@@ -128,7 +124,6 @@ _LAZY = {
     "PEARL_C_ROW_ALIGN": (f"{_SERVING}.pearl_c", "ROW_ALIGN"),
     "POLLS": (f"{_SERVING}.h1.serve_gate", "POLLS"),
     "REPLY_FIELDS": (f"{_SERVING}.h1.challenger", "REPLY_FIELDS"),
-    "Receipts": (f"{_SERVING}.h1.receipts", "Receipts"),
     "SESSION_FIELDS": (f"{_SERVING}.h1.challenger", "SESSION_FIELDS"),
     "Sites": (f"{_SERVING}.h1.commit", "Sites"),
     "Writer": (f"{_SERVING}.h1.prover", "Writer"),
@@ -141,10 +136,9 @@ _LAZY = {
     "declared_layout": (f"{_SERVING}.h1.served", "declared_layout"),
     "descriptor": (f"{_SERVING}.h1.served", "descriptor"),
     "draw_k": (f"{_SERVING}.h1.challenger", "draw_k"),
-    "drawn_reads": (f"{_SERVING}.h1.serve_draw", "drawn_reads"),
-    "drawn_units": (f"{_SERVING}.h1.serve_draw", "drawn_units"),
+    "drawn_reads": (f"{_SERVING}.h1.serve_sample", "drawn_reads"),
+    "drawn_units": (f"{_SERVING}.h1.serve_sample", "drawn_units"),
     "dump_live": (f"{_SERVING}.h1.live", "dump"),
-    "h1_tables_available": (f"{_SERVING}.h1.tables_device", "available"),
     "h1_units": (f"{_SERVING}.h1", "units"),
     "kept_bytes": (f"{_SERVING}.h1.prover", "kept_bytes"),
     "layout_of": (f"{_POUW}.verifier.credit", "layout_of"),
@@ -159,17 +153,15 @@ _LAZY = {
     "session_of": (f"{_SERVING}.h1.challenger", "session_of"),
     "unit_of": (f"{_SERVING}.h1.served", "unit_of"),
     "weights_of": (f"{_SERVING}.h1.served", "weights_of"),
-    "window_units": (f"{_SERVING}.h1.serve_draw", "units"),
+    "window_units": (f"{_SERVING}.h1.serve_sample", "units"),
     "write_program": (f"{_SERVING}.h1.served", "write_program"),
     "y_value": (f"{_SERVING}.pearl_c.window", "y_value"),
     "RowTableArgs": (f"{_SERVING}.row_table_kernels", "Args"),
-    "RowTableLibrary": (f"{_SERVING}.row_table_kernels", "DeviceLibrary"),
     "ROW_TABLE_CUDA_DIR": (f"{_SERVING}.row_table_kernels", "CUDA_DIR"),
     "ROW_TABLE_SEG_BYTES": (f"{_SERVING}.row_table_kernels", "SEG_BYTES"),
     "ROW_TABLE_TAB_WORDS": (f"{_SERVING}.row_table_kernels", "TAB_WORDS"),
     "row_table_host_lib": (f"{_SERVING}.row_table_kernels", "host_lib"),
     "row_table_nvcc": (f"{_SERVING}.row_table_kernels", "nvcc"),
-    "row_table_side_stream": (f"{_SERVING}.row_table_kernels", "side_stream"),
     "hm_tables": (f"{_SERVING}.row_table_kernels", "hm_tables"),
     "leaf_prefixes": (f"{_SERVING}.row_table_kernels", "leaf_prefixes"),
     "table_width": (f"{_SERVING}.row_table_kernels", "table_width"),

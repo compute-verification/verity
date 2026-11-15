@@ -205,7 +205,7 @@ coins uniform, as `MomentSound`'s sample space has them, this makes the replicas
 It rests on the coins' derivation: the challenger derives each coin as
 `derive(K_ch, "verity/pouw-accel/<kind>/v1", {period, replica, sampling block index, root receipt digest})`, its key
 `K_ch` never leaving the challenger, so no two of the fleet's coins share a context, and the derivation is taken as
-uniform. `verity.ml.randomness.derive` is deterministic, so a coin keyed by its roots alone would repeat with them.
+uniform. `verity.commitments.randomness.derive` is deterministic, so a coin keyed by its roots alone would repeat with them.
 
 A dither broadcast to several replicas puts a replica's own dither in the others' coins, which `FleetSound` hands to
 its strategy, and then its moment fails. The check coins are in it too: `FleetSound`'s strategies read every other

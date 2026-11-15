@@ -8,8 +8,8 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   column) grid, so each rest commits one BF16 (the width rule). Rows and weight rows off a whole tile (`TILE`, a warp's
   32 × 32, the tile the H1 kernel computes) are padded: pad row p reads constant zero bits of its own, contiguous, so it is a
   distinct row of the site, and its outputs are not served.
-* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, vLLM's
-  ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
+* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, the engine's
+  scheduler's tokens a step, ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
   served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
   steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's proof blocks,
   off(w) the proof blocks of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
@@ -40,7 +40,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, the arm's `int_mm` beside, `int8_arm.Int8Arm`, to check). The last ``retain`` calls' Y are kept.
 * **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
-  (`traced`); the call gate-passes only if the y it hands back to vLLM was written by the GEMM invocation that wrote its
+  (`traced`); the call gate-passes only if the y it hands back to the serving engine was written by the GEMM invocation that wrote its
   z, the only GEMM of the call, and z is its records, which hold together with its scales and served y
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
@@ -120,7 +120,7 @@ CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
 PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
-#: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
+#: the one origin a credited window's coins may come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
@@ -322,7 +322,7 @@ class H1Run:
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None,
+                 coins_from: str = "in-process", opener: Opener | None = None, served: Any = None,
                  prover: str | None = None, session: str | None = None, graphs: Sequence[int] = (),
                  commit_record: CT.CommitRecord | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
@@ -348,7 +348,7 @@ class H1Run:
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
-        self.draw, self.admission, self.coin_source, self.commit_record = draw, admission, coin_source, commit_record
+        self.draw, self.admission, self.coins_from, self.commit_record = draw, admission, coins_from, commit_record
         #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
@@ -473,7 +473,7 @@ class H1Run:
               ) -> list[RQ.RequestEntry]:
         """The step about to run: the requests the engine admits for it, each (req_id, prompt token ids, token cap), and its
         batch order, each scheduled request's (req_id, rows) in the order the step's A tables hold its rows
-        (`pouw_h1_requests.batch_order`). Each new request's entry goes in the step's round, at its first slot; a req_id
+        (the adapter's). Each new request's entry goes in the step's round, at its first slot; a req_id
         already admitted (a request resumed
         after a preemption) keeps its entry (`readmitted`). A request past the window's S steps, with no prompt token or
         cap, or not in the batch is refused (`refused_requests`): it has no entry, and its rows are a gap
@@ -632,7 +632,7 @@ class H1Run:
 
     def judge(self, trace: Any, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
+        back to the serving engine; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
         the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
         made, self._recorded = self._recorded, None
         if made is None:
@@ -670,7 +670,7 @@ class H1Run:
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
                                     "readmitted": len(self.readmitted), "gaps": self.request_gaps(),
                                     "coins": "live" if self.rounds is not None else "none",
-                                    "coin_source": self.coin_source, "admission": self.admission,
+                                    "coin_source": self.coins_from, "admission": self.admission,
                                     "a_roots": "bound: each call's A table is under its round's root" if unbound is None
                                     else f"unbound: {unbound}"}
         self.details["static"] = self.static()
@@ -704,7 +704,7 @@ class H1Run:
         ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
         untied = bool(tie.get("reason")) if (tie := self.details.get("roots1")) else False
-        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
+        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coins_from != CHALLENGER),
                         (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
         return out
@@ -730,7 +730,7 @@ class H1Run:
         return {"rule": "gate-pass the served rows of calls whose served y is the credited kernel's own output only, and none "
                         "in a window that served a row of a request with no entry or whose coins the auditor's challenger "
                         "didn't draw; padded work and refused calls are shown, not gate-passed", "requests": gaps,
-                "coins": self.coin_source,
+                "coins": self.coins_from,
                 "gate_passed": {"rows": sum(c.served for c in ok), "macs": sum(c.served * c.n * c.k for c in ok)},
                 "refused": {"calls": len(no), "rows": sum(c.served for c in no), "macs": sum(c.served * c.n * c.k for c in no),
                             "reasons": CG.reasons(verdicts[c.index] for c in no)},

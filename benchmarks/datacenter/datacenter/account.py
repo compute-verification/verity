@@ -56,7 +56,7 @@ from .memory import answer_time, fill_rate, into, regen_time
 from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
-#: the premise that no undeclared compute is reachable from a block
+#: the premise that no unregistered hardware is reachable from a block
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
 #: k, the bits that could carry it out before registration, stays at most this many
@@ -156,7 +156,7 @@ class Account:
     def sound(self) -> bool:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
         (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
-        `LinkWindows.network_verdict` (`verity/protocols/accounting/certifier/verifier/service.py`), the same AND over a link's outcomes
+        `TransferBlocks.network_verdict` (`verity/protocols/accounting/certifier/verifier/service.py`), the same AND over a link's outcomes
         of record; this model builds no proof-system streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
 

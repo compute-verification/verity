@@ -47,6 +47,11 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
 
+The run's exit is its record's verdict. 0 means the compiled Lean composite of record accepted, and only a composite
+computed off the served node, on an auditor device, is of record. 2 means pending: no composite of record yet. That is
+what a window run on the served node ends with, since its own composite is a development check; it is not a crash. 1
+means a rejection, a refused composite, or a failed step.
+
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
 directory holds the served run's own: its placement and its commands.
 
@@ -62,7 +67,7 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor device reached through its gate, and its live coins are PoUW's always and SPOT's when
-`PP_CHALLENGER` names it, V3c's audit, the sampled-proofs audit of record, among them. Otherwise a local development
+`PP_CHALLENGER` names it, V3c's audit, the SPOT audit of record, among them. Otherwise a local development
 challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
 `served_verdicts.sh` takes it only in a development run, which `placement.toml` says it is (`DEVELOPMENT=1`).
 The verifier flips no coins of its own. The other three are not
@@ -105,7 +110,7 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
    `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
 2. `run.sh` (`window`, the default): `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `run.sh serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
-   phase in the serve dir, for an audit of one later (`verity/protocols/proofs/spot/prover/audit/prove_path.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
+   phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run

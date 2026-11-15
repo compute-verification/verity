@@ -23,7 +23,7 @@
 #                rec-compose over them; its tree-top controls are vstage's FORGE=top and top-salt, which Lean must refuse
 #   STEP=icheck  (CPU) the replay on the inner's last session, the schedule the sessions were held to against
 #                the statement's (derived again), each session's own schedule, how it ended and its message count, and the
-#                coin server's record against the clear tops
+#                live-coin part's record against the clear tops
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
@@ -112,6 +112,8 @@
 #              staged with a table of its own, the forgery's, its own)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+for o in LOOPBACK_DRAW:LOOPBACK_SAMPLE FC_FIREWALL:FC_ZK_SERVER; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "rec-reprice: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
 [ -z "${GPU_LEASE_UUID:-}" ] || { echo "REFUSED: the job holds a GPU lease (launched with --gpus): launch it without, each prove leases its own"; exit 2; }
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-reprice-job}/out; mkdir -p $O
@@ -188,7 +190,7 @@ no_build() { [ -z "${PREBUILT:-}" ] || { echo "REFUSED: PREBUILT=$PREBUILT has n
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src
 export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 # the inner statement's prover, statement and replay: on the challenger's coin tree (rec_live --coin-tree's INNER_COIN_SPEC, the
 # prover's own streams then the inner phase's sparse and stacked ones); FC_COINS=tree is today's loopback M0's, on its
@@ -427,7 +429,7 @@ def live(d):
             "statement_digest": rows[0][1].get("statement_digest"), "prover_peak_gb": gb(d / "time-prove.txt"),
             "gpu_peak_mib": max(mib) if mib else None, "gpu_idle_mib": min(mib) if mib else None,
             "lease": [l for l in text(d / "prove.err").splitlines() if l.startswith("gpu-lease:")],
-            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "zk_server_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
+            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "firewall_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
             if timed else None}
 
 def replay(p):
@@ -596,7 +598,7 @@ inner_partition() {
 
 # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement, set up under
 # the verifier's own program of it (which a wired inner's Linking needs), and the inner session STEP=vstage staged every
-# statement from, a forgery's too, with the coin server's transcript of it, whose root_B, later tops and link points
+# statement from, a forgery's too, with the challenger's live-coin part's transcript of it, whose root_B, later tops and link points
 # every statement's tops and check 5 are held to (RecVStar.checkTopRows, RecCoins.checkLink) and whose c_k its rec-c<k>
 # rows are (RecVStar.checkPubRows)
 rec_inner_files() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-program $DD/stage/program.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session"; }
@@ -942,7 +944,7 @@ EOF
   # RELEASE=1: the recursive session the inner session opened (its ZK server.json), its parts as the inner step fixed them,
   # which must be V*'s statements here, and the staged statement of each part in their order (ORDER), every part one
   if [ $RELEASE = 1 ]; then
-    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/zk_server.json) \
+    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/firewall.json) \
       || { echo "RELEASE=1: $INNER opened no recursive session (no ZK server.json)"; exit 1; }
     mapfile -t PARTS < <(python3 -c 'import json, sys; print(*json.load(open(sys.argv[1]))["parts"], sep="\n")' $DD/release.json)
     mapfile -t ORDER < <(python3 - $VS $V $DD/release.json <<'EOF'
@@ -1063,7 +1065,7 @@ EOF
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
   # RELEASE=1: the recursive session on the ZK server's record against its schedule, each part's release time beside when the
-  # Lean loop decided it (its ZK-SERVER-TIMES line in the part's prove.err); every part released, or the step fails
+  # Lean loop decided it (its FIREWALL-TIMES line in the part's prove.err); every part released, or the step fails
   if [ $RELEASE = 1 ]; then
     cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
     python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py release-report --state $FWS --session $SID \

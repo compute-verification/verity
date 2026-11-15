@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Joint
+public import Definitions.Compose.Joint
 public import Definitions.Poub.Bandwidth.Game
 import Mathlib.Basic.ENNReal.Real
 

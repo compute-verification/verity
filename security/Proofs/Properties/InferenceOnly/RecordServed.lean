@@ -33,7 +33,7 @@ public import Proofs.Properties.InferenceOnly.RecordWired
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 
 /-- `front` reads each template's leaves off its own Program. -/
@@ -57,7 +57,7 @@ open InferenceOnlyCheck.Record.SecurityProofs (form read_front finish_text front
 leaves the Program gives each. -/
 theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
     Spot.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts ∧
-      unwhole c.f.ts (c.f.ts.map (leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
+      unwhole c.f.ts (c.f.ts.map (InferenceOnlyCheck.Record.leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc
   refine ⟨front_text hf, ?_⟩

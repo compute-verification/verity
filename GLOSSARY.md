@@ -18,7 +18,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
 | annotation α | The gates α(ℓ) each label ℓ of a circuit holds; blocks, placements, covers and selections are annotations, each a predicate on α. | `Verity.Annotation`, `Annotation.IsPartition`, `Partition.toAnnotation` |
 | θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.RegisteredCircuit.θ`; x is the input part of `Circuit.eval`'s argument |
-| D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.RegisteredCircuit.D`, `Verity.Committed`; 𝓘 is `Verity.RegisteredCircuit.𝓘`, the registered compiler's output, with its proof blocks `Verity.RegisteredCircuit.P`; the policy, `InferenceOnly.Complies` |
+| D, R = (θ, D, 𝓘) | The registered circuit, what the developer claims it computed: its registered programs on its committed inputs. R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.RegisteredCircuit.D`, `Verity.Committed`; 𝓘 is `Verity.RegisteredCircuit.𝓘`, the registered compiler's output, with its proof blocks `Verity.RegisteredCircuit.P`; the policy, `InferenceOnly.Complies` |
 | (c, k), 𝒞_{c,k} | A partition's budgets per block, each at most: gate budget c and fresh-input budget k; \|I\| ≤ c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`, `Partition.IsCK` |
 | A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
@@ -47,7 +47,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | g (PoUW) | The gap, how PoUW's proofs carry ε: G_g at g is G_ε at ε = g/(1 − g); an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g). | `Pouw.GGap`, `Pouw.Wins`, `Pouw.Proofs.gGap_iff_gε` |
 | γ | The honest overhead: honest busy SM-time ≤ (1 + γ)·(fastest stock time for the same MACs) at the served shapes, pooled over the served mix; γ ≤ 10 at each operating point (C compute-bound, L memory-bound, swept per card). | `Pouw.RelativeSecurity.Efficient`; operating points not yet in Lean |
 | fixed operand B_w | A GEMM operand fixed before the salt and reused across units, by id; model weights are its usual instance, never a first-class notion of their own. | `Pouw.Layout.fixedId`, `Pouw.Workload.fixed`, `Pouw.PearlC.Workload.FixedOK` |
-| inert work, ι | A tile's operations that don't affect its output: left out, the output is bit-for-bit unchanged (an FP32 add that rounding discards, an add into zero). The inert-work bound: on each sampled tile, the verifier computes it exactly and requires at most ι of the tile's credit (1/400 on the H100, 1/1,000 on the RTX PRO 6000); a sampled tile over it is credited nothing. Incorrect work, which sampling bounds, is separate. | `Pouw.PearlC.Skip`; `capOK`, `debitOf` until renamed |
+| inert work, ι | A tile's operations that don't affect its output: left out, the output is bit-for-bit unchanged (an FP32 add that rounding discards, an add into zero). The inert-work bound: on each sampled tile, the verifier computes it exactly and requires at most ι of the tile's credit (1/400 on the H100, 1/1,000 on the RTX PRO 6000); a sampled tile over it is credited nothing. Incorrect work, which sampling bounds, is separate. | `Pouw.PearlC.Skip`; `inertBoundOK`, `inertWorkOf` until renamed |
 | SPOT[Π] | SPOT, the Sample-and-PrOve Transform, over Π, read "SPOT over Π", SPOT always in capitals. SPOT is a transform, not a protocol: from a proof system Π knowledge sound for single proof blocks it builds the argument SPOT[Π] for a whole partitioned computation, whose prover commits to every proof block and proves only the sampled ones; a SPOT proof is one run's commitments and Π-proofs. SPOT samples and verifies one quantity at two levels: a run, and a monitoring period, whose pooled bound is the second level (every run's bound at once is compose over the period's runs). SPOT preserves completeness, zero knowledge and knowledge soundness, relaxed to the sampled relation, and states its costs. The deployed one is SPOT[Flock]; the recursion compiler has no name. | `Claims.SamplingGeneric` (`CompilerKS`, `CompilerZK`, proved); SPOT[Flock]'s claims: `Claims.Sampling` |
 | E, reach | An incorrect proof block's reach E: the set of served outputs it can change downstream, everything after it being locally correct. The wiring alone fixes it, and a set's reach is the union of its members'. Incorrect proof blocks change no served output outside their reach, so \|E\| bounds what they put on the served outputs. | `Population.Dataflow.coneEgress O {u}`, whose size the Lean writes E(u); `WeightSecurity.Served.Local`'s `E` bounds it per incorrect proof block |
 | run (SPOT) | SPOT's unit: the proof system's run of one registration, from its public check through its verdict, with its boundary commitment, live coins, sample, proofs and verdict. The run's serving, the span whose values it commits, is an execution phase. Its length, the run length, is a deployment parameter (600 s in the reference deployment, `window_s`), neither a circuit nor a security concept. | `Spot.Run` |
@@ -175,7 +175,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "netlist"; Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
 | "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until renamed | monitoring period (`horizon` is its pooled reading) |
-| "block" for a part of the device graph; `Datacenter.blocks`, `block_of`, `benchmarks/network_sim`'s `--blocks` flag | zone |
+| "block" for a part of the device graph; `Datacenter.blocks`, `block_of` | zone |
 | "block", "thread block" for CUDA's unit of a launch; CUDA's `blockIdx`, `blockDim` | CTA |
 | "block" for a kernel's tile of a tensor; the Definitions `AttnBlock_v*`, `AttnBlockSoftcap_v*`, `AttnBlockFA3_v1`, `SparseMlaBlock_v1`, `TritonBlockRMSNorm_v1`, `MoeAlignBlocks_v1`, Triton's `BLOCK_*` | tile |
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
@@ -199,7 +199,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for what a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `adapters/vllm/` until vLLM's workloads move | workload; a workload of record |
-| "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `TransferBlocks` and `TransferBlocksAcceptMeans`, until a format version | an execution phase's transfer blocks |
+| "link-window", "link window"; code and records' `window` (`NetworkCertifierParams.window`), the Lean's `TransferBlocks` and `TransferBlocksAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.commitments.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
 | "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
 | "Commit window", for the steps one Commit covers | Commit period |
@@ -207,7 +207,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
-| `ShaSpeed` and Dither's `Pouw.Assumptions.ServiceSound`, the Lean's names until renamed; not H1's premise `Properties.Pouw.Period.ServiceSound` (a window's one-stage Flock sessions), another premise, which keeps its name | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
+| `ShaSpeed` and Dither's `Pouw.Assumptions.ServiceSound`, the Lean's names until renamed; not H1's premise `Properties.Pouw.MonitoringPeriod.ServiceSound` (a window's one-stage Flock sessions), another premise, which keeps its name | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 | "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; the stored key `rho` (the board's `search()`, the training harness's `slowdown/v1`, the circuit properties' output) and the Lean's ρ in prose, until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕); the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
@@ -241,8 +241,8 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "firewall"; the record ids and domain tags `firewall/v0` and `verity/firewall-*`, the party name `firewall` and the message type `Firewall`, until a format version; `benchmarks/`'s `MODES=firewall`, `--firewall`, `FC_FIREWALL*` and `flock-firewall`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
-| "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
-| a served span: "window", `IntegrityPeriod`, "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
+| "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, the registered circuit's work; execution block, execution phase |
+| a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
 | "window" for SPOT's served span with its audit; SPOT's records' `window` (`window.kind`, `window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
@@ -333,7 +333,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     block's chance to pass the sample is its miss probability (Older names), which the Lean's `effAcceptProb` and
     `acceptProb` lemmas and the docstrings of SPOT's Python verifier still call its acceptance probability.
   - **Cap**: SPOT's served cap S, the most served output bits a request counts in the capped two-stage form, and the
-    network certifier's registered response cap (`WardenParams.max_tokens_cap`, the most tokens a response carries)
+    network certifier's registered response cap (`NetworkCertifierParams.max_tokens_cap`, the most tokens a response carries)
     keep the word. Pearl's cap is its inert-work bound (Older names), and "cap check" and an "over-cap" tile stay
     retired.
 
@@ -371,7 +371,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
   It is certified by checking each input's commitment root against its external
-  anchor (the registered weights root, the client's request commitment, the randomness source), always, never sampled.
+  anchor (the registered weights root, the client's request commitment, the challenger's live coins), always, never sampled.
 - **Pinned**, as an instruction's status (`verity.circuits.silicon.instructions`): its silicon model matched every
   hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
   unprobed). A pinned value or root is one fixed before the run, which a check compares to.
@@ -385,9 +385,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Value acquisition** and **native tap** (`adapters/vllm`'s `acquire/`): value acquisition takes a required value's
   bytes where vLLM computes it, by a Python hook or a native tap (a capture compiled into a kernel).
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
-  clock (one bucket, `bucket_ms`): its row of that direction's record (`WardenParams.grid`), proved as its own proof
+  clock (one bucket, `bucket_ms`): its row of that direction's record (`NetworkCertifierParams.grid`), proved as its own proof
   block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`). The code's `link-window` is an execution phase's
-  2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the scan's start
+  2T transfer blocks, T buckets each way under one registration (`NetworkCertifierParams.window`), its Program the scan's start
   (`IngressScanStart`, the state the execution phase starts from), then the T ingress and the T egress proof blocks
   chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
   one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link (its
@@ -418,7 +418,10 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
     `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
-    base too.
+    base too. Under `--gate verdict` a plain candidate (each member with a land verdict of its own, no move, and nothing
+    drive.toml's `verdict_excludes` names, nor its `lowrisk_excludes` outside `verdict_plain`) lands on those verdicts and
+    the quick tier, and `main`'s whole check follows: its red reverts the one culprit or, with none, sends plain
+    candidates back to the whole check.
   - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
     `queue/<sha12>` and checked as one.
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
@@ -436,7 +439,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
     what is checked.
   - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
-    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    verified queue runs with `--gate check` (under `--gate verdict`, every candidate but a plain one): one beside each
+    candidate and beside `main` each time it moves, `main`'s saying
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.

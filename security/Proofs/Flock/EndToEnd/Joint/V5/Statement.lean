@@ -37,7 +37,7 @@ play; the window's are their images in the population (`JointAuditV5.incorrectSe
   blocks together with probability at least `δ` (the product of their `P_a`s), and their ANDs and output bits are each at
   most the most any choice in that confidence set holds.
 
-`ε_ks,m` is member `m`'s knowledge term at the worst registration and `ε_bind,m` its binding term `δ_link`, each at the
+`ε_ks,m` is member `m`'s knowledge term at the worst registration and `ε_bind,m` its binding term `ε_bind`, each at the
 sampling design that samples member `m`'s part of the sample (`JointAuditV5.design`), as `SampledKSLiveV5` states them. A
 member with no proof block in the sample contributes nothing to `ε_bind,m` at that sample and the empty sample's knowledge term
 to `ε_ks,m`. Each member's session has one link-point count at every sample that ended (`JointAuditV5.hcls`), which the
@@ -49,7 +49,7 @@ under `Nonempty EndΩ`). The named assumptions
 are A3 (`uniform/io-getrandombytes`) for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`,
 `RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
 (`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone at the samples that ended (in a
-period, at every window's strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in
+period, at every window's strategy on some run, `JointMonitoringPeriodV5.Plays`), stated flat. Their proofs are in
 `Joint/V5/Bound.lean`.
 -/
 
@@ -176,7 +176,7 @@ noncomputable def incorrectSet (L : SamplingDesign m.n) (hL : m.OneClass L) (τ 
 /-- The knowledge term `ε_ks` at `L`: `ksAvgStrictZ` at the worst registration. -/
 noncomputable def epsKs (L : SamplingDesign m.n) : ℝ≥0∞ := ⨆ R : Reg, ksAvgStrictZ (planZHJP m.dj m.y₀) L m.k m.qF m.qS R
 
-/-- The binding term `ε_bind` at `L`, `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in
+/-- The binding term `ε_bind` at `L`, `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in
 `SampledKSLiveV5`. -/
 noncomputable def link (L : SamplingDesign m.n) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ p : m.vb.Pos,
@@ -399,7 +399,7 @@ noncomputable def record (W : ℕ → JointAuditV5) (t : ℕ) (τ : Strategy (W 
 
 end JointAuditV5
 
-namespace JointPeriodV5
+namespace JointMonitoringPeriodV5
 
 /-- **A monitoring period of `T` windows**, window `t`'s audit after window `t − 1`'s, against one prover. -/
 noncomputable def game (W : ℕ → JointAuditV5) (T : ℕ) : Game Unit := monitoringPeriodG (fun t => (W t).game) 0 T
@@ -429,7 +429,7 @@ def Within (W : ℕ → JointAuditV5) (δ : ℝ) (ands bits : (t : ℕ) → Fin 
     (((l.map (AuditRecV5.harm ands)).sum : ℕ) : ℝ) ≤ maxHarm W ands δ l ∧
     (((l.map (AuditRecV5.harm bits)).sum : ℕ) : ℝ) ≤ maxHarm W bits δ l
 
-end JointPeriodV5
+end JointMonitoringPeriodV5
 
 /-- **A monitoring period of windows of several members, pooled.** In a monitoring period of `T` windows `W t` as in
 `JointAuditV5`, each with a fresh live sample over its members' proof blocks, played by one adaptive prover `s`, for every
@@ -442,22 +442,22 @@ at least `δ`, and their ANDs and output bits in all are at most the period's `m
 many windows and members the period has. Its named assumptions, at every window: A3 (`Assumptions.UniformRandomBytes`)
 for its sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw`), and `cr/sha-512`
 (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at each member's session played alone at every
-strategy the window is played with on some run (`JointPeriodV5.Plays`), the last two only at a window where some
+strategy the window is played with on some run (`JointMonitoringPeriodV5.Plays`), the last two only at a window where some
 outcome of its stream ends its sample (`Nonempty EndΩ`). -/
 def JointPooledV5 : Prop :=
   ∀ (W : ℕ → JointAuditV5) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (JointPeriodV5.game W T),
-    (∀ t (τ : Strategy (W t).game), JointPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j,
+    ∀ s : Strategy (JointMonitoringPeriodV5.game W T),
+    (∀ t (τ : Strategy (W t).game), JointMonitoringPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign τ k).draw ω) (reg ((W t).memberSim τ k))) j
         (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (cont ((W t).memberSim τ k) ω))
         ((W t).ms.get k).qF ((W t).ms.get k).qS) →
-    (∀ t (τ : Strategy (W t).game), JointPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k,
+    (∀ t (τ : Strategy (W t).game), JointMonitoringPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k,
       Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) ((W t).ms.get k).vb (reg ((W t).memberSim τ k))
         (cont ((W t).memberSim τ k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M ((W t).ms.get k).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ JointPeriodV5.Within W δ ands bits l) (JointPeriodV5.run W T s) ≤
+    value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ JointMonitoringPeriodV5.Within W δ ands bits l) (JointMonitoringPeriodV5.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, (W t).eps
 
 end Flock.Guarantees

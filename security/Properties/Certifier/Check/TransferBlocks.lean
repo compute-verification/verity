@@ -7,7 +7,7 @@ public import Lms.Sign
 # N2's execution phase verdict of record: what its Lean code (`NetworkCheck.TransferBlocks`) does
 
 The property of `NetworkCheck.TransferBlocks.verdict`, the verdict of record on one execution phase of N2
-(`service.OF_RECORD` in `verity/core/protocols/certifier/service.py`), stated against its functions as they run: for
+(`service.OF_RECORD` in `verity/protocols/accounting/certifier/verifier/service.py`), stated against its functions as they run: for
 every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
 3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a network certifier link, which
 declares none, nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids
@@ -69,10 +69,10 @@ def ExecutionPhaseCertified (c : Case) : Prop :=
 certifier link declares no sync, so nothing is asked of the syncs there. -/
 def ExecutionPhaseSynced (c : Case) : Prop :=
   match c.kind with
-  | .warden _ => True
+  | .networkCertifier _ => True
   | _ => ∃ s, c.syncs[c.window]? = some s ∧ s.delta ∈ c.deltas ∧ ∃ r ∈ c.rhos, s.num * r.2 = r.1 * s.den
 
-/-- An accepted link-window's public outputs: `verdict` 1 and `deadline` 1. -/
+/-- An accepted execution phase's public outputs: `verdict` 1 and `deadline` 1. -/
 def acceptedOutputs : Json :=
   Json.mkObj [("verdict", toJson (1 : Nat)), ("deadline", toJson (1 : Nat))]
 

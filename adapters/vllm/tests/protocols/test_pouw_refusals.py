@@ -50,7 +50,7 @@ from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as PF
 from verity.protocols.accounting.pouw.prover.serving.operands import quantize
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import grouped as PG
+from verity_torch.pouw.pearl_c import grouped as PG
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import schedule_of, whole_options
 
@@ -89,13 +89,13 @@ def test_a_tensor_parallel_world_is_refused(scheme):
 def test_a_forward_anchor_is_refused_under_an_executor_that_counts_its_own_forwards():
     """``start_forward`` places the circuit-backed executor's first pass.  The host's other executors count their forwards
     from 0, so an anchor past 0 is refused there, and an anchor of 0 is none."""
-    circuits = ", ".join(P.pouw_circuit.SCHEMES)
+    circuits = ", ".join(P.NCP_CIRCUIT_SCHEMES)
     for scheme in ("ncp-v1", "ncp-v1-shift24"):
         assert P.refusals(scheme, _serve(scheme, start_forward=0)) == ()
         said = (f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                 f"({circuits}); this executor counts its own from 0")
         assert P.refusals(scheme, _serve(scheme, start_forward=3)) == (said,)
-    assert "ncp-v2" in P.pouw_circuit.SCHEMES
+    assert "ncp-v2" in P.NCP_CIRCUIT_SCHEMES
     assert P.refusals("ncp-v2", _serve("ncp-v2", start_forward=3)) == ()
 
 

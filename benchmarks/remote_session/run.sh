@@ -73,7 +73,7 @@
 # (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
 # REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
 # puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared
+# engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared
 # in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
 # id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
 # the synchronous scheduling a session needs, such as
@@ -214,7 +214,7 @@ trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
 if [ -n "${SERVE:-}" ]; then
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-$WS/hf} PATH=$(dirname "$VPY"):$PATH
-  export PYTHONPATH=$PWD/adapters/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$PWD/adapters/vllm:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
 fi
 if [ -n "$SERVED" ]; then
   PLAN=${PLAN:-serve}
@@ -393,7 +393,7 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
           "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
         nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" \
-          benchmarks/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
+          verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
           { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
         sha256sum "$B/kv.so" > "$O/libs.sha256"
         KV=(--remote-kv-lib "$B/kv.so") ;;
@@ -424,13 +424,13 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
   fi
   if [ "$ROLE" = both ]; then
     if [ -z "${LEAN_EXE:-}" ]; then
-      LEAN_EXE=$("$PY" -c 'from verity.protocols.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
+      LEAN_EXE=$("$PY" -c 'from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
         2> "$O/lean-build.log") ||
         { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed (LEAN_EXE names a built one)"; exit 4; }
     fi
     eval "VA=(${VERIFIER_ARGS:-})"
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
       "${VERIFY[@]}" --lean-exe "$LEAN_EXE" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
     SV=$!
     set +m

@@ -1,4 +1,4 @@
-"""N2's period sample (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
+"""N2's period sample (`TransferBlocks.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
 period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
 proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.sampleOn`), and what the sample
@@ -26,7 +26,7 @@ def lean_draw(monkeypatch):
     """The Lean's sample stood in by its Python twin on the same bytes; each call's (k, n, coins) recorded."""
     calls = []
 
-    def draw(k: int, n: int, read: bytes) -> dict:
+    def sample(k: int, n: int, read: bytes) -> dict:
         calls.append((k, n, read))
         at = [0]
 
@@ -38,12 +38,12 @@ def lean_draw(monkeypatch):
         except ValueError:
             return {"refused": "draw: the stream ran out"}
         return {"law": "subset", "population": n, "k": k, "units": sorted(units)}
-    monkeypatch.setattr(SVC, "lean_draw", draw)
+    monkeypatch.setattr(SVC, "lean_draw", sample)
     return calls
 
 
 class Coins:
-    """A coin source with a `commit`, as a remote challenger's: what it was committed to, and when it was read."""
+    """Coins with a `commit`, as a remote challenger's: what it was committed to, and when it was read."""
 
     def __init__(self, byte: int = 0x5a) -> None:
         self.byte, self.events = byte, []
@@ -75,7 +75,7 @@ def prove(run: Run, drawn: dict, openings: dict, windows=None) -> list[S.Outcome
     return out
 
 
-def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
+def test_the_period_sample_commits_every_root_before_it_reads_a_coin(tmp_path):
     run, coins = Run(tmp_path), Coins()
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, coins)
@@ -116,12 +116,12 @@ def test_a_sampled_link_is_accepted_on_its_sampled_windows_and_states_its_incorr
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
     assert all(o.accepted for o in prove(run, drawn, openings))
-    (undrawn,) = {0, 1, 2} - set(drawn["units"])
+    (unsampled,) = {0, 1, 2} - set(drawn["units"])
     assert [r["window"]["window"] for r in run.stream.log] == drawn["units"]
     assert not run.lw.network_verdict(run.stream)["accepted"]
     verdict = run.lw.network_verdict(run.stream, drawn=drawn)
     assert lean_draw == [(2, 3, bytes.fromhex(drawn["read"]))] and drawn["read"]
-    assert verdict["accepted"] and verdict["refused"] == [] and verdict["records"][undrawn] is None
+    assert verdict["accepted"] and verdict["refused"] == [] and verdict["records"][unsampled] is None
     assert verdict["why"] == {}
     assert all(verdict["records"][w] is not None for w in drawn["units"])
     assert verdict["selection"] == {"law": "subset", "k": 2, "population": 3, "units": drawn["units"],
@@ -254,7 +254,7 @@ def test_the_sample_is_held_to_this_stream_and_the_period_it_committed(tmp_path)
     for bad in ({**drawn, "units": drawn["units"][:1]}, {**drawn, "population": 4}, {**drawn, "units": [2, 0]},
                 {**drawn, "format": "other"}, {**drawn, "k": 0, "units": []}, {**drawn, "roots": drawn["roots"][:2]},
                 {**drawn, "read": "zz"}, {**drawn, "read": "abc"}, {k: v for k, v in drawn.items() if k != "read"}):
-        with pytest.raises(ValueError, match="not a period draw"):
+        with pytest.raises(ValueError, match="not a period sample"):
             run.lw.network_verdict(run.stream, drawn=bad)
 
 
@@ -267,7 +267,7 @@ def test_a_sampled_window_missing_or_past_the_sample_refuses_a_sampled_link(tmp_
     assert run.lw.network_verdict(run.stream, drawn=drawn)["refused"] == [last]
     prove(run, drawn, openings, [last])
     assert run.lw.network_verdict(run.stream, drawn=drawn)["accepted"]
-    (undrawn,) = {0, 1, 2} - set(drawn["units"])
-    reg = run.stream.register(run.lw.registration(openings[undrawn], run.previous), run.lw.ports(undrawn))
+    (unsampled,) = {0, 1, 2} - set(drawn["units"])
+    reg = run.stream.register(run.lw.registration(openings[unsampled], run.previous), run.lw.ports(unsampled))
     assert reg.order == 2
     assert run.lw.network_verdict(run.stream, drawn=drawn)["refused"] == [3]

@@ -1,15 +1,15 @@
 module
 
-public import Definitions.Certifier.Warden
+public import Definitions.Certifier.Cells
 
 /-!
 # The response cap: each response at most its request's `max_tokens` tokens
 
-Definitions only. A run may register a response cap `cap` with its schedule (`warden.WardenParams.max_tokens_cap`,
+Definitions only. A run may register a response cap `cap` with its schedule (`network_certifier.NetworkCertifierParams.max_tokens_cap`,
 which the schedule's parameters digest, and so every record head, binds), in the id egress form, where each data cell
 is one id event, a token, and the end of the stream holds only the trailer (`io_tie`). The network certifier then reads
-each request's `max_tokens` from its first ingress cell, at the place `active.id_request` fixes for it
-(`active.id_request_max_tokens`): `some m`, or `none` where the field isn't a u32 there. A request of `none`, or of
+each request's `max_tokens` from its first ingress cell, at the place `id_form.id_request` fixes for it
+(`id_form.id_request_max_tokens`): `some m`, or `none` where the field isn't a u32 there. A request of `none`, or of
 `m > cap`, is refused at ingress: none of its bytes reaches the server, and its lane fails at once (reason `cap`, the
 client's). Every other's response is held to its `m` tokens: a lane fails at its data cell `m` (reason `limit`, the
 server's), as at a late cell.

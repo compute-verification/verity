@@ -3,13 +3,13 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python verity/protocols/accounting/certifier/prover/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of execution phase W: the parameters the network certifier run's ``deployment.json`` (its key and its
   session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
   run's own, and one schedule, its integer fields and its response cap when it has one: the period check reads the id
   egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
-  `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
+  `NetworkCertifierParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `relay_check.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits an execution phase, `leak_bounds.JITTER`), and the
@@ -66,7 +66,7 @@ from pathlib import Path
 
 from verity.protocols.accounting.certifier.verifier import scan_answer as SA
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import INTEGER_FIELDS, NetworkCertifierParams
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
@@ -84,7 +84,7 @@ def certificates(run: Path, w: int) -> list[dict]:
         link, d = RC.CERTIFIED[name]
         got = [c for c in docs if (c["link"], c["direction"], c["window"]) == (link, d.value, w)]
         if len(got) != 1:
-            raise SystemExit(f"{run}: link-window {w}'s {name} record has {len(got)} certificates, not 1")
+            raise SystemExit(f"{run}: execution phase {w}'s {name} record has {len(got)} certificates, not 1")
         out.append({k: got[0][k] for k in CERTIFICATE_KEYS})
     return out
 
@@ -134,7 +134,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     audits = doc.get("audits", [])
     cap = dep["params"].get("max_tokens_cap")
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
-    cells = WardenParams(**dep["params"]).rows_cells(1)
+    cells = NetworkCertifierParams(**dep["params"]).rows_cells(1)
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": cells,
               "circuit": circuit, "first": x["window"], "jitter": SA.JITTER_BOUND,
               "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": RC.LINK,
@@ -192,7 +192,7 @@ def main(argv=None) -> int:
     ap.add_argument("--circuit", type=Path, metavar="CIRCUIT_RECORD",
                     help="the verifier's own window-circuit record of V3c's class (prove_path.py window-circuit): its "
                          "program is the class circuit V3c's audit is held to; required with --v3c")
-    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
+    ap.add_argument("cases", nargs="+", help="NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     if a.v3c and not a.circuit:
         ap.error("--v3c needs --circuit: V3c's audit is held to the verifier's own window-circuit record")

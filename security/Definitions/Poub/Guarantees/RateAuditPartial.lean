@@ -6,9 +6,9 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # The rate audit with partial completion: what an accepted device held and read (trusted)
 
-The game is `Security/Definitions/Poub/RateAuditPartial.lean`: `RateAudit`'s, with `rebuild` replaced by
+The game is `security/Definitions/Poub/RateAuditPartial.lean`: `RateAudit`'s, with `rebuild` replaced by
 `complete j x g`, which obtains any `x` of word `j`'s `b` bits at `cost x`. Proofs are in
-`Security/Proofs/Poub/RateAudit/Partial*.lean`. The rebuild term rests on the named assumption
+`security/Proofs/Poub/RateAudit/Partial*.lean`. The rebuild term rests on the named assumption
 `Accounting.Assumptions.WorkHardness b rounds c_root cost` (`rate-codec-work` in partial-completion form: `x` bits
 cost at least `x/b` of a word's `rounds · c_root`, `Definitions/Poub/Assumptions/RateAudit.lean`), and in a joint run
 on `Accounting.Assumptions.RateComputeAdditive` (W: the compute account's work and the game's completions share no
@@ -16,7 +16,7 @@ work).
 
 * `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
   may keep part of a word and complete the rest; its honest device is a lemma, `RatePartialHonest`
-  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
+  (`security/Proofs/Poub/Lemmas/RateAudit.lean`).
 * `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (PoUB's route
   `Accounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through

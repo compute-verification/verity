@@ -27,7 +27,8 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import served_y_device as SYD
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
@@ -67,7 +68,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import run_device as PPDR
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
@@ -108,7 +109,7 @@ def load(name: str, path: Path):
 R = load("pearl_c_sm120_run", KERNEL / "run.py")
 F = load("pearl_c_sm120_fixture", POUW / "pearl_c_sm120" / "fixture.py")
 VR = load("pearl_c_vllm_verify_run", POUW / "pearl_c_vllm" / "verify_run.py")
-SD = load("pearl_c_vllm_served_debit", POUW / "pearl_c_vllm" / "served_debit.py")
+SD = load("pearl_c_vllm_served_inert_work", POUW / "pearl_c_vllm" / "served_inert_work.py")
 #: the device path's schemes whose device record is a variant of KERNEL's pipeline (pearl_c_sm90 runs h100's)
 KERNEL_SCHEMES = sorted(s for s in PPD.SCHEMES if SchemeId.parse(s).device in R.VARIANT_G)
 
@@ -388,7 +389,7 @@ def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(
         given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
         return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
     monkeypatch.setattr(run, "_retained", with_tree)
-    monkeypatch.setattr(SY, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
+    monkeypatch.setattr(SYD, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
     man = json.loads(Path(run.end()["manifest"]).read_text())
@@ -524,9 +525,9 @@ def _served(monkeypatch, kernel, weights, more=None, **run):
     from verity_vllm.protocols import pouw
     monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(PPD, "new_salt_key", lambda scheme: SALT_KEY)
+    monkeypatch.setattr(pouw, "pearl_c_salt_key", lambda scheme: SALT_KEY)
     if run:
-        monkeypatch.setattr(PPDR, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
+        monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
     model = _Model(weights)
     settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
@@ -867,7 +868,7 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
     """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
     (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
-    S = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    S = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     rng = np.random.default_rng(31)
     words = bf16_words(rng, 64, 1024).view(np.uint32)
     words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
@@ -1173,7 +1174,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
 
 
 @pytest.mark.slow
-def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
+def test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source, coins=published(path))
@@ -1240,13 +1241,17 @@ def test_answer_names_its_schemes_assumption():
     """An accepted Pearl+ answer's ``public.assumption`` (`verify_run.assumption_of`) is the named Prop its scheme's credit,
     (1 − ρ)·`creditDevRev1`, is at: TT_OUT(1/400) per audit tile, rev1, at the scheme's device record. The served scheme,
     ``pearl-c-h100-v1-h3``, is at `TTOutTilePearlCH100Rev1`, every other scheme the device path runs at
-    `TTOutTilePearlCDevRev1` at its record, and each is a def of `TTOutRev1.lean`; the Lean port's `ASSUMPTION` is the
-    H100's. Neither Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no
-    TT_OUT accounting, is ever named."""
+    `TTOutTilePearlCDevRev1` at its record, a def of `TTOutRev1.lean`, which the H100's is at `devH100` (a def of the
+    records Proofs/Pouw/PearlC/Records.lean keeps since 12b47061986); the Lean port's `ASSUMPTION` is the H100's. Neither
+    Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no TT_OUT accounting,
+    is ever named."""
     root = Path(__file__).resolve().parents[3]
     lean = (root / "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean").read_text()
-    for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV):
-        assert f"def {name.rsplit('.', 1)[1]} " in lean and name.startswith("Pouw.PearlC.Assumptions."), name
+    records = (root / "security/Proofs/Pouw/PearlC/Records.lean").read_text()
+    dev, h100 = (name.rsplit(".", 1)[1] for name in (VR.ASSUMPTION_DEV, VR.ASSUMPTION_H100))
+    assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV))
+    assert f"def {dev} " in lean, dev
+    assert re.search(rf"^def {h100} .*\n(?:.*\n)*?  {dev} CM devH100 sem ρ$", records, re.M), h100
     assert VR.assumption_of(PPD.scheme_of("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
     for scheme in map(PPD.scheme_of, PPD.SCHEMES):
         got = VR.assumption_of(scheme)
@@ -1533,12 +1538,15 @@ def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
     assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
+    from verity_vllm.protocols import pouw
+
     monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
+    monkeypatch.setattr(pouw, "pearl_c_salt_key", pouw.pearl_c_salt_key)
     one, two = {"coins": None}, {}
     SP.seed_install(one)
     SP.seed_install(two)
     assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert PPD.new_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    assert PPD.new_salt_key(SCHEME) == pouw.pearl_c_salt_key(SCHEME) == SP.seeded("salt key")(32)
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -1773,19 +1781,19 @@ def _replay_every_tile(p) -> dict[int, str]:
     return {tid: reason for _, tid, ok, reason, *_ in got if not ok}
 
 
-def test_a_salt_dead_element_puts_its_row_over_the_cap(tmp_path, monkeypatch):
-    """P3's forming term in the tile rule (`pearl_c_debit.forming_elements`): credited row 9 holds one entry 300 times its
+def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeypatch):
+    """P3's forming term in the tile rule (`pearl_c_inert_work.inert_elements`): credited row 9 holds one entry 300 times its
     RMS, which keeps the per-row rules and is salt-dead, inert work of fs·|cols|/n = 64 over the row's bound of 41 at
     k = 128 with no flagged atom, so its tile, and it alone, fails; without the term every tile passes."""
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", spike=300.0)[0]
     p = VR.load(path, published(path))
     assert _replay_every_tile(p) == {0: "A row 9's replayed debit 64 exceeds its cap 41 (the row cap: ρ·its credited "
                                         "cells' credit)"}
-    monkeypatch.setattr(CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    monkeypatch.setattr(CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     assert _replay_every_tile(p) == {}
 
 
-def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_passes(tmp_path):
+def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile_then_passes(tmp_path):
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
     gives the row up, and rewrites the records and their root alone: the commitment, A's roots and the files are the pass's,
@@ -1813,7 +1821,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
-def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_cap(tmp_path, capsys):
+def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
     cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
@@ -1831,12 +1839,12 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     takes = {}
     for verdict, fn in (("run", VR.verify_passes), ("pass", VR.verify)):
         takes[verdict] = "over_cap" in inspect.signature(fn).parameters
-        for rule in (None, *(SP.OVER_CAP if takes[verdict] else ())):
+        for rule in (None, *(SP.OVER_INERT_BOUND if takes[verdict] else ())):
             flag = () if rule is None else ("--over-cap", rule)
             capsys.readouterr()
             assert SP.main(["volunteer-needed", "--verdict", verdict, *flag]) == 0
             yes, took = capsys.readouterr().out.split()
-            assert yes in ("yes", "no") and took in SP.OVER_CAP and took == (rule or took)
+            assert yes in ("yes", "no") and took in SP.OVER_INERT_BOUND and took == (rule or took)
             if verdict == "run":
                 _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
                 drawn = {v["tile"] for v in doc["verdicts"]}
@@ -1847,7 +1855,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
             assert (yes == "yes") == rejects, (
                 f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
-                f"{'rejects' if rejects else 'does not reject'} a run on a drawn row over its cap: served_passes.over_cap_rule "
+                f"{'rejects' if rejects else 'does not reject'} a run on a drawn row over its cap: served_passes.over_inert_bound_rule "
                 "must name the rule the verdict takes")
     for verdict in (v for v, t in takes.items() if not t):
         capsys.readouterr()
@@ -1855,8 +1863,8 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
         assert "takes no over_cap" in capsys.readouterr().err
 
 
-class _StandInDebit:
-    """`debit.Debit` without a card: `fast_tile.word_debits` (module `ft`) on the whole of A′ by B̃, with the words `bad`
+class _StandInInertWork:
+    """`debit.InertWork` without a card: `fast_tile.words_inert_work` (module `ft`) on the whole of A′ by B̃, with the words `bad`
     names in the first call marked non-finite and their counts wrong, and one added to the first call's atoms at `off`."""
 
     def __init__(self, ft, device, bad=(), off=None):
@@ -1864,7 +1872,7 @@ class _StandInDebit:
 
     def words(self, a, b):
         self.calls.append((a.shape, b.shape))
-        atoms, zeros = (x.astype(np.uint16) for x in self.ft.word_debits(a.tolist(), b.tolist(), self.device))
+        atoms, zeros = (x.astype(np.uint16) for x in self.ft.words_inert_work(a.tolist(), b.tolist(), self.device))
         bad = np.zeros(atoms.shape, bool)
         if len(self.calls) == 1:
             for i, j in self.bad:
@@ -1875,7 +1883,7 @@ class _StandInDebit:
 
 
 def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_up_the_same_rows(tmp_path):
-    """`volunteer_pass.words_device` on a stand-in for the card (`_StandInDebit`): each call's A′ (its real rows) and each
+    """`volunteer_pass.words_device` on a stand-in for the card (`_StandInInertWork`): each call's A′ (its real rows) and each
     weight's B̃ formed once as `encode` forms a tile's, every word's counts cut into the tiles in `scheme.tiles`' order with
     filler rows zero, give every tile's counts as the CPU replay (`words`) gives them, so the pass gives up the same rows to
     the same records root.  A tile with a word the device marks non-finite takes the replay's counts, and a count unlike
@@ -1888,7 +1896,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
     cubin = tmp_path / "debit_sm90.cubin"
     cubin.write_bytes(b"stand-in")
     # call 0's row 17 is in its second row tile (tile id 1), which no cross-check at every 2^20th tile replays
-    stand = _StandInDebit(VP.FT, p.scheme.device, bad=[(17, 3)])
+    stand = _StandInInertWork(VP.FT, p.scheme.device, bad=[(17, 3)])
     VP._DEBIT[str(cubin.resolve())] = stand
     VP._B_CODES.clear()
     try:
@@ -1897,11 +1905,11 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
         assert all(np.array_equal(got[t][0], want[t][0]) and np.array_equal(got[t][1], want[t][1]) for t in want)
         assert [a for a, _ in stand.calls] == [(r.real_rows, r.matmul.shape.k) for r in p.records]
         assert on["bad_tiles"] == 1 and on["replayed"] == 2 and on["cross_check"] == 1 << 20
-        VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, p.scheme.device, off=(0, 0))
+        VP._DEBIT[str(cubin.resolve())] = _StandInInertWork(VP.FT, p.scheme.device, off=(0, 0))
         with pytest.raises(RuntimeError, match="differ from the CPU replay's on 1 of 1 tiles"):
             VP.volunteer(path, coins, 1, cubin, 1 << 20)
         assert path.read_text() == before
-        VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, p.scheme.device)
+        VP._DEBIT[str(cubin.resolve())] = _StandInInertWork(VP.FT, p.scheme.device)
         out = VP.volunteer(path, coins, 1, cubin, 1)
         assert out["ok"] and out["device"]["replayed"] == len(want) and "counted on the device" in out["line"]
         dev_root = out["records_root"]["after"]
@@ -2096,7 +2104,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
 
-def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
+def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
     record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
@@ -2117,7 +2125,7 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_an
 
 
 def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_its_cubin_and_cross_check(tmp_path):
-    """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInDebit`) gives up the rows the CPU replay
+    """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInInertWork`) gives up the rows the CPU replay
     gives up, to the same records root, and its document names the debit cubin, the cross-check rate (``--device-check``,
     else `volunteer_pass.CROSS_CHECK`) and the tiles it replayed on the CPU too; the CPU's document has no ``device``."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
@@ -2131,7 +2139,7 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
     try:
         for check in ("2", None):
             path.write_text(before)
-            VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, device)
+            VP._DEBIT[str(cubin.resolve())] = _StandInInertWork(VP.FT, device)
             VP._B_CODES.clear()
             more = ["--device-check", check] if check else []
             assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1", "--device", str(cubin),
@@ -2414,7 +2422,7 @@ def test_a_window_class_that_is_no_three_positive_integers_is_refused_by_name():
 
 
 @pytest.mark.slow
-def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
+def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
     """With the execution phase's class (``window_class``, ``served_passes.py verify --class``), a tied run accepts only where its passes
     are the class's fixed load: a pass a round of the class's outputs, each retained or dropped, every call of round 0
     of slots x prompt rows and of a later round of slots, committed in rows padded to 16.  Here the class is 2 slots of 8
@@ -2471,11 +2479,16 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     for bad in ((2, 8), (2, 8, 0), (2, 8, True), "2,8,2"):
         with pytest.raises(ValueError, match="a window class is SLOTS, PROMPT, OUTPUTS"):
             run([a, b], window_class=bad)
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
+
+    # the served verify's node draw on `run`'s source: on the OS's coins its 3 draws can all land over the inert-work
+    # bound, at ε 1 and no give-up
+    monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 4)[:n])
     d = _serve_dir(tmp_path, [a, b])
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile), "--class", "2,8,2")
     assert rc == 0 and doc["class"] == [2, 8, 2] and answer["public"]["tie"]["load"] == [2, 8, 2], doc["line"]
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     served = answer["public"]["work"]
     assert served["give_up"] > 0 and (served["macs"], served["credited_tiles"]) == (whole["macs"], whole["credited_tiles"])
     assert answer["profile"]["exact_work"] == kept and doc["timed"] == {"passes": 2, "macs": whole["macs"], "credited": 0}
@@ -2779,7 +2792,7 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
     changed = True
     while changed:
         changed = False
-        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+        for _, r, _, row_cell, tiles in units if CW.row_inert_bound(scheme) else ():
             while a_left(r):
                 excess = {}
                 for _, tile, w in tiles:
@@ -2792,7 +2805,7 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
                     break
                 va[r.matmul.index].add(max(excess, key=lambda i: (excess[i], -i)))
                 changed = True
-        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+        for _, r, _, row_cell, tiles in units if CW.row_inert_bound(scheme) else ():
             for _, tile, w in tiles:
                 while b_left(r):
                     rows, cols = credited(r, tile)
@@ -2830,7 +2843,7 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
     return {i: sorted(s) for i, s in va.items() if s}, {w: sorted(s) for w, s in vb.items() if s}
 
 
-def test_volunteer_words_ranks_a_units_rows_over_their_caps_in_one_scan():
+def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan():
     """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, one a band, since an A row
     given up takes its band out and leaves every other band's rows' sums and caps as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
     rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
@@ -3100,11 +3113,11 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
 
 
 @pytest.mark.slow
-def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_path):
+def test_served_inert_work_records_the_tile_rules_own_inert_work_and_bound(honest_pass, tmp_path):
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
     assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
-    assert CW._debit_cap is SD._DEBIT_CAP and CW.D.tile_debit is SD._TILE_DEBIT
+    assert CW._inert_work_and_bound is SD._INERT_WORK_AND_BOUND and CW.D.tile_inert_work is SD._TILE_INERT_WORK
     (got,) = json.loads((out / "summary.json").read_text())["passes"]
     assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
     assert set(got["strata"]) == {"m32-k128-n16", "m16-k128-n32"} and got["tiles_total"] == tr.commitment.count
@@ -3120,7 +3133,7 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         ctx = Context(epoch.salt, u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
         ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
         rows, cols = rec.credited(ref.tile)
-        debit, cap = CW._debit_cap(s, rec, ref.tile, ops, rows, cols)
+        debit, cap = CW._inert_work_and_bound(s, rec, ref.tile, ops, rows, cols)
         credit = CW.cell_credit(s, rec) * len(rows) * len(cols)
         assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
         assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
@@ -3128,14 +3141,14 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
         formed = [(ops.a.alpha[pos_a[i]], ops.a.x[pos_a[i]], ops.a.beta[pos_a[i]]) for i in rows]
         formed_b = [(ops.b.alpha[pos_b[j]], ops.b.x[pos_b[j]], ops.b.beta[pos_b[j]]) for j in cols]
-        assert (t["atoms"], t["later_zero_promotions"], t["forming_elements"], t["mends"]) == CW.D.tile_debit(
+        assert (t["atoms"], t["later_zero_promotions"], t["forming_elements"], t["mends"]) == CW.D.tile_inert_work(
             a_codes, b_codes, formed, formed_b, s.device)
         assert t["ok"] == (CW.check_opened(s, rec, ref.tile, a, b, ops) is None)
     assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
 
 
 @pytest.mark.slow
-def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_path):
+def test_served_inert_work_per_input_bounds_each_input_on_its_own(honest_pass, tmp_path):
     """Per-input mode (lean's ruling on): each chosen input is one matmul of the pass, measured in full or by
     work-weighted samples, with its own failures, `W`, `w_max` and a simultaneous upper limit; nothing is pooled."""
     path, s, epoch, prover, tr, splits, records = honest_pass
@@ -3166,7 +3179,7 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
 
 
 @pytest.mark.slow
-def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
+def test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
     """`--fresh-draws`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the
     source, every trial the tile rule on the committed rows under that salt, bounded by Clopper–Pearson; a resume with the
     same source measures nothing again, and another source's trials are refused."""
@@ -3182,7 +3195,7 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
     fails = [t for t in lines if not t["ok"]]
     assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] for t in lines)
     # an honest row can exceed its own cap (-h3's row cap, k 128 here), and the served path volunteers no rows
-    assert all("the row cap" in t["reason"] for t in fails) and (not fails or CW.row_cap(s))
+    assert all("the row cap" in t["reason"] for t in fails) and (not fails or CW.row_inert_bound(s))
     for row in doc["inputs"]:
         failures = sum(t["matmul"] == row["matmul"] for t in fails)
         assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == failures
@@ -3195,7 +3208,7 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
     ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
     ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
     rows, cols = records[ref.matmul].credited(ref.tile)
-    debit, cap = CW._debit_cap(s, records[ref.matmul], ref.tile, ops, rows, cols)
+    debit, cap = CW._inert_work_and_bound(s, records[ref.matmul], ref.tile, ops, rows, cols)
     assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
     again = tmp_path / "again"
     resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
@@ -3428,7 +3441,7 @@ def test_clopper_pearson_upper():
     assert SD.clopper_pearson_upper(5, 5, 0.05) == 1.0
 
 
-def test_served_debit_input_bounds():
+def test_served_inert_work_input_bounds():
     """The per-input limits (lean's rulings on): the work-weighted rule of three for a census and for n samples at no
     failure, Bernstein no tighter than the observed rate, and no bound for a sampled input with failures."""
     row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
@@ -3444,7 +3457,7 @@ def test_served_debit_input_bounds():
     assert SD.input_bound(row | {"failures": 3, "failures_weighted": 3 * 4096}, 0.05)[0] == up
 
 
-def test_served_debit_rebound_recomputes_an_inputs_json(tmp_path):
+def test_served_inert_work_rebound_recomputes_an_inputs_json(tmp_path):
     """`--rebound` rewrites a recorded inputs.json's bounds from its counts alone, at δ = 0.05/m, with no manifest."""
     rows = [{"pass": "decode", "run": "r", "manifest_sha256": "0", "matmul": i, "weight": i, "m": 1, "k": 4096, "n": 4096,
              "NT": nt, "W": nt * 4096, "w_max": 4096, "method": method, "drawn": drawn, "openings_failed": 0, "failures": 0,
@@ -3459,7 +3472,7 @@ def test_served_debit_rebound_recomputes_an_inputs_json(tmp_path):
     assert doc["cited_upper"] == doc["inputs"][1]["upper"] and doc["cited_input"]["matmul"] == 1
 
 
-def _debit_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int]]:
+def _inert_work_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int]]:
     """E4M3 code rows whose words flag atoms: small codes with some large 32-code slices (the small ones' atoms then round
     away), and the first promotion group zero when `zero_first` (a later promotion into a +0 total)."""
     c = rng.integers(1, 0x10, (rows, k))
@@ -3471,25 +3484,25 @@ def _debit_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int]]:
     return [[int(x) for x in row] for row in c | rng.integers(0, 2, (rows, k)) << 7]
 
 
-def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejection():
+def test_the_batch_inert_work_is_the_scalar_inert_work_and_a_nan_code_is_the_scalars_rejection():
     FT, s = SD.FT, PPD.scheme_of(SCHEME)
     rng, seen = np.random.default_rng(3), set()
     for trial in range(8):
-        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
-        want = CW.D.chain_debit(a, b, s.device)
-        assert FT.chain_debit(a, b, s.device) == want
+        a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
+        want = CW.D.chain_inert_work(a, b, s.device)
+        assert FT.chain_inert_work(a, b, s.device) == want
         seen.add(want[1] > 0)
         assert want[0] > 0
     assert seen == {True, False}
     a[0][5] = 0x7F
     with pytest.raises(Exception) as want:
-        CW.D.chain_debit(a, b, s.device)
+        CW.D.chain_inert_work(a, b, s.device)
     with pytest.raises(type(want.value), match=str(want.value)):
-        FT.chain_debit(a, b, s.device)
+        FT.chain_inert_work(a, b, s.device)
 
 
-def test_the_batch_tile_debit_is_the_scalar_tile_debit():
-    """`fast_tile.tile_debit` is `pearl_c_debit.tile_debit`, forming elements and mends included: on rows with salt-dead
+def test_the_batch_tile_inert_work_is_the_scalar_tile_inert_work():
+    """`fast_tile.tile_inert_work` is `pearl_c_inert_work.tile_inert_work`, forming elements and mends included: on rows with salt-dead
     elements (accumulators past both ends' saturation, and at 0), a zero row whose every block every word flags, B rows
     whose ends make dead pairs and forced zeros with them, and a row whose accumulator overflows, where both reject
     alike."""
@@ -3497,7 +3510,7 @@ def test_the_batch_tile_debit_is_the_scalar_tile_debit():
     rng, seen = np.random.default_rng(7), set()
     one = 0x3F800000
     for trial in range(6):
-        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
+        a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
         a[1] = [0] * 384
         mags = 10.0 ** rng.uniform(-3, 5, (3, 384)) * rng.choice((-1, 1), (3, 384))
         x = [[int(w) for w in row.astype(np.float32).view(np.uint32)] for row in mags]
@@ -3505,11 +3518,11 @@ def test_the_batch_tile_debit_is_the_scalar_tile_debit():
         beta = [int(np.float32(v).view(np.uint32)) for v in rng.uniform(0.01, 2.0, 3)]
         formed = [(one, x[i], beta[i]) for i in range(3)]
         formed_b = [(one, x[i % 3][::-1] if i else x[0], beta[i % 3]) for i in range(4)]
-        want = CW.D.tile_debit(a, b, formed, formed_b, s.device)
-        assert FT.tile_debit(a, b, formed, formed_b, s.device) == want
+        want = CW.D.tile_inert_work(a, b, formed, formed_b, s.device)
+        assert FT.tile_inert_work(a, b, formed, formed_b, s.device) == want
         flags = [[CW.D.word_flags(r, c, s.device) for c in b] for r in a]
         dead = [CW.D.salt_dead(*f, s.device) for f in formed]
-        assert want[:2] == CW.D.chain_debit(a, b, s.device) and want[2] == sum(
+        assert want[:2] == CW.D.chain_inert_work(a, b, s.device) and want[2] == sum(
             1 for i in range(3) for l in range(384) if dead[i][l] or all(f[l // 32] for f in flags[i]))
         ends_a, ends_b = [CW.D.row_ends(*f, s.device) for f in formed], [CW.D.row_ends(*f, s.device) for f in formed_b]
         assert want[3] == sum(CW.D.word_mend(ea, eb, s.device) for ea in ends_a for eb in ends_b)
@@ -3518,25 +3531,25 @@ def test_the_batch_tile_debit_is_the_scalar_tile_debit():
     assert seen == {True}
     formed[0] = (0x7F000000, x[0], beta[0])
     with pytest.raises(Exception) as want:
-        CW.D.tile_debit(a, b, formed, formed_b, s.device)
+        CW.D.tile_inert_work(a, b, formed, formed_b, s.device)
     with pytest.raises(type(want.value), match=str(want.value)):
-        FT.tile_debit(a, b, formed, formed_b, s.device)
+        FT.tile_inert_work(a, b, formed, formed_b, s.device)
 
 
-def test_the_batch_debit_word_by_word_is_each_words_scalar_debit():
-    """`fast_tile.word_debits` is `pearl_c_debit.word_debit` on every word, and its sums `chain_debit`'s on any rows and
+def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
+    """`fast_tile.words_inert_work` is `pearl_c_inert_work.word_inert_work` on every word, and its sums `chain_inert_work`'s on any rows and
     columns, so the remedy's row and column debits are the verifier's."""
     FT, s = SD.FT, PPD.scheme_of(SCHEME)
     rng = np.random.default_rng(3)
     for trial in range(4):
-        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
-        atoms, zeros = FT.word_debits(a, b, s.device)
+        a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
+        atoms, zeros = FT.words_inert_work(a, b, s.device)
         assert atoms.shape == zeros.shape == (3, 4) and atoms.sum() > 0
         for i, x in enumerate(a):
             for j, y in enumerate(b):
-                flags, z = CW.D.word_debit(x, y, s.device)
+                flags, z = CW.D.word_inert_work(x, y, s.device)
                 assert (atoms[i, j], zeros[i, j]) == (sum(flags), z)
-        assert (atoms[[0, 2]][:, [1, 3]].sum(), zeros[[0, 2]][:, [1, 3]].sum()) == CW.D.chain_debit([a[0], a[2]], [b[1], b[3]], s.device)
+        assert (atoms[[0, 2]][:, [1, 3]].sum(), zeros[[0, 2]][:, [1, 3]].sum()) == CW.D.chain_inert_work([a[0], a[2]], [b[1], b[3]], s.device)
 
 
 def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
@@ -3553,16 +3566,16 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
     def run():
         ops = s.encode(ctx, s.noise(ctx), a, b, tile)
         formed, formed_b = list(zip(ops.a.alpha, ops.a.x, ops.a.beta)), list(zip(ops.b.alpha, ops.b.x, ops.b.beta))
-        return (ops, s.checked(ctx, ops), CW.D.chain_debit(ops.a.codes, ops.b.codes, s.device),
-                CW.D.tile_debit(ops.a.codes, ops.b.codes, formed, formed_b, s.device))
+        return (ops, s.checked(ctx, ops), CW.D.chain_inert_work(ops.a.codes, ops.b.codes, s.device),
+                CW.D.tile_inert_work(ops.a.codes, ops.b.codes, formed, formed_b, s.device))
 
-    debits = (CW.D.chain_debit, CW.D.tile_debit)
+    debits = (CW.D.chain_inert_work, CW.D.tile_inert_work)
     before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3)
     undo = FT.install(s)
-    assert C.form_v1 is FT.form_v1 and (CW.D.chain_debit, CW.D.tile_debit) == (FT.chain_debit, FT.tile_debit)
+    assert C.form_v1 is FT.form_v1 and (CW.D.chain_inert_work, CW.D.tile_inert_work) == (FT.chain_inert_work, FT.tile_inert_work)
     fast = run()
     undo()
-    debits = (CW.D.chain_debit, CW.D.tile_debit)
+    debits = (CW.D.chain_inert_work, CW.D.tile_inert_work)
     assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3) == before
     ref = run()
     for side in ("a", "b"):
@@ -3575,7 +3588,7 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
 
 
 @pytest.mark.slow
-def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pass, tmp_path):
+def test_served_inert_work_batch_replay_and_resume_record_the_scalar_lines(honest_pass, tmp_path):
     """The batch replay writes the scalar replay's tile lines (all of them cross-checked here), and `--resume` on them
     measures nothing again and writes the same summary."""
     path, *_ = honest_pass
@@ -3603,9 +3616,9 @@ def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pa
     assert len(SD.resumed([f"{unstamped}={lines['batch'][0]['manifest_sha256']}"], lines["batch"][0]["manifest_sha256"])) == len(lines["batch"])
 
 
-def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
-    """served_debit's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
-    promotion add of every word out once: every share it records is `tileDebitRev1` over that credit, none with the add
+def test_served_inert_work_share_is_the_tile_rules_inert_work_over_its_rev1_credit():
+    """served_inert_work's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
+    promotion add of every word out once: every share it records is `tileInertWorkRev1` over that credit, none with the add
     taken out a second time."""
     s = PPD.scheme_of(SCHEME)
     rng, shape, rows, cols = np.random.default_rng(11), Shape(64, 512, 48), 3, 2
@@ -3613,7 +3626,7 @@ def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
     def codes(r):
         return [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
                                   for _ in range(r - 1)]
-    debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows,
+    debit, cap = CW.tile_inert_bound(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows,
                              [(0x3F800000, [0] * shape.k, 0x3F800000)] * cols)
     credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
     assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
@@ -3963,7 +3976,7 @@ def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monk
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPD2R
+    from verity_torch.pouw.pearl_c import run_device as PPD2R
     PF = load("pearl_c_vllm_profile", POUW / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
     before = (PPD2R._steps, PPD2R.call_keys, PPD2R.PearlCDeviceRun.gemm, PPD2R.PearlCDeviceRun.end)
@@ -4103,7 +4116,7 @@ def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
     # the module itself: under the layout move its package re-exports a function named as the module
-    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -4158,7 +4171,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4175,7 +4188,7 @@ def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypa
     """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
     (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
     interpreted_triton(monkeypatch)
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.run_device import screen as PS
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4402,7 +4415,8 @@ def test_the_served_whole_capture_launches_each_calls_a_tree_as_one_cta_on_the_t
     the pipelines are left without it.  Without ``whole_defer_a`` the graphs made split aren't replayed, and graphs made
     unsplit launch pd_commit in mode 0 alone.  The graphs are made as `_replay` makes them, a stand-in in the scatter's place
     (a Triton launch)."""
-    G = PPD.graphs
+    from verity_torch.pouw.pearl_c import graphs as G
+
     make, kernel, weights, _ = sm90_run
     run = make(schedule="serial")
     run.graphs, run.order = True, {w: i for i, w in enumerate(weights)}
@@ -4776,8 +4790,8 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
+    from verity_torch.pouw.pearl_c import host as PPH
+    from verity_torch.pouw.pearl_c import lanes_device as PPL
     make, *_ = sm90_run
     run = make()
     calls = []
@@ -4820,7 +4834,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     waits for stats_a before E' (``form_ep_a``, under FORM_EP) and for the whole fork at its end, so the per-row keying's
     end moves one step (the fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on
     the lane; without the driver (no graphs) the steps are as they were."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PPG
+    from verity_torch.pouw.pearl_c import graphs as PPG
     make, kernel, *_ = sm90_run
     run = make()
     calls = []
@@ -4863,7 +4877,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
 
 
 def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity_torch.pouw.pearl_c import host as PPH
     got = []
 
     def cu(rc=0):

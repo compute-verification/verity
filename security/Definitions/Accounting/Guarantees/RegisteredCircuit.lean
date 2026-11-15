@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.Stacking
+public import Definitions.Poub.Guarantees.Stacking
 
 /-!
-# A declared circuit's space and bandwidth from an accepted audit (trusted)
+# A registered circuit's space and bandwidth from an accepted audit (trusted)
 
-The goal in one statement, `RegisteredCircuitRequirement`: for any declared circuit `W` that passes the stacking
+The goal in one statement, `RegisteredCircuitRequirement`: for any registered circuit `W` that passes the stacking
 property, any prover, and an accepted audit at the deployed parameters (sketch receipts, a store per pass, the
 append-coin rule), except with probability `δ_G` the prover system read, from the appended blocks of `W`'s values each
 pass's step reads, `W`'s credited bits there less an explicit share `ε` of the store. It is a layer-1 bound in decision
@@ -18,7 +18,7 @@ requirement (A1's
 `Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
 appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
 weights and the filler are the registration audit's to count. Its theorem is
-`Accounting.SecurityProofs.RegisteredCircuitRequirement`, in `Security/Proofs/Accounting/RegisteredCircuit/Requirement.lean`
+`Accounting.SecurityProofs.RegisteredCircuitRequirement`, in `security/Proofs/Accounting/RegisteredCircuit/Requirement.lean`
 with its pieces beside it.
 -/
 
@@ -30,7 +30,7 @@ open Accounting
 open Pous (pr)
 open scoped ENNReal
 
-/-- **A declared circuit's held and moved bits from an accepted stacked audit, at the deployed parameters.**
+/-- **A registered circuit's held and moved bits from an accepted stacked audit, at the deployed parameters.**
 
 *The audit.* `StackedRunConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
 16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window (the 1 s window's count; a longer window's
@@ -71,7 +71,7 @@ the devices of session `steer c y`, so a device may follow the layout the prover
 pass, within the pass's deadline `τ`, are the class's parameters: at most `S` bits kept besides the store, at most
 `L_r·τ` bits taken from outside it, at most `q_r·τ` oracle queries over its grinding candidates at every summary
 (`Accounting.Assumptions.SketchHashBudget`), and at most `X_r·τ` bits of the pass's appended tiles rebuilt besides the
-sectors of a carrier of the declared circuit `Wc`'s over at most `L` of the audit `Aud`'s windows, the lifetime cap
+sectors of a carrier of the registered circuit `Wc`'s over at most `L` of the audit `Aud`'s windows, the lifetime cap
 (`Accounting.Assumptions.CircuitCarriers`, on the pass's store, under the lifetime cap). Its rebuilds of registered
 tiles are not bounded. `G` holds at every value of them; what they are on a node's devices is layer 2 (data sheets,
 named assumptions).
@@ -181,7 +181,7 @@ bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's credit is at 
 
 Frozen (no-function, hash): `StackedRunConservationSketchDeployed`'s game on a store per pass whose layout reads
 the codec and the append coins through an `a`-bit summary the pass's devices are told, each append's blocks read
-within `L` windows of the one it joined, with the rebuilds of appended tiles charged to carriers of a declared circuit
+within `L` windows of the one it joined, with the rebuilds of appended tiles charged to carriers of a registered circuit
 passing the stacking property within its caps over `L` windows, its shortfall read pass by pass against the circuit's
 credited reads in appended blocks at the step each pass is bound to, with the memory map and plans holding its
 credited blocks (one-sided), each pass and window on the devices' clocks, in the random-oracle and ideal encoding

@@ -30,6 +30,7 @@ public import Spot.PopOrder
 public import Spot.FilePart
 public import Spot.Service
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 public import Spot.Returned
 public import Spot.SecondStageExamples
 public import Spot.SecondWires
@@ -50,6 +51,7 @@ public import Spot.ChallengerInnerTrees
 public import Spot.MonitoringPeriod
 public import Spot.MonitoringPeriodAudit
 public import Spot.Wires
+public import Spot.RecordText
 public import Spot.HistoryTable
 public import Spot.WiresSpan
 public import Spot.WiresOrder

@@ -7,7 +7,7 @@ public import CircuitRequirement
 # The requirement difftest: `CircuitRequirement` behind `Difftest.serve`
 
 `requirement-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
-(`tests/test_requirement_difftest.py`) holds it to `verity.ml.circuits.requirement`. Its one function, `requirement`,
+(`tests/test_requirement_difftest.py`) holds it to `verity.circuits.requirement`. Its one function, `requirement`,
 takes an instance, value by value, with the store, a plan per step, the block size and the number of steps:
 
     {"width": [w], "registered": [v], "inputs": [v], "ops": [[v]], "uses": [[v]], "step": [s | null], "value": [x],
@@ -22,11 +22,11 @@ gives, device by device, the tick at which it begins each engine step. A payload
 lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses an instance
 that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a registered value
 or run input that isn't one, a plan count that isn't `T`), an execution that doesn't follow its wiring, and, when it is
-asked for a executionPhase, a placement that doesn't place the execution (`Instance.places`). It returns whether the wiring is
+asked for an execution phase, a placement that doesn't place the execution (`Instance.places`). It returns whether the wiring is
 topological; for each step `t < T` the live and read values, their bits, the blocks that hold them with the bits in
 each, those of them in complete blocks (`credited`, `creditedReads`) and their bits, the resident blocks, and whether
 the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and for each
-executionPhase, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its credits
+execution phase, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its credits
 at the pricing `price`.
 -/
 
@@ -87,7 +87,7 @@ def placement (j : Json) (n : Nat) : Flock.V Placement := do
     ticks := ← (← Flock.J.arr j "ticks" "input").mapM fun t => do
       return (← nats t "ticks").toArray }
 
-/-- A executionPhase of PoUW's: the devices `X`, the marked values, the ticks `[lo, hi)` and the engine steps
+/-- An execution phase of PoUW's: the devices `X`, the marked values, the ticks `[lo, hi)` and the engine steps
 `[start, start + len)`. -/
 structure ExecutionPhase where
   devices : List Nat

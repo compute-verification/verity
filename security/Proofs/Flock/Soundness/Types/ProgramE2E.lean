@@ -55,7 +55,7 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
 
 /-- **The end-to-end count curve on a program of units.** `flock_e2e_count`, carried by `UProg.rowsL1`:
 if `execAccept` holds, the probability that at least `K` units are incorrect on the program's Boolean circuit, at the
-committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + δ_link`, when only a unit's constant column sits
+committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + ε_bind`, when only a unit's constant column sits
 on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -79,7 +79,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
 
 /-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_sampled`, carried by
 `UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is incorrect on the program's Boolean circuit is at
-most `ε_ks(σ) + δ_link`, when only a unit's constant column sits on the constant's gate. -/
+most `ε_ks(σ) + ε_bind`, when only a unit's constant column sits on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_sampled
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)

@@ -451,7 +451,8 @@ def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, caps
     assert capsys.readouterr().err == ""
     group = json.loads((tmp_path / "ours").read_text())["reads"][m]
     assert group["definitions"] == sides["theirs"]["reads"][m]["definitions"]
-    assert not set(old) & set(group["definitions"]) and f"{m.removeprefix('Definitions.')}.NoiseLayout" in group["definitions"]
+    renamed = next(d for d in old if d.endswith(".Layout")).removesuffix("Layout") + "NoiseLayout"
+    assert not set(old) & set(group["definitions"]) and renamed in group["definitions"]
     assert "guarantees" not in group
 
 
@@ -1102,7 +1103,7 @@ def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
-    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
+    gone = "import Definitions.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
     assert gone not in text
     assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(

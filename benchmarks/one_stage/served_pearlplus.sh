@@ -84,7 +84,7 @@
 # symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
-# serve's first docket where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
+# serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
 # served_verdicts.sh's weights(), which registers the weights before the first request) and naming the day the serve
 # declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
@@ -106,6 +106,8 @@
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
 # wrote the piece.
 set -uo pipefail
+for o in PEARLPLUS_DRAWS:PEARLPLUS_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-pearlplus: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" && pwd) || exit 1
 cd "$(dirname "$0")/../.." || exit 1
 TREE=$PWD TPY=$PWD/.venv/bin/python

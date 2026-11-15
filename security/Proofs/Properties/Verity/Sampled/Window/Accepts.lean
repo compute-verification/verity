@@ -87,7 +87,7 @@ structure SessionVerdict (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array Str
   verdict : _root_.Spot.OneStageZk.verdictOf a.I a.scope a.ksFiles a.population keys record
     (Flock.Witness.recordDraw record) (.ok (spec, tabs, rest)) (.ok proofs)
     (_root_.Spot.OneStageZk.coinKeyOf record (.ok (spec, tabs, rest))) = .ok ()
-  program : (a.programSha.map Json.str != some a.want) = false
+  program : (match a.programSha with | some sha => _root_.Spot.jsonStrIs a.want sha | none => false) = true
   units : _root_.Spot.OneStageZk.provedUnits a.I.publicFile record = .ok units
 
 /-- The run after an accepted session: the session's coin-tree key among the keys, its verdict of record pushed, and
@@ -120,7 +120,7 @@ theorem push_iff {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     {want : Json} {r r' : _root_.Spot.OneStageZk.Run} {s : _root_.Spot.OneStageZk.RunFiles} {record : String}
     {st : _root_.Spot.OneStageZk.SetUp} {coinKey : Option String} {verdict : Flock.V Unit} :
     (_root_.Spot.OneStageZk.push I rd programSha want r s record st coinKey verdict = .ok r' ∧ r'.all = true) ↔
-      r.all = true ∧ verdict = .ok () ∧ (programSha.map Json.str != some want) = false ∧
+      r.all = true ∧ verdict = .ok () ∧ (match programSha with | some sha => _root_.Spot.jsonStrIs want sha | none => false) = true ∧
         ∃ units, _root_.Spot.OneStageZk.provedUnits I.publicFile record = .ok units ∧
           r' = { coinKeys := match coinKey with | some k => r.coinKeys.push k | none => r.coinKeys,
                  all := r.all, proved := r.proved ++ units,
@@ -137,19 +137,31 @@ theorem push_iff {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     | ok u =>
       cases u
       dsimp only at h
-      split at h
-      · cases h
-      · rename_i hne
-        obtain ⟨units, hus, h⟩ := ebind_ok h
-        obtain rfl := Except.ok.inj h
-        exact ⟨hall, rfl, Bool.eq_false_iff.2 hne, units, hus, rfl⟩
+      cases programSha with
+      | none =>
+        dsimp only at h
+        rw [if_pos (by rfl)] at h
+        cases h
+      | some sha =>
+        dsimp only at h
+        by_cases hj : _root_.Spot.jsonStrIs want sha = true
+        · rw [if_neg (by simp [hj])] at h
+          obtain ⟨units, hus, h⟩ := ebind_ok h
+          obtain rfl := Except.ok.inj h
+          exact ⟨hall, rfl, hj, units, hus, rfl⟩
+        · rw [if_pos (by simpa using hj)] at h
+          cases h
   · rintro ⟨hr, hv, hp, units, hus, rfl⟩
     subst hv
     refine ⟨?_, hr⟩
     unfold _root_.Spot.OneStageZk.push
     dsimp only
-    rw [ite_eq_right (Bool.eq_false_iff.1 hp)]
-    exact ok_bind_of hus rfl
+    cases programSha with
+    | none => exact Bool.noConfusion hp
+    | some sha =>
+      dsimp only at hp ⊢
+      rw [if_neg (by simp [hp])]
+      exact ok_bind_of hus rfl
 
 /-- **An `.ok` verdict held the session's coin-tree key fresh**: `verdictOf` checks the key against the earlier
 sessions' before it verifies. -/

@@ -41,7 +41,7 @@ def EncardIngressObsDecodableLe : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m),
     Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The ingress timing bound.** Read the interaction inward (`NetTiming.Protocol.Ingress`): the secret `m` is the
+/-- **The ingress timing bound.** Read the interaction inward (`Definitions.Certifier.Ingress`): the secret `m` is the
 outside's message, `snd m` chooses when ingress frames arrive and reacts to every record (and so to X's egress), `op`
 is X's devices, the record's `rows` are what the `L` ingress links release into X, and `wire` is everything that enters
 X. Take messages `Ms` whose runs keep every status complete up to `n`, and whose frames on each link `ℓ`, in the order
@@ -86,9 +86,9 @@ def EncardIngressDecodableLeContents : Prop :=
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over the
+/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress execution phase.** `EncardIngressObsDecodableLe` over the
 monitoring period's first `m` whole windows of `T` buckets, its first `n = m·T` steps: for one content assignment `c`,
-at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its
+at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each execution phase contributes the factor `(r ℓ + 1)^T`, its
 `T·log2(r ℓ + 1)` bits, and each window `D^T` of jitter, 1 under J. -/
 def EncardIngressObsDecodableLePerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
@@ -117,8 +117,8 @@ def EncardIngressObsDecodableLeContentsPerExecutionPhase : Prop :=
 ## The schedule's declared bound and the coins
 
 This section fixes the two terms of the charge that the capacity bounds leave open: what the advice's content part
-counts and the coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration
-(`calibrations/llama8b-node1.json`): T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
+counts and the coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration:
+T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
 link (`requests`) at r_in = 34 and τ_in = 100 ms, and J (D = 1).
 
 ### What the advice counts

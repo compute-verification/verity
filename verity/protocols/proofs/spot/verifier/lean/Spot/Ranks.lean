@@ -1,5 +1,5 @@
 /-
-**A joined circuit's ranks** (`verity.commitments.windows.interface.Ranks`, the record's `ranks`): the record of a node's
+**A joined circuit's ranks** (`verity.commitments.periods.interface.Ranks`, the record's `ranks`): the record of a node's
 circuit joined from its ranks states, in rank order, each rank's window by its circuit's digest `H_r` (the SHA-512 of the
 canonical JSON of its record less its run's fields, `circuit_of`), its units of each template and the count of the joined
 wires that are its own. Serving commits one window a rank, never the join; the verifier reads the joined record as its
@@ -97,10 +97,17 @@ structure Member where
 /-- Rank `q`'s units of template `t`, none for a template it doesn't name. -/
 def Rank.unitsOf (q : Rank) (t : String) : Nat := ((q.units.find? (·.1 == t)).map (·.2)).getD 0
 
+/-- Template `t`'s first unit of each rank in the joined circuit, then its count: the earlier ranks' come first. -/
+def Ranks.bounds (rs : Ranks) (t : String) : Array Nat :=
+  rs.of.foldl (fun b q => b.push ((b.back?.getD 0) + q.unitsOf t)) #[0]
+
+/-- Rank `r`'s units `[lo, hi)` by `Ranks.bounds`' `b`. -/
+def segmentIn (b : Array Nat) (r : Nat) : Nat × Nat :=
+  let lo := b.getD (min r (b.size - 1)) 0
+  (lo, b.getD (r + 1) lo)
+
 /-- Rank `r`'s units of template `t` in the joined circuit, `[lo, hi)`: the earlier ranks' come first. -/
-def Ranks.segment (rs : Ranks) (t : String) (r : Nat) : Nat × Nat :=
-  let lo := ((rs.of.extract 0 r).map (·.unitsOf t)).foldl (· + ·) 0
-  (lo, lo + ((rs.of[r]?).map (·.unitsOf t)).getD 0)
+def Ranks.segment (rs : Ranks) (t : String) (r : Nat) : Nat × Nat := segmentIn (rs.bounds t) r
 
 /-- One rank of the record's `ranks` field: exactly `units`, `window` and `wires`, its window 128 lowercase hex digits,
 its units an object of naturals and its wires a natural; `none` otherwise. -/
@@ -183,7 +190,7 @@ def memberOf (rs : Ranks) (regs : Array Registered) (t : String) (u : Nat) : Opt
 
 /-- `ranks-window` of served rank records `served` (each its `H` and the digest of its bytes, in rank order) against
 registrations `regs`: each is its rank's window, and its rank's registration binds both. -/
-def runFailures (rs : Ranks) (regs : Array Registered) (served : Array (String × String)) : List (String × Json) :=
+def executionPhaseFailures (rs : Ranks) (regs : Array Registered) (served : Array (String × String)) : List (String × Json) :=
   let ok := served.size == rs.of.size && (List.range rs.of.size).all fun r =>
     match served[r]?, rs.of[r]?, regs.find? (·.rank == r) with
     | some hc, some q, some reg => hc.1 == q.window && reg.digest == hc.1 && reg.circuit == hc.2
@@ -263,9 +270,12 @@ def rankPrefix (r : Nat) : String := "r" ++ toString r ++ "/"
 /-- Rank `r`'s first unit of template `t` in the joined circuit. -/
 def Ranks.first (rs : Ranks) (t : String) (r : Nat) : Nat := (rs.segment t r).1
 
+/-- The rank whose units `[b[r], b[r + 1])` (`Ranks.bounds`) hold units `lo` to `hi`, both included. -/
+def rankIn (b : Array Nat) (lo hi : Nat) : Option Nat :=
+  (List.range (b.size - 1)).find? fun r => decide (b.getD r 0 ≤ lo) && decide (lo ≤ hi) && decide (hi < b.getD (r + 1) 0)
+
 /-- The rank whose units of template `t` hold units `lo` to `hi`, both included. -/
-def Ranks.rankOf (rs : Ranks) (t : String) (lo hi : Nat) : Option Nat :=
-  (List.range rs.of.size).find? fun r => decide ((rs.segment t r).1 ≤ lo) && decide (hi < (rs.segment t r).2)
+def Ranks.rankOf (rs : Ranks) (t : String) (lo hi : Nat) : Option Nat := rankIn (rs.bounds t) lo hi
 
 /-- Rank `r`'s wires of its record `doc` as the joined record holds them: each one's reader units and its writers
 moved by rank `r`'s first unit of their template. -/
@@ -273,19 +283,28 @@ def shiftedWires (rs : Ranks) (r : Nat) (doc : Json) : Array Json :=
   (arrAt doc "wires").map fun w =>
     raiseInt (raiseNat w "at" (rs.first (strAt w "reader") r)) "base" (rs.first (strAt w "writer") r)
 
-/-- A wire of the join's: its reader units are one rank's and its writers are not all that rank's. -/
+/-- A wire of the join's: it reads at least one reader unit, every one in some rank's units, and in each rank whose
+units it reads, its writers of those units (`Spot.Wires.Wire.box` on their indices) are not all that rank's: a read
+within one rank is that rank's own wire, which its window states. A wire may read several ranks' units, as `join`'s
+coalesced wires do; the check is one box per wire and rank, over each template's bounds summed once a wire. -/
 def joinWireOk (rs : Ranks) (j : Json) : Bool :=
   match Spot.Wires.Wire.ofJson j with
   | .ok w =>
-    match rs.rankOf w.reader w.start (w.start + w.readerUnits - 1) with
-    | some r => decide (w.readerUnits ≥ 1) &&
-        !(decide (0 ≤ w.span.1) && rs.rankOf w.writer w.span.1.toNat w.span.2.toNat == some r)
-    | none => false
+    let br := rs.bounds w.reader
+    let bw := rs.bounds w.writer
+    decide (w.readerUnits ≥ 1) && decide (w.start + w.readerUnits ≤ (segmentIn br (rs.of.size - 1)).2) &&
+      (List.range rs.of.size).all fun r =>
+        let (lo, hi) := segmentIn br r
+        if !w.readsIn (w.reader, lo, hi - lo) then true else
+        let (a, b) := w.indicesIn lo (hi - lo)
+        let (x, y) := w.box a b
+        !(decide (0 ≤ x) && rankIn bw x.toNat y.toNat == some r)
   | .error _ => false
 
 def WIRES_WHY : String :=
   "the joined record's first wires are not each rank's own wires moved to its units, a rank's count of them, in rank " ++
-  "order, or a wire after them has its reader units in no one rank or all its writers in its reader's rank"
+  "order, or a wire after them reads no reader unit, or one in no rank, or in some rank whose units it reads has " ++
+  "all its writers of them in that rank"
 
 /-- `ranks-wires`: the joined record `rec`'s wires are each rank's record's wires (`records`, in rank order) moved to
 its units (`shiftedWires`), as many as the rank states, then the join's (`joinWireOk`). -/
@@ -371,7 +390,13 @@ def recordFailures (rs : Ranks) (rec : Json) (records : Array Json) : List (Stri
     ("templates", .arr #[.arr #[.str "A", n 4], .arr #[.str "B", n 4]]), ("wires", .arr ws)]
   let codes (j : Json) : List String := (recordFailures rs j #[rank, rank]).map (·.1)
   let reads := #[read "r0/w" 0, read "r1/w" 2]
-  codes (joined #[wire 0 0, wire 2 2, wire 2 0] reads) == [] &&
+  let wide (b : Nat) (s : Int) : Json := Json.mkObj [("at", n 0), ("base", n b), ("out", .str "o0"), ("port", .str "x"),
+    ("radix", .arr #[n 4]), ("reader", .str "A"), ("step", .arr #[Lean.toJson s]), ("writer", .str "B")]
+  -- A join wire over both ranks' readers, each rank's reading the other's writers: accepted; over both ranks' readers,
+  -- rank 0's reading its own writers: refused.
+  codes (joined #[wire 0 0, wire 2 2, wide 3 (-1)] reads) == [] &&
+    codes (joined #[wire 0 0, wire 2 2, wide 0 1] reads) == ["ranks-wires"] &&
+    codes (joined #[wire 0 0, wire 2 2, wire 2 0] reads) == [] &&
     codes (joined #[wire 0 0, wire 2 0] reads) == ["ranks-wires"] &&
     codes (joined #[wire 0 0, wire 2 2, wire 0 0] reads) == ["ranks-wires"] &&
     codes (joined #[wire 0 0, wire 2 2] #[read "r0/w" 0, read "r1/w" 0]) == ["ranks-reads"]
@@ -383,7 +408,7 @@ def failures (rec : Json) (records : Array Json) (served : Array (String × Stri
   match Ranks.ofJson? (getD rec "ranks") with
   | none => [("ranks-shape", Json.str SHAPE_WHY)]
   | some rs =>
-    runFailures rs regs served ++ runFailures rs regs root logged ++ membersFailures rs regs ++
+    executionPhaseFailures rs regs served ++ runFailures rs regs root logged ++ membersFailures rs regs ++
       recordFailures rs rec records
 
 /-- **The ranks' check** (module docstring): each code once, with the detail it first failed with. -/

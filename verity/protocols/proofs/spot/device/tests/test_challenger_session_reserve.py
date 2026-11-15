@@ -23,10 +23,8 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P
-
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
 XOR8 = PrimitiveDefinition("A5ReserveTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -39,7 +37,7 @@ ALL_FAMILIES = [256, 1, 2, 1, 160, 9, 9, 1, 8, 1, 49152, 6144, 4096, 2048, 19360
 SILU_RULE, FAMILIES_RULE = "stratified-rate:4/675", "stratified-rate:1/90112"
 ROOT = "ab" * 64
 AFTER = bytes.fromhex("cd" * 64)
-STUB = AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = LC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def template(i: int):
@@ -169,15 +167,15 @@ def test_a_reserve_that_cant_cover_the_samples_is_refused_naming_need_and_reserv
 def local(tmp_path: Path, monkeypatch, ranks: list[int], root: str | None = None, dest: str = "challenger", **kw):
     """`a5_coins.start` on a local challenger session under `tmp_path` (on `ROOT`, or ``root``; finished into ``dest``),
     pinned on this tree's commit. Its serve.py runs under
-    live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `sampled-proofs-verifier`."""
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `spot-verifier`."""
+    A = LC._module("a5_auditor", LC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     main = tmp_path / "main.txt"
     main.write_text(AC.on_main([]) + "\n")
-    return AC.start("local", ROOT if root is None else root, ranks, tmp_path / dest, main, **kw)
+    return AC.start("local", ROOT if root is None else root, ranks, tmp_path / dest, main, local=LC.Local, **kw)
 
 
 def nothing_reserved(tmp_path: Path) -> bool:
@@ -290,7 +288,7 @@ def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_p
         return CC.coins_reason(key, held["main"], evidence, root, AC.family(0), AFTER, read, AC.lms_verify)
     assert [reason(k, root) for k, root in enumerate(roots)] == [None, None]
     assert reason(0, roots[1]) is not None and reason(1, roots[0]) is not None
-    own = AC.Local(tmp_path / "own", held["main"]).key
+    own = LC.Local(tmp_path / "own", held["main"]).key
     assert own != held["key"] and all(reason(k, root, own) is not None for k, root in enumerate(roots))
     assert 0 < spent[0] and spent[1] == 2 * spent[0] <= 2 ** AC.LOCAL_PARAMS[1]
 
@@ -362,8 +360,8 @@ def test_a_local_open_whose_challenger_signed_nothing_is_refused_without_the_ses
     """The gate answers an open with the session's secret even when its challenger stopped before it signed a commitment
     (`auditor.gate_open`). `Local.open` refuses that open by name with the gate's answer less its secret, so the text a
     run's log keeps holds no session's secret."""
-    session = AC.Local(tmp_path, [AC.on_main([])])
-    monkeypatch.setattr(AC.Local, "_serve", lambda self, s: None)  # the session's unit stops before it signs
+    session = LC.Local(tmp_path, [AC.on_main([])])
+    monkeypatch.setattr(LC.Local, "_serve", lambda self, s: None)  # the session's unit stops before it signs
     with pytest.raises(Ch.CoinError, match="the local gate refused the open, or its challenger signed no commitment: ") as e:
         session.open(ROOT, [[AC.FAMILY, 2]])
     secret = (session.host.sessions / session.session / session.A.SECRET).read_text().strip()

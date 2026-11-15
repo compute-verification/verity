@@ -14,7 +14,7 @@
   },
   "m0-verifier": {
    "what": "each session's own verdict, its roots held to its statement's and its sample checked",
-   "verifier": "flock-circuit serve, compared in verity/protocols/proofs/spot/prover/audit/window_audit.py",
+   "verifier": "flock-circuit serve, compared in benchmarks/one_stage/a5.py",
    "decided_by": "rust and python",
    "proved_by": null
   }
@@ -22,17 +22,17 @@
  "checks": {
   "checks_before_draw": {
    "what": "the checks before the sample",
-   "verifier": "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+   "verifier": "benchmarks/one_stage/a5.py",
    "decided_by": "python"
   },
   "pins": {
    "what": "each session's circuit file is the one its template's params name",
-   "verifier": "verity/protocols/proofs/spot/prover/audit/two_stage.py",
+   "verifier": "benchmarks/one_stage/two_stage.py",
    "decided_by": "python"
   },
   "negatives": {
    "what": "the audit's negative controls, each a changed input the audit must refuse",
-   "verifier": "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+   "verifier": "benchmarks/one_stage/a5.py",
    "decided_by": "python"
   },
   "registered_reads": {
@@ -53,7 +53,7 @@
  },
  "outcome": {
   "what": "the stream's outcome of the second stage's sample",
-  "verifier": "sampled-proofs-verifier",
+  "verifier": "spot-verifier",
   "decided_by": "lean"
  },
  "withheld": {

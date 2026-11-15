@@ -1,5 +1,5 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
-are the seeded weights' (`benchmarks.torch_gpu.p2_stage.served_weights`, interface 1: its fixture's TINY manifest, tensor digests and
+are the seeded weights' (`verity.protocols.accounting.pous.prover.served_weights`, interface 1: its fixture's TINY manifest, tensor digests and
 entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are interface
 1's fixture roots under its salts, for its reader named by digest, whose domains are the verifier's (``tok`` (H, V) in
 row/v2, every tensor 16-bit leaves, an f32 scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow``
@@ -348,7 +348,7 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert len(rep["streams"]) == 4 and all(s["weights"] and s["witness"] for s in rep["streams"])
     assert set(rep) == {"shape", "model", "values", "rows", "link_bytes", "witness_bytes", "seconds", "jobs", "workers",
                         "streams"} and [set(a) for a in rep["streams"]] == [{"weights", "witness"}] * 4, (
-        "the relay's record is witness whole (auditor.WARDEN_PUBLIC names none of it): a new key stays there")
+        "the relay's record is witness whole (auditor.NETWORK_CERTIFIER_PUBLIC names none of it): a new key stays there")
     assert [sum(a[k] for a in rep["streams"]) for k in ("weights", "witness")] == [rep["link_bytes"],
                                                                                     rep["witness_bytes"]]
     assert rep == json.loads((out / "load-relay.json").read_text())

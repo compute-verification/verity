@@ -22,7 +22,7 @@ The core, from the registry's call Definitions (`verity.protocols.accounting.pou
     finite, the noise floor ρ·α >= 1 and at most k/64 dead words (`pc8`'s module docstring, `PearlC.admissible`).
   - **caps.** A's salt-dead counts (`PearlPlusSaltDead_v1`, `Pc8RowACap`'s), then `Pc8TileCap_v2` on the codes, the
     factors, the admission words and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's cap at
-    ρ = 1/RHO and each admitted row's at ρr = 1/RHOR (`cap.row_rho`: 4ρ at a census k, else ρ).
+    ρ = 1/RHO and each admitted row's at ρr = 1/RHOR (`inert_bound.row_rho`: 4ρ at a census k, else ρ).
   - **leaf.** The tile's ``sha512/row-seg/v1`` digest of its messages (`leaves.tile_messages`, `PearlCRowDigest_v1`): the
     preimage of its leaf in the transcript tree.
   - **y.** Each row's TN served words from U (`PearlCUnscale_v1`, no bias), held to the row's committed y (``y[i]``, N FP32
@@ -80,12 +80,12 @@ from verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile import PearlCU
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Shape
 from ..schemes import pearl_c as C
-from ..schemes import pearl_c_debit as D
+from ..schemes import pearl_c_inert_work as D
 from ..schemes import pearl_c_u as CU
 from ..schemes import pearl_kw as P
 from ..schemes.pearl_c_device import DEVICES
 from . import boolean as _boolean
-from . import cap, pc8
+from . import inert_bound, pc8
 from . import tile_units as U
 from . import leaves as L
 from . import words as W
@@ -137,8 +137,8 @@ def _on_bits(word: CompositeDefinition, version: int, register: bool = True) -> 
 _WORDS = {id(d.word): d for d in vars(_boolean).values() if isinstance(d, CompositeDefinition) and isinstance(
     getattr(d, "word", None), PrimitiveDefinition)}
 _LIFTED: dict[int, CompositeDefinition] = {}
-_on_bits(cap.Pc8CapWordDef, 2, register=False)
-_on_bits(cap.Pc8TileCapDefV2, 3, register=False)
+_on_bits(inert_bound.Pc8CapWordDef, 2, register=False)
+_on_bits(inert_bound.Pc8TileCapDefV2, 3, register=False)
 
 
 # ---- a row's admission and salt-dead counts -----------------------------------------------------------------------------
@@ -169,14 +169,14 @@ PearlPlusAdmitV2 = _on_bits(PearlPlusAdmit, 2)
 
 def _salt_dead_body(B, S, x, alpha, beta):
     e, k = U._Emit(B), S.K
-    dead = cap.SALT_DEAD[DEVICES[S.DEV].atom.name]
-    cb = e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, cap.FLAT_E))
+    dead = inert_bound.SALT_DEAD[DEVICES[S.DEV].atom.name]
+    cb = e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, inert_bound.FLAT_E))
     bits = [e.call(dead, e.call(F32MulV2, alpha, x[t]), cb) for t in range(k)]
-    return array_of([cap._wire(e, 32, cap._count(e, bits[s:s + SLICE])) for s in range(0, k, SLICE)])
+    return array_of([inert_bound._wire(e, 32, inert_bound._count(e, bits[s:s + SLICE])) for s in range(0, k, SLICE)])
 
 
 def _salt_dead_sig(S):
-    if DEVICES[S.DEV].atom.name not in cap.SALT_DEAD:
+    if DEVICES[S.DEV].atom.name not in inert_bound.SALT_DEAD:
         raise DomainError(f"Pearl-C's cap circuit has no salt-dead bit for {S.DEV!r}'s atom")
     return (("x", Array(S.K, F32)), ("alpha", F32), ("beta", F32)), Array(S.K // SLICE, I32)
 
@@ -191,11 +191,11 @@ PearlPlusSaltDeadV2 = _on_bits(PearlPlusSaltDead, 2)
 # ---- the core -----------------------------------------------------------------------------------------------------------
 
 def _check(S) -> Any:
-    d, ng = cap._promoted(S.DEV, S.K)
+    d, ng = inert_bound._promoted(S.DEV, S.K)
     if S.N % S.TN or S.N < S.TN:
         raise DomainError(f"a row of y holds whole column tiles: TN = {S.TN} does not divide N = {S.N}")
-    cap._cap_constants(S.K, S.TM, S.TN, S.N, S.RHO, S.DEV)
-    cap._row_constants(S.K, S.TN, S.N, S.RHOR, S.DEV)
+    inert_bound._inert_bound_constants(S.K, S.TM, S.TN, S.N, S.RHO, S.DEV)
+    inert_bound._row_constants(S.K, S.TN, S.N, S.RHOR, S.DEV)
     return d, ng
 
 
@@ -230,8 +230,8 @@ def _core_body(B, S, a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g):
     ok_a = [B.call(admit, a[i], ra[i][2], ra[i][3], ra[i][4]) for i in range(tm)]
     ok_b = [B.call(admit, b[j], rb[j][2], rb[j][3], rb[j][4]) for j in range(tn)]
     sd = [B.call(bind(PearlPlusSaltDead, K=k, DEV=dev), a[i], ra[i][4], ra[i][5]) for i in range(tm)]
-    tile_cap = bind(cap.Pc8TileCapDefV2, K=k, TM=tm, TN=tn, N=S.N, RHO=S.RHO, RHOR=S.RHOR, DEV=dev)
-    capped = B.call(tile_cap, array_of([r[0] for r in ra]), array_of([r[0] for r in rb]), array_of([r[1] for r in ra]),
+    tile_inert_bound = bind(inert_bound.Pc8TileCapDefV2, K=k, TM=tm, TN=tn, N=S.N, RHO=S.RHO, RHOR=S.RHOR, DEV=dev)
+    capped = B.call(tile_inert_bound, array_of([r[0] for r in ra]), array_of([r[0] for r in rb]), array_of([r[1] for r in ra]),
                     array_of([r[1] for r in rb]), array_of([U.ok_word(e, o) for o in ok_a]), array_of(sd), cert)
     c, u, verdict = capped[0], capped[1], capped[2]
     digest = B.call(bind(PearlCRowDigest, K=2 * tm * tn), L.tile_messages(c, u, tm, tn))
@@ -318,12 +318,12 @@ PearlPlusTile = CompositeDefinition(
 
 def tile(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, depth: int) -> SpecializedDefinition:
     """`PearlPlusTile_v1` for ``scheme`` (forming v1, -h3) at depth ``k``, a TM × TN tile of a unit of ``n`` columns and a
-    transcript tree of depth ``depth``: ρ the device's cap, ρr the scheme's row cap at k (`cap.row_rho`)."""
+    transcript tree of depth ``depth``: ρ the device's cap, ρr the scheme's row cap at k (`inert_bound.row_rho`)."""
     d = scheme.device
     if scheme.forming != "v1" or scheme.hashing != "h3" or DEVICES.get(d.name) != d:
         raise DomainError(f"{scheme.name}: Pearl+'s tile unit is forming v1 under -h3 on a device record")
-    return bind(PearlPlusTile, K=k, TM=tm, TN=tn, N=n, D=depth, RHO=cap._rho(d.name, None),
-                RHOR=cap.row_rho(scheme, k), DEV=d.name)
+    return bind(PearlPlusTile, K=k, TM=tm, TN=tn, N=n, D=depth, RHO=inert_bound._rho(d.name, None),
+                RHOR=inert_bound.row_rho(scheme, k), DEV=d.name)
 
 
 # ---- the statement's ports ----------------------------------------------------------------------------------------------
@@ -356,8 +356,8 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     """The core on the scheme (`pearl_c`): (the tile's digest, ok) for A's rows ``a`` (tile rows ``rows`` of unit
     ``unit``) and B's ``b`` (columns ``cols``, which give E_B's lines), the rows of y, the certificates, the salt and B's
     root.  ok: the tile encodes (`PearlC.encode`), every row is admissible (`PearlC.admissible`'s per-row rule), the
-    certificates are the prover's (`cap.certificates`), the tile's and each row's debit within ρ = 1/rho and ρr = 1/rhor of
-    their cells' credit (rev1's capOK on `pearl_c_debit`'s replay), and each row's committed y at column tile ``col`` is
+    certificates are the prover's (`inert_bound.certificates`), the tile's and each row's debit within ρ = 1/rho and ρr = 1/rhor of
+    their cells' credit (rev1's inertBoundOK on `pearl_c_inert_work`'s replay), and each row's committed y at column tile ``col`` is
     the served y (`pearl_c_u.y`).  The digest is None where the tile doesn't encode."""
     d = DEVICES[dev]
     tm, tn = len(a), len(b)
@@ -370,38 +370,44 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     checked = scheme.checked(ctx, ops)
     admitted = all(P.f32_of_bits(r) * P.f32_of_bits(al) >= P.SIGMA_MIN and C.live_row(x)
                    for side in (ops.a, ops.b) for r, al, x in zip(side.rho, side.alpha, side.x))
-    certs = all([w for g in cert[i][j] for w in g] == cap.certificates(ops.a.codes[i], ops.b.codes[j], dev)
+    certs = all([w for g in cert[i][j] for w in g] == inert_bound.certificates(ops.a.codes[i], ops.b.codes[j], dev)
                 for i in range(tm) for j in range(tn))
     sd = [_salt_dead(d, ops.a.alpha[i], ops.a.beta[i], a[i]) for i in range(tm)]
     capped = (_cap_ok(d, k, n, rho, ops.a.codes, ops.b.codes, sd)
               and all(_cap_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tm)))
-    try:
-        served = 0 <= col < n // tn and all(y[i][col * tn + j] == CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) << 16
-                                            for i in range(tm) for j in range(tn))
-    except P.Reject:
-        served = False
+    served = 0 <= col < n // tn and _served(y, checked, ops, col, tm, tn)
     return C.leaf(checked, "h3"), int(admitted and certs and capped and served)
+
+
+def _served(y: Sequence[Sequence[int]], checked: Any, ops: Any, col: int, tm: int, tn: int) -> bool:
+    """Whether each row's committed y at column tile ``col`` is the served y (`pearl_c_u.y`); False where the served y
+    rejects (`P.Reject`)."""
+    try:
+        return all(y[i][col * tn + j] == CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) << 16
+                   for i in range(tm) for j in range(tn))
+    except P.Reject:
+        return False
 
 
 def _salt_dead(d, alpha: int, beta: int, x: Sequence[int]) -> list[int]:
     """A row's salt-dead counts per block of 32: the device's salt-dead bit on f32(α·x_t) and e4m3(f32(β·44))."""
-    bit = cap.SALT_DEAD[d.atom.name]
-    cb = P.f32_to_fp8(P.f32_of_bits(fp32.mul(beta, cap.FLAT_E)))
+    bit = inert_bound.SALT_DEAD[d.atom.name]
+    cb = P.f32_to_fp8(P.f32_of_bits(fp32.mul(beta, inert_bound.FLAT_E)))
     dead = [bit.evaluate(fp32.mul(alpha, xt), cb) for xt in x]
     return [sum(dead[s:s + SLICE]) for s in range(0, len(x), SLICE)]
 
 
 def _cap_ok(d, k: int, n: int, rho: int, ac, bc, sd) -> bool:
-    """rev1's capOK over every row of ``ac`` and column of ``bc`` at ρ = 1/rho on a unit of ``n`` columns
+    """rev1's inertBoundOK over every row of ``ac`` and column of ``bc`` at ρ = 1/rho on a unit of ``n`` columns
     (`pearlCTilesDevRev1`), False where the replay raises."""
     try:
-        atoms, zeros = D.chain_debit(list(ac), list(bc), d)
+        atoms, zeros = D.chain_inert_work(list(ac), list(bc), d)
         flags = {(i, j): D.word_flags(ac[i], bc[j], d) for i in range(len(ac)) for j in range(len(bc))}
     except P.Reject:
         return False
     elems = sum(SLICE if all(flags[i, j][t] for j in range(len(bc))) else sd[i][t]
                 for i in range(len(ac)) for t in range(k // SLICE))
-    debit = D.debit_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
+    debit = D.inert_work_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
     at, m = replace(d, cap=Fraction(1, rho)), 64
     bound = at.cap * C.PearlC(forming="v1", device=at, hashing="h0").credit_of(Shape(m, k, n)) * len(ac) * len(bc) / (m * n)
     return debit <= bound

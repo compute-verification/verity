@@ -17,7 +17,7 @@ its served y and its weight side). `replay` checks:
    on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
    `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call samples its plan (`Traced.draw`) under the work sampling design at its share of the window's budget
-   (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
+   (`plan.window_sampling_designs`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
    and so is every unit it reads; so is each Y unit its sampled tiles read, in its weight side (once per replay). Each
    opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,
    from its opened inputs to its opened outputs, and the call's Y and c₀ at each sampled column strip must be its weight
@@ -139,7 +139,7 @@ TAMPER_LEAF = 7
 
 def tamper_tiles(records: Sequence[PC.CallRecord]) -> tuple[list[PC.CallRecord], dict[str, Any]]:
     """A negative control: the calls as a prover commits and opens them with word `TAMPER_LEAF` of every tile of the first call
-    flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkLaw`'s floor), so whatever the
+    flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkSamplingDesign`'s floor), so whatever the
     window's fresh sample, a wrong tile is proved. Returns the calls and where the tamper is."""
     rec = records[0]
     nat = PN.Native(rec.call, rec.scheme)
@@ -228,8 +228,8 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
         try:
             ans = derived(records, salt, first)
             ledger = windows.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
-            laws = CPL.window_laws([t.layout() for t in traced], k)
-            plans = [t.draw(law, a, ledger) for t, law, a in zip(traced, laws, ans)]
+            sampling_designs = CPL.window_sampling_designs([t.layout() for t in traced], k)
+            plans = [t.draw(sampling_design, a, ledger) for t, sampling_design, a in zip(traced, sampling_designs, ans)]
             ledger.sent()
             record = ledger.record()
         except (DomainError, ValueError) as e:
