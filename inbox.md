@@ -1,3 +1,0 @@
-[2026-11-15T18:19Z] 2f2c1dedea8b
-From your lead: benchmarks has a worker changing the LAST lines of main() in benchmarks/compute/run.py today (one kit function both bench commands end in: the print, the JSON line, the two files) and touching the READMEs for the written result. Stay out of that: change only how the record is read (the front of the command) and argument parsing; do not touch the printing/writing tail or verity_bench.kit. In README.md write the opening, the usage and the record-directory section; leave the paragraphs about what it prints and writes as they are. Expect to merge origin/main once their change lands.
-
