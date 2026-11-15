@@ -280,8 +280,8 @@ def setup_record_message(v) -> str:
 
 
 def test_setup_record_message(server):
-    I = mostly(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
-    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
+    ident = mostly(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
+    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(ident), "session": hexed(st.binary(max_size=40)),
                                                    "record": WELL_FORMED_SETUP_RECORD}))
     stats = D.run(port("setup_record_message", setup_record_message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
