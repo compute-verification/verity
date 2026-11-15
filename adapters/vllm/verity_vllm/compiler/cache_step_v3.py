@@ -382,8 +382,12 @@ class Stream:
             if key:
                 NW = self.Z.NW
                 mask = (1 << NW) - 1
-                self._acc(TAGS["M"], key, lambda v, b=b, cn=cn, cp=cp, mask=mask, NW=NW: (cn if v & mask == b else v & mask)
-                          | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW | v >> 2 * NW << 2 * NW)
+
+                def unlinked(v: int, b: int = b, cn: int = cn, cp: int = cp, mask: int = mask, NW: int = NW) -> int:
+                    return ((cn if v & mask == b else v & mask)
+                            | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW | v >> 2 * NW << 2 * NW)
+
+                self._acc(TAGS["M"], key, unlinked)
                 if cp:
                     self._b(cp, cnext=cn)
                 if cn:
@@ -401,8 +405,15 @@ class Stream:
             key = self._acc(TAGS["RK"], rk(S, c.r, k))
             if self.value(TAGS["K"], b):
                 self._refuse(f"cache of block {b}: it has a key")
-            self._acc(TAGS["K"], b, lambda v, key=key: key)
-            m = self._acc(TAGS["M"], key, lambda v, b=b: (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW)
+
+            def keyed(v: int, key: int = key) -> int:
+                return key
+
+            def linked(v: int, b: int = b) -> int:
+                return (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW
+
+            self._acc(TAGS["K"], b, keyed)
+            m = self._acc(TAGS["M"], key, linked)
             last = (m >> Z.NW) & mask
             if last:
                 self._b(last, cnext=b)
