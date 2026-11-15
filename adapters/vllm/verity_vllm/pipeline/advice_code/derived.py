@@ -508,3 +508,255 @@ def tie_fields(walk: Walk, res: Residual, held: Holdings, cfg: Config) -> list[R
             raise ValueError(f"request {i}: its committed outputs break the stop rule")
         out.append(RequestAdvice(req.id, P, L, finish))
     return out
+
+
+def config_of(trace: dict) -> Config:
+    c = trace["config"]
+    return Config(block_size=c["block_size"], num_gpu_blocks=c["num_gpu_blocks"], max_num_batched_tokens=c["max_num_batched_tokens"],
+                  max_model_len=c["max_model_len"], eos_token_id=c["eos_token_id"], stop_token_ids=tuple(c["stop_token_ids"]),
+                  scheduler=c.get("scheduler", "sync"), long_prefill_token_threshold=c.get("long_prefill_token_threshold", 0),
+                  max_num_seqs=c.get("max_num_seqs", 256), enable_prefix_caching=c.get("enable_prefix_caching", True),
+                  row_order=c.get("row_order", "scheduling" if c.get("rows_in_scheduling_order", True) else "explicit"),
+                  hit_unit=c.get("hit_unit", 0))
+
+
+def _sampling_rows(advice: Advice, i: int) -> int:
+    P, k = advice.requests[i].prompt_len, 0
+    for st in advice.steps:
+        for r in st.rows:
+            if r.request == i and r.start + r.n >= P + k:
+                k += 1
+    return k
+
+
+def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int] | None = None,
+             shaped: bool = False) -> Residual:
+    """The advice that remains of `advice`, whose requests are certified requests `order` (None: in ingress order): what
+    `reconstruct` needs beside the config and the tokens to give every field back. Refused unless the walk gives
+    `advice` back: a hit other than the longest cached one while nothing can have been evicted, a source other than the
+    earliest-admitted request, or a start, n or kind off vLLM's rules."""
+    order = tuple(range(len(advice.requests))) if order is None else tuple(order)
+    if sorted(order) != list(range(len(advice.requests))):
+        raise ValueError(f"the advice's {len(advice.requests)} requests aren't certified requests {order}, each once")
+    number = {t: i for i, t in enumerate(order)}
+    prompt_len = tuple(q.prompt_len for q in advice.requests)
+    pool = pool_bound([[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps], cfg)
+    if pool and any(r.preempted for st in advice.steps for r in st.rows):
+        raise ValueError("a resumed row where the pool bound rules preemption out")
+    hits: list[int] = []
+    resumes: list[int] = []
+    later = [0]
+    ns: list[int] = []
+    lags: list[bool] = []
+    row_of = [{r.request: r for r in st.rows} for st in advice.steps]
+
+    def hit_of(s: int, t: int, cached: int | None) -> int:
+        i = number[t]
+        if i not in row_of[s]:
+            raise ValueError(f"step {s}: the walk admits request {i} (certified request {t}), which has no row there")
+        h = row_of[s][i].cache_hit
+        if cached is not None:
+            if h != cached:
+                raise ValueError(f"step {s} request {i}: a hit of {h} where nothing can have been evicted, and the "
+                                 f"longest cached prefix is {cached}")
+            return h
+        if h % cfg.unit:
+            raise ValueError(f"step {s} request {i}: a cache hit of {h} isn't whole hit units ({cfg.unit})")
+        hits.append(h // cfg.unit)
+        return h
+
+    def resumed_of(s: int, k: int) -> bool:
+        later[0] += 1
+        if advice.steps[s].rows[k].preempted:
+            resumes.append(later[0] - 1)
+        return advice.steps[s].rows[k].preempted
+
+    def n_of(s: int, k: int) -> int:
+        ns.append(advice.steps[s].rows[k].n)
+        return ns[-1]
+
+    def lag_of(i: int) -> bool:
+        lags.append(_sampling_rows(advice, i) - advice.requests[i].output_len == 1)
+        return lags[-1]
+
+    rows = tuple(tuple(r.request for r in st.rows) for st in advice.steps)
+    walk = walk_steps(rows, prompt_len, cfg, held=held, pool=pool, hit_of=hit_of, resumed_of=resumed_of, n_of=n_of,
+                      lag_of=lag_of, order_of=lambda s, numbers: tuple(order[i] for i in numbers))
+    for s, (mine, theirs) in enumerate(zip(walk.steps, advice.steps, strict=True)):
+        for j, (a, b) in enumerate(zip(mine.rows, theirs.rows, strict=True)):
+            if a != b:
+                off = [f"{f} {getattr(b, f)!r}, where the walk gives {getattr(a, f)!r}"
+                       for f in ("start", "n", "kind", "cache_hit", "preempted", "sources") if getattr(a, f) != getattr(b, f)]
+                raise ValueError(f"step {s} row {j} (request {b.request}): {'; '.join(off)}")
+    return Residual(rows, prompt_len, tuple(hits), None if pool else tuple(resumes),
+                    tuple(lags) if cfg.scheduler == "async" else None, walk.order_sent, tuple(ns),
+                    None if shaped else tuple(advice.release))
+
+
+def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
+    """I1's steps from the residual, the config and the tokens: the compile slice's proof block's derivation, which the compiler then
+    reads."""
+    values = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
+    resumes = iter(res.resumes or ())
+    later, resume = [0], [next(resumes, None)]
+    told = iter(res.order)
+    entry = [next(told, None)]
+
+    def order_of(s: int, numbers: Sequence[int]) -> Sequence[int] | None:
+        if entry[0] is None or entry[0][0] != s:
+            return None
+        ordered, entry[0] = entry[0][1], next(told, None)
+        return ordered
+
+    def take(name: str):
+        value = next(values[name], None)
+        if value is None:
+            raise ValueError(f"residual: fewer {name} values than the rows read")
+        return value
+
+    def resumed_of(s: int, k: int) -> bool:
+        later[0] += 1
+        if resume[0] != later[0] - 1:
+            return False
+        resume[0] = next(resumes, None)
+        return True
+
+    walk = walk_steps(res.rows, res.prompt_len, cfg, held=held, pool=res.resumes is None,
+                      hit_of=lambda s, t, cached: cached if cached is not None else take("hit") * cfg.unit,
+                      resumed_of=resumed_of, n_of=lambda s, k: take("n"), lag_of=lambda i: take("lag"), order_of=order_of)
+    if resume[0] is not None or any(next(it, None) is not None for it in values.values()):
+        raise ValueError("residual: more values than the rows read, or resumes out of order")
+    if entry[0] is not None or walk.order_sent != tuple((s, tuple(o)) for s, o in res.order):
+        raise ValueError("residual: an order entry the walk doesn't read, or one equal to its prediction")
+    return walk
+
+
+def rebuild(res: Residual, cfg: Config, held: Holdings, release: Sequence[int]) -> Advice:
+    """The whole of v0 from the residual, the config and the tie's witness: `rebuild(residual(a), …) == a`. `release` is
+    read only on a shaped egress, where it is derived (`served.derive`)."""
+    walk = reconstruct(res, cfg, held)
+    requests = tie_fields(walk, res, held, cfg)
+    for i, lag in zip(walk.lag_requests, res.lag or (), strict=True):
+        if lag and requests[i].finish != "eos":
+            raise ValueError(f"request {i}: a decode after its last output, which no stop id ended")
+    return Advice(tuple(requests), walk.steps, tuple(res.release if res.release is not None else release))
+
+
+class Records(NamedTuple):
+    """An encoding's bits by record, as I1 charges them, each by field: the header, each request's record, each step's,
+    and each kept output's release."""
+    header: dict[str, int]
+    requests: list[dict[str, int]]
+    steps: list[dict[str, int]]
+    release: int
+
+
+def _uvar(value: int) -> int:
+    return I1.WIDTH_BITS + value.bit_length()
+
+
+def v0_records(adv: Advice) -> Records:
+    """I1's layout (its module's docstring), by field; `charge` of it is I1's `bits_by_window`."""
+    lens = [x for q in adv.requests for x in (q.prompt_len, q.output_len)]
+    lens += [x for st in adv.steps for r in st.rows for x in (r.start, r.n, r.cache_hit, *(s.n for s in r.sources))]
+    w_req, w_len = max(len(adv.requests) - 1, 0).bit_length(), max(lens, default=0).bit_length()
+    w_src = max((len(r.sources) - 1 for st in adv.steps for r in st.rows if r.cache_hit), default=0).bit_length()
+    header = {"header": 8 + _uvar(len(adv.requests)) + _uvar(len(adv.steps)) + 3 * I1.WIDTH_BITS}
+    requests = [{"id": _uvar(len(q.id.encode())) + 8 * len(q.id.encode()), "prompt_len": w_len, "output_len": w_len, "finish": 1}
+                for q in adv.requests]
+    steps = [{"rows_in_step": w_req, "request": w_req * len(st.rows), "kind": len(st.rows), "start": w_len * len(st.rows),
+              "n": w_len * len(st.rows), "cache_hit": w_len * len(st.rows), "preempted": len(st.rows),
+              "sources": sum(w_src + len(r.sources) * (w_req + w_len) for r in st.rows if r.cache_hit)} for st in adv.steps]
+    return Records(header, requests, steps, max(adv.release, default=0).bit_length())
+
+
+def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
+    """The residual's layout, by field, each at its least width as I1 does: the header (I1's, a width for hits in hit
+    units, a flag each for order, resumes and release being sent, when order is, its count of steps, and when resumes
+    are, their width and count); a request's prompt_len and its lag bit (when asked); a step's row count and requests,
+    the step's position and its new requests' ingress indices where the order is sent, each resumed row's position (when
+    sent), a hit flag for each admitting row whose hit the walk reads, with the hit's units when nonzero, and an explicit
+    n where read; a kept output's release (when sent). The hit unit is the registered config's, and sources are
+    canonical, so neither costs anything here."""
+    w_req = max(len(res.prompt_len) - 1, 0).bit_length()
+    w_len = max((*res.prompt_len, *res.ns), default=0).bit_length()
+    w_hit = max(res.hits, default=0).bit_length()
+    w_res = max(res.resumes or (0,)).bit_length()
+    w_step = max(len(res.rows) - 1, 0).bit_length()
+    header = {"header": 8 + _uvar(len(res.prompt_len)) + _uvar(len(res.rows)) + 3 * I1.WIDTH_BITS + 3}
+    if res.order:
+        header["order"] = _uvar(len(res.order))
+    if res.resumes is not None:
+        header["resumes"] = I1.WIDTH_BITS + _uvar(len(res.resumes))
+    lagged = set(walk.lag_requests)
+    requests = [{"prompt_len": w_len, "lag": int(i in lagged)} for i in range(len(res.prompt_len))]
+    told = {s: len(o) for s, o in res.order}
+    explicit: dict[int, int] = {}
+    for s in walk.explicit_n:
+        explicit[s] = explicit.get(s, 0) + 1
+    sent = set(walk.sent_hits)
+    seen: set[int] = set()
+    steps = []
+    for s, st in enumerate(walk.steps):
+        d = {"rows_in_step": w_req, "request": w_req * len(st.rows), "resumes": 0, "hits": 0, "n": w_len * explicit.get(s, 0),
+             "order": w_step + w_req * told[s] if s in told else 0}
+        for r in st.rows:
+            first = r.request not in seen
+            seen.add(r.request)
+            if r.preempted:
+                d["resumes"] += w_res
+            if (first or r.preempted) and s in sent:
+                d["hits"] += 1 + (w_hit if r.cache_hit else 0)
+        steps.append(d)
+    return Records(header, requests, steps,
+                   max(res.release, default=0).bit_length() if res.release is not None else 0)
+
+
+def _earliest(adv: Advice, T: int) -> tuple[list[int], list[int]]:
+    """I1's charge windows: each step's (the earliest window of an output at that step or later; the last window when
+    none follows), and each request's first step."""
+    windows = [b // T for b in adv.release]
+    own: list[int | None] = [None] * len(adv.steps)
+    for o, w in zip(I1.outputs(adv), windows):
+        own[o.step] = w if own[o.step] is None else min(own[o.step], w)
+    earliest, at = [0] * len(adv.steps), None
+    for s in range(len(adv.steps) - 1, -1, -1):
+        if own[s] is not None:
+            at = own[s] if at is None else min(at, own[s])
+        earliest[s] = max(windows, default=0) if at is None else at
+    first: dict[int, int] = {}
+    for s, st in enumerate(adv.steps):
+        for r in st.rows:
+            first.setdefault(r.request, s)
+    return earliest, [first[i] for i in range(len(adv.requests))]
+
+
+def charge(adv: Advice, T: int, rec: Records) -> dict[int, dict[str, int]]:
+    """`rec`'s bits per egress window of T buckets, by field, by I1's rule (`bits_by_window`): an output's release to its
+    own window, a step's record to the earliest window of an output at that step or later, a request's to its first
+    step's, the header to step 0's."""
+    out: dict[int, dict[str, int]] = {}
+
+    def add(w: int, d: dict[str, int]) -> None:
+        for f, b in d.items():
+            if b:
+                out.setdefault(w, {})[f] = out.get(w, {}).get(f, 0) + b
+
+    if not adv.release:
+        for d in (rec.header, *rec.requests, *rec.steps):
+            add(0, d)
+        return out
+    earliest, first = _earliest(adv, T)
+    add(earliest[0], rec.header)
+    for i, d in enumerate(rec.requests):
+        add(earliest[first[i]], d)
+    for s, d in enumerate(rec.steps):
+        add(earliest[s], d)
+    for b in adv.release:
+        add(b // T, {"release": rec.release})
+    return out
+
+
+FORCED = ("prompt_len", "hits", "lag", "resumes", "order")
+"""The residual's fields that witness fixes but that are sent: checked (prompt_len, lag, order) or fixed by vLLM's rules
+over witness that nothing replays yet (hits past the no-eviction bound, resumes)."""
