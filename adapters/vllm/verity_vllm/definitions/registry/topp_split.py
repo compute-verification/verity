@@ -85,7 +85,7 @@ class Cfg:
                                 #   0 | 1 | "lane" (1-D lane-half) are diagnostic alternatives.
 
     @classmethod
-    def for_vocab(cls, V: int, S: int) -> "Cfg":
+    def for_vocab(cls, V: int, S: int) -> Cfg:
         spt = spt_for(V, S)
         return cls(spt_stats=spt, spt_x=spt)
 

@@ -1779,7 +1779,7 @@ def replay_body(B: Builder, body, args: Sequence[Coll]) -> Coll:
     return Coll(body.ret_type, _remap(body.ret, args, k0))
 
 
-def as_program(fn: SpecializedDefinition, **kw) -> "Program":
+def as_program(fn: SpecializedDefinition, **kw) -> Program:
     """`Program(fn)` for any complete specialization, INCLUDING body-only ones (a decoded `WorkloadRequest_v1` component or a
     `Lifted[decoded]`): those get a same-id definition whose python body is the identity replay of the set body, so the root lowers,
     evaluates and digests exactly as the body says (the spec id — hence `program_fn` in the digest — is unchanged)."""

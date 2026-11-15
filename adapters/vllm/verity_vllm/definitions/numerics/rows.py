@@ -509,7 +509,7 @@ def moe_sum(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.
     return {"sum": D.f2fp_bf16(acc).astype(np.uint16)}
 
 
-_PADDED_BLOCK_MEMO: "collections.OrderedDict[tuple, dict[str, np.ndarray]]" = collections.OrderedDict()
+_PADDED_BLOCK_MEMO: collections.OrderedDict[tuple, dict[str, np.ndarray]] = collections.OrderedDict()
 _PADDED_BLOCK_MEMO_MAX = 4
 
 

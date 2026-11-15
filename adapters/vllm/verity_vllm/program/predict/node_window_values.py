@@ -110,7 +110,7 @@ def made_up(fn: Any, prompt: Sequence[int], rng: np.random.Generator) -> dict[st
 
 # ---- the Program's values
 
-def _embedding_shard(v: "Values", node: Any, t: int) -> np.ndarray:
+def _embedding_shard(v: Values, node: Any, t: int) -> np.ndarray:
     S = node.fn.bindings
     VS, H, START = int(S["VS"]), int(S["H"]), int(S["START"])
     tok = int(v.leaves(v.arg(node, 0, t))[0])
@@ -135,7 +135,7 @@ def _embedding_shard_small() -> tuple[Any, list[np.ndarray], np.ndarray]:
 
 
 #: an unlowered family's NumPy transcription, a member at a time, for one whose reference evaluator can't take its operands
-NATIVE: dict[str, Callable[["Values", Any, int], np.ndarray]] = {"EmbeddingShard": _embedding_shard}
+NATIVE: dict[str, Callable[[Values, Any, int], np.ndarray]] = {"EmbeddingShard": _embedding_shard}
 
 
 def native_selftest() -> dict[str, Any]:
