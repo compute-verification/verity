@@ -25,6 +25,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -64,11 +65,9 @@ def own_scope(root: Path = Path("/")) -> Path | None:
     """The cgroup this process runs in, when that is the check's own scope (SCOPE_ENV names it); else None, since a shared
     session scope's numbers are other runs' too."""
     unit = SETTINGS.get(SCOPE_ENV)
-    if not unit:
+    if not unit or not (own := root / "proc/self/cgroup").is_file():
         return None
-    try:
-        line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
-    except (OSError, StopIteration):
+    if (line := next((ln for ln in own.read_text().splitlines() if ln.startswith("0::")), None)) is None:
         return None
     d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
     return d if d.name == f"{unit}.scope" else None
@@ -97,7 +96,8 @@ class ScopeWatch:
 
     `sample` reads the scope every WATCH_EVERY_S on a thread of its own (`start`), and `write` puts the figures in the record
     every CORES_WINDOW_S and at `stop`, so a check that is killed keeps what it had used a minute before. GiB are 2^30 bytes,
-    as a slot's mem= is. A reading that fails is skipped, and a record that can't be written never stops the check."""
+    as a slot's mem= is. A reading that fails is counted (`tick`), and a record that can't be read or written is said on
+    stderr and never stops the check."""
 
     def __init__(self, scope: Path, record: Path, clock=time.monotonic):
         self.scope, self.record, self.clock = scope, record, clock
@@ -137,26 +137,31 @@ class ScopeWatch:
             u["current_max_gib"], u["file_at_current_max_gib"] = round(current / GIB, 1), round(stat.get("file", 0) / GIB, 1)
         u.update(peak_gib=max(u["peak_gib"], round(peak / GIB, 1)), cpu_s=round(cpu, 1), samples=u["samples"] + 1)
 
+    def tick(self) -> None:
+        """One `sample`; one that fails is counted in `used` (`missed`, and the last error as `unread`), not raised."""
+        try:
+            self.sample()
+        except (OSError, ValueError, StopIteration) as e:
+            self.used.update(missed=self.used.get("missed", 0) + 1, unread=f"{type(e).__name__}: {e}")
+
     def write(self) -> None:
         """`used` into the record, beside what slot.py wrote there."""
+        doc = {}
         try:
             doc = json.loads(self.record.read_text())
-        except (OSError, ValueError):
-            doc = {}
+        except (OSError, ValueError) as e:
+            print(f"spans: the run's {RUN_SLOT} not read ({e}); `used` is written alone", file=sys.stderr, flush=True)
         tmp = self.record.with_name(f".{self.record.name}.{os.getpid()}")
         try:
             tmp.write_text(json.dumps({**(doc if isinstance(doc, dict) else {}), "used": dict(self.used)}) + "\n")
             os.replace(tmp, self.record)
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"spans: what the scope used not written to the run's {RUN_SLOT}: {e}", file=sys.stderr, flush=True)
 
     def run(self) -> None:
         written = self.clock()
         while not self.stopped.wait(WATCH_EVERY_S):
-            try:
-                self.sample()
-            except (OSError, ValueError, StopIteration):
-                continue
+            self.tick()
             if self.clock() - written >= CORES_WINDOW_S:
                 self.write()
                 written = self.clock()
@@ -165,10 +170,7 @@ class ScopeWatch:
         self.stopped.set()
         if self.thread:
             self.thread.join()
-        try:
-            self.sample()
-        except (OSError, ValueError, StopIteration):
-            pass
+        self.tick()
         self.write()
 
 
