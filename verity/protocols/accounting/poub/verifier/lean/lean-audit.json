@@ -1,12 +1,6 @@
 {
- "format": 1,
- "roots": [
-  "Poub",
-  "Poub.Difftest",
-  "Poub.Verifier",
-  "Poub.Protocol",
-  "Poub.P2Protocol"
- ],
+ "format": 2,
+ "roots": ["Poub", "Poub.Difftest", "Poub.Verifier", "Poub.Protocol", "Poub.P2Protocol"],
  "exempt": {
   "Poub.DifftestMain": "the poub-difftest executable's entry point, one line; it serves Poub.Difftest.table, audited under Poub.Difftest, through the difftest server's line protocol: a test and not a proof",
   "Poub.VerifierMain": "the poub-verifier executable's entry point, one line; it runs Poub.Verifier.serve, audited under Poub.Verifier",
@@ -33,6 +27,6 @@
  },
  "guarantees": {},
  "dependencies": {
-  "toolchain": "7e5e738e4840d9266989ec372ac6a921cc3efa7fc3158d3d06f480b0b3ea0029"
+  "toolchain": "acccb6f641a52c9be17964be42390d079cbad65923ee098c4c0dc7d6803f861b"
  }
 }

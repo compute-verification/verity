@@ -1743,7 +1743,7 @@ ORDER_TREE = {
                                             '[[require]]\nname = "spot"\npath = "../../spot/lean"\n'),
     "verity/protocols/proofs/flock/verifier/Flock/V.lean": "import Spot.X\nimport Mathlib.Y\nimport Flock.W\n",
     "verity/protocols/proofs/flock/verifier/Flock/W.lean": "",
-    "verity/hardware/package_above.py": "import verity.protocols.proofs.flock.verifier.interface\n",
+    "verity/commitments/periods/package_above.py": "import verity.protocols.proofs.flock.verifier.interface\n",
     "verity/protocols/proofs/spot/lean/lakefile.toml": 'name = "spot"\n[[lean_lib]]\nname = "Spot"\n',
     "verity/protocols/proofs/spot/lean/Spot/X.lean": "",
     BY_PATH: ("import sys\nfrom pathlib import Path\n"
@@ -1800,12 +1800,12 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     steps = _listing().steps
     places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/runtime"]}, {"paths": ["verity/commitments/crypto"]},
                       {"paths": [verifier]}, {"paths": [device]}, {"paths": [prover]}, {"paths": ["verity/protocols/proofs/flock/verifier"]},
-                      {"paths": ["verity/hardware"]}, {"paths": ["verity/protocols/proofs/spot"]}])
+                      {"paths": ["verity/commitments/periods"]}, {"paths": ["verity/protocols/proofs/spot"]}])
     listing = Listing(steps, own, {}, places)
     found = {pair: sorted(files) for pair, files in _against(loads, steps).items()}
     assert found == {
         ("verity/circuits", "verity/runtime"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
-        ("verity/hardware", "verity/protocols/proofs/flock"): ["verity/hardware/package_above.py"],
+        ("verity/commitments/periods", "verity/protocols/proofs/flock"): ["verity/commitments/periods/package_above.py"],
         ("verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"): ["verity/protocols/proofs/flock/verifier/Flock/V.lean", "verity/protocols/proofs/flock/verifier/lakefile.toml"],
         ("verity/protocols/proofs/flock", "verity/protocols/accounting/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
         ("verity/protocols/proofs/spot", "demos"): ["verity/protocols/proofs/spot/by_path.py"],
@@ -1837,10 +1837,10 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         (f"{verifier}/check.py", 6, f"{prover}/__init__.py"), (f"{verifier}/check.py", 6, f"{prover}/build.py"),
         (f"{check}/interop.py", 1, "verity/protocols/proofs/flock/prover/stage.py")]
     assert [str(x) for x in _into_distributions(loads, listing)] == [
-        "verity/hardware/package_above.py:1: python package verity.protocols.proofs.flock.verifier.interface loads "
+        "verity/commitments/periods/package_above.py:1: python package verity.protocols.proofs.flock.verifier.interface loads "
         "verity/protocols/proofs/flock/__init__.py"]
     found = _place_loads(loads, listing)
-    assert list(found) == sorted(["verity/circuits", "verity/runtime", "verity/hardware", "verity/protocols/proofs/flock/verifier",
+    assert list(found) == sorted(["verity/circuits", "verity/runtime", "verity/commitments/periods", "verity/protocols/proofs/flock/verifier",
                                   device, prover, verifier, "verity/protocols/proofs/spot"]), list(found)
     assert [sorted(x) for x in found["verity/circuits"]] == [["verity/runtime"], [], []], found["verity/circuits"]
     assert [sorted(x) for x in found["verity/runtime"]] == [["verity/circuits"], [], []], found["verity/runtime"]
@@ -1852,7 +1852,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     assert reach["verity/runtime"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/runtime/toy.py"]
     assert sorted(loaders) == sorted(["verity/protocols/proofs/flock/prover/stage.py", f"{prover}/build.py"]), loaders
     assert [sorted(x) for x in found[device]] == [[verifier], sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
-    assert [sorted(x) for x in found["verity/protocols/proofs/flock/verifier"]] == [[], [], ["verity/hardware/package_above.py"]]
+    assert [sorted(x) for x in found["verity/protocols/proofs/flock/verifier"]] == [[], [], ["verity/commitments/periods/package_above.py"]]
     marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/runtime"], "trusted": True}])))
     assert [sorted(x) for x in marked["verity/runtime"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
@@ -1937,7 +1937,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         and written.places[party]["reaches"] >= parts.places[party]["reaches"]
     with pytest.raises(AssertionError, match="loads no other distribution.*\n.*package_above.py:1: python package"):
         hold_distributions(tree.dirs, loads, held)
-    flock, above = "verity/protocols/proofs/flock", "verity/hardware/package_above.py"
+    flock, above = "verity/protocols/proofs/flock", "verity/commitments/periods/package_above.py"
 
     def knowing(*files: str, why: str = "a toy's") -> Listing:
         return held._replace(distributions=own | {flock: own[flock] | {"known": list(files), "known_reason": why}})
@@ -1947,7 +1947,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
                    "verity.protocols.proofs.flock.prover.stage")
     with pytest.raises(AssertionError, match="loads no other distribution.*\n.*seventh.py:1: python import"):
         hold_distributions(tree.dirs, (*loads, seventh), knowing(above))
-    for listed in ("verity/hardware", "verity/hardware/*.py", "verity/hardware/gone.py"):
+    for listed in ("verity/commitments/periods", "verity/commitments/periods/*.py", "verity/commitments/periods/gone.py"):
         with pytest.raises(AssertionError, match=f"names no directory or glob: delete them: \\['{flock}: {re.escape(listed)}'\\]"):
             hold_distributions(tree.dirs, loads, knowing(above, listed))
     with pytest.raises(AssertionError, match=f"says why in its `known_reason`.*\\['{flock}'\\]"):

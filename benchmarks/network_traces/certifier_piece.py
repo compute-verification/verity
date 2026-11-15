@@ -953,12 +953,9 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
     holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = captured([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(d), str(quarantine),
-                    *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
-                    "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
-                    "--report", str(quarantine / "piece-guard.json")],
-                   env={**os.environ,
-                        "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), os.environ.get("PYTHONPATH")]))})
+    got = captured(SS.guard_argv(d, quarantine, *(["--gates", unpacked] if unpacked is not None else []),
+                                 "--hold", hold, "--release-to", d, *(x for f in PIECE_FILES for x in ("--public", f)),
+                                 "--report", quarantine / "piece-guard.json"), cwd=TREE)
     print(f"leak guard (exit {got.returncode}): {got.stdout.strip()[-400:]}", flush=True)
     return got.returncode
 
