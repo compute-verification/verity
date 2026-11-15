@@ -142,8 +142,10 @@ def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(m
 
 
 def _area() -> list[tuple[str, str]]:
-    """Each Python file of the area, this one aside (it spells undeclared names to see them refused), with its text."""
-    return [(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in sorted(AREA.rglob("*.py"))
+    """Each Python file of the area and of its tests (at `tests/verity/circuits`), this one aside (it spells undeclared names
+    to see them refused), with its text."""
+    files = [*AREA.rglob("*.py"), *(ROOT / "tests" / "verity" / "circuits").rglob("*.py")]
+    return [(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in sorted(files)
             if p != Path(__file__).resolve()]
 
 
