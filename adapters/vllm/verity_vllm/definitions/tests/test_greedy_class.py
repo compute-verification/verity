@@ -147,7 +147,10 @@ def test_the_check_ties_n_to_the_last_count_and_bit():
     """A check handed a count or bit other than the chain's refuses: the rule's n and the selects' count are one number,
     and a chain still live is not done."""
     ids, req, row = [5, 37, 0, 0], _req(max_tokens=100), _row(8)
-    ok = lambda count, live, ids=ids: int(evaluate(_check(), *_args(row), ids, req, _bits(count), _bits(live))[0])  # noqa: E731
+
+    def ok(count, live, ids=ids):
+        return int(evaluate(_check(), *_args(row), ids, req, _bits(count), _bits(live))[0])
+
     assert ok(2, 0) == 1 and ok(1, 0) == 0 and ok(3, 0) == 0 and ok(2, 1) == 0
     assert ok(2, 0, [5, 37, 9, 0]) == 0 and ok(2, 0, [5, 37, 0, 9]) == 0
 
@@ -246,7 +249,10 @@ def test_a_reader_reads_only_the_count_s_bits_and_the_bit_s_bit_0():
     """``count`` and ``live`` are a u16 word each, wired from outputs of fewer bits zero-padded: the selects and the check
     read the count's low log2(O) + 1 bits and the bit's bit 0, so the other bits of either word change nothing."""
     req, row = _req(max_tokens=100), _row(6)
-    high = lambda w, extra: [b | e for b, e in zip(_bits(w), _bits(extra))]  # noqa: E731
+
+    def high(w, extra):
+        return [b | e for b, e in zip(_bits(w), _bits(extra))]
+
     want = _out(evaluate(LIVE, *_args(row), req, _bits(1), _bits(1)))
     assert _out(evaluate(LIVE, *_args(row), req, high(1, 0xFFF0 & ~((1 << K) - 1)), high(1, 0xFFFE))) == want == (6, 1, 2, 6)
     ids = [5, 37, 0, 0]
