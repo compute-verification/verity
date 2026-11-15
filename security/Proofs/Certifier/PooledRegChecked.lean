@@ -3,6 +3,7 @@ module
 public import Definitions.Certifier.Guarantees.PooledRegChecked
 public import Proofs.Certifier.PooledReg
 public import Proofs.Certifier.Carried
+import Proofs.Certifier.MonitoringPeriodSum
 
 /-!
 # The checked bound pooled over a monitoring period, proved
@@ -231,7 +232,6 @@ noncomputable def phaseHit [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled 
   fun z i ω c => ∃ u ∈ (D (x z ω i)).checked (x z ω i) (fun j => c.2 (Fin.castLE (hk z ω i) j)),
     u ∈ WregR H D x Pv ops z ω i
 
-omit [Nonempty Coin] in
 /-- A phase's sample meets its incorrect set reading only the earlier phases' coins where its statement, its prover's
 strategy and its registered openings do. -/
 theorem phaseHit_prefix [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A)
@@ -267,7 +267,6 @@ theorem pr_phaseHit_le [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg →
   intro z hz i
   refine pr_phase_le i (fun ω c => phaseAcc H D x Pv hk z i ω c ∧ phaseHit H D x Pv hk ops z i ω c)
     (fun ω ω' hω => by
-      simp only
       rw [phaseAcc_prefix H D x Pv hk had.1 had.2.1 z i ω ω' hω, phaseHit_prefix H D x Pv hk ops had z i ω ω' hω])
     (fun ω => ?_)
   by_cases hsc : (D (x z ω i)).Scope (x z ω i)
@@ -439,7 +438,6 @@ theorem pooledChecked_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D :
   have hmain := NetTiming.pr_pooled_le
     (fun i ω c => phaseAcc H D x Pv hk z i ω c ∧ ¬phaseHit H D x Pv hk ops z i ω c)
     (fun i ω ω' hω => by
-      simp only
       rw [phaseAcc_prefix H D x Pv hk had.1 had.2.1 z i ω ω' hω, phaseHit_prefix H D x Pv hk ops had z i ω ω' hω])
     (WregR H D x Pv ops z) (fun i ω ω' hω => wreg_prefix H D had z i ω ω' hω) (fun _ => 0) εchk (fun _ => le_rfl)
     q hq0 hq1 (fun i ω => phasesMissNoHit hS Zs x Pv hk ops hq1 hrate z hz i ω)
@@ -470,15 +468,15 @@ theorem encard_pooledRegChecked_le {Lk K S m : ℕ} (lay : AuditStatement → Bo
     (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
     (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool)
-    {Conn Cell Srv Dev Par Z : Type} (arr : Srv → Conn → Arrivals Cell)
+    {Conn Cell Srv Dev Par Zt : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs Lk K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs Lk K S)))
     (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (rd : Par → (Fin m → List (Obs Lk K S)) → Conn → List (ℕ × CellView Cell))
-    (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows) (Θ : Set Par) (Zs : Set Z)
-    (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (dec : (Conn → List (ℕ × CellView Cell)) → Z)
+    (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows) (Θ : Set Par) (Zs : Set Zt)
+    (sched : Zt → CertifierSchedule Conn) (srv : Zt → Srv) (dec : (Conn → List (ℕ × CellView Cell)) → Zt)
     (hch : MonitoringPeriodChannelReg f allows Θ Zs sched srv dec fun p => (run tap p).1)
-    (W : Z → Fin m → Finset ℕ) (Reg : Z → Prop)
+    (W : Zt → Fin m → Finset ℕ) (Reg : Zt → Prop)
     (hWn : ∀ z ∈ Zs, Reg z → ∀ i, W z i ⊆ range (Pw i).blocks.length) (Fmax : ℕ) :
     {z | z ∈ Zs ∧ Reg z ∧ PooledGoodChecked lay k reg valid Dj sw Pw ρ
         (fun i => op i (runsBefore (run tap (sched z, srv z)).2 i)) Fmax (W z) (run tap (sched z, srv z)).2}.encard ≤
@@ -487,7 +485,7 @@ theorem encard_pooledRegChecked_le {Lk K S m : ℕ} (lay : AuditStatement → Bo
         ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card *
           Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
   classical
-  let W' : Z → Fin m → Finset ℕ := fun z i => (W z i).filter (· < (Pw i).blocks.length)
+  let W' : Zt → Fin m → Finset ℕ := fun z i => (W z i).filter (· < (Pw i).blocks.length)
   have hW' : ∀ z i, W' z i ⊆ range (Pw i).blocks.length := fun z i v hv => mem_range.2 (mem_filter.1 hv).2
   have hWeq : ∀ z ∈ Zs, Reg z → W' z = W z := fun z hz hr => funext fun i =>
     Finset.filter_true_of_mem fun v hv => mem_range.1 (hWn z hz hr i hv)
