@@ -79,7 +79,7 @@ readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_compare.py", find = "a\\.serve / \"serve\\.json\"" },
     { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "serve_dir / \"serve\\.json\"\\)\\.read" },
     { lane = "network-accounting", file = "benchmarks/network_traces/served_session.py", find = "src / \"serve\\.json\"" },
-    { lane = "network-accounting", file = "benchmarks/network_e2e/chain.py", find = "ep / \"serve\\.json\"" },
+    { lane = "network-accounting", file = "adapters/vllm/verity_vllm/pipeline/advice_bind.py", find = "ep / \"serve\\.json\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\\[\"clocks\"\\]\\[\"time\"\\].*\"\\$D/serve\\.json\"|d / \"serve\\.json\"" },
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "\"serve\\.json\"" },
     { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "\"serve\\.json\"" },
@@ -129,6 +129,7 @@ readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$D/windows\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "REC_RUN/windows\\.jsonl" },
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "\"windows\\.jsonl\"" },
+    { lane = "network-accounting", file = "adapters/vllm/verity_vllm/pipeline/advice_bind.py", find = "ep / \"windows\\.jsonl\"" },
 ]
 
 [[message]]
@@ -206,6 +207,7 @@ writers = [
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "advice_trace\\.jsonl" },
     { lane = "network-accounting", file = "benchmarks/network_e2e/chain.py", find = "ep / \"advice_trace\\.jsonl\"" },
+    { lane = "network-accounting", file = "adapters/vllm/verity_vllm/pipeline/advice_bind.py", find = "ep / \"advice_trace\\.jsonl\"" },
     { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "ENDPOINT = \\(\"advice_trace\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_overhead.py", find = "TRACE, WINDOWS, SERVE = \"advice_trace\\.jsonl\"" },
 ]
@@ -220,6 +222,7 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "adv / \"private\" / \"advice\\.bin\", opening=adv / \"private\" / \"opening\\.json\"|last\\.dir / \"private\" / \"opening\\.json\"|\"advice\" / f\"w\\{a\\.window\\}\" / \"private\" / \"opening\\.json\"" },
     { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "REC_RUN/advice/w\\$REC_K/private/opening\\.json" },
+    { lane = "network-accounting", file = "adapters/vllm/verity_vllm/pipeline/advice_bind.py", find = "\"private\" / \"(advice|opening)\\.json\"" },
 ]
 
 [[message]]
@@ -233,6 +236,7 @@ readers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "/ \"registration\\.json\"\\)\\.read_text" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$D/advice/w\\$K/registration\\.json\"|\"\\$D/advice/\\.w\\$K/windows\\.json\"" },
     { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "advice/w\\$3/registration\\.json" },
+    { lane = "network-accounting", file = "adapters/vllm/verity_vllm/pipeline/advice_bind.py", find = "d / \"registration\\.json\"|adv_dir / \"windows\\.json\"" },
 ]
 
 [[message]]

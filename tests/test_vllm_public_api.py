@@ -178,6 +178,9 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.pipeline.advice_bind": "I1: the endpoint's own advice bound to a run's certified I/O and charged per "
+                                        "execution phase (`verity-vllm advice --bind`), which benchmarks/network_traces' "
+                                        "chain record takes from the command's output",
     "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
                                         "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
     "verity_vllm.compiler.replay_chain": "I1: the replay chain's rows, windows and units (load, advance, close), which "

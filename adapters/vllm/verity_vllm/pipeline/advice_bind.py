@@ -8,8 +8,9 @@ Commit) with its opening beside it. ``--bind`` names the run: its execution phas
 bound to the advice (each window opened to its registered root, every certified request admitted in exactly one window, a
 window that carries requests in joined to the window before it, `window_chain.join`) and each chain of windows rebuilt
 from its certified I/O under the config read off the endpoint's records (`endpoint_config`), its bits placed in the run's
-execution phases (`served_advice`). The command writes nothing and prints one JSON document (`main`): either ``advice``
-and ``bits``, `served_advice`'s two, or ``error``, the repr of what refused the records.
+execution phases (`served_advice`). Each record is read through its message's declaration (`verity_vllm.messages`).
+The command writes nothing and prints one JSON document (`main`): either ``advice`` and ``bits``, `served_advice`'s
+two, or ``error``, the repr of what refused the records.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from typing import Any
 
 from verity.protocols.resource_accounting.network.prover import window_chain as WC
 from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm import messages as M
 from verity_vllm.log import write
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_code import derived as D
@@ -31,10 +33,6 @@ ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json
 SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
 COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
 ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
-
-
-def _jsonl(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
 
 
 def holdings(adv: I1.Advice, io: Sequence[Mapping[str, Any]]) -> tuple[D.Holdings | None, tuple[int, ...] | None, str | None]:
@@ -143,11 +141,11 @@ def served_advice(ep: Path, adv_dir: Path, deployment: Mapping[str, Any], io: Se
     step's bucket, each later window's release counted from its own first step's, so its bits land in the execution
     phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first window's
     row."""
-    recs = _jsonl(ep / "advice_trace.jsonl")
-    serve = json.loads((ep / "serve.json").read_text())
-    index = json.loads((adv_dir / "windows.json").read_text())
+    recs = [json.loads(x) for x in M.lines(ep / "advice_trace.jsonl", "Advice")]
+    serve = json.loads(M.read(ep / "serve.json", "ServingConfiguration"))
+    index = json.loads(M.read(adv_dir / "windows.json", "Advice"))
     commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
-               for d in _jsonl(ep / "windows.jsonl")}
+               for d in map(json.loads, M.lines(ep / "windows.jsonl", "Run"))}
     first = first_steps(recs)
     origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
     bucket_s = deployment["window_s"] / T
@@ -183,14 +181,14 @@ def served_advice(ep: Path, adv_dir: Path, deployment: Mapping[str, Any], io: Se
             rows.append({"window": w, "refused": why})
             continue
         d = adv_dir / f"w{w}"
-        reg = json.loads((d / "registration.json").read_text())
-        adv = WA.from_json(json.loads((d / "private" / "advice.json").read_text()))
+        reg = json.loads(M.read(d / "registration.json", "Advice"))
+        adv = WA.from_json(json.loads(M.read(d / "private" / "advice.json", "Advice")))
         ids = [q.id for q in adv.requests]
         for i in ids[len(adv.carried):]:
             if i in seen:
                 seen[i] += 1
         foreign = [i for i in ids if i not in certified]
-        opened = WA.opens(reg, json.loads((d / "private" / "opening.json").read_text()), adv)
+        opened = WA.opens(reg, json.loads(M.read(d / "private" / "opening.json", "Advice")), adv)
         at = math.floor((first[w] - origin) / bucket_s)
         row = {"window": w, "commit": reg.get("commit"), "commit_is_the_windows": reg.get("commit") == commits.get(w),
                "root": reg["binding"]["advice"]["root"], "opened": opened, "requests": len(ids) - len(adv.carried),
