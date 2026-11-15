@@ -28,7 +28,7 @@ sub-Call is a word Definition; with these, Gemma-2's GeGLU under `registered_val
 from __future__ import annotations
 
 from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal, localcontext
-from functools import lru_cache, cache
+from functools import cache, lru_cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (

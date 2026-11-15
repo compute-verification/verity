@@ -20,7 +20,7 @@ No word Definition calls a MUFU (`TanhF32Rn_v1` is the libdevice `tanhf` stand-i
 """
 from __future__ import annotations
 
-from functools import lru_cache, cache
+from functools import cache, lru_cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (

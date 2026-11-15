@@ -30,7 +30,7 @@ Definition.
 """
 from __future__ import annotations
 
-from functools import lru_cache, cache
+from functools import cache, lru_cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (
