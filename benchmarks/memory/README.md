@@ -111,8 +111,9 @@ reads for the store in each stretch against what it could read:
 - the ledger that turns a session into the share and its error (`verifier/session/verifier.py`), and the error rule
   (an error of 1 or more prints no number);
 - the session's form: one paced session (`--paced 1:1000:2773:7`, a coin every pass group, seven credited stretches
-  of a second at 2773 openings each, its groups counted at an 85 ms pass). `--local` refuses any other `PACED` or
-  `PACE_PASS_MS`, and any `UNPACED`, `SESSIONS`, `WINDOWS`, `WINDOW_MS` or `SAMPLES`;
+  of a second at 2773 openings each, its groups counted at the pass the session's calibration measures on the card,
+  `PACE_PASS_MS=0`). `--local` refuses any other `PACED` or `PACE_PASS_MS`, and any `UNPACED`, `SESSIONS`, `WINDOWS`,
+  `WINDOW_MS` or `SAMPLES`;
 - the data sheets the share is of, and this command.
 
 A number from a changed verifier or sheet is not a result, and the digests in its `machine` line say which changed.

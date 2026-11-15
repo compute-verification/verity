@@ -1079,8 +1079,10 @@ class Machine:
 
 @pytest.fixture
 def work(tmp_path, monkeypatch) -> Path:
-    """LOCAL_WORK in the test's directory, a vLLM interpreter of the person's own, and no `gpu-lease` installed."""
+    """LOCAL_WORK in the test's directory, a vLLM interpreter of the person's own, and no `gpu-lease` installed nor a
+    lease directory of the machine's."""
     monkeypatch.setenv("LOCAL_WORK", str(tmp_path / "work"))
+    monkeypatch.setattr(M, "LEASE_DIR", tmp_path / "no-lease-dir")
     monkeypatch.setenv("VLLM_PY", str(tmp_path / "vllm" / "python"))
     monkeypatch.setattr(M.shutil, "which", lambda name: None)
     return tmp_path / "work"
@@ -1103,8 +1105,9 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
                                   *sorted(pin["files"])]]
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.8"
     assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
-    assert env["VERIFIER_ARGS"] == (f"--paced 1:1000:2773:7 --pace-pass-ms 85 --node {env['RESEARCH_RUN_DIR']}/"
-                                    f"{M.NODE_FILE} --hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
+    assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
+    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
+                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
     assert (env["JITTER_MS"], env["QUANTILE"]) == ("50", "max")
     assert (env["NODE_WORKSPACE"], env["HF_HOME"], env["UV_CACHE_DIR"], env["GPU_LEASE_DIR"]) == (
         str(work), str(work / "hf"), str(work / "cache/uv"), str(work / "gpu-lease"))
@@ -1160,6 +1163,16 @@ def test_the_arena_vllm_py_gpu_and_cores_are_the_persons_to_set(store, capsys, w
     assert printed(capsys)[1]["machine"]["arena_gib"] == 80
 
 
+def test_a_machines_own_lease_directory_stays_the_one_its_lease_counts_in(store, work, monkeypatch, tmp_path):
+    """A lease in LOCAL_WORK would take a card no other lane on the machine sees taken: where the machine has its
+    lease directory, `--local` leaves GPU_LEASE_DIR to it."""
+    (tmp_path / "no-lease-dir").mkdir()
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert "GPU_LEASE_DIR" not in env
+
+
 def test_local_splits_this_process_cores_among_the_engine_the_prover_and_the_verifier(store, work):
     machine = Machine()
     assert bench(store, "--local", run=machine) == 0
@@ -1170,7 +1183,7 @@ def test_local_splits_this_process_cores_among_the_engine_the_prover_and_the_ver
         or len(have) < 4
 
 
-@pytest.mark.parametrize("given", [{"PACED": "1:60000:33273:2"}, {"PACE_PASS_MS": "17"}, {"WINDOWS": "7"},
+@pytest.mark.parametrize("given", [{"PACED": "1:60000:33273:2"}, {"PACE_PASS_MS": "85"}, {"WINDOWS": "7"},
                                    {"UNPACED": "7:60000:33273"}, {"SESSIONS": "2", "SAMPLES": "64"}])
 def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, given):
     for k, v in given.items():
@@ -1179,7 +1192,7 @@ def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, gi
     assert bench(store, "--local", run=machine) == 2
     assert machine.started == []
     err = capsys.readouterr().err
-    assert "--local runs one session form, PACED=1:1000:2773:7 at PACE_PASS_MS=85" in err
+    assert "--local runs one session form, PACED=1:1000:2773:7 at PACE_PASS_MS=0" in err
     assert all(f"{k}={v}" in err for k, v in given.items())
 
 

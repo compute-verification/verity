@@ -41,8 +41,8 @@ SERVE=node and GPUS=1, a vLLM engine (VLLM_PY's) serving ROLE's pinned checkpoin
 most of the card's memory (`arena_of`), which is the store; the node prover reads the whole arena in paced, timed
 passes beside the serving, and the Lean verifier and its coins run in processes beside them, in one session form
 (`PACE`, refused otherwise). The checkpoint is fetched into LOCAL_WORK; with no `gpu-lease` installed, the lease is
-the tree's own program, its locks in LOCAL_WORK. The run's records stay in LOCAL_WORK/runs/ (the research run's own
-directory under one). A session whose store is below `STORE_MIN` of the card's memory prints no number. The verifier
+the tree's own program, its locks in LOCAL_WORK unless the machine has a lease directory of its own (`LEASE_DIR`).
+The run's records stay in LOCAL_WORK/runs/ (the research run's own directory under one). A session whose store is below `STORE_MIN` of the card's memory prints no number. The verifier
 and the coins ran on the machine being measured, so the number is a measurement to improve on and not an audit: the
 text says so first, and the JSON says it under `local`. It reads no evidence store, so the two references beside it
 are left out with that reason.
@@ -131,9 +131,12 @@ LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-serve
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
 VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier"
 SHEETS = ROOT / "hardware"
-#: the one session form `--local` runs, the node run's paced session (PACED's default) as its verifier takes it: a coin
-#: a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at `gate.sh`'s pass
-PACE = {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "85"}
+#: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
+#: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
+#: the pass the session's calibration measures on the card (`--pace-pass-ms 0`)
+PACE = {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "0"}
+#: the machine's own lease directory (`gpu_lease.sh`'s default), which every lane's lease on the machine counts in
+LEASE_DIR = Path("/run/gpu-lease")
 #: `run.sh`'s windowed form, which the paced session replaces: --local refuses each of them set
 WINDOWED = ("UNPACED", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
 #: the node run's engine and prover, with one engine (`gate_run.sh`'s ENGINE_ARGS and NODE_ARGS), and its verifier's
@@ -570,15 +573,17 @@ def local(run: Callable = subprocess.run) -> dict:
     """The node's session on one card of this machine: `run.sh` with ROLE=both, SERVE=node and GPUS=1, a vLLM engine
     serving ROLE's pinned checkpoint with its weights in one arena (`engine.py`), the store, which the node prover
     (`node.py`) reads whole in paced, timed passes, and the verifier beside them on cores of its own, in the one
-    session form (`PACE`), read from its records. VLLM_PY is the vLLM interpreter; the checkpoint, the caches and,
-    with no `gpu-lease` installed, the tree's own lease's locks are kept in LOCAL_WORK. The run's records are kept, in
+    session form (`PACE`), read from its records. VLLM_PY is the vLLM interpreter; the checkpoint and the caches are
+    kept in LOCAL_WORK, and on a machine with no lease of its own (no `gpu-lease` and no `LEASE_DIR`) the tree's
+    lease's locks too, while a machine's own lease directory stays the one every lane there counts in. The run's records are kept, in
     the research run's directory under one and else in a directory of LOCAL_WORK/runs/. A session whose store is
     below `STORE_MIN` of the card's memory prints no number."""
     given = SETTINGS.environ()
     other = [f"{k}={given[k]}" for k, v in PACE.items() if given.get(k, v) not in (v, "")]
     if other := other + [f"{k}={given[k]}" for k in WINDOWED if given.get(k)]:
         raise Unreadable(f"--local runs one session form, PACED={PACE['PACED']} at PACE_PASS_MS={PACE['PACE_PASS_MS']} "
-                         f"(a coin a pass group, seven credited stretches of a second at 2773 openings each), so its "
+                         f"(a coin a pass group, seven credited stretches of a second at 2773 openings each, at the "
+                         "pass the calibration measures), so its "
                          f"numbers compare: {', '.join(other)} is another")
     if not SETTINGS.VLLM_PY:
         raise CouldNotRun("--local serves with vLLM, and VLLM_PY names no vLLM interpreter: make one (`uv venv "
@@ -596,9 +601,9 @@ def local(run: Callable = subprocess.run) -> dict:
         held = tempfile.mkdtemp(prefix="run-", dir=work / "runs")
     (Path(held) / NODE_FILE).parent.mkdir(parents=True, exist_ok=True)
     (Path(held) / NODE_FILE).write_text(json.dumps(node, sort_keys=True))
-    paced = ["--paced", PACE["PACED"], "--pace-pass-ms", PACE["PACE_PASS_MS"]]
     env = {"ENGINE_CPUS": engine_cpus, "PROVER_CPUS": prover_cpus, "VERIFIER_CPUS": verifier_cpus, **LATENESS,
-           **given, "ROLE": "both", "SERVE": "node", "GPUS": "1", "PLAN": SETTINGS.PLAN or "honest", "MODEL": str(snap),
+           **given, **PACE, "ROLE": "both", "SERVE": "node", "GPUS": "1", "PLAN": SETTINGS.PLAN or "honest",
+           "MODEL": str(snap),
            "NODE_WORKSPACE": str(work), "HF_HOME": str(work / "hf"), "UV_CACHE_DIR": str(work / "cache" / "uv"),
            "PIP_CACHE_DIR": str(work / "cache" / "pip"), "XDG_CACHE_HOME": str(work / "cache"),
            "RESEARCH_RUN_DIR": held,
@@ -606,9 +611,9 @@ def local(run: Callable = subprocess.run) -> dict:
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
                                                given.get("NODE_ARGS")])),
-           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), *paced, "--node",
+           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
-    if shutil.which("gpu-lease") is None:
+    if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
           f"verifier's node one card of {kind}; its records go to {held}/out", file=sys.stderr)
