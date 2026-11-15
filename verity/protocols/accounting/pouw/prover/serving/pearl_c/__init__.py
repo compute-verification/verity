@@ -87,6 +87,7 @@ from verity.protocols.accounting.pouw.verifier.serving import (
     hash_format,
 )
 
+from verity.protocols.accounting.pouw.prover.serving import run_matmul
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds, _Pass
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs import (
     GRAPH_ROWS,
@@ -721,7 +722,7 @@ class _ExecutorPass:
                 run.poison(0xA5 if c.arg is None else c.arg)
 
     def call(self, site: Any, x: Any, weight: Any, bias: Any) -> Any:
-        return self.run.gemm(site.weight_id, x, weight, bias)
+        return run_matmul(self.run, site.weight_id, x, weight, bias)
 
     def end(self) -> dict[str, Any]:
         try:

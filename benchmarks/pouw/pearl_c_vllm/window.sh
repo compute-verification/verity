@@ -78,7 +78,7 @@ UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 export E2E_GPU_UUID=$UUID
 if [ "${STATEMENT:-}" = build ]; then
   /usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
-    benchmarks/pouw/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
+    verity/protocols/accounting/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi
 [ -z "${STATEMENT:-}" ] || SWITCHES+=(--statement "$STATEMENT")

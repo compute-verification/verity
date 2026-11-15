@@ -1,5 +1,5 @@
-// Kernels the SASS gate refuses even built without flags (../../test_sass_gate.py): each has an instruction the verifier's
-// scalar model can't replay and no pinned sequence covers. __frsqrt_rn is correctly rounded but ptxas builds it from two bare
+// Kernels the SASS gate refuses even built without flags (benchmarks/pouw/tests/test_sass_gate.py): each has an
+// instruction the verifier's scalar model can't replay and no pinned sequence covers. __frsqrt_rn is correctly rounded but ptxas builds it from two bare
 // MUFU.RSQ, which the gate has no entry for; the rest are approximate or flush subnormals. refused.nvdisasm.txt is
 // `nvdisasm -c` of this file built like ftz_probe.cu (plain) with CUDA 12.9.1.
 extern "C" __global__ void frsqrt_k(float* y, const float* a) {

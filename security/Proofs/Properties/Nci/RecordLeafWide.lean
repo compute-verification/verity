@@ -42,9 +42,9 @@ end NciCheck.Properties.SecurityProofs.Resolve
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope Ref Ty)
+open Flock.Program (Prog Scope Ref Ty fieldsOf)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row fieldsOf)
+open NciCheck.RecordText (Row)
 open NciCheck.Record.SecurityProofs (ranges_spec)
 open NciCheck.Properties.SecurityProofs
 

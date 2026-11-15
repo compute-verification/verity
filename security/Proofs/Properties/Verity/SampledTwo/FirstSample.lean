@@ -185,7 +185,8 @@ theorem accepted_secondLaw {form : Bool} {p : Params} {c : OneStage.Commitment} 
     hchk, hd⟩ := run_draw hr hj
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw₂⟩ := secondLawOf_ok hl
   rw [hd] at hlaw₂
-  obtain ⟨h1, h2, h3, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
+  obtain ⟨h1, h2, h3, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂
+    { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
   rw [hio] at hn hrule htab hder hres hsel hchk
   rw [h3] at hn hchk
   rw [h1, h2] at hrule htab hres

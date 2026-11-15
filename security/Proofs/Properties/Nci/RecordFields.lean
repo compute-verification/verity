@@ -6,7 +6,7 @@ public import Proofs.Properties.Nci.LeafWidthsType
 /-!
 # A field's leaf is a leaf of the return
 
-An output row is one field of a Definition's return type (`RecordText.fieldsOf`), and its leaves are the return's
+An output row is one field of a Definition's return type (`Flock.Program.fieldsOf`), and its leaves are the return's
 leaves from the field's first, the leaves of the fields before it.
 
 * `fields_leaf`: of a list of types, a leaf of one of them is a leaf of the list's, after the leaves of the types
@@ -20,7 +20,6 @@ leaves from the field's first, the leaves of the fields before it.
 namespace NciCheck.Properties.Record.SecurityProofs
 
 open Flock.Program
-open NciCheck.RecordText (fieldsOf)
 open NciCheck.Properties.SecurityProofs.LeafWidths (wStep foldl_leaves field_le fold_wAt leaves_tuple leaves_record
   wAt_tuple wAt_record)
 
@@ -85,22 +84,18 @@ theorem field_leaf (t : Ty) (f l : ℕ) (hf : f < (fieldsOf t).length) (hl : l <
   | value w => exact field_leaf_one (.value w) rfl f l hf hl
   | array n e => exact field_leaf_one (.array n e) rfl f l hf hl
   | tuple fs =>
-    by_cases he : fs.isEmpty = true
-    · exact field_leaf_one (.tuple fs) (ite_eq_left he) f l hf hl
-    · have hfo : fieldsOf (.tuple fs) = fs.toList := ite_eq_right he
-      rw [hfo] at hf hl ⊢
-      obtain ⟨h1, h2⟩ := fields_leaf _ f l hf hl
-      rw [leaves_tuple, wAt_tuple, h2, Option.getD_some]
-      exact ⟨h1, rfl⟩
+    have hfo : fieldsOf (.tuple fs) = fs.toList := rfl
+    rw [hfo] at hf hl ⊢
+    obtain ⟨h1, h2⟩ := fields_leaf _ f l hf hl
+    rw [leaves_tuple, wAt_tuple, h2, Option.getD_some]
+    exact ⟨h1, rfl⟩
   | record fs =>
-    by_cases he : fs.isEmpty = true
-    · exact field_leaf_one (.record fs) (ite_eq_left he) f l hf hl
-    · have hfo : fieldsOf (.record fs) = fs.toList.map (·.2) := ite_eq_right he
-      rw [hfo] at hf hl ⊢
-      obtain ⟨h1, h2⟩ := fields_leaf _ f l hf hl
-      rw [foldl_map_wStep] at h2
-      rw [List.map_map] at h1
-      rw [leaves_record, wAt_record, h2, Option.getD_some]
-      exact ⟨h1, rfl⟩
+    have hfo : fieldsOf (.record fs) = fs.toList.map (·.2) := rfl
+    rw [hfo] at hf hl ⊢
+    obtain ⟨h1, h2⟩ := fields_leaf _ f l hf hl
+    rw [foldl_map_wStep] at h2
+    rw [List.map_map] at h1
+    rw [leaves_record, wAt_record, h2, Option.getD_some]
+    exact ⟨h1, rfl⟩
 
 end NciCheck.Properties.Record.SecurityProofs

@@ -109,7 +109,7 @@ echo "$(date -u +%H:%M:%SZ) builds rc=$pb" | tee -a "$OUT/steps.txt"
 [ "$pb" = 0 ] || { tail -30 "$OUT/prebuild.log"; stop "the builds (rc $pb, prebuild.log)" 16; }
 ( export PATH=$CLEAN_PATH; unset PYTHONPATH PY PY312 VIRTUAL_ENV; cd "$TREE" || exit 1
   OUT=$OUT/a5 COMMIT_SCHEME=rows-sha512 WINDOW=served A5_ROW_DIR=$D A5_PARTITION=$PART A5_WINDOW=$WD A5_FLOCK_WORK=$FW \
-    bash benchmarks/one_stage/a5.sh ) > "$OUT/a5.out" 2>&1
+    bash verity/protocols/proofs/spot/prover/audit/window_audit.sh ) > "$OUT/a5.out" 2>&1
 ar=$?
 echo "$(date -u +%H:%M:%SZ) a5 rc=$ar" | tee -a "$OUT/steps.txt"
 

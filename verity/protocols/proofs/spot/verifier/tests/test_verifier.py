@@ -16,8 +16,15 @@ from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean,
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, hello as H, link_points as LP, partition as P,
-                                                            registration as R, verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    hello as H,
+    link_points as LP,
+    partition as P,
+    docket as R,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 
@@ -86,7 +93,7 @@ def test_every_check_runs_both_and_records_them():
 
 
 def test_the_declared_day_is_held_by_both():
-    """R2's declared day (`registration._declared`, `Registration.declaredCode`) by the verifier: the day's own program,
+    """R2's declared day (`registration._declared`, `VStar.Recursive.Caller.declaredCode`) by the verifier: the day's own program,
     another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the
     Python; and the Lean refuses the parameters the Python refuses (`registration._declarations`): a day without
     declarations or the other way round, a day that isn't a natural number, and a declaration not of the view's form."""

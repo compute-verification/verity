@@ -18,7 +18,7 @@ import pytest
 from verity.protocol import place, site_of
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Refused
 
 SP, WORK = P.SUBPROTOCOLS["verity/remote/v1"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v1"]["pearl-plus"]
