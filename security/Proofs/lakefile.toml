@@ -118,6 +118,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Flock.SpotFlock.HeldOfWires",
   "Proofs.Flock.SpotFlock.DoWalk", "Proofs.Flock.SpotFlock.ParamsWf",
   "Proofs.Properties.Verity.SampledTwo.PortsOfParams",
+  "Proofs.Properties.Verity.SampledTwo.FormStmtsRead",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.InferenceOnly.ReadsExact",
   "Proofs.Properties.InferenceOnly.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
