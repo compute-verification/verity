@@ -330,6 +330,7 @@ patterns = [
     "\\bDraws\\.skip\\b",
     "\\bfirst_draw\\b",
     "(?<=``)drawn(?=``)",
+    "\\.draw\\b(?!\\()",
 ]
 strings = [
     "the PoUW window's keyed draw takes A4 and A5",
