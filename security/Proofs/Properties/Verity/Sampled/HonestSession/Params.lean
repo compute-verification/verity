@@ -74,7 +74,7 @@ open Lean (Json)
 open FlockSoundness.Discharge.Recursion.FirewallObj (plain_mkObj)
 open FlockSoundness.Discharge.Recursion.FirewallJson renaming norm → jnorm
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 400000
 set_option maxRecDepth 200000
 
 /-- `plstr`: a plain literal string, number, null or empty array is plain, by the tree's canonical recipe (the string's
@@ -427,6 +427,7 @@ private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
 
 /-! ## v2's parameters, with every field named -/
 
+set_option maxHeartbeats 4000000 in
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
 private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
     ∃ p : Spot.OneStageZk.Params,
