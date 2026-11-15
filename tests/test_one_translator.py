@@ -1,16 +1,22 @@
-"""One translator from PyTorch to circuits: the PyTorch adapter (`adapters/torch/`) holds the only code that traces a PyTorch
-program as a graph, and the training benchmark reaches it only through the adapter's public names.
+"""One translator from a PyTorch training step to a circuit: the PyTorch adapter (`adapters/torch/`), which the training
+benchmark reaches only through its public names.
 
-- No tracked Python file outside the adapter calls a PyTorch graph tracer (`TRACERS`), named through what its imports bind,
-  but the files `ALLOWED` names, each with why. `ALLOWED` only shrinks: each file in it is tracked and still calls one.
-- No source of the training benchmark outside its tests imports a name of an adapter module that the module's `__all__`
-  doesn't list, nor reads such a name off a module of the adapter it imports.
+- No tracked source outside the adapter and outside tests traces a training step: calls a PyTorch graph tracer (`TRACERS`,
+  named through what its imports bind) in a file that runs a backward or builds an optimizer. A test may trace a step to check
+  what it measures; the vLLM adapter's export of a served forward runs no backward.
+- No tracked source outside the adapter and outside tests describes a training step as a circuit by hand: builds a Definition
+  whose name starts with `Train`.
+- `EXCEPTION` names the one file that does either today, with why. It only shrinks: a file in it that no longer does fails.
+- No source of the training benchmark outside its tests reads a name of an adapter module that the module's `__all__` doesn't
+  list: one it imports, or one it reads off a module of the adapter it imports.
 
-Nothing is executed (AST only). A tracer reached another way (`getattr`, a string handed to an import) is not seen."""
+Nothing is executed (AST only). A tracer reached another way (`getattr`, an import by string), a step traced in a file that
+only receives its backward, or a step's Definition under another name is not seen."""
 
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 from test_boundaries import ROOT, _is_test, _tracked_python
@@ -25,25 +31,19 @@ TRACERS = frozenset({
     "torch.fx.Tracer", "torch.jit.trace", "torch._subclasses.fake_tensor.FakeTensorMode", "torch._subclasses.FakeTensorMode",
     "torch._functorch.aot_autograd.aot_function", "torch._functorch.aot_autograd.aot_module",
     "functorch.compile.aot_function"})
-_VLLM_TEST = "a vLLM adapter test that exports a toy served forward for the derivation it tests"
-#: {file outside the adapter that calls a tracer: why}. It only shrinks.
-ALLOWED = {
-    "adapters/vllm/verity_vllm/program/frontend/vllm_meta.py":
-        "the vLLM adapter exports a served model's forward, which the PyTorch adapter's derivation reads",
-    "adapters/vllm/tests/pipeline/tp_toy.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_derive_tp_stochastic.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_dsa_derive.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_dsa_fp8_derive.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_dsv4_derive.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_harden_alias.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_launch_batch.py": _VLLM_TEST,
-    "adapters/vllm/tests/program/test_pouw_lowering.py": _VLLM_TEST,
-    "benchmarks/training_slowdown/tests/test_flops.py": "the counter's test traces one op for the dtype make_fx records",
+#: what runs a backward, by its name; and a call of any attribute named `backward`
+BACKWARD = frozenset({"torch.autograd.grad", "torch.autograd.backward"})
+STEP_DEFINITION = re.compile(r"Train")
+#: {file outside the adapter that traces or describes a training step: why}. It only shrinks.
+EXCEPTION = {
+    "adapters/vllm/verity_vllm/definitions/registry/torch_step.py":
+        "`TrainStep_v1`, a decoder's training step built by hand from the training Definitions (with its numerics model, "
+        "`numerics/torch_step.py`), stays until the PyTorch adapter derives that step",
 }
 
 
 def _bound(tree: ast.AST) -> dict[str, str]:
-    """{name: the dotted module or object it names} for each name the imports of `tree` bind (absolute ones)."""
+    """{name: the dotted module or object it names} for each name the absolute imports of `tree` bind."""
     out = {}
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
@@ -63,11 +63,25 @@ def _dotted(e: ast.AST, bound: dict[str, str]) -> str | None:
     return ".".join([bound[e.id], *reversed(parts)]) if isinstance(e, ast.Name) and e.id in bound else None
 
 
-def tracer_calls(source: str) -> list[str]:
-    """`line: tracer` for each call in `source` of a name `TRACERS` holds."""
-    tree = ast.parse(source)
+def _calls(tree: ast.AST) -> list[tuple[ast.Call, str | None]]:
     bound = _bound(tree)
-    return [f"{n.lineno}: {d}" for n in ast.walk(tree) if isinstance(n, ast.Call) and (d := _dotted(n.func, bound)) in TRACERS]
+    return [(n, _dotted(n.func, bound)) for n in ast.walk(tree) if isinstance(n, ast.Call)]
+
+
+def step_translations(source: str) -> list[str]:
+    """`line: what` for each tracer call in `source` when it also runs a backward or builds an optimizer, and for each
+    Definition it builds of a training step."""
+    calls = _calls(ast.parse(source))
+    trains = any(d in BACKWARD or (d or "").startswith("torch.optim.")
+                 or (isinstance(n.func, ast.Attribute) and n.func.attr == "backward") for n, d in calls)
+    out = [f"{n.lineno}: {d}" for n, d in calls if trains and d in TRACERS]
+    for n, d in calls:
+        name = n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
+        first = n.args[0] if n.args else None
+        if (name.endswith("Definition") and isinstance(first, ast.Constant) and isinstance(first.value, str)
+                and STEP_DEFINITION.match(first.value)):
+            out.append(f"{n.lineno}: {name}({first.value!r})")
+    return out
 
 
 def _public(module: str) -> set[str] | None:
@@ -99,17 +113,19 @@ def private_reads(source: str) -> list[str]:
     return out
 
 
-def test_nothing_outside_the_adapter_traces_a_pytorch_program() -> None:
-    found = {rel: calls for rel, text in _tracked_python().items()
-             if not rel.startswith(ADAPTER) and rel not in ALLOWED and (calls := tracer_calls(text))}
-    assert not found, ("a second translator: these files trace a PyTorch program, which only the PyTorch adapter does; call "
-                       f"its public interface (`verity_torch.frontend.train_step.export_steps`, `steps_program`): {found}")
+def test_only_the_adapter_turns_a_training_step_into_a_circuit() -> None:
+    found = {rel: hits for rel, text in _tracked_python().items()
+             if not rel.startswith(ADAPTER) and not _is_test(rel) and rel not in EXCEPTION
+             and (hits := step_translations(text))}
+    assert not found, ("a second translator: these files trace or describe a PyTorch training step, which only the PyTorch "
+                       "adapter does; call its public interface (`verity_torch.frontend.train_step.export_steps`, "
+                       f"`steps_program`): {found}")
 
 
-def test_allowed_only_shrinks_to_files_that_still_trace() -> None:
+def test_the_exception_only_shrinks() -> None:
     texts = _tracked_python()
-    stale = sorted(rel for rel in ALLOWED if rel not in texts or not tracer_calls(texts[rel]))
-    assert not stale, f"ALLOWED names files that no longer trace a PyTorch program: delete their entries: {stale}"
+    stale = sorted(rel for rel in EXCEPTION if rel not in texts or not step_translations(texts[rel]))
+    assert not stale, f"EXCEPTION names files that no longer trace or describe a training step: delete their entries: {stale}"
 
 
 def test_the_training_benchmark_reads_only_the_adapters_public_names() -> None:
@@ -120,12 +136,17 @@ def test_the_training_benchmark_reads_only_the_adapters_public_names() -> None:
 
 
 def test_a_second_translator_and_a_private_read_are_found() -> None:
-    assert tracer_calls("from torch.fx.experimental.proxy_tensor import make_fx as trace\ng = trace(f)(x)\n") == [
-        "2: torch.fx.experimental.proxy_tensor.make_fx"]
-    assert tracer_calls("import torch\ntorch.export.export(m, (x,))\n") == ["2: torch.export.export"]
-    assert tracer_calls("import torch._subclasses.fake_tensor as ft\nwith ft.FakeTensorMode():\n    pass\n") == [
-        "2: torch._subclasses.fake_tensor.FakeTensorMode"]
-    assert tracer_calls("import torch\nm = torch.compile(m)\n") == []
+    traced = "from torch.fx.experimental.proxy_tensor import make_fx as trace\n\ndef step(m, x):\n    m(x).sum().backward()\n\n"
+    assert step_translations(traced + "g = trace(step)(m, x)\n") == ["6: torch.fx.experimental.proxy_tensor.make_fx"]
+    assert step_translations("import torch\nopt = torch.optim.AdamW(ps)\ntorch.export.export(m, (x,))\n") == [
+        "3: torch.export.export"]
+    assert step_translations("import torch._subclasses.fake_tensor as ft\nimport torch\ntorch.autograd.grad(y, x)\n"
+                             "with ft.FakeTensorMode():\n    pass\n") == ["4: torch._subclasses.fake_tensor.FakeTensorMode"]
+    assert step_translations("import torch\ntorch.export.export(m, (x,))\n") == []
+    assert step_translations("import torch\nm = torch.compile(m)\nm(x).sum().backward()\n") == []
+    assert step_translations("S = CompositeDefinition(\n    'TrainLoop', 1, (), sig, body)\n") == [
+        "1: CompositeDefinition('TrainLoop')"]
+    assert step_translations("S = CompositeDefinition('CacheStep', 1, (), sig, body)\n") == []
     assert private_reads("from verity_torch.frontend.train_trace import _trace, CaptureRefused\n") == [
         "1: verity_torch.frontend.train_trace._trace"]
     assert private_reads("from verity_torch.frontend import train_trace\ntrain_trace._marked_attention()\n") == [
