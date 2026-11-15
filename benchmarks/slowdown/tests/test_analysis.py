@@ -168,8 +168,8 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 
-    drawn = []
-    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: drawn.append((out, targets)) or {})
+    plotted = []
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: plotted.append((out, targets)) or {})
     monkeypatch.setenv("OUT", str(tmp_path))
     monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", NAMES[0]])
     run.main()
@@ -180,7 +180,7 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     record = json.loads((tmp_path / "slowdown.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     assert set(record["scenarios"]) == {NAMES[0]}
     assert {"corner", "slowdown_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
-    assert drawn == [(tmp_path / "figures", [10.0])]
+    assert plotted == [(tmp_path / "figures", [10.0])]
 
 
 def test_the_runner_runs_by_path_from_any_directory(tmp_path):
@@ -264,7 +264,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
             "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket execution phase, at the network "
             "certifier form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
-            "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
+            "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is sampled)") in text
     assert "line rate, 5.01e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1
     record = json.loads((tmp_path / "slowdown.json").read_text())["scenarios"]

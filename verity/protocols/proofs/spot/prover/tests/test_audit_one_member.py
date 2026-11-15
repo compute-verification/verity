@@ -35,6 +35,8 @@ pytestmark = pytest.mark.slow
 
 #: The sampling design, the plain random subset, and the window's one instance, which its sample is
 DESIGN, N = "subset:1", 1
+#: the rate the audit is given, which names `DESIGN` over the window's one proof block
+RATE = "rate:1/1"
 
 
 def _window(d: Path) -> Path:
@@ -53,8 +55,10 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     """The audit accepts with the member's ``challenger`` verdict; the release log holds the sample, then the session's
     one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, crediting the
     drawn unit as proved."""
-    rc, row, out, said = T._audit(tmp_path, _window(tmp_path / "window"), binaries, "--deployed-key",
-                                  more={"FLOCK_CHALLENGER": "1"}, design=DESIGN)
+    window = _window(tmp_path / "window")
+    assert T.RA.verifier_window(window, RATE, None)[0].law == D.parse_design(DESIGN)
+    rc, row, out, said = T._audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"},
+                                  design=RATE)
     assert rc == 0 and row.get("ok") is True, said
     assert row["draw"] == [0] and row["audit"]["accepted"] is True, (row["audit"], said)
     assert row["audit"]["verdicts"] == {f"{v}/m0": True for v in (*T.VERDICTS, "challenger")}

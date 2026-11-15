@@ -87,7 +87,7 @@ def test_the_state_row_is_its_layout():
             EG.state_bits(sh, bad)
 
 
-def test_the_map_is_the_wardens_slots():
+def test_the_map_is_the_network_certifiers_slots():
     """Two lanes of r = 2, D = 1: request slot 0 (stream 1, admitted at 0, outputs 3), slot 1 (stream 2, admitted at 0,
     no output) and slot 2 (stream 3, admitted at 2, one output). Bucket 0 is the delay's pads; at bucket 1 slot 0's
     outputs 0 and 1 and slot 1's END; at bucket 2 slot 0's output 2 and END, and slot 2's pads, its lane freed by slot
@@ -109,7 +109,7 @@ def test_the_map_is_the_wardens_slots():
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
-def test_the_state_renders_the_wardens_registered_rows(seed):
+def test_the_state_renders_the_network_certifiers_registered_rows(seed):
     """Every bucket row of a busy link, idle ones too, is the network certifier's registered row
     (`network_certifier_rows.window_rows` of the record its grid closed), rendered from the state the scan's ingress step wrote at
     that bucket (each request in the lowest free slot from its admission to its last egress bucket)."""
@@ -169,7 +169,7 @@ def test_the_bucket_circuit_is_its_reference(B, R, r, NR, K, IB_, D):
     assert over >= 1 or NR <= sh.lanes
 
 
-def test_the_bucket_circuit_computes_the_wardens_rows():
+def test_the_bucket_circuit_computes_the_network_certifiers_rows():
     """On every bucket of a busy link, the circuit computes the network certifier's registered row from the state the
     ingress step wrote, with o0 `ACCEPT`; under a state one of whose rendered output ids is another (what links the
     state's layout to the circuit) it computes another row, which no registered read of the network certifier's
@@ -210,7 +210,7 @@ def _committed(served, w):
     return cells, WR.bucket_port(cells.head, PARAMS, reads_from=3)
 
 
-def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
+def test_the_registered_read_holds_the_row_output_to_the_network_certifiers_rows():
     """The verifier's registered read of the proof block's row output o1 (`network_certifier_rows.refusal` on `bucket_port`: proof
     block 3 + t reads row t) accepts the rows a window's proof blocks compute from its states, committed under the
     network certifier's salts, and refuses a row with one bit flipped and a row moved to another bucket, at its own

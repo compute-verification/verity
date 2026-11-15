@@ -1,4 +1,4 @@
-"""warden-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
+"""network-certifier-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (whose records came through the older certifier's proxy in front of the
 endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network certifier
@@ -62,7 +62,7 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a certifier rehearsal's run (its records through the older certifier's proxy in front of the endpoint): "
-         "the warden path reads an active warden's own run (network_certifier_serve.py's, or the gate's warden-rehearse)")
+         "the network certifier path reads an active network certifier's own run (network_certifier_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
@@ -76,7 +76,7 @@ UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: ``peer``, ``request``, ``end``) the reader of its ``status`` checks, and no check here reads them
 RECORD = "certifier-key/v1"
 #: the counts of `network_certifier_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
-#: run's end publishes (`auditor.WARDEN_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
+#: run's end publishes (`auditor.NETWORK_CERTIFIER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
 #: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
 #: bytes before padding, the requests' tokens and finish reasons, the certifier's clocks and stalls) and stay there.
@@ -117,7 +117,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
-        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a warden's)")
+        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network certifier's)")
     params = W.NetworkCertifierParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
@@ -270,7 +270,7 @@ def io(run: Path) -> dict:
                 try:
                     kind, q, payload = W.read_cell(f, B)
                 except ValueError as e:
-                    violations.append([rec.window * T + t, f"an ingress cell that isn't the warden's: {e}"])
+                    violations.append([rec.window * T + t, f"an ingress cell that isn't the network certifier's: {e}"])
                     continue
                 if kind in (W.DATA, W.END) and q not in end:
                     data[q] += payload
@@ -285,7 +285,7 @@ def io(run: Path) -> dict:
         except (ValueError, KeyError, TypeError):
             ok = False
         if not ok:
-            violations.append([q, "a request that isn't a warden-form id request"])
+            violations.append([q, "a request that isn't a network-certifier-form id request"])
             continue
         if (first := users.setdefault(fields["user"], q)) != q:
             violations.append([q, f"a request whose user names connection {first} too"])

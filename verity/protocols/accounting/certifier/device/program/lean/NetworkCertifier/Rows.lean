@@ -105,10 +105,10 @@ egress form (module docstring). -/
 def readCell (B : Nat) (f : ByteArray) : Except String Cell := do
   if f.size ≠ B then throw s!"a cell is {B} bytes, not {f.size}"
   let n := beAt f 5 4
-  let some kind := Kind.ofCode? (beAt f 0 1) | throw "not a warden cell"
-  if B < headerBytes + n then throw "not a warden cell"
+  let some kind := Kind.ofCode? (beAt f 0 1) | throw "not a network certifier cell"
+  if B < headerBytes + n then throw "not a network certifier cell"
   let c : Cell := ⟨kind, beAt f 1 4, f.extract headerBytes (headerBytes + n)⟩
-  if c.encode B != f then throw "not a warden cell"
+  if c.encode B != f then throw "not a network certifier cell"
   match kind with
   | .data => unless n == B - headerBytes do throw s!"a data cell of {n} bytes"
   | .fin => pure ()

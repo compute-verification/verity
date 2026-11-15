@@ -185,9 +185,9 @@ def caseOf (j : Json) : V Case := do
     | "advised" => throw "an advised link is refused: no advised link has a verdict of record"
     | "warden" => do
       let d ← bytesOf (← get j "warden" "case") "warden"
-      unless d.size = digestBytes do throw s!"a warden's parameters digest is {digestBytes} bytes, not {d.size}"
+      unless d.size = digestBytes do throw s!"a network certifier's parameters digest is {digestBytes} bytes, not {d.size}"
       pure (Kind.networkCertifier d)
-    | k => throw s!"a link is plain, served or a warden's, not {k}"
+    | k => throw s!"a link is plain, served or a network certifier's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
   let rhos ← (← arr ss "rhos" "sync_set").mapM (ratOf · "sync_set.rhos")
@@ -202,7 +202,7 @@ def caseOf (j : Json) : V Case := do
   if let .networkCertifier _ := kind then
     let fields (g : NetworkCheck.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
     unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
-      throw "a warden link's two ends are on the warden's one grid, with no occupancy profile"
+      throw "a network certifier link's two ends are on the network certifier's one grid, with no occupancy profile"
   pure { link := ← str j "link" "case", run := ← str j "run" "case", window := ← nat j "window" "case",
          root := ← bytesOf (← get j "root" "case") "root", registration := ← str j "registration" "case",
          units := ← natsOf (← get j "units" "case") "units", program := ← str j "program" "case",

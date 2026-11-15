@@ -5,7 +5,7 @@
 # own sweep dir (sweep-a5): the Commit of record's commit/ is never written.
 #   bash benchmarks/one_stage/a5_glm53_commit.sh
 #   (a job run from the source tree, up to 12 h, keeping out/**)
-# Needs on the node: the row of record at $SRC/$ROW (manifest.json, build/, match/capture/tokens.json), the checkpoint's verified
+# Needs on the node: the workload of record at $SRC/$ROW (manifest.json, build/, match/capture/tokens.json), the checkpoint's verified
 # local copy at /workspace/cp/glm53-ckpt/$REV (bound over its pinned path /workspace/fs/glm53/$REV, created if absent),
 # /workspace/cp/venv312 and /workspace/cp/hf. The windows' private bodies (m*-private.bin, v*-private.bin: rows and salts)
 # leave the run dir for HANDOFF before the job ends, so custody never uploads them; $OUT keeps the public files, the TP

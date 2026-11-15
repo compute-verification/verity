@@ -706,7 +706,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 def test_a_network_certifier_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
     assert list(h.rounds) == ["block-0", "honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
-    assert h.whole.run_id == "00" * 32 and "warden run" in h.whole.source
+    assert h.whole.run_id == "00" * 32 and "network certifier run" in h.whole.source
     assert h.whole.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.whole.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.whole.tampered.key_of == "the driver's own"
@@ -897,7 +897,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert list(refused) == sz.targets(r.at, r.name) == ["egress-0"]
     assert refused["egress-0"] == f"registered reads: table row {b} does not open the registered root at position {b}"
     assert sz.wired(r.members) == []
-    with pytest.raises(SystemExit, match=re.escape("the warden failed a connection in execution phases [0], which the "
+    with pytest.raises(SystemExit, match=re.escape("the network certifier failed a connection in execution phases [0], which the "
                                                    "scan refuses")):
         sz.host(tmp_path / "two", run, setup=sz.TEST, group=2)
 
@@ -1324,7 +1324,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     _rewrite(run / "responses.records", [RF.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
     with pytest.raises(SystemExit, match="egress execution phase 0's record under cells.salts isn't the rows whose root "
-                                         "the warden signed"):
+                                         "the network certifier signed"):
         sz.host(tmp_path / "h1", run)
 
     run = published(tmp_path / "run2")
@@ -1356,7 +1356,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
                                                              "connection 7: fail, HTTP None, complete False"]}))
     _rewrite(run / "fails.records", [RF.pack_record(replace(rec, grid=grid, window=0))])
-    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the warden's fails record has a "
+    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the network certifier's fails record has a "
                                                    f"reason in buckets [{t}], not the same: a failed connection's "
                                                    "reason is in its FAIL's bucket (connection 7 failed closed (late) "
                                                    "at egress cell 2)")):
@@ -1380,7 +1380,7 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
 
 
-def test_the_window_root_is_the_wardens_signed_execution_phase(tmp_path):
+def test_the_window_root_is_the_network_certifiers_signed_execution_phase(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
     read from its published registrations alone, and each execution phase of a group has its own."""
     def phase(whole, w: int = 0) -> SimpleNamespace:

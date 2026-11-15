@@ -297,7 +297,7 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
+#: the period-open's field holding the workloads of record's fixed length: ``{max_tokens, stop}``,
 #: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
 #: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
 LENGTH_FIELD = "length"
@@ -1398,7 +1398,7 @@ def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: 
 
 def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
           ) -> tuple[list[int] | None, tuple[str, str] | None]:
-    """The sampled units of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
+    """The sampled proof blocks of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
     ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
     got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,

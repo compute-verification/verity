@@ -54,7 +54,7 @@ Lean's registered reads by its reason. ``--out`` holds the window as committed (
 a5's records (``rank0/``, ``challenger/``, ``summary.json``); the network certifier's rows and salts stay in ``--run``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_network_certifier.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
+      python benchmarks/one_stage/a5_network_certifier.py --run NETWORK_CERTIFIER_RUN --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
@@ -131,7 +131,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
                         found[name].setdefault(q, record)
     both = sorted(set.intersection(*(set(f) for f in found.values())))
     if not both:
-        raise SystemExit(f"no connection of {run} is admitted in execution phases the warden registered with {n} ingress cells and "
+        raise SystemExit(f"no connection of {run} is admitted in execution phases the network certifier registered with {n} ingress cells and "
                          f"D·r + n = {start[RC.EGRESS]} + {n} egress cells")
     q, out, B = both[0], {}, params.cell_bytes
     for name, f in found.items():
@@ -141,7 +141,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
         head, dom = WR.check_registration(doc, key, session, params, link, direction, record.window)
         opening = WR.Cells.of(link, direction, record, params, session, salts, wiring_salt)
         if opening.head != head:
-            raise SystemExit(f"{head.value}: the warden's rows and wiring under its salts aren't its registered head")
+            raise SystemExit(f"{head.value}: the network certifier's rows and wiring under its salts aren't its registered head")
         units = WR.Units.span(q, start[name], n)
         placed = opening.wiring.place(params, units.cells)
         out[name] = SimpleNamespace(params=params, key=key, session=session, link=link, direction=direction,
@@ -353,7 +353,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
         return x.opening.rows[t][j * B:(j + 1) * B]
 
     cross, (q2, k2), (q1, k1), (t, j) = crossed(x)
-    foreign = refusal(lambda: port(cross, [(q2, k2)]), "the wiring isn't the one the warden signed")
+    foreign = refusal(lambda: port(cross, [(q2, k2)]), "the wiring isn't the one the network certifier signed")
     pad, (g, _), (tp, jp) = padded(x)
     q, k0 = x.reads[0]
     cells = next(n for c, _, n in w.connections if c == q)
@@ -377,7 +377,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
             "padding-slot-read-of-a-connection-holding-no-slot (port)": refusal(lambda: port(w, [(g, 0)]), "never an empty slot")
             | {"read": [g, 0]},
             "padding-slot-read-under-a-padded-wiring (port)": refusal(lambda: port(pad, [(g, 0)]),
-                                                                      "the wiring isn't the one the warden signed")
+                                                                      "the wiring isn't the one the network certifier signed")
             | {"read": [g, 0], "row": tp, "slot": jp, "empty": cell_at(tp, jp) == bytes(B)},
             "read-past-the-connections-cells (port)": refusal(lambda: port(w, [(q, cells)]), f"not cell {cells}")
             | {"read": [q, cells]}} | made
@@ -423,7 +423,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool) -> bool:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="a5_network_certifier.py", description=__doc__.splitlines()[0])
-    ap.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory (network_certifier_serve.py rehearse)")
+    ap.add_argument("--run", required=True, type=Path, help="a network-certifier-serve run's directory (network_certifier_serve.py rehearse)")
     ap.add_argument("--units", type=int, default=16, help="n: each transfer-gate chunk's units")
     ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work sampling design")
     ap.add_argument("--m0-pythonpath", required=True)

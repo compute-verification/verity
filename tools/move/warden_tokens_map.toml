@@ -234,6 +234,24 @@ strings = [
     "the round's provenance: its link-window of the warden's run",
     'b"warden-run"',                                  # the tests' seeds of a synthetic run and of a second one
     'b"another warden"',
+    '"warden_check',                                  # keys, markers, values and file names a passing run writes, which
+    '"warden_cost',                                   # records made before the rename are read back by
+    '"warden_certificates"',
+    '"warden_endpoint',
+    '"warden_cores_busy"',
+    '"warden_cpu_s"',
+    '"warden_invol"',
+    '"warden arrival"',
+    '"warden admission"',
+    '"warden release"',
+    "| warden release |",
+    "prover-root-under-the-wardens-certificate (check_registration)",
+    "window-naming-another-warden-root (source)",
+    '"A5-WARDEN ',
+    "CR_PATH:-warden}",
+    '"$CR_PATH" = warden ]',
+    "warden-registration",
+    "/warden-run",
 ]
 
 [rewrite]

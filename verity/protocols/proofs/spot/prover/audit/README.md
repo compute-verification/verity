@@ -74,12 +74,12 @@ commitments and never published.
 2. **Each step's Programs are the compiler's output.** The window's `served_programs` are the digests the compiler produced
    for the advice, and the population program and partition the docket is checked against (R1–R7) are over those
    Programs. The Stream's Check names the unit templates' Program digests, as it does for a declared run.
-3. **Named gap: the advice is opened to the verifier until the compile unit exists.** The verifier is handed the
+3. **Named gap: the advice is opened to the verifier until the compile slice's proof block exists.** The verifier is handed the
    commitment's opening (the advice and its salts, `advice_windows.opening`), the way the demo opens the wiring. It recomputes
    the root, compiles the advice with its own copy of the registered compiler, derives its own window
    (`advice_windows.window_of_advice`, reading no committed value), and holds the docket to it
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
-   population). The compile unit below replaces the opening and the recompile. Nothing else in the audit changes.
+   population). The compile slice's proof block below replaces the opening and the recompile. Nothing else in the audit changes.
 4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
    checks that the credit bits came before the sampling coin. The digest of the docket the verifier opens the advice under
    covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
@@ -96,7 +96,7 @@ commitments and never published.
    - a request the compiler can't run: a chunked prefill, a prefix-cache hit, a preemption or a gap (the compiler's v0
      rules, `advice_windows.refusals`).
 
-   A malformed opening is refused the same way (`open_advice`). The compile unit's statement quantifies over every advice string
+   A malformed opening is refused the same way (`open_advice`). The compile slice's proof block's statement quantifies over every advice string
    up to ℓ, not just the honest one, and a refused string has no Programs, so it has no accepting proof.
 6. **What the advice can and can't do.**
    - Advice that names a request the Commit didn't serve, or a served one at another arrival, commits no window, because the
@@ -211,11 +211,11 @@ guarantee above.
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
 match is refused. It is never a soundness gap.
 
-## The compile unit (the target; not built)
+## The compile slice's proof block (the target; not built)
 
 The unit closes the named gap: the advice is never opened, and the verifier never recompiles.
 
-- **Selection All.** Each docket has one compile unit, always proved. Its Spec's selection is `service.All`, so it is
+- **Selection All.** Each docket has one compile slice's proof block, always proved. Its Spec's selection is `service.All`, so it is
   never sampled. It reads no coins, and its proof goes through the ZK server like every unit's.
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;

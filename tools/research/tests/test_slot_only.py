@@ -20,6 +20,8 @@ from research.pods.nebius import slot_only as S
 
 NEBIUS = Path(S.__file__).resolve().parent
 REPO = NEBIUS.parents[5]
+#: the slot.py path a machine's own copy sits below: main's tree's, where every machine has it, not the tree's own
+INSTALLED = "tools/verity/check/slot.py"
 
 
 def test_only_a_command_that_runs_cmd_in_a_check_slot_counts():
@@ -136,7 +138,8 @@ def test_a_command_that_names_a_pool_and_the_trees_slot_py_names_the_machines_ow
                   ["env", f"CHECK_SLOTS={S.POOLS['research']}", "python3", "elsewhere/slot.py", "--", "true"], ["true"], []):
         assert S.node_copy(other) is None, other
     assert S.through_slot(["python3", S.NODE_SLOT, "--", "true"]) and not S.through_slot(["python3", S.NODE_SLOT, "--status"])
-    assert S.NODE_SLOT.startswith("/") and S.NODE_SLOT.endswith("/" + S.SLOT_PATHS[0]), "below slot.py's path in the repository"
+    assert S.NODE_SLOT == "/usr/local/lib/vy-monitoring/check-slot/" + INSTALLED and INSTALLED in S.TREE_SLOTS, (
+        "where every machine has its copy, below a slot.py path every reader knows")
     assert run_records.pool(own) == "research" and run_records.pool(["python3", S.NODE_SLOT, "--", "true"]) == run_records.OWN_POOL
 
 
@@ -336,8 +339,8 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     rows = [e for e in manifest["file"] if e.get("src") == S.SLOT_PATHS[0]]
     assert [e["path"] for e in rows] == [S.NODE_SLOT], "one copy a machine"
-    beside = S.NODE_SLOT.rsplit("/", S.SLOT_PATHS[0].count("/") + 1)[0] + "/"   # .../check-slot/, which holds the copy below its repository path
-    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + S.SLOT_PATHS[0]
+    beside = S.NODE_SLOT.rsplit("/", INSTALLED.count("/") + 1)[0] + "/"   # .../check-slot/, which holds the copy below INSTALLED
+    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + INSTALLED
     assert [e["path"] for e in [*manifest["file"], *manifest.get("tree", [])]
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"
     (row,) = rows

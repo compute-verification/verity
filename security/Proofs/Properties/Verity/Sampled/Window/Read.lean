@@ -176,14 +176,15 @@ with hm96-sha512 rows (`hMA`); and `ExecutionPhaseRead` holds of each play the s
 the device's, whose blobs sent hold each pinned table and each member's files at their registered files and whose
 sample answers the strategy's `afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant
 `StepInv`, and each round's reading picks only openings (`executionPhaseReadingAt_picks`). -/
-theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (dev : Exchange → Properties.Challenger.History)
+theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (T : PinnedTables)
+    (dev : Exchange → Properties.Challenger.History)
     (reg : Option Claims.Msg → ByteArray) (tb : ExecutionPhase → String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (nc : ℕ)
     {S : ByteArray → Array ByteArray → Option ExecutionPhase}
-    (hD : ExecutionPhaseDeployed V ((K.withBinding dev k).withProject V (sessionReadings tb ev record₀ recordDigest)
+    (hD : ExecutionPhaseDeployed V ((K.withBinding T dev k).withProject V (sessionReadings tb ev record₀ recordDigest)
       (fun W _ _ _ _ _ => sessionDecoders reg (tb W) filesDec)
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)
         fun W => W.srcCoinsAt nc)) S)
@@ -195,12 +196,12 @@ theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (de
     (hWR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c))
       (z : CoinTape (V.game θ F c) σ), V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ z) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ z) →
-      TablesSent (CoinTape.run (V.game θ F c) σ z).sent → FilesSent V (CoinTape.run (V.game θ F c) σ z) →
+      TablesSent T (CoinTape.run (V.game θ F c) σ z).sent → FilesSent V (CoinTape.run (V.game θ F c) σ z) →
       SampledDigest k (CoinTape.run (V.game θ F c) σ z).sent (afterAt V k θ F c σ) →
       ExecutionPhaseRead W (tb W) ev filesDec (label θ F c σ) (afterAt V k θ F c σ) nc
         (CoinTape.run (V.game θ F c) σ z)) :
     V.SpotSound k :=
-  executionPhaseSpotSound_assembled V k fieldEnc (sessionReadings tb ev record₀ recordDigest) K dev
+  executionPhaseSpotSound_assembled V k fieldEnc (sessionReadings tb ev record₀ recordDigest) K T dev
     (fun W _ _ _ _ _ => sessionDecoders reg (tb W) filesDec) label nc hD hCov
     (fun W θ F c σ => StepInv V θ F c W (sessionReadings tb ev record₀ recordDigest W θ F c) σ
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)
@@ -210,7 +211,7 @@ theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (de
       executionPhaseReadingAt_picks #[tb W] 1026 (sessionReveal #[tb W] ev) (record₀ W θ F c) (recordDigest W θ F c))
     (fun θ F W hW c σ =>
       memberSteps_sampleMap V θ F c k
-        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o) ∧
+        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o) ∧
           SampledDigest k o.sent (afterAt V k θ F c σ))
         W (V.cost θ F c σ) reg (tb W) ev filesDec (record₀ W θ F c) (recordDigest W θ F c) σ (label θ F c σ)
         (afterAt V k θ F c σ) (hL θ F W hW) (hMA θ F W hW)

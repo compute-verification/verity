@@ -114,6 +114,24 @@ strings = [
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
     "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
     "the round's provenance: its link-window of the warden's run",
+    '"warden_check',                                  # keys, markers, values and file names a passing run writes, which
+    '"warden_cost',                                   # records made before the rename are read back by
+    '"warden_certificates"',
+    '"warden_endpoint',
+    '"warden_cores_busy"',
+    '"warden_cpu_s"',
+    '"warden_invol"',
+    '"warden arrival"',
+    '"warden admission"',
+    '"warden release"',
+    "| warden release |",
+    "prover-root-under-the-wardens-certificate (check_registration)",
+    "window-naming-another-warden-root (source)",
+    '"A5-WARDEN ',
+    "CR_PATH:-warden}",
+    '"$CR_PATH" = warden ]',
+    "warden-registration",
+    "/warden-run",
 ]
 
 [rewrite]

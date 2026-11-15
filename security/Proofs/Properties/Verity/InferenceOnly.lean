@@ -122,7 +122,7 @@ end Vocab
 
 theorem remote_soundness_of_subprotocols : RemoteSoundness :=
   fun ι α _ d V hS hW _ _ =>
-    soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW (V.inferenceOnlySound .remote))
+    soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW (V.inferenceOnlySound .remote (by decide) (by decide)))
 
 /-- **`RemoteSoundness`'s honest lemma**: its two targets and the wires' statement hold at the idle deployment's
 compiled remote composite. -/

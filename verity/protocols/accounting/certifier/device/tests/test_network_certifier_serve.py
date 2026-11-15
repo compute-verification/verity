@@ -1,4 +1,4 @@
-"""warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
+"""network-certifier-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
 id `deployment.json` names, and refuses a deployment whose start isn't the one certified, a record that isn't what
@@ -56,7 +56,7 @@ def test_the_network_certifier_always_paces_and_serve_and_rehearse_refuse_a_rele
              "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
     for paced in ("0", "25", "100"):
         for argv in (serve, ["rehearse", "--fake", "--out", str(tmp_path / "run")]):
-            with pytest.raises(SystemExit, match="the warden always paces"):
+            with pytest.raises(SystemExit, match="the network certifier always paces"):
                 ws.main([*argv, "--paced-ms", paced])
     assert not (tmp_path / "run").exists()
 

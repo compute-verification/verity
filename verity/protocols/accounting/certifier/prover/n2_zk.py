@@ -554,9 +554,9 @@ def prove(a) -> int:
                   "verifier of record (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
     summary["warden_run"] = members["honest"].plan["warden_run"]
-    summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the link's "
+    summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the link's "
                                   "charge is 0",
-                         "counts": "the warden's schedule's (service.NetworkCertifierProfile), not a profile's"}
+                         "counts": "the network certifier's schedule's (service.NetworkCertifierProfile), not a profile's"}
     members = {k: v for k, v in members.items() if k in a.rounds or k == OTHER}
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
