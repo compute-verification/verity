@@ -96,7 +96,7 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
   some "V*'s list: the later levels' caps hold [128, 128] nodes, and the reps' schedule commits tops of [64, 64, 32] nodes a rep ([128, 128, 64] both reps')"
 
 -- `statements inner` is a whole V* list, about 20 minutes in the interpreter, so none is built here: that the deployed
--- dense list passes `statements`' checks and ends in the RecCaps above is `flock-verify rec-statements` at this shape,
+-- dense list passes `statements`' checks and ends in the RecCaps above is `verity-verify-proof rec-statements` at this shape,
 -- compiled (`test_rec_vstar_checks.py::test_the_verifiers_statements_are_the_ones_v_star_stages`).
 -- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
 -- a list without the parts is refused at round 0.
