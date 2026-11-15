@@ -59,28 +59,23 @@ def check_memory(root: Path = Path("/")) -> dict:
     unit = SETTINGS.get(SCOPE_ENV)
     if not unit:
         return {}
+    def stat(f: Path) -> dict[str, int]:
+        if not f.is_file():
+            return {}
+        return {w[0]: int(w[1]) for ln in f.read_text().splitlines() if len(w := ln.split()) == 2 and w[1].isdigit()}
+
     try:
         line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
         d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
         if d.name != f"{unit}.scope":
             return {}
-        out = {f"mem_{k}_gb": round(int((d / f"memory.{k}").read_text().strip()) / 1e9, 1) for k in ("peak", "current")}
+        peak, current = (int((d / f"memory.{k}").read_text().strip()) for k in ("peak", "current"))
+        mem, cpu = stat(d / "memory.stat"), stat(d / "cpu.stat")
     except (OSError, StopIteration, ValueError):
         return {}
-
-    def stat(name: str) -> dict[str, int]:
-        try:
-            return {f[0]: int(f[1]) for ln in (d / name).read_text().splitlines() if len(f := ln.split()) == 2 and f[1].isdigit()}
-        except OSError:
-            return {}
-
-    mem, cpu = stat("memory.stat"), stat("cpu.stat")
+    out = {"mem_peak_gb": round(peak / 1e9, 1), "mem_current_gb": round(current / 1e9, 1)}
     if "file" in mem:
-        try:
-            out["mem_held_gb"] = round(max(0, int((d / "memory.current").read_text().strip())
-                                           - max(0, mem["file"] - mem.get("shmem", 0))) / 1e9, 1)
-        except (OSError, ValueError):
-            pass
+        out["mem_held_gb"] = round(max(0, current - max(0, mem["file"] - mem.get("shmem", 0))) / 1e9, 1)
     if "usage_usec" in cpu:
         out["cpu_s"] = round(cpu["usage_usec"] / 1e6, 1)
     return out

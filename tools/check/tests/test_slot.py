@@ -1950,13 +1950,13 @@ def test_a_shard_that_fits_a_share_passes_the_heavy_waiters_ahead_and_leaves_the
     monkeypatch.setenv(SLOT.RUN_MEM_ENV, "139.587")                          # 130 GiB: lean-build's
     slots = SLOT.asking(SLOT.parse((tmp_path / "slots").read_text()))
     me, mfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
-    assert SLOT.ahead(me) == 1 and SLOT.asks_ahead(me) == [pytest.approx(340, abs=0.01)]
+    assert SLOT.ahead(me) == 1 and SLOT.asks_ahead(me, NOW) == [pytest.approx(340, abs=0.01)]
     names = lambda got: [s["name"] for s in got]                             # noqa: E731
-    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), True)) == ["c", "c2"], "never t, which the heavy part waits for"
+    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"], "never t, which the heavy part waits for"
     free[0] = 340 + 150 - 1
-    assert SLOT.passing(me, slots, slots, SLOT.Poll(), True) == [], "its share would come out of the 340 the heavy part waits for"
+    assert SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True) == [], "its share would come out of the 340 the heavy part waits for"
     free[0] = 340 + 150
-    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), True)) == ["c", "c2"]
+    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"]
     os.close(mfd)
     me.unlink()
     with pytest.raises(Exec):                                   # t is free, and the heavy part ahead has not taken it yet
@@ -1964,20 +1964,20 @@ def test_a_shard_that_fits_a_share_passes_the_heavy_waiters_ahead_and_leaves_the
     assert ran == {"slot": "c", "mem": "300", "book": "150"}
     whole, wfd = SLOT.join(tmp_path, priority=True, who={"pid": 1}, rank=0)  # a whole check, which names no ask: it books t's 200
     me, mfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
-    assert SLOT.asks_ahead(me) == [pytest.approx(340, abs=0.01), 0]
+    assert SLOT.asks_ahead(me, NOW) == [pytest.approx(340, abs=0.01), 0]
     free[0] = 340 + 200 + 150 - 1
-    assert SLOT.passing(me, slots, slots, SLOT.Poll(), True) == []
+    assert SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True) == []
     free[0] = 340 + 200 + 150
-    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), True)) == ["c", "c2"]
+    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"]
     os.close(mfd)
     me.unlink()
     monkeypatch.setenv(SLOT.RUN_MEM_ENV, "171.799")                          # 160 GiB: a shard that fits a share, ahead
     other, ofd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
     me, mfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
-    assert SLOT.passing(me, slots, slots, SLOT.Poll(), True) == [], "the shard ahead takes the next share: first come, first served"
-    assert names(SLOT.passing(other, slots, slots, SLOT.Poll(), True)) == ["c", "c2"]
+    assert SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True) == [], "the shard ahead takes the next share: first come, first served"
+    assert names(SLOT.passing(other, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"]
     whole_lines = [s for s in slots if not s.get("share")]
-    assert SLOT.passing(me, slots, whole_lines, SLOT.Poll(), True) == [], "a run that takes no share passes nobody"
+    assert SLOT.passing(me, slots, whole_lines, SLOT.Poll(), NOW, True) == [], "a run that takes no share passes nobody"
     for fd in (hfd, wfd, ofd, mfd):
         os.close(fd)
 

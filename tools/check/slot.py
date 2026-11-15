@@ -1126,28 +1126,13 @@ def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None,
     return n
 
 
-def asks_ahead(ticket: Path) -> list[float]:
+def asks_ahead(ticket: Path, now: datetime) -> list[float]:
     """The GiB each live waiter that came before ``ticket``'s asks, as its ticket says (0: it names none), oldest first."""
-    out = []
-    for p in sorted(ticket.parent.iterdir()):
-        if p.name >= ticket.name:
-            break
-        if p.name.startswith("."):
-            continue
-        try:
-            fd = os.open(p, os.O_RDONLY)
-        except FileNotFoundError:
-            continue
-        try:
-            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)             # nobody holds it: a waiter that died, which `ahead` removes
-        except BlockingIOError:
-            out.append(_asks(fd))
-        finally:
-            os.close(fd)
-    return out
+    asks = [w.get("mem_gb") for w in waiting(ticket.parent, now, before=ticket.name)]
+    return [gb * 1e9 / 2 ** 30 if isinstance(gb, (int, float)) and gb > 0 else 0.0 for gb in asks]
 
 
-def passing(ticket: Path, slots: list[dict], mine: list[dict], poll: Poll, priority: bool = False) -> list[dict]:
+def passing(ticket: Path, slots: list[dict], mine: list[dict], poll: Poll, now: datetime, priority: bool = False) -> list[dict]:
     """The lines of ``mine`` (the ones this waiter's run may take) that it may take with other waiters ahead of it: none but
     shares of a slot (share=), and those only while no waiter ahead could take one (each asks more than the largest share
     line's mem=, or names no ask: the heavy kind, `takes`) and the memory free holds, beside the share, what the waiters
@@ -1157,7 +1142,7 @@ def passing(ticket: Path, slots: list[dict], mine: list[dict], poll: Poll, prior
     if not shares:
         return []
     most = max(s["mem"] for s in shares)
-    asks = asks_ahead(ticket)
+    asks = asks_ahead(ticket, now)
     if any(0 < a <= most for a in asks):
         return []
     whole = max((booked(s) or 0 for s in slots if not s.get("share")), default=0)
@@ -1413,7 +1398,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         n = ahead(ticket, free_gb=lambda: poll.memory_gb() - poll.reserved_gb(**lane_peaks(slots)),
                   passed=lambda name: passed_gb(name, SLOTS.parent))
         mine = [s for s in slots if (priority or not s["trains"]) and holds(s, min_mem) and takes(s)]
-        got = take(passing(ticket, slots, mine, poll, priority) if n else mine, SLOTS.parent, now(), priority, poll)
+        got = take(passing(ticket, slots, mine, poll, now(), priority) if n else mine, SLOTS.parent, now(), priority, poll)
         if got and pair:
             state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
             if state != "claimed":
