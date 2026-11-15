@@ -1,5 +1,5 @@
-"""`tools/check/check.py`, run with this one's arguments: main's train.sh runs a candidate's check from this path and greps it
-for what the check takes (`--bookkeeping-warn`, `DESELECT_FILE`). It goes once the architecture branch lands."""
+"""`tools/check/check.py`, run with this one's arguments: a launcher from before the move runs a candidate's check from this
+path and greps it for what the check takes (`--bookkeeping-warn`, `DESELECT_FILE`). It goes once no launcher names this path."""
 import os
 import sys
 
