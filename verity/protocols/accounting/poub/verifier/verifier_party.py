@@ -122,6 +122,12 @@ def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = a
             "windows": windows}
 
 
+def _reply(line: str) -> None:
+    """One line of the side's stdout, which the party that started it reads (`period_prover`'s `side_of`)."""
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
@@ -129,12 +135,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     request = json.loads(sys.stdin.readline())
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
-        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+        _reply(json.dumps({"listening": srv.getsockname()[1]}))
         conn, _ = srv.accept()
         with conn, conn.makefile("rwb") as f:
             period = serve(f, request, coins=secrets.token_bytes(64))
-    print(json.dumps({"answer": period.answer, "case": period.case, "host": socket.gethostname()}, sort_keys=True),
-          flush=True)
+    _reply(json.dumps({"answer": period.answer, "case": period.case, "host": socket.gethostname()}, sort_keys=True))
     return 0
 
 

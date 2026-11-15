@@ -1520,6 +1520,13 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
         tmp.replace(path)
 
 
+def _say(line: str) -> None:
+    """One line of the verifier's stdout, flushed: its log, which its runner keeps as `verifier.log` and waits on for
+    `verifier: listening`."""
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
 def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: Verify | None = None,
          served_verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
     """The verifier's process on `argv` (the command line's by default), for the node of `figures`. A gate session's
@@ -1634,11 +1641,11 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
             ap.error(f"--node {a.node}: {why}")
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
-                                                                  host_bytes=a.host_bytes)} | (
+        _say(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
+                                                                 host_bytes=a.host_bytes)} | (
             {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=a.host_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
-                          for s in v["sessions"] if s["accepted"]], indent=1))
+                         for s in v["sessions"] if s["accepted"]], indent=1))
         return 0
     registry = load_registry(a.registry)
     if a.close is not None:
@@ -1650,11 +1657,11 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
         got, kept = lean.call({"op": "close", "node": node.hex()}), lean.call({"op": "registry"})
         lean.close()
         if got != closed:
-            print(f"verifier: the verifiers disagree on closing {node.hex()}: Lean {json.dumps(got)}, "
-                  f"audit.Registry {json.dumps(closed)}; {a.registry} is unchanged", flush=True)
+            _say(f"verifier: the verifiers disagree on closing {node.hex()}: Lean {json.dumps(got)}, "
+                 f"audit.Registry {json.dumps(closed)}; {a.registry} is unchanged")
             return 3
         save_registry(a.registry, kept)
-        print(f"verifier: closed {json.dumps(closed)}", flush=True)
+        _say(f"verifier: closed {json.dumps(closed)}")
         return 0
     if a.out is None:
         ap.error("--out is required")
@@ -1680,7 +1687,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     w0 = time.monotonic_ns()
     checks = Checks(a.check_workers) if a.check_workers > 0 else None
     server = wire.listen(a.host, a.port)
-    print(f"verifier: listening on {a.host}:{a.port}", flush=True)
+    _say(f"verifier: listening on {a.host}:{a.port}")
     sock, peer = server.accept()
     # Read again: another verifier process may have closed a registration while this one listened, and a refusal
     # saves this process's registry over the file.
@@ -1688,7 +1695,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     conn = wire.Conn(sock)
     v = Verifier(conn, figures=figures, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6),
                  samples=a.samples, delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
-                 log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
+                 log=_say, checks=checks, lifetime=a.lifetime, registry=registry,
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
                  lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
@@ -1699,7 +1706,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError) as e:
-        print(f"verifier: refused the registration: {e}", flush=True)
+        _say(f"verifier: refused the registration: {e}")
         kept = v.registry_json()
         save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
@@ -1710,11 +1717,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
         v.stop()
         return 3
     save_registry(a.registry, v.registry_json())
-    print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
-          flush=True)
+    _say(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}")
     rtt = v.ping(a.pings)
     allowance = v.allowance(rtt, a.quantile)
-    print(f"verifier: rtt {json.dumps(rtt)}, allowance A = {allowance / 1e6:.3f} ms", flush=True)
+    _say(f"verifier: rtt {json.dumps(rtt)}, allowance A = {allowance / 1e6:.3f} ms")
     results, not_before = [], None
 
     def record() -> None:
@@ -1739,23 +1745,22 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
             if (pl := r.get("ledger", {}).get("paced")) is not None:
                 line = f"refused: {pl['refused']}" if "refused" in pl else \
                     f"snapshot {pl['snapshot']['share']:.4%} time {pl['time']['share']:.4%}"
-                print(f"verifier: session {k} paced {json.dumps(r['pace'])}: {line} "
-                      f"gamma horizon {lg.get('horizon', {}).get('gamma')}", flush=True)
+                _say(f"verifier: session {k} paced {json.dumps(r['pace'])}: {line} "
+                     f"gamma horizon {lg.get('horizon', {}).get('gamma')}")
             passes = [w["passes"] for w in r["windows_seen"]]
-            print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
-                  f"passes={passes if r.get('pace') is None else sum(passes)} gamma={lg.get('gamma')} "
-                  f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')} "
-                  f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')} "
-                  f"average share={mem.get('average', {}).get('share')} "
-                  f"node={json.dumps(mem['node']['share']) if 'node' in mem else None} "
-                  f"node average={json.dumps(mem['node']['average']['share']) if 'node' in mem else None} "
-                  f"declared={json.dumps({f: x.get('epsilon', x.get('refused')) for f, x in lines.items()})}",
-                  flush=True)
+            _say(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
+                 f"passes={passes if r.get('pace') is None else sum(passes)} gamma={lg.get('gamma')} "
+                 f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')} "
+                 f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')} "
+                 f"average share={mem.get('average', {}).get('share')} "
+                 f"node={json.dumps(mem['node']['share']) if 'node' in mem else None} "
+                 f"node average={json.dumps(mem['node']['average']['share']) if 'node' in mem else None} "
+                 f"declared={json.dumps({f: x.get('epsilon', x.get('refused')) for f, x in lines.items()})}")
             record()
     finally:
         save_registry(a.registry, v.registry_json())
     closed = v.close_registration(reg.node)
-    print(f"verifier: closed the registration: {json.dumps(closed)}", flush=True)
+    _say(f"verifier: closed the registration: {json.dumps(closed)}")
     record()
     conn.send({"type": "bye"})
     if checks:
@@ -1766,7 +1771,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     out["cpu"] = {"self_s": me.ru_utime + me.ru_stime, "workers_s": kids.ru_utime + kids.ru_stime,
                   "wall_s": (time.monotonic_ns() - w0) / 1e9, "cores": len(os.sched_getaffinity(0))}
     (a.out / "verifier.json").write_text(json.dumps(out, indent=1))
-    print(f"verifier: cpu {json.dumps(out['cpu'])}", flush=True)
+    _say(f"verifier: cpu {json.dumps(out['cpu'])}")
     return 0
 
 

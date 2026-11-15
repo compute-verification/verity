@@ -702,6 +702,12 @@ def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> t
     return answer, record, rc
 
 
+def _say(line: str) -> None:
+    """One line of the command's stdout, flushed: a session's verdict line, or a registration's JSON."""
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
 def session(a: argparse.Namespace) -> int:
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
@@ -715,8 +721,9 @@ def session(a: argparse.Namespace) -> int:
     with open(out / "prover.log", "a") as log_f:
 
         def log(m: str) -> None:
-            print(m, file=log_f, flush=True)
-            print(m, file=sys.stderr, flush=True)
+            for f in (log_f, sys.stderr):
+                f.write(m + "\n")
+                f.flush()
 
         t0 = time.perf_counter()
         vk = VkPaths(a.store, reg.params, reg.salt, reg.root, pool)
@@ -774,7 +781,7 @@ def session(a: argparse.Namespace) -> int:
            "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line,
            "case": case}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    print(line, flush=True)
+    _say(line)
     return 0 if line.endswith("PASS") else 1
 
 
@@ -822,8 +829,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         reg = registration_of_store(a.store, a.node.encode())
         plan = tensor_plan(json.loads(a.layout.read_text()), reg.blocks)
         registration_file(reg, a.out, plan)
-        print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "plan_units": plan.length,
-                          "root": reg.root.hex()}))
+        _say(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "plan_units": plan.length,
+                         "root": reg.root.hex()}))
         return 0
     if (a.party is None) != (a.party_host is None):
         ap.error("--party and --party-host go together")
