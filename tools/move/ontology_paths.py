@@ -100,6 +100,8 @@ def toml(way: str) -> str:
            "# `tests/test_boundaries.py`'s `_trusted` and `tests/test_lowrisk_excludes.py`'s `TRUSTED_DIRS` gain `attester`;",
            "# `tests/tree.toml`'s `NAME/device/` becomes `NAME/attester/`, with a row for each resource group;",
            "# `benchmarks/demo_minutes/tests/test_no_pin_literal.py`'s `SCANNED` gains `verity/protocols/registration`.",
+           "# Then two regenerations: `uv run tools/check/import_order.py` (the listing's lines re-sort) and",
+           "# `tools/pous_grader/TRUSTED.sha256` by the command `tests/test_pins.py` prints (it pins a rewritten lakefile).",
            "", "[roots]", f"old = {inline}", f"new = {inline}", "", "[paths]"]
     out += [f"{q(k)} = {q(v)}" for k, v in paths.items()]
     retired = [f"{P}/accounting/", f"{P}/policy/"]

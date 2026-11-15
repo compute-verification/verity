@@ -20,6 +20,8 @@
 # `tests/test_boundaries.py`'s `_trusted` and `tests/test_lowrisk_excludes.py`'s `TRUSTED_DIRS` gain `attester`;
 # `tests/tree.toml`'s `NAME/device/` becomes `NAME/attester/`, with a row for each resource group;
 # `benchmarks/demo_minutes/tests/test_no_pin_literal.py`'s `SCANNED` gains `verity/protocols/registration`.
+# Then two regenerations: `uv run tools/check/import_order.py` (the listing's lines re-sort) and
+# `tools/pous_grader/TRUSTED.sha256` by the command `tests/test_pins.py` prints (it pins a rewritten lakefile).
 
 [roots]
 old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_torch = "adapters/torch/verity_torch" }
