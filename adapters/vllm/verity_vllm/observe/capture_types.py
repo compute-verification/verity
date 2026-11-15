@@ -23,6 +23,7 @@ class ObserverConfig:
     snapshot_max_bytes: int = 32 << 20
     snapshot_max_bytes_op: int | None = None   # limit at dispatcher-call events (None: snapshot_max_bytes); Triton launches keep the full limit
     arena_bytes: int = 1 << 30
+    draft: bool = False                  # "record" only: the speculator's `propose` as the step's phase "draft", its model's tensors as roots
 
 
 @dataclass
@@ -31,6 +32,8 @@ class _Step:
     events: list[Event] = field(default_factory=list)
     forward_s: float = 0.0
     sample_s: float = 0.0
+    draft_s: float = 0.0
+    awaiting_draft: bool = False         # sampled, held open for the speculator's propose (`ObserverConfig.draft`)
     t_wall0: float = 0.0
     wall_s: float = 0.0
     facts: dict = field(default_factory=dict)

@@ -11,6 +11,7 @@ took, the capture's clock is stood in as well: each reading is twice the last, s
 from __future__ import annotations
 
 import itertools
+import re
 from types import SimpleNamespace
 from typing import Any
 
@@ -759,3 +760,136 @@ def test_a_hybrid_runners_groups_that_cannot_be_read_are_logged_empty_each_with_
     assert start.kv_groups == [{"layers": [], "block_size": 2, "block_tables": {"a": [], "b": []}, "slot_mapping": [], "error": error}] * 2
     assert (start.block_tables, start.slot_mapping, start.rows) == ({"a": [4], "b": [6]}, [8, 9, 12], [("a", 0), ("a", 1), ("b", 0)])
     assert [(e.recorded, e.synchronized) for e in device] == [(2, 1)] and len(capture.errors) == 1
+
+
+class _Drafter(torch.nn.Module):
+    """The speculator's model: a projection of its own, the model's table shared (one tensor, as vLLM's MTP drafter shares
+    the target's embedding), and a layer with a KV cache of its own."""
+
+    def __init__(self, model: _Model) -> None:
+        super().__init__()
+        self.eh = torch.nn.Parameter(torch.eye(2))
+        self.table = model.table
+        self.attn = _Attention()
+
+    def forward(self, ids: Any) -> Any:
+        return (self.attn(self.table[ids]) @ self.eh) @ self.table.T
+
+
+class _Speculator:
+    """vLLM V2's speculator, as far as the capture reads one: its model, and `propose`, which `sample_tokens` calls after
+    `sample` with the step's sampled ids."""
+
+    def __init__(self, model: _Model) -> None:
+        self.model = _Drafter(model)
+        self.calls: list[tuple] = []
+
+    def propose(self, input_batch: Any, sampled: Any, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append((input_batch, args, kwargs))
+        return self.model(sampled.reshape(-1)).argmax(-1)
+
+
+def _drafting(tmp_path, config: ObserverConfig, speculator: bool = True) -> tuple[Capture, _Runner]:
+    model = _Model()
+    runner = _Runner(model, STEPS)
+    if speculator:
+        runner.speculator = _Speculator(model)
+    capture = Capture(SimpleNamespace(runner=runner, model=model), header=None, log_path=tmp_path / "log.jsonl", config=config)
+    capture.install()
+    return capture, runner
+
+
+def _step_and_propose(runner: _Runner, step: int) -> Any:
+    """One step as `sample_tokens` takes it with a speculator: `execute_model`, `sample`, then `propose` on the sampled ids."""
+    _, (output, _rest) = _step(runner, step)
+    return runner.speculator.propose(runner.execute_model_state.input_batch, output.sampled_token_ids, "an argument", key="a value")
+
+
+def _runs(phases: list[str]) -> list[str]:
+    return [p for i, p in enumerate(phases) if i == 0 or phases[i - 1] != p]
+
+
+def test_the_draft_phase_is_the_steps_last_with_the_speculators_calls_in_order_before_its_sample_end(tmp_path, device):
+    capture, runner = _drafting(tmp_path, ObserverConfig(triton=False, draft=True))
+    drafts = [_step_and_propose(runner, 0), _step_and_propose(runner, 1)]
+    assert [d.tolist() for d in drafts] == [[15, 15], [15, 15]]
+    assert [c[1:] for c in runner.speculator.calls] == [(("an argument",), {"key": "a value"})] * 2
+    events, starts = _logged(tmp_path, capture)
+    assert capture.errors == [] and [s.step for s in starts] == [0, 1]
+    for start in starts:
+        step = events[events.index(start):]
+        step = step[: next(i for i, e in enumerate(step) if isinstance(e, E.StepEnd)) + 1]
+        assert _kinds(step[-2:]) == ["SampleEnd", "StepEnd"]
+        enters = [e for e in step if isinstance(e, E.DispatchEnter)]
+        assert {e.step for e in enters} == {start.step}
+        assert _runs([e.phase for e in enters]) == ["other", "forward", "other", "sample", "draft"]
+        assert [e.op for e in enters if e.phase == "draft"] == [
+            "aten.view.default", "aten.index.Tensor", "aten.add.Tensor", "aten.mm.default", "aten.permute.default", "aten.mm.default",
+            "aten.argmax.default"]
+        # the step's logits stay the model's: the drafter's are not its `SampleEnd`'s
+        assert step[-2].logits_view.shape == (2, 16)
+    assert [t["draft_s"] > 0 for t in capture.step_times] == [True, True]
+
+
+def test_the_drafters_tensors_are_roots_under_its_prefix_and_one_it_shares_stays_the_models(tmp_path, device):
+    capture, runner = _drafting(tmp_path, ObserverConfig(triton=False, draft=True))
+    assert capture.drafter is runner.speculator.model
+    assert [(r.role, r.name, r.view.alloc, r.view.shape) for r in capture.roots] == [
+        ("weight", "table", 1, (16, 2)), ("buffer", "scale", 2, (2,)), ("weight", "drafter.eh", 3, (2, 2))]
+    events, _ = _logged(tmp_path, capture)
+    note = next(data for text, data in _notes(events) if text.startswith("external buffers"))
+    assert sorted(note["buffers"]) == ["input_buffers.input_ids", "input_buffers.positions", "kv_cache[attn]", "kv_cache[drafter.attn]",
+                                       "runner.kv_caches[0]"]
+    assert [(r.name, r.view.alloc) for r in events if isinstance(r, E.Root) and r.role != "prompt_token"] == [
+        ("table", 1), ("scale", 2), ("drafter.eh", 3)]
+
+
+def test_a_drafting_step_closes_after_propose_or_without_one_at_the_next_step_or_at_close(tmp_path, device):
+    capture, runner = _drafting(tmp_path, ObserverConfig(triton=False, draft=True))
+    _step(runner, 0)
+    assert _held(capture) == (0, None) and capture._cur.awaiting_draft and capture.step_index == 0
+    runner.speculator.propose(runner.execute_model_state.input_batch, torch.tensor([[9], [4]]))
+    assert _held(capture) == (None, 0) and not capture._pending.awaiting_draft and capture.step_index == 1
+    # a propose outside a held step (a dummy run's) is not observed
+    runner.speculator.propose(None, torch.tensor([[1]]))
+    assert _held(capture) == (None, 0) and capture.rec.active is False
+    _step(runner, 1)
+    assert _held(capture) == (1, None) and capture._cur.awaiting_draft
+    runner.execute_model(_scheduled(0))
+    assert _held(capture) == (2, None) and capture.step_index == 2 and [t["step"] for t in capture.step_times] == [0, 1]
+    runner.sample("hidden", runner.execute_model_state.input_batch, 0)
+    assert _held(capture) == (2, None) and capture._cur.awaiting_draft
+    events, starts = _logged(tmp_path, capture)
+    assert [s.step for s in starts] == [0, 1, 2] and _kinds(events)[-3:] == ["SampleEnd", "StepEnd", "RunEnd"]
+    phases = [[e.phase for e in events if isinstance(e, E.DispatchEnter) and e.step == s] for s in (0, 1, 2)]
+    assert [_runs(p)[-1] for p in phases] == ["draft", "sample", "sample"] and capture.errors == []
+
+
+def test_a_capture_without_the_draft_phase_is_todays_byte_for_byte_whatever_the_runner_drafts(tmp_path, device, monkeypatch):
+    logs = []
+    for i, (config, speculator) in enumerate([(ObserverConfig(triton=False), False), (ObserverConfig(triton=False, draft=False), True)]):
+        readings = itertools.count()
+        monkeypatch.setattr(C, "time", SimpleNamespace(perf_counter=lambda: 2 ** next(readings)))
+        out = tmp_path / str(i)
+        out.mkdir()
+        capture, runner = _drafting(out, config, speculator)
+        propose = getattr(getattr(runner, "speculator", None), "propose", None)
+        for step in (0, 1):
+            _step(runner, step)
+            if speculator:
+                assert runner.speculator.propose == propose
+                runner.speculator.propose(runner.execute_model_state.input_batch, torch.tensor([[9], [4]]))
+        assert capture.drafter is None and [r.name for r in capture.roots] == ["table", "scale"]
+        capture.close()
+        # an address, its reuse counts and the encoder's own timing are the allocator's and the clock's, different in any two captures
+        logs.append(re.sub(rb'"(ptr|generation|generation_bumps|encode_s)":[0-9.e-]+', rb'"\1":_', (out / "log.jsonl").read_bytes()))
+    assert logs[0] == logs[1] and b"draft" not in logs[1]
+
+
+def test_the_draft_phase_asked_of_a_runner_with_no_speculator_is_noted_and_the_capture_is_todays_otherwise(tmp_path, device):
+    capture, runner = _drafting(tmp_path, ObserverConfig(triton=False, draft=True), speculator=False)
+    _step(runner, 0)
+    assert capture.drafter is None and _held(capture) == (None, 0)
+    events, _ = _logged(tmp_path, capture)
+    assert ("draft phase asked for, but the runner has no speculator with a model: not observed", {}) in _notes(events)
+    assert capture.errors == []

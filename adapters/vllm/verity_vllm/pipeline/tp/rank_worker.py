@@ -289,7 +289,7 @@ class TP2CaptureWorkerExtension:
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
                     weights_verified: bool = False, argv: list[str] | None = None, target: Any = None,
-                    post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
+                    post_load_tensors: dict[str, list[str]] | None = None, draft: bool = False) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -328,7 +328,7 @@ class TP2CaptureWorkerExtension:
                                                  f"before hashing (the adapter's own id was {pid_adapter})")
         cfg = ObserverConfig(mode="record", reenter=reenter, triton=triton, module_hooks=module_hooks, write_log=True,
                              snapshot_steps=frozenset(int(s) for s in snapshot_steps),
-                             snapshot_dir=rank_dir if snapshot_steps else None, snapshot_max_bytes=int(snapshot_max_bytes))
+                             snapshot_dir=rank_dir if snapshot_steps else None, snapshot_max_bytes=int(snapshot_max_bytes), draft=bool(draft))
         log_path = out / f"log.rank{rank}.jsonl.gz"
 
         def log(*a: Any) -> None:

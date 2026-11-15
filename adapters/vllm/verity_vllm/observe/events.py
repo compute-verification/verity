@@ -228,7 +228,7 @@ class DispatchEnter:
     id: int
     parent: int | None
     step: int
-    phase: str                 # "forward" | "sample" | "other"
+    phase: str                 # "forward" | "sample" | "other" | "draft" (`ObserverConfig.draft`)
     op: str                    # e.g. "aten.mm.default", "_C.fused_add_rms_norm.default", "vllm.unified_attention_with_output.default"
     schema: str
     args: list
