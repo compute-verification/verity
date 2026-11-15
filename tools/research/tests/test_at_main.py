@@ -193,6 +193,44 @@ def test_the_shim_runs_origin_mains_code_for_a_stale_checkout_and_the_checkouts_
     assert [env["PYTHONPATH"].split(os.pathsep)[0] for _, env in ran] == [str(repo / "tools/research/src")]
 
 
+#: a research package's `__main__`, which says whose copy it is and what it was asked
+WHOSE = "import sys\nprint({!r}, *sys.argv[1:])\n"
+
+
+def two_researches(tmp_path: Path) -> Path:
+    """A repository on branch `lane`, cut from main, whose research `python -m research` runs, saying it is the
+    checkout's, with `origin/main` one research commit ahead, whose research says it is origin/main's."""
+    repo, main_py = tmp_path / "repo", "tools/research/src/research/__main__.py"
+    git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    commit(repo, "tools/research/src/research/__init__.py", "")
+    commit(repo, main_py, WHOSE.format("the checkout's"))
+    git(repo, "checkout", "-q", "-b", "lane")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "update-ref", "refs/remotes/origin/main", commit(repo, main_py, WHOSE.format("origin/main's")))
+    git(repo, "checkout", "-q", "lane")
+    return repo
+
+
+def as_the_shim_runs_it(repo: Path, cache: Path, *argv: str, **env: str) -> subprocess.CompletedProcess:
+    """`research ARGV` as /usr/local/bin/research (`tools/agent-guard/research.sh`) runs it: this file's source as
+    `python -c SOURCE ARGV`, with no package, and `RESEARCH_CHECKOUT` naming the checkout."""
+    base = {k: v for k, v in ENV.items() if k != at_main.OPT_OUT}
+    return subprocess.run([sys.executable, "-c", Path(at_main.__file__).read_text(), *argv], cwd=repo, capture_output=True,
+                          text=True, env={**base, "RESEARCH_CHECKOUT": str(repo), "XDG_CACHE_HOME": str(cache), **env})
+
+
+def test_the_shims_script_form_runs_origin_mains_copy_or_with_the_opt_out_the_checkouts(tmp_path):
+    """A read of the settings registry that needs the package (`from . import settings`) failed every command the shim
+    ran, before any of this module ran; the tests above import it as `research.at_main`, where it has one."""
+    repo, cache = two_researches(tmp_path), tmp_path / "cache"
+    behind = as_the_shim_runs_it(repo, cache, "--version")
+    assert behind.returncode == 0 and "Traceback" not in behind.stderr, behind.stderr
+    assert behind.stdout == "origin/main's --version\n"
+    assert behind.stderr.startswith("research: this checkout's research code is 1 commit(s) behind origin/main")
+    opted_out = as_the_shim_runs_it(repo, cache, "--version", RESEARCH_AT_CHECKOUT="1")
+    assert (opted_out.returncode, opted_out.stdout, opted_out.stderr) == (0, "the checkout's --version\n", "")
+
+
 def at_worktree_add(does):
     """A runner that is git's, but for `git worktree add`, where ``does(argv, timeout)`` stands in."""
     return lambda argv, timeout, **kw: does(argv, timeout) if argv[3:5] == ["worktree", "add"] else subprocess.run(argv, **kw)

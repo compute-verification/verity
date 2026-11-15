@@ -212,6 +212,7 @@
     {"file": "verity/protocols/accounting/certifier/device/tests/test_network_certifier_serve_phase10.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/device/network_certifier_serve.py", "count": 3},
     {"file": "verity/protocols/accounting/certifier/prover/network_certifier_zk.py", "count": 1},
-    {"file": "benchmarks/slowdown/run.py", "count": 1}
+    {"file": "benchmarks/slowdown/run.py", "count": 1},
+    {"file": "tools/research/src/research/at_main.py", "count": 1}
   ]
 }

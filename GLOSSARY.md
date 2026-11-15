@@ -419,8 +419,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
     `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
     base too. Under `--gate verdict` a plain candidate (each member with a land verdict of its own, no move, and nothing
-    drive.toml's `lowrisk_excludes` or `verdict_excludes` names) lands on those verdicts and the quick tier, and `main`'s
-    whole check follows: its red reverts the one culprit or, with none, sends plain candidates back to the whole check.
+    drive.toml's `verdict_excludes` names, nor its `lowrisk_excludes` outside `verdict_plain`) lands on those verdicts and
+    the quick tier, and `main`'s whole check follows: its red reverts the one culprit or, with none, sends plain
+    candidates back to the whole check.
   - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
     `queue/<sha12>` and checked as one.
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
