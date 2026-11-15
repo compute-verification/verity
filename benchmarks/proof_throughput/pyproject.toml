@@ -17,31 +17,3 @@ research = { workspace = true }
 verity = { workspace = true }
 verity-numerical = { workspace = true }
 verity-flock = { workspace = true }
-
-[tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_cli.py"]
-# The contract (verity_numerical.bench.contract) reads the census when it is imported; verity_flock.class_statement, which
-# samples the instances, imports circuit_check without declaring it.
-inputs = ["benchmarks/census", "tools/verity/circuit_check/src/circuit_check"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q -p no:cacheprovider"
-markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_instances.py", "tests/test_workloads.py"]
-paths = ["verity/protocols/resource_accounting/network", "verity/protocols/resource_accounting/memory/pous", "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_workloads.py"]
-paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py"]
-
-# circuit-check's registries import each module with a sidecar under the adapters' packages (`circuit_check.sidecars.TREES`)
-[[tool.verity.tests.reads]]
-tests = ["tests/test_instances.py", "tests/test_workloads.py"]
-paths = ["adapters/vllm/verity_vllm/*.circuit-check.py"]
