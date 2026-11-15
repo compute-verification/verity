@@ -608,6 +608,10 @@
    "owner": "@network-accounting",
    "why": "A scope: the subtrees of the Site that hold each host with every location in it or not at all, so that what leaves one crosses a registered link; a subtree at a device or a memory leaf is outside it."
   },
+  "Verity.Site.RatedOn": {
+   "owner": "@network-accounting",
+   "why": "A scope: the links the limit sums are those the registered site gives a rate; across a link with none, no limit is stated."
+  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7",
