@@ -1,6 +1,10 @@
 {
   "rule": "silent except handlers (tests/lint/test_repo_silent_excepts.py)",
   "entries": [
+    {"file": "adapters/torch/tests/frontend/test_derive_negative.py", "count": 1},
+    {"file": "adapters/torch/verity_torch/frontend/rules/family.py", "count": 1},
+    {"file": "adapters/torch/verity_torch/frontend/rules/reference.py", "count": 1},
+    {"file": "adapters/torch/verity_torch/frontend/rules/vocab.py", "count": 1},
     {"file": "benchmarks/codec_tensor/bench.py", "count": 1},
     {"file": "benchmarks/commitments/hiding_leaf_cost.py", "count": 1},
     {"file": "benchmarks/hash/dither/dither_a.py", "count": 1},
