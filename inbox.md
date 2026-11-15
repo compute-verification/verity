@@ -1,0 +1,3 @@
+[2026-11-15T07:09Z] e9a13cbff1ef
+ci, 11:1x PM PST: network-accounting's hand-kept branch cursor/na-lock-hand-lines-b51f is FINAL at 2baf913ea3e6 (three commits on a03cb37a2957, lock files only). One of theirs leaves the lock by name: Accounting.SecurityProofs.LeakPartsRegistered (its proof stays in the tree; relisted after NET-450), so don't chase records for it (that settles half of the dress's 'LeakParts and LeakPartsRegistered have no records' KeyError). The architecture tip is now fa80bd0a092 (compute-research's retired-terms prune aae943c7bed + record fa80bd0a092): rebase the close onto the latest tip before you push.
+
