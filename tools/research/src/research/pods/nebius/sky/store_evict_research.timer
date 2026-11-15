@@ -1,0 +1,10 @@
+# /etc/systemd/system/vy-store-evict-research.timer on every node: every 30 minutes (source trees pile up fastest where checks run).
+[Unit]
+Description=research store eviction every 30 minutes
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target

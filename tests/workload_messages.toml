@@ -1,0 +1,437 @@
+# Today's writers and readers of each message between the workload and the prover, by lane, as they stand before
+# the adapter reaches them through the declarations (`verity/protocols/*/*/prover/workload.py`). One entry a form a
+# message takes today: `second = true` marks a second form of a message already listed. `find` is a regular
+# expression for the site in its file. `tests/test_workload_messages.py` holds the list to the declarations.
+
+[[message]]
+type = "Circuit"
+today = "the circuit: the row's Build of record (`predicted/manifest.json`, `predicted.json`, its Programs)"
+writers = [
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/aot.py", find = "predicted\\.json" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/records/predicted_row.py", find = "FILE = \"predicted\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "vv predict row " },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$PRED/predicted\\.json\"|--predicted \"\\$PRED\"|--pred \"\\$PRED\"|\"\\$D\" \"\\$PRED\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_compare.py", find = "\"--pred\"" },
+]
+
+[[message]]
+type = "Circuit"
+second = true
+today = "`--required-manifest FILE`: the values the Commit must acquire for the row's Programs"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--required-manifest \"\\$PRED/manifest\\.json\"" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--required-manifest\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_seal.py", find = "required_manifest" },
+]
+
+[[message]]
+type = "RegisteredCompiler"
+today = "the registered compiler: its name and digest (`prove_path.py compiler` to `verity-vllm advice --compiler-name --compiler-digest`)"
+writers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "sub\\.add_parser\\(\"compiler\"|def compiler_doc" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py compiler --serve-run|--compiler-name" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "compiler_name|compiler_digest" },
+]
+
+[[message]]
+type = "RegisteredWeights"
+today = "the weights registration (`weights_registration.json`, `verity-vllm/weights-registration/v1`)"
+writers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "def weights_registration_of_serve|\\\"weights-registration\\\": weights_registration_of_serve" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py weights-registration --serve-run" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "weights_of_record|weights-of-record" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--weights-of-record \"\\$WREG\"|--registration \"\\$WREG\"|--registered \"\\$WREG\"|--pins \"\\$WREG\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "\"--registration\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/records_audit.py", find = "\"--registered\"|\"--pins\"" },
+    { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "weights_registration\\.json" },
+]
+
+[[message]]
+type = "RegisteredWeights"
+second = true
+today = "the engine's rotary table (`private/cos_sin_cache.npy`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/match_capture.py", find = "out / \"cos_sin_cache\\.npy\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_seal.py", find = "dump_cos_sin\\(llm" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "\"cos_sin_cache\\.npy\"" },
+]
+
+[[message]]
+type = "ServingConfiguration"
+today = "the endpoint's own statement of how it serves (`serve.json`): engine, revision, flags, \u03c6's facts, protocols"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "out / \"serve\\.json\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "\"serve\\.json\"\\)\\.read_text" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "\"serve\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/inference_only.py", find = "serve_dir / \"serve\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_compare.py", find = "a\\.serve / \"serve\\.json\"" },
+    { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "serve_dir / \"serve\\.json\"\\)\\.read" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/served_session.py", find = "src / \"serve\\.json\"" },
+    { lane = "network-accounting", file = "benchmarks/network_e2e/chain.py", find = "ep / \"serve\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\\[\"clocks\"\\]\\[\"time\"\\].*\"\\$D/serve\\.json\"|d / \"serve\\.json\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "\"serve\\.json\"" },
+    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "\"serve\\.json\"" },
+]
+
+[[message]]
+type = "CommitmentScheme"
+today = "`--scheme rows-sha512 --seal --window-steps --max-num-batched-tokens --window-requests --admit`: commit every value under this scheme, in runs of this size, and seal each"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--scheme rows-sha512 --seal|--admit release-order --window-requests" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--(scheme|seal|window-steps|admit)\"" },
+]
+
+[[message]]
+type = "CanonicalServing"
+today = "`VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=DIR`: how the engine computes and where the committer keeps raw copies"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/settings.py", find = "S\\(\"(VERITY_RETAIN|VLLM_BATCH_INVARIANT|NATIVE_COLLECT_BUILD)\"" },
+]
+
+[[message]]
+type = "MonitoringPeriodDeclaration"
+today = "`--day DAY --day-log --day-program [--day-blocks --day-params]`: the day's declaration the run is held to"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "day=\\(--day \"\\$DAY\" --day-log \"\\$DAY_LOG\" --day-program" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_day.py", find = "option\\(\"--day\"" },
+]
+
+[[message]]
+type = "Run"
+today = "the closed run's line (`windows.jsonl`): its run id and run root, steps, requests, each protocol's outcome"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "M\\.append\\(self\\.out / \"windows\\.jsonl\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "d / \"windows\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "serve_dir / \"windows\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"windows\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/inference_only.py", find = "serve_dir / \"windows\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$D/windows\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "REC_RUN/windows\\.jsonl" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "\"windows\\.jsonl\"" },
+]
+
+[[message]]
+type = "Run"
+second = true
+today = "the run's seal (`seals.jsonl`): the sealed row dir and whether its seal passed"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "M\\.append\\(self\\.out / \"seals\\.jsonl\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "serve_dir / \"seals\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/inference_only.py", find = "serve_dir / \"seals\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "seals\\.jsonl" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "\"seals\\.jsonl\"" },
+]
+
+[[message]]
+type = "Request"
+today = "the requests (`requests.jsonl`): each request's user, prompt ids, served ids, rows and seed"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "open\\(self\\.out / \"requests\\.jsonl\", \"ab\"\\)" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "Path\\(run\\) / \"requests\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "serve_dir / \"requests\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/inference_only.py", find = "serve_dir / \"requests\\.jsonl\"" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "serve_dir / \"requests\\.jsonl\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "requests\\.jsonl" },
+]
+
+[[message]]
+type = "Request"
+second = true
+today = "the requests' users (`request_users.jsonl`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "REQUEST_USERS = \"request_users\\.jsonl\"|open\\(self\\.out / REQUEST_USERS" },
+]
+readers = [
+    { lane = "network-accounting", file = "benchmarks/network_traces/served_session.py", find = "USERS = \"request_users\\.jsonl\"" },
+]
+
+[[message]]
+type = "RunTotals"
+today = "the run's summary (`summary.json`): `final`, the Commit's totals"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "out / \"summary\\.json\"" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "run / \"summary\\.json\"" },
+    { lane = "vllm", file = "adapters/vllm/tools/served_run/serve.sh", find = "pauses\\.jsonl summary\\.json" },
+]
+
+[[message]]
+type = "Advice"
+today = "the advice (`advice/w<k>/private/advice.bin`, I1's canonical encoding)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "private / \"advice\\.bin\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "vv advice \\\"\\$D\\\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--advice \"\\$D/advice/w\\$K/private/advice\\.bin\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "adv / \"private\" / \"advice\\.bin\", opening" },
+    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "\"private\" / \"advice\\.bin\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "tools/advice_compile\\.py" },
+]
+
+[[message]]
+type = "Advice"
+second = true
+today = "the scheduler's step trace (`advice_trace.jsonl`): each step's rows, each request's first position and length, cache hits, preemptions, finishes, each run's open and close"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/engine/step_trace.py", find = "SERVED = \"advice_trace\\.jsonl\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "^def advice_trace" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "advice_trace\\.jsonl" },
+    { lane = "network-accounting", file = "benchmarks/network_e2e/chain.py", find = "ep / \"advice_trace\\.jsonl\"" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "ENDPOINT = \\(\"advice_trace\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_overhead.py", find = "TRACE, WINDOWS, SERVE = \"advice_trace\\.jsonl\"" },
+]
+
+[[message]]
+type = "Advice"
+second = true
+today = "the advice a second and a third time (`private/advice.json`, I1's `to_json`; `private/opening.json`, its encoding with every row's salt)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "private / \"(opening|advice)\\.json\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "adv / \"private\" / \"advice\\.bin\", opening=adv / \"private\" / \"opening\\.json\"|last\\.dir / \"private\" / \"opening\\.json\"|\"advice\" / f\"w\\{a\\.window\\}\" / \"private\" / \"opening\\.json\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "REC_RUN/advice/w\\$REC_K/private/opening\\.json" },
+]
+
+[[message]]
+type = "Advice"
+second = true
+today = "the advice's registration (`advice/w<k>/registration.json`: the compiler, the advice's root and length, the bits charged, the weights' registered roots; `advice/windows.json`, the index)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "out / \"registration\\.json\"|out / \"windows\\.json\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "/ \"registration\\.json\"\\)\\.read_text" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$D/advice/w\\$K/registration\\.json\"|\"\\$D/advice/\\.w\\$K/windows\\.json\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/run.sh", find = "advice/w\\$3/registration\\.json" },
+]
+
+[[message]]
+type = "BoundaryCommitment"
+today = "the run commit (`v3c-w<K>-<class>/window/`: `circuit.json`, `registration.json`, `index.json` and the rows, `verity.commitments.periods`' four records)"
+writers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "^def window_commit_of_advice|\\\"window-commit\\\": window_commit_of_advice" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py window-commit --serve-run" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/records_audit.py", find = "window / \"registration\\.json\"|window / \"circuit\\.json\"|IF\\.of_records\\(window_dir" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "records_audit\\.py (warm|audit|period) --window \"\\$VW/window\"" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "v3c / \"period\\.json\"" },
+]
+
+[[message]]
+type = "RequestProgram"
+today = "the run's request Programs (`windows/w<K>/build_request_*/` with `descriptor.json.gz`, `instances.json.gz`, `result.json`, and `manifest.json`, `compiled.json`), by `tools/advice_compile.py RUN --window K`"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "M\\.write\\(out / \"(manifest|compiled)\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "tools/advice_compile\\.py \"\\$D\" --window \"\\$K\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "p = Path\\(d\\) / \"descriptor\\.json\\.gz\"|man = Path\\(a\\.row_dir\\) / \"manifest\\.json\"|glob\\(\"build_request\\*/result\\.json\"\\)" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--row-dir \"\\$D/windows/w\\$K\"" },
+]
+
+[[message]]
+type = "Values"
+today = "the adapter calls `verity.commitments.periods` (`rows`, `interface`, `links`: the run's circuit record, its registration, `Window.record/close/write`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serving_rows.py", find = "verity\\.commitments\\.periods" },
+]
+readers = [
+    { lane = "vllm", file = "verity/commitments/periods/interface.py", find = "^CIRCUIT = " },
+    { lane = "vllm", file = "verity/commitments/periods/interface.py", find = "^class Window|^    def (record|close|write)\\(" },
+    { lane = "vllm", file = "verity/commitments/periods/rows.py", find = "^def (commit|registration|write)\\(" },
+]
+
+[[message]]
+type = "PoUWScheme"
+today = "`--protocols NAME [--protocols-config JSON]`: run each linear's product under PoUW (H1; or Pearl+ with its kernel directory and cubin file)"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--protocols pouw:eps1-sm120-h1fx1|--protocols \\\"\\$PEARLPLUS_ARM\\\"|--protocols-config" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--(protocols|protocols-config)\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
+]
+
+[[message]]
+type = "H1State"
+today = "`--h1-prover DIR`: keep each served call's prover state (`private/h1/w<k>/`)"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--h1-prover \"\\$D/private/h1\"" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-prover\"|prover=opts\\.gate\\.h1_prover" },
+]
+
+[[message]]
+type = "H1RunCommitment"
+today = "`--h1-window-commit CMD`: at each run's close run the prover's run commit, `bash -c CMD _ SERVE_DIR K W R PROVER_DIR`"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "argv = \\[\"bash\", \"-c\", self\\.command" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "h1\\+=\\(--h1-window-commit " },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "^tie\\(\\) \\{|window_commit \\\"\\$D/h1/w\\$K/window-commit\\.json\\\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-window-commit\"|WindowTie\\(opts\\.gate\\.h1_window_commit" },
+]
+
+[[message]]
+type = "PoUWMonitoringPeriod"
+today = "PoUW's period (`period.json`, `served_verdicts.py period open`): the open monitoring period and its coins"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "PERIOD = \"period\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "served_verdicts\\.py\\\" period open" },
+]
+readers = [
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py", find = "PERIOD = \"period\\.json\"|serve_dir / PERIOD" },
+    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"period\\.json\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "-f \"\\$D/period\\.json\"" },
+]
+
+[[message]]
+type = "H1Program"
+today = "PoUW H1's declared run Program (`h1/window-program.json.gz`, `h1/window-program.meta.json`)"
+writers = [
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py", find = "PROGRAM, PROGRAM_META = \"window-program\\.json\\.gz\"" },
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_program.py", find = "out / PH\\.PROGRAM_META" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "^def program\\(" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"h1/window-program\\.json\\.gz\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "PH\\.PROGRAM_META|\\\"window-program\\.json\\.gz\\\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "PH\\.PROGRAM_META" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "h1/window-program\\.json\\.gz" },
+]
+
+[[message]]
+type = "H1Record"
+today = "PoUW H1's run record (`h1/w<k>/pouw-h1-calls.json`, `verity-vllm/pouw-h1-calls/v2`): the calls root, the session, the outcome"
+writers = [
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py", find = "CALLS_FILE = \"pouw-h1-calls\\.json\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "pouw-h1-calls\\.json\\\"$|calls = serve_dir / f\\\"h1/w\\{k\\}/pouw-h1-calls\\.json\\\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "H1_CALLS = \"h1/w\\{k\\}/pouw-h1-calls\\.json\"|serve_dir / H1_CALLS" },
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py", find = "RECORD = \"h1/w\\{w\\}/pouw-h1-calls\\.json\"" },
+]
+
+[[message]]
+type = "H1Registration"
+today = "H1's tie: the run's registration W (`h1/w<k>/registration.json`) and the log of ties (`h1/log.jsonl`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "LOG = \"log\\.jsonl\"|W_FILE, R_FILE, COMMAND_LOG = \"registration\\.json\"|M\\.(write|append)\\((wf|self\\.log), \"H1Registration\"" },
+]
+readers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--window-registration \"\\$3\"|\"\\$D/h1/log\\.jsonl\"" },
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "\"--window-registration\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_cases.py", find = "H1_LOG = Path\\(\"h1/log\\.jsonl\"\\)" },
+]
+
+[[message]]
+type = "H1Registration"
+second = true
+today = "the run's record R (`h1/w<k>/record.json`), the answer to `--h1-window-commit`"
+writers = [
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "cp \"\\$VW/window/registration\\.json\" \"\\$4\"" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "R_FILE" },
+]
+
+[[message]]
+type = "PearlPass"
+today = "Pearl+'s passes (`pearl/w<k>/served.json`, `coins.json`, `pass-NNNNN/`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "\"coins\\.json\"|\"served\\.json\"" },
+]
+readers = [
+    { lane = "compute-accounting", file = "benchmarks/pouw/pearl_c_vllm/served_passes.py", find = "passes / \"served\\.json\"\\)\\.read_text" },
+    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "d / \"retention\\.json\"|\"--pearl-passes\"" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--pearl-passes \"\\$4\"" },
+]
+
+[[message]]
+type = "PoUWValues"
+today = "the adapter calls PoUW's prover package (`verity.protocols.resource_accounting.compute.pouw.prover`: `schemes.pearl_c`, `circuit.h1window`, `circuit.ncp2`, ...)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
+    { lane = "compute-accounting", file = "adapters/vllm/verity_vllm/protocols/pouw/__init__.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
+]
+readers = [
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py", find = "^SCHEMES|^def get\\(" },
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/circuit/__init__.py", find = "^SCHEMES" },
+]
+
+[[message]]
+type = "PoUSSetup"
+today = "PoUS's Setup: `protocols.install(model, Context(enabled=[pous:...]))`, store these weights as P2's C*"
+writers = [
+    { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "PO\\.install\\(model, ctx\\)|PO\\.adapter\\(\\\"pous\\\"\\)|PO\\.Context\\(" },
+]
+readers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/protocols/__init__.py", find = "^def install\\(|^def adapter\\(" },
+    { lane = "memory-accounting", file = "adapters/vllm/verity_vllm/protocols/pous.py", find = "^def install\\(" },
+]
+
+[[message]]
+type = "PoUSStore"
+today = "PoUS's store, the answer to PoUS's Setup: `comp.get(\"pous\").store` (its commitment, salt, root, segments, published point) and `opt.prover(())`, which answers the memory challenger's rounds"
+writers = [
+    { lane = "memory-accounting", file = "adapters/vllm/verity_vllm/protocols/pous.py", find = "^    def prover\\(|^    def segments\\(|^    def published\\(" },
+]
+readers = [
+    { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "opt = comp\\.get\\(\"pous\"\\)|s = opt\\.store|opt\\.prover\\(\\(\\)\\)|inputs = \\(s\\.commitment" },
+]
+
+[[message]]
+type = "CommittedRows"
+today = "the run's committed step-input rows and their salts (`served_rows/w<k>.json`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "d = self\\.out / \"served_rows\"" },
+]
+readers = [
+    { lane = "network-accounting", file = "benchmarks/prove_path/served_tie_window.py", find = "run_dir / \"served_rows\"" },
+]
+
+[[message]]
+type = "ReportedAdvice"
+today = "the adapter calls the certifier's prover package (`ingress_scan`, `window_charge.Advice`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", find = "certifier\\.prover\\.window_charge" },
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/scan_state.py", find = "certifier\\.prover" },
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/window_rows.py", find = "certifier\\.prover" },
+]
+readers = [
+    { lane = "network-accounting", file = "verity/protocols/resource_accounting/network/prover/window_charge.py", find = "^class Advice" },
+]

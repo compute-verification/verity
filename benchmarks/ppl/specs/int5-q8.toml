@@ -1,0 +1,40 @@
+description = "FP8-int5 (the integers -16..16, exact in E4M3), one scale per token and per output row; a coin-chosen 0.125 of every k64 word's positions dithered on both operands, the rest rounded, after SmoothQuant 0.5 and the rotation; the adopted int8 attention"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "grid"
+grid = "int5"
+act = "dither"
+weight = "dither"
+density = 0.125
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "q"
+width = 64
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

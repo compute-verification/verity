@@ -1,0 +1,38 @@
+[
+  {
+    "id": "bf16",
+    "display": "BF16",
+    "common": "BF16",
+    "format": "BF16",
+    "bits": 16,
+    "sources": [
+      {
+        "label": "PTX ISA: .bf16 (1 sign, 8 exponent, 7 mantissa bits)"
+      }
+    ]
+  },
+  {
+    "id": "e4m3",
+    "display": "FP8 (E4M3)",
+    "common": "FP8",
+    "format": "E4M3",
+    "bits": 8,
+    "sources": [
+      {
+        "label": "PTX ISA: .e4m3 (OCP FP8: 1 sign, 4 exponent, 3 mantissa bits; no infinities)"
+      }
+    ]
+  },
+  {
+    "id": "e2m1",
+    "display": "FP4 (NVFP4, E2M1)",
+    "common": "FP4",
+    "format": "NVFP4, E2M1",
+    "bits": 4,
+    "sources": [
+      {
+        "label": "PTX ISA: .e2m1 operands with UE4M3 block scales over 16 elements (kind::mxf4nvf4, NVFP4)"
+      }
+    ]
+  }
+]

@@ -1,0 +1,158 @@
+{
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"in/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"w\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"y\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"w\"],\"out\":[\"in/0\",\"y\"]},\"roots\":[\"boundary\",\"ru0\"],\"subcircuit\":\"c79e803a886158bee7a2956c41a4a52b97148cdaf854593bbb953b3a7d204b5c\"}],\"references\":[{\"leaf\":\"in/0\",\"offset\":[],\"ref\":\"in/0\"},{\"leaf\":\"w\",\"offset\":[],\"ref\":\"w\"},{\"leaf\":\"y\",\"offset\":[],\"ref\":\"y\"}],\"roots\":[{\"count\":2,\"domain\":\"741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"1af3af39ebac6e7b53dce75d90983516b6f5205bf4357a6ae0e865190e93ffab\"},{\"count\":1,\"domain\":\"53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"51781bac150568666f41c1dee5c8fda5df90cb3a9b01abfed089a75f5c0ba9ec\"}],\"subcircuits\":[{\"definition\":{\"name\":\"q7/wide-input\"},\"digest\":\"c79e803a886158bee7a2956c41a4a52b97148cdaf854593bbb953b3a7d204b5c\",\"gates\":[{\"op\":\"Input\",\"value\":\"00000100\",\"width\":32},{\"args\":[[\"gate\",0]],\"op\":\"requant_u7\"},{\"args\":[[\"in\",0],[\"gate\",1]],\"op\":\"mul8\"}],\"in\":[8],\"out\":[0,2]}]}",
+ "code": "E_NOT_LOWERABLE",
+ "description": "A 32-bit Input gate in int8-q7, whose source width is 8: well-formed at the Verity level, but the legacy backend pins only positions of its source width. The one lowering-boundary code the interface reports.",
+ "detail": "subcircuit c79e803a8861 gate 0: an Input of 32 bits cannot be lowered in a family whose source width is 8",
+ "digest": "d471a917c0d83ad87fb8112b7301f425a2f58e64b1ed712d9a00e4e795c083d2",
+ "name": "reject/input-not-lowerable",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "in/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "w",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "y",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "w"
+     ],
+     "out": [
+      "in/0",
+      "y"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "c79e803a886158bee7a2956c41a4a52b97148cdaf854593bbb953b3a7d204b5c"
+   }
+  ],
+  "references": [
+   {
+    "leaf": "in/0",
+    "offset": [],
+    "ref": "in/0"
+   },
+   {
+    "leaf": "w",
+    "offset": [],
+    "ref": "w"
+   },
+   {
+    "leaf": "y",
+    "offset": [],
+    "ref": "y"
+   }
+  ],
+  "roots": [
+   {
+    "count": 2,
+    "domain": "741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "1af3af39ebac6e7b53dce75d90983516b6f5205bf4357a6ae0e865190e93ffab"
+   },
+   {
+    "count": 1,
+    "domain": "53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "51781bac150568666f41c1dee5c8fda5df90cb3a9b01abfed089a75f5c0ba9ec"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "q7/wide-input"
+    },
+    "digest": "c79e803a886158bee7a2956c41a4a52b97148cdaf854593bbb953b3a7d204b5c",
+    "gates": [
+     {
+      "op": "Input",
+      "value": "00000100",
+      "width": 32
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     },
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "gate",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "in": [
+     8
+    ],
+    "out": [
+     0,
+     2
+    ]
+   }
+  ]
+ },
+ "subcircuits_well_formed": [
+  false
+ ],
+ "tags": [
+  "stage-1",
+  "rejection",
+  "input-gate",
+  "lowering-boundary"
+ ],
+ "verdict": "reject"
+}

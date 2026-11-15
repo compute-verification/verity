@@ -1,0 +1,36 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "qwen3-8b-bf16-rtx-served-arm"
+# G2's served arm (benchmarks/served_commit/served_arm.py) for Qwen3-8B: the compiled Commit at rows-sha512's 4 KiB rows
+# (G2's served-commit-rows-4k, control stock@compiled) against stock as vLLM serves it (stock@compiled) and the
+# batch-invariant eager stock every eager row is timed against (stock), interleaved rep by rep on one RTX PRO 6000, over
+# G2's width sweep. The eager Commit is qwen3-8b-bf16-rtx-served-arm-eager's: four 16 GB engines don't fit one GPU beside
+# the Commit's buffers.
+arms = ["stock", "stock@compiled", "served-commit-rows-4k"]
+arm_modules = ["served_commit.served_arm:ROWS_4K"]
+sweep = "width"
+reps = 3
+eager = true
+
+[arm_settings."stock@compiled"]
+control = "none"
+
+[preset]
+id = "qwen3-8b-bf16-rtx-served-arm"
+model = "Qwen/Qwen3-8B"
+revision = "b968826d9c46dd6066d109eabc6255188de91218"
+case = "QWEN3_8B"
+precision = "bfloat16"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+max_model_len = 4096
+resident_gpu_memory_utilization = 0.25
+block_gpu_memory_utilization = 0.80
+resident_kv_cache_memory_bytes = 4294967296
+block_kv_cache_memory_bytes = 4294967296
+
+[admission]
+max_minutes = 120

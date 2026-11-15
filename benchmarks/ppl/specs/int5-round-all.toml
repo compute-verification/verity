@@ -1,0 +1,30 @@
+description = "FP8-int5 (the integers −16..16, exact in E4M3) on both operands of every matmul, rounded to the nearest level: the linears after SmoothQuant 0.5 and the rotation, attention rotated with centered keys and no key blocks"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "grid"
+grid = "int5"
+act = "round"
+weight = "round"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "grid"
+grid = "int5"
+q = "round"
+k = "round"
+p = "round"
+v = "round"
+p_sink = false

@@ -1,0 +1,47 @@
+[project]
+name = "verity-vllm"
+version = "0.1.0"
+description = "Verity x vLLM integration: runtime capture, definitions and Torch-derived Programs for vLLM, Match/Commit, the qualification sweep."
+requires-python = ">=3.12"
+dependencies = [
+    "verity",
+    "verity-config",
+    "numpy>=1.26",
+    "verity-torch",
+]
+
+[project.scripts]
+verity-vllm = "verity_vllm.pipeline.cli:main"
+
+# vLLM calls each general plugin in every process it loads plugins in (vllm/plugins/__init__.py): this one puts the canonical
+# moe_align_block_size on the Marlin MoE path (verity_vllm/engine/moe_align.py)
+[project.entry-points."vllm.general_plugins"]
+verity_moe_align = "verity_vllm.engine.moe_align:register"
+verity_cut = "verity_vllm.pipeline.cut_plugin:register"
+
+[project.optional-dependencies]
+# The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
+torch = ["torch>=2.4"]
+# The team's run and store tool, which the custody, telemetry and store paths (`pipeline/research*.py`, `source_identity.py`)
+# and their tests use; the workspace installs it with every member.
+research = ["research"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "verity_vllm",
+]
+
+[tool.uv.sources]
+research = { workspace = true }
+verity = { workspace = true }
+verity-config = { workspace = true }
+# vLLM's mypy settings; tests/lint/test_mypy.py runs mypy under them and holds its errors to allowlists/mypy.json
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"

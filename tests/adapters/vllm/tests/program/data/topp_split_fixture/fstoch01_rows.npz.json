@@ -1,0 +1,92 @@
+{
+ "step37_row4": {
+  "request": "cbbbf803-7028-5102-9bd2-94fb886435cd",
+  "pos": 107,
+  "served": 304,
+  "S": 16,
+  "mask_constexprs": {
+   "HAS_K": false,
+   "MASK_VALUE": -Infinity,
+   "S": 16,
+   "F": 8,
+   "NUM_ROUNDS": 5,
+   "VOCAB_SIZE": 128256,
+   "BLOCK": 8192
+  },
+  "gumbel_constexprs": {
+   "BLOCK_SIZE": 1024,
+   "IS_DRAFTING": false,
+   "APPLY_TEMPERATURE": false,
+   "USE_FP64": false,
+   "PER_TOKEN_COL": false
+  },
+  "device": {
+   "seed": 509133774,
+   "pos": 107,
+   "temperature": 0.800000011920929,
+   "top_p": 0.949999988079071
+  },
+  "V": 128256,
+  "rows_in_step": 5
+ },
+ "step82_row3": {
+  "request": "d589cb22-cecd-5ee3-8d27-9dc63d92eb4e",
+  "pos": 667,
+  "served": 1938,
+  "S": 16,
+  "mask_constexprs": {
+   "HAS_K": false,
+   "MASK_VALUE": -Infinity,
+   "S": 16,
+   "F": 8,
+   "NUM_ROUNDS": 5,
+   "VOCAB_SIZE": 128256,
+   "BLOCK": 8192
+  },
+  "gumbel_constexprs": {
+   "BLOCK_SIZE": 1024,
+   "IS_DRAFTING": false,
+   "APPLY_TEMPERATURE": false,
+   "USE_FP64": false,
+   "PER_TOKEN_COL": false
+  },
+  "device": {
+   "seed": 1214888207,
+   "pos": 667,
+   "temperature": 0.800000011920929,
+   "top_p": 0.949999988079071
+  },
+  "V": 128256,
+  "rows_in_step": 5
+ },
+ "step92_row3": {
+  "request": "d589cb22-cecd-5ee3-8d27-9dc63d92eb4e",
+  "pos": 677,
+  "served": 21187,
+  "S": 16,
+  "mask_constexprs": {
+   "HAS_K": false,
+   "MASK_VALUE": -Infinity,
+   "S": 16,
+   "F": 8,
+   "NUM_ROUNDS": 5,
+   "VOCAB_SIZE": 128256,
+   "BLOCK": 8192
+  },
+  "gumbel_constexprs": {
+   "BLOCK_SIZE": 1024,
+   "IS_DRAFTING": false,
+   "APPLY_TEMPERATURE": false,
+   "USE_FP64": false,
+   "PER_TOKEN_COL": false
+  },
+  "device": {
+   "seed": 1214888207,
+   "pos": 677,
+   "temperature": 0.800000011920929,
+   "top_p": 0.949999988079071
+  },
+  "V": 128256,
+  "rows_in_step": 5
+ }
+}

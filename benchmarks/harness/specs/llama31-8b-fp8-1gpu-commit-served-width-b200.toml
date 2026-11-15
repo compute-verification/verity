@@ -1,0 +1,42 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-fp8-1gpu-commit-served-width-b200"
+# `llama31-8b-fp8-1gpu-commit-served-width` on one B200 (sm_100a): the served Commit (rows-sha512 hiding
+# leaves in a frame-v3-sha512 tree), commit@compiled / stock-fp8@compiled, at b1, b8 and b32, with that spec's arms,
+# sweep, reps and engine settings, and both arms on FlashAttention 2, as the B200 Build's row declares: on cc 10.0 vLLM
+# would serve FlashInfer attention, which has no Definitions. The pinned 60 GiB pool (458,752 tokens) is the RTX's, and
+# every point runs in `blocks`. Launch with `verity-bench run SPEC --direct NODE`, NODE the B200 VM in
+# `verity_bench.jobs.DIRECT_NODES`.
+arms = ["stock-fp8@compiled", "commit@compiled"]
+arm_modules = ["verity_bench.vllm.commit_arm:COMMIT_COMPILED"]
+sweep = "width"
+reps = 6
+eager = true
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama31-8b-fp8-1gpu-commit-served-width-b200"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+case = "LLAMA31_8B"
+precision = "fp8"
+gpu_id = "b200"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.80
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 16384
+block_kv_cache_memory_bytes = 60129542144
+attention_backend = "FLASH_ATTN"
+attention_config = { flash_attn_version = 2 }
+
+# The point's run, its slot and its lease, the wait for other leases on the node's one GPU included.
+[admission]
+max_minutes = 120

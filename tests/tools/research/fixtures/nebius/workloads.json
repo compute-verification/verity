@@ -1,0 +1,554 @@
+{
+ "items": [
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "Workload",
+   "metadata": {
+    "creationTimestamp": "2026-09-30T04:45:36Z",
+    "finalizers": [
+     "kueue.x-k8s.io/resource-in-use"
+    ],
+    "labels": {
+     "kueue.x-k8s.io/job-uid": "7c69235d-f4d8-490a-be7a-5c1ccf7ce296"
+    },
+    "name": "pod-bench-q-1dc0f",
+    "namespace": "default"
+   },
+   "spec": {
+    "active": true,
+    "podSets": [
+     {
+      "count": 1,
+      "name": "main",
+      "template": {
+       "metadata": {},
+       "spec": {
+        "affinity": {
+         "podAntiAffinity": {
+          "requiredDuringSchedulingIgnoredDuringExecution": [
+           {
+            "labelSelector": {
+             "matchLabels": {
+              "verity.dev/build": "true"
+             }
+            },
+            "namespaceSelector": {},
+            "topologyKey": "kubernetes.io/hostname"
+           }
+          ]
+         }
+        },
+        "containers": [
+         {
+          "image": "registry.k8s.io/pause:3.10",
+          "imagePullPolicy": "IfNotPresent",
+          "name": "c",
+          "resources": {
+           "limits": {
+            "nvidia.com/gpu": "1"
+           },
+           "requests": {
+            "cpu": "10m",
+            "memory": "16Mi",
+            "nvidia.com/gpu": "1"
+           }
+          },
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "volumeMounts": [
+           {
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "name": "kube-api-access-pzpzz",
+            "readOnly": true
+           }
+          ]
+         }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "schedulingGates": [
+         {
+          "name": "kueue.x-k8s.io/admission"
+         },
+         {
+          "name": "kueue.x-k8s.io/topology"
+         }
+        ],
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 1,
+        "tolerations": [
+         {
+          "effect": "NoExecute",
+          "key": "node.kubernetes.io/not-ready",
+          "operator": "Exists",
+          "tolerationSeconds": 300
+         },
+         {
+          "effect": "NoExecute",
+          "key": "node.kubernetes.io/unreachable",
+          "operator": "Exists",
+          "tolerationSeconds": 300
+         }
+        ],
+        "volumes": [
+         {
+          "name": "kube-api-access-pzpzz",
+          "projected": {
+           "defaultMode": 420,
+           "sources": [
+            {
+             "serviceAccountToken": {
+              "expirationSeconds": 3607,
+              "path": "token"
+             }
+            },
+            {
+             "configMap": {
+              "items": [
+               {
+                "key": "ca.crt",
+                "path": "ca.crt"
+               }
+              ],
+              "name": "kube-root-ca.crt"
+             }
+            },
+            {
+             "downwardAPI": {
+              "items": [
+               {
+                "fieldRef": {
+                 "apiVersion": "v1",
+                 "fieldPath": "metadata.namespace"
+                },
+                "path": "namespace"
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      "topologyRequest": {
+       "podIndexLabel": "kueue.x-k8s.io/pod-group-pod-index"
+      }
+     }
+    ],
+    "priority": 300,
+    "priorityClassRef": {
+     "group": "kueue.x-k8s.io",
+     "kind": "WorkloadPriorityClass",
+     "name": "prover-bench"
+    },
+    "queueName": "provers"
+   },
+   "status": {
+    "admission": {
+     "clusterQueue": "provers",
+     "podSetAssignments": [
+      {
+       "count": 1,
+       "flavors": {
+        "cpu": "vy-nebius-1",
+        "memory": "vy-nebius-1",
+        "nvidia.com/gpu": "vy-nebius-1"
+       },
+       "name": "main",
+       "resourceUsage": {
+        "cpu": "10m",
+        "memory": "16Mi",
+        "nvidia.com/gpu": "1"
+       }
+      }
+     ]
+    },
+    "conditions": [
+     {
+      "lastTransitionTime": "2026-09-30T04:45:47Z",
+      "message": "All pods reached readiness and the workload is running",
+      "observedGeneration": 1,
+      "reason": "Started",
+      "status": "True",
+      "type": "PodsReady"
+     },
+     {
+      "lastTransitionTime": "2026-09-30T04:45:36Z",
+      "message": "Quota reserved in ClusterQueue provers",
+      "observedGeneration": 1,
+      "reason": "QuotaReserved",
+      "status": "True",
+      "type": "QuotaReserved"
+     },
+     {
+      "lastTransitionTime": "2026-09-30T04:45:36Z",
+      "message": "The workload is admitted",
+      "observedGeneration": 1,
+      "reason": "Admitted",
+      "status": "True",
+      "type": "Admitted"
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "Workload",
+   "metadata": {
+    "creationTimestamp": "2026-09-30T04:45:55Z",
+    "finalizers": [
+     "kueue.x-k8s.io/resource-in-use"
+    ],
+    "labels": {
+     "kueue.x-k8s.io/job-uid": "97cd2cc5-c00e-4153-8e69-5dafce1a458a"
+    },
+    "name": "pod-build-2-b9477",
+    "namespace": "default"
+   },
+   "spec": {
+    "active": true,
+    "podSets": [
+     {
+      "count": 1,
+      "name": "main",
+      "template": {
+       "metadata": {},
+       "spec": {
+        "containers": [
+         {
+          "image": "registry.k8s.io/pause:3.10",
+          "imagePullPolicy": "IfNotPresent",
+          "name": "c",
+          "resources": {
+           "limits": {
+            "nvidia.com/gpu": "1"
+           },
+           "requests": {
+            "cpu": "10m",
+            "memory": "16Mi",
+            "nvidia.com/gpu": "1"
+           }
+          },
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "volumeMounts": [
+           {
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "name": "kube-api-access-nwbbh",
+            "readOnly": true
+           }
+          ]
+         }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "schedulingGates": [
+         {
+          "name": "kueue.x-k8s.io/admission"
+         },
+         {
+          "name": "kueue.x-k8s.io/topology"
+         }
+        ],
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 1,
+        "tolerations": [
+         {
+          "effect": "NoExecute",
+          "key": "node.kubernetes.io/not-ready",
+          "operator": "Exists",
+          "tolerationSeconds": 300
+         },
+         {
+          "effect": "NoExecute",
+          "key": "node.kubernetes.io/unreachable",
+          "operator": "Exists",
+          "tolerationSeconds": 300
+         }
+        ],
+        "volumes": [
+         {
+          "name": "kube-api-access-nwbbh",
+          "projected": {
+           "defaultMode": 420,
+           "sources": [
+            {
+             "serviceAccountToken": {
+              "expirationSeconds": 3607,
+              "path": "token"
+             }
+            },
+            {
+             "configMap": {
+              "items": [
+               {
+                "key": "ca.crt",
+                "path": "ca.crt"
+               }
+              ],
+              "name": "kube-root-ca.crt"
+             }
+            },
+            {
+             "downwardAPI": {
+              "items": [
+               {
+                "fieldRef": {
+                 "apiVersion": "v1",
+                 "fieldPath": "metadata.namespace"
+                },
+                "path": "namespace"
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      "topologyRequest": {
+       "podIndexLabel": "kueue.x-k8s.io/pod-group-pod-index"
+      }
+     }
+    ],
+    "priority": 500,
+    "priorityClassRef": {
+     "group": "kueue.x-k8s.io",
+     "kind": "WorkloadPriorityClass",
+     "name": "circuits"
+    },
+    "queueName": "circuits"
+   },
+   "status": {
+    "admission": {
+     "clusterQueue": "circuits",
+     "podSetAssignments": [
+      {
+       "count": 1,
+       "flavors": {
+        "cpu": "vy-nebius-1",
+        "memory": "vy-nebius-1",
+        "nvidia.com/gpu": "vy-nebius-1"
+       },
+       "name": "main",
+       "resourceUsage": {
+        "cpu": "10m",
+        "memory": "16Mi",
+        "nvidia.com/gpu": "1"
+       }
+      }
+     ]
+    },
+    "conditions": [
+     {
+      "lastTransitionTime": "2026-09-30T04:45:55Z",
+      "message": "Not all pods are ready or succeeded",
+      "observedGeneration": 1,
+      "reason": "WaitForStart",
+      "status": "False",
+      "type": "PodsReady"
+     },
+     {
+      "lastTransitionTime": "2026-09-30T04:45:55Z",
+      "message": "Quota reserved in ClusterQueue circuits",
+      "observedGeneration": 1,
+      "reason": "QuotaReserved",
+      "status": "True",
+      "type": "QuotaReserved"
+     },
+     {
+      "lastTransitionTime": "2026-09-30T04:45:55Z",
+      "message": "The workload is admitted",
+      "observedGeneration": 1,
+      "reason": "Admitted",
+      "status": "True",
+      "type": "Admitted"
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "Workload",
+   "metadata": {
+    "creationTimestamp": "2026-09-30T04:49:30Z",
+    "finalizers": [
+     "kueue.x-k8s.io/resource-in-use"
+    ],
+    "labels": {
+     "kueue.x-k8s.io/job-uid": "50663534-6d08-472f-a3ca-012b74c09837"
+    },
+    "name": "pod-dev-wait-d8d7f",
+    "namespace": "default"
+   },
+   "spec": {
+    "active": true,
+    "podSets": [
+     {
+      "count": 1,
+      "name": "main",
+      "template": {
+       "metadata": {},
+       "spec": {
+        "containers": [
+         {
+          "image": "registry.k8s.io/pause:3.10",
+          "imagePullPolicy": "IfNotPresent",
+          "name": "c",
+          "resources": {
+           "limits": {
+            "nvidia.com/gpu": "8"
+           },
+           "requests": {
+            "cpu": "10m",
+            "memory": "16Mi",
+            "nvidia.com/gpu": "8"
+           }
+          },
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "volumeMounts": [
+           {
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "name": "kube-api-access-c2k54",
+            "readOnly": true
+           }
+          ]
+         }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "schedulingGates": [
+         {
+          "name": "kueue.x-k8s.io/admission"
+         },
+         {
+          "name": "kueue.x-k8s.io/topology"
+         }
+        ],
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 1,
+        "tolerations": [
+         {
+          "effect": "NoExecute",
+          "key": "node.kubernetes.io/not-ready",
+          "operator": "Exists",
+          "tolerationSeconds": 300
+         },
+         {
+          "effect": "NoExecute",
+          "key": "node.kubernetes.io/unreachable",
+          "operator": "Exists",
+          "tolerationSeconds": 300
+         }
+        ],
+        "volumes": [
+         {
+          "name": "kube-api-access-c2k54",
+          "projected": {
+           "defaultMode": 420,
+           "sources": [
+            {
+             "serviceAccountToken": {
+              "expirationSeconds": 3607,
+              "path": "token"
+             }
+            },
+            {
+             "configMap": {
+              "items": [
+               {
+                "key": "ca.crt",
+                "path": "ca.crt"
+               }
+              ],
+              "name": "kube-root-ca.crt"
+             }
+            },
+            {
+             "downwardAPI": {
+              "items": [
+               {
+                "fieldRef": {
+                 "apiVersion": "v1",
+                 "fieldPath": "metadata.namespace"
+                },
+                "path": "namespace"
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      "topologyRequest": {
+       "podIndexLabel": "kueue.x-k8s.io/pod-group-pod-index"
+      }
+     }
+    ],
+    "priority": 100,
+    "priorityClassRef": {
+     "group": "kueue.x-k8s.io",
+     "kind": "WorkloadPriorityClass",
+     "name": "dev"
+    },
+    "queueName": "provers"
+   },
+   "status": {
+    "conditions": [
+     {
+      "lastTransitionTime": "2026-09-30T04:49:30Z",
+      "message": "Not all pods are ready or succeeded",
+      "observedGeneration": 1,
+      "reason": "WaitForStart",
+      "status": "False",
+      "type": "PodsReady"
+     },
+     {
+      "lastTransitionTime": "2026-09-30T04:49:30Z",
+      "message": "couldn't assign flavors to pod set main: insufficient unused quota for nvidia.com/gpu in flavor vy-nebius-1, 2 more needed",
+      "observedGeneration": 1,
+      "reason": "Pending",
+      "status": "False",
+      "type": "QuotaReserved"
+     }
+    ],
+    "resourceRequests": [
+     {
+      "name": "main",
+      "resources": {
+       "cpu": "10m",
+       "memory": "16Mi",
+       "nvidia.com/gpu": "8"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

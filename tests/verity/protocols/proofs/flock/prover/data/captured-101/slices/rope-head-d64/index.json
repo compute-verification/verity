@@ -1,0 +1,1 @@
+{"schema":"vllm-vu-set/v1/index","set":"rope-head-d64","columns":["id","vu","request","engine_step","op_path","row","phase","source","sub"],"rows":[[0,1056,"r0",1,"model.layers.0.self_attn.rotary_emb",0,"first-decode","committed",{"head":0,"NHEADS":32}],[1,1056,"r0",1,"model.layers.0.self_attn.rotary_emb",0,"first-decode","committed",{"head":3,"NHEADS":32}]]}

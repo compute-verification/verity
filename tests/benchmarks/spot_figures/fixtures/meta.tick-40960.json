@@ -1,0 +1,40 @@
+{
+ "server_argv": [
+  "-m",
+  "vllm.entrypoints.openai.api_server",
+  "--model",
+  "/workspace/fs/glm53/aca966e4e02791568aa6a4ced368624b3d897f42",
+  "--served-model-name",
+  "glm-5.3",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "18745",
+  "--tensor-parallel-size",
+  "8",
+  "--max-model-len",
+  "40960",
+  "--max-num-seqs",
+  "256",
+  "--seed",
+  "0",
+  "--disable-uvicorn-access-log",
+  "--middleware",
+  "vllm_accept_stamp.AcceptStamp",
+  "--middleware",
+  "verity_vllm.pipeline.tick_plugin.TickFeed",
+  "--no-enable-prefix-caching"
+ ],
+ "tick": {
+  "bucket_us": 250000,
+  "sat_us": 220000,
+  "free_us": 220000
+ },
+ "versions": {
+  "vllm": "0.28.1rc1.dev472+gd9105ea80.cu129",
+  "torch": "2.13.0+cu129",
+  "aiohttp": "3.14.5",
+  "transformers": "5.22.2"
+ },
+ "fake": false
+}

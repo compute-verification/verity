@@ -1,0 +1,3 @@
+# a tool that reads a declaration by name, and a record that names a module, which keeps nothing
+declaration = "Core.citedByTool"
+moved = "Definitions.Dead"
