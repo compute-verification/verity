@@ -1,0 +1,160 @@
+module
+
+public import Definitions.Certifier.Guarantees.PooledRegChecked
+public import Proofs.Certifier.WitnessesPooledReg
+public import Proofs.Certifier.PooledRegChecked
+
+/-!
+# The witnesses of the checked pooled bound at the trace with the registered openings
+
+`PooledLeakRegisteredChecked`'s honest lemma (`PooledLeakRegisteredChecked_honest`) is its premises at one instance
+that accepts: `PooledLeakRegistered_honest`'s toy instance (one execution phase audited by `twoL` against the prover
+that sends nothing, the program of two inputs sampled whole, the layout `twoLay` and the registered openings
+`certOps`), with no input registered and the free input, the gate `1`, checked. The check (`valid₂`) pins the run at
+the gate `1` to the value the run at the trace with the registered openings holds there (`regRunR`), so it pins the
+checked input (`checkedUnique_pin`) and holds on that run, and its miss is `0` (`PhaseChecks` at `εchk = 0`). The
+network certifier has no connection; its record is the one step's `twoObs` (`oneFormat`). Its last conjunct is the
+guarantee's event there, which is not empty: at every history the phase is accepted, registered as the period's and
+its record complete.
+
+Its nontrivial lemma (`PooledLeakRegisteredChecked_nontrivial`): at that instance the checked count is strictly
+below `PooledLeakRegistered`'s, the checked input being a free input outside the registered ones
+(`pooledCount_checked_lt`).
+-/
+
+@[expose] public section
+
+namespace NetTiming.Witness
+
+open Claims Claims.Sampling Claims.Witness
+open Claims.SamplingGeneric (Arg Compiled)
+open Claims.Witness.SamplingGeneric (twoA twoL twoStmt twoPart twoProg twoSessions_meets twoL_parse twoL_partition)
+
+local notation "shaD" => FlockDeploy.sha512
+
+local notation "twoLay" => (BoundaryGates.mk (fun _ ℓ _ => Fin.elim0 ℓ) (fun _ => [0]) : BoundaryGates 0 1)
+local notation "twoObs" => (Obs.mk (fun ℓ => Fin.elim0 ℓ) 0 (fun _ => Status.complete) : Obs 0 1 1)
+local notation "Ω₂" => (Fin 1 → Unit × (Fin 2 → Bool))
+local notation "D₂" => (fun _ => twoL Bool : Msg → Compiled Bool (twoA Bool))
+local notation "x₂" => (fun _ _ _ => [] : Unit → Ω₂ → Fin 1 → Msg)
+local notation "P₂" => (fun _ _ _ => silentP : Unit → Ω₂ → Fin 1 → Prover Unit)
+local notation "ops₂" => (fun _ _ _ _ => certOps : Unit → Ω₂ → Fin 1 → AuditStatement → List (Opening Bool))
+local notation "obs₂" => (fun _ _ _ => [twoObs] : Unit → Ω₂ → Fin 1 → List (Obs 0 1 1))
+local notation "e₂" =>
+  (fun _ => Compiled.εregX shaD (twoL Bool) [] silentP +
+    Finder.Pr shaD (BopsX shaD (twoL Bool) (fun _ => certOps) Unit silentP []) : Fin 1 → ℝ)
+
+/-! The check: the run holds the gate `1` at the value the run at the trace with the registered openings holds there. -/
+
+local notation "run₂" =>
+  (regRunR shaD (twoL Bool) silentP [] (fun _ => certOps) (fun _ => twoLay) (fun _ => 1) twoStmt twoPart)
+local notation "valid₂" => (fun _ ρ => ∀ g ∈ ({1} : Finset ℕ), ρ g = run₂ g : AuditStatement → (ℕ → Bool) → Prop)
+
+/-! The network certifier: no connection, no server behavior to speak of, one device. -/
+
+/-- The record format of a network certifier with no connection over one execution phase: it holds every schedule, its
+record is the one step's record `twoObs`, and no cell reads back from it, as the code sends none. -/
+def oneFormat : RecordFormat Empty Unit (Fin 1 → List (Obs 0 1 1)) :=
+  ⟨fun _ _ _ _ => [twoObs], fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
+
+local notation "arr₂" => (fun _ c => c.elim : Unit → Empty → Arrivals Unit)
+local notation "runT" =>
+  (fun _ p => recordingCode oneFormat p.1 (arr₂ p.2) :
+    Unit → CertifierSchedule Empty × Unit → (Empty → List (ℕ × CellView Unit)) × (Fin 1 → List (Obs 0 1 1)))
+local notation "rd₂" => (fun _ _ c => c.elim : Unit → (Fin 1 → List (Obs 0 1 1)) → Empty → List (ℕ × CellView Unit))
+local notation "sched₂" => (fun _ _ => ⟨0, 0, Empty.elim, Empty.elim⟩ : Unit → Ω₂ → CertifierSchedule Empty)
+
+/-- The gate `1` of the program of two inputs is a free input at `twoLay` over one step: an input, and no step's
+ingress, which is the gate `0`. -/
+theorem one_mem_freeInputs : 1 ∈ freeInputs twoStmt.prog twoLay 1 := by
+  first | decide | simp [freeInputs, twoStmt, twoProg]
+
+/-- At the honest instance the phase is registered as the period's with no input registered: its statement parses to
+`twoStmt` with the partition `twoPart`. -/
+theorem twoPhase_registered_none (ω : Ω₂) (i : Fin 1) :
+    PhaseRegistered D₂ (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => twoStmt) (fun _ => twoPart)
+      (fun _ _ => true) x₂ ops₂ () ω i :=
+  ⟨twoStmt, rfl, ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, fun g hg => absurd hg (Finset.notMem_empty g)⟩
+
+/-- **`PooledLeakRegisteredChecked`'s premises at an instance that accepts, with a checked input.** Toy code: one
+execution phase audited by `twoL` against the prover that sends nothing, the program of two inputs sampled whole (rate
+`1`), the gate `0` the ingress, no input registered, the gate `1` checked, the registered openings `certOps`, the record
+`twoObs`, the phase's own error. The check pins the run's gate `1` to the value of the run at the trace with the
+registered openings there: it pins the checked input (`CheckedUnique`, by `checkedUnique_pin`) and its miss is `0`
+(`PhaseChecks`), since that run passes it by construction; it is not a check any deployed system runs. The network
+certifier has no connection, so no cell reaches the client, and one secret: the read-back and the channel hold
+trivially. At every history the phase is accepted, registered as the period's and its record complete, which is the
+guarantee's event. -/
+theorem PooledLeakRegisteredChecked_honest :
+    (twoA Bool).KS shaD ∧ (twoL Bool).commit.Binds shaD ∧ (twoL Bool).Sessions shaD ∧ PhaseRounds D₂ 2 x₂ ∧
+      PhasesAdaptive x₂ P₂ ops₂ ∧
+      (∀ s, (twoL Bool).parse [] = some s → RegOpens shaD (twoL Bool).commit s ∅ certOps) ∧
+      (∀ s Pt, (twoL Bool).parse [] = some s → (twoL Bool).partition s = some Pt → RateAt s Pt 1) ∧
+      PhaseErrors shaD D₂ x₂ P₂ ops₂ e₂ ∧
+      (∀ _ : Fin 1, CheckedUnique twoStmt.prog twoPart twoStmt.design twoLay 1 {1} (valid₂ twoStmt)) ∧
+      PhaseChecks shaD D₂ (fun _ => twoLay) (fun _ => 1) valid₂ (fun _ => twoStmt) x₂ P₂ ops₂ (fun _ => 0) ∧
+      (twoLay).Fits twoStmt.prog 1 ∧
+      Verity.Assumptions.TrustedDevice () runT (fun p => recordingCode oneFormat p.1 (arr₂ p.2)) ∧
+      oneFormat.ReadsBy rd₂ (fun _ _ => True) ∧
+      (∀ ω : Ω₂, MonitoringPeriodChannelReg oneFormat (fun _ _ => True) Set.univ (Set.univ : Set Unit)
+        (fun z => sched₂ z ω) (fun _ => ()) (fun _ => ()) fun p => (runT () p).1) ∧
+      (∀ s, (twoL Bool).parse [] = some s →
+        CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) ∧
+      ∀ (ω : Ω₂) (i : Fin 1), phaseAcc shaD D₂ x₂ P₂ (fun _ _ _ => le_rfl) () i ω (ω i) ∧
+        PhaseRegistered D₂ (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => twoStmt) (fun _ => twoPart)
+          (fun _ _ => true) x₂ ops₂ () ω i ∧
+        RecordComplete (fun _ => 1) 1 (fun _ => twoStmt) obs₂ () ω i := by
+  obtain ⟨hA, hb, hS, -, hacc⟩ := twoSessions_meets (Coin := Bool) shaD
+  refine ⟨hA, hb, hS, fun _ _ _ => le_rfl, ⟨fun _ _ _ _ _ => rfl, fun _ _ _ _ _ => rfl, fun _ _ _ _ _ => rfl⟩,
+    fun s hs => ⟨fun o ho => ?_, fun g hg => absurd hg (Finset.notMem_empty g)⟩,
+    fun s Pt hs hPt => ?_, fun _ _ _ => le_rfl,
+    fun _ => checkedUnique_pin twoPart _ twoLay_fits (Finset.singleton_subset_iff.2 one_mem_freeInputs) run₂,
+    fun _ _ _ => ?_, twoLay_fits, fun _ => rfl, fun _ _ _ _ _ => funext fun c => c.elim,
+    fun _ => ⟨fun _ _ => ⟨trivial, (), Set.mem_univ _, trivial⟩, fun _ _ => rfl⟩, fun s hs => ?_,
+    fun ω i => ⟨(hacc _).2, twoPhase_registered_none ω i, twoPhase_record ω i⟩⟩
+  · simp only [certOps, List.mem_cons, List.not_mem_nil, or_false] at ho
+    rcases ho with rfl | rfl <;> rfl
+  · obtain rfl := twoL_parse hs
+    obtain rfl := twoL_partition hPt
+    exact rateAt_all rfl rfl
+  · unfold PrCheckMissR
+    refine (Claims.Pr_mono (q := fun _ => False) fun p hp => ?_).trans Claims.Pr_false.le
+    obtain ⟨-, s, Pt, hs, hPt, -, hv⟩ := hp
+    obtain rfl := twoL_parse hs
+    obtain rfl := twoL_partition hPt
+    exact hv fun _ _ => rfl
+  · obtain rfl := twoL_parse hs
+    exact twoLay_registers
+
+/-- At that instance the guarantee's hypotheses are those premises and its event is every phase accepted, so its bound
+reads there: at `q = 1`, `Fmax = 1` and `εchk = 0`, the phase is accepted outside its checked good event with
+probability at most its own error. -/
+example (h : Guarantees.PooledLeakRegisteredChecked) :
+    Pr (fun ω : Ω₂ => (∀ i, phaseAcc shaD D₂ x₂ P₂ (fun _ _ _ => le_rfl) () i ω (ω i)) ∧
+        ¬PooledGoodChecked (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) valid₂ 1 (fun _ => twoStmt)
+          (fun _ => twoPart) (fun _ _ => true) (fun _ _ _ => [true]) 1 (WregR shaD D₂ x₂ P₂ ops₂ () ω) (obs₂ () ω)) ≤
+      (1 - 1 : ℝ) ^ 1 + ∑ i, e₂ i + ∑ _ : Fin 1, (0 : ℝ) := by
+  obtain ⟨hA, hb, hS, -, had, hops, hrate, he, hchk, hck, hfit, htrust, hread, hch, hcert, hev⟩ :=
+    PooledLeakRegisteredChecked_honest
+  refine le_trans (Claims.Pr_mono fun ω hω => ?_)
+    ((h shaD D₂ hA (fun _ => hb) (fun _ => hS) (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) valid₂ 1
+      (fun _ => twoStmt) (fun _ => twoPart) (fun _ _ => true) hchk (fun _ _ _ _ => [true]) x₂ P₂
+      (fun _ _ _ => le_rfl) ops₂ had (fun _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl
+      (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he (fun _ => 0) hck (fun _ => hfit) arr₂ oneFormat () runT
+      htrust rd₂ (fun _ _ => True) hread Set.univ Set.univ sched₂ (fun _ _ => ()) (fun _ _ => ()) hch
+      (fun _ _ _ s hs _ => hcert s hs) 1).1 () (Set.mem_univ _))
+  exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
+
+/-- **At the honest instance the checked count is strictly below the unchecked one**: with no input registered and
+the gate `1` checked, the factor `PooledLeakRegisteredChecked`'s count takes for the phase's inputs is strictly below
+the one `PooledLeakRegistered`'s count takes at the same registration, since the gate `1` is a free input outside the
+registered ones (`pooledCount_checked_lt`). It compares the two bounds at one instance; it says nothing of how many
+secrets the instance's record singles out. -/
+theorem PooledLeakRegisteredChecked_nontrivial :
+    ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ (∅ ∪ {1})).card *
+        1 ^ 1) <
+      ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ ∅).card * 1 ^ 1) :=
+  pooledCount_checked_lt (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) Nat.one_pos (fun _ => twoStmt) 0
+    (Finset.mem_singleton_self 1) one_mem_freeInputs (Finset.notMem_empty 1)
+
+end NetTiming.Witness
