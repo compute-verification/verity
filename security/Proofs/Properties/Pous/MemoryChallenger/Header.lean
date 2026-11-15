@@ -3,7 +3,7 @@ module
 public import Aesop.BuiltinRules
 public import Mathlib.Tactic.ToDual
 public import MemoryChallenger.Records
-public import Proofs.Properties.NetworkCertifier.Records.Bytes
+public import Proofs.Properties.Certifier.Records.Bytes
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
 import Mathlib.Algebra.Order.Group.Nat
 import Mathlib.Data.Finset.Attr
@@ -56,24 +56,24 @@ theorem pyJsonStr_toList (s : String) (h : ∀ c ∈ s.toList, plain c = true) :
 /-- The header's keys, each with its place in `vals`. -/
 def keys : List (String × Nat) :=
   [("binding", 0), ("block_bytes", 1), ("blocks", 2), ("clock", 3), ("coin_key_sha512", 4), ("coin_root", 5),
-   ("coin_tree", 6), ("k", 7), ("limit_ns", 8), ("protocol", 9), ("records_tree", 10), ("session", 11), ("ended", 12),
+   ("coin_tree", 6), ("k", 7), ("limit_ns", 8), ("protocol", 9), ("records", 10), ("session", 11), ("ended", 12),
    ("rounds", 13)]
 
 /-- The header's values, in `keys`'s places. -/
-def vals (c : SessionCommitment) (e : String) (n : Nat) : List String :=
+def vals (c : ChallengePhaseCommitment) (e : String) (n : Nat) : List String :=
   c.headerFields.map (·.2) ++ [pyJsonStr e, toString n]
 
 /-- The order the header writes its keys in, which no field moves. -/
 def order : Array (String × Nat) := keys.toArray.qsort fun x y => decide (x.1 < y.1)
 
-def entry (c : SessionCommitment) (e : String) (n : Nat) (x : String × Nat) : String :=
+def entry (c : ChallengePhaseCommitment) (e : String) (n : Nat) (x : String × Nat) : String :=
   pyJsonStr x.1 ++ ":" ++ (vals c e n)[x.2]!
 
-theorem header_eq (c : SessionCommitment) (e : String) (n : Nat) :
+theorem header_eq (c : ChallengePhaseCommitment) (e : String) (n : Nat) :
     header c e n = "{" ++ ",".intercalate (order.toList.map (entry c e n)) ++ "}" := by
   have hf : (c.headerFields ++ [("ended", pyJsonStr e), ("rounds", toString n)]).toArray =
       keys.toArray.map fun x => (x.1, (vals c e n)[x.2]!) := by
-    simp [keys, vals, SessionCommitment.headerFields]
+    simp [keys, vals, ChallengePhaseCommitment.headerFields]
   unfold header
   simp only
   rw [hf, Sort.qsort_map, Array.toList_map, List.map_map]
@@ -119,7 +119,7 @@ theorem comma_pyJsonStr {s : String} (hs : Plain s) : ',' ∉ (pyJsonStr s).toLi
   rw [pyJsonStr_toList s hs]
   simpa using comma_plain hs
 
-theorem plain_const : Plain CLOCK ∧ Plain COIN_TREE ∧ Plain PROTOCOL ∧ Plain RECORDS_TREE := by
+theorem plain_const : Plain CLOCK ∧ Plain COIN_TREE ∧ Plain PROTOCOL ∧ Plain RECORDS := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> intro c hc <;> revert c <;> decide
 
 theorem plain_keys : ∀ x ∈ keys, Plain x.1 := by
@@ -128,11 +128,11 @@ theorem plain_keys : ∀ x ∈ keys, Plain x.1 := by
   simp only [keys, List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> subst h <;> decide
 
-theorem comma_vals (c : SessionCommitment) {e : String} (he : Plain e) (n : Nat) :
+theorem comma_vals (c : ChallengePhaseCommitment) {e : String} (he : Plain e) (n : Nat) :
     ∀ v ∈ vals c e n, ',' ∉ v.toList := by
   have hc := plain_const
   intro v hv
-  simp only [vals, SessionCommitment.headerFields, List.map_cons, List.map_nil, List.cons_append, List.nil_append,
+  simp only [vals, ChallengePhaseCommitment.headerFields, List.map_cons, List.map_nil, List.cons_append, List.nil_append,
     List.mem_cons, List.not_mem_nil, or_false] at hv
   rcases hv with h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> subst h
   · exact comma_pyJsonStr (plain_hexOf _)
@@ -150,7 +150,7 @@ theorem comma_vals (c : SessionCommitment) {e : String} (he : Plain e) (n : Nat)
   · exact comma_pyJsonStr he
   · exact comma_plain (plain_toString _)
 
-theorem comma_entry (c : SessionCommitment) {e : String} (he : Plain e) (n : Nat) {x : String × Nat} (hx : x ∈ keys) :
+theorem comma_entry (c : ChallengePhaseCommitment) {e : String} (he : Plain e) (n : Nat) {x : String × Nat} (hx : x ∈ keys) :
     ',' ∉ (entry c e n x).toList := by
   simp only [entry, String.toList_append, List.mem_append, not_or]
   refine ⟨⟨comma_pyJsonStr (plain_keys x hx), by decide⟩, ?_⟩
@@ -166,7 +166,7 @@ theorem keys_order {x : String × Nat} (hx : x ∈ keys) : x ∈ order.toList :=
   Array.mem_toList_iff.mpr (Sort.mem_qsort _ (List.mem_toArray.mpr hx))
 
 /-- The header's values are read back from it, for plain endings. -/
-theorem vals_inj {c c' : SessionCommitment} {e e' : String} {n n' : Nat} (he : Plain e) (he' : Plain e')
+theorem vals_inj {c c' : ChallengePhaseCommitment} {e e' : String} {n n' : Nat} (he : Plain e) (he' : Plain e')
     (h : header c e n = header c' e' n') : ∀ x ∈ keys, (vals c e n)[x.2]! = (vals c' e' n')[x.2]! := by
   rw [header_eq, header_eq] at h
   have hq := congrArg String.toList h
@@ -200,7 +200,7 @@ theorem vals_inj {c c' : SessionCommitment} {e e' : String} {n n' : Nat} (he : P
 
 /-- **A header determines the commitment it writes**, up to the coin key's hash, with how the session ended (if plain)
 and its number of rounds. -/
-theorem header_inj {c c' : SessionCommitment} {e e' : String} {n n' : Nat} (he : Plain e) (he' : Plain e')
+theorem header_inj {c c' : ChallengePhaseCommitment} {e e' : String} {n n' : Nat} (he : Plain e) (he' : Plain e')
     (h : header c e n = header c' e' n') :
     c.binding = c'.binding ∧ c.blockBytes = c'.blockBytes ∧ c.blocks = c'.blocks ∧
       Sha512.hash c.coinKey = Sha512.hash c'.coinKey ∧ c.coinRoot = c'.coinRoot ∧ c.k = c'.k ∧

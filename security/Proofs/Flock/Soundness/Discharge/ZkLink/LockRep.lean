@@ -152,7 +152,7 @@ noncomputable def lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} 
           (lockLigPadZ A r hr P₀ t c₀ op.T op.b C₀ sch))
     (Lock.same _)
 
-/-- **A masked rep in lockstep** (`repMaskedZK`, its rows in flock-verify's order, beside `repMaskedZC`). -/
+/-- **A masked rep in lockstep** (`repMaskedZK`, its rows in verity-verify-proof's order, beside `repMaskedZC`). -/
 noncomputable def lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :

@@ -6,8 +6,8 @@ public import Mathlib.Data.Finset.Prod
 /-!
 # Populations: units over committed value slots, with public dataflow
 
-Sampled proofs certify one thing: with high probability at most `m` units are incorrect. This file is the vocabulary for
-asking which object that statement must be about for a policy (integrity, non-exfiltration, skippable work) to follow
+SPOT certifies one thing: with high probability at most `m` units are incorrect. This file is the vocabulary for
+asking which object that statement must be about for a policy (integrity, non-exfiltration, ε_skip work) to follow
 from it.
 
 A **population** (`Dataflow`) is a finite set of units `U` over value slots `S`. Some slots are inputs (`input`); every
@@ -17,7 +17,7 @@ from the values it reads to the values it writes, a whole program if need be, si
 
 An assignment `σ : S → V` gives every slot a value (the committed values). Unit `u` is **correct** in `σ` when its
 written slots hold its function of its read slots (`Correct`); `incorrect f σ` is the set of units that are not. The
-sampled-proofs guarantee is the hypothesis `(incorrect f σ).card ≤ m`.
+SPOT guarantee is the hypothesis `(incorrect f σ).card ≤ m`.
 
 What a checker can confirm from the dataflow alone (`Checked`):
 * **single assignment** (`SingleAssignment`): no unit writes an input, and every other slot has exactly one writer;

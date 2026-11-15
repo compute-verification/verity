@@ -18,6 +18,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((Path(__file__).resolve().parents[4] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
 import layout as L  # noqa: E402
 
 torch = pytest.importorskip("torch")
@@ -541,7 +542,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
     layout = layout_doc(model(64, 2, 1, 256), per_segment=11)
     (tmp_path / "layout.json").write_text(json.dumps(layout))
     coin, com = bytes(range(64)), bytes(range(64, 128))
-    lay = L.store_layout(layout, L.registered_prefix(P.draw_salt(coin, com)))
+    lay = L.store_layout(layout, L.registered_prefix(P.sample_salt(coin, com)))
     used = lay.blocks(1).stop
     m = np.zeros((lay.params.blocks, L.ROW), dtype=np.uint8)
     m[:used, L.LEAD:] = np.frombuffer(L.payloads(lay, L.Weights.of(doc), L.reader(tmp_path / "w.bin"), 0, used),

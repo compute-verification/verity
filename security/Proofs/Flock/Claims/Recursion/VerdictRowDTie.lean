@@ -180,7 +180,7 @@ theorem build_congr (h : algFields sh = algFields sh') (lins : Array RecAlgebra.
   unfold RecAlgebra.build
   simp only [hc, hs, buildAll_congr h, RecAlgebra.wNames, rounds_congr h]
 
-theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.CoinSource) (extras : Array Claim) :
+theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.RoundCoins) (extras : Array Claim) :
     RecAlgebra.residualLins sh coins extras = RecAlgebra.residualLins sh' coins extras := by
   obtain ⟨hm, hk, hc, hs, -⟩ := algFields_eq h
   unfold RecAlgebra.residualLins RecAlgebra.run
@@ -204,13 +204,13 @@ end Congr
 
 /-! ## The verifier rows read only the rounds that hold coins -/
 
-/-- **`verifierRows` skips rounds of no coins** (`CoinSource.ofRounds`): at recorded rounds equal but for them, it computes
+/-- **`verifierRows` skips rounds of no coins** (`RoundCoins.ofRounds`): at recorded rounds equal but for them, it computes
 the same rows. -/
 theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     (h : a.filter (·.size ≠ 0) = b.filter (·.size ≠ 0)) :
     RecAlgebra.verifierRows sh a extras comb = RecAlgebra.verifierRows sh b extras comb := by
-  have e : RecAlgebra.CoinSource.ofRounds a = RecAlgebra.CoinSource.ofRounds b := by
-    unfold RecAlgebra.CoinSource.ofRounds
+  have e : RecAlgebra.RoundCoins.ofRounds a = RecAlgebra.RoundCoins.ofRounds b := by
+    unfold RecAlgebra.RoundCoins.ofRounds
     rw [h]
   unfold RecAlgebra.verifierRows
   rw [e]
@@ -231,7 +231,7 @@ theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Ar
     rcases RecAlgebra.coinVec_ok hv with ⟨h6, -⟩ | ⟨-, hr6, -⟩
     · exact absurd h6 (by decide)
     · rw [Array.eq_empty_of_size_eq_zero h0] at hr6
-      simp [RecAlgebra.CoinSource.ofRounds] at hr6
+      simp [RecAlgebra.RoundCoins.ofRounds] at hr6
   · exact h0
 
 /-! ## Check 5's `dirs` rows -/
@@ -328,7 +328,7 @@ source, the session is the inner statement's table 0 (its `m` and `k_log`), its 
 first coin's link points, and each rep's rounds are `canonRounds` of the coins after the link, as row D's readers take
 them, up to rounds of no coins (which `verifierRows` skips, `verifierRows_filter`) and wherever the rep has a round
 (which any rows it gives do, `verifierRows_pos`). This is the coin side of check 5 at every value it registers
-(`staged_rep_drawn` is its round-by-round form). -/
+(`staged_rep_sampled` is its round-by-round form). -/
 def InnerCoinsR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → ∀ (_ : 0 < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),

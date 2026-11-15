@@ -7,7 +7,7 @@ public import PouwCommit.Tagged
 public import Identity.Domains.Pouw
 
 /-!
-# frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
+# frame-v3 trees (`verity.commitments.merkle`) over range positions
 
 Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha512` (`Flock.FV3.Sha512`, 64-byte digests, the default) or
 `sha256` (`Flock.FV3.Sha256`, 32, Pearl-C's h0 format and NCP's, named where it is read). A domain over positions
@@ -74,7 +74,7 @@ structure Domain where
 def Domain.mk? (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat) : Except String Domain := do
   if binding.size != 32 && binding.size != 64 then
     throw "binding must be 64 bytes (a SHA-512 identity) or 32 (a SHA-256 one)"
-  if owner < -2 then throw "owner must be -2 (weights), -1 (boundary) or a replay unit"
+  if owner < -2 then throw "owner must be -2 (weights), -1 (boundary) or a replay block"
   pure ⟨h, count, frameHash h "domain" [binding, FV3.uint (owner + 2).toNat, rangeIdentity h count, FV3.uint count]⟩
 
 namespace Domain

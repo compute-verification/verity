@@ -5,6 +5,8 @@ restarts."""
 
 from __future__ import annotations
 
+import inspect
+import itertools
 import json
 import socket
 import struct
@@ -14,9 +16,11 @@ import deploy_example as X
 import pytest
 
 from verity import protocol as M
+from verity.runtime import sources as S
 from verity.runtime.channels import Playback, dial
 from verity.runtime.runner import ARRIVED, RUNTIME, run
 from verity.runtime.transcript import PartyLog
+from verity.runtime.framing import decode
 from verity.channel import PUBLIC, REFUSALS, Message, Refused
 from verity.runtime import handshake
 
@@ -30,7 +34,7 @@ def simulated(state, protocol=X.PROTOCOL, conf=None, **kw):
 
 
 def stamps(t: PartyLog) -> list[int]:
-    return [ARRIVED.decode(e.data).fields["ns"] for e in t if e.dir == "arrived"]
+    return [decode(ARRIVED, e.data).fields["ns"] for e in t if e.dir == "arrived"]
 
 
 def watching(party, seen: list):
@@ -132,6 +136,32 @@ def test_a_peers_frame_reaches_its_party_stamped_with_its_arrival_on_its_clock(t
     assert stamps(again.transcripts["challenger"]) == [arrived]
 
 
+def test_a_party_is_handed_the_name_of_the_clock_its_source_reads(tmp_path):
+    """`Identity.clock` is the name of the real clock a party's clock source reads, as given with it; None for virtual
+    time, in a replay and for a party with no clock. The runtime's own real clock reads `time.monotonic_ns` and is named
+    `MONOTONIC`."""
+    named: dict[str, list] = {p: [] for p in BOTH}
+
+    def naming(party):
+        class Naming(party):
+            def start(self, params, identity):
+                named[identity.party].append(identity.clock)
+                return super().start(params, identity)
+        return Naming
+
+    proto = X.protocol(challenger=naming(X.Challenger), responder=naming(X.Responder))
+    untimed = X.config(params={**X.PARAMS, "timer": False})
+    tick = itertools.count(10 ** 9, 1000).__next__
+    r = run(untimed, BOTH, "live", tmp_path, protocols={X.ID: proto}, keys=X.keys(*BOTH), verify=X.verify,
+            sources={"challenger": {"clock": S.RealClock(tick, "CLOCK_TEST ns"), "coins": S.SeededCoins(SEED)}})
+    assert r.status == "completed", r.outcomes
+    assert simulated(None, proto).status == "completed"
+    run(untimed, ["challenger"], "replay", None, protocols={X.ID: proto}, replay_dir=tmp_path / "runs/1")
+    assert named == {"challenger": ["CLOCK_TEST ns", None, None], "responder": [None, None]}
+    assert inspect.signature(S.RealClock).parameters["read"].default is S.time.monotonic_ns
+    assert S.RealClock().name == S.MONOTONIC == "CLOCK_MONOTONIC ns"
+
+
 def test_replay_of_the_challenger_from_its_transcript(tmp_path):
     simulated(tmp_path)
     r = run(X.config(), ["challenger"], "replay", None, protocols=X.PROTOCOLS, replay_dir=tmp_path / "runs/1")
@@ -192,7 +222,7 @@ def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_res
     server.close()
     how = r.ended["challenger"]["responder"]
     assert how.startswith(("ConnectionResetError on ", "BrokenPipeError on ")), how
-    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    told = [decode(RUNTIME, e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": how})]
     assert r.outcomes["challenger"]["refused"] == "closed" and r.summary()["ended"] == r.ended
 
@@ -207,7 +237,7 @@ def test_a_connect_that_fails_is_recorded_not_raised(tmp_path):
             verify=X.verify, seed=SEED, dial_to={"responder": address})
     how = r.ended["challenger"]["responder"]
     assert how.startswith("ConnectionRefusedError on connecting: "), how
-    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    told = [decode(RUNTIME, e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": how})]
     assert r.outcomes["challenger"]["refused"] == "closed"
 
@@ -254,7 +284,7 @@ def test_an_undeclared_message_is_refused():
     assert r.outcomes["responder"]["refused"] == "undeclared"
     assert "Verdict" in r.outcomes["responder"]["outcome"]["detail"]
     assert r.outcomes["challenger"]["refused"] == "closed"
-    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    told = [decode(RUNTIME, e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": "end"})] and r.ended == {}
     sent = [e for e in r.transcripts["responder"] if e.dir == "out" and e.channel == "challenger"]
     assert sent == []

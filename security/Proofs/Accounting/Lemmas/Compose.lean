@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.Compose
+public import Definitions.Compose.Guarantees.Compose
 
 /-!
-# PoUW's credit on an arbitrary declared circuit: lemmas
+# PoUW's credit on an arbitrary registered circuit: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.Compose` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Compose.Guarantees.Compose` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 
@@ -85,7 +85,7 @@ def SplitRateMerged : Prop :=
   ∀ (K : ℕ) (ρ p p0 q a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ q → p ≤ q → p0 ≤ q → q < 1 →
     0 < a → a ≤ b → SplitRate K ρ p p0 a b wmax (b * (1 + K * ρ * wmax) / (ρ * K * (1 - q)))
 
-/-- **The service's share covers every tile that isn't good.** For a declared circuit's window whose ideal game is the
+/-- **The service's share covers every tile that isn't good.** For a registered circuit's window whose ideal game is the
 service's at share `1` per unit of each skipped tile's late cone (`tileCone`, from the IR) at any joint run `R` of the
 rounds' coins (`jointGame`; a split-stage window's `serviceGame` is one, at `SplitStages.joint`), and its proofs the
 IR's layer (`Declared.layer`, at any run-dependent half `pr`), committed as the layer says (`LayerCommitted`; at

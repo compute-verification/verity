@@ -37,7 +37,7 @@ from pathlib import Path
 
 import torch
 
-H, I, LAYERS, EPS = 2048, 8192, 16, 1e-5
+H, INTER, LAYERS, EPS = 2048, 8192, 16, 1e-5
 NORMS, SILUS = 2 * LAYERS - 1, LAYERS
 ITEM_MS = 10.0
 NORM_WARPS = (1, 2, 4, 8, 16)
@@ -130,10 +130,10 @@ class Silu:
 
     def __init__(self, m: int, n: int | None = None):
         self.m = m
-        self.n = n or copies(m * 2 * I * 2)
-        self.gus = [torch.cat([served_rows(m, I, 20 + i, 2.0), served_rows(m, I, 200 + i, 0.5)], 1) for i in range(self.n)]
-        self.h = torch.empty(m, I, dtype=torch.bfloat16, device="cuda")
-        self.xq = torch.empty(m, I, dtype=torch.int8, device="cuda")
+        self.n = n or copies(m * 2 * INTER * 2)
+        self.gus = [torch.cat([served_rows(m, INTER, 20 + i, 2.0), served_rows(m, INTER, 200 + i, 0.5)], 1) for i in range(self.n)]
+        self.h = torch.empty(m, INTER, dtype=torch.bfloat16, device="cuda")
+        self.xq = torch.empty(m, INTER, dtype=torch.int8, device="cuda")
         self.s = torch.empty(m, device="cuda")
 
     def unfused(self, part: str = "both"):
@@ -173,7 +173,7 @@ def forward(norm: Norm, silu: Silu, fused: bool):
     x0, x1, r = norm.xs[0], norm.xs[-1], norm.rs[0]
     gu = silu.gus[0]
     fuse_norm = fused and F.producer_warps("norm", norm.m, H) is not None
-    fuse_silu = fused and F.producer_warps("silu", silu.m, I) is not None
+    fuse_silu = fused and F.producer_warps("silu", silu.m, INTER) is not None
 
     def f():
         for layer in range(LAYERS):
@@ -217,9 +217,9 @@ def timed(fns: dict, seconds: float, clock, calls: dict) -> dict:
         per[arm] = max(1, round(ITEM_MS / max(e0.elapsed_time(e1), 1e-3)))
         graphs[arm] = g
     arms = tuple(fns)
-    us = {arm: [] for arm in arms}
+    us: dict[str, list[float]] = {arm: [] for arm in arms}
     ms = {arm: 0.0 for arm in arms}
-    clocks = {arm: [] for arm in arms}
+    clocks: dict[str, list[list[float | None]]] = {arm: [] for arm in arms}
     r = 0
     while min(ms.values()) < 1e3 * seconds:
         for j in range(len(arms)):
@@ -244,22 +244,22 @@ def timed(fns: dict, seconds: float, clock, calls: dict) -> dict:
 
 
 def main() -> int:
-    global H, I, LAYERS, NORMS, SILUS
+    global H, INTER, LAYERS, NORMS, SILUS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--ms", default="8192,16384,32768")
     ap.add_argument("--sustain", type=float, default=2.0)
     ap.add_argument("--sweep-seconds", type=float, default=0.3)
-    ap.add_argument("--shape", default=f"{H},{I},{LAYERS}", help="H,I,LAYERS")
+    ap.add_argument("--shape", default=f"{H},{INTER},{LAYERS}", help="H,I,LAYERS")
     a = ap.parse_args()
-    H, I, LAYERS = (int(v) for v in a.shape.split(","))
+    H, INTER, LAYERS = (int(v) for v in a.shape.split(","))
     NORMS, SILUS = 2 * LAYERS - 1, LAYERS
     a.out.mkdir(parents=True, exist_ok=True)
     importlib.import_module("vllm._custom_ops")  # registers torch.ops._C
     from verity_vllm.engine import int8_fused as F
     clock = nvml()
     dev = torch.cuda.get_device_properties(0)
-    doc: dict = {"device": dev.name, "l2_bytes": dev.L2_cache_size, "H": H, "I": I, "layers": LAYERS, "norms": NORMS,
+    doc: dict = {"device": dev.name, "l2_bytes": dev.L2_cache_size, "H": H, "I": INTER, "layers": LAYERS, "norms": NORMS,
                  "silus": SILUS, "batch_invariant": os.environ["VLLM_BATCH_INVARIANT"], "item_ms": ITEM_MS,
                  "sustain_s": a.sustain, "rows": []}
     ok = True
@@ -288,14 +288,14 @@ def main() -> int:
         d_norm = launch["norm_unfused"]["us"] - launch["norm_fused"]["us"]
         d_silu = launch["silu_unfused"]["us"] - launch["silu_fused"]["us"]
         row = {"m": m, "gates": gates, "norm_copies": norm.n, "silu_copies": silu.n, "norm_warps": nw, "silu_warps": sw,
-               "engine_warps": {"norm": F.producer_warps("norm", m, H), "silu": F.producer_warps("silu", m, I)},
+               "engine_warps": {"norm": F.producer_warps("norm", m, H), "silu": F.producer_warps("silu", m, INTER)},
                "sweep": {**sweep_n, **sweep_s}, "launch": launch, "forward": fwd,
                "saving_per_launch_us": {"norm": d_norm, "silu": d_silu},
                "saving_per_forward_us_modelled": NORMS * d_norm + SILUS * d_silu,
                "saving_per_forward_us_timed": fwd["forward_unfused"]["us"] - fwd["forward_fused"]["us"],
                "quant_launches_removed": NORMS + SILUS,
                "norm_fused_tb_s": (norm.m * H * 2 * 4 + norm.m * H) / (launch["norm_fused"]["us"] * 1e6),
-               "silu_fused_tb_s": (silu.m * I * 2 * 3 + silu.m * I) / (launch["silu_fused"]["us"] * 1e6)}
+               "silu_fused_tb_s": (silu.m * INTER * 2 * 3 + silu.m * INTER) / (launch["silu_fused"]["us"] * 1e6)}
         doc["rows"].append(row)
         print(json.dumps({k: row[k] for k in ("m", "norm_warps", "silu_warps", "engine_warps", "saving_per_launch_us",
                                               "saving_per_forward_us_modelled", "saving_per_forward_us_timed",
@@ -305,8 +305,8 @@ def main() -> int:
         torch.cuda.empty_cache()
     doc["ok"] = ok
     doc["versions"] = {"triton": __import__("triton").__version__, "torch": torch.__version__}
-    (a.out / f"int8_producers_gpu_{H}x{I}.json").write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({"ok": ok, "out": str(a.out / f"int8_producers_gpu_{H}x{I}.json")}), flush=True)
+    (a.out / f"int8_producers_gpu_{H}x{INTER}.json").write_text(json.dumps(doc, indent=1) + "\n")
+    print(json.dumps({"ok": ok, "out": str(a.out / f"int8_producers_gpu_{H}x{INTER}.json")}), flush=True)
     return 0 if ok else 4
 
 

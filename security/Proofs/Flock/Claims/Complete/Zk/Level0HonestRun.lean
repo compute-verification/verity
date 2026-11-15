@@ -116,6 +116,8 @@ theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c
 
 -- one proof of a few hundred lines running `ligeritoPZk` against the masked model's `FinalZ`, `rw` and `omega` on the
 -- round indices at each step
+variable {wideLeaf : Bool}
+
 set_option maxHeartbeats 4000000 in
 /-- **The honest masked Ligerito meets the masked model's final identity**: at a `--zk` schedule, as rep `rep < 2`, on
 a table `tb` and weights `b` of `2^n` entries whose level-0 commitment has `tb`'s padded rows (`encodeRowsZk`), with a
@@ -127,7 +129,7 @@ theorem honestZ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : 
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (basisAt : Array F256 → ℕ → Array F256) (L : ℕ) (t : Transcript) (l : Array Claims.Msg) {P : LigeritoProof}
     {zl : Zk.Level0Msgs} {rc : Zk.L0Rec} {t' : Transcript} {l' : Array Claims.Msg}
-    (h1 : 25 ≤ m) (h2 : m ≤ 35) (hsch : Zk.schedule m = .ok (sch, tPad)) (hrep : rep < 2)
+    (h1 : 25 ≤ m) (h2 : m ≤ 35) (hsch : Zk.schedule wideLeaf m = .ok (sch, tPad)) (hrep : rep < 2)
     (htb : tb.size = 2 ^ sch.n) (hb : b.size = 2 ^ sch.n)
     (hcm0 : cm0.rows = encodeRowsZk (sch.levels.getD 0 default) tPad tb extra lanePad)
     (hbasis : ∀ q e y, q.size + e = sch.n → y < 2 ^ e →

@@ -31,15 +31,23 @@ or expiry. No directory above it is named as a run id: a run inside another run'
 is the newest mtime of the directory and of every directory and file under it (`_last_write`: one scandir and lstat walk that
 follows no symlink). The record never expires before the custody key its runner publishes with does (`<request
 dir>/custody/cred.json`, which the runner deletes when it is done), so not while that runner may still be publishing, which it
-does after the status is final. A run that waits in a slot line is `running`, and one still queued has no job.json, so neither
-has a record. A run directory whose status, files or custody key can't be read has no record either: it is listed as invalid
-with what could not be read, since whether it may go is unknown, and is never deleted.
+does after the status is final. A run that waits in a slot line is `running`, and one still queued has neither a job.json nor
+a refused.json, so neither has a record. A run directory whose status, files or custody key can't be read has no record either:
+it is listed as invalid with what could not be read, since whether it may go is unknown, and is never deleted.
+A launch that was refused before it ran gets the same record, though it wrote no job.json and no status.json. Its directory
+is named as a run id and holds a refused.json that names it, which a refusal writes last. What shows that it is a run directory
+of this machine is the request beside its runs root, `<runs root>/../REQUESTS/<run id>/request.json`, which names the run id and
+that runs root; so the record's node is this host, and its owner is `runner`. Where its launch.json records a runner, that
+host is this one and no process of this host's table has the runner's pid: launch.json records no start time, so a pid that
+some process has now is not known gone, and the directory has no record until it is. The custody key is looked for in that
+request's directory. A directory that holds nothing is a claim, whose launch may still be starting, and never has a record; nor
+does one whose refused.json or request is missing, names another run or another runs root, or is not a JSON object.
 gc deletes these runs only with --unpreserved-runs: without it a pass lists them apart and leaves them, so a machine's first pass
 can be read before anything goes. It never takes one whose clone still stands (CLONES: `<runs root>/../scratch/<run id>`, where
 `research run --cwd clone` ran it on a machine): what removes a run's clone decides that its run is over from the run directory's
 launch.json and status.json, so the clone goes first and the run directory at a pass after; until then gc lists the run with that
 reason. `research keep RUNDIR ...` before the 7 days are over keeps a run, and so does preserving it
-(`research data custody RUN --publish`).
+(`research data custody RUN --publish`), which a refused launch, having run nothing, has no way to.
 
 A launcher's copy of a run on another machine is what `research run --on`, `status` and `fetch` leave on the machine that launched
 it: a directory named as the run's id that holds the launcher's `remote.json` (`custody.LAUNCHER_RECORD`) naming that id, with
@@ -71,7 +79,9 @@ meanwhile stays. Its `remote.json` is deleted last (`_delete`), so a deletion cu
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
 a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
---max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. A path qualifies only with a valid record (explicit or
+--max-paths paths (MAX_PATHS; 0 lifts the limit), and the next takes the rest. Launches refused before they ran go first, oldest
+expiry first, with --max-paths of their own: each is a few files, so however many wait they never take the place of what frees
+the disk, and the n-th of them is gone by the ceil(n / --max-paths)-th pass that acts. A path qualifies only with a valid record (explicit or
 implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
 --unpreserved-runs, or a launcher's copy's under --launcher-copies, where nothing else qualifies; and no file in the job-script
 directories may name it (`JobScripts`). A preserved run's implicit record also
@@ -84,9 +94,16 @@ preserved path) is there so that gc never deletes the only copy of data somebody
 STORED. gc deletes on `verified` (the remote holds the artifact; with no remote to ask, as on a node, which holds no store key, the
 replica this store's catalog verified when custody pushed it), on `expired` (the remote holds its manifest and has dropped its blobs
 past its kind's time to live, `store.gc.TTL_DAYS`) and on `withdrawn` (every blob the remote lacks is under a `withdrawn` label,
-`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. It
-keeps the path on `uncovered` (the artifact doesn't hold every file now under the path at its size, so files custody trimmed never
-count as stored, whatever the remote says), on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
+`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. A
+symlink or any other entry that is not a regular file holds no bytes, and deleting it deletes nothing it points at, so the check
+passes over it, as custody does (`custody.run_files`). It keeps the path on `uncovered` (the artifact doesn't hold every regular
+file now under the path at its size, so files custody trimmed never count as stored, whatever the remote says; the check answers
+it only when the remote would otherwise have let the path go), except a preserved run's under its implicit record (`.custody`):
+custody marked it preserved with those files only listed, so they are its only copy, as a never-stored run's directory is, and
+gc deletes it under --unpreserved-runs once UNPRESERVED_RUN_EXPIRY (7 days) has passed since custody verified the run (its marker's
+`verified_utc`, which its record's expiry is RUN_EXPIRY after; never the last write, which the store eviction moves when it
+removes the stored files), and lists it with that date and how to keep it until then; its line says how many bytes of it were
+stored nowhere else, and the plan's `trimmed` counts such runs apart. A run with a sidecar keep record is never one. It keeps the path on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
 rule explains), on `unknown` (the remote has no manifest for it: it never stored it) and on `unreachable` (the remote, or with none
 this store, could not be asked), and an `unreachable` fails the pass (exit 1). Every --apply reports how many of each it found.
 
@@ -122,10 +139,11 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
+from . import settings
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
 from .store import evict as EV
@@ -160,9 +178,12 @@ LAUNCHER_HEADS = 32
 IMPLICIT = {"custody": ".custody", UNPRESERVED: "unpreserved run", LAUNCHER: "launcher's copy"}
 #: The directory beside a machine's runs root that holds its runs' clones, `<CLONES>/<run id>` (`clone.home`).
 CLONES = "scratch"
+#: The directory beside a machine's runs root that holds its launches' requests, `<REQUESTS>/<run id>/request.json`
+#: (`remote.stage_request`).
+REQUESTS = "requests"
 #: The line the report and gc print above the unpreserved runs, which they list after every other path.
-UNPRESERVED_HEAD = (f"unpreserved runs (ended, and custody did not preserve them: each directory is its run's only copy, and expires "
-                    f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
+UNPRESERVED_HEAD = (f"unpreserved runs (ended, or refused before they ran, and custody did not preserve them: each directory is its "
+                    f"run's only copy, and expires {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
 DEFAULT_ROOT = Path("/workspace")
 DEFAULT_JOBS_DIRS = (Path("/workspace/pouw/fill/queue"), Path("/workspace/pouw/fill/running"))
 POLICY = "default/v0"
@@ -201,7 +222,7 @@ class RecordError(ValueError):
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_utc(s: Any) -> datetime:
@@ -211,11 +232,11 @@ def parse_utc(s: Any) -> datetime:
     t = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
     if t.tzinfo is None or t.utcoffset() != timedelta(0):
         raise ValueError(f"{s!r} is not in UTC (write it as YYYY-MM-DDTHH:MM:SSZ)")
-    return t.astimezone(timezone.utc)
+    return t.astimezone(UTC)
 
 
 def fmt_utc(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime(TS)
+    return t.astimezone(UTC).strftime(TS)
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
@@ -228,16 +249,19 @@ def parse_expires(s: str, now: datetime) -> str | None:
         return fmt_utc(now + timedelta(**{"days" if m[2] == "d" else "hours": int(m[1])}))
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc))
+            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC))
         return fmt_utc(parse_utc(s))
     except ValueError:
         raise RecordError(f"--expires {s!r}: give never, now, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None
 
 
 def _utc_or_none(s: Any) -> datetime | None:
+    if s is None:
+        return None
     try:
         return parse_utc(s)
-    except ValueError:
+    except ValueError as e:
+        print(f"retention: {e}, read as none", file=sys.stderr, flush=True)
         return None
 
 
@@ -337,9 +361,12 @@ def write(path: Path, record: dict) -> Path:
 
 
 def _read_json(p: Path) -> dict | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"retention: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 
@@ -368,19 +395,52 @@ def _ended(run_dir: Path, host: Any) -> str | None:
     return state if state in EV.ENDED else None
 
 
+def _in_runs_root(d: Path, runs_root: Any) -> bool:
+    """Whether `runs_root`, as a record of the run of `d` names it, is the directory `d` lies in."""
+    return isinstance(runs_root, str) and os.path.isabs(runs_root) and os.path.realpath(runs_root) == os.path.realpath(d.parent)
+
+
+def _refused_launch(d: Path) -> tuple[str, str] | None:
+    """(this host, its request file) when `d`, which holds no job.json, is the directory of a launch that was refused before
+    it ran (module docstring); None for any other. `evict.Unestablished` or OSError when one of the records that say so can't
+    be read."""
+    request = d.parent.parent / REQUESTS / d.name / "request.json"
+    if not ids.is_run_id(d.name) or os.path.lexists(d / "status.json"):
+        return None
+    if EV._get(EV._doc(EV._text(d / "refused.json")), "run_id") != d.name:
+        return None
+    req = EV._doc(EV._text(request))
+    if EV._get(req, "run_id") != d.name or not _in_runs_root(d, EV._get(req, "runs_root")):
+        return None
+    host, launch = socket.gethostname(), EV._doc(EV._text(d / "launch.json"))
+    if launch is not None:
+        pid = launch.get("runner_pid")
+        if launch.get("hostname") != host or not isinstance(pid, int) or isinstance(pid, bool) or not (PROC / "1" / "stat").is_file():
+            return None
+        if EV._quiet(lambda: os.lstat(PROC / str(pid))) is not None:
+            return None
+    return host, str(request)
+
+
 def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
-    """The record of an ended run that custody did not preserve (module docstring), given that `.custody` doesn't say preserved;
-    None for a directory that is not such a run's. RecordError when it is a run directory and what decides whether it may go
-    can't be read: its status, something under it, or its runner's custody key."""
-    run_id, runs_root, host = EV._get(job, "run", "id"), EV._get(job, "run", "runs_root"), EV._get(job, "environment", "hostname")
-    if run_id != d.name or not ids.is_run_id(run_id) or not isinstance(host, str) or not host:
-        return None
-    if not isinstance(runs_root, str) or not os.path.isabs(runs_root) or os.path.realpath(runs_root) != os.path.realpath(d.parent):
-        return None
+    """The record of an ended run that custody did not preserve, or of a launch refused before it ran (module docstring), given
+    that `.custody` doesn't say preserved; None for a directory that is neither's. RecordError when it is a run directory and
+    what decides whether it may go can't be read: its status, the records of its launch, something under it, or its runner's
+    custody key."""
+    run_id, host, request = EV._get(job, "run", "id"), EV._get(job, "environment", "hostname"), EV._get(job, "run", "remote", "request")
     above = d.parents[:rel.count("/")]
     if os.path.lexists(d / CU.LAUNCHER_RECORD) or any(ids.is_run_id(a.name) or any(map(os.path.lexists, _places(a))) for a in above):
         return None
+    refused = None
     try:
+        if not os.path.lexists(d / "job.json"):
+            if (refused := _refused_launch(d)) is None:
+                return None
+            host, request = refused
+        elif run_id != d.name or not ids.is_run_id(run_id) or not isinstance(host, str) or not host:
+            return None
+        elif not _in_runs_root(d, EV._get(job, "run", "runs_root")):
+            return None
         if CU.has_custody(d)[0] or (state := _ended(d, host)) is None:
             return None
     except EV.Unestablished as e:
@@ -391,7 +451,6 @@ def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
         expires = datetime.fromtimestamp(math.ceil(_last_write(d)), UTC) + UNPRESERVED_RUN_EXPIRY
     except (OSError, OverflowError, ValueError) as e:
         raise RecordError(f"when {d} was last written can't be read ({e})") from None
-    request = EV._get(job, "run", "remote", "request")
     if isinstance(request, str):
         key = Path(request).parent / CU.DIR_NAME / CU.CRED_FILE
         try:
@@ -404,7 +463,7 @@ def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
                 raise RecordError(f"the expiry of the custody key {key} can't be read, so whether the runner of {d} still publishes is unknown")
             expires = max(expires, key_expires)
     created = _utc_or_none(EV._get(job, "run", "created_utc"))
-    ended = "its runner is gone" if state == EV.LOST else f"it ended {state}"
+    ended = "its launch was refused before it ran" if refused else "its runner is gone" if state == EV.LOST else f"it ended {state}"
     return {"schema": SCHEMA, "path": rel, "node": host, "owner": owner, "by": None, "created": fmt_utc(created) if created else None,
             "expires": fmt_utc(expires), "priority": PRIORITIES[0], "preserved": None, "regenerate": None,
             "why": f"no run custody ({ended}): this directory is the run's only copy, and it expires "
@@ -428,9 +487,7 @@ def _launcher_copy(d: Path, rel: str) -> dict | None:
     if not isinstance(machine, str) or not machine or any(ids.is_run_id(a.name) or any(map(os.path.lexists, _places(a))) for a in above):
         return None
     job = _read_json(d / "job.json") or {}
-    runs_root = EV._get(job, "run", "runs_root")
-    if (EV._get(job, "environment", "hostname") == socket.gethostname() and isinstance(runs_root, str) and os.path.isabs(runs_root)
-            and os.path.realpath(runs_root) == os.path.realpath(d.parent)):
+    if EV._get(job, "environment", "hostname") == socket.gethostname() and _in_runs_root(d, EV._get(job, "run", "runs_root")):
         return None                                   # the run's own directory, on the machine it ran on: never a copy
     try:
         expires = datetime.fromtimestamp(math.ceil(_last_write(d)), UTC) + LAUNCHER_COPY_EXPIRY
@@ -556,7 +613,8 @@ def keep(path: Path | str, *, owner: str, expires: str | None, priority: str, ro
     rel = target(p, root)
     try:
         old = load(p) or {}
-    except RecordError:
+    except RecordError as e:
+        print(f"retention: {p}'s record unread, so it is written afresh ({e})", file=sys.stderr, flush=True)
         old = {}
     given = {"regenerate": regenerate, "preserved": preserved, "why": why, "by": by}
     rec = {"schema": SCHEMA, "path": rel, "node": node or socket.gethostname(), "owner": owner,
@@ -784,11 +842,12 @@ def _raise(e: OSError) -> None:
     raise e
 
 
-def covers(man: Any, path: Path, launcher: bool = False) -> str | None:
-    """None when the artifact's payload holds every file now under `path` at its size (a directory's own sidecar and custody's
-    markers aside); else what it lacks. A symlink is never held, and an unreadable directory raises. With `launcher`, `path` is a
-    launcher's copy of the run whose record the artifact is: its `remote.json` is the launcher's own, and a file at its top is held
-    by its path, whatever its size (module docstring)."""
+def covers(man: Any, path: Path, launcher: bool = False, out: list[tuple[str, int]] | None = None) -> str | None:
+    """None when the artifact's payload holds every regular file now under `path` at its size (a directory's own sidecar and
+    custody's markers aside); else what it lacks, each (path, bytes) appended to `out` too. A symlink or other non-regular entry is
+    passed over: it holds no bytes, and deleting it deletes nothing it points at. An unreadable directory raises. With `launcher`,
+    `path` is a launcher's copy of the run whose record the artifact is: its `remote.json` is the launcher's own, and a file at its
+    top is held by its path, whatever its size (module docstring)."""
     pl = man.payload
     p = Path(path)
     if pl is None:
@@ -805,29 +864,37 @@ def covers(man: Any, path: Path, launcher: bool = False) -> str | None:
     lacking = []
     for base, dirs, files in os.walk(p, onerror=_raise):
         dirs.sort()
-        for name in sorted(files + [d for d in dirs if os.path.islink(os.path.join(base, d))]):
+        for name in sorted(files):
             q = os.path.join(base, name)
             rel = os.path.relpath(q, p).replace(os.sep, "/")
-            if rel in skip:
+            if rel in skip or rel.startswith(CU.MARKER + ".tmp."):
                 continue
             s = os.lstat(q)
-            if not stat.S_ISREG(s.st_mode) or (rel not in have if launcher and "/" not in rel else have.get(rel) != s.st_size):
-                lacking.append(rel)
+            if not stat.S_ISREG(s.st_mode):
+                continue
+            if rel not in have if launcher and "/" not in rel else have.get(rel) != s.st_size:
+                lacking.append((rel, s.st_size))
+    if out is not None:
+        out += lacking
     if lacking:
-        return f"{len(lacking)} file(s) under it are not in the artifact at their size, e.g. {lacking[0]}"
+        return f"{len(lacking)} file(s) under it are not in the artifact at their size, e.g. {lacking[0][0]}"
     return None
 
 
 @dataclass(frozen=True)
 class Stored:
-    """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words."""
+    """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words. An `uncovered` answer also
+    counts the files the artifact lacks and their bytes, which are stored nowhere else."""
     state: str
     why: str
+    lost_files: int = field(default=0, compare=False)
+    lost_bytes: int = field(default=0, compare=False)
 
 
 def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc_now) -> Callable[[str, Path], Stored]:
     """The default remote check, run just before a deletion: what became of the path's stored copy (STORED, module docstring).
-    The artifact must hold the path's files (`covers`); then `preserved.check` in head mode says whether the remote holds it (remote
+    The artifact must hold the path's files (`covers`), else the answer is `uncovered` where the remote's would have let the path
+    go, and the remote's own where it keeps the path; `preserved.check` in head mode says whether the remote holds it (remote
     sizes, and the single-part ETag against the local blob's MD5 where the blob is here, else a read-back; `LocalStore.verify`
     would read back every blob). Where it holds the manifest and lacks blobs, the store gave the copy up when that check's verdict is
     WITHDRAWN (it pulls the artifact's labels from the remote, and a `withdrawn` label covers every blob the remote lacks), or when
@@ -838,6 +905,14 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
     st = None
 
     def chk(art: str, path: Path) -> Stored:
+        lacking: list[str] = []
+        lost: list[tuple[str, int]] = []
+        found = held(art, path, lacking, lost)
+        if lacking and found.state in COLLECTED:
+            return Stored("uncovered", lacking[0], len(lost), sum(n for _, n in lost))
+        return found
+
+    def held(art: str, path: Path, lacking: list[str], lost: list[tuple[str, int]]) -> Stored:
         nonlocal st
         from .store import gc as G
         from .store import preserved as P
@@ -852,8 +927,8 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
                 man = st.get_manifest(art)
             except NotFound as e:
                 return Stored("unknown", str(e)) if r is not None else Stored("unreachable", f"{e}: {nobody}")
-            if why := covers(man, path):
-                return Stored("uncovered", why)
+            if why := covers(man, path, out=lost):
+                lacking.append(why)
             rep = P.check(st, [art], mode="head" if r is not None else "recorded")
             if rep["preserved"]:
                 return Stored("verified", "verified on the remote" if r is not None else
@@ -992,6 +1067,9 @@ def _why_deletable(row: Row, found: Stored | None) -> str:
     elif row.source == LAUNCHER:
         how = "a launcher's copy of a run" + (f" ({found.why})" if found else
                                               ", if the remote says just before an --apply deletes it that the run is over and stored")
+    elif found and found.state == "uncovered":
+        how = (f"preserved {rec['preserved']} but for {_lost(found)}, which custody trimmed: "
+               f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after custody verified the run")
     elif rec.get("preserved"):
         how = f"preserved {rec['preserved']}" + (f" ({found.why})" if found else ", checked on the remote just before an --apply deletes it")
     else:
@@ -999,10 +1077,35 @@ def _why_deletable(row: Row, found: Stored | None) -> str:
     return f"{rec['priority']}, expired {rec['expires']}, {how}"
 
 
+def uncovered_until(record: dict) -> datetime:
+    """When the files custody did not store of a preserved run go (module docstring): UNPRESERVED_RUN_EXPIRY after custody verified
+    the run, which its implicit record's expiry is RUN_EXPIRY after."""
+    return parse_utc(record["expires"]) - RUN_EXPIRY + UNPRESERVED_RUN_EXPIRY
+
+
+def _lost(found: Stored) -> str:
+    return f"{_size(found.lost_bytes)} stored nowhere else ({found.why})"
+
+
+def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, unpreserved: bool) -> str | None:
+    """Why gc keeps a preserved run whose run record lacks files custody trimmed (`uncovered`), or None once it may go."""
+    until, days = uncovered_until(row.record), UNPRESERVED_RUN_EXPIRY // timedelta(days=1)
+    lack = f"custody trimmed {_lost(found)} from its run record {row.record['preserved']}"
+    keep = (f"; to keep it: `research keep {path} --owner @LANE --expires DATE --priority P`, or a custody that declares the files "
+            f"(--declared-output)")
+    if now < until:
+        return (f"{lack}: it goes {fmt_utc(until)}, {days} d after custody verified the run"
+                + ("" if unpreserved else ", under --unpreserved-runs") + keep)
+    if not unpreserved:
+        return f"{lack}: its {days} d after custody verified the run are over, and only --unpreserved-runs deletes it{keep}"
+    return None
+
+
 def keeping(run_dir: Path) -> str:
-    """The two ways its lane keeps an unpreserved run's directory, as gc prints them for a run it has not deleted."""
-    return (f"to keep it: `research keep {run_dir} --owner @LANE --expires DATE --priority P`, or preserve it: `research data custody "
-            f"{run_dir.name} --publish`")
+    """The two ways its lane keeps an unpreserved run's directory, as gc prints them for a run it has not deleted; the first
+    alone for a refused launch, which has no job.json: it ran nothing that custody could preserve."""
+    keep = f"to keep it: `research keep {run_dir} --owner @LANE --expires DATE --priority P`"
+    return keep if not os.path.lexists(run_dir / "job.json") else f"{keep}, or preserve it: `research data custody {run_dir.name} --publish`"
 
 
 def _clone_first(run_dir: Path) -> str | None:
@@ -1151,13 +1254,14 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
     DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
     `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
-    `max_paths` caps the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
+    `max_paths` limits the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
     unpreserved runs, which it otherwise lists and leaves; `launcher` (--launcher-copies) gives the launchers' copies of runs
     their records and holds the pass to them: an --apply deletes one only on `copy_check`'s answer (None is
     `launcher_check(now)`), and every other path the pass would have taken is listed as left (ONLY_LAUNCHER). The plan's
-    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the cap left
+    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the limit left
     for the next pass, and `unpreserved` the unpreserved runs, apart from every other path (`unpreserved_runs`), with the
-    `deleted` ones this pass deleted, or in a dry run would."""
+    `deleted` ones this pass deleted, or in a dry run would. `trimmed` counts the preserved runs whose files custody trimmed
+    (`uncovered`) apart again: those deleted, with the `files` and `bytes` of theirs stored nowhere else, and those `kept`."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -1176,6 +1280,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
                             "inodes_pct_before": round(100 * iused / itotal, 2) if itotal else None,
                             "max_paths": max_paths, "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": [],
                             "stored": dict.fromkeys(STORED, 0), "capped": 0, "deletes_unpreserved": unpreserved,
+                            "trimmed": {"deleted": 0, "files": 0, "bytes": 0, "kept": 0},
                             "deletes_launcher_copies": launcher,
                             "unpreserved": {**unpreserved_runs([]), "deleted": unpreserved_runs([])["expired"]}}
     if not plan["acting"]:
@@ -1205,16 +1310,18 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             skips.append(Action(row, "skip", why))
         else:
             candidates.append(row)
-    candidates.sort(key=lambda r: (PRIORITIES.index(r.record["priority"]), parse_utc(r.record["expires"]), r.path))
-    acts, deletions = [], 0
+    refused = {r.path for r in candidates if r.source == UNPRESERVED and not os.path.lexists(root / r.path / "job.json")}
+    candidates.sort(key=lambda r: (r.path not in refused, PRIORITIES.index(r.record["priority"]), parse_utc(r.record["expires"]), r.path))
+    acts, deletions = [], {True: 0, False: 0}
     for row in candidates:
         p = root / row.path
         if pct < low_pct:
             acts.append(Action(row, "skip", f"not needed: the filesystem is at {pct:.1f}%, under {low_pct:g}%"))
             continue
-        if max_paths is not None and deletions >= max_paths:
+        if max_paths is not None and deletions[row.path in refused] >= max_paths:
             plan["capped"] += 1
-            acts.append(Action(row, "skip", f"left for the next pass: this one has its {max_paths} path(s) (--max-paths)"))
+            share = "refused launch(es)" if row.path in refused else "path(s)"
+            acts.append(Action(row, "skip", f"left for the next pass: this one has its {max_paths} {share} (--max-paths)"))
             continue
         fresh = record_at(p, row.path, launcher)
         why = found = None
@@ -1229,7 +1336,10 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         elif apply and row.record.get("preserved"):
             found = remote_check(row.record["preserved"], p)
             plan["stored"][found.state] += 1
-            if found.state not in COLLECTED:
+            if found.state == "uncovered" and row.source == "custody":
+                why = _uncovered_wait(row, p, found, t, unpreserved)
+                plan["trimmed"]["kept"] += bool(why)
+            elif found.state not in COLLECTED:
                 why = f"preserved {row.record['preserved']} is not verified on the remote: {found.why}"
         elif apply and row.source == LAUNCHER:
             found = copy_check(p)
@@ -1243,7 +1353,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         if why:
             acts.append(Action(row, "skip", why, stored=found and found.state))
             continue
-        deletions += 1
+        deletions[row.path in refused] += 1
         if not apply:
             used -= row.bytes
             iused -= row.files + row.dirs
@@ -1258,6 +1368,9 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         acts.append(Action(row, "delete", "deleted: " + _why_deletable(row, found), round(pct, 2), err, found and found.state))
         if not err:
             plan["freed_bytes"] += row.bytes
+            if found and found.state == "uncovered":
+                tr = plan["trimmed"]
+                tr["deleted"], tr["files"], tr["bytes"] = tr["deleted"] + 1, tr["files"] + found.lost_files, tr["bytes"] + found.lost_bytes
     for a in acts + skips:
         if a.row.source == UNPRESERVED and not (apply and a.action == "delete" and not a.error):
             a.reason += f"; {keeping(root / a.row.path)}"
@@ -1641,14 +1754,14 @@ def main(argv: list[str]) -> int:
                                                                             "every qualifying path)")
         ap.add_argument("--force", action="store_true", help="act under --high-pct too")
         ap.add_argument("--max-paths", type=int, default=MAX_PATHS, metavar="N", help="delete at most N paths in this pass and leave "
-                        "the rest for the next (default %(default)s; 0: no cap)")
+                        "the rest for the next (default %(default)s; 0: no limit)")
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
         ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store that says what became of a preserved path's "
                         "stored copy (default $RESEARCH_STORE or ~/.research/store; on a node, the node's: /workspace/research/store)")
-        ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs that custody did not "
-                        f"preserve, each directory its run's only copy, expired {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its "
-                        "last write. Without it they are listed, apart, and left")
+        ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs, and launches refused "
+                        "before they ran, that custody did not preserve, each directory its run's only copy, expired "
+                        f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write. Without it they are listed, apart, and left")
         ap.add_argument("--launcher-copies", action="store_true", help="a pass over the launchers' copies of runs on other machines, "
                         "and nothing else: a directory named as a run id that holds the launcher's remote.json, expired "
                         f"{LAUNCHER_COPY_EXPIRY // timedelta(hours=1)} h after its last write, goes only once the remote holds the run's "
@@ -1659,7 +1772,7 @@ def main(argv: list[str]) -> int:
                         "when a deletion failed or a stored copy could not be asked about")
         ns = ap.parse_args(rest)
         if ns.max_paths < 0:
-            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no cap", file=sys.stderr)
+            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no limit", file=sys.stderr)
             return 2
         if missing := [d for d in [ns.root, *ns.jobs_dir] if not Path(d).is_dir()]:
             print(f"research retention gc: {missing[0]} is not a directory", file=sys.stderr)
@@ -1708,9 +1821,15 @@ def main(argv: list[str]) -> int:
             print(f"unpreserved runs, of the paths above: {_counted(u['expired'])} expired, {took}; {_counted(u['recorded'])} not yet expired"
                   + _unread(u["invalid"]))
         if ns.apply:
-            count = lambda states: ", ".join(f"{plan['stored'][k]} {k}" for k in states)  # noqa: E731
+            tr = plan["trimmed"]
+            count = lambda states: ", ".join(f"{plan['stored'][k] - (tr['deleted'] if k == 'uncovered' else 0)} {k}" for k in states)  # noqa: E731
             print(f"stored copies of the preserved paths it asked about: {count(COLLECTED)} (deleted); {count(STORED[len(COLLECTED):])} (kept)"
                   + ("; a copy that could not be asked about fails the pass" if plan["stored"]["unreachable"] else ""))
+            if tr["deleted"] or tr["kept"]:
+                print(f"runs whose files custody trimmed, apart from the never-stored and the covered: {tr['deleted']} deleted, "
+                      f"{tr['files']} file(s), {_size(tr['bytes'])} of them stored nowhere else; {tr['kept']} kept until "
+                      f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after custody verified each"
+                      + ("" if ns.unpreserved_runs else ", then for --unpreserved-runs"))
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
         return rc
@@ -1721,7 +1840,7 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--approved-by", required=True, metavar="@OWNER", help="the owner who said yes; every record covering a PATH or "
                         "beneath it must name this handle")
         ap.add_argument("--ref", required=True, metavar="REF", help="where the owner said yes (a Slack permalink or thread ts)")
-        ap.add_argument("--by", default=os.environ.get("RESEARCH_AGENT_URL"), metavar="URL",
+        ap.add_argument("--by", default=settings.get("RESEARCH_AGENT_URL"), metavar="URL",
                         help="who deletes (default $RESEARCH_AGENT_URL); --apply needs it")
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
@@ -1761,4 +1880,4 @@ def main(argv: list[str]) -> int:
 __all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "LAUNCHER", "LAUNCHER_COPY_EXPIRY", "MAX_PATHS", "ONLY_LAUNCHER",
            "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "STORED", "UNPRESERVED", "UNPRESERVED_RUN_EXPIRY", "RecordError", "Stored",
            "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "keeping", "launcher_check", "load", "main",
-           "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "unpreserved_runs", "write"]
+           "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "uncovered_until", "unpreserved_runs", "write"]

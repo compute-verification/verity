@@ -42,18 +42,18 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
   `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session. Under `--zk` with
-  `FC_FIREWALL=1`, `flock-circuit` is the prover workers' side of the ZK server, which is Lean
-  (`../verifier/Flock/Firewall`, `flock-firewall`, and its release side `../../recursion/verifier/firewall/`):
+  `FC_ZK_SERVER=1`, `flock-circuit` is the prover workers' side of the ZK server, which is Lean
+  (`../verifier/Flock/ZkServer`, `flock-zk-server`, and its release side `../../recursion/verifier/zk_server/`):
   `live/PROTOCOL.md` §10.4 says what each side computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
 - `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
-- `verifier/`: what runs Flock's verifier, the Lean verifier (`../verifier/`, `flock-verify`, whose
+- `verifier/`: what runs Flock's verifier, the Lean verifier (`../verifier/`, `verity-verify-proof`, whose
   definitions are the specification), and the scripts that hold it to upstream's Rust verifier; its Lean proofs are
   under `security/Proofs/Flock/`. See its README.
 
 Flock's circuit prover is `circuit.py` in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
 `verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it
-(`verity.commitments.windows.rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
+(`verity.commitments.periods.rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
 (`--m0-pythonpath`), not from the checkout. Flock ZK is `flock-circuit prove --zk` (`live/PROTOCOL.md`).
 `flock-circuit` also reads the typed statement (`verity/flock-circuit/types`, `verity_flock.typed_statement`) of a
 flat class and of a template whose instance type places calls (GEMM) and reads tables (attention, as placed `table/v2`
@@ -94,6 +94,23 @@ every point pass. `POINTS=0` runs the preflight check alone, and `STAGE_ONLY=1 P
 check's three GPU cases run at once, each in its own process, while three times one case's device memory (measured per K in
 `74-gemm-hill.sh`) fits the GPU's free memory, else one after another; its record (`selftest.per_case`, `selftest.run`) has
 each case's wall time, exit code and peak device memory, and why it fell back.
+
+## Verdicts of record
+
+Python returns no accept of its own. Each question a verifier answers is Lean's, and a Python path that once answered it is
+the difftest's reference (`_twin`, read by no deciding path) or raises `NotImplementedError` naming its goal.
+
+| Question | Lean that answers it | Python |
+| --- | --- | --- |
+| One outer session | `verity-verify-proof verify --zk` (`Flock`'s verifier, `verity/protocols/proofs/flock/verifier/`) | none |
+| V*'s statements of a recursive session | `verity-verify-proof verify --zk --rec-part J` (`VStar`) | `rec_vstar.check_twin` |
+| V*'s parts composed | `verity-verify-proof rec-compose` (`Flock.RecCompose.check`) | `rec_compose.check_twin` |
+| V*'s verdict on a session directory | none yet | `rec_vstar.main` raises `proofs/recursion-vstar-of-record`; `rec_vstar.session_twin` |
+| An outer session's release | `core-zk-server session` (`Core.ZkServer.Loop`) | none |
+
+Readers, which carry a verdict of record and add only refusals: `proof_server.Session.accepted` (both sides' verdicts,
+conjoined), `zk_server_transcript.Session.accepted` (the challenger's Finish, refused on a proxy stop), `class_statement`'s
+sweep (every session's verdict and the prover's exit), and `agreement/` (compares the verifiers' verdicts and decides none).
 
 ## Tests
 

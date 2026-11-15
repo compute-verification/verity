@@ -16,7 +16,7 @@ from verity.circuits.program import Program
 from verity.circuits.query import parse, query
 from verity.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.circuits.query_codec import from_json, query_id, to_json
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 GEMM = 'members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")'
 ATTN = '''each("//AttentionHead_v3{*}",
@@ -64,7 +64,7 @@ def tokensel():
 
 
 def materialise(program, q):
-    """Family + list of its sets, with the three consistency laws checked."""
+    """Family + list of its sets, with the three consistency rules checked."""
     fam = evaluate(program, q)
     sets = list(fam)
     assert fam.count() == len(sets)

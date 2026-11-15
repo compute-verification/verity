@@ -1,5 +1,5 @@
-"""A request's arrival on each side of the wire: the client's read of a response the warden's cells carried, the API
-server's accept stamp, and the summary's arrival orders and its views of a warden trace for the replay."""
+"""A request's arrival on each side of the wire: the client's read of a response the network certifier's cells carried, the API
+server's accept stamp, and the summary's arrival orders and its views of a network certifier trace for the replay."""
 from __future__ import annotations
 
 import asyncio
@@ -101,9 +101,9 @@ def test_inversions_count_the_pairs_put_the_other_way_round(mod):
     assert summary.inversions(["b", "x", "a"], ["a", "b"]) == 1
 
 
-def warden_trace(root):
-    """A corpus of one trace through the warden: four requests sent in order r0..r3 and admitted together at bucket 1;
-    r0's request takes four ingress buckets, so the warden releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
+def network_certifier_trace(root):
+    """A corpus of one trace through the network certifier: four requests sent in order r0..r3 and admitted together at bucket 1;
+    r0's request takes four ingress buckets, so the network certifier releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
     engine schedules them in that order."""
     d = root / "w"
     (d / "raw").mkdir(parents=True)
@@ -156,9 +156,9 @@ def warden_trace(root):
     return d
 
 
-def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp_path, mod):
+def test_summary_orders_arrivals_along_the_wire_and_writes_the_network_certifiers_views(tmp_path, mod):
     summary = mod("summary")
-    d = warden_trace(tmp_path)
+    d = network_certifier_trace(tmp_path)
     t = summary.summarize(tmp_path)["traces"]["w"]
     reqs = {r["id"]: r for r in summary.read_jsonl(d / "requests.jsonl")}
     r0 = reqs["r0"]
@@ -186,7 +186,7 @@ def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp
             assert math.isclose(r["send_unix"] + r["chunks"][0][0], reqs[x]["send_unix"] + 1.5, abs_tol=1e-6)
         assert (tmp_path / f"w.{view}" / "steps.jsonl").read_text() == (d / "steps.jsonl").read_text()
     text = (tmp_path / "README.md").read_text()
-    assert "## The warden" in text and "## Arrival order" in text and "| warden release | 4 | 0 | 3 |" in text
-    assert "D counted from the warden's release a (the ingress end)." in text
+    assert "## The network certifier" in text and "## Arrival order" in text and "| warden release | 4 | 0 | 3 |" in text
+    assert "D counted from the network certifier's release a (the ingress end)." in text
     assert "| w | 0-1 / 2 / 3 | 2 | 1 / 0 / 0 / 0 / 1 / 0 / 0 / 0 | 1 | 2.0 / 2.0 | None | None |" in text
     assert (w["ticks"]["over_slack"], w["client_loop"]["stalls"], w["egress_base"]) == (1, 0, "release a (the ingress end)")

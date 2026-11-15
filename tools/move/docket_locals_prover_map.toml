@@ -1,0 +1,32 @@
+# A window's docket as a parameter or local of SPOT's prover audits: `registration` becomes `docket` in
+# `records_audit`'s window read, `two_stage.stop_order`'s digest and `test_records_audit`'s `_audited`. The files
+# `registration.json` and the expert tables' registration keep their word.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/prover/audit/records_audit.py"]
+[words_in.words]
+"= registration" = "= docket"
+"in registration" = "in docket"
+"registration =" = "docket ="
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/prover/audit/two_stage.py"]
+[words_in.words]
+", registration" = ", docket"
+"registration)" = "docket)"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/prover/tests/test_records_audit.py"]
+[words_in.words]
+"registration or" = "docket or"
+"registration:" = "docket:"
+
+[keep]
+patterns = []
+strings = []
+
+[rewrite]
+exclude = ["**/*.json", "**/*.jsonl", "**/*.toml", "**/*.lean", "**/fixtures/**", "tools/move/**",
+           "tools/research/src/research/store/moves.json"]

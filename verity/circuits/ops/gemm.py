@@ -35,7 +35,7 @@ over it names no architecture (`prims`), and a refusal for any other step:
                                       cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)
     ScaledMmS8CoordinateRows_v1{K, R, DOT}  (x0..x{R-1}: s8[K/R], sx: f32, wrow0..wrow{R-1}: s8[K/R], sw: f32) -> bf16:
                                       `ScaledMmS8Coordinate_v1{K, DOT}` on the concatenations of x's and wrow's R parts, so
-                                      that each operand is R rows of at most 262,144 bits (`UNIT_CLASS_MAX`) when K is
+                                      that each operand is R rows of at most 262,144 bits (`SIZE_CLASS_MAX`) when K is
                                       past 32,768
     ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}  (ScaledMmS8CoordinateRows_v1's ports, r: bf16) -> bf16: the residual
                                       add in the coordinate's epilogue, `Bf16AddF2fp_v1(r, ScaledMmS8CoordinateRows_v1{K, R,
@@ -303,7 +303,7 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
            conformance=ScaledMmS8Coordinate.conformance, refuse=_refuse_r(_S8))
 def ScaledMmS8CoordinateRows(B, S, *ports):
     """`ScaledMmS8Coordinate_v1{K, DOT}` on x and W's row each given as R consecutive parts of K/R codes, called on their
-    concatenations: the same word for every input. Past K = 32,768 an s8 operand is wider than `partition_v2.UNIT_CLASS_MAX`
+    concatenations: the same word for every input. Past K = 32,768 an s8 operand is wider than `partition_v2.SIZE_CLASS_MAX`
     (262,144 bits), so a proof block reads it as R rows."""
     R = S.R
 

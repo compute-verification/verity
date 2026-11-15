@@ -27,6 +27,8 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.opened import opened_check
 from verity_vllm.query.manifest import format as RM
 
+__all__ = ["check_rows"]
+
 RULE = ("every check of every request's Program (instances header `checks`), evaluated from its committed inputs at every executed "
         "step, is its `accept` value")
 #: named records kept per class; the counts are uncapped
@@ -79,8 +81,9 @@ def _check(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int,
         if why is not None:
             return rec | {"result": None, "why": why}
     else:
+        got: Any                                                                 # outputs where `why` is None, whatever the evaluator gave
         got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
-        if got is None:
+        if why is not None:
             return rec | {"result": None, "why": why}
         bit = _interior_slice(got, lo, hi)
         if bit is None or bit.size != 1:

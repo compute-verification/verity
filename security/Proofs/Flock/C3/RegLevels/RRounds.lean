@@ -33,7 +33,7 @@ verifier holds of `stacked/rep0`:
   streams and then R's, none of them R's index, and finds R's stream by its name at any table but `stacked/`;
 * `stackedStreams_of_covers`: so at the verifier's hold, where the covers check passes, R's rounds in `holoStreams`
   are `stackedRounds` of META's shape, as many as the stream's rounds of coins, with `holoSelOne_stacked`'s and
-  `drawn_stacked`'s `hS`, `hL` and `hf`.
+  `sampled_stacked`'s `hS`, `hL` and `hf`.
 
 The covers check is `AcceptsC3`'s conjunct at the commits the verifier holds, so `hcov` is its instance (`ChecksC3`
 carries the same check at the checked sessions' acceptances, `FlockC3.Reps.covers_checked`).

@@ -31,21 +31,13 @@ regenerate the values to answer a challenge; the bytes are reported as `values_r
 from __future__ import annotations
 
 import ctypes
-import gc
 import json
 import math
 import os
 import queue
-import re
 import threading
 import time
-from collections import Counter
 from typing import Any
-
-try:
-    import torch
-except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
-    torch = None  # type: ignore[assignment]
 
 from verity_vllm import settings
 from verity_vllm.acquire.committer_api import (
@@ -55,7 +47,7 @@ from verity_vllm.acquire.committer_api import (
     declaration,
 )
 from verity_vllm.commit import step_rows
-from verity_vllm.commit.committer import weights_rows
+from verity_vllm.commit.committer import identity_check, weights_rows
 from verity_vllm.commit.committer.acquired import (
     ACQUIRE_CLASSES,
     ACQUIRE_INPUT_CLASSES,
@@ -67,7 +59,17 @@ from verity_vllm.commit.committer.acquired import (
     skip_classes_of_env,
 )
 from verity_vllm.commit.committer.acquired import GPU_CHUNK_BYTES as GPU_CHUNK_BYTES
+from verity_vllm.commit.committer.device_arena import _DeviceArena
+from verity_vllm.commit.committer.footprint import GcPauses as GcPauses
+from verity_vllm.commit.committer.footprint import _Footprint
+from verity_vllm.commit.committer.footprint import value_family as value_family
+from verity_vllm.commit.committer.identity_check import (
+    CALL_DEPENDENT_RE,
+    TP_PARTIAL_RE,
+    is_hidden_value_row,
+)
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
+from verity_vllm.commit.committer.optional_torch import torch
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer.staging_bounds import _ARENA_MIN, step_bound_bytes
 from verity_vllm.commit.committer.staging_bounds import _ARENA_ROUND as _ARENA_ROUND
@@ -86,92 +88,19 @@ from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import DROPPED, NativeRangeOpenings, open_levels
 from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.spans import Spans
 
 __all__ = ["GPU_CHUNK_BYTES", "NativeHostCommitter", "bounded_host_bound", "hazard_of_record", "schedule_stream_bound",
            "value_family"]
 
-
-class _DeviceArena:
-    """Device (GPU) staging blocks, one per in-flight step.  A hook copies every acquired tensor D2D into the step's block ON THE
-    COMPUTE STREAM (stream-ordered => the snapshot is taken before any later kernel overwrites the tensor in place, e.g. the fused
-    add+RMSNorm residual), so the worker can move / hash the packed step stream from a SIDE stream while the engine runs on.
-    Blocks are allocated once (warm-up) and recycled when the worker releases them."""
-
-    def __init__(self, block_bytes: int, n_blocks: int = 2, extra_blocks: list[int] | None = None) -> None:
-        self.block_bytes = block_bytes
-        self.free: list[Any] = []
-        self.all: list[Any] = []
-        self.allocs = 0
-        self.alloc_s = 0.0
-        self._n_init = n_blocks
-        self._extra = list(extra_blocks or [])       # additional preallocated blocks of other sizes (one prefill-sized block)
-        self._lock = threading.Lock()
-        self._cv = threading.Condition(self._lock)
-        self.waits = 0                                # backpressure: how often / how long the serving thread waited for a block
-        self.wait_s = 0.0
-
-    def prealloc(self) -> None:
-        for _ in range(self._n_init):
-            self.free.append(self._alloc(self.block_bytes))
-        for nb in self._extra:
-            self.free.append(self._alloc(nb))
-
-    def _alloc(self, nbytes: int) -> Any:
-        t0 = time.perf_counter()
-        blk = torch.empty(nbytes, dtype=torch.uint8, device="cuda")
-        self.all.append(blk)
-        self.allocs += 1
-        self.alloc_s += time.perf_counter() - t0
-        return blk
-
-    # Backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
-    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
-    # step larger than every block), with VERITY_ARENA_GROW=1, or `wait=False`: the worker, the only releaser, must not wait on itself.
-    GROW = bool(settings.VERITY_ARENA_GROW)
-    WAIT_TIMEOUT_S = settings.VERITY_ARENA_WAIT_S
-
-    def _best_free(self, min_bytes: int) -> int:
-        best = -1
-        for i, b in enumerate(self.free):
-            if b.numel() >= min_bytes and (best < 0 or b.numel() < self.free[best].numel()):
-                best = i
-        return best
-
-    def take(self, min_bytes: int = 0, *, wait: bool = True) -> Any:
-        # best fit: the SMALLEST free block that holds the step (decode steps must not consume the prefill-sized block)
-        with self._cv:
-            best = self._best_free(min_bytes)
-            if best >= 0:
-                return self.free.pop(best)
-            if wait and not self.GROW and any(b.numel() >= min_bytes for b in self.all):
-                t0 = time.perf_counter()
-                while best < 0:
-                    if not self._cv.wait(timeout=1.0) and time.perf_counter() - t0 > self.WAIT_TIMEOUT_S:
-                        raise RuntimeError(f"native collector arena: waited {self.WAIT_TIMEOUT_S:.0f}s for a free block >= {min_bytes} B "
-                                           f"(ring {[int(b.numel()) >> 20 for b in self.all]} MiB, all busy): the worker is not releasing blocks")
-                    best = self._best_free(min_bytes)
-                self.waits += 1
-                self.wait_s += time.perf_counter() - t0
-                return self.free.pop(best)
-        return self._alloc(max(self.block_bytes, min_bytes))
-
-    def release(self, blk: Any) -> None:
-        with self._cv:
-            self.free.append(blk)
-            self._cv.notify_all()
-
-    @property
-    def bytes_total(self) -> int:
-        return sum(int(b.numel()) for b in self.all)
+logger = init_logger(__name__)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # Collector footprint.  Two things, both OFF by default (roots/layouts/openings are unchanged in every mode):
 #
-#  * `VERITY_FOOTPRINT=<path.jsonl>` -- a per-step device-memory timeline written from the serving thread (begin/end of step) and the worker
-#    (absorb = hashing done, release = arena block back in the pool): bytes staged by value family, arena block sizes, retained copies and
-#    tree levels, torch allocated/reserved.  Design input for the streaming absorb/release work; no effect on what is bound.
+#  * `VERITY_FOOTPRINT=<path.jsonl>` -- the per-step device-memory timeline of `footprint._Footprint`.
 #  * retention policy `VERITY_RETAIN=device|host|none` (commit_delta `--retain`): WHERE the raw staged bytes live after the step is
 #    cryptographically absorbed (leaves + tree computed, root bound).  `device` = a compact device copy per step, kept
 #    for lazy openings (~9.2 GB/seq, which OOMs Llama 1024/128 at B=2); `host` = the copy goes to host memory (D2H on the side
@@ -180,28 +109,6 @@ class _DeviceArena:
 #    deterministic (BI) execution of the same committed inputs reproduces the same bytes and the same roots (`open(..., values_from=other)`),
 #    verified against the ORIGINAL run's roots.  One-stage binding is untouched: the leaves are hashed from the arena block before any copy.
 RETAIN_MODES = ("device", "host", "none", "sample")
-# either FlashAttention tap's hidden-value rows (`fa2.m1/L<k>/...`, `fa3.m1/L<k>/...`): one family for the identity check, the trace and the footprint
-HIDDEN_M1_PREFIXES = ("fa2.m1/", "fa3.m1/")
-TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # <module path>/part_rank<r>: the rank-local input of that module's collective
-CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
-
-
-def tp_partials_bad(man: dict[str, Any], names: Counter[str]) -> dict[str, int]:
-    """TP rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
-    (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
-    tp_bad: dict[str, int] = {}
-    tp_sites = man.get("tp_sites")                                    # none for a run with no TP source: left out, null or empty
-    tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
-    if tp_sites:
-        tp_want = man.get("tp_site_counts")                           # a mid-module site binds its static call count per step, any other site one
-        tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1) if tp_want else 1)}
-        tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
-        rk = man.get("tp_rank")
-        if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):
-            tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
-    elif tp_counts:
-        tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
-    return tp_bad
 
 
 def hazard_of_record(name: str, HAZARD_LEAVES: tuple[str, ...] | frozenset[str] | set[str]) -> bool:
@@ -218,93 +125,6 @@ def hazard_of_record(name: str, HAZARD_LEAVES: tuple[str, ...] | frozenset[str] 
     if leaf in HAZARD_LEAVES or "embed" in leaf:                 # the caller's table (NativeHostCommitter.HAZARD_LEAVES of record); named so the by-name lint sees the rule
         return True
     return idx == "1" and "norm" in leaf.lower()
-
-
-FAMILY_RULES = (   # (substring of the tensor name -> value family) for the footprint profile; first match wins
-    ("fa2.m1/", "fa2_hidden_m1"), ("fa3.m1/", "fa3_hidden_m1"), ("sampled_token_ids", "sampled_ids"), ("logits", "logits"), ("embed_tokens/in", "input_ids"),
-    ("embed_tokens", "embedding"), ("qkv_proj", "gemm_qkv"), ("o_proj", "gemm_o"), ("gate_up_proj", "gemm_gate_up"), ("down_proj", "gemm_down"),
-    ("lm_head", "gemm_lm_head"), ("norm", "norm"), ("rotary", "rope"), ("act_fn", "act"), ("attn", "attention_out"),
-)
-
-
-def value_family(name: str) -> str:
-    for sub, fam in FAMILY_RULES:
-        if sub in name:
-            return fam
-    return "other"
-
-
-class GcPauses:
-    """`gc.callbacks` while a run is installed: each collection of at least `min_s`, as (generation, start, seconds, thread), the start on
-    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step.
-
-    `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
-    sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
-    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce.  Collections never touch a value."""
-
-    def __init__(self, min_s: float = 1e-3) -> None:
-        self.min_s = min_s
-        self.pauses: list[tuple[int, float, float, str]] = []
-        self.freeze_s: list[float] = []
-        self._t0 = 0.0
-
-    def __call__(self, phase: str, info: dict) -> None:
-        if phase == "start":
-            self._t0 = time.perf_counter()
-        elif (dt := time.perf_counter() - self._t0) >= self.min_s:
-            self.pauses.append((int(info["generation"]), self._t0, dt, threading.current_thread().name))
-
-    def install(self) -> None:
-        if self in gc.callbacks:
-            return
-        t0 = time.perf_counter()
-        gc.collect()
-        gc.freeze()
-        self.freeze_s.append(time.perf_counter() - t0)
-        gc.callbacks.append(self)
-
-    def uninstall(self) -> None:
-        if self in gc.callbacks:
-            gc.callbacks.remove(self)
-
-    def record(self) -> dict[str, Any]:
-        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses), "freeze_s": list(self.freeze_s)}
-
-
-class _Footprint:
-    """Per-step device-memory timeline (`VERITY_FOOTPRINT`).  One JSON line per event; `t` is perf_counter seconds since the profiler was
-    created.  Events: begin_step, end_step (serving thread), absorbed (leaves + levels computed and the copy taken; the arena block is released
-    right after), plus `run` summaries written by the committer's finalize."""
-
-    def __init__(self, path: str) -> None:
-        self.path = path
-        self.t0 = time.perf_counter()
-        self._f = open(path, "a")   # noqa: SIM115
-        self._lock = threading.Lock()
-
-    @staticmethod
-    def cuda() -> dict[str, int]:
-        if torch is None or not torch.cuda.is_available():
-            return {}
-        free, total = torch.cuda.mem_get_info()
-        return {"allocated": int(torch.cuda.memory_allocated()), "reserved": int(torch.cuda.memory_reserved()),
-                "device_free": int(free), "device_total": int(total)}
-
-    def event(self, kind: str, **kw: Any) -> None:
-        rec = {"t": round(time.perf_counter() - self.t0, 6), "event": kind, "thread": threading.current_thread().name, **kw, "cuda": self.cuda()}
-        line = json.dumps(rec, default=str) + "\n"
-        with self._lock:
-            self._f.write(line)
-            self._f.flush()
-
-    @staticmethod
-    def families(metas: list[TensorMeta]) -> dict[str, dict[str, int]]:
-        out: dict[str, dict[str, int]] = {}
-        for m in metas:
-            d = out.setdefault(value_family(m.name), {"bytes": 0, "tensors": 0})
-            d["bytes"] += int(m.nbytes)
-            d["tensors"] += 1
-        return out
 
 
 def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: str, retain_exclude: set[str] | frozenset[str] | list[str],
@@ -447,23 +267,6 @@ def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
 
-def _split_step_names(srcs: list[Any], names: Any, step: int) -> tuple[Any, dict[str, tuple[int, int]]]:
-    """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
-    bad: dict[str, tuple[int, int]] = {}
-    for src in srcs:
-        names, mine = src.split_step_names(names, step, False)
-        bad.update(mine)
-    return names, bad
-
-
-def _listed(man: dict[str, Any], field: str) -> Any:
-    """What an expected manifest lists under `field` (its TP sites, its MoE layers, the layers whose router commits one more
-    tensor, the sites ruled out); nothing for a manifest that leaves the field out or gives it null or empty: a run without that
-    source declares none."""
-    got = man.get(field)
-    return got if got else []
-
-
 _MEMTRACE = settings.VERITY_MEMTRACE
 
 
@@ -475,8 +278,8 @@ def memtrace(where: str, step: int | None = None) -> None:
 
     a, r = torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
     free, total = torch.cuda.mem_get_info()
-    print(f"[memtrace] {time.strftime('%H:%M:%S')} step {step if step is not None else '-':>4} {where:<28} alloc {a / 2**30:6.2f} reserved {r / 2**30:6.2f} "
-          f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
+    logger.info("[memtrace] step %4s %-28s alloc %6.2f reserved %6.2f device-used %6.2f GiB", step if step is not None else "-", where,
+                a / 2**30, r / 2**30, (total - free) / 2**30)
 
 
 class NativeHostCommitter(WindowViews, NativeRangeOpenings):
@@ -729,7 +532,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     # ------------------------------------------------------------------ static context
 
     def _model_geo_digest(self) -> bytes:
-        hf = self.engine.llm.llm_engine.vllm_config.model_config.hf_config
+        hf = self.engine.vllm_config.model_config.hf_config
         doc = {k: getattr(hf, k, None) for k in ("hidden_size", "num_hidden_layers", "num_attention_heads", "num_key_value_heads",
                                                  "head_dim", "intermediate_size", "vocab_size", "model_type")}
         doc["repo"] = self.engine.cp.get("repo")
@@ -741,8 +544,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return step_rows.ctx_digest(self.run_id, step)
 
     def _select_modules(self) -> list[tuple[str, Any]]:
+        model = self.model
+        assert model is not None, "no model to select modules of: give the committer an engine, or set `model` on the offline core"
         out = []
-        for name, m in self.model.named_modules():
+        for name, m in model.named_modules():
             names = _mro_names(m)
             if names & SKIP_CLASSES:
                 continue
@@ -806,13 +611,14 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         """The manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
         output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
         here and left unbound (coverage names it).  [v2 acquire] under a plan: the plan's consumer-input sites not among the selected modules."""
-        if getattr(self, "model", None) is None:
+        model = getattr(self, "model", None)
+        if model is None:
             return []
         wanted = self.plan_inputs if self.plan_inputs is not None else set(self.acquire_inputs)
         if not wanted:
             return []
         selected = {n for n, _m in self._modules}
-        mods = dict(self.model.named_modules())
+        mods = dict(model.named_modules())
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:
@@ -835,7 +641,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         roots: list[Any]
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
-        items = list(self.model.named_parameters()) + list(self.model.named_buffers())
+        model = self.model
+        assert model is not None, "no model to register the weights of: give the committer an engine, or set `model` on the offline core"
+        items = list(model.named_parameters()) + list(model.named_buffers())
         for name, p in items:
             if not isinstance(p, torch.Tensor) or id(p) in seen or p.numel() == 0:
                 continue
@@ -1101,13 +909,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         if t.device.type != "cuda":
             return
         self.x03_expected += 1                       # attempted acquisition; committed counted only after the copy was issued
-        self._acquire_impl(name, t, job)
+        self._copy_into_step(name, t, job)
         self.x03_committed += 1
 
-    def _acquire_impl(self, name: str, t: Any, job: _StepJob) -> None:
+    def _copy_into_step(self, name: str, t: Any, job: _StepJob) -> None:
         t0 = time.perf_counter()
-        if self._rt is not None and t.is_contiguous():
-            return self._acquire_by_cudart(name, t, job, t0)
+        if self._rt is not None and self.arena is not None and t.is_contiguous():
+            return self._acquire_by_cudart(name, t, job, t0, self.arena)
         src = t.detach()
         if not src.is_contiguous():
             src = src.contiguous()          # a device copy: counted under acquisition (bytes noted)
@@ -1153,7 +961,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     # ---- acquisition by libcudart: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered
     # on the compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).
     # Bit semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
-    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
+    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float, arena: _DeviceArena) -> None:
         nbytes = t.numel() * t.element_size()
         if nbytes == 0:
             return
@@ -1171,7 +979,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         off = (job.cursor + 3) & ~3
         if off + nbytes > job.arena.numel():
             job.overflow.append((job.arena, job.cursor))
-            job.arena = self.arena.take(max(nbytes, self.arena.block_bytes))
+            job.arena = arena.take(max(nbytes, arena.block_bytes))
             job.arena_ptr = job.arena.data_ptr()
             off = 0
         stream = job.stream_handle
@@ -1198,12 +1006,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         import os as _os
 
         cands = glob.glob(_os.path.join(_os.path.dirname(torch.__file__), "lib", "libcudart*.so*"))
+        tried: list[str] = []                    # each place that gave no runtime, with what it raised: the error's text when none loads
         try:
             import nvidia.cuda_runtime  # type: ignore
 
             cands += glob.glob(_os.path.join(_os.path.dirname(nvidia.cuda_runtime.__file__), "lib", "libcudart.so*"))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            tried.append(f"nvidia.cuda_runtime ({type(e).__name__}: {e})")
         cands += ["libcudart.so", "libcudart.so.12", "libcudart.so.13"]
         for c in cands:
             try:
@@ -1213,16 +1022,16 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 rt.cudaMemsetAsync.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, ctypes.c_void_p]
                 rt.cudaMemsetAsync.restype = ctypes.c_int
                 return rt, c
-            except Exception:  # noqa: BLE001
-                continue
-        raise RuntimeError("libcudart not found")
+            except Exception as e:  # noqa: BLE001
+                tried.append(f"{c} ({type(e).__name__}: {e})")
+        raise RuntimeError("libcudart not found; tried " + ", ".join(tried))
 
     def _side_stream(self):
         if self._side is None:
             self._side = torch.cuda.Stream()
         return self._side
 
-    def _move_step_to_host(self, job: _StepJob) -> float:
+    def _move_step_to_host(self, job: _StepJob, arena: _DeviceArena) -> float:
         """Worker: D2H of the step's packed device stream into pinned memory on the side stream; sets meta.host views.  Returns the
         wall seconds spent (issue + wait; overlapped with the engine's compute stream)."""
         t0 = time.perf_counter()
@@ -1234,7 +1043,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 m.host = hv[m.dev_off:m.dev_off + m.nbytes]
                 m.dev_block = None
             job.stream = hv[:job.cursor]
-            self.arena.release(job.arena)
+            arena.release(job.arena)
             job.arena = None
             return time.perf_counter() - t0
         side = self._side_stream()
@@ -1243,10 +1052,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             blocks = job.overflow + [(job.arena, job.cursor)]
             total = sum(used for _b, used in blocks)
             host = self.pool.take(total) if total else None
-            hv = memoryview(host.numpy()).cast("B") if total else memoryview(b"")
+            hv = memoryview(host.numpy()).cast("B") if host is not None else memoryview(b"")
             base = 0
             for blk, used in blocks:                       # the packed step stream = the used parts of the blocks, contiguous
-                if used == 0:
+                if used == 0 or host is None:
                     continue
                 host[base:base + used].copy_(blk[:used], non_blocking=True)
                 for m in job.metas:
@@ -1259,7 +1068,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             ev.record(side)
         ev.synchronize()
         for blk, _used in blocks:
-            self.arena.release(blk)
+            arena.release(blk)
         for m in job.metas:
             m.dev_block = None
         job.overflow = []
@@ -1321,7 +1130,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         try:
             os.sched_setaffinity(0, cores)
         except OSError:
-            pass
+            logger.warning("thread group %d: pinning to cores %s was refused; it runs unpinned", group, sorted(cores), exc_info=True)
 
     def _start_worker(self) -> None:
         if self._worker is not None and self._worker.is_alive():
@@ -1361,8 +1170,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             self._commit_step(job)
         except Exception as e:  # noqa: BLE001
             self.errors.append(f"worker step {job.step}: {e!r}"[:300])
-            for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
-                self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
+            if self.arena is not None and job.arena is not None:
+                for blk in [job.arena, *(b for b, _u in job.overflow)]:
+                    self.arena.release(blk)  # the serving thread waits on the ring for the blocks a failed step holds
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
@@ -1377,6 +1187,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             off = -(-len(buf) // self.ALIGN) * self.ALIGN
             buf += b"\0" * (off - len(buf))
             m.stream_off = off
+            assert m.host is not None, f"{m.name}: no host copy to pack (the direct staging path packs each tensor's host bytes)"
             buf += bytes(m.host)
         return memoryview(bytes(buf))
 
@@ -1386,14 +1197,15 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                                "collector (native_collect_v2b)")
         if "noworker" in self.ABL:
             job.event.synchronize()
-            for blk in [job.arena, *(b for b, _u in job.overflow)] if job.arena is not None else []:
-                self.arena.release(blk)
+            if self.arena is not None and job.arena is not None:
+                for blk in [job.arena, *(b for b, _u in job.overflow)]:
+                    self.arena.release(blk)
             self._layouts[job.step] = job.metas
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in job.metas), len(job.metas), b"", job.t_step_end,
                                                   time.perf_counter(), job.backlog)
             return
         if self.arena is not None and job.arena is not None:
-            mv_s = self._move_step_to_host(job)                       # side stream: D2H of the packed step, overlapped with compute
+            mv_s = self._move_step_to_host(job, self.arena)                   # side stream: D2H of the packed step, overlapped with compute
             self.spans.add("movement", mv_s, step=job.step, nbytes=0)
         else:
             job.event.synchronize()           # every direct D2H copy of this step has landed
@@ -1458,197 +1270,29 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         for s in steps:
             metas = self._layouts.get(s.step)                             # a step that staged nothing has no layout, or an empty one
             names = [] if not metas else metas.names if hasattr(metas, "scan") else [m.name for m in metas]
-            fa2 = next((n for n in names if n.startswith(HIDDEN_M1_PREFIXES)), None)
+            fa2 = next((n for n in names if is_hidden_value_row(n)), None)
             out.append({"step": s.step, "root": s.root[:8].hex(), "tensors": s.n_tensors, "bytes": s.n_bytes, "leaves": s.n_leaves,
                         "layout": s.layout_digest[:8].hex(), "fa2": fa2})
         return out
 
     # ------------------------------------------------------------------ identities: expected manifest vs committed identities
 
-    @staticmethod
-    def _module_of(name: str) -> str:
-        """Committed tensor name -> the producing module name (tuple slot `/k`, acquired input `/in`, sampler ids stripped)."""
-        return name.split("/", 1)[0]
-
     def expected_manifest(self) -> dict[str, Any]:
-        """The identities every committed step MUST cover, derived from the INSTALL-TIME module set (the acquired Instance-output modules of
-        the model, selected by class -- `_select_modules`) and the attached hidden sources, not from what the collector emitted:
-        every hooked module contributes >= 1 tensor per step, the sampler exactly one `sampled_token_ids`, each FA2 hidden source exactly
-        one `fa2.m1/L<k>/...` row per attention layer.  Counts alone cannot see 'missing one, duplicated another'; identities can."""
-        modules = [n for n, _m in self._modules]
-        # under external acquisition (compiled kernel taps) the module forwards are NOT wrapped: the per-step identities
-        # are the source's (P_compiled's kernel launches, `c<piece>.<kernel>`), declared by the source from the required manifest
-        ext = [s for s in self.sources if hasattr(s, "expected_modules")]
-        if ext and getattr(self, "external_acquisition", False):
-            modules = sorted({m for s in ext for m in s.expected_modules()})
-        if self.runner is not None and hasattr(self.runner, "sample") and "runner.sampler" not in modules:
-            modules.append("runner.sampler")        # sampled ids are acquired from the wrapped `runner.sample`, not from a module hook
-        attn_layers = sorted({int(n.split(".layers.")[1].split(".")[0]) for n, m in self._modules if "Attention" in _mro_names(m) and ".layers." in n})
-        fa2 = any(getattr(s, "short_name", "") in ("hidden_m1", "hidden_m1_fa3") or type(s).__name__.endswith(("HiddenM1Source", "HiddenM1SourceFA3"))
-                  for s in self.sources)                                   # the FA3 tap binds the same one-row-per-layer identity
-        # the MoE block source binds exactly TENSORS_PER_LAYER tensors per MoE layer per step (router_w, router_ids, up, act, down, sum), + router_softmax per tapped layer
-        moe_src, rs_src = (next((s for s in self.sources if getattr(s, "short_name", "") == n), None) for n in ("moe", "router_softmax"))
-        moe_layers = sorted(set(moe_src.layers.values())) if moe_src is not None else []
-        # the TP partial source binds exactly ONE rank-local collective input per hooked site per step (install-time site set)
-        tp_src = next((s for s in self.sources if getattr(s, "short_name", "") == "tp_partial"), None)
-        # the TP source is also the ONE binder of the fused-MoE block's RECEIVED all-reduce output
-        # (`model.layers.<L>.mlp.experts/out`; MoERunner is not an ACQUIRE_CLASSES module), the MoE source of a module that does not reduce it
-        for sites in (getattr(tp_src, "received_site_names", None), getattr(moe_src, "out_site_names", None)):
-            modules += [s for s in (sites() if sites is not None else ()) if s not in modules]
-        return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
-                "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
-                "moe_hash_layers": sorted(getattr(moe_src, "hash_layers", ())),        # a hash layer's router commits one more (`moe_source`: ids, in)
-                "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
-                # partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
-                "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
+        """The identities every committed step MUST cover (`identity_check.expected_manifest`), from this committer's install-time
+        module set (`_select_modules`), its attached sources and its engine's runner."""
+        return identity_check.expected_manifest(self._modules, self.sources, self.runner, getattr(self, "external_acquisition", False))
 
     def _moe_layer_of(self) -> Any:
-        """The MoE source's `layer_of`: the layer of each name it commits (its planes, or its values at calls under a MoE module),
-        which it holds to its own rule; None for every name without one.  Without the source (an offline committer), a plane's layer."""
-        from verity_vllm.acquire.sources.moe_source import plane_layer
-        src = next((s for s in self.sources if getattr(s, "short_name", "") == "moe"), None)
-        return getattr(src, "layer_of", None) or plane_layer
+        """The MoE source's `layer_of`, or a plane's layer without the source (`identity_check.moe_layer_of`)."""
+        return identity_check.moe_layer_of(self.sources)
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-        """The identity check.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
-        tensor came from a module outside it; (2) the FA2/FA3 hidden source produced, per attention layer, exactly the plane inventory the
-        layer's class implies -- DERIVED per layer from the Program's attention Call statics x the step's active sequences when the driver
-        handed `attention_layer_decls` (fa2_plane_classes: a windowed layer and a global GQA layer of one step legitimately
-        differ), else the uniform rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
-        module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
-        the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
-        duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
-        model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
-        covers the hooked modules the map has no entry for.  -> `RunCommitment.extra['identity_check']`."""
-
-        from verity_vllm.acquire import fa2_plane_classes as FP
-        man = manifest or self.expected_manifest()
-        expected_modules = set(man["modules"])
-        if not expected_modules:
-            return {"ok": None, "skipped": "no install-time module set (offline core)", "steps_checked": len(self._layouts)}
-        violations: list[dict[str, Any]] = []
-        ref_names: Counter | None = None
-        fa2_rules_used: Counter = Counter()                          # per step: "per-layer" (declarations + active set) or "uniform"
-        decls = getattr(self, "attention_layer_decls", None) or []   # the Program's per-layer attention Call statics (driver-supplied)
-        # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
-        rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
-        cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
-        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what no module produced (KV slots)
-        moe_of = self._moe_layer_of()
-
-        # no step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
-        verdicts: dict[Any, Any]
-        step_free, verdicts = rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
-        for step in sorted(self._layouts):
-            metas = self._layouts[step]
-            cols = metas.names if hasattr(metas, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
-            if step_free and cols in verdicts:                         # a plan-name tuple already judged (None is never a key)
-                fa2_rules_used.update({"uniform": 1} if man["fa2_hidden_per_layer"] else {})
-                violations.extend([{**verdicts[cols], "step": step}] if verdicts[cols] else [])
-                continue
-            names = Counter(m.name for m in metas) if cols is None else Counter(cols)
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
-            tp_bad = tp_partials_bad(man, names)
-            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, False, metas) if rt_src is not None else (mod_names, {})
-            by_module: Counter[str] = Counter()
-            for n, c in mod_names.items():
-                by_module[self._module_of(n)] += c
-            step_expected = rt_src.step_modules(expected_modules) if rt_src is not None else expected_modules
-            missing = sorted(step_expected - set(by_module))
-            unknown = sorted(set(by_module) - expected_modules)
-            fa2_layers = FP.counts_by_layer(names.elements())
-            fa2_bad: dict[int, int] = {}
-            fa2_detail: dict[str, Any] = {}
-            if man["fa2_hidden_per_layer"]:
-                seqs = self._step_sequences(step, metas if cols is None else metas.scan()) if decls else None
-                if seqs is not None:
-                    # each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
-                    # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA
-                    # layer's is swapped (one whole row) -- uniformity across layers is a consequence for one-class Programs, not a rule
-                    v = FP.check_step(decls, seqs, names.elements(), self._plane_policy())
-                    fa2_bad = v["fa2_layers_bad"]
-                    fa2_rules_used["per-layer"] += 1
-                    if fa2_bad:
-                        fa2_detail = {"rule": v["rule"], "n_seq": v["n_seq"], "max_seqlen_q": v["max_seqlen_q"], "exact_seqlens": v["exact_seqlens"],
-                                      "classes": v["classes"], "layers_bad": {k: d[:3] for k, d in list(v["layers_bad"].items())[:4]},
-                                      "undeclared_layers": dict(list(v["undeclared_layers"].items())[:4])}
-                else:
-                    # uniformity rule (no declarations, or no record of the step's active sequences): one whole-buffer row per layer, or (per-sequence
-                    # compaction) 6 planes x sequences per layer -- every attention layer of the step must carry the SAME positive count
-                    fa2_bad = FP.uniform_rule(fa2_layers, man["attention_layers"])
-                    fa2_rules_used["uniform"] += 1
-            moe_bad: dict[int, int] = {}
-            if man.get("moe_layers"):
-                moe_counts = Counter(k for n in names.elements() if (k := moe_of(n)) is not None)
-                want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(_listed(man, "router_softmax_layers")),
-                                                set(_listed(man, "moe_hash_layers")))
-                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers) + (k in hash_layers)}
-                moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
-            elif any(n.startswith("moe/") for n in names):
-                moe_bad = {-1: sum(c for n, c in names.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
-            n_ids = names.get("runner.sampler/sampled_token_ids", 0)
-            sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step)
-            split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
-            ref_names = mod_names if ref_names is None else ref_names
-            diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) | set(ref_names) if mod_names.get(n, 0) != ref_names.get(n, 0)}
-            if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff or split_bad:
-                violations.append({"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
-                                   "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
-                                   "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
-                                   **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
-                                   **({"fa2_detail": fa2_detail} if fa2_detail else {})})
-            if step_free and cols is not None:
-                verdicts[cols] = violations[-1] if violations and violations[-1]["step"] == step else None
-        return {"ok": not violations, "steps_checked": len(self._layouts),
-                "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
-                             "sampler_ids": man["sampler_ids"], "moe_layers": len(_listed(man, "moe_layers")), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
-                             "tp_sites": len(_listed(man, "tp_sites")), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": _listed(man, "tp_sites_ruled_out")},
-                # which attention-plane rule each step ran and what it was derived from
-                "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
-                             "policy": {k: v for k, v in self._plane_policy().__dict__.items() if k != "ms" or v} if decls else None,
-                             "classes_declared": (sorted(Counter(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha")
-                                                                 for d in decls).items()) if decls else None)},
-                "violations": violations[:5], "violations_n": len(violations)}
-
-    def _plane_policy(self):
-        """The collector's hidden-plane staging rule (`fa2_plane_classes.LayoutPolicy`): the explicit override, else read from
-        the installed hidden source -- the native FA2 source's `Fa2Wrap.compact` (per-sequence compaction), the Python source stages whole
-        buffers, the FA3 sources stage whole PackGQA launches."""
-        from verity_vllm.acquire import fa2_plane_classes as FP
-
-        if getattr(self, "plane_policy", None) is not None:
-            return self.plane_policy
-        for s in getattr(self, "sources", None) or []:
-            sn = getattr(s, "short_name", "")
-            tn = type(s).__name__
-            if sn == "hidden_m1_fa3" or tn.endswith("FA3"):
-                return FP.LayoutPolicy(backend="fa3", compact=False, ms=bool(getattr(s, "ms", False)))
-            if sn == "hidden_m1" or tn.endswith("HiddenM1Source"):
-                w = getattr(s, "_w", None)
-                return FP.LayoutPolicy(backend="fa2", compact=bool(getattr(w, "compact", False)) if w is not None else False, ms=bool(getattr(s, "ms", False)))
-        return FP.LayoutPolicy()
-
-    def _step_sequences(self, step: int, metas: list) -> Any:
-        """The step's active-sequence set (`fa2_plane_classes.StepSequences`): the collector's row record `step_rows[step]`
-        (BIND-01: [(request, row_lo, row_hi)] in launch order) when present; else (n_seq, tokens) read from the executed layout -- the
-        sampled-ids member has one slot per co-scheduled sequence, the integer ids input one row per token; None when neither is known
-        (the caller then runs the uniform rule for the step).  Never read from the hidden planes themselves."""
-        from verity_vllm.acquire import fa2_plane_classes as FP
-
-        rows = (getattr(self, "step_rows", None) or {}).get(int(step))
-        if rows:
-            return FP.StepSequences.from_rows(rows)
-        n_seq = tokens = None
-        for m in metas:
-            numel = int(math.prod(m.shape)) if m.shape else 0
-            if m.name == "runner.sampler/sampled_token_ids":
-                n_seq = numel
-            elif m.name.endswith("/in") and tokens is None and str(m.dtype).replace("torch.", "") in ("int32", "int64", "i32", "i64", "long", "int"):
-                tokens = numel
-        if n_seq is None or tokens is None:
-            return None
-        return FP.StepSequences.from_counts(n_seq, tokens)
+        """The identity check of this committer's steps (`identity_check.identity_check`) against `manifest`, or its own expected
+        manifest: with the attention declarations the driver handed (`attention_layer_decls`), the collector's row record
+        (`step_rows`) and the staging rule set on it (`plane_policy`).  -> `RunCommitment.extra['identity_check']`."""
+        return identity_check.identity_check(manifest or self.expected_manifest(), self._layouts, self.sources,
+                                             getattr(self, "attention_layer_decls", None) or [],   # the Program's per-layer attention Call statics (driver-supplied)
+                                             getattr(self, "step_rows", None), getattr(self, "plane_policy", None))
 
     def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
         """The published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --
@@ -1736,7 +1380,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return tuple(open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
-        """Production verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
+        """Serving verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
         binds into the ORIGINAL step root, which is in the run root."""
         return self._verify_rows(run, opening)
 
@@ -1775,7 +1419,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 if m.name.startswith(("fa2.m1/", "fa3.m1/", "moe/")) or moe_of(m.name) is not None or m.name.endswith("/row4_f32"):
                     continue                                  # declared separately (hidden source / MoE block source / row-4 regenerate baseline)
                 mc = self._module_class(m.name)
-                compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdigit() and m.name[3] == "."   # compiled kernel: c<piece>.<kernel>/<role>
+                compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdecimal() and m.name[3] == "."   # compiled kernel: c<piece>.<kernel>/<role>
                 if m.name.endswith("/in") or (compiled_kernel and m.name.endswith("/ids")):
                     cls, fam = "input_token_ids", (TOKEN_IDS_INPUT,)
                 elif "sampled_token_ids" in m.name:
@@ -1818,7 +1462,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             # R10a / R10b (norm kernel interiors): DECLARED treatment only.  Every interior fp32 value of fused_add_rms_norm_kernel (squares,
             # cub block-reduction partials, variance/N, rsqrtf, x*rstd) and of the layer-0 Triton _rms_norm_kernel is a deterministic function
             # of the BOUND source row (the token's residual/embedding bf16 row, R2e / R2b) and the registered weight row under the pinned
-            # kernel's fixed reduction order = the registry's exact model (`verity/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
+            # kernel's fixed reduction order = the registry's exact model (`adapters/vllm/verity_vllm/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
             # conformant).  So the derived-value route applies with a ROW-sourced phi: opening = source-row leaf(s) + weight opening + op-by-op
             # replay; no interior word needs a leaf.  The verifier for that multi-source phi is NOT implemented -> the checker
             # reports 'derived-declared', never secure.  Alternative = M1-style export of 47.6 MB/request (not built).

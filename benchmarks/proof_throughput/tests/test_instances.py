@@ -37,15 +37,15 @@ def test_a_result_names_the_population_its_draws_are_taken_from():
                                    "manifest_sha256": I.manifest_sha256(W)}
 
 
-def test_the_law_is_one_stratum_of_every_unit():
-    assert I.law(W, 16) == {"law": "stratified", "k": 16, "strata": [{"template": TEMPLATE, "units": [[0, 1024]], "k": 16}]}
-    assert I.law(W, 1024)["strata"][0]["k"] == 1024
+def test_the_sampling_design_is_one_stratum_of_every_unit():
+    assert I.sampling_design(W, 16) == {"law": "stratified", "k": 16, "strata": [{"template": TEMPLATE, "units": [[0, 1024]], "k": 16}]}
+    assert I.sampling_design(W, 1024)["strata"][0]["k"] == 1024
 
 
-def test_the_population_command_writes_the_law_and_names_the_class_sweeps_program(tmp_path, capsys):
+def test_the_population_command_writes_the_sampling_design_and_names_the_class_sweeps_program(tmp_path, capsys):
     assert cli.main(["population", "--workload", W.name, "--B", "8", "--out", str(tmp_path)]) == 0
     assert capsys.readouterr().out.split() == [W.vu, str(W.n_max)]
-    assert json.loads((tmp_path / "law.json").read_text()) == I.law(W, 8)
+    assert json.loads((tmp_path / "law.json").read_text()) == I.sampling_design(W, 8)
     assert cli.main(["population", "--workload", W.name, "--B", "2048", "--out", str(tmp_path)]) == 1
 
 

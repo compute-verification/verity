@@ -12,7 +12,7 @@ selects, read from that window's run.
 
 `run.sh JOB [ARGS...]` starts one job's script with the arguments and environment as given; run it from the source tree,
 as a `research run`'s command (or, for PoUW's piece of a served window, `benchmarks/one_stage/served_verdicts.sh`'s).
-Each script's header has its full command, its knobs (`H1_*`) and what it writes.
+Each script's header has its full command, its knobs (`H1_*`, `DC_*`) and what it writes.
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --mem-gb G --declared-output 'out/*' \
@@ -30,14 +30,23 @@ is PoUW's piece of a served window with its sampled proof blocks proved: each sa
 window's registered values, a session a statement, the statements file checked as credit does, then
 `served_verdicts.py pouw`. It writes `PIECE_DIR/` (the statements file, a directory of logs a session).
 
+One more job has no row for the same reason: its name is that job's with `_cost` after it. It is what the ZK server
+adds to that job's sessions: on its test's served window, once under the ZK server and once on the `--zk` path without
+it, each arm stages, proves and has credit check the window's sampled calls. It writes `out/summary.json` (each arm's
+sessions: the job cgroup's CPU seconds over each, both sides' timing records, the live verdicts, credit's line, and the
+peak RSS summed over the ZK server's processes) and each arm's log and piece directory under `out/`.
+
 `recorded.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), and `run.sh` never starts it.
 
 ## The Python modules
 
-`h1unit.py` is the tile unit as a Flock statement and the commitments it is opened against, which the committer, prover
-and verifier share; `window.py` is the window's committer and prover, which `recorded.py` drives and the verifier never
-imports; `stage.py K WORK` builds the unit's circuit once and stages each round on it; `layer.py` records a decoder
-layer's int8 codes and scales from a checkpoint on the CPU. `live.py` is also read by the vLLM adapter's tests and
-`benchmarks/one_stage/`, and `h1_lanes/served.py` takes the units `served.py` samples. `h1unit.py`, `window.py`,
+H1's lowering is the prover's (`verity/protocols/accounting/pouw/prover/lowering/`): `h1unit.py`, the tile unit as a
+Flock statement and the commitments it is opened against, which the committer, prover and verifier share; `stagers.py`,
+the stagers `drawn.py` hands the sampled prover; and `live.py`, the live units' lowering and the verifier's own files of
+them. `h1form.py` hands it this harness's ``H1_TILE`` and ``H1_TMPL`` (`benchmarks/pouw/settings.py`) as arguments.
+`window.py` is the window's committer and prover, which `recorded.py` drives and the verifier never imports;
+`stage.py K WORK` builds the unit's circuit once and stages each round on it; `layer.py` records a decoder layer's int8
+codes and scales from a checkpoint on the CPU; `live.py` is the live units' CLI over the lowering, which `live.sh` runs
+and `benchmarks/one_stage/` reads, and `h1_lanes/served.py` takes the units `served.py` samples. `window.py`,
 `recorded.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
 included, except underscore names. Their tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.

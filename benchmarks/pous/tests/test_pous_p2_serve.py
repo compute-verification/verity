@@ -20,6 +20,7 @@ sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/accounting/pous/pro
 from p2_v1 import serve as V  # noqa: E402
 from p2_store import store as S  # noqa: E402
 
+from verity.protocols.accounting.poub.prover import p2_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import p2, receipts  # noqa: E402
 
 STORE, DOC, C_STAR = V.toy()
@@ -27,8 +28,8 @@ SALT = bytes.fromhex(DOC["salt"])
 
 
 @pytest.fixture(scope="module")
-def p2_store() -> p2.Store:
-    return p2.Store(V.registration(STORE, DOC, C_STAR), V.blocks_of(STORE, C_STAR))
+def p2_store() -> p2_prover.Store:
+    return p2_prover.Store(V.registration(STORE, DOC, C_STAR), V.blocks_of(STORE, C_STAR))
 
 
 def engine() -> V.Engine:

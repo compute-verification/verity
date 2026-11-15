@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Accounting.Requirement
-public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Confidence
 
 /-!
 # A placed execution as an actual run (trusted)
 
-A declared circuit `W`'s placed execution (`Accounting.Requirement.Placement`) as a run of the actual-circuit model
+A registered circuit `W`'s placed execution (`Accounting.Requirement.Placement`) as a run of the actual-circuit model
 (`Accounting.Placed`, `Actual.Run`), so that what PoUW credits and the help it bounds (`Accounting.PouwWork`'s `credits`
 and `help`) read `W`'s gates. `W`'s values are `Fin n`, the IR's canonical order, in which an operand comes before its
 gate (`Wiring.Topological`).

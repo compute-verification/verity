@@ -1,4 +1,4 @@
-"""`flock-verify rec-compose` (`RecCompose.check`) and its Python mirror (`verity_flock.rec_compose`) agree, verdict and
+"""`verity-verify-proof rec-compose` (`RecCompose.check`) and its Python mirror (`verity_flock.rec_compose`) agree, verdict and
 reason, on an honest part set at a real inner shape and on that set with one thing changed: each shared input in one part
 (another file, or none where the compiled verifier reads one), an inner shape or rows file other than the composition's,
 a session without `--zk`, with an identifier or refused, a reused or missing coin key, a part missing, repeated, out
@@ -22,7 +22,7 @@ import pytest
 from verity.protocols.proofs.spot.device import challenger as C
 from verity_flock import rec_compose as RC
 
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"
 
 pytestmark = [pytest.mark.slow,
               pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")]
@@ -174,7 +174,7 @@ def _compose(d: Path, tmp_path: Path, n: int, inner: bytes, parts: list[tuple[st
     p = subprocess.run([str(BIN), "rec-compose", "--rec-inner", str(d / "inner.json"), "--rec-rows", str(d / "rows.json"),
                         "--rec-run", str(tmp_path / "run.json"), *flag, *logs], capture_output=True, text=True)
     [line] = [json.loads(ln[12:]) for ln in p.stdout.splitlines() if ln.startswith("REC-COMPOSE ")]
-    want = RC.check(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
+    want = RC.check_twin(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
     assert (line["accepted"], line["why"]) == want, line
     assert p.returncode == (0 if want[0] else 1)
     return want
