@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from research import at_main
+from research import at_main, guard_notice
 
 ENV = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t",
        "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
@@ -337,6 +337,58 @@ def test_the_copy_a_command_is_meant_to_run_and_a_node_or_a_test_say_nothing_of_
     else:
         assert said(tmp_path, monkeypatch, case(tmp_path, monkeypatch, workspace)) is None
     assert capsys.readouterr().err == ""
+
+
+def no_guard_notice(env) -> None:
+    """`guard_notice.notice` with nothing to say: no test asks the VM's own guard."""
+
+
+def test_a_mark_directory_that_cant_be_read_is_one_line_and_the_command_goes_on(tmp_path, monkeypatch, capsys):
+    """Another user's mode-700 mark directory raised PermissionError from `mark.exists()`, which stopped the command."""
+    workspace = on_an_agents_vm(tmp_path, monkeypatch)
+    third = tree_at(tmp_path / "wt-main")
+    monkeypatch.setenv("PYTHONPATH", str(third.parent))
+    monkeypatch.setattr(at_main, "__file__", str(third / "at_main.py"))
+    monkeypatch.setattr(at_main.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    closed, exists = tmp_path / "tmp/research-pythonpath-notice", Path.exists
+
+    def denied(self, *args, **kwargs):
+        if self.is_relative_to(closed):
+            raise PermissionError(13, "Permission denied", str(self))
+        return exists(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "exists", denied)
+    monkeypatch.setattr(guard_notice, "notice", no_guard_notice)
+    monkeypatch.setenv(at_main.OPT_OUT, "1")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    assert at_main.reexec(["--version"], workspace, tmp_path / "cache") is None
+    assert capsys.readouterr().err == (f"research: pythonpath_notice could not run, and the command goes on: [Errno 13] "
+                                       f"Permission denied: '{closed / AGENT}'\n")
+
+
+def test_no_home_costs_no_command_that_returns_before_it_needs_the_cache(tmp_path, monkeypatch, capsys):
+    """`Path.home()` raises RuntimeError with no HOME and no passwd entry: computed first, it stopped every command."""
+    def no_home(cls):
+        raise RuntimeError("Could not determine home directory.")
+
+    for name in ("HOME", "XDG_CACHE_HOME", "CURSOR_CONVERSATION_ID", "PYTEST_CURRENT_TEST"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(no_home))
+    monkeypatch.setattr(guard_notice, "notice", no_guard_notice)
+    monkeypatch.setenv(at_main.OPT_OUT, "1")
+    assert at_main.reexec(["--version"], checkout(tmp_path)) is None
+    assert capsys.readouterr().err == ""
+
+
+def test_a_guard_notice_that_raises_is_one_line_and_the_command_goes_on(tmp_path, monkeypatch, capsys):
+    def unreadable(env):
+        raise OSError("tools/agent-guard/inbox.py: Permission denied")
+
+    monkeypatch.setattr(guard_notice, "notice", unreadable)
+    monkeypatch.setenv(at_main.OPT_OUT, "1")
+    assert at_main.reexec(["--version"], checkout(tmp_path), tmp_path / "cache") is None
+    assert capsys.readouterr().err == ("research: guard_notice could not run, and the command goes on: "
+                                       "tools/agent-guard/inbox.py: Permission denied\n")
 
 
 def test_research_run_from_a_third_tree_by_pythonpath_says_so_once_and_exits_as_it_would_have(tmp_path):
