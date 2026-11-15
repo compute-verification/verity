@@ -20,6 +20,9 @@ from pathlib import Path
 
 from verity_vllm import settings
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
+
+__all__ = ["Options", "main"]
 
 #: none of them private (`research_outputs.private`): the run publishes them as its run_files
 RECORDS = ("stages.txt", "row.log", "source_identity.json", "verdict.json", "manifest_verify.log",
@@ -55,8 +58,8 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
         try:
             doc = json.loads(sid.read_text())
             fp["source_identity"] = {k: doc.get(k) for k in ("requested_root", "requested_sha", "ok", "sys_path0") if k in doc}
-            ids = doc.get("identities") or {}
-            fp["tree_sha"] = next((i.get("git_sha") for i in ids.values() if isinstance(i, dict) and i.get("git_sha")), None)
+            ids = doc.get("identities")   # one entry per source root the launch resolved; a document that states none states no tree
+            fp["tree_sha"] = next((i.get("git_sha") for i in ids.values() if isinstance(i, dict) and i.get("git_sha")), None) if ids else None
         except (OSError, ValueError):
             fp["source_identity"] = "unreadable"
     m = re.search(r"digest[= ]([0-9a-f]{16,64})", v.get("build", ("", ""))[1])
@@ -66,7 +69,7 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
     for s in requested:
         m = re.search(r"wall=(\d+)s", v.get(s, ("", ""))[1])
         if m:
-            meas.append({"name": f"{s}_wall", "value": int(m.group(1)), "unit": "s"})
+            meas.append({"name": f"proofs/one-stage.{s}-wall", "value": int(m.group(1)), "unit": "s"})
     files: list[str] = []
     if run_dir is not None:
         ev = run_dir / "evidence"
@@ -110,7 +113,7 @@ def main(a: Options) -> int:
         tmp = run_dir / "result.json.tmp"
         tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
         os.replace(tmp, run_dir / "result.json")
-        print(f"research_result: {run_dir / 'result.json'} validation={doc['validation']['status']}")
+        write(f"research_result: {run_dir / 'result.json'} validation={doc['validation']['status']}")
     except Exception as e:  # noqa: BLE001 -- never mask the row's own verdicts
         print(f"research_result: FAILED to write result.json: {type(e).__name__}: {e}", file=sys.stderr)
     return 0

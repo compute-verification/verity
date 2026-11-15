@@ -1,9 +1,11 @@
-"""What every record's `load` shares: the refusal, naming the file and the field, and the field reads.  A nested field is named
+"""What every record's `of` shares: the refusal, naming the file and the field, and the field reads.  A nested field is named
 by its dotted path in the record (`name`, default the key)."""
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 from typing import Any
+
+__all__ = ["RecordError"]
 
 
 class RecordError(ValueError):

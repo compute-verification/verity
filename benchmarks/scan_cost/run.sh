@@ -5,7 +5,7 @@
 # the network pool, as a job of at most 180 minutes:
 #   research run --on NODE --project verity --source . --cwd clone --pool network --as LANE --mem-gb 128 \
 #     --timeout 10800 -- bash benchmarks/scan_cost/run.sh
-# env: SC_GROUP=G (scan_zk.sh's: G execution phases in one registration; a setting, in the result beside the identity)
+# env: SC_GROUP=G (scan_zk.sh's: G execution phases, each a registration; a setting, in the result beside the identity)
 #      SC_CORES=N (21, the least a slot of the network pool gives: the job is pinned to the first N cores it has, and
 #      a job with fewer is refused; another N is another identity, which compares with no result at 21)
 #      SC_CLASS (w63k4, the benchmark's; `test`, the certifier tests' class, rehearses this runner, and its result
@@ -56,7 +56,7 @@ if [ -d "$KEPT" ]; then
       done
   echo "scan_cost: $(du -sm "$KEPT" | cut -f1) MB of the scan's files kept, without the verifier's copies a kept log names"
 fi
-export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/verity/configuration/config
+export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/tools/config
 PY=(python3)   # the result's writer is the harness kit's, which this job's python3 may be too old to import
 python3 -c 'import verity_bench.kit' 2>/dev/null || PY=(uv run -q --no-project --python 3.12 python)
 PATH=$PATH:$HOME/.local/bin:$HOME/.cargo/bin "${PY[@]}" benchmarks/scan_cost/result.py write "$RESEARCH_RUN_DIR" --scan-exit "$rc"

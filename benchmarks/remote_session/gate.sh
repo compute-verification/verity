@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# A gate run's steps through the two auditor hosts' gates under the lane's gate key (GATE_KEY), as a job on the machine
+# A gate run's steps through the two auditor devices' gates under the lane's gate key (GATE_KEY), as a job on the machine
 # that holds it, cwd = a clone of COMMIT, the commit the verifier host's verifier is pinned at.
 # `gate_run.sh` launches it; one VERB a run, everything into $OUT:
 #
 #   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
-#          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
-#          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
-#          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
+#          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's poub tree (auditor_line's
+#          `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
+#          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
+#          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
-#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
+#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT`, the ledger read before and after: the period signs
+#          no model.
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
-#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
-#          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
+#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE); its `status` every 30 s until it ends, then the run's directory
+#          without its transcripts (`fetch`) into host/RUN. Exits with the run's rc. The verifier holds no checkpoint:
+#          the store is the developer's choice.
 #          With SESSIONS the request asks for that many sessions of one coin a window in place of PACED's paced ones:
 #          WINDOWS windows of WINDOW_MS, SAMPLES openings a window (each the verifier's own default where unset). The
 #          host's run takes one form, so SESSIONS beside PACED or PACE_PASS_MS, or one of the three without SESSIONS, is
@@ -27,9 +30,12 @@
 #          period open for a rerun in it and runs no auditor. With LEASE_BY (a UTC time) it opens nothing for a lease
 #          that began after LEASE_BY, and stops waiting 2 minutes after it.
 #
+# CHALLENGER and AUDITOR are the challenger host and the verifier host as USER@HOST, by default research@ the addresses
+# VY_CHALLENGER_1_HOST and VY_AUDITOR_1_HOST hold; a host with neither ends any VERB but form, naming the variable.
+#
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
-# the verifier host's host key).
+# the verifier host's host key). A dry fire that can't read PROVER_NODE's leases (a stopped node) says so and goes on.
 set -u
 VERB=${1:?probe, open, host, close, audit, fire or form}
 if [ -n "${SESSIONS:-}" ]; then
@@ -46,15 +52,18 @@ fi
 [ "$VERB" = form ] && exit 0
 : "${OUT:?}"
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
-CHALLENGER=${CHALLENGER:-research@204.12.178.84}
-AUDITOR=${AUDITOR:-research@81.85.1.145}
+CHALLENGER=${CHALLENGER:-research@${VY_CHALLENGER_1_HOST:?the address of the challenger host, or CHALLENGER as USER@HOST}}
+AUDITOR=${AUDITOR:-research@${VY_AUDITOR_1_HOST:?the address of the verifier host, or AUDITOR as USER@HOST}}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
-LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
+LANE=${LANE:-memory-accounting} ENGINES=${ENGINES:-8}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
 PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
 JITTER_MS=${JITTER_MS:-50} QUANTILE=${QUANTILE:-max} PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
 SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15
   -i "$GATE_KEY")
+
+# shellcheck source=benchmarks/remote_session/main_line.sh
+source "$(dirname "${BASH_SOURCE[0]}")/main_line.sh" || exit 3
 
 gate() {
   # HOST WORDS...: one request to that host's gate, its answer on stdout
@@ -72,17 +81,8 @@ circuit() {
   local head tree
   head=$(git rev-parse HEAD) || return 3
   [ "$head" = "${COMMIT:?}" ] || { echo "this clone is $head, not COMMIT $COMMIT" >&2; return 3; }
-  tree=$(git rev-parse "$COMMIT:verity/protocols/poub/verifier") || return 3
+  tree=$(git rev-parse "$COMMIT:verity/protocols/accounting/poub/verifier") || return 3
   printf 'verity/remote-bandwidth/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
-}
-
-main_line() {
-  # origin/main's first-parent history into $OUT/main.probe.txt, fetched as auditor.sh fetches it
-  local unshallow=()
-  [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=(--unshallow)
-  { git fetch -q "${unshallow[@]}" origin +refs/heads/main:refs/remotes/origin/main \
-      || git fetch -q "${unshallow[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
-    >> "$OUT/fetch.probe.log" 2>&1 && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
 }
 
 probe() {
@@ -91,10 +91,13 @@ probe() {
   echo "circuit $c (COMMIT $COMMIT)"
   [ -z "${CIRCUIT:-}" ] || [ "$CIRCUIT" = "$c" ] || { echo "CIRCUIT $CIRCUIT is not COMMIT's $c"; exit 3; }
   CIRCUIT=$c
-  main_line || {
-    echo "can't read origin/main's first-parent history (fetch.probe.log), so COMMIT can't be checked on it"; exit 3; }
+  main_line "$OUT/fetch.probe.log" "$OUT/main.probe.txt" || {
+    main_refused fetch.probe.log "COMMIT can't be checked on it: nothing was sent"
+    exit 3; }
+  echo "main from $MAIN_SHOWN at $(head -n 1 "$OUT/main.probe.txt")"
   grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
-    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it"; exit 3; }
+    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it, or" \
+      "relaunch from a checkout fetched just before (git fetch origin main) if main has moved past it since"; exit 3; }
   if [ -n "${DRY:-}" ]; then
     [ -f "$GATE_KEY" ] && echo "DRY: the gate key $GATE_KEY is here" || echo "DRY: no gate key at $GATE_KEY"
     ssh-keygen -F "${AUDITOR#*@}" -l 2>&1 | grep -q -F "$AUDITOR_FP" \
@@ -157,7 +160,7 @@ EOF
 
 open_period() {
   gate "$CHALLENGER" ledger > "$OUT/ledger.before.jsonl"
-  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" --model "$MODEL" \
+  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" \
     > "$OUT/period-open.out" 2> "$OUT/period-open.err"
   local r=$?
   echo "period-open rc $r"
@@ -178,7 +181,7 @@ host_run() {
   fi
   gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" "${form[@]}" \
     --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
-    --model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS" > "$OUT/host-run.json" 2> "$OUT/host-run.err"
+    > "$OUT/host-run.json" 2> "$OUT/host-run.err"
   r=$?
   echo "host run rc $r"
   cat "$OUT/host-run.json" "$OUT/host-run.err"
@@ -248,6 +251,7 @@ fire() {
   echo "fire $(date -u +%FT%TZ): waiting for $PROVER_RUN to hold $ENGINES GPUs on $PROVER_NODE${by:+, leased by $LEASE_BY}"
   for ((k = 0; ; k++)); do
     if ! l=$(leased); then
+      [ -n "${DRY:-}" ] && { echo "DRY: can't read $PROVER_NODE's leases; would wait until $PROVER_RUN holds $ENGINES"; break; }
       # one failed read waits for the next; ten running (five minutes) end the wait
       fails=$((fails + 1))
       [ $fails -lt 10 ] || { echo "can't read $PROVER_NODE's leases $fails times running: nothing opened"; exit 3; }

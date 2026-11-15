@@ -20,7 +20,7 @@ records how the tree got here or who is working on it, which the tree can't keep
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
   as an owner.
 
-Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``fixtures/artifacts.json``,
+Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``artifacts.json``,
 each ``lean-audit.json``'s records, the handle registry, the manifests), nor what ``SKIP`` names, each with its reason.
 This lint takes over P11's docstring patterns (``adapters/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
 rounds and dates), for the whole tree.

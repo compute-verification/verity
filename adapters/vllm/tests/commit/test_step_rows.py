@@ -7,21 +7,28 @@ import hashlib
 import json
 import os
 import random
+from pathlib import Path
 
 import pytest
-
-from verity.errors import InvalidArtifact
-from verity.commitments import hm96, merkle
+from verity.commitments import domains, hm96, merkle
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, verify_opening
+from verity.commitments.merkle import (
+    Commitment,
+    CommitmentDomain,
+    MerkleTree,
+    Opening,
+    verify_opening,
+)
 from verity.commitments.multiproof import multiproof, multiproof_root
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.errors import InvalidArtifact
+
 from verity_vllm.commit import step_rows as R
 
 _CORE = os.path.dirname(merkle.__file__)
-FRAME = json.load(open(os.path.join(_CORE, "frame_v3", "vectors_sha512.json")))
-HM96 = json.load(open(os.path.join(_CORE, "hm96", "vectors_sha512.json")))
+FRAME = json.loads(Path(_CORE, "frame_v3", "vectors_sha512.json").read_text())
+HM96 = json.loads(Path(_CORE, "hm96", "vectors_sha512.json").read_text())
 OTHER_KEY = bytes.fromhex(HM96["other_key"])
 PD, CTX, GEO, LAYOUT = (hashlib.sha512(t).digest() for t in (b"program", b"ctx", b"geo", b"layout"))
 
@@ -199,3 +206,9 @@ def test_the_identity_digests_are_whole_sha512_digests():
 def test_roots_refuse_a_wrong_size_or_count(call):
     with pytest.raises(InvalidArtifact):
         call()
+
+
+def test_the_tree_tags_are_the_tables_and_their_bytes_dont_move():
+    assert R.NODE_TAG == domains.VLLM_NODE.encode() == b"verity-vllm/node/v1"
+    assert R.LIFT_TAG == domains.VLLM_LIFT.encode() == b"verity-vllm/lift/v1"
+    assert R.EMPTY_TAG == domains.VLLM_EMPTY.encode() == b"verity-vllm/empty/v1"

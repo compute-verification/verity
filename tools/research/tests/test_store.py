@@ -17,7 +17,7 @@ from research.store.cli import main
 from research.store.index import flatten
 from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound, StoreError
 from research.store.model import ArtifactManifest, Payload, TreeFile, attempt_errors, validate_attempt_doc
-from research.store.remote import ConfigError, FsRemote, RemoteConflict, load_remote
+from research.store.remote import FsRemote, RemoteConflict, load_remote
 
 DRV = "drv:" + "a" * 64
 RK = "b" * 64
@@ -483,6 +483,25 @@ def test_remote_config(env, monkeypatch):
         load_remote(env / "c.toml")
 
 
+@pytest.mark.parametrize("place", [Path("artifacts.json"), Path("fixtures", "artifacts.json")], ids=["at-the-root", "under-fixtures"])
+def test_the_registry_is_read_at_either_place_a_tree_holds_it(env, monkeypatch, place):
+    """A run's research can be older or newer than the tree it reads: wherever the tree holds the registry, it finds the
+    repository from below, reads the map there and writes it back there.  The place from before the registry moved is
+    spelled here in two parts, so a rewrite of the registry's path that left the store one place fails this test."""
+    from research.store import fixtures as F
+    from research.store.local import REPLICA_MAPS, find_repo
+
+    assert place in REPLICA_MAPS and len(set(REPLICA_MAPS)) == 2
+    monkeypatch.delenv("RESEARCH_REPO")
+    repo = env / "repo"
+    (repo / place).parent.mkdir(parents=True, exist_ok=True)
+    (repo / place).write_text(json.dumps({"art:" + "a" * 64: "pkg/data.json"}))
+    (repo / "pkg").mkdir()
+    assert find_repo(repo / "pkg") == repo
+    assert F.replica_map_file(repo) == repo / place and F.load_map(repo) == {"art:" + "a" * 64: "pkg/data.json"}
+    assert LocalStore(repo=repo).replica_map() == {"art:" + "a" * 64: "pkg/data.json"}
+
+
 def test_repo_replica_map_verified_then_fallback(env, fs_remote, tmp_path, capsys):
     repo = env / "repo"
     fixture = repo / "fixtures" / "golden" / "rec.json"
@@ -494,7 +513,7 @@ def test_repo_replica_map_verified_then_fallback(env, fs_remote, tmp_path, capsy
     tart = producer.put_artifact("fixture/v1", {"name": "tree"}, tree=tdir)
     producer.push(art)
     producer.push(tart)
-    (repo / "fixtures" / "artifacts.json").write_text(json.dumps({art: "fixtures/golden/rec.json", tart: "fixtures/tree"}, indent=1))
+    (repo / "artifacts.json").write_text(json.dumps({art: "fixtures/golden/rec.json", tart: "fixtures/tree"}, indent=1))
 
     consumer = LocalStore()   # fresh store; manifests come from the remote, bytes from the repo
     assert consumer.replica_map() == {art: "fixtures/golden/rec.json", tart: "fixtures/tree"}
@@ -533,7 +552,7 @@ def test_where_with_a_broken_vault_still_reports_local_and_repo(env, tmp_path, m
     fixture.write_text('{"pin": 1}')
     st = LocalStore()
     art = st.put_artifact("fixture/v1", {}, file=fixture)
-    (repo / "fixtures" / "artifacts.json").write_text(json.dumps({art: "fixtures/PIN.json"}))
+    (repo / "artifacts.json").write_text(json.dumps({art: "fixtures/PIN.json"}))
     where = {w["location"]: w for w in LocalStore().where(art)}
     assert where["local"]["present"] and where["repo"]["present"] and where["repo"]["path"] == "fixtures/PIN.json"
     assert where["remote"]["configured"] is True and where["remote"]["present"] is None and "SB_TEST_KEY" in where["remote"]["error"]
@@ -683,7 +702,7 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
     seen: list[tuple[str, str]] = []
 
     class H(http.server.BaseHTTPRequestHandler):
-        def log_message(self, *a):  # noqa: D102
+        def log_message(self, *a):
             pass
 
         def _key(self):
@@ -804,7 +823,7 @@ class FakeS3:
             return state.etags.get(key) or hashlib.md5(state.objects[key]).hexdigest()
 
         class H(http.server.BaseHTTPRequestHandler):
-            def log_message(self, *a):  # noqa: D102
+            def log_message(self, *a):
                 pass
 
             def _key(self):
@@ -973,7 +992,7 @@ class FakeS3:
 
 @pytest.fixture
 def fake_s3(env, monkeypatch):
-    """A `FakeS3` wired in as the store's remote through store.toml (credentials from env vars, as in production)."""
+    """A `FakeS3` wired in as the store's remote through store.toml (credentials from env vars, as when deployed)."""
     made: list[FakeS3] = []
 
     def make(**kw) -> FakeS3:
@@ -1127,7 +1146,7 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
     shutil.copyfile(big, tree / "big.bin")
     shutil.copyfile(small, tree / "small.bin")
     art = st.put_artifact("run-files/v1", {}, tree=tree)
-    m = st.get_manifest(art)
+    st.get_manifest(art)
     big_sha = hashlib.sha256(big.read_bytes()).hexdigest()
     key = f"objects/sha256/{big_sha}"
     rep = st.push(art, jobs=4)
@@ -1244,9 +1263,9 @@ def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, caps
     s.reject_conditional = 501
     art2 = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t2", 3, seed=5))
     assert main(["push", art2, art]) == 0
-    cap = capsys.readouterr()
-    assert cap.out.count("PRESERVED") == 2 and "2/2 preserved" in cap.out
-    assert cap.err.count("note: NotImplemented (501)") == 1, "the fallback is said once per batch"
+    said = capsys.readouterr()
+    assert said.out.count("PRESERVED") == 2 and "2/2 preserved" in said.out
+    assert said.err.count("note: NotImplemented (501)") == 1, "the fallback is said once per batch"
 
 
 def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):

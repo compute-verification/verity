@@ -1,11 +1,12 @@
 """A workload's bytes are a fixture in the evidence store (`config.workload_file`): every one is listed by its directory's SHA256SUMS
-and registered in fixtures/artifacts.json, an absent one is fetched by its art id, a changed one is refused, an unlisted file passes
+and registered in artifacts.json, an absent one is fetched by its art id, a changed one is refused, an unlisted file passes
 through, and `verity-vllm workload-file` makes them present for the shell scripts."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -31,22 +32,22 @@ def _fetch_from(data: dict[str, bytes], calls: list):
 
 
 def registered_and_listed(d: Path) -> tuple[set[str], set[str]]:
-    """The workloads of the directory ``d`` that fixtures/artifacts.json registers, and those its SHA256SUMS lists."""
-    reg = json.loads((C.REPO / "fixtures" / "artifacts.json").read_text())
+    """The workloads of the directory ``d`` that artifacts.json registers, and those its SHA256SUMS lists."""
+    reg = json.loads((C.REPO / "artifacts.json").read_text())
     rel = os.path.relpath(d, C.REPO)
     registered = {v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and os.path.dirname(v) == rel}
     return registered, {os.path.join(rel, n) for n in C.stored_workloads(d)}
 
 
 def test_every_workload_is_a_fixture_its_directory_lists_and_the_registry_holds():
-    """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (fixtures/artifacts.json), never its bytes
+    """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (artifacts.json), never its bytes
     (tests/test_repository.py holds the registered paths gitignored)."""
     registered, listed = registered_and_listed(C.WORKLOADS)
-    assert registered == listed, (f"in fixtures/artifacts.json, not in a SHA256SUMS: {sorted(registered - listed)}; "
+    assert registered == listed, (f"in artifacts.json, not in a SHA256SUMS: {sorted(registered - listed)}; "
                                   f"in a SHA256SUMS, not registered: {sorted(listed - registered)}")
     loose = sorted(p.name for p in C.WORKLOADS.glob("*.json") if p.name not in C.stored_workloads())
     assert not loose, (f"{loose}: workloads no SHA256SUMS lists. A workload is a fixture: `research data put --kind fixture/v1 --file "
-                       "adapters/vllm/workloads/NAME --preserve`, its id and path in fixtures/artifacts.json, the path in .gitignore, "
+                       "adapters/vllm/workloads/NAME --preserve`, its id and path in artifacts.json, the path in .gitignore, "
                        "and `sha256sum NAME >> SHA256SUMS` in adapters/vllm/workloads/")
 
 
@@ -86,7 +87,7 @@ def test_workload_files_lists_stored_and_present_ones_and_fetches_the_absent_in_
 def test_a_failed_fetch_names_the_workload_and_the_fix(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     (repo / "fixtures").mkdir(parents=True)
-    (repo / "fixtures" / "artifacts.json").write_text("{}")
+    (repo / "artifacts.json").write_text("{}")
     _stored(repo / "w", {"a.json": {}})
     monkeypatch.chdir(repo / "w")
     seen = []
@@ -128,3 +129,17 @@ def test_an_option_naming_a_changed_workload_is_a_usage_error(tmp_path, monkeypa
     with pytest.raises(SystemExit) as e:
         cli.main(["served-match", "--workload", str(tmp_path / "a.json")])
     assert e.value.code == 2 and "is not the" in capsys.readouterr().err
+
+
+def test_the_command_prints_a_row_and_a_path_one_a_line_and_with_no_workload_is_a_usage_error(tmp_path, monkeypatch, capsys):
+    data = _stored(tmp_path, {"a.json": {"x": 1}, "row-b.json": {"x": 2}})
+    monkeypatch.setattr(C, "_fetch", _fetch_from(data, []))
+    monkeypatch.setenv("VERITY_WORKLOADS", str(tmp_path))
+    assert cli.main(["workload-file", "row-b", str(tmp_path / "a.json")]) == 0
+    assert capsys.readouterr().out == f"{(tmp_path / 'row-b.json').resolve()}\n{tmp_path / 'a.json'}\n"
+    with pytest.raises(SystemExit) as e:
+        cli.main(["workload-file"])
+    assert e.value.code == 2 and capsys.readouterr().err.endswith("error: the following arguments are required: ROW_OR_PATH\n")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["workload-file", "--help"])
+    assert e.value.code == 0 and re.search(r"^\s*ROW_OR_PATH\s+row ids or workload files$", capsys.readouterr().out, re.M)

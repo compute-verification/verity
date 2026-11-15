@@ -1,4 +1,4 @@
-"""`verity.definitions.numerics.dense_rows`: the dense chain's kernels equal the reference (`verity.circuits.evaluation`) on seeded, edge and
+"""`verity_vllm.definitions.numerics.dense_rows`: the dense chain's kernels equal the reference (`verity.circuits.evaluation`) on seeded, edge and
 exhaustive bf16 words, claiming every finite instance; the k16 chain, by `cpp/k16_chain.cpp` and by `_chain` in numpy, equals
 `derived_rows.dot_bf16` word for word on the coordinates it claims and on those it hands back (subnormal and overflowing steps,
 non-finite operands), for any thread count; and `Gemm_v1`'s row kernel is the same on either path and against the reference."""
@@ -11,15 +11,14 @@ import sys
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import self_check
 from verity.circuits.defs import bind
-from verity.definitions.numerics import dense_rows as DR
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.numerics import rows
-from verity.definitions.registry import b1, dense
+from verity.circuits.evaluation import self_check
+from verity_vllm.definitions.numerics import dense_rows as DR
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics import rows
+from verity_vllm.definitions.registry import b1, dense
 
-ALL_BF16 = np.arange(1 << 16, dtype=np.uint16)
+ALL_BF16: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
 #: the 256 bf16 words with an all-ones exponent field (+-inf, NaN), 16 per instance of N=16 over `ALL_BF16`
 NONFINITE_INSTANCES = 16
 EDGE_F32 = np.array([0x00000000, 0x80000000, 0x00000001, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x80800000,
@@ -114,7 +113,7 @@ def test_mean_triton_follows_the_body_reduction_order(N):
 
 
 def test_mean_triton_declines_an_overflowing_sum():
-    x = np.full((2, 20), 0x7F7FFFFF, dtype=np.uint32)
+    x: np.ndarray = np.full((2, 20), 0x7F7FFFFF, dtype=np.uint32)
     x[1] = _f32(np.arange(20.0))
     sc = _check(bind(dense.MeanTriton, N=20), [x], declined=1)
     assert sc.n == 2
@@ -264,16 +263,16 @@ def test_the_words_are_the_same_at_any_thread_count(dot_id, monkeypatch, chain_p
     assert DR.threads() == 3
 
 
-@pytest.mark.parametrize(("env", "cap"), [("16", 16), ("many", DR.MAX_THREADS), (None, DR.MAX_THREADS)])
-def test_a_process_takes_the_cap_from_its_environment_at_import(env, cap):
+@pytest.mark.parametrize(("env", "limit"), [("16", 16), ("many", DR.MAX_THREADS), (None, DR.MAX_THREADS)])
+def test_a_process_takes_the_thread_limit_from_its_environment_at_import(env, limit):
     """No caller passes `VERITY_DENSE_THREADS`: a process that imports the module, as every stage process of a row does, is capped
     by its own environment under `use_threads`' rule."""
     environ = {k: v for k, v in os.environ.items() if k != "VERITY_DENSE_THREADS"}
     if env is not None:
         environ["VERITY_DENSE_THREADS"] = env
-    out = subprocess.run([sys.executable, "-c", "from verity.definitions.numerics import dense_rows as DR; print(DR._THREADS[0])"],
+    out = subprocess.run([sys.executable, "-c", "from verity_vllm.definitions.numerics import dense_rows as DR; print(DR._THREADS[0])"],
                          env=environ, capture_output=True, text=True, check=True).stdout
-    assert int(out) == cap
+    assert int(out) == limit
 
 
 def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch, chain_path):
@@ -304,7 +303,11 @@ def test_gemm_v2_row_kernel_takes_the_k16_chain_of_its_dot(monkeypatch, chain_pa
     slow = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     monkeypatch.setattr(DR, "FAST_GEMM_WORDS", 1)
     calls = []
-    monkeypatch.setattr(DR, "_claimed", lambda *a, _c=DR._claimed: calls.append(a[2]) or _c(*a))
+    def counted(*a, _c=DR._claimed):
+        calls.append(a[2])
+        return _c(*a)
+
+    monkeypatch.setattr(DR, "_claimed", counted)
     fast = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     assert calls and set(calls) == {DR.STEPS["HopperBF16WgmmaDot16_v1"]}
     assert np.array_equal(fast, slow)

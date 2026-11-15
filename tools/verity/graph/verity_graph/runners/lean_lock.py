@@ -37,6 +37,11 @@ def regenerate(pkg: str) -> str:
     return f"python3 tools/verity/lean/check.py --build --update {pkg}"
 
 
+def programs() -> Path:
+    """The worker's cache of the audit's compiled Lean programs (`check.py --program-cache`), as `lean_audit.py` keeps it."""
+    return la.COMMON.cache_dir() / "lean-programs"
+
+
 def run(task: dict, work: Path) -> dict:
     tree, out = work / "tree", work / "audit"
     try:
@@ -75,7 +80,7 @@ def _audit(task: dict, work: Path, tree: Path, out: Path) -> dict:
     except EnvError as e:
         return {"status": "error", "detail": {"error": f"the lean env: {e}"}}
     rc = call([sys.executable, str(tree / "tools" / "verity" / "lean" / "check.py"), "--no-replay", "--no-runs",
-               "--repo", str(tree), "--out", str(out), str(tree / pkg)], work, tree,
+               "--program-cache", str(programs()), "--repo", str(tree), "--out", str(out), str(tree / pkg)], work, tree,
               {**os.environ, "LEAN_NUM_THREADS": str(task.get("resources", {}).get("cores", 1))})
     doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").is_file() else {}
     rep = next((r for r in doc.get("packages", []) if Path(r["package"]).resolve() == (tree / pkg).resolve()), None)

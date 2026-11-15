@@ -72,7 +72,7 @@ HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
 `r19-reference-v1`).  A recorded `check` sets `VERITY_REGRESSION=1` and runs the T0 tier less the checks that recompute from a
 row's Programs (`REBUILD = True`, marked `rebuild`: manifest_digest, step_segmentation and the #57 negative), which
-`tools/verity/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input files.toml names that does not resolve, or
+`tools/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input files.toml names that does not resolve, or
 an absent `expected/<row>.json`, FAILS: the only skips are a tier not asked for, a check that does not apply to the row, and a check
 retired on the row (`[rows.<row>.retired.<check>]`: `reason`, `since`, `needs`; `python -m tests.regression.decisions` lists them).
 Self-check (the current code against its own records):
@@ -97,6 +97,8 @@ from typing import NoReturn
 import pytest
 
 from . import checks, resolver, store_io
+from . import decisions as D
+from .checks import manifest_digest
 
 pytestmark = pytest.mark.regression
 
@@ -136,13 +138,13 @@ def _unresolved(why: str) -> NoReturn:
     if resolver.store_required():
         pytest.fail(f"{why}\n  ({resolver.STORE_REQUIRED_ENV}=1: an input that does not resolve fails; a check that cannot run on a row's "
                     "record is retired by `[rows.<row>.retired.<check>]` in fixtures.toml, with its reason)")
-    pytest.skip(why)
+    raise pytest.skip.Exception(why)
 
 
 def _skip_rebuild(what: str, candidate: str | None) -> None:
     if not resolver.rebuilds() and not candidate:
         pytest.skip(f"{what} recomputes from the row's Programs (CPU minutes to half an hour a row): it runs after each train on "
-                    f"main (`tools/verity/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
+                    f"main (`tools/check/post_train.py`), not in `check`; {resolver.REBUILD_ENV}=1 runs it here")
 
 
 def _skip_retired(row: resolver.Row, check_name: str, record_property) -> None:
@@ -216,10 +218,10 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     if not ENABLED:
         pytest.skip("set VERITY_REGRESSION=1 to run the reference regression")
     _skip_rebuild("the #57 negative", os.environ.get(resolver.CANDIDATE_ENV))
-    row = next((r for r in resolver.rows() if r.number == 57), None)
-    if row is None:
+    numbered_57 = [r for r in resolver.rows() if r.number == 57]
+    if not numbered_57:
         pytest.skip("#57 not in fixtures.toml")
-    from .checks import manifest_digest
+    row = numbered_57[0]
     _skip_retired(row, manifest_digest.NAME, record_property)
     try:
         reachable = row.programs_root() is not None or row.candidate_root() is not None
@@ -249,7 +251,6 @@ def test_decisions_are_listed_and_well_formed(record_property) -> None:
     `python -m tests.regression.decisions`; no store, no VERITY_REGRESSION needed): row, check, finding, status, since, what it
     sanctions (`expected`) and pins (`pins`), the reason.  Fails on a malformed decision (missing DECISION_FIELDS, unknown status)
     -- `sanction` would ignore it silently otherwise -- so the pending ones (`status = "pending_review"`) are always reviewable."""
-    from . import decisions as D
     rows_ = D.listing()
     text = D.render(rows_)
     print("\n" + text)

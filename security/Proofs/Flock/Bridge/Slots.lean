@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Sampling.InputSlot
 
 `partitions_slots`: the population in strata of sizes `ns` that hold its `n` units, slot `u` unit `u`'s lowered gates
 (`unitGates`), then the input class of `progOf C κ` (`InputSlot.withInputs`), each input gate a slot of its own,
-partition `progOf C κ` (`Partition.Partitions`), where every unit has a lowered gate and commits at most `unitClassMax`
+partition `progOf C κ` (`Partition.Partitions`), where every unit has a lowered gate and commits at most `sizeClassMax`
 values.
 
 * No gate is in two slots: two wires' lowered gates don't meet (`block_inj`), so neither do two units'
@@ -16,7 +16,7 @@ values.
   an input slot's.
 * Every gate but a constant is in a slot: an input gate is its own, and every other is a computed wire's lowered gate,
   so its unit's (`exists_unitGates`).
-* Every slot's commitment fits a size class (`unitClass_of_le`): a unit's by hypothesis, and an input slot's, one gate,
+* Every slot's commitment fits a size class (`sizeClass_of_le_max`): a unit's by hypothesis, and an input slot's, one gate,
   is at most `1`.
 -/
 
@@ -28,16 +28,16 @@ open FlockSoundness.Audit Claims.Sampling
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
-/-- **A commitment of at most `unitClassMax` values has a size class**, which holds it. -/
-theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitClassMax) :
-    ∃ w, unitClass Cp u = some w ∧ committed Cp u ≤ w := by
-  have hlog : Nat.log2 (unitClassMax / 16) = 14 := by
-    rw [show unitClassMax / 16 = 2 ^ 14 from rfl, Nat.log2_two_pow]
-  have hmem : unitClassMax ∈ sizeClasses := by
+/-- **A commitment of at most `sizeClassMax` values has a size class**, which holds it. -/
+theorem sizeClass_of_le_max {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ sizeClassMax) :
+    ∃ w, sizeClass Cp u = some w ∧ committed Cp u ≤ w := by
+  have hlog : Nat.log2 (sizeClassMax / 16) = 14 := by
+    rw [show sizeClassMax / 16 = 2 ^ 14 from rfl, Nat.log2_two_pow]
+  have hmem : sizeClassMax ∈ sizeClasses := by
     rw [sizeClasses, hlog]
     exact List.mem_map.2 ⟨14, by simp, rfl⟩
   have hs : (sizeClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
-    List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
+    List.find?_isSome.2 ⟨sizeClassMax, hmem, decide_eq_true h⟩
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hs
   have hd := List.find?_some hw
   exact ⟨w, hw, of_decide_eq_true hd⟩
@@ -112,9 +112,9 @@ theorem blocks_slots {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool
   simp [Partition.blocks, List.flatten_splitLengths ((List.finRange n).map (unitGates P)) ns (by simpa using hns)]
 
 /-- **The population's slots, then the input class, partition the lowered program**, where every unit has a lowered
-gate and commits at most `unitClassMax` values. -/
+gate and commits at most `sizeClassMax` values. -/
 theorem partitions_slots {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) {ns : List ℕ} (hns : n ≤ ns.sum)
-    (hne : ∀ u, unitGates P u ≠ []) (hw : ∀ u, committed (progOf C κ) (unitGates P u) ≤ unitClassMax) :
+    (hne : ∀ u, unitGates P u ≠ []) (hw : ∀ u, committed (progOf C κ) (unitGates P u) ≤ sizeClassMax) :
     (InputSlot.withInputs ⟨[ns.splitLengths ((List.finRange n).map (unitGates P))]⟩ (progOf C κ)).Partitions
       (progOf C κ) := by
   have hb := blocks_slots P κ hns
@@ -152,11 +152,11 @@ theorem partitions_slots {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option 
       exact List.cons_ne_nil _ _
   · rw [hb]
     intro b hb'
-    apply unitClass_of_le
+    apply sizeClass_of_le_max
     rcases List.mem_append.1 hb' with h | h
     · obtain ⟨u, -, rfl⟩ := List.mem_map.1 h
       exact hw u
     · obtain ⟨g, -, rfl⟩ := List.mem_map.1 h
-      exact (List.length_filter_le _ _).trans (by simp [unitClassMax])
+      exact (List.length_filter_le _ _).trans (by simp [sizeClassMax])
 
 end Flock.Bridge

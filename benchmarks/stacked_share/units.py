@@ -1,4 +1,4 @@
-"""The units a served Program spends under property/v1 (`verity.definitions.circuits.stacking`), by callee and class: the honest budget
+"""The units a served Program spends under property/v1 (`verity.circuits.stacking`), by callee and class: the honest budget
 `share.py` multiplies by a served rate.
 
 `units(fn)` runs property/v1's pass over the body of `fn` (a Program's root, or a bound Definition) and sums each node's tally by
@@ -34,8 +34,8 @@ from verity.circuits.defs import (
     bind,
 )
 from verity.circuits.program import is_input
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census, family, step_ends
+from verity.circuits import stacking as P
+from verity.circuits.census import census, family, step_ends
 
 
 def charged(t: P.Tally) -> tuple[Counter, Counter]:
@@ -197,7 +197,7 @@ def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], a
 def load(path: Path) -> Any:
     """A Build's descriptor (``.json`` or ``.json.gz``) decoded through vLLM's registry."""
     from verity.circuits.codec import decode_program
-    from verity.definitions.registry.catalog import load as registry
+    from verity_vllm.definitions.registry.catalog import load as registry
 
     reg, errors = registry()
     for e in errors:

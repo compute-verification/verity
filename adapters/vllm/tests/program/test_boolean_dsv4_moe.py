@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_dsv4_moe`: DeepSeek-V4's routers and clamped SwiGLU on bits agree with their word
+"""`verity_vllm.definitions.registry.boolean_dsv4_moe`: DeepSeek-V4's routers and clamped SwiGLU on bits agree with their word
 Definitions (`trace.word_of`): MUFU.LG2 on all 2^23 mantissas (the SHA-256 of the words measured on the RTX PRO 6000) and on
 random words of every exponent and sign; ex2.approx, the hash weight and the sqrtsoftplus score on special, edge and random
 words; the clamped SwiGLU on every gate word and every up word against the clamp's edges, and on random pairs; the hash router
@@ -14,7 +14,6 @@ import json
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits import evaluation as E
@@ -23,9 +22,9 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_dsv4_moe as BD
-from verity.definitions.registry import dsv4_moe as D
+from verity.circuits.ops.boolean import versions as SW
+from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
+from verity_vllm.definitions.registry import dsv4_moe as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -125,7 +124,7 @@ def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
     only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
     h = hashlib.sha256()
     for lo in range(0, 1 << 23, 1 << 19):
-        m = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
+        m: np.ndarray = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
         y = np.asarray(BS.evaluate_words(bind(BD.MufuLg2Mantissa), m | np.uint32(0x3F800000))).astype("<u4").reshape(-1)
         assert np.array_equal((y >> 23 & 0xFF) == 0, m == 0)
         h.update(y.tobytes())
@@ -155,7 +154,7 @@ def test_the_clamped_swiglu_on_its_edges_and_random_pairs() -> None:
 @pytest.mark.slow
 def test_the_clamped_swiglu_on_every_gate_and_every_up_word() -> None:
     """Every gate word against four of the clamp's edges and every up word against one (about 17 s)."""
-    every = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+    every: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
     rng = np.random.default_rng(0xC1A)
     g = np.concatenate([np.repeat(every, 4), np.tile(CLAMP_EDGES, 1 << 14)[:1 << 16], rng.integers(0, 1 << 16, 4000).astype(np.uint16)])
     u = np.concatenate([rng.choice(CLAMP_EDGES, 1 << 18), every, rng.integers(0, 1 << 16, 4000).astype(np.uint16)])

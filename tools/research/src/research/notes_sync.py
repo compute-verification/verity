@@ -10,6 +10,24 @@ exit is 3 and the conflicted files are named.  Before anything is pushed, the ou
 material (`KEY_PATTERNS`, and the value of any secret-named environment variable); a hit refuses the push (exit 4), naming the
 file.  With no remote configured the commit is local and the report says so.
 
+One sync of a clone runs at a time, so several agents can share a clone: a sync holds the clone's lock (`_lock`, a flock on
+`<git dir>/notes-sync.lock`) from before its commit to after its push, and another sync of the clone waits for it, at most
+LOCK_WAIT_S, saying on stderr whom it waits for (the holder's pid, machine and agent); past that it commits nothing and exits
+1.  Before it commits, a sync puts right what an earlier git left in the clone (`settle`), each with one `SYNC-WARN` line: a
+rebase or merge in progress that no git process is running is ended, and a HEAD left detached with nothing in progress and the
+branch at or behind it gets the branch checked out where it is.  A HEAD detached anywhere else is refused (exit 2).  Ending a
+rebase, a found one or the sync's own, never loses what was written under it: `git rebase --abort` resets every tracked file,
+so the files changed in the working tree are saved first and put back after (`end_operation`), and the sync's own rebase is
+run again when what stopped it was such a file.  What cannot be put back (the file changed on both sides since, a conflicted
+file someone wrote into, a file written where a found rebase had taken one out of the tree, a commit made on its detached
+HEAD) stays on a local branch `rescue-<UTC time>`, and the sync fails naming it.  Other git commands in a clone (the watcher's
+`snapshot`, the standby's `pull`, the archive) do not take the lock.
+
+A commit made here is the clone's own (`identity_env`: `sync`'s and its rebase's, the archive's, `snapshot`'s): where the
+configuration git reads in the clone names an author and a committer, git is not handed the calling shell's GIT_AUTHOR_NAME,
+GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL, so a name a script exported never reaches the notes.  A clone
+that names none commits as the variables say.  A commit the rebase replays keeps the author it was made with.
+
 A lane note (`lanes/**/*.md`) the sync would add or change stays out of the commit when its filename stamp `YYYYMMDDTHHMMZ` (a
 path new since HEAD) or its front matter's `created:` (new or changed since HEAD) is more than 5 minutes ahead of the sync's
 clock: one `SYNC-REFUSED <path>: ...` line each, with the value `date -u` gives now, the rest synced, exit 5 when nothing else
@@ -45,8 +63,13 @@ token>.insteadOf https://github.com/` matches only the plain URL, so it no longe
 notes repo refuses; the token itself is never in a URL, an argument or a message.  A Cursor agent's token is the agents' GitHub
 broker's, asked for with its Cursor identity whatever the variable held, so a cloud VM needs no secret and one it still
 injects is not used.  Where the broker gives none (no Cursor identity: a laptop, the control pod), the token is the variable as it
-was set, and with neither nothing changes.  When GitHub refuses the variable's token (401 or 403), `sync`, `pull` and the clone
-say so in one line and go on with the broker's where it gives one (`refused_given`).  With a token, a notes command (and machine
+was set, and with neither nothing changes.  A Cursor agent whose mint gives none (Cursor's identity service answers a burst of
+token requests with HTTP 429 for a few seconds: asked again once, MINT_WAIT_S later) sends nothing (`NoToken`), whatever the
+variable holds (`unminted`: a VM started before its injected token was removed still holds it, expired): its own
+credentials are cursor[bot]'s, which the notes repository refuses.  When GitHub refuses the variable's token (401 or 403),
+`sync`, `pull` and the clone say so in one line and go on with the broker's where it gives one (`refused_given`); when it
+refuses the broker's, once more with one minted afresh MINT_WAIT_S later.  A failure names the part that failed: the mint, the
+helper (the token it passed was refused) or the rewrite (`token_hint`, `rewrite`).  With a token, a notes command (and machine
 resolution, which reads `<notes>/machines.d`) on a machine without the notes clone clones `NOTES_URL` there first
 (`ensure_clone`).
 """
@@ -54,11 +77,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import json
 import math
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -68,12 +93,17 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
+from . import settings
+
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
 SOURCE_ENV, EXPIRES_ENV = "RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"
 #: the agents' GitHub broker: a Cursor agent's identity buys an hour's token for the notes repository
 GITHUB_BROKER = "https://website-docs-sage.vercel.app/api/agent-github/token"
 REFRESH_S, BROKER_RETRY_S = 300, 60
+#: how long to wait before minting once more: after an HTTP 429 (Cursor's identity service refuses a burst of token requests for
+#: a few seconds), and after GitHub refused a token the broker minted
+MINT_WAIT_S = 3.0
 NOTES_URL = "https://github.com/compute-verification/research-notes.git"
 #: a clone made before the notes moved into the organization still names the old address; the token is the organization's
 MOVED = {"danielreuter/research-notes": "compute-verification/research-notes"}
@@ -98,6 +128,14 @@ NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
 EVIDENCE_PATH = re.compile(r"^(?:renders/|campaigns/[^/]+/assets/|lanes/[^/]+/evidence/)")
 #: an index.lock this old, with no git process in the repository, was left by a git that died mid-write
 STALE_LOCK_S = 600
+#: the clone's sync lock, in its git directory; how long a sync waits for another sync of the clone, and how often it looks again
+LOCK_FILE, LOCK_WAIT_S, LOCK_POLL_S = "notes-sync.lock", 120.0, 0.25
+#: how long a sync that finds a rebase or merge in progress, or HEAD detached, waits for a git process at work in the clone to end
+GIT_WAIT_S = 10.0
+#: a local branch that keeps what a sync could not put back; never pushed, and never taken for the notes branch
+RESCUE = "rescue-"
+#: `git status --porcelain` codes of a path with an unresolved conflict
+UNMERGED = ("DD", "AU", "UD", "UA", "DU", "AA", "UU")
 
 
 def is_evidence(path: str) -> bool:
@@ -117,12 +155,36 @@ CITE_HINTS = {"run": "a run is in the store once its attempt is on the remote: `
               "art": "`research data push <art>` where it was put"}
 
 
-def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
-    """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters.
+#: what names a commit's author and committer from a shell: git reads these before the repository's configuration
+IDENTITY_ENV = ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL")
+
+
+def identity_env(root: Path) -> dict[str, str] | None:
+    """The environment git commits in under `root`: the caller's less IDENTITY_ENV where the configuration git reads there
+    (the clone's, the user's, the machine's) names an author and a committer, each with an address, so a commit is theirs
+    whatever a shell exported; else None, the caller's as it is: a clone that names none commits as the variables say, and
+    without them as git guesses or refuses.  GIT_AUTHOR_DATE and GIT_COMMITTER_DATE stay."""
+    env = {k: v for k, v in os.environ.items() if k not in IDENTITY_ENV}
+    if len(env) == len(os.environ):
+        return None
+    r = subprocess.run(["git", "-C", str(root), "config", "--get-regexp", r"^(user|author|committer)\.(name|email)$"],
+                       capture_output=True, text=True, errors="replace", timeout=60, env=env)
+    named = {f[0] for f in (line.split(None, 1) for line in r.stdout.splitlines()) if len(f) == 2}
+    whole = all(f"{who}.{k}" in named or f"user.{k}" in named for who in ("author", "committer") for k in ("name", "email"))
+    return env if whole else None
+
+
+def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None, index: Path | None = None) -> subprocess.CompletedProcess:
+    """git in `root`, as the clone's own author and committer (`identity_env`); output that is not UTF-8 (a diff of a binary
+    or Latin-1 file) is decoded with replacement characters.  With `index`, git reads and writes that index file instead of
+    the clone's.
     Commits are unsigned: the notes repo needs no signatures, and an agent VM's signing key is often missing from its agent,
     which would make every commit and rebase here fail."""
+    env = identity_env(root)
+    if index is not None:
+        env = {**(os.environ if env is None else env), "GIT_INDEX_FILE": str(index)}
     return subprocess.run(["git", "-C", str(root), "-c", "commit.gpgsign=false", *args], capture_output=True, text=True,
-                          errors="replace", timeout=timeout, input=input)
+                          errors="replace", timeout=timeout, input=input, env=env)
 
 
 def _out(root: Path, *args: str) -> str | None:
@@ -131,50 +193,100 @@ def _out(root: Path, *args: str) -> str | None:
 
 
 clock = time.time
+sleep = time.sleep
 NO_IDENTITY = "no Cursor identity here"
 _BROKER_REFUSED: list[tuple[float, str]] = []       # (when, why) the broker last gave no token; empty once it gives one
 _SET_ASIDE: list[str] = []                          # non-empty once the broker's token replaced one the variable was given
+_MINTED_AGAIN: list[bool] = []                      # [True] once `_authed` retried a refused broker token with a fresh one
+_MINTED_HERE: list[bool] = []                       # [True] once this process minted a token, not only inherited the broker's
+
+
+def has_identity() -> bool:
+    """Whether this machine has a Cursor agent's identity socket, which buys the broker's notes token: a cloud VM, not a laptop."""
+    return os.path.exists(settings.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock"))
 
 
 def _held() -> tuple[str | None, bool, float]:
     """(the token in the environment, whether `notes_token` put it there from the broker, when that one expires)."""
-    tok, source, expires = (os.environ.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
+    tok, source, expires = (settings.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
     return tok or None, source == "broker", float(expires or 0) if source == "broker" else 0.0
 
 
-def notes_token(now: float | None = None) -> str | None:
+def _mint() -> tuple[str, float]:
+    """(token, expiry) from the agents' GitHub broker, by this agent's Cursor identity; raises what the identity service or the
+    broker answered."""
+    from .slack import _NoRedirect, oidc_token
+    req = urllib.request.Request(GITHUB_BROKER, data=json.dumps({"scope": "notes"}).encode(), method="POST",
+                                 headers={"Authorization": f"Bearer {oidc_token(GITHUB_BROKER)}", "Content-Type": "application/json"})
+    with urllib.request.build_opener(_NoRedirect).open(req, timeout=25) as r:
+        d = json.loads(r.read(32768))
+    new = d["token"]
+    expires = dt.datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00")).timestamp()
+    if not isinstance(new, str) or not new or any(c.isspace() for c in new):
+        raise ValueError("malformed token")
+    return new, expires
+
+
+def _status(e: Exception) -> int | None:
+    """The HTTP status a failed mint was answered with: the broker's, or the one the Cursor identity service's error names."""
+    code = getattr(e, "code", None)
+    if isinstance(code, int):
+        return code
+    m = re.search(r"\(HTTP (\d{3})\)", str(e)) if type(e).__name__ == "SlackError" else None
+    return int(m[1]) if m else None
+
+
+def _mint_why(e: Exception) -> str:
+    code = _status(e)
+    if type(e).__name__ == "SlackError":
+        if not has_identity():
+            return NO_IDENTITY
+        return f"{e}" + (": this VM asked Cursor for too many identity tokens at once, which clears in seconds" if code == 429 else "")
+    if code:
+        return f"the broker answered HTTP {code}"
+    reason = getattr(e, "reason", None)
+    return f"the broker gave no usable answer ({type(e).__name__}{f': {reason}'[:100] if reason else ''})"
+
+
+def notes_token(now: float | None = None, fresh: bool = False) -> str | None:
     """A token for the notes repository.  On a Cursor agent, an hour's token from the agents' GitHub broker (`GITHUB_BROKER`, scope
     `notes`), asked for with the agent's Cursor identity whatever RESEARCH_NOTES_TOKEN held: this puts it in the environment with
     its source and expiry, so git's credential helper and child processes read it, and mints again REFRESH_S before it expires.
+    An HTTP 429, from Cursor's identity service or the broker, is asked again once after MINT_WAIT_S (`sleep`).
     Where the broker gives none (`broker_why`: no Cursor identity, as on a laptop or the control pod; a refusal; an outage),
-    RESEARCH_NOTES_TOKEN as it was set, else None; a broker that gave none is asked again only after BROKER_RETRY_S."""
+    `unminted`; a broker that gave none is asked again only after BROKER_RETRY_S.  `fresh` mints now, whatever is held or was
+    refused."""
     now = clock() if now is None else now
     tok, minted, expires = _held()
-    if tok and minted and expires > now + REFRESH_S:
+    if not fresh and tok and minted and expires > now + REFRESH_S:
         return tok
-    if _BROKER_REFUSED and now < _BROKER_REFUSED[-1][0] + BROKER_RETRY_S:
-        return tok
-    try:
-        from .slack import _NoRedirect, oidc_token
-        req = urllib.request.Request(GITHUB_BROKER, data=json.dumps({"scope": "notes"}).encode(), method="POST",
-                                     headers={"Authorization": f"Bearer {oidc_token(GITHUB_BROKER)}",
-                                              "Content-Type": "application/json"})
-        with urllib.request.build_opener(_NoRedirect).open(req, timeout=25) as r:
-            d = json.loads(r.read(32768))
-        new = d["token"]
-        expires = dt.datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00")).timestamp()
-        if not isinstance(new, str) or not new or any(c.isspace() for c in new):
-            raise ValueError("malformed token")
-    except Exception as e:  # noqa: BLE001  (no Cursor identity, a refusal or an outage: the caller goes on with what it was given)
-        code = getattr(e, "code", None)
-        _BROKER_REFUSED[:] = [(now, f"the broker answered HTTP {code}" if isinstance(code, int) else
-                               NO_IDENTITY if type(e).__name__ == "SlackError" else f"the broker gave no usable answer ({type(e).__name__})")]
-        return tok
+    if not fresh and _BROKER_REFUSED and now < _BROKER_REFUSED[-1][0] + BROKER_RETRY_S:
+        return unminted(tok, minted, expires, now)
+    for again in (False, True):
+        try:
+            new, expires = _mint()
+            break
+        except Exception as e:  # noqa: BLE001  (no Cursor identity, a refusal or an outage: the caller goes on with what it was given)
+            if not again and _status(e) == 429:
+                sleep(MINT_WAIT_S)
+                continue
+            _BROKER_REFUSED[:] = [(now, _mint_why(e))]
+            return unminted(tok, minted, expires, now)
     if tok and not minted:
         _SET_ASIDE.append(TOKEN_ENV)
     _BROKER_REFUSED.clear()
+    _MINTED_HERE[:] = [True]
     os.environ.update({TOKEN_ENV: new, SOURCE_ENV: "broker", EXPIRES_ENV: f"{expires:.0f}"})
     return new
+
+
+def unminted(tok: str | None, minted: bool, expires: float, now: float) -> str | None:
+    """The token `notes_token` gives when the broker gives none: on a Cursor agent (`has_identity`) the broker's while it has
+    not expired, else None, never RESEARCH_NOTES_TOKEN as the VM injected it (a VM started before that secret was removed still
+    holds it, expired, and GitHub's refusal of it would hide why the mint failed); elsewhere the variable as it was set."""
+    if not has_identity():
+        return tok
+    return tok if minted and expires > now else None
 
 
 def broker_why() -> str | None:
@@ -191,8 +303,9 @@ def token_source() -> tuple[str | None, str]:
         return "broker", "the GitHub broker's token, by this agent's Cursor identity" + (
             f"; {TOKEN_ENV} is set here too and is not used: a Cursor agent no longer needs it" if _SET_ASIDE else "")
     why = broker_why() or "the broker was not asked"
+    unused = f"{TOKEN_ENV} is set but not used: a Cursor agent sends only the broker's" if _held()[0] else f"{TOKEN_ENV} is not set"
     return ("env", f"{TOKEN_ENV}, since the GitHub broker gave no token ({why})") if tok else \
-        (None, f"git's own: there is no notes token ({why}, and {TOKEN_ENV} is not set)")
+        (None, f"git's own: there is no notes token ({why}, and {unused})")
 
 
 #: what git says when GitHub answers a credential with 401 or 403
@@ -215,13 +328,30 @@ def refused_given() -> bool:
     return again
 
 
+class NoToken(OSError):
+    """A Cursor agent's mint gave no notes token, so there is nothing to reach the notes with: git's own credentials on such a VM
+    are cursor[bot]'s, which the notes repository refuses.  The text says why the mint failed and what git would have used."""
+
+
 def _authed(target: Callable[[], tuple[list[str], str]], git: Callable[[list[str], str], subprocess.CompletedProcess]
             ) -> subprocess.CompletedProcess:
     """`git(options, repository)` for what `target` gives now (`remote_target`, `token_url`); when GitHub refuses
-    RESEARCH_NOTES_TOKEN as given (`TOKEN_REFUSED`, `refused_given`), once more with the broker's token."""
-    r = git(*target())
-    if r.returncode and any(k in r.stderr for k in TOKEN_REFUSED) and refused_given():
+    RESEARCH_NOTES_TOKEN as given (`TOKEN_REFUSED`, `refused_given`), once more with the broker's token; when it refuses the
+    broker's, once more with one minted afresh after MINT_WAIT_S.  `NoToken` comes back as a failed git, its text the stderr."""
+    _MINTED_AGAIN.clear()
+    try:
         r = git(*target())
+        if r.returncode and any(k in r.stderr for k in TOKEN_REFUSED):
+            refused, minted, _ = _held()
+            if minted:
+                sleep(MINT_WAIT_S)
+                if (again := notes_token(fresh=True)) and again != refused:
+                    _MINTED_AGAIN.append(True)
+                    r = git(*target())
+            elif refused_given():
+                r = git(*target())
+    except NoToken as e:
+        return subprocess.CompletedProcess([], 128, "", str(e))
     return r
 
 
@@ -237,14 +367,50 @@ def token_url(url: str) -> tuple[list[str], str] | None:
 
 def remote_target(root: Path, remote: str = "origin") -> tuple[list[str], str]:
     """(git options, what to name as the repository) for a fetch, pull or push of the notes clone's `remote`: `token_url` of its
-    URL as configured (`remote get-url` prints it rewritten by insteadOf), else ([], remote) as before."""
-    url = _out(root, "config", "--get", f"remote.{remote}.url")
-    return (token_url(url) if url else None) or ([], remote)
+    URL as configured (`remote get-url` prints it rewritten by insteadOf), else ([], remote) as before.  `NoToken` instead of
+    ([], remote) for a github.com remote on a Cursor agent (`has_identity`) whose mint gave none."""
+    url = (_out(root, "config", "--get", f"remote.{remote}.url") or "").strip()
+    if target := token_url(url) if url else None:
+        return target
+    if url and GITHUB_URL_RE.match(url) and has_identity():
+        rewritten = rewrite(root, url)
+        raise NoToken(f"{MINT_FAILED} ({broker_why()}), so nothing was sent: this agent's own git credentials are cursor[bot]'s"
+                      + (f" ({rewritten})" if rewritten else "") + ", which the notes repository refuses; sync again in a minute, "
+                      "and `research doctor` checks the mint")
+    return [], remote
+
+
+MINT_FAILED = "mint: the GitHub broker gave no notes token"
+
+
+def rewrite(root: Path, url: str) -> str:
+    """Which `url.<base>.insteadOf` rule git applies to `url` in `root`, said with the user part of its base and of the prefix it
+    rewrites (a user, or a user and a token) masked; '' when none
+    does.  git takes the longest matching prefix, and of equally long ones the first in its configuration: on a cloud VM that
+    keeps one rule per token refresh, the oldest token.  Read past the agent guard's git, which strips credentials from what
+    `git config` prints and so would hide whether the base carries one."""
+    r = subprocess.run(["git", "-C", str(root), "config", "--get-regexp", r"^url\..*\.insteadof$"], capture_output=True, text=True,
+                       errors="replace", timeout=60, env={**os.environ, "VERITY_GIT_GUARD": "off"})
+    rules = [(key[len("url."):-len(".insteadof")], prefix) for key, _, prefix in (line.partition(" ") for line in r.stdout.splitlines())
+             if url.startswith(prefix)]
+    if not rules:
+        return ""
+    best = max(len(p) for _, p in rules)
+    alike = [(base, p) for base, p in rules if len(p) == best]
+    base, prefix = (re.sub(r"(^|//)[^/\s]*@", r"\1<credential>@", s) for s in alike[0])
+    return f"url.{base}.insteadOf rewrites {prefix}" + (
+        f"; {len(alike)} rules rewrite it alike, and git takes the first, the oldest" if len(alike) > 1 else "")
 
 
 RACE = ("non-fast-forward", "fetch first", "[rejected]", "failed to update ref", "stale info")
 REFUSED = ("Authentication failed", "could not read Username", "Permission denied", "denied to", "returned error: 401",
-           "returned error: 403", "Repository not found", "does not appear to be a git repository")
+           "returned error: 403", "Repository not found", "does not appear to be a git repository", MINT_FAILED)
+
+
+def git_said(stderr: str) -> str:
+    """git's stderr for a failure line: its last 300 characters, or whole when it is a failed mint's (`NoToken`), which begins
+    with what failed."""
+    return stderr.strip() if stderr.startswith(MINT_FAILED) else stderr.strip()[-300:]
 
 
 def refused(stderr: str) -> bool:
@@ -253,13 +419,30 @@ def refused(stderr: str) -> bool:
     return any(k in stderr for k in REFUSED)
 
 
-def token_hint(root: Path, remote: str = "origin") -> str:
-    """'' unless there is no notes token here and `remote` is github.com's; then why git failed and what to do, for the end of
-    a fetch or push failure (a laptop's own credentials need no token, so having none is no refusal by itself)."""
-    url = _out(root, "config", "--get", f"remote.{remote}.url") or ""
-    if not GITHUB_URL_RE.match(url.strip()) or notes_token():
+def token_hint(root: Path, remote: str = "origin", stderr: str = "") -> str:
+    """For the end of a fetch or push failure of a github.com `remote` (git's `stderr`), which part failed: the helper (GitHub
+    refused the broker's token as the credential helper passed it, and the fresh one `_authed` minted), the mint (GitHub refused
+    a broker's token this process only inherited, and no mint here replaced it), or, with no notes token
+    and no Cursor identity, the machine's own credentials (`rewrite`: the insteadOf rule that supplied them).  '' otherwise: a
+    refused RESEARCH_NOTES_TOKEN is said by `refused_given`, and a failed mint by `NoToken`'s text."""
+    url = (_out(root, "config", "--get", f"remote.{remote}.url") or "").strip()
+    if not GITHUB_URL_RE.match(url):
         return ""
-    return (f" -> no notes token here ({broker_why()}), so git used this machine's own credentials, which the notes repo refuses "
+    if notes_token():
+        if not (_held()[1] and any(k in stderr for k in TOKEN_REFUSED)):
+            return ""
+        if not _MINTED_HERE:
+            return (f" -> {MINT_FAILED} ({broker_why()}): GitHub refused the broker's token this process was given ({SOURCE_ENV}="
+                    "broker in its environment, minted elsewhere), and nothing minted one to replace it; sync again in a minute, and "
+                    "`research doctor` checks the mint")
+        return (" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper passed it"
+                + (f", and a fresh one minted {MINT_WAIT_S:g} s later too" if _MINTED_AGAIN else "")
+                + ": the agents' GitHub App may have lost research-notes from its repository access (`research doctor`)")
+    if has_identity():
+        return ""
+    rewritten = rewrite(root, url)
+    return (f" -> no notes token here ({broker_why()}), so git used this machine's own credentials"
+            + (f" ({rewritten})" if rewritten else "") + ", which the notes repo refuses "
             f"on a cloud VM: a Cursor agent's token comes from the GitHub broker (`research doctor` checks it), so sync again in "
             f"a minute; where there is no Cursor identity, set {TOKEN_ENV}")
 
@@ -349,7 +532,7 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def created_at(text: str) -> tuple[str, dt.datetime] | None:
@@ -360,9 +543,10 @@ def created_at(text: str) -> tuple[str, dt.datetime] | None:
         return None
     try:
         t = dt.datetime.fromisoformat(f"{m[2]}T{m[3]}{m[4] if m[4] and m[4].upper() != 'Z' else ''}")
-    except ValueError:
+    except ValueError as e:
+        print(f"notes sync: {m[0][:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
-    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.UTC)
 
 
 def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, str]:
@@ -381,9 +565,9 @@ def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, s
         found = []
         if old is None and (m := STAMP_RE.match(p.name)):
             try:
-                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc), "%Y%m%dT%H%MZ"))
-            except ValueError:
-                pass
+                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC), "%Y%m%dT%H%MZ"))
+            except ValueError as e:
+                print(f"notes sync: {path}'s stamp {m[1]} is not a time, so it is not checked ({e})", file=sys.stderr, flush=True)
         c, prev = created_at(text), created_at(old) if old is not None else None
         if c and (prev is None or prev[1] != c[1]):
             found.append(("created:", *c, "%Y-%m-%dT%H:%MZ"))
@@ -412,7 +596,7 @@ def header_issues(path: str, text: str, now: dt.datetime) -> tuple[list[str], li
         warn.append(f"lane: {m[1]} but the note is in lanes/{parts[1]}/" + (" (a handoff's lane is its recipient)" if MAIL_RE.search(parts[-1]) else ""))
     if c and (s := STAMP_RE.match(parts[-1])):
         try:
-            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc)
+            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC)
         except ValueError:
             off = dt.timedelta(0)
         if abs(off) > CREATED_STAMP_SLACK:
@@ -524,16 +708,16 @@ def outgoing_citations(root: Path, base: str | None) -> dict[str, list[str]]:
 
 
 def cite_check_on() -> bool:
-    return os.environ.get(CITE_ENV, "").strip().lower() not in ("0", "off", "no", "false")
+    return settings.get(CITE_ENV, "").strip().lower() not in ("0", "off", "no", "false")
 
 
 def missing_citations(cited: list[str], remote=None, workers: int = 8, wait_s: float = CITE_WAIT_S) -> tuple[set[str], str | None]:
     """(the ids among `cited` the store's remote does not have, why the answer is partial or None), `workers` lookups at a time
     for at most `wait_s` (daemon threads: a remote that hangs never holds up the exit).  (set(), None) with no usable remote: none
     configured, or its credentials absent here."""
-    from .store.labels_sync import remote_labels_for  # noqa: PLC0415
-    from .store.local import attempt_key  # noqa: PLC0415
-    from .store.remote import ConfigError, load_remote  # noqa: PLC0415
+    from .store.labels_sync import remote_labels_for
+    from .store.local import attempt_key
+    from .store.remote import ConfigError, load_remote
 
     if remote is None:
         try:
@@ -594,18 +778,9 @@ def citation_warnings(cites: dict[str, list[str]], remote=None) -> list[str]:
     return out
 
 
-def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
-    """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
-    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase until someone clears it by hand."""
-    gitdir = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
-    if not gitdir:
-        return False
-    lock = Path(gitdir) / "index.lock"
-    try:
-        if (now if now is not None else time.time()) - lock.stat().st_mtime < STALE_LOCK_S:
-            return False
-    except FileNotFoundError:
-        return False
+def git_running(root: Path, procs: Path = Path("/proc")) -> int | None:
+    """The pid of a git process at work in the repository (its working directory is `root` or under it); None when there is
+    none, and where there is no /proc to look in."""
     real = Path(root).resolve()
     for proc in procs.glob("[0-9]*"):
         try:
@@ -615,29 +790,317 @@ def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/
         except OSError:
             continue
         if cwd == real or real in cwd.parents:
+            return int(proc.name)
+    return None
+
+
+def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
+    """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
+    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase until someone clears it by hand."""
+    gitdir = _gitdir(root)
+    if gitdir is None:
+        return False
+    lock = gitdir / "index.lock"
+    try:
+        if (now if now is not None else time.time()) - lock.stat().st_mtime < STALE_LOCK_S:
             return False
+    except FileNotFoundError:
+        return False
+    if git_running(root, procs) is not None:
+        return False
     lock.unlink(missing_ok=True)
     return True
 
 
+def _gitdir(root: Path) -> Path | None:
+    out = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
+    return Path(out) if out else None
+
+
+def _branch(root: Path) -> str:
+    """The branch HEAD is on; '' when HEAD is detached."""
+    return (_out(root, "symbolic-ref", "-q", "--short", "HEAD") or "").strip()
+
+
+class Busy(Exception):
+    """Another sync held the clone's lock for the whole wait; the text names it."""
+
+
+def _who() -> str:
+    """This sync, as one that waits for it names it: its pid and machine, the agent that runs it (`remote.sender`), else the
+    lane or the user, and when it took the lock."""
+    from .remote import sender
+
+    who = sender() or settings.get("RESEARCH_LANE") or settings.get("USER") or "an unnamed caller"
+    return f"pid {os.getpid()} on {socket.gethostname()}, {who}, since {_utcnow():%H:%M:%SZ}"
+
+
+def _lock(gitdir: Path, wait_s: float) -> int:
+    """A descriptor holding the clone's sync lock, an exclusive flock on `<git dir>/notes-sync.lock`, after waiting at most
+    `wait_s` for another sync of the clone to let it go; `Busy` after that.  The kernel drops the lock when its holder exits,
+    however it exits, so a killed sync leaves nothing to clear, and git never inherits it.  The holder writes who it is into the
+    file (`_who`), and a sync that waits says once, on stderr, whom it waits for."""
+    fd = os.open(gitdir / LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o666)
+    start, said = time.monotonic(), False
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            holder = os.pread(fd, 400, 0).decode(errors="replace").strip()      # empty for the instant before it writes it
+            if time.monotonic() - start >= wait_s:
+                os.close(fd)
+                raise Busy(holder or "which did not say who it is") from None
+            if holder and not said:
+                print(f"notes sync: waiting up to {wait_s:g} s for another sync of this clone to end: {holder}", file=sys.stderr, flush=True)
+                said = True
+            time.sleep(LOCK_POLL_S)
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, _who().encode(), 0)
+    return fd
+
+
+def in_progress(gitdir: Path) -> str | None:
+    """"rebase" or "merge" when the repository is in the middle of one (its state is in the git directory), else None."""
+    if (gitdir / "rebase-merge").is_dir() or (gitdir / "rebase-apply" / "rebasing").exists():
+        return "rebase"
+    return "merge" if (gitdir / "MERGE_HEAD").exists() else None
+
+
+def notes_branch(root: Path, remote: str = "origin") -> str | None:
+    """The branch a clone whose HEAD is detached belongs on: the one the remote's HEAD names (`refs/remotes/<remote>/HEAD`, which
+    a clone sets), else the only local branch that is not a `rescue-` one; None when neither says."""
+    local = [b for b in (_out(root, "for-each-ref", "--format=%(refname:short)", "refs/heads") or "").split() if not b.startswith(RESCUE)]
+    named = (_out(root, "symbolic-ref", "-q", "--short", f"refs/remotes/{remote}/HEAD") or "").strip().removeprefix(f"{remote}/")
+    return named if named in local else local[0] if len(local) == 1 else None
+
+
+def _merged(path: Path) -> bytes | None:
+    """A file's bytes with the labels off its conflict markers, which differ with the command that wrote them; None when it is
+    not a file."""
+    return re.sub(rb"(?m)^(<{7}|\|{7}|>{7}) .*$", rb"\1", path.read_bytes()) if path.is_file() else None
+
+
+def _keep(root: Path, gitdir: Path, found: bool, orig: str = "") -> dict | None:
+    """What ending a rebase or merge would discard from the working tree, as a commit on HEAD (`commit`) made through an index of
+    its own, so the clone's index and files are not touched: every tracked file as the working tree has it.  `paths` are the
+    files changed since they were last staged, which is what someone wrote under the operation: each is put back after (`base`
+    is the tree they are a change to).  A file left in conflict is the stopped step's own, and git writes it again at the next
+    conflict; with `found` (an operation that may have sat stopped for long), `aside` are the conflicted files that are no
+    longer what git wrote there (`git checkout --merge` writes that again, into a directory of its own), which someone wrote
+    into since: the commit holds those as they are, and they are not put back.  So it is with `in_way`, the untracked files at
+    paths the commit a found rebase began from (`orig`) has: a rebase takes a file its branch added out of the tree until it
+    picks that commit again, a line appended meanwhile makes a new file there, and git will not abort over it.  None when there
+    is nothing to keep."""
+    entries = (_out(root, "status", "--porcelain=v1", "-z", f"--untracked-files={'all' if found and orig else 'no'}") or "").split("\0")
+    unmerged, paths, untracked, i = [], [], [], 0
+    while i < len(entries):
+        code, path = entries[i][:2], entries[i][3:]
+        i += 2 if code[:1] in ("R", "C") else 1
+        if path and (code in UNMERGED or code[1] != " "):
+            (unmerged if code in UNMERGED else untracked if code == "??" else paths).append(path)
+    in_way = sorted(set(untracked) & set((_out(root, "ls-tree", "-r", "-z", "--name-only", orig) or "").split("\0"))) if untracked else []
+    index, aside = gitdir / f"notes-sync.index.{os.getpid()}", []
+    try:
+        shutil.copyfile(gitdir / "index", index)
+        if found and unmerged:
+            with tempfile.TemporaryDirectory(prefix="notes-sync-") as tmp:
+                _run(root, "-c", "core.hooksPath=/dev/null", f"--work-tree={tmp}", "--literal-pathspecs", "checkout", "-q", "--merge",
+                     "--", *unmerged, index=index)
+                aside = [p for p in unmerged if (was := _merged(Path(tmp) / p)) is None or was != _merged(root / p)]
+        if not (paths or aside or in_way):
+            return None
+        if unmerged:
+            _run(root, "update-index", "--force-remove", "-z", "--stdin", input="\0".join(unmerged), index=index)
+        base = _run(root, "write-tree", index=index).stdout.strip()
+        _run(root, "add", "-u", index=index)
+        if there := [p for p in aside + in_way if (root / p).is_file()]:
+            _run(root, "--literal-pathspecs", "add", "-f", "--", *there, index=index)
+        tree = _run(root, "write-tree", index=index).stdout.strip()
+    finally:
+        for p in (index, index.with_name(f"{index.name}.lock")):
+            p.unlink(missing_ok=True)
+    made = _run(root, "commit-tree", tree, "-p", "HEAD", "-m", "notes sync: what the working tree held when a rebase or merge was ended")
+    if not (base and tree and made.returncode == 0):
+        raise RuntimeError(f"could not save the working tree before ending a rebase or merge; nothing was changed: {made.stderr.strip()[-200:]}")
+    return {"commit": made.stdout.strip(), "base": base, "paths": paths, "aside": aside, "in_way": in_way}
+
+
+def _rescue(root: Path, commit: str) -> str:
+    """A new local branch `rescue-<UTC time>` at `commit`; its name."""
+    stamp = f"{RESCUE}{_utcnow():%Y%m%dT%H%M%SZ}"
+    for name in (stamp, *(f"{stamp}-{n}" for n in range(2, 100))):
+        if _run(root, "branch", "-q", "--no-track", name, commit).returncode == 0:
+            return name
+    raise RuntimeError(f"could not make a branch {stamp} at {commit[:12]} to keep the working tree on; nothing was changed")
+
+
+def _patch(root: Path, old: str, new: str, *paths: str) -> bytes:
+    """The change from tree `old` to tree `new` (in `paths`, else everywhere) as a patch `git apply` takes."""
+    return subprocess.run(["git", "-C", str(root), "-c", "diff.noprefix=false", "--literal-pathspecs", "diff", "--binary", "--no-color",
+                           "--no-ext-diff", "--no-textconv", old, new, "--", *paths], capture_output=True, timeout=120).stdout
+
+
+def _apply(root: Path, patch: bytes) -> bool:
+    """Apply `patch` to the working tree, whole or not at all (git refuses a patch any hunk of which does not fit, and changes
+    nothing); True when the tree already holds what it adds, and when it is applied."""
+    if not patch.strip():
+        return True
+    git = ["git", "-C", str(root), "apply", "--whitespace=nowarn"]
+    if subprocess.run([*git, "--reverse", "--check"], input=patch, capture_output=True, timeout=120).returncode == 0:
+        return True
+    return subprocess.run(git, input=patch, capture_output=True, timeout=120).returncode == 0
+
+
+def _unstash(root: Path, stash: str) -> bool:
+    """Put back the uncommitted changes a rebase stashed before it began (its autostash); whether they are back.  The stash goes
+    into `git stash list` first, and stays there when it does not apply."""
+    if _run(root, "stash", "store", "-m", "notes sync: the autostash of a rebase that never ended", stash).returncode:
+        return False
+    if not _apply(root, _patch(root, f"{stash}^1", stash)):
+        return False
+    if (_out(root, "rev-parse", "-q", "--verify", "refs/stash") or "").strip() == stash:
+        _run(root, "stash", "drop", "-q")
+    return True
+
+
+def end_operation(root: Path, gitdir: Path, op: str, found: bool = False) -> dict:
+    """End the rebase or merge in progress in the clone (`git rebase --abort`, `git merge --abort`) and keep what that discards.
+    git's abort resets the tracked files, so lines someone wrote into one under the operation would be gone, held by no commit:
+    they are saved first (`_keep`, on a new `rescue-` branch) and put back after as a patch, and the branch is deleted once all
+    of it is back.  `found`: the operation was found in progress with no process running it, however long ago it stopped; then
+    a conflicted file someone wrote into since, a file written where a rebase had taken one out of the tree (removed from the
+    tree once the branch holds it, so the abort can run), and a commit made on a rebase's detached HEAD that the branch has no
+    equal of, stay on the rescue branch.  A rebase that died before it wrote where it came from (only its autostash is there, and HEAD
+    never moved) is cleared by removing its directory, its autostash put back (`_unstash`).
+    The report: `over` (nothing is in progress now), `put_back` (files), and `lost`: None when everything local is back in the
+    tree, else what is not and where it is kept, for the caller to fail with."""
+    state = next((gitdir / d for d in ("rebase-merge", "rebase-apply") if (gitdir / d).is_dir()), None) if op == "rebase" else None
+
+    def read(name: str) -> str:
+        return (state / name).read_text().strip() if state and (state / name).is_file() else ""
+
+    head, onto, orig, autostash = (_out(root, "rev-parse", "HEAD") or "").strip(), read("onto"), read("orig-head"), read("autostash")
+    picked = {f[1] for f in (line.split() for line in read("rewritten-list").splitlines()) if len(f) == 2}
+    out = {"over": True, "put_back": 0, "lost": None}
+    try:
+        kept = _keep(root, gitdir, found, orig)
+        rescue = _rescue(root, kept["commit"]) if kept else None
+    except (OSError, RuntimeError) as e:
+        return {**out, "over": False, "lost": f"the {op} in progress was not ended ({e})"}
+    in_way = kept["in_way"] if kept else []
+    for p in in_way:
+        (root / p).unlink()                                     # the rescue branch holds it, and git's abort refuses to write over it
+    aborted = _run(root, op, "--abort")
+    if aborted.returncode and in_progress(gitdir):
+        for p in in_way:
+            (root / p).write_bytes(subprocess.run(["git", "-C", str(root), "cat-file", "blob", f"{kept['commit']}:{p}"],
+                                                  capture_output=True, check=True, timeout=120).stdout)
+        if rescue:
+            _run(root, "branch", "-q", "-D", rescue)            # the abort changed no file, so the tree still holds all of it
+        if state is None or read("head-name"):
+            why = " ".join(aborted.stderr.split())[-300:] or "git gave no reason"
+            return {**out, "over": False, "lost": f"the {op} in progress could not be ended ({why}); no file was changed"}
+        shutil.rmtree(state)
+        if autostash and not _unstash(root, autostash):
+            out["lost"] = ("the uncommitted changes a rebase stashed before it died no longer apply to the files: they are the "
+                           "first entry of `git stash list` (git stash pop, then resolve)")
+        return out
+    missing = [p for p in (kept["paths"] if kept else []) if not _apply(root, _patch(root, kept["base"], kept["commit"], p))]
+    out["put_back"] = len(kept["paths"]) - len(missing) if kept else 0
+    aside = kept["aside"] if kept else []
+    extra = [line[2:] for line in (_out(root, "cherry", orig, head, onto) or "").splitlines()
+             if line.startswith("+ ") and line[2:] not in picked] if found and head and onto and orig else []
+    if not (missing or aside or in_way or extra):
+        if rescue:
+            _run(root, "branch", "-q", "-D", rescue)
+        return out
+    rescue = rescue or _rescue(root, head)
+    what = [f"{len(x)} {name} ({', '.join(x[:3])})" for x, name in (
+        (missing, f"file(s) written while the {op} was in progress could not be put back"),
+        (aside, f"file(s) the {op} left in conflict were written into since"),
+        (in_way, f"file(s) were written where the {op} had taken a file of the branch's out of the tree"),
+        ([c[:7] for c in extra], "commit(s) made on its detached HEAD are not on the branch")) if x]
+    return {**out, "lost": f"{'; '.join(what)}: the branch {rescue} keeps them as they were (git diff HEAD {rescue}); "
+                           f"delete it once they are back"}
+
+
+def settle(root: Path, gitdir: Path, remote: str = "origin") -> tuple[str, list[str], str | None]:
+    """The clone back on its branch with nothing in progress, whatever an earlier git left behind, before a sync commits:
+    (the branch, one line for each thing put right, why it could not be: then the sync commits nothing).  The caller holds the
+    clone's lock, so no other sync is at work in it.
+    A rebase or merge in progress that no git process is running is ended (`end_operation`).  A HEAD left detached with nothing
+    in progress and the notes branch (`notes_branch`) at or behind it, as a rebase leaves it that died after its first step or
+    lost its state directory, gets the branch checked out where HEAD is (`git checkout -B`), which moves no file and drops no
+    commit.  Any other detached HEAD is someone's to resolve, and is refused as before."""
+    said: list[str] = []
+    op, head = in_progress(gitdir), (_out(root, "rev-parse", "--short", "HEAD") or "").strip()
+    if not op and (branch := _branch(root)):
+        return branch, said, None
+    start = time.monotonic()
+    while (pid := git_running(root)) is not None and time.monotonic() - start < GIT_WAIT_S:
+        time.sleep(LOCK_POLL_S)                                 # a git that only reads is gone at the next look
+    if pid is not None:
+        return "", said, (f"a {op} is in progress" if op else "HEAD is detached") + \
+            f" and git (pid {pid}) is at work in this clone; nothing committed: sync again when it has ended"
+    if op:
+        ended = end_operation(root, gitdir, op, found=True)
+        if not ended["over"]:
+            return "", said, f"{ended['lost']}; nothing committed"
+        said.append(f"ended a {op} left in progress that no process was running (HEAD was at {head}): the local commits are kept"
+                    + (f", and {ended['put_back']} file(s) written under it are back in the tree" if ended["put_back"] else ""))
+        if ended["lost"]:
+            return "", said, f"{ended['lost']}; nothing committed"
+    branch = _branch(root)
+    if not branch:
+        want = notes_branch(root, remote)
+        if not want or _run(root, "merge-base", "--is-ancestor", f"refs/heads/{want}", "HEAD").returncode:
+            return "", said, f"HEAD is detached at {head}" + (f", which {want} is not behind" if want else "") + \
+                "; nothing committed: check out the notes branch"
+        back = _run(root, "checkout", "-q", "-B", want, "HEAD")
+        if back.returncode:
+            why = (back.stderr.strip().splitlines() or ["git gave no reason"])[-1][:200]
+            return "", said, f"HEAD is detached at {head} and {want} could not be checked out there ({why}); nothing committed"
+        said.append(f"HEAD was detached at {head} with nothing in progress and {want} at or behind it: checked {want} out there "
+                    f"(git checkout -B {want} HEAD), which moved no file and dropped no commit")
+        branch = want
+    return branch, said, None
+
+
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
-    """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
+    """Commit, then fetch / rebase / push with bounded retries (module docstring), one sync of a clone at a time (`_lock`)
+    and from a clone put right first (`settle`).  The report: `commit`, `paths`, `skipped`,
     `evidence` (evidence and renders left out), `future` (notes left out, stamped ahead of `now`), `header` (notes left out, broken
-    front matter), `warn` (SYNC-WARN lines: front matter, and once pushed, citations the store lacks), `pushed` (bool), `attempts`,
-    and on failure `error` plus `conflict` (files)
+    front matter), `warn` (SYNC-WARN lines: front matter, what `settle` put right, and once pushed, citations the store lacks),
+    `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
     or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
-    if _out(root, "rev-parse", "--git-dir") is None:
+    gitdir = _gitdir(root)
+    if gitdir is None:
         return {"rc": 2, "error": f"{root} is not a git repository"}
-    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
-    if not branch:
-        return {"rc": 2, "pushed": False, "attempts": 0, "commit": None,
-                "error": "HEAD is detached; nothing committed: check out the notes branch"}
+    try:
+        lock = _lock(gitdir, LOCK_WAIT_S)
+    except Busy as e:
+        return {"rc": 1, "pushed": False, "attempts": 0, "commit": None,
+                "error": f"another sync of this clone was still running after {LOCK_WAIT_S:g} s ({e}); nothing committed: sync again"}
+    try:
+        return _sync(root, gitdir, paths, message, retries, remote, max_bytes, secrets, now)
+    finally:
+        os.close(lock)
+
+
+def _sync(root: Path, gitdir: Path, paths: list[str] | None, message: str | None, retries: int, remote: str, max_bytes: int,
+          secrets: list[str] | None, now: dt.datetime | None) -> dict:
+    """`sync`, holding the clone's lock."""
     stale = clear_stale_lock(root)
-    rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
+    branch, said, error = settle(root, gitdir, remote)
     if stale:
-        rep["warn"] = [*rep.get("warn", []), f"removed a stale .git/index.lock (over {STALE_LOCK_S} s old, no git running here)"]
+        said.insert(0, f"removed a stale .git/index.lock (over {STALE_LOCK_S} s old, no git running here)")
+    if error:
+        return {"rc": 2, "pushed": False, "attempts": 0, "commit": None, "warn": said, "error": error}
+    rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
+    rep["warn"] = [*rep.get("warn", []), *said]
     if rep["future"] or rep["header"]:
         rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:
@@ -656,16 +1119,20 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
             if n < retries and not refused(f.stderr):
                 time.sleep(min(2.0, 0.1 * 2 ** n))
                 continue
-            return {**rep, "rc": 1, "error": f"git fetch {remote} failed: {f.stderr.strip()[-300:]}{token_hint(root, remote)}"}
+            return {**rep, "rc": 1, "error": f"git fetch {remote} failed: {git_said(f.stderr)}{token_hint(root, remote, f.stderr)}"}
         base = tracking if has_remote else None
         if has_remote and _run(root, "merge-base", "--is-ancestor", tracking, "HEAD").returncode != 0:
             rb = _run(root, "rebase", "--autostash", tracking, timeout=300)
             if rb.returncode:
                 conflict = [x for x in (_out(root, "diff", "--name-only", "--diff-filter=U") or "").splitlines() if x]
-                _run(root, "rebase", "--abort")
-                if not _out(root, "symbolic-ref", "-q", "HEAD"):
+                ended = end_operation(root, gitdir, "rebase") if in_progress(gitdir) else {"over": True, "put_back": 0, "lost": None}
+                if not _branch(root) and not in_progress(gitdir):
                     # an abort that lost its rebase-merge directory (as on NFS) leaves HEAD detached at the remote branch
                     _run(root, "checkout", "-q", branch)
+                if ended["lost"]:
+                    return {**rep, "rc": 3, "conflict": conflict, "error": f"the rebase stopped, and {ended['lost']}; then sync again"}
+                if ended["put_back"] and not conflict and n < retries:
+                    continue                                    # it stopped at a file someone wrote under it: again, with that stashed
                 return {**rep, "rc": 3, "conflict": conflict,
                         "error": "rebase conflict; nothing was dropped (the local commit is kept, the rebase aborted): resolve "
                                  + (", ".join(conflict) or rb.stderr.strip()[-200:]) + ", then sync again"}
@@ -680,7 +1147,7 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
             net("fetch", f"+refs/heads/{branch}:{tracking}")
             return {**rep, "pushed": True, "warn": rep["warn"] + citation_warnings(cites)}
         if refused(p.stderr) or n == retries and not any(k in p.stderr for k in RACE):
-            return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {p.stderr.strip()[-300:]}{token_hint(root, remote)}"}
+            return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {git_said(p.stderr)}{token_hint(root, remote, p.stderr)}"}
         time.sleep(min(2.0, 0.1 * 2 ** n))
     return {**rep, "rc": 1, "error": f"lost the push race {retries + 1} times (local commit kept); sync again"}
 
@@ -760,7 +1227,7 @@ def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
     """After a notes write command: `sync` the lane directories it wrote, when `RESEARCH_NOTES_SYNC=1`.  (report lines, FUTURE_RC
     when a note was left out for its stamp or its front matter, else 0; other failures stay advisory, the next sync retries them);
     (None, 0) when off."""
-    if os.environ.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
+    if settings.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
         return None, 0
     rep = sync(root, paths=[f"lanes/{x}" for x in lanes if x], message=f"notes: {', '.join(x for x in lanes if x)}")
     return "\n".join([render_sync(rep), *refused_lines(rep)]), FUTURE_RC if rep.get("future") or rep.get("header") else 0
@@ -769,7 +1236,8 @@ def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
 def main(argv: list[str], default_root: Path) -> int:
     ap = argparse.ArgumentParser(prog="research notes", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (bounded retries; a conflict drops nothing; "
+    sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (one sync of a clone at a time; bounded retries; a "
+                                     "conflict drops nothing; "
                                      "exit 5: lane notes stamped over 5 min ahead of the clock, or with broken front matter, were left out)")
     sy.add_argument("--path", action="append", default=[], metavar="P", help="only changes under P (repeatable; default every change)")
     sy.add_argument("-m", "--message", default=None)

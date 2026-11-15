@@ -9,14 +9,15 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from verity_vllm.pipeline import release_json as rj
 
 HERE = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
-EXPORT = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "dirty_patch_bytes": 0, "exported_utc": "2026-09-20T10:08:00Z"}
+EXPORT: dict[str, Any] = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "dirty_patch_bytes": 0, "exported_utc": "2026-09-20T10:08:00Z"}
 TP = "FA2-TAP-OK 2222 /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so arch=8.9 hdims=64,96,128 mask=14 layout=v8"
 NC = "3333 /workspace/cp/nc_build-r16-int-3/verity_native_collect.so"
 TP3 = "FA3-TAP-OK 4444 /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so hdims=64,128 mask=6 layout=v9"
@@ -28,7 +29,8 @@ def _rec(tree: Path, tag="r16-int-3", cwd=None, **kw):
 
 
 def test_record_tree_is_the_installed_tree_never_the_default(tmp_path):
-    own = tmp_path / "r16-int-3"; own.mkdir()
+    own = tmp_path / "r16-int-3"
+    own.mkdir()
     rel = _rec(own)
     assert rel["tree"] == os.path.realpath(str(own))
     assert rel["schema"] == rj.SCHEMA and rel["tag"] == "r16-int-3" and rel["commit"] == EXPORT["commit"]
@@ -36,15 +38,19 @@ def test_record_tree_is_the_installed_tree_never_the_default(tmp_path):
 
 
 def test_record_refuses_a_tree_that_is_not_the_cwd(tmp_path):
-    own = tmp_path / "r16-int-3"; own.mkdir()
-    other = tmp_path / "shared"; other.mkdir()
+    own = tmp_path / "r16-int-3"
+    own.mkdir()
+    other = tmp_path / "shared"
+    other.mkdir()
     with pytest.raises(ValueError, match="refusing to write RELEASE.json"):
         _rec(own, cwd=other)
 
 
 def test_record_resolves_symlinked_trees(tmp_path):
-    own = tmp_path / "r16-int-3"; own.mkdir()
-    link = tmp_path / "current"; link.symlink_to(own)
+    own = tmp_path / "r16-int-3"
+    own.mkdir()
+    link = tmp_path / "current"
+    link.symlink_to(own)
     rel = _rec(link, cwd=own)   # REMOTE_TREE given through a symlink, cwd is the real dir: same tree
     assert rel["tree"] == os.path.realpath(str(own))
 
@@ -69,14 +75,15 @@ def test_m0477_shape_does_not_name_the_own_tree():
 
 
 def test_write_then_check_pod_wide_and_tree_local(tmp_path):
-    own = tmp_path / "r16-int-3"; own.mkdir()
+    own = tmp_path / "r16-int-3"
+    own.mkdir()
     pod = tmp_path / "RELEASE.json"
     paths = rj.write_record(_rec(own), str(own), str(pod))
     assert paths == [str(pod), os.path.join(os.path.realpath(str(own)), "RELEASE.json")]
-    assert json.load(open(pod))["tree"] == os.path.realpath(str(own)) == json.load(open(own / "RELEASE.json"))["tree"]
+    assert json.loads(pod.read_text())["tree"] == os.path.realpath(str(own)) == json.loads((own / "RELEASE.json").read_text())["tree"]
     assert rj.check_installed(str(own), "r16-int-3", EXPORT["commit"][:9], str(pod)) == []
     # the ship's read-back check catches a pod-wide record that names another tree
-    json.dump({**json.load(open(pod)), "tree": "/workspace/cp/shared"}, open(pod, "w"))
+    pod.write_text(json.dumps({**json.loads(pod.read_text()), "tree": "/workspace/cp/shared"}))
     probs = rj.check_installed(str(own), "r16-int-3", EXPORT["commit"][:9], str(pod))
     assert len(probs) == 1 and "pod-wide" in probs[0] and "the record names another tree" in probs[0]
     # wrong tag / commit / missing file are problems too
@@ -86,8 +93,9 @@ def test_write_then_check_pod_wide_and_tree_local(tmp_path):
 
 
 def _tree_with_export(tmp_path: Path, name: str, export=EXPORT) -> Path:
-    t = tmp_path / name; t.mkdir()
-    json.dump(export, open(t / "EXPORT.json", "w"))
+    t = tmp_path / name
+    t.mkdir()
+    (t / "EXPORT.json").write_text(json.dumps(export))
     return t
 
 
@@ -101,7 +109,7 @@ def test_release_line_two_trees_on_one_pod(tmp_path):
     rel2 = rj.release_record(tag="r16-int-2", export=exp2, tree=str(base), cwd=str(base), artifacts=rj.parse_artifacts(TP, NC), env={}, gpu={}, installed_utc="t")
     rj.write_record(rel2, str(base), str(pod))
     rj.write_record(_rec(own), str(own), str(pod))          # the later own-tree ship overwrites the pod-wide file
-    assert json.load(open(pod))["tag"] == "r16-int-3"
+    assert json.loads(pod.read_text())["tag"] == "r16-int-3"
     line_own, src_own = rj.release_line(str(own), pod_path=str(pod))
     line_base, src_base = rj.release_line(str(base), pod_path=str(pod))
     assert line_own.startswith("r16-int-3|commit=a2dabe493 ") and src_own == os.path.join(os.path.realpath(str(own)), "RELEASE.json")
@@ -113,20 +121,20 @@ def test_release_line_pod_wide_fallback_and_unreleased(tmp_path):
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
     # pod-wide only (a ship that wrote no tree-local record): applies when it names this tree
-    json.dump({**_rec(own), "tree": os.path.realpath(str(own))}, open(pod, "w"))
+    pod.write_text(json.dumps({**_rec(own), "tree": os.path.realpath(str(own))}))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("r16-int-3|") and src == str(pod)
     # pod-wide names the shared tree -> this tree is UNRELEASED, by name
-    json.dump({**_rec(own), "tree": "/workspace/cp/shared"}, open(pod, "w"))
+    pod.write_text(json.dumps({**_rec(own), "tree": "/workspace/cp/shared"}))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("UNRELEASED|commit=a2dabe493 ") and "is the tree /workspace/cp/shared, not this one" in line and src == "-"
     # a record with no tree field cites no tree
-    json.dump({k: v for k, v in _rec(own).items() if k != "tree"}, open(pod, "w"))
+    pod.write_text(json.dumps({k: v for k, v in _rec(own).items() if k != "tree"}))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("UNRELEASED|") and "is the tree None, not this one" in line and src == "-"
     # a tree-local record whose commit no longer matches EXPORT (ship.sh over the tree) never cites the stale release
     rj.write_record(_rec(own), str(own), str(pod))
-    json.dump({**EXPORT, "commit": "f" * 40}, open(own / "EXPORT.json", "w"))
+    (own / "EXPORT.json").write_text(json.dumps({**EXPORT, "commit": "f" * 40}))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("UNRELEASED|commit=fffffffff ") and "!= this tree's EXPORT" in line
     # no records at all

@@ -1,6 +1,7 @@
 """`verity bench memory`'s environment variables, each declared once (`verity_config.settings`). It reads two of its
-own, the node run's session in either of its forms; the ones a research run sets are the shared settings every
-registry reads, and what `gate_run.sh` and `run.sh` read passes through to them whole."""
+own: the node run's session in either of its forms;
+the ones a research run sets are the shared settings every registry reads, and what `gate_run.sh` and `run.sh` read
+passes through to them whole."""
 from __future__ import annotations
 
 from verity_config.settings import VALUE, Registry

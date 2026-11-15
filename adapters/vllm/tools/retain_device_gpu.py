@@ -1,18 +1,18 @@
-"""retain_device_gpu.sh's three parts: the draws, the drawer and the comparison of a ``--retain device`` serve with a
+"""retain_device_gpu.sh's three parts: the samples, the drawer and the comparison of a ``--retain device`` serve with a
 ``--retain host`` one of the same load.
 
-    python retain_device_gpu.py reads HOST_DIR READS_DIR          # each sealed window's draw, from the host serve's store
-    python retain_device_gpu.py draw DEVICE_DIR READS_DIR --protocol P --delay-s S --stop FILE
+    python retain_device_gpu.py reads HOST_DIR READS_DIR          # each sealed window's sample, from the host serve's store
+    python retain_device_gpu.py sample DEVICE_DIR READS_DIR --protocol P --delay-s S --stop FILE
     python retain_device_gpu.py compare DEVICE_DIR HOST_DIR READS_DIR
 
-``reads`` picks, for each window the host serve sealed, a draw by hand (no subprotocol's draw is wired in yet): the window's first
+``reads`` picks, for each window the host serve sealed, a sample by hand (no subprotocol's sample is wired in yet): the window's first
 and last steps, three members of each (the largest one's first two leaves, a middle member's middle leaf, the last member), and one
 member of a middle step that no read names (``undrawn``). It prints the largest window's committed bytes, which sizes the device
 pool. ``draw`` is the hand drawer: once a window's ``windows.jsonl`` line is out it waits ``--delay-s`` (so the next window's steps
 fill the pool and wait on this window's release) and writes ``draws/w<k>.<P>.json`` whole, until ``--stop`` exists and every
-window's line has had its draw. ``compare`` holds each window the device serve sealed to the host serve's: the device bundle keeps
-exactly the leaves the draw opens (`serve_release.leaves_of`), each equal to the host bundle's leaf; every drawn read verifies
-against the device bundle's own run root; the undrawn read is refused by name there and answered by the host bundle; the tree
+window's line has had its sample. ``compare`` holds each window the device serve sealed to the host serve's: the device bundle keeps
+exactly the leaves the sample opens (`serve_release.leaves_of`), each equal to the host bundle's leaf; every sampled read verifies
+against the device bundle's own run root; the unsampled read is refused by name there and answered by the host bundle; the tree
 levels are whole. Its last line is ``RETAIN-DEVICE PASS|FAIL``, with the device pool's peak and waits.
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _named(metas: list[list], i: int) -> str:
 
 
 def pick(doc: dict[str, Any]) -> dict[str, Any]:
-    """A draw of one window by hand: reads of its first and last steps, and an undrawn read of a middle step."""
+    """A sample of one window by hand: reads of its first and last steps, and an unsampled read of a middle step."""
     C, steps = int(doc["chunk"]), doc["steps"]
     reads = []
     for s in sorted({0, len(steps) - 1}):

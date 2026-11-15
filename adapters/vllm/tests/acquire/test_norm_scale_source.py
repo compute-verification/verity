@@ -17,7 +17,7 @@ from verity_vllm.query import norm_scales as NS  # noqa: E402
 
 class Recorder:
     def __init__(self) -> None:
-        self._cur = None
+        self._cur: types.SimpleNamespace | None = None
         self.errors: list[str] = []
         self.acquired: list[tuple[str, tuple]] = []
         self.sources: list = []
@@ -39,7 +39,11 @@ class Kernel:
         self.src = "kernel source"
 
     def __getitem__(self, grid):
-        return lambda *a, **kw: self.launches.append((grid, a, kw)) or "launched"
+        def launch(*a, **kw):
+            self.launches.append((grid, a, kw))
+            return "launched"
+
+        return launch
 
 
 def model():

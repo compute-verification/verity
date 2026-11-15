@@ -24,7 +24,7 @@ manifest's (`checkpoint_index.shard_pin`), else refused; without it no shard is 
 
 One spawned process per rank (`--workers` at a time) opens and commits its tensors one at a time, so it holds a tensor, not the
 rank's weights (95 GB a GLM-5.3 B1 rank), and another reads the descriptor before them. Under --out: `record.json` (the
-registration record), `trusted.json` (nci-check's trusted input), `provenance.json` (the instance's θ provenance) and
+registration record), `trusted.json` (the inference-only policy's trusted input), `provenance.json` (the instance's θ provenance) and
 `registration.json` (digests, the checkpoint's pin, per-rank counts and timings).
 Under --salts: each value's row salts, `<value>.salts`, the prover's, which nothing public carries, so --salts is refused inside
 --out. Exit 0 written, 2 refused.
@@ -43,6 +43,9 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.errors import Refused
+from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
+from verity_vllm.records.schema_ids import NODE_REGISTRATION_SCHEMA
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -68,10 +71,6 @@ class Options:
     salts: str = option("--salts", help="where each value's row salts go (private: never under --out)")
     workers: int = option("--workers", type=int, default=8, help="ranks registered at once, a spawned process each (1: in this process)")
     cmd: str = field(default="node-registration", init=False)
-
-
-class Refused(Exception):
-    """The node's parameters are not the descriptor's, or a rank's θ is not what its Commit of record registered."""
 
 
 def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:
@@ -104,7 +103,9 @@ def theta_nodes(desc: dict[str, Any], params, theta: tuple[str, ...]) -> list[in
                       f"first apart at input node {at}: these are not its parameters")
     held = set(theta)
     want = [k for (name, _w, _n), (k, _w2, _n2) in zip(lowered, nodes) if name in held]
-    got = list((desc.get("annotations") or {}).get("theta") or [])
+    annotations = desc.get("annotations")   # a descriptor without annotations, or without θ among them, marks no θ (`codec`)
+    marked = annotations.get("theta") if annotations else None
+    got = list(marked) if marked else []
     if got != want:
         raise Refused(f"the descriptor's θ is {len(got)} root nodes, the node's weights parameters lower to {len(want)} others")
     return got
@@ -133,7 +134,8 @@ def commit_of_record(out: Path, pair: int | None) -> tuple[int, dict[str, Any], 
 
 def program_digest_of(d: str) -> str:
     res = json.loads(Path(d, "result.json").read_text())
-    return str((res.get("program") or {}).get("digest") or res.get("program_digest") or "")
+    program = res.get("program")   # a result without the block states its digest at the top, or none
+    return str((program.get("digest") if program else None) or res.get("program_digest") or "")
 
 
 def trace_fields(d: str) -> list[str]:
@@ -147,26 +149,29 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
     """What rank `rank`'s process registers, once its bundle, Build and trace are shown to be the record's (module docstring)."""
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.pipeline import replay_bundle as RB
-    from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
 
     world = len(P.phis)
     try:
         b = RB.open_bundle(RB.path(out, pair, rank=rank))
     except (OSError, ValueError) as e:
         raise Refused(f"rank {rank}: {e}") from e
-    ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
+    listed = dd.get("bundles")   # a deferred record that lists no bundle names none of this pair and rank, refused below
+    ent = next((x for x in listed if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None) if listed else None
     ctx = b["context"]
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
         raise Refused(f"rank {rank}: replay_deferred.json names no bundle of pair {pair} with manifest sha256 {b['manifest_sha256'][:16]}")
     if (int(ctx["pair"]), int(ctx["tp"]["rank"]), int(ctx["tp"]["world"])) != (pair, rank, world):
         raise Refused(f"rank {rank}: its bundle is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {world}")
     cfg = ctx["replay"]
+    # the driver writes both; a config without one declares no request, or no digest of record for the rank
+    requests, by_rank = cfg.get("requests"), cfg.get("of_record")
     root = o.build_rank[rank] if o.build_rank else cfg["programs"][str(rank)]
     try:
-        dirs = sorted(set(request_program_dirs(str(root), list(cfg.get("requests") or []), rank).values()))
+        dirs = sorted(set(request_program_dirs(str(root), list(requests) if requests else [], rank).values()))
     except RuntimeError as e:
         raise Refused(str(e)) from e
-    of_record = set((cfg.get("of_record") or {}).get(str(rank)) or [])
+    digests = by_rank.get(str(rank)) if by_rank else None
+    of_record = set(digests) if digests else set()
     bad = [d for d in dirs if program_digest_of(d) not in of_record]
     if not dirs or bad:
         raise Refused(f"rank {rank}: {bad or root} holds no Program of record for the rank ({sorted(x[:16] for x in of_record)})")
@@ -177,7 +182,9 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
     if prefix is None or any(t != [prefix + n for n in names] for t in traced.values()):
         raise Refused(f"rank {rank}: its Build's trace names its {len(first)} weights fields otherwise than the node's {len(names)} "
                       f"(first {first[:1]} vs {names[:1]}): the fields are not one weights record")
-    weights_root = ((c.get("per_rank") or {}).get(str(rank)) or {}).get("weight_registration", {}).get("root")
+    per_rank = c.get("per_rank")   # a commit block with no entry for the rank states no committed root for it, refused at its tree
+    entry = per_rank.get(str(rank)) if per_rank else None
+    weights_root = entry.get("weight_registration", {}).get("root") if entry else None
     return {"rank": rank, "world": world, "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "root": weights_root,
             "roles": CPU.registered_roles(dirs, prefix), "prefix": prefix, "program": digest, "salts": o.salts,
             "fields": [(f"rank{rank}.weights[{i}]", n, t.to_json()) for i, (n, t) in enumerate(P.leaves[rank])],
@@ -188,6 +195,7 @@ def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     """Rank `job["rank"]`'s θ parameters committed (`registered_rows.commit`) one tensor at a time, each opened against the rank's
     committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts."""
     from verity.circuits.types import type_from_json
+
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.commit import registered_rows as RR
     from verity_vllm.pipeline import cpu_replay as CPU
@@ -284,7 +292,7 @@ def register(o: Options) -> dict[str, Any]:
     reg = RL.record(digest, P.params, theta, entries, window)
     for name in ("record", "trusted", "provenance"):
         (out / f"{name}.json").write_text(json.dumps(reg[name], separators=(",", ":")) + "\n")
-    doc = {"schema": "verity-vllm/node-registration/v1", "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
+    doc = {"schema": NODE_REGISTRATION_SCHEMA, "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
            "wrapper": o.wrapper, "shape": shape, "commit_out": str(commit_out), "pair": pair, "window": window,
            "theta_parameters": len(P.theta), "theta_nodes": len(theta), "rows": sum(e["leaves"] for e in entries.values()),
            "checkpoint": checkpoint, "ranks": ranks, "salts": str(salts),

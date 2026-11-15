@@ -12,6 +12,7 @@ public import Proofs.Flock.Bridge.Scope
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.UnitRows
+public import Proofs.Flock.Bridge.GateARow
 public import Proofs.Flock.Bridge.Canon
 public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
@@ -26,6 +27,7 @@ public import Proofs.Flock.Bridge.BitsRows
 public import Proofs.Flock.Bridge.BitsLower
 public import Proofs.Flock.Bridge.BitsKeys
 public import Proofs.Flock.Bridge.BitsKeyProg
+public import Proofs.Flock.Bridge.BitsCopyGate
 public import Proofs.Flock.Bridge.Members
 public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
@@ -39,7 +41,7 @@ public import Proofs.Flock.Bridge.QsRows.FirstReads
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
 the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and
 `canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every target it takes), and
-`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its statement, file and draw
+`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its statement, file and sample
 preconditions read off the verifiers' acceptance (`Refused`, `ScopeGate`). `Lowers`: the claims program `progOf C κ`
 lowers every unit of every circuit
 (`Flock.Bridge.lowers`). `FilePart`: `FilePartTarget`, proved (`Flock.Bridge.filePartTarget`), and `RelDeployTarget`
@@ -61,6 +63,8 @@ Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridg
 Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
 returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). `UnitRows`: each copy
 of a unit of the parsed file holds the unit net's rows at the unit's local evaluation (`Flock.Bridge.rows_localEval`).
+`BitsCopyGate`: a copy's gate at a column is the gate Bits gives there, at an input port's bit
+(`Flock.Bridge.copyGate_inGate`) and at a returned output's (`Flock.Bridge.copyGate_outGate`).
 -/
 
 @[expose] public section

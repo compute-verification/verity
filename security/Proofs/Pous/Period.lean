@@ -4,8 +4,8 @@ public import Properties.Pous.Period
 public import Proofs.Pous.EndToEnd
 public import Proofs.Properties.Pous.Run
 public import Proofs.Accounting.Prob
-public import Proofs.Accounting.Capacity
-public import Proofs.Accounting.PerRunJoint
+public import Proofs.Pous.Accounting.Capacity
+public import Proofs.Pouw.PerRunJoint
 
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee
@@ -53,7 +53,7 @@ theorem onTime_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
     {ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
     (h : P.Certified ω) : P.OnTime ω := by
   obtain ⟨_, _, haud, _, _, run, hrun, hc, hot⟩ := h
-  have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.SessionCommitment.limitNs hc
+  have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.ChallengePhaseCommitment.limitNs hc
   exact ⟨run, hrun, hc, hl.trans_le haud.2.2.2.2.1, hot⟩
 
 theorem δ_nonneg : (0 : ℝ) ≤ (Params.δ : ℝ) := by
@@ -223,7 +223,7 @@ theorem seqRounds_ret {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (
 /-- **`periodHeld`'s device premises hold at the honest instance**, at every budget `(D, Q, L)`: on a run whose
 capacity account holds all of `C`'s `FULL` bits at a tick of the capacity window on every coin, for every audit whose
 designated session id has 32 bytes, as the memory challenger's ids do, the lookup strategy meets the device model
-(each answer is a lookup, no query, and its state is `C`'s bits) and the instantiation (the code's draw never fails,
+(each answer is a lookup, no query, and its state is `C`'s bits) and the instantiation (the code's sample never fails,
 and a lookup returns the challenged block of `C`). -/
 theorem periodHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
     (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))

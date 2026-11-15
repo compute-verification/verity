@@ -50,7 +50,6 @@ import chain as CH
 import derive as DV
 import fill as F
 import identity as I
-import refs as RF
 import report as R
 import schedule as S
 import shapes as SH
@@ -72,7 +71,7 @@ def _gate():
     """The SASS gate, from its file and under the name every file that loads it gives it, so a process holds one."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ROOT / "benchmarks/pouw/harness/sass_gate.py")
+        spec = importlib.util.spec_from_file_location(name, ROOT / "verity/protocols/accounting/pouw/prover/sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
@@ -429,7 +428,6 @@ def _known_bad(arm, dev, shape, ops):
 def _arm_gate(dev, arm, shape, flags, calls, sets: list[int]):
     def run():
         out = {}
-        RF.prefetch(arm, dev, [calls[i] for i in sets], shape, flags)
         for i in sets:
             calls[i].launch(dev.stream)
             dev.sync()

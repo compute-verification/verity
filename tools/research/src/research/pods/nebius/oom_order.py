@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`python3 oom_order.py [--runs DIR ...] [--ramlock DIR] [--log FILE] [--dry-run]`: order the kernel OOM killer's picks on a
-shared node by each live run's memory use against its research.mem reservation, until reservations are caps.
+shared node by each live run's memory use against its research.mem reservation, until reservations are limits.
 
 A reservation (`research run --mem-gb`, a check slot's mem=; research.mem's files in RAMLOCK) only gates admission: the kernel
 picks its victim by size alone, so a run inside its reservation is OOM-killed as the node's largest process beside runs far over
@@ -36,7 +36,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 RUNS = (Path("/workspace/research/runs"), Path("/workspace/jobs/runs"))
@@ -54,13 +54,14 @@ RUNNER = b"-m\0research\0run\0"
 
 
 def clock() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _json(p: Path) -> dict:
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"oom_order: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -84,7 +85,8 @@ def reservations(ramlock: Path) -> list[dict]:
         d = _json(f)
         try:
             gb = float(d["gb"])
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"oom_order: {f.name} has no amount of memory, so it reserves none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out.append({"file": f.name, "gb": gb, "run_id": d.get("run_id"), "pid": d.get("pid") if isinstance(d.get("pid"), int) else None,
                     "priority": d.get("priority") is True})

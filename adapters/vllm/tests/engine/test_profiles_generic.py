@@ -9,15 +9,18 @@ import json
 
 import pytest
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.fold.patterns import TokenSelectArgmax
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.observe.events import RunHeader
+from verity_vllm.observe.fold.patterns import TokenSelectArgmax
+from verity_vllm.observe.fold.patterns.collectives import (
+    EmbeddingShardCuda,
+    TpCollective,
+)
 from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
+from verity_vllm.program import model as analytic
 
 SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
 #: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
@@ -98,7 +101,7 @@ def test_profile_module_for_case_is_derived_not_looked_up():
 
 
 def test_derived_b0_is_the_protected_base_profile_behind_the_tuned_gemm():
-    """The golden corpus's profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
+    """The protected base profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
     same C up to the identity fields and unset keys, the same pattern list after the target's tuned-GEMM specialization."""
     derived = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0").PROFILE
 
@@ -125,7 +128,7 @@ def test_every_hand_fact_cites_where_vllm_hard_codes_it():
     for fam, f in FF.FAMILY_FACTS.items():
         for key, fact in f["facts"].items():
             assert fact.get("provenance"), (fam, key)
-            assert FF.VLLM in fact["provenance"] or "vllm/" in fact["provenance"] or "csrc/" in fact["provenance"], (fam, key, fact["provenance"])
+            assert "vllm/" in fact["provenance"] or "csrc/" in fact["provenance"], (fam, key, fact["provenance"])
             assert sum(k in fact for k in ("const", "key", "derive")) == 1, (fam, key, "exactly one of const / key / derive")
         for p in ("params",):
             if f.get(p):
@@ -220,7 +223,9 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
         DsaSparseMla,
         DsaTopK,
     )
-    from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
+    from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (
+        MoEFusedSharedExpertsFp8,
+    )
 
     cfg = json.loads((Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
     assert FF.facts_for(cfg)["arch"] == "dsa-moe"
@@ -314,3 +319,18 @@ def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():
     f, r = layer(full.C), layer(rank.C)
     assert rank.C["NH"] * 2 == full.C["NH"] and r["o_w"] * 2 == f["o_w"]
     assert r["q_norm"] == f["q_norm"] == full.C["NH"] * full.C["D"] and r["k_norm"] == f["k_norm"] == full.C["KVH"] * full.C["D"]
+
+
+def test_header_checks_hold_a_family_s_header_keys_and_only_where_it_declares_them():
+    """GPT-NeoX declares `header_keys` (`layer_norm_eps` is the profile's `EPS`); a family that declares none checks none."""
+    assert [f for f, facts in FF.FAMILY_FACTS.items() if "header_keys" in facts] == ["gpt_neox"]
+    neox, C = {"model_type": "gpt_neox"}, {"EPS": 1e-5}
+    assert FF.header_checks(neox, C, {"layer_norm_eps": 1e-5}) == []
+    assert FF.header_checks(neox, C, {"layer_norm_eps": 1e-6}) == ["layer_norm_eps=1e-06 != C[EPS]=1e-05"]
+    assert FF.header_checks({"model_type": "llama"}, C, {"layer_norm_eps": 1e-6}) == []
+
+
+@pytest.mark.parametrize("held", [None, {}, 0, "", False, []], ids=["null", "empty", "zero", "empty text", "false", "empty list"])
+def test_a_family_whose_header_keys_are_null_or_empty_checks_none(monkeypatch, held):
+    monkeypatch.setitem(FF.FAMILY_FACTS["gpt_neox"], "header_keys", held)
+    assert FF.header_checks({"model_type": "gpt_neox"}, {"EPS": 1e-5}, {"layer_norm_eps": 1e-6}) == []

@@ -1,12 +1,14 @@
 """GLM-5.3's acquisition sources on CPU, driven the way the pinned vLLM's call sites drive the ops they wrap, against the capture map
 (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`): every name a source commits in one step is a name the map lists for
-that source, and none is missing.  The vLLM modules are stand-ins installed in `sys.modules` with the pinned signatures; the tensors
-are shape-and-dtype stand-ins on a "cuda" device, so nothing here needs vLLM or a GPU."""
+that source, and none is missing.  vLLM is its one stand-in (`tests.fake_vllm`), with what a source patches set on it at the pinned
+signatures; the tensors are shape-and-dtype stand-ins on a "cuda" device, so nothing here needs vLLM or a GPU."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import importlib.util
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -15,8 +17,11 @@ from typing import Any
 import pytest
 import torch
 
+from tests import fake_vllm as stand_in
+from tests.acquire.test_vocab_range_source import exactness_in_tree
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.records import property_record as PR
 
 ROOT = Path(__file__).parents[2]
 CMAP = CM.load(ROOT / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json")
@@ -31,6 +36,8 @@ class T:
     storage's identity, `to` and `repeat_interleave` make new ones."""
 
     device = types.SimpleNamespace(type="cuda")
+    #: the tensor a view was taken of
+    base: T
 
     def __init__(self, *shape: int, dtype: torch.dtype = torch.bfloat16) -> None:
         self.shape, self.dtype = tuple(shape), dtype
@@ -76,6 +83,8 @@ class Committer:
     """The committer's side of a source: the current step job, `_acquire`, the gather collector's flush, `errors`."""
 
     gather = True
+    #: the X-03 rows the MoE source counts on its committer
+    x03_expected: int
 
     def __init__(self) -> None:
         self._cur = types.SimpleNamespace(step=0)
@@ -96,19 +105,13 @@ class Committer:
 
 # ---------------------------------------------------------------- the pinned vLLM's MoE call sites, as stand-ins
 
-def fake_vllm(monkeypatch, *, fused_grouped_topk: bool = True) -> types.SimpleNamespace:
-    """`sys.modules` entries for the modules the MoE source patches, with the pinned signatures and results' shapes."""
-    calls: list[str] = []
+#: the grouped top-k router's module, which the MoE source imports by its name: no entry of vLLM's surface
+ROUTER_MODULE = "vllm.model_executor.layers.fused_moe.router.grouped_topk_router"
 
-    def mod(name: str, **attrs) -> types.ModuleType:
-        m = types.ModuleType(name)
-        for k, v in attrs.items():
-            setattr(m, k, v)
-        monkeypatch.setitem(sys.modules, name, m)
-        parent, _, leaf = name.rpartition(".")
-        if parent in sys.modules:
-            monkeypatch.setattr(sys.modules[parent], leaf, m, raising=False)
-        return m
+
+def fake_vllm(monkeypatch, *, fused_grouped_topk: bool = True) -> types.SimpleNamespace:
+    """vLLM's stand-in for one test, with what the MoE source reads and patches set on it at the pinned signatures and results' shapes."""
+    calls: list[str] = []
 
     def topk_softmax(topk_weights, topk_ids, token_expert_indices, gating_output, renormalize=False):
         calls.append("topk_softmax")
@@ -134,17 +137,16 @@ def fake_vllm(monkeypatch, *, fused_grouped_topk: bool = True) -> types.SimpleNa
         calls.append("group_quant")
 
     monkeypatch.setattr(torch.ops._C, MS.GROUP_QUANT_OP, per_token_group_fp8_quant, raising=False)
-    mod("vllm")
-    mod("vllm.envs", VLLM_USE_FUSED_MOE_GROUPED_TOPK=fused_grouped_topk)
-    mod("vllm.platforms", current_platform=types.SimpleNamespace(is_cuda=lambda: True))
-    ops = mod("vllm._custom_ops", topk_softmax=topk_softmax, moe_sum=moe_sum, silu_and_mul_per_block_quant=silu_and_mul_per_block_quant)
-    for name in ("vllm.model_executor", "vllm.model_executor.layers", "vllm.model_executor.layers.fused_moe",
-                 "vllm.model_executor.layers.fused_moe.experts", "vllm.model_executor.layers.fused_moe.router"):
-        mod(name)
-    fm = mod("vllm.model_executor.layers.fused_moe.fused_moe", invoke_fused_moe_triton_kernel=invoke_fused_moe_triton_kernel)
-    tm = mod("vllm.model_executor.layers.fused_moe.experts.triton_moe", invoke_fused_moe_triton_kernel=invoke_fused_moe_triton_kernel)
-    gr = mod("vllm.model_executor.layers.fused_moe.router.grouped_topk_router", grouped_topk=grouped_topk)
-    return types.SimpleNamespace(ops=ops, fm=fm, tm=tm, gr=gr, calls=calls)
+    fake = stand_in.install(monkeypatch, extra=[f"{ROUTER_MODULE}:grouped_topk"])
+    fake["vllm.envs"].VLLM_USE_FUSED_MOE_GROUPED_TOPK = fused_grouped_topk
+    fake.set("vllm.platforms:current_platform", types.SimpleNamespace(is_cuda=lambda: True))
+    ops = fake["vllm._custom_ops"]
+    ops.topk_softmax, ops.moe_sum, ops.silu_and_mul_per_block_quant = topk_softmax, moe_sum, silu_and_mul_per_block_quant
+    fm = fake["vllm.model_executor.layers.fused_moe.fused_moe"]
+    tm = fake["vllm.model_executor.layers.fused_moe.experts.triton_moe"]
+    fm.invoke_fused_moe_triton_kernel = tm.invoke_fused_moe_triton_kernel = invoke_fused_moe_triton_kernel
+    fake.set(f"{ROUTER_MODULE}:grouped_topk", grouped_topk)
+    return types.SimpleNamespace(ops=ops, fm=fm, tm=tm, gr=fake[ROUTER_MODULE], calls=calls)
 
 
 def group_quant(x: T) -> tuple[T, T]:
@@ -176,7 +178,8 @@ class MoERunner(torch.nn.Module):
             scoring_func="sigmoid", routed_scaling_factor=2.5, e_score_correction_bias=self.bias)
         N = 2 * MIL
         cache1, cache3, out = T(M, TOPK, N), T(M, TOPK, H), T(M, H)
-        sorted_ids, expert_ids, npp, config = T(M * TOPK, dtype=torch.int32), T(M, dtype=torch.int32), T(1, dtype=torch.int32), {}
+        sorted_ids, expert_ids, npp = T(M * TOPK, dtype=torch.int32), T(M, dtype=torch.int32), T(1, dtype=torch.int32)
+        config: dict[str, Any] = {}
         fp8 = dict(compute_type=None, use_fp8_w8a8=fp8_on, use_int8_w8a8=False, use_int8_w8a16=False, use_int4_w4a16=False,
                    per_channel_quant=False, block_shape=[128, 128] if fp8_on else None, B_bias=None)
         a1, a1q_scale = group_quant(hidden_states) if fp8_on else (hidden_states, None)
@@ -267,6 +270,7 @@ def test_the_moe_source_commits_exactly_the_maps_moe_taps_on_a_served_step(monke
     assert src.stats["router"] == {"sigmoid:block": len(MOE_LAYERS)} and src.router_steps == {"block": [0]}
     decl = src.declaration_classes()[0]
     assert decl["tensors_per_layer"] == 10 and decl["planes"] == list(MOE_FP8_PLANES) and decl["router_kernel_steps"] == {"block": [0]}
+    assert exactness_in_tree(src)
 
 
 def test_the_act_plane_is_the_input_of_the_quant_that_wrote_the_w2_input(monkeypatch):
@@ -302,6 +306,58 @@ def test_the_fused_silu_quant_binds_nine_planes_without_act(monkeypatch):
     assert src.planes == planes and src.stats["tensors_per_layer"] == 9 and c.errors == []
 
 
+#: the module the MoE source's evidence names as the check of a kernel's value correspondence, and the kernels it names it for
+MOE_CHECKS = {
+    "tests.properties.router_tap_exactness": ("topk_softmax",),
+    "tests.properties.sigmoid_router_capture_gpu": ("grouped_topk",),
+    "tests.properties.dsv4_moe_capture_gpu": ("dsv4_topk", "topk_hash_softplus_sqrt", "silu_and_mul_with_clamp"),
+    "tests.properties.dsv4_marlin_capture_gpu": ("moe_wna16_marlin_gemm",),
+    "tests.properties.glm53_block_fp8_capture_gpu": ("per_token_group_quant_fp8", "fused_moe_kernel", "silu_and_mul", "moe_sum"),
+    "verity_vllm.program.moe_difftest": ("fused_moe_kernel", "silu_and_mul", "moe_sum"),
+}
+#: the check the evidence names by its registered property, and its kernels: its module's name holds a GPU architecture's, which a
+#: string of the library does not (lint P8)
+MOE_PROPERTY = ("blackwell_fp8_capture", ("per_token_group_quant_fp8", "fused_moe_kernel"))
+#: the kernel the evidence says no check of the tree launches
+MOE_UNCHECKED = "silu_and_mul_per_block_quant"
+
+
+def _module_text(module: str) -> str:
+    spec = importlib.util.find_spec(module)
+    assert spec is not None and spec.origin is not None, f"the tree has no module {module}"
+    return Path(spec.origin).read_text()
+
+
+def _property_text(name: str) -> str:
+    """The text of the one file under tests/properties that writes the registered property's schema."""
+    assert name in PR.REGISTRY, f"no property {name} is registered"
+    writers = [p for p in (ROOT / "tests" / "properties").glob("*.py") if f'"{PR.REGISTRY[name].schema}"' in p.read_text()]
+    assert len(writers) == 1, f"{len(writers)} file(s) under tests/properties write the schema of the property {name}"
+    return writers[0].read_text()
+
+
+def test_the_evidence_names_a_check_the_tree_has_for_each_kernel_and_says_which_kernel_has_none(monkeypatch):
+    """The declaration gives each kernel's value correspondence as a check, by its module or its registered property: the tree has
+    each one, the check's own text names every kernel the declaration gives it, and the fused activation quant, which no check names,
+    is said to have none."""
+    _c, src, _names = run_source(monkeypatch, [3], path="fused")
+    text = src.declaration_classes()[0]["evidence"].partition("value correspondence")[2]
+    assert sorted(set(re.findall(r"\b(?:tests|verity_vllm)(?:\.\w+)+", text))) == sorted([*MOE_CHECKS, PR.__name__])
+    named = {module: (_module_text(module), kernels) for module, kernels in MOE_CHECKS.items()}
+    named[f"the property {MOE_PROPERTY[0]}, which {PR.__name__} registers"] = (_property_text(MOE_PROPERTY[0]), MOE_PROPERTY[1])
+    clauses = text.split("; ")
+    for words, (check, kernels) in named.items():
+        clause = next((c for c in clauses if words in c), "")
+        for kernel in kernels:
+            word = re.compile(rf"\b{kernel}\b")
+            assert word.search(clause), f"the evidence does not give {kernel} to {words}"
+            assert word.search(check), f"{words} does not name {kernel}, which the evidence gives it"
+    assert f"nothing in the tree checks {MOE_UNCHECKED}" in clauses[0]
+    checks = [*(ROOT / "tests" / "properties").glob("*.py"), ROOT / "verity_vllm" / "program" / "moe_difftest.py"]
+    naming = sorted(p.name for p in checks if re.search(rf"\b{MOE_UNCHECKED}\b", p.read_text()))
+    assert len(checks) > len(named) and not naming, f"{naming} name {MOE_UNCHECKED}: the evidence is to name its check"
+
+
 def test_a_w2_input_that_no_group_quant_of_the_layer_wrote_is_an_error(monkeypatch):
     v = fake_vllm(monkeypatch)
     raw = getattr(torch.ops._C, MS.GROUP_QUANT_OP)
@@ -327,7 +383,11 @@ def test_the_moe_output_is_bound_only_on_a_tp_rank_of_a_module_that_does_not_red
 
 
 def test_identity_check_holds_a_served_step_to_ten_planes_per_layer_and_its_out(monkeypatch):
-    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+    from verity_vllm.commit.committer.native_host import (
+        GPU_CHUNK_BYTES,
+        NativeHostCommitter,
+        TensorMeta,
+    )
 
     _c, src, names = run_source(monkeypatch, [3, 4])
     com = NativeHostCommitter(None, run_id="glm53-moe", gpu_tree=True)
@@ -400,6 +460,7 @@ def test_grouped_topk_args_reads_positional_and_keyword_calls():
 
 # ---------------------------------------------------------------- fused_allreduce_rms_norm, as DeepseekV32DecoderLayer calls it
 
+FAR_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
 MODEL_MODULE = "vllm.models.deepseek_v32.nvidia.model"
 FLASHINFER_MAX_TOKENS = 42
 
@@ -418,16 +479,12 @@ def fake_far(monkeypatch, world: int = TP) -> types.SimpleNamespace:
         calls.append("all_reduce")
         return norm(T(*hidden_states.shape), residual)
 
-    for name in ("vllm", "vllm.models", "vllm.models.common", "vllm.models.common.ops", "vllm.models.deepseek_v32",
-                 "vllm.models.deepseek_v32.nvidia"):
-        monkeypatch.setitem(sys.modules, name, sys.modules.get(name) or types.ModuleType(name))
-    home = types.ModuleType("vllm.models.common.ops.fused_allreduce_rms_norm")
-    home.fused_allreduce_rms_norm = fused_allreduce_rms_norm
-    user = types.ModuleType(MODEL_MODULE)
-    user.fused_allreduce_rms_norm = fused_allreduce_rms_norm
-    monkeypatch.setitem(sys.modules, home.__name__, home)
-    monkeypatch.setitem(sys.modules, MODEL_MODULE, user)
-    return types.SimpleNamespace(home=home, user=user, calls=calls)
+    # neither module is of vLLM's surface: the source finds the first in `sys.modules` by its name and the second by the model's classes
+    names = [f"{FAR_MODULE}:fused_allreduce_rms_norm", f"{MODEL_MODULE}:fused_allreduce_rms_norm"]
+    fake = stand_in.install(monkeypatch, extra=names)
+    for name in names:
+        fake.set(name, fused_allreduce_rms_norm)
+    return types.SimpleNamespace(home=fake[FAR_MODULE], user=fake[MODEL_MODULE], calls=calls, fake=fake)
 
 
 class Norm(torch.nn.Module):
@@ -546,7 +603,11 @@ class FarRun:
 
     def identity_check(self) -> dict[str, Any]:
         """The committer's X-03 identity check over the steps run, with this source attached and the norms as its modules."""
-        from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+        from verity_vllm.commit.committer.native_host import (
+            GPU_CHUNK_BYTES,
+            NativeHostCommitter,
+            TensorMeta,
+        )
 
         com = NativeHostCommitter(None, run_id="glm53-far", gpu_tree=True)
         com._modules = [(n, m) for n, m in self.root.named_modules() if isinstance(m, Norm)]
@@ -635,12 +696,7 @@ def test_the_meta_export_shim_emits_the_fused_leaf_only_on_flashinfers_served_ra
             seen.append((tuple(hidden_states.shape), tuple(residual.shape), tuple(weight.shape), eps))
             return T(*hidden_states.shape), T(*residual.shape)
 
-    parallel = types.ModuleType("vllm.distributed.parallel_state")
-    parallel.get_tp_group = lambda: types.SimpleNamespace(world_size=TP, bus=Bus())
-    distributed = types.ModuleType("vllm.distributed")
-    distributed.parallel_state = parallel
-    monkeypatch.setitem(sys.modules, distributed.__name__, distributed)
-    monkeypatch.setitem(sys.modules, parallel.__name__, parallel)
+    v.fake.set("vllm.distributed.parallel_state:get_tp_group", lambda: types.SimpleNamespace(world_size=TP, bus=Bus()))
 
     hidden, residual = T(M, H), T(M, H)
     with fused_allreduce_rms_norm_leaf(model):

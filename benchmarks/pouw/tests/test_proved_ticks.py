@@ -7,7 +7,6 @@ figure as the block's compute)."""
 
 from __future__ import annotations
 
-import importlib.util
 import re
 from pathlib import Path
 
@@ -56,7 +55,7 @@ def test_a_family_without_a_sheet_clock_is_refused():
 
 
 def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_other_work_is_refused():
-    from verity.protocols.pouw.prover.circuit import h1tile
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile
 
     assert (h1tile.SCHEME, h1tile.FOLD) == (P.SCHEME, "fx1") and all("S8" in k for k in h1tile.KINDS)
     # benchmarks/datacenter's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_proved_ticks_placed's
@@ -74,8 +73,6 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
             P.placed(wrong, grid)
 
 
-needs_h1 = pytest.mark.skipif(importlib.util.find_spec("verity.protocols.pouw.prover.circuit.segment") is None,
-                              reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
 ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 
 
@@ -90,7 +87,6 @@ def h1_rows() -> dict[tuple[int, int, int], int]:
 TILE_ROWS = {(4, 8, 64): (2048, 6144), (4, 16, 64): (4096, 12288), (4, 8, 96): (3072, 8192)}
 
 
-@needs_h1
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
 def test_a_tiles_products_are_lean_h1_rows_and_placed_credits_z_at_its_k(r, c, k):
     """census/v1 counts an H1 tile's z and its lanes' segment dots as int8 products, r·c·(2K + 32m), 3× z's at K = 64;
@@ -106,7 +102,6 @@ def test_a_tiles_products_are_lean_h1_rows_and_placed_credits_z_at_its_k(r, c, k
 TILE_ROWS_V3 = {(4, 8, 64): 4096, (4, 16, 64): 8192, (4, 8, 96): 5120}
 
 
-@needs_h1
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
 def test_a_one_stream_tiles_products_are_its_lanes_and_placed_credits_z_at_its_k(r, c, k):
     """v3's z is recombined from the lanes' folded words, so its tile has `h1Rows`' products less z's own, and `placed`
@@ -123,7 +118,6 @@ def test_lean_h1_rows_are_the_three_rows():
     assert set(h1_rows()) == set(TILE_ROWS)
 
 
-@needs_h1
 @pytest.mark.slow
 @pytest.mark.parametrize("version", [1, 3])
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
@@ -131,10 +125,10 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     """The tile's Program, read as the datacenter reads a block (`logical.work`'s `mac:int8`, here census/v1's products by
     class), on v1 and on the one stream v3, is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
     seeds' SHA-512 on bits (about 35 s), then about 1 s a row; the fast rows above take the products from Lean alone."""
-    from verity.protocols.pouw.prover.circuit import h1tile as H
-    from verity.definitions.circuits.census import PRODUCTS, census
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
+    from verity.circuits.census import PRODUCTS, census
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.circuits.program import Program
 
     exact = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)

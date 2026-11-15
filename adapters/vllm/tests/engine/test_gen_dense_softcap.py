@@ -3,27 +3,40 @@ softcapped launch resolves to `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` with the 
 a windowed + softcapped launch (Gemma-2 even layers) goes through the inert-window rule; bad softcaps are Unsupported with a reason."""
 from __future__ import annotations
 
-import importlib
-
 import dataclasses
+import importlib
 import math
 
 import pytest
+from verity_vllm.definitions.registry import dense as SC
 
+from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
+from tests.observe.test_patterns_synthetic import (
+    KVH,
+    NH,
+    D,
+    _context_on_host,
+    by_spec,
+    context,
+    decode_step,
+)
 from verity_vllm.observe.fold.patterns import AttentionScope
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.observe.fold.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
-from verity_vllm.observe.fold.profiles.gen_dense_softcap_patterns import AttentionScopeSoftcap, with_softcap_patterns
+from verity_vllm.observe.fold.profiles.gen_dense2_patterns import (
+    AttentionScopeInertWindow,
+    with_dense2_patterns,
+)
+from verity_vllm.observe.fold.profiles.gen_dense_softcap_patterns import (
+    AttentionScopeSoftcap,
+    with_softcap_patterns,
+)
+from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
+from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 
 gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
-from verity_vllm.observe.fold.patterns.target import target_of
-from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
-from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
-from tests.observe.test_patterns_synthetic import D, KVH, NH, _context_on_host, by_spec, context, decode_step
-from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.quarantine.dense import softcap as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"
 CAPPED = "AttentionSoftcap_v1{T=33,NH=9,KVH=3,D=64,BN=128,CAP=50.0}"
@@ -80,14 +93,16 @@ def test_softcapped_launch_resolves_to_attention_softcap_with_the_base_operands(
     assert c.pattern == "attention.fa2_varlen_fwd.softcap" and c.spec.bindings["CAP"] == 50.0
     assert set(c.consumed) == next(n for n in se.roots if n.op == SCOPE).ids()
     # the rest of the step is unchanged by the more specific scope (same specs apart from the attention body)
-    others = lambda d: sorted(s for s in d if not s.startswith(("Attention_v3", "AttentionSoftcap")))
+    def others(d):
+        return sorted(s for s in d if not s.startswith(("Attention_v3", "AttentionSoftcap")))
+
     assert others(by_spec(res)) == others(by_spec(base))
 
 
 def test_softcap_definition_is_the_quarantined_one_and_builds_a_body():
     se, res = _resolve(softcap=50.0)
     (c,) = by_spec(res)[CAPPED]
-    assert c.spec.defn is SC.AttentionSoftcap and SC.SEMANTIC_ID == "dense/AttentionSoftcap@v1"
+    assert c.spec.defn is SC.AttentionSoftcap
     assert "quarantine" in (c.spec.defn.conformance or "")
     # CAP is a static of the body: the two constants differ from the base body's
     assert SC.softcap_mul_bits(64, 50.0) != SC.softcap_scale_log2_bits(50.0)
@@ -114,13 +129,13 @@ def test_softcap_without_dense2_patterns_still_resolves_the_windowless_launch():
     assert "AttentionSoftcap_v1{T=33,NH=9,KVH=3,D=64,BN=128,CAP=30.0}" in by_spec(res)
 
 
-@pytest.mark.parametrize("cap", [-50.0, float("nan"), float("inf")])
-def test_bad_softcaps_are_unsupported_with_the_value_recorded(cap):
-    se, res = _resolve(softcap=cap)
+@pytest.mark.parametrize("softcap_value", [-50.0, float("nan"), float("inf")])
+def test_bad_softcaps_are_unsupported_with_the_value_recorded(softcap_value):
+    se, res = _resolve(softcap=softcap_value)
     uns = [r for r in res if isinstance(r, Unsupported)]
     assert len(uns) == 1 and uns[0].op == SCOPE and "softcap" in uns[0].reason
     got = uns[0].detail["softcap"]
-    assert got == cap or (math.isnan(cap) and math.isnan(got))
+    assert got == softcap_value or (math.isnan(softcap_value) and math.isnan(got))
 
 
 def test_base_facts_are_still_checked_under_a_softcap():

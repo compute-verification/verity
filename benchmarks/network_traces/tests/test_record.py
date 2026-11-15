@@ -14,7 +14,6 @@ import types
 from pathlib import Path
 
 import pytest
-from verity.protocols.certifier.verifier import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -88,8 +87,6 @@ def test_a_chunk_becomes_frames_in_canonical_order_and_ingress_frames() -> None:
     assert cfg["ingress"][0]["arrival_ms"] == [50.0, 50.0, 99.9, WINDOW_MS + 50.0]
     (body,), _ = rec.build_trace(records, samples(2), name="t", windows=2, ingress="body")
     assert body["ingress"][0]["arrival_ms"] == [50.0] * 3 + [99.9] * 3 + [WINDOW_MS + 50.0] * 3
-    report = calibration.calibrate(rec.trace_doc(configs))
-    assert (report["egress"][0]["honest_windows"], report["egress"][0]["honest_misses"]) == (2, 0)
 
 
 def test_contamination_and_failures_drop_windows_and_split_the_chunk() -> None:
@@ -356,8 +353,10 @@ def thaw():
 def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path, monkeypatch, thaw, evict) -> None:
     """A whole offline `run` on the fake engine and the injected clock, with SIGTERM delivered 90 s after t0, while the
     engine loads (seeds 62-69's eviction), or never. The schedule is frozen out of the collector's reach before the
-    first request is admitted, and `meta.json` records the freeze."""
-    now, handlers, evict_at, first = [100.0], {}, [math.inf], []
+    first request is admitted, and `meta.json` records the freeze: the count the recorder read once, after its one
+    freeze and before that request. The count is compared with no later reading: it falls whenever a frozen object
+    is freed."""
+    now, handlers, evict_at, order, reached = [100.0], {}, [math.inf], [], []
 
     def clock():
         now[0] += 0.001
@@ -396,8 +395,9 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
 
     class Evicting(FakeEngine):
         def add_request(self, rid, prompt, params):
-            if not first:
-                first.append((gc.get_freeze_count(), any(o is prompt["prompt_token_ids"] for o in gc.get_objects())))
+            if not reached:
+                order.append("first request")
+                reached.append(any(o is prompt["prompt_token_ids"] for o in gc.get_objects()))
             super().add_request(rid, prompt, params)
 
         def step(self):
@@ -413,6 +413,16 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
             evict_at[0] = now[0] + args.warmup_s + 90
         return types.SimpleNamespace(llm=types.SimpleNamespace(llm_engine=Evicting(now))), None
 
+    def freeze():
+        order.append("freeze")
+        gc.freeze()
+
+    def get_freeze_count():
+        order.append(gc.get_freeze_count())
+        return order[-1]
+
+    monkeypatch.setattr(rec, "gc", types.SimpleNamespace(
+        collect=gc.collect, callbacks=gc.callbacks, freeze=freeze, get_freeze_count=get_freeze_count))
     monkeypatch.setattr(rec, "clock", clock)
     monkeypatch.setattr(rec, "threading", types.SimpleNamespace(Event=Event))
     monkeypatch.setattr(rec, "multiprocessing", types.SimpleNamespace(
@@ -430,7 +440,6 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(SamplingParams=lambda **kw: kw))
     monkeypatch.setitem(sys.modules, "verity_vllm.engine.engine_driver",
                         types.SimpleNamespace(external_id=lambda s: s.rsplit("-", 1)[0]))
-    frozen = gc.get_freeze_count()  # not 0: CPython starts with objects in the permanent generation
     rc = rec.main(["run", "--out", str(tmp_path), "--model", "unsloth/Llama-3.2-1B", "--mode", "bi-eager",
                    "--mix", "b4=5", "--minutes", "3.5", "--warmup-s", "10"])
     meta = json.loads((tmp_path / "meta.json").read_text())
@@ -438,9 +447,9 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     assert rc == (143 if evict else 0) and meta["ended"]["evicted"] is bool(evict)
     if evict == "at startup":
         assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"
-        assert "gc" not in meta and first == []
+        assert "gc" not in meta and order == []
         return
-    assert meta["gc"]["frozen_before_t0"] > frozen and first == [(meta["gc"]["frozen_before_t0"], False)]
+    assert order == ["freeze", meta["gc"]["frozen_before_t0"], "first request"] and reached == [False]
     assert meta["windows"] == 2 and summary["windows_planned"] == (1 if evict else 2)
     assert summary["windows_kept"] == summary["windows_planned"]
     assert len(json.loads((tmp_path / "trace.json").read_text())["configurations"]) == 1

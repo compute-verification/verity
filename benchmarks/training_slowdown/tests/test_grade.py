@@ -1,5 +1,5 @@
-"""training_slowdown.grade on synthetic records and on a job's own: the fit, the seeds, H and p both ways, ρ from the
-search record's trace at a named policy, the sensitivities and the code version from the trace's circuit and what is
+"""training_slowdown.grade on synthetic records and on a job's own: the fit, the seeds, H and p both ways, the search record's
+slowdown from its trace at a named policy, the sensitivities and the code version from the trace's circuit and what is
 blank without them, S and what it refuses, the bound of record beside it, the periods, and the command."""
 import copy
 import json
@@ -99,7 +99,7 @@ def traced(losses: list, seed: int = 0, **over) -> dict:
 
 
 #: a traced step's circuit as the capture measures one (`capture.circuit.measure`), the keys the grade reads; a token
-#: reads one id, so τ is its stub's and ρ counts the same steps with the circuit as without
+#: reads one id, so τ is its stub's and the record's slowdown counts the same steps with the circuit as without
 CIRCUIT = {"sigma": 0.9, "affected_share": 0.5, "token_factor": 2.0, "grad_cut_bits": 3_000_000,
            "partial_cut_bits": 2_000_000, "delta_grad_bits": 4_000_000, "tau_ids": 1.0, "tau_other_bits": 0.0,
            "a_bits": 512.0, "u_in": [[0.0, 0.0], [1.0, 3e6]], "u1_bits": 3e6, "tail_share": 0.25}
@@ -168,20 +168,20 @@ def test_the_range_of_p_is_least_c_over_greatest_h_to_greatest_c_over_least_h():
 
 
 def test_the_runs_gates_at_s_read_the_mean_of_c_over_seeds_that_differ():
-    """The run at S is the mean |C| over the final seeds times ρ: not their least, their greatest, or the search
-    record's |C| that ρ was read at."""
+    """The run at S is the mean |C| over the final seeds times the record's slowdown: not their least, their greatest, or the search
+    record's |C| that its slowdown was read at."""
     s = graded([reach(5, 0), reach(7, 1), traced([OVER, UNDER, UNDER])], [reach(2, 0), reach(4, 1)])
-    C, rho = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
-    assert C["min"] < C["mean"] < C["max"] and rho > 1
+    C, slowdown = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
+    assert C["min"] < C["mean"] < C["max"] and slowdown > 1
     per_and = gates.per_and("gemm/bf16")
-    assert s["per_period"]["run_and_gates"] == pytest.approx(C["mean"] * rho / per_and)
+    assert s["per_period"]["run_and_gates"] == pytest.approx(C["mean"] * slowdown / per_and)
     for other in (C["min"], C["max"], s["rho"]["C_gates"]):
-        assert s["per_period"]["run_and_gates"] != pytest.approx(other * rho / per_and)
-    assert s["S"]["honest"] == pytest.approx(2.0 * rho)
+        assert s["per_period"]["run_and_gates"] != pytest.approx(other * slowdown / per_and)
+    assert s["S"]["honest"] == pytest.approx(2.0 * slowdown)
 
 
-def test_rho_reads_the_first_planned_search_seed():
-    """With two search records, ρ is read on the seed the config's `seeds.search` names first, whatever order the
+def test_the_records_slowdown_reads_the_first_planned_search_seed():
+    """With two search records, the record's slowdown is read on the seed the config's `seeds.search` names first, whatever order the
     records come in."""
     early, late = traced([OVER, UNDER, UNDER]), traced([OVER, OVER, OVER, UNDER], seed=1)
     runs, ref = [reach(5, 0), reach(7, 1), early, late], [reach(2, 0)]
@@ -250,9 +250,9 @@ def test_an_unknown_policy_is_refused_by_name_and_a_name_resolves_in_one_place()
     assert set(calculator.policies()) >= {"v4-pro-session"} and calculator.policy("console") is None
 
 
-def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
-    """ρ is `formalism.published` at the policy's (c, k) on the search job's first checkpoint reaching the gain, and
-    S = p·ρ against each H. At a registry policy whose k the trace's products aren't classified at, ρ is unmeasured
+def test_the_records_slowdown_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
+    """The record's slowdown is `formalism.published` at the policy's (c, k) on the search job's first checkpoint reaching the gain, and
+    S is p times it against each H. At a registry policy whose k the trace's products aren't classified at, the record's slowdown is unmeasured
     with the formalism's reason and there is no S; p stands."""
     search = traced([OVER, UNDER, UNDER])
     runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1), search], [job([OVER, UNDER])]
@@ -265,13 +265,34 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert s["S"] == {"honest": pytest.approx(1.5 * want["rho"]), "any": pytest.approx(1.5 * want["rho"]),
                       "why": None, "lower_bound": want["partial"]}
     assert s["rests_on"]["rho"] == want["rests_on"] and "4 of the 5 starts on data d" in s["rests_on"]["gain"]
+    premise = f"attention: that {products.ATTENTION_PREMISE}"
+    assert s["rests_on"]["attention"] is None and premise not in G.text(s)
+    assert premise in G.text(s | {"rests_on": s["rests_on"] | {"attention": products.ATTENTION_PREMISE}})
     at = graded(runs, ref, CONFIG | {"policy": "v4-pro-session"})
     assert at["policy"]["kind"] == policy.FIXED and at["rho"]["rho"] is None and at["S"]["any"] is None
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
 
 
+def test_a_grown_models_own_numbers_price_neither_the_policy_nor_c0():
+    """A job of a route that grows the start (`grow`) records the grown model's forward MACs a token and c, and its
+    map (`origin`). Nothing that prices the policy reads them: the grade's (c, k), at the console's rule and at a
+    registry's policy, is the policy's at the start's shape, and C0 and the fit are the starts registry's, as for a
+    job of the start's own shape."""
+    search = traced([OVER, UNDER, UNDER])
+    grown = copy.deepcopy(search)
+    fwd = 3 * grown["record"]["forward_macs_per_token"]
+    grown["record"] |= {"forward_macs_per_token": fwd, "c": 4096 * fwd, "origin": {"blocks": 24, "sha256": "0" * 64,
+                                                                                 "map": {"blocks.23.wo.weight": None}}}
+    runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1)], [job([OVER, UNDER])]
+    for name in ("console", "v4-pro-session"):
+        plain, deep = (graded(runs + [s], ref, CONFIG | {"policy": name}) for s in (search, grown))
+        assert plain["policy"] == deep["policy"] == policy.named(name, SHAPE)
+        assert plain["fit"] == deep["fit"] and plain["p"] == deep["p"]
+    assert policy.c0(registry()["starts"]["s"])[0] == 1e15 * PER_MAC
+
+
 def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
-    """What ρ reads of a record's trace: each raw row priced by `capture.products.priced` by the rule of the capture
+    """What a record's slowdown reads of its trace: each raw row priced by `capture.products.priced` by the rule of the capture
     that traced it, which gives back the row that capture states (a stored record's float32 attention products in
     bf16), at the rows' k and at each k of the dial; over the steps through the checkpoint that read a changed
     weight, by their tokens over the traced step's. The grade holds no price: the products are the formalism's of
@@ -334,14 +355,14 @@ def test_the_traces_circuit_gives_the_parts_their_structure_and_both_sensitiviti
         why.endswith("the term sums the parts that have it") for why in s["rho"]["unmeasured"].values())
     red, upd = s["rho"]["sensitivities"].values()
     text = G.text(s)
-    assert f"reduction {red:,.6g}, update {upd:,.6g}, beside rho and never in it" in text
+    assert f"reduction {red:,.6g}, update {upd:,.6g}, beside the record's slowdown and never in it" in text
     assert f"reduction: partial: {s['rho']['unmeasured']['reduction'].removeprefix('unmeasured: ')}" in text
     assert "unmeasured" not in text and ", its code 9.9" in text
     assert "blank" not in text
 
 
 def test_a_trace_without_its_circuit_or_code_version_still_grades_and_says_what_is_blank():
-    """A record whose trace has only what ρ reads grades at the ρ and S of the same record with its circuit. The
+    """A record whose trace has only what its slowdown reads grades at the slowdown and S of the same record with its circuit. The
     figures that read what it lacks are blank, each with why and with how the trace is taken again: both
     sensitivities without the circuit, the code version without its own. One that lacks only one has only that
     blank."""
@@ -361,7 +382,7 @@ def test_a_trace_without_its_circuit_or_code_version_still_grades_and_says_what_
     no_code = f"the search record's trace has no capture_code, the version of the code that took the trace; {again}"
     assert s["rho"]["blank"] == {"reduction": no_circuit, "update": no_circuit, "capture_code": no_code}
     text = G.text(s)
-    assert "reduction blank, update blank, beside rho and never in it" in text
+    assert "reduction blank, update blank, beside the record's slowdown and never in it" in text
     assert f"reduction: blank: {no_circuit}" in text and f"update: blank: {no_circuit}" in text
     assert f", its code blank: {no_code}" in text
     coded = graded([final, heavy(traced([OVER, UNDER], capture_code="9.9"))], ref)["rho"]
@@ -388,9 +409,9 @@ def test_a_step_is_after_the_first_update_when_it_reads_a_changed_weight():
     assert G.changed_steps(steps({"new/1": [""]}, {"new/1": [""]}), None) == []
 
 
-def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again():
-    """p reads the count alone, so it stands where ρ has no trace to read: a record with none, one whose step the
-    capture refused, one of another capture version, or one without a key ρ reads. The reason names the job that
+def test_no_slowdown_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again():
+    """p reads the count alone, so it stands where the record's slowdown has no trace to read: a record with none, one whose step the
+    capture refused, one of another capture version, or one without a key its slowdown reads. The reason names the job that
     re-traces the record at its commit and config.text; a record without them is told it has no config to re-trace
     from, and no command."""
     ref = [job([UNDER])]
@@ -410,23 +431,23 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
     orphan = "the record has no config.text and no commit, so no config to re-trace from"
     assert G.RETRACE == "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
     assert why(job([OVER, UNDER], split="search"), **here) == (
-        f"refused: the search record has no trace, and ρ reads a traced step; {again}")
+        f"refused: the search record has no trace, and its slowdown reads a traced step; {again}")
     refused = {"refused": {"reason": "unsupported", "op": "aten::foo", "message": "foo has no trace"}}
     assert why(traced([OVER, UNDER]), trace=refused, **here) == (
-        f"refused: the capture refused the search record's step (unsupported, aten::foo: foo has no trace), and ρ "
+        f"refused: the capture refused the search record's step (unsupported, aten::foo: foo has no trace), and its slowdown "
         f"reads a traced step; {again}")
     assert why(traced([OVER, UNDER], capture="0.1"), **here) == (
         f"refused: the search record's trace is capture 0.1's, and this grade reads capture 4.12.9's and "
         f"{products.CAPTURE}'s; {again}")
     lacking = traced([OVER, UNDER])
     del lacking["record"]["trace"]["at"], lacking["record"]["trace"]["carried_scalars"]
-    assert why(lacking, **here) == (f"refused: the search record's trace has no at, carried_scalars, which ρ reads; "
+    assert why(lacking, **here) == (f"refused: the search record's trace has no at, carried_scalars, which its slowdown reads; "
                                     f"{again}")
     # a trace that was not taken is no refusal: nothing was found against the step, and the reason is the job's
     for failed in ("the route's process was ended by SIGSEGV after it wrote the job's record",
                    "RuntimeError: no trace today"):
         assert why(traced([OVER, UNDER]), trace={"failed": failed}, **here) == (
-            f"unmeasured: the search record's trace was not taken ({failed}), and ρ reads a traced step; {again}")
+            f"unmeasured: the search record's trace was not taken ({failed}), and its slowdown reads a traced step; {again}")
     for search in (job([OVER, UNDER], split="search"), traced([OVER, UNDER], capture="0.1"),
                    traced([OVER, UNDER]) | {"record": traced([OVER, UNDER])["record"] | {"trace": refused}}):
         assert why(search).endswith(f"; {orphan}") and "python" not in why(search)
@@ -434,7 +455,7 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
         "; the record has no config.text, so no config to re-trace from")
 
 
-def test_no_rho_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes():
+def test_no_slowdown_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes():
     """A read-back that decides what the graph can't carry, a trace whose products no update reaches, and a
     checkpoint with a nonempty E before any step reads a changed weight are refused, never priced; p stands."""
     ref = [job([UNDER])]
@@ -459,7 +480,7 @@ def test_no_rho_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes
 
 def test_a_records_provenance_is_passed_on_and_never_read():
     """A record that says where it came from is graded as the same record that doesn't: its `provenance` goes, as it
-    is, beside the record in `records` and, for the record ρ read, into what S rests on and the block's lines."""
+    is, beside the record in `records` and, for the record whose slowdown it read, into what S rests on and the block's lines."""
     said = {"converted_from": "another schema", "by": "a script"}
     plain, marked = traced([OVER, UNDER]), traced([OVER, UNDER])
     marked["record"]["provenance"] = said
@@ -478,7 +499,7 @@ def test_a_records_provenance_is_passed_on_and_never_read():
 def named(run: dict, dtype: str = "float32") -> dict:
     """`run` (a `job` or a `traced` one) as this version's counter writes it: every row of its op log names a dtype.
     A `job`'s names `dtype`. A `traced` one's names bf16, the dtype its trace ran its products in, whatever `dtype`
-    is: a job counts and traces one step, and a record that names another dtype than its trace prices has no ρ
+    is: a job counts and traces one step, and a record that names another dtype than its trace prices has no slowdown
     (`G.priced_apart`)."""
     rec = copy.deepcopy(run["record"])
     for st in rec["structures"].values():
@@ -517,7 +538,7 @@ def test_records_priced_two_ways_give_no_p_and_no_s_and_the_reason_names_both_wa
         assert "again with a job of this version" in G.MIXED
         assert (s["H"]["any"]["config"], s["H"]["any"]["C"]) == (None, None) and s["H"]["honest"]["C"]
         block = G.text(s)
-        assert f"  {'S = p x rho':<17} none: the records read are priced two ways" in block
+        assert f"  {'S = p x slowdown':<17} none: the records read are priced two ways" in block
         assert "against any route none; against the honest route none" in block and "none: no S" in block
         assert "any route, over 2 configs (attack, reference), no config: none (the configs' records are priced" in block
     lines = G.text(graded([named(r | {"record": r["record"] | {"device": "cpu"}}) for r in attack], [named(ref[0])]))
@@ -691,16 +712,18 @@ def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_t
     of it a record states, while its op log names a GEMM float32 has its products at a price that isn't its job's:
     the grade stops, and says which record, which ops and the way out, the job run again with the switch off.
 
-    A Shampoo job's float32 GEMMs are its optimizer's, outside M. With those rows named `tf32` the same record
-    grades, its ρ too, at the TF32 GEMM's price; with the switch off it grades at the exact one; and counted as if
+    A Shampoo job's float32 GEMMs on a CPU are its optimizer's and attention's, which a job on a CPU runs under the
+    math kernel, in float32 (`run.cpu_attention`); M holds none of them. With those rows named `tf32` the same record
+    grades, its slowdown too, at the TF32 GEMM's price; with the switch off it grades at the exact one; and counted as if
     its log named no dtype it is one that names none."""
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     starts = registry("tiny", synthetic.SHAPE)
     run = {"seed": 0, "split": "search", "record": preconditioned}
-    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["other mm"]
+    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["bwd bmm", "fwd bmm", "other mm"]
     assert not [r for r in preconditioned["trace"]["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
     with pytest.raises(ValueError, match=r"^grade: the record at seed 0, search states torch's TF32 switch on, and "
-                                         r"its op log names GEMM ops float32, the exact product \(other mm\): ") as e:
+                                         r"its op log names GEMM ops float32, the exact product "
+                                         r"\(bwd bmm, fwd bmm, other mm\): ") as e:
         G.grade(config, starts, [stating(run, on)], [run])
     assert str(e.value).endswith(f"at another price. {G.TF32_FIX}") and "`tf32`" not in str(e.value)
     assert "fp32_precision = 'ieee'" in G.TF32_FIX and "allow_tf32 = False" in G.TF32_FIX
@@ -722,13 +745,13 @@ def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_t
 def test_a_product_of_m_named_tf32_is_priced_apart_from_its_trace(adapted):
     """A trace names no TF32, so naming `tf32` the rows of a float32 GEMM that M holds is no way out: a LoRA job's
     builds of B·A, float32 GEMMs of M, named so are priced in float32 in the trace and as TF32 in the count, and
-    the record has no ρ and no S. The refusal of the record that states the switch on names the one way out, the
+    the record has no slowdown and no S. The refusal of the record that states the switch on names the one way out, the
     job run again with the switch off."""
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     starts = registry("tiny", synthetic.SHAPE)
     run = {"seed": 0, "split": "search", "record": adapted}
     with pytest.raises(ValueError, match=r"states torch's TF32 switch on, and its op log names GEMM ops float32, "
-                                         r"the exact product \(other mm\)") as e:
+                                         r"the exact product \(bwd bmm, fwd bmm, other mm\)") as e:
         G.grade(config, starts, [stating(run, ON[0])], [run])
     assert str(e.value).endswith(G.TF32_FIX)
     renamed = stating(as_tf32(run), ON[0])
@@ -759,7 +782,7 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     """The record a job writes, with the trace its job took of its own step, grades as it is: its rows priced by the
     capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds, which the
     job holds as θ's, so it lists no weight), of the traced step's own shape. Its trace says more than the grade
-    reads, and a refused one has no ρ."""
+    reads, and a refused one has no slowdown."""
     assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
     assert ran["tf32"] == {"cuda_matmul_fp32_precision": "none"} and gates.tf32_on(ran) is False
     assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"] == {}
@@ -785,19 +808,21 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
 def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an_earlier_captures(ran):
     """Where the two rules of one price meet, on a record whose op log names dtypes. `two_pricings` is about records
     among themselves, C over H. `work.repriced` is about a slowdown over a trace's own circuit, which the grade never
-    takes: it divides the trace's products by the record's count, so their one price is that each product the trace
-    prices is priced in the dtype the record names for it.
+    takes: it divides the trace's products of M by the record's count, so their one price is that each of them is
+    priced in the dtype the record names for it.
 
     With the trace its job took, of this capture: neither rule speaks. Every traced product with fewer than two
     token dims, which M's all are, is priced in the dtype it was traced in, the one the record's log names for it.
-    The products the two sides differ on are attention's, float32 in the trace and bf16 in the rows the counter
-    writes for a fused kernel, and M leaves them out for their two token dims.
+    Attention's products, which M leaves out for their two token dims, are float32 in the trace, as the math kernel
+    computes them, and in the record's log, since a job on a CPU runs that kernel too (`run.cpu_attention`); the
+    trace states the bf16 their call computes in on a card (a row's `attention`), which is their price.
 
-    With the same rows under an earlier capture, whose rule prices those float32 products at bf16: `work.repriced`
-    lists them and nothing else, so over the trace's own circuit there is no slowdown, with that reason, and the
-    grade's ρ and bound of record are what they are with the job's own trace, since nothing M holds moved."""
+    With the same rows as an earlier capture's, which states no call, that capture's rule prices those float32
+    products at bf16 too, so the work is priced as it is with the job's own trace; but that capture's circuit
+    counted them in float32, so `work.repriced` lists them and nothing else, and over the trace's own circuit there
+    is no slowdown, with that reason. The grade's the record's slowdown and bound of record are what they are with the job's own trace."""
     tr = ran["trace"]
-    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.CAPTURE
     names: dict = {}
     for _, _, op, shapes, _, _, dtype in ran["structures"][ran["steps"][tr["step"]]["struct"]]["log"]:
         if op in (*F.PLAIN_PRODUCTS, "bmm"):
@@ -811,13 +836,20 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     attentions = [r for r in tr["rows"] if sum(x in r["token_dims"] for x in "mkn") >= 2]
     others = [r for r in tr["rows"] if r not in attentions]
     assert others and all(named_for(r) == {products.traced_dtype(r)} == {"bfloat16"} for r in others)
-    assert attentions and all((r["op"], products.traced_dtype(r), named_for(r)) == ("bmm", "float32", {"bfloat16"})
-                              for r in attentions)
+    assert attentions and all((r["op"], products.traced_dtype(r), r["attention"], named_for(r)) == (
+        "bmm", "float32", "bfloat16", {"float32"}) for r in attentions)
+    assert all({products.priced_dtype(r, tr["capture"])} == named_for(r) for r in others)
+    assert {products.priced_dtype(r, tr["capture"]) for r in attentions} == {"bfloat16"}
+
+    def no_call(rows: list) -> list:
+        return [{k: v for k, v in r.items() if k != "attention"} for r in rows]
 
     earlier = products.READS[0]
-    old = tr | {"capture": earlier}
+    old = tr | {"capture": earlier, "rows": no_call(tr["rows"]),
+                "at": {k: b | {"rows": no_call(b["rows"])} for k, b in tr["at"].items()}}
     moved = work.repriced(old)
-    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in attentions for r in moved)
+    assert products.on_premise(tr["rows"]) and not products.on_premise(old["rows"])
+    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in no_call(attentions) for r in moved)
     pol = policy.named(CONFIG["policy"], synthetic.SHAPE)
     alone = calculator.slowdown(pol, old)
     assert calculator.slowdown(pol, tr)["slowdown"] is not None and alone["slowdown"] is None
@@ -826,9 +858,8 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     row = G.rows_of(ran)[-1]
     now, then = (G.traced(ran | {"trace": t}, row)["formalism"] for t in (tr, old))
     assert then["products"]["he"] == now["products"]["he"] and now["products"]["he"]["groups"]
-    prices = [(x["op"], x["gates_per_mac"], y["gates_per_mac"])
-              for x, y in zip(now["trace"]["products"]["rows"], then["trace"]["products"]["rows"]) if x != y]
-    assert prices == [("bmm", gates.per_mac("gemm/f32"), PER_MAC)] * len(attentions)
+    assert then["trace"]["products"]["rows"] == now["trace"]["products"]["rows"]
+    assert {x["gates_per_mac"] for x in now["trace"]["products"]["rows"] if x["op"] == "bmm"} == {PER_MAC}
 
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     runs = [{"seed": 0, "split": "search", "record": ran}]
@@ -850,16 +881,16 @@ def adapted(tmp_path_factory):
 
 
 def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_names_is_refused(ran, adapted):
-    """ρ divides the work of the trace's products by the record's count, so their one price is that each product M
+    """The record's slowdown divides the work of the trace's products by the record's count, so their one price is that each product M
     holds is priced, in the trace, in the dtype the record's op log names for it (`G.priced_apart`); else the record
-    has no ρ, and no S.
+    has no slowdown, and no S.
 
     M holds a LoRA job's two builds of B·A, float32 in its trace and in its record. With the trace its job took, of
     this capture, each is priced as traced, nothing is apart and the record grades. The same rows as an earlier
     capture's are priced by that capture's rule, a product traced wider than bf16 at bf16: the builds are then bf16
-    in the work and float32 in the count, and ρ is refused, saying how many, the largest with its two dtypes and the
-    way out, the job traced again at capture `PRICED_AS_TRACED_FROM` or later. A job with no product of M wider than
-    bf16 has none apart under either capture: attention's float32 products are outside M.
+    in the work and float32 in the count, and the record's slowdown is refused, saying how many, the largest with its two dtypes and the
+    way out, the job traced again by this capture. A job with no product of M wider than bf16 has none apart under
+    either capture.
 
     A trace whose step ran M's products in another dtype than the job did is refused at this capture too, and there
     the way out is a trace whose step runs them as the job did: the job traced again on a device of the kind the
@@ -869,7 +900,7 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     old = tr | {"capture": earlier}
     builds = [r for r in tr["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
     assert len(builds) == 2 and all(r["phase"] == "forward" and not r["token_dims"] for r in builds)
-    assert G.names_dtypes(adapted) is True and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.names_dtypes(adapted) is True and tr["capture"] == products.CAPTURE
     assert G.priced_apart(tr, row["macs_log"]) == [] and G.traced(adapted, row)["formalism"]["products"]["he"]["groups"]
     apart = G.priced_apart(old, row["macs_log"])
     assert sorted(apart, key=str) == sorted(({"row": r, "priced": "bfloat16", "named": ["float32"]} for r in builds),
@@ -880,8 +911,8 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     said = (f"2 of the traced step's matrix products in M are priced in another dtype than the search record's op log "
             f"names for them (the largest: 1 forward mm of {d['m']}×{d['k']} by {d['k']}×{d['n']}, priced in "
             f"bfloat16 where the record names float32), and one slowdown has one price: trace the job again at "
-            f"capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product in the dtype it was "
-            f"traced in (float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
+            f"capture {products.CAPTURE} or later, which prices each product in the dtype its circuit counts it in "
+            f"(float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
     with pytest.raises(F.Refused) as refused:
         G.traced(adapted | {"trace": old}, row)
     assert str(refused.value) == said and G.RETRACE in said
@@ -935,14 +966,14 @@ def test_a_jobs_own_trace_gives_both_sensitivities_back(ran):
     assert rest["token_gates"] == circuit["sigma"] * rest["gates"] and circuit["grad_cut_bits"] > 0
     run = {"seed": 0, "split": "search", "record": ran}
     c, k = rest["token_gates"] / 2 / 3.5, policy.CONSOLE[1]
-    rho, _ = G.rho_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
+    slowdown, _ = G.slowdown_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
                       synthetic.SHAPE)
-    total = rho["C_gates"]
+    total = slowdown["C_gates"]
     assert total == pytest.approx(setup["gates"] + first["gates"] + rest["gates"])
-    assert rho["sensitivities"] == pytest.approx({"reduction": c * 2 * 3 * circuit["partial_cut_bits"] / (k * total),
+    assert slowdown["sensitivities"] == pytest.approx({"reduction": c * 2 * 3 * circuit["partial_cut_bits"] / (k * total),
                                                   "update": c * 2 * circuit["grad_cut_bits"] / (k * total)})
-    assert rho["sensitivities"]["reduction"] > rho["sensitivities"]["update"] > 0
-    assert rho["blank"] == {} and rho["capture_code"] == VERSION and set(rho["unmeasured"]) == {"reduction", "update"}
+    assert slowdown["sensitivities"]["reduction"] > slowdown["sensitivities"]["update"] > 0
+    assert slowdown["blank"] == {} and slowdown["capture_code"] == VERSION and set(slowdown["unmeasured"]) == {"reduction", "update"}
 
 
 def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
@@ -962,10 +993,10 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
     assert not bad["reached"] and bad["why"] == "no scored checkpoint: invalid: foreign op"
 
 
-def test_rho_is_the_bound_of_record_where_products_bind():
-    """ρ's products term is the bound of record: the calculator's count solved for the fewest blocks
-    (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products bind, ρ
-    is the bound's slowdown and S is p times it, and the block says so under the bound."""
+def test_the_records_slowdown_is_the_bound_of_record_where_products_bind():
+    """The products term of the record's slowdown is the bound of record: the calculator's count solved for the fewest blocks
+    (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products bind, the
+    record's slowdown is the bound's and S is p times it, and the block says so under the bound."""
     s = graded([job([OVER, UNDER], 0), traced([OVER, UNDER])], [job([UNDER])])
     w, got = s["rho"]["work"], s["bound_of_record"]
     c, k = policy.CONSOLE
@@ -974,30 +1005,34 @@ def test_rho_is_the_bound_of_record_where_products_bind():
     assert s["rho"]["binding_kind"] == "products"
     assert s["rho"]["rho"] == s["rho"]["terms"]["products"] == got["slowdown"]
     assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * got["slowdown"])
-    assert f"\n  {'':<17} {G.BOUND_IS_RHO}\n" in G.text(s) and "this attack pays" not in G.text(s)
-    assert "rho is it" in G.BOUND_IS_RHO and "closed form" not in G.text(s) and "overhead" not in G.text(s)
+    assert f"\n  {'':<17} {G.BOUND_IS_SLOWDOWN}\n" in G.text(s) and "this attack pays" not in G.text(s)
+    assert "the record's slowdown is it" in G.BOUND_IS_SLOWDOWN and "closed form" not in G.text(s) and "overhead" not in G.text(s)
 
 
-def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
-    """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
-    β_x, b_y, F and |C|, with no n, and ρ's products term is its blocks times c/|C|: with the calculator's `bound`
-    replaced, each choice of the work is scored by it, and ρ and S follow it. Without a traced step, or on one whose
-    M is empty (no operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
+def test_the_bound_of_record_is_the_calculators_and_the_records_slowdown_follows_it(monkeypatch):
+    """The bound of record is the calculator's choice on the traced step's products (`min_cut.slowdown_of`) at the
+    policy's (c, k) and |C|, with no n, and the products term of the record's slowdown is its term: with `slowdown_of` replaced by one that
+    gives 300 blocks wherever it chooses a work, the bound of record is its `Bound` on the work it chose, and the record's slowdown and S
+    follow it. Without a traced step, or on one whose M is empty (no operand holds a bit, so there is no β to hand
+    over), it is not available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
-    calls = []
+    calls, real = [], calculator._min_cut()
 
-    def stub(c, k, n, **kw):
-        calls.append((c, k, n, kw))
-        return SimpleNamespace(slowdown=300.0 * c / kw["size"], blocks=300.0, statement="HE",
-                               rests_on="given (H) and (E)")
+    def stub(c, k, n, *, size, work, scale):
+        calls.append((c, k, n, size))
+        got = real.slowdown_of(c, k, n, size=size, work=work, scale=scale)
+        if got.choice is None:
+            return got
+        return real.Chosen(SimpleNamespace(slowdown=300.0 * c / size, blocks=300.0, statement="HE",
+                                           rests_on="given (H) and (E)"), got.choice, got.products, 300.0 * c / size,
+                           got.terms, got.K_thr, got.q, got.beta_w, got.beta_x, got.b_y, got.F, got.alpha, got.N, got.O)
 
-    stubbed = SimpleNamespace(**vars(calculator._min_cut()) | {"bound": stub, "HE": "the statement"})
+    stubbed = SimpleNamespace(**vars(real) | {"slowdown_of": stub, "HE": "the statement"})
     monkeypatch.setattr(calculator, "_min_cut", lambda: stubbed)
     s = graded(runs, ref)
     w, got = s["rho"]["work"], s["bound_of_record"]
     assert len(calls) > 1 and all(call[:3] == (*policy.CONSOLE, None) for call in calls)
-    assert calls[-1][3] == {"N": w["N"], "O": w["O"], "size": w["C_gates"], "beta_w": w["beta_w"],
-                            "beta_x": w["beta_x"], "b": w["b_y"], "F": w["F"]}
+    assert calls[-1][3] == w["C_gates"]
     slowdown = 300.0 * policy.CONSOLE[0] / w["C_gates"]
     assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, slowdown, 300.0, "HE")
     assert s["rho"]["rho"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
@@ -1013,7 +1048,7 @@ def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
         b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
     empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
     assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
-    assert not empty["bound_of_record"]["available"] and len(calls) == made
+    assert not empty["bound_of_record"]["available"]
 
 
 def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
@@ -1039,7 +1074,7 @@ def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
 
 def test_the_bound_call_fits_the_calculator_as_it_is():
     """On the calculator as the tree has it, the grade's own call gives a slowdown of at least 1 under one of the two
-    statements the calculator's `min_cut` names, the first of them the one the grade says ρ's products term solves
+    statements the calculator's `min_cut` names, the first of them the one the grade says the products term of the record's slowdown solves
     the count of, with the premise that count takes on the batch."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     got, mod = s["bound_of_record"], calculator._min_cut()
@@ -1050,7 +1085,7 @@ def test_the_bound_call_fits_the_calculator_as_it_is():
 
 
 def test_the_periods_and_fleets_are_the_calculators():
-    """The run's AND gates at S are C·ρ at a bf16 GEMM's gates an AND, and each share is over a fleet of the
+    """The run's AND gates at S are C times the record's slowdown at a bf16 GEMM's gates an AND, and each share is over a fleet of the
     calculator's at its peak, for the census's window and core's periods."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     per = s["per_period"]

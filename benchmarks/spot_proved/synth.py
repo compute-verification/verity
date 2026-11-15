@@ -10,7 +10,7 @@ from pathlib import Path
 
 TREE = Path.cwd()
 for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "adapters/vllm",
-           "verity/protocols/flock/prover/python", "."):
+           "verity/protocols/proofs/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 
 import numpy as np  # noqa: E402
@@ -19,7 +19,7 @@ TREES = None
 
 
 def blocks():
-    from verity.definitions.registry import tp_allreduce as AR
+    from verity_vllm.definitions.registry import tp_allreduce as AR
     trees = json.dumps([AR.GLM53_H200_TREE] * 8, separators=(",", ":"))
     return {
         "SparseMlaSplitPart_T64": 'SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
@@ -71,7 +71,7 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.protocols.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
     out = Path(a.out)

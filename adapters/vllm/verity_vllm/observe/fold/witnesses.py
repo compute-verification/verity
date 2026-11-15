@@ -38,15 +38,15 @@ class WitnessInputs:
 
     def finalise(self, params: tuple, requests: list[dict]) -> tuple[tuple, list[tuple[str, dict]]]:
         """`params` with every witness parameter sized to its reads, and a refusal (message, detail) for each that none took."""
-        params, empty = list(params), []
+        out, empty = list(params), []
         for (ri, name), pidx in self.param.items():
             n = sum(f["leaves"] for f in self.fields[(ri, name)])
             if not n:
                 req = requests[ri]["request_id"]
-                empty.append((f"request {req!r}: no read took its {params[pidx][0]!r} witness parameter, which would be empty (input layout "
-                              f"shift); refused", {"request": req, "param": params[pidx][0]}))
-            params[pidx] = (params[pidx][0], Array(n, Value(32)) if n else RecordType())
-        return tuple(params), empty
+                empty.append(((f"request {req!r}: no read took its {out[pidx][0]!r} witness parameter, which would be empty (input layout "
+                               f"shift); refused"), {"request": req, "param": out[pidx][0]}))
+            out[pidx] = (out[pidx][0], Array(n, Value(32)) if n else RecordType())
+        return tuple(out), empty
 
     def layout(self, params: tuple, requests: list[dict]) -> list[dict]:
         """The witness parameters as the record states them: parameter index, request, witness name and every read's leaf range in

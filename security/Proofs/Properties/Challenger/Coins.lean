@@ -9,11 +9,14 @@ public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
 `challengerStream` reads the segment's openings as its family's coins `start`, `start + 1`, … of the commitment it is
 given (`liveReason`), concatenates their coins, and requires their indices to be exactly those the family's roots, as
-the run's release log shows them, released after `after` (`stream_ok`). So when the commitment and the roots are a
+the run's release log shows them, released after `after`, every one of those roots `after` (`stream_ok`). So when the commitment and the roots are a
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
-(`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
-of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedSession_record`), so the
-coins a sample reads are any such run's released coins, or a break (`drawn_released`). `drawCoins` compares the segment's
+(`stream_released`), or the fixed finder outputs a break. `sampleCoins` reads the stream under the commitment and roots
+of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedChallengePhase_record`), so the
+coins a sample reads are any such run's released coins, or a break (`sampled_released`). `coinsReason` reads what
+`sampleCoins` reads from the same evidence under the key it is handed, holds the evidence's copy of main's history to the
+one it is handed, and holds the bytes read to the start of the stream (`coinsReason_none`, `coinsReason_sample`).
+`sampleCoins` compares the segment's
 label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
@@ -419,8 +422,8 @@ theorem forIn_ok {P : Json × Nat → LiveOpening → Prop} {f : Json × Nat →
       exact ⟨o :: os, .cons ho hos, hout⟩
 
 /-- **What `challengerStream` reads when it accepts**: the segment's label, start and openings, each opening read as
-the family's coin `start + i` and accepted, the stream their coins concatenated, and their indices those the roots show
-released after `after`. -/
+the family's coin `start + i` and accepted, the stream their coins concatenated, their indices those the roots show
+released after `after`, and every root `after`. -/
 theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {rs : List ByteArray}
     (h : challengerStream c segment after (some rs) = .ok ξ) :
     ∃ (l : String) (start : Nat) (openings : Array Json) (os : List LiveOpening),
@@ -429,7 +432,8 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
       List.Forall₂ (fun (p : Json × Nat) (o : LiveOpening) => LiveOpening.ofJson p.1 = .ok o ∧
         liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none) openings.toList.zipIdx os ∧
       ξ = os.foldl (fun acc o => acc ++ o.coin) .empty ∧
-      (rs.zipIdx.filter (·.1 == after)).map (·.2) = List.range' start openings.size := by
+      (rs.zipIdx.filter (·.1 == after)).map (·.2) = List.range' start openings.size ∧
+      ∀ r ∈ rs, r = after := by
   unfold challengerStream at h
   simp only [bind, Except.bind] at h
   split at h
@@ -442,28 +446,31 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
         · cases h
         · rename_i v hv
           split at h
-          · rename_i hord
-            cases h
-            refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
-              LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
-              ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
-                ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord⟩
-            intro ⟨doc, i⟩ b r hr
-            simp only at hr
-            split at hr
-            · cases hr
-            · rename_i o ho
+          · split at h
+            · rename_i hall hord
+              cases h
+              refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
+                LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
+                ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
+                  ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord,
+                    fun r hr => beq_iff_eq.1 (List.all_eq_true.1 hall r hr)⟩
+              intro ⟨doc, i⟩ b r hr
+              simp only at hr
               split at hr
               · cases hr
-              · rename_i w hw
+              · rename_i o ho
                 split at hr
                 · cases hr
-                · rename_i hn
-                  cases w with
-                  | some why => exact absurd rfl (hn why)
-                  | none =>
-                    cases hr
-                    exact ⟨o, ⟨ho, hw⟩, rfl⟩
+                · rename_i w hw
+                  split at hr
+                  · cases hr
+                  · rename_i hn
+                    cases w with
+                    | some why => exact absurd rfl (hn why)
+                    | none =>
+                      cases hr
+                      exact ⟨o, ⟨ho, hw⟩, rfl⟩
+            · cases h
           · cases h
       · cases h
     · cases h
@@ -515,7 +522,7 @@ theorem stream_released {s : Run} {c : LiveCommitment} {roots : Roots} {r : Chal
   · exact .inr hb
   refine .inl ?_
   have cf := cf_of_not_break hb
-  obtain ⟨l, start, openings, os, hl', hst, hop, hos, rfl, hord⟩ := stream_ok h
+  obtain ⟨l, start, openings, os, hl', hst, hop, hos, rfl, hord, -⟩ := stream_ok h
   rw [hl] at hl'
   cases hl'
   subst hrc
@@ -553,48 +560,48 @@ theorem recordOfJson_ok (j : Json) :
     ⦃⌜True⌝⦄ ChallengerRecord.ofJson j ⦃⇓? r => ⌜ChallengerRecord.ofJson j = .ok r⌝⦄ := ok_spec _
 
 set_option maxHeartbeats 1000000 in
-/-- `sessionOf` returns its record's commitment. -/
-theorem sessionOf_record {record log close : Json} {res : LiveCommitment × Roots × String}
-    (h : sessionOf key record log close = .ok res) :
+/-- `challengePhaseOf` returns its record's commitment. -/
+theorem challengePhaseOf_record {record log close : Json} {res : LiveCommitment × Roots × String}
+    (h : challengePhaseOf key record log close = .ok res) :
     ∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1 := by
   refine of_triple (Q := fun res => ∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1) ?_ h
   clear h
-  mvcgen [sessionOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok, closeMessage_spec,
+  mvcgen [challengePhaseOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok, closeMessage_spec,
     mapM_spec, releasedRootsOf_spec]
   all_goals exact ⟨_, by assumption, rfl⟩
 
-theorem sessionOf_record_spec (record log close : Json) :
-    ⦃⌜True⌝⦄ sessionOf key record log close
+theorem challengePhaseOf_record_spec (record log close : Json) :
+    ⦃⌜True⌝⦄ challengePhaseOf key record log close
       ⦃⇓? res => ⌜∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1⌝⦄ :=
-  triple_of fun _ => sessionOf_record
+  triple_of fun _ => challengePhaseOf_record
 
 set_option maxHeartbeats 1000000 in
-/-- `sessionNamed` returns its session record's commitment. -/
-theorem sessionNamed_record {a : Audited} {session : Json} {res : LiveCommitment × Roots}
-    (h : sessionNamed a key session = .ok res) :
+/-- `challengePhaseNamed` returns its session record's commitment. -/
+theorem challengePhaseNamed_record {a : Audited} {session : Json} {res : LiveCommitment × Roots}
+    (h : challengePhaseNamed a key session = .ok res) :
     ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1 := by
   refine of_triple
     (Q := fun res => ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1) ?_ h
   clear h
-  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_record_spec, recordOfJson_ok, mapM_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_record_spec, recordOfJson_ok, mapM_spec]
 
-/-- `trustedSessionOf` returns its session record's commitment. -/
-theorem trustedSession_record {ledger window pins main session : Json} {res : LiveCommitment × Roots}
-    (h : trustedSessionOf ledger window key pins main session = .ok res) :
+/-- `trustedChallengePhaseOf` returns its session record's commitment. -/
+theorem trustedChallengePhase_record {ledger window pins main session : Json} {res : LiveCommitment × Roots}
+    (h : trustedChallengePhaseOf ledger window key pins main session = .ok res) :
     ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1 := by
-  unfold trustedSessionOf at h
+  unfold trustedChallengePhaseOf at h
   obtain ⟨a, -, ha⟩ := bind_ok.1 h
-  exact sessionNamed_record ha
+  exact challengePhaseNamed_record ha
 
-/-- What `drawCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
+/-- What `sampleCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
 `label`, and the stream of its openings under that session's commitment and `label`'s roots. -/
-theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
-    ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
+    ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       getD (getD coins "segment") "label" = Json.str label ∧
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ := by
-  unfold drawCoins at h
+  unfold sampleCoins at h
   simp only [bind, Except.bind] at h
   split at h
   · split at h
@@ -608,16 +615,50 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
       · cases h
   · cases h
 
-/-- **The coins a sample reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
+/-- What `coinsReason` reads when it gives no reason: the stream `sampleCoins` reads from the same evidence under `key`,
+the evidence's copy of main's history the one `coinsReason` is handed, and `read` the start of that stream, ending
+inside its last coin. -/
+theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray}
+    (h : coinsReason key main coins window label after read = none) :
+    ∃ ξ, sampleCoins key window label after coins = .ok ξ ∧ sameMain main (getD coins "main") = true ∧
+      ξ.extract 0 read.size = read ∧ (read.size + COIN_BYTES - 1) / COIN_BYTES = ξ.size / COIN_BYTES := by
+  unfold coinsReason at h
+  split at h
+  · cases h
+  · rename_i ξ hd
+    split at h
+    · cases h
+    · rename_i hm
+      unfold startReason at h
+      split at h
+      · cases h
+      · rename_i hpre
+        split at h
+        · cases h
+        · rename_i hall
+          exact ⟨ξ, hd, by simpa using hm, by simpa using hpre, by simpa using hall⟩
+
+/-- **The coin check of a stream's run reads the challenger's sample**: where `coinsReason` gives no reason under `key`,
+`sampleCoins` under `key` reads, from the same evidence, coins of the same family that `read` is the start of. -/
+theorem coinsReason_sample {main : Json} {window : String} {after read : ByteArray}
+    (h : coinsReason key main coins window label after read = none) :
+    ∃ ξ, sampleCoins key window label after coins = .ok ξ ∧ read.size ≤ ξ.size ∧ ξ.extract 0 read.size = read := by
+  obtain ⟨ξ, hd, -, hpre, -⟩ := coinsReason_none h
+  refine ⟨ξ, hd, ?_, hpre⟩
+  have hs : (ξ.extract 0 read.size).size = read.size := congrArg ByteArray.size hpre
+  rw [ByteArray.size_extract] at hs
+  omega
+
+/-- **The coins a sample reads are the ones its session released**: when `sampleCoins` reads `ξ` from a segment of family
 `label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots
 are the session's, or the fixed finder outputs a break. -/
-theorem drawn_released {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
-    ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+theorem sampled_released {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
+    ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       ∀ s ∈ dev.runs key.pub, s.commitment = some c → releasedRootsOf c s.log = .ok roots →
         ξ = s.released label after ∨ Break dev key label coins := by
   obtain ⟨c, roots, hts, hl, hst⟩ := drawCoins_ok h
-  obtain ⟨r, hr, hrc⟩ := trustedSession_record hts
+  obtain ⟨r, hr, hrc⟩ := trustedChallengePhase_record hts
   exact ⟨c, roots, hts, fun s hs hsc hroots => stream_released hs hsc hroots hr hrc hl hst⟩
 
 end Properties.Challenger.Coins

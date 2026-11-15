@@ -14,7 +14,7 @@ def _row(tmp_path: Path, *, lines: int = 1) -> Path:
     d = tmp_path / ROW
     d.mkdir()
     (d / "manifest.json").write_text(json.dumps({"manifest_digest": "m0", "query": {"query_id": QUERY_OF_RECORD, "partition": {"object": "p", "digest": "pd"}}}))
-    (d / "manifest.log").write_text("".join(f"Q_word_v1{{X=16,W=32,R=no-recompute}}: 10 calls -> 20 units over 30 gates\n" for _ in range(lines)))
+    (d / "manifest.log").write_text("".join("Q_word_v1{X=16,W=32,R=no-recompute}: 10 calls -> 20 units over 30 gates\n" for _ in range(lines)))
     (d / "build_summary.json").write_text(json.dumps({"request": {"program_digest": "p0"}, "step": {"program_digest": "s0"}}))
     return d
 

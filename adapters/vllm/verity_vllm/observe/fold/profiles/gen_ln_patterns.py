@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
-from verity.definitions.registry import act, layer_norm
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import act, layer_norm
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (BiasAdd, GeometryError, RotaryEmbedding, _fmt, _group_compute, _positions_ok, as_float,
@@ -142,7 +142,7 @@ class GeluErfPattern:
         if not isinstance(x, ViewDesc) or not outs:
             return unsupported(node, "gelu arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if approx not in (None, "none"):
-            return unsupported(node, "gelu with the tanh approximation is not this Definition (see quarantine.dense GeluTanh*)", approximate=approx)
+            return unsupported(node, "gelu with the tanh approximation is not this Definition (see registry.dense GeluTanh*)", approximate=approx)
         y = outs[0]
         if x.rank != 2 or not is_row_major(x) or y.shape != x.shape or not is_row_major(y):
             return unsupported(node, "gelu over views that are not row-major [M,N]", x=repr(x), y=repr(y))

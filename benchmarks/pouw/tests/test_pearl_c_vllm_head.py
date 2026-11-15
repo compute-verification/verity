@@ -3,9 +3,9 @@ Llama 3.2 1B's head (its tied embedding), (16, 2,048, 128,256) with 4 real rows,
 scheme the H200 runs, its weight's 128,256 vocabulary rows committed as ``pearl-b/64`` and one of them all +0, excluded.
 The call has 2,004 column tiles and its y rows are 501 segments of 256 words.
 
-Only the tiles the verifier opens are proved (the scheme's reference, on `fast_tile`'s batch forms): the draw is fixed to
+Only the tiles the verifier opens are proved (the scheme's reference, on `fast_tile`'s batch forms): the sample is fixed to
 the call's first, a middle and its last column tile (``clear_work.draw`` patched), and the exclusion tile of the +0 row
-opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier draws from
+opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier samples from
 its own record of the coins, so this pass is the Python's alone; a fully proved one is `head_pass`'s with ``prove=None``
 (all 2,004 tiles proved, ``jobs`` processes at a time).
 
@@ -14,9 +14,7 @@ the 128-word test instances of `test_pearl_c_vllm` can't: a verifier or y check 
 (a 64-row tile grid, y's segments, W's weight entry at 128,256 leaves), and the head's credit at the linears' rate."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -25,24 +23,13 @@ import pytest
 
 pytest.importorskip("torch")
 
-HERE = Path(__file__).resolve().parent
-
-
-def _module(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
-T = _module("test_pearl_c_vllm", HERE / "test_pearl_c_vllm.py")
+import test_pearl_c_vllm as T  # the served passes' test: the modules it loads and its helpers
 
 SCHEME = "pearl-c-h100-v1-h3"
 M16, K, N, REAL, WEIGHT, INDEX = 16, 2_048, 128_256, 4, 64, 0
 #: the vocabulary row that is all +0 (it fails liveness, so it is declared excluded), in column tile 2,001
 ZERO_ROW = 128_100
-#: the column tiles the draw is fixed to: the first, one in the middle and the last
+#: the column tiles the sample is fixed to: the first, one in the middle and the last
 DRAWN = (0, 1_002, 2_003)
 EXCLUSION = ZERO_ROW // 64
 KEY = bytes([1]) * 32
@@ -101,7 +88,7 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
     root_b = tree_b[-64:]
     weights = {str(WEIGHT): {"n": N, "k": K, "root": root_b.hex(), "excluded_b": [ZERO_ROW],
                              "rows": T.PH._entry(d / "weights" / f"{WEIGHT}.rows.bf16", N * K * 2),
-                             "tree": T.PPD._write(d / "weights" / f"{WEIGHT}.tree", tree_b)}}
+                             "tree": T.PH._write(d / "weights" / f"{WEIGHT}.tree", tree_b)}}
     roots = {WEIGHT: root_b}
     coins = T.salt_coin(roots)
     mm = T.Matmul(INDEX, T.Shape(M16, K, N), WEIGHT)
@@ -138,8 +125,8 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
     records = [T.PW.UnitRecord(mm, REAL, K, (), (ZERO_ROW,), (), ())]
     matmuls = [{"index": INDEX, "m": M16, "k": K, "n": N, "weight": WEIGHT, "real_rows": REAL, "k_kept": K, "excluded_a": [],
                 "root_a": root_a.hex(),
-                "rows": T.PPD._write(d / "calls" / f"{INDEX}.rows.bf16", T.bf16_file(a_rows), digest=False),
-                "tree": T.PPD._write(d / "calls" / f"{INDEX}.tree", tree_a),
+                "rows": T.PH._write(d / "calls" / f"{INDEX}.rows.bf16", T.bf16_file(a_rows), digest=False),
+                "tree": T.PH._write(d / "calls" / f"{INDEX}.tree", tree_a),
                 "y": T.SY.retain_y(d, INDEX, y.tobytes(), N, epoch.salt, KEY)}]
     dt = T.transcript_domain(epoch, len(leaves), h)
     tree_t = T.laid_out(dt, [dt.leaf(i, i, T.TILE_SCHEMA, v + T.hm96_salt(KEY, T.HM96_TRANSCRIPT, i)) for i, v in enumerate(leaves)])
@@ -147,9 +134,9 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             "records_root": T.PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tree_t[-64:].hex(), "count": len(leaves)},
-            "leaves": T.PPD._write(d / "leaves", b"".join(leaves)),
-            "tree_t": T.PPD._write(d / "tree_t", tree_t), "hm96_salt_key": KEY.hex()}
-    path = T.PPD.write_manifest(d, head, weights, matmuls)
+            "leaves": T.PH._write(d / "leaves", b"".join(leaves)),
+            "tree_t": T.PH._write(d / "tree_t", tree_t), "hm96_salt_key": KEY.hex()}
+    path = T.PH.write_manifest(d, head, weights, matmuls)
     (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path
 
@@ -172,7 +159,7 @@ def verdict(path: Path, **kw) -> dict:
 @pytest.mark.slow
 def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_credits_it_at_the_linears_rate(head, fixed_draw):
     """An honest head call is accepted, tied to a W that registers its A, its y of 4 rows of 128,256 words and its weight
-    of 128,256 rows; it opens the drawn tiles and the +0 row's exclusion tile, holds y's words in the last column tile to
+    of 128,256 rows; it opens the sampled tiles and the +0 row's exclusion tile, holds y's words in the last column tile to
     its U, and credits the call's 4 real rows at |K| over every column but the +0 row's block of 64 (the band rule,
     `UnitRecord.credited`: its tile credits nothing), less ε and ρ. The first
     and the last column tile are replayed on the scalar reference too, whose verdict the batch forms' must be."""

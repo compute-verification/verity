@@ -19,6 +19,7 @@ PINS = 'PINS = (Pin("pins/TRUSTED.sha256", None, "src"),)\n'
 ROOT = Path(__file__).resolve().parents[3]
 MOVE_SCRIPTS = ("tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py")
 MAP = "tools/move/demo_map.toml"
+OTHER = "tools/move/demo_other_map.toml"
 PROTO = "import old_proto.a\n\nX = old_proto.a.f()\n"
 
 
@@ -87,7 +88,7 @@ def moved(tmp_path: Path) -> Path:
     repo = tmp_path / "moved"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
-    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/verity/check/pins.py": "PINS = ()\n",
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
                   "tools/research/src/research/store/moves.json": '{"moves": []}\n',
                   MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
                        '[words]\n"old_proto" = "new_proto"\n',
@@ -100,6 +101,38 @@ def moved(tmp_path: Path) -> Path:
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", f"Move old_proto to new_proto\n\nMove: {MAP}\n")
     commit(repo, {"c.py": "c2\n"}, "landed after the move")
+    return repo
+
+
+@pytest.fixture
+def corrected(tmp_path: Path) -> Path:
+    """`moved`, but the move's commit records a map it didn't run (`OTHER`, which renames a word no file holds), a commit after
+    it quotes a move line and is no move, and `main` then adds `tools/move/move_lines.toml`, which corrects the move's record
+    to `MAP` and says the other is no move (`move = false`); `pr` is crossed across the moves `main` has by `main`'s
+    `restack.py` with that table beside it, as `crossed`."""
+    repo = tmp_path / "corrected"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
+                  "tools/research/src/research/store/moves.json": '{"moves": []}\n',
+                  MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
+                       '[words]\n"old_proto" = "new_proto"\n',
+                  OTHER: '[rewrite]\nexclude = ["tools/move/**"]\n\n[words]\n"no_such_word" = "none"\n',
+                  "old_proto/__init__.py": "", "old_proto/a.py": "def f():\n    return 1\n", "b.py": PROTO, "c.py": "c\n"},
+           "base")
+    branch(repo, "pr")
+    commit(repo, {"b.py": PROTO + "Y = old_proto.a.f()\n"}, "the PR")
+    git(repo, "checkout", "-q", "main")
+    script(repo, "tools/move/rename.py", "--map", MAP)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", f"Move old_proto to new_proto\n\nMove: {OTHER}\n")
+    move = git(repo, "rev-parse", "HEAD")
+    note = commit(repo, {"d.py": "d\n"}, f"A note\n\nMove: {OTHER}\n")
+    commit(repo, {"tools/move/move_lines.toml": f'["{move}"]\nline = "Move: {MAP}"\nreason = "It ran {MAP}."\n\n'
+                                                f'["{note}"]\nmove = false\nreason = "No script wrote it."\n'}, "corrected")
+    [r] = json.loads(script(repo, "tools/move/restack.py", "pr", "--main", "main", "--json", "--no-pins"))
+    assert r["status"] == "clean", r
+    git(repo, "branch", "crossed", r["result"])
     return repo
 
 
@@ -308,15 +341,48 @@ def test_a_restack_commit_that_changes_more_than_the_moves_script_is_the_prs_own
     assert (d.kind, d.moves) == ("authored", ()) and d.why == f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script"
 
 
+def test_a_crossing_over_a_corrected_move_carries_by_the_restack_py_whose_commit_has_the_table_and_not_by_one_without(
+        corrected: Path):
+    """Carry reruns the move with the landed commit's `restack.py` and the corrections that commit has beside it: with
+    `main`'s, the rerun runs `MAP` and the crossing carries; with the move's own commit, which has no table, it runs the
+    recorded `OTHER`, which moves nothing, so the restack's commit holds the whole move beyond what that writes."""
+    old, new, move, main = (git(corrected, "rev-parse", r) for r in ("pr", "crossed", "main~2", "main"))
+    d = carry.delta(corrected, old, new, landed(corrected), restack=main)
+    assert (d.kind, d.parents, d.moves) == ("merge-only", (main,), (move,)), d
+    d = carry.delta(corrected, old, new, landed(corrected), restack=move)
+    assert (d.kind, d.moves) == ("authored", ()), d
+    assert d.why == (f"{git(corrected, 'rev-parse', 'crossed^1')[:12]} changes b.py, new_proto/__init__.py, new_proto/a.py, "
+                     f"old_proto/__init__.py, old_proto/a.py ... beyond the move {move[:12]}'s script")
+
+
+#: what reaches the store (`research.store`: its key pair, bucket, root and config, the export's key pair, the API token that
+#: mints a key, the index's databases) and the queue's GitHub and Slack credentials
+KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCOUNT_ID",
+        "RESEARCH_STORE", "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_BUCKET", "RESEARCH_EXPORT_ACCESS_KEY_ID",
+        "RESEARCH_EXPORT_SECRET_ACCESS_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "STORE_INDEXER_DATABASE_URL",
+        "STORE_PRIVATE_READER_URL", "GH_TOKEN", "GITHUB_TOKEN", "SLACK_BOT_TOKEN")
+
+
+def test_a_moves_rerun_sees_neither_the_stores_keys_nor_the_queues_credentials(repo: Path, monkeypatch):
+    """The move's script runs the tree's own code, from a carried head, in drive's or the loop's process, which hold the store's
+    keys to write labels and verdicts: the run sees none of them, nor what pushes, and the rest of the environment reaches it."""
+    for k in (*KEYS, "KEPT"):
+        monkeypatch.setenv(k, "dummy-" + k.lower())
+    monkeypatch.setattr(carry, "_MOVED", "import os, sys; sys.exit(','.join(sorted(k for k, v in os.environ.items() "
+                                         "if v.startswith('dummy-'))))")
+    head = git(repo, "rev-parse", "main")
+    assert carry.moved_tree(repo, head, head, Path("unused")) == (None, "exit 1: KEPT")
+
+
 def test_a_move_never_reruns_on_a_tree_that_another_commit_of_the_line_leaves_unvouched(moved: Path, tmp_path: Path):
     """A move's script runs a tree's own code (`rename.py` loads the tree's pins list), so carry reruns it only once every other
     commit of the PR's line passed: here an unreviewed commit below the crossing plants code in that list."""
     old, main = git(moved, "rev-parse", "pr"), git(moved, "rev-parse", "main")
     planted = tmp_path / "planted"
     git(moved, "checkout", "-q", "pr")
-    commit(moved, {"tools/verity/check/pins.py": f"import pathlib\npathlib.Path({str(planted)!r}).touch()\nPINS = ()\n"}, "more")
+    commit(moved, {"tools/check/pins.py": f"import pathlib\npathlib.Path({str(planted)!r}).touch()\nPINS = ()\n"}, "more")
     new = cross(moved)
     assert planted.exists()
     planted.unlink()
     d = carry.delta(moved, old, new, landed(moved), restack=main)
-    assert d.kind == "authored" and "tools/verity/check/pins.py" in d.why and not planted.exists()
+    assert d.kind == "authored" and "tools/check/pins.py" in d.why and not planted.exists()

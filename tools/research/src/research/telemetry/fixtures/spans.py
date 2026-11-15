@@ -1,4 +1,4 @@
-"""Nested / repeated / overlapping spans fixture (brief §12), emitted through the real append helper from one parent and two children
+"""Nested / repeated / overlapping spans fixture, emitted through the real append helper from one parent and two children
 (concurrent siblings), then checked with telemetry.events.spans: exclusive = inclusive - union(children); the two overlapping children are
 not summed into the parent; repeated `match.load` calls are distinct; the deliberately unclosed span stays open.
 
@@ -10,7 +10,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-from research.telemetry.events import Emitter, read_all, spans  # noqa: E402
+from research.telemetry.events import Emitter, read_all, spans
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--attempt-dir", required=True)

@@ -3,7 +3,7 @@
 A *query* ``Q`` partitions the Calls of a Program ``P`` into *proof blocks*; the values a verifier must be able to
 open are the values that cross a unit boundary, plus what the protocol prescribes beside them::
 
-    Q(P)                      -> a sequence of VerificationUnit (a stable id + a set of Call ids)
+    Q(P)                      -> a sequence of ProofBlock (a stable id + a set of Call ids)
     boundary_values(P, Q)     =  U_{V in Q(P)} ( in(V) u out(V) )
     required_values(P, Q, pi) =  boundary_values(P, Q)  u  pi.prescribed_inputs  u  pi.protocol_required
 
@@ -36,10 +36,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import NamedTuple, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
-__all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "boundary_values",
-           "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
+__all__ = ["ValueRef", "Call", "CallGraph", "ProofBlock", "Query", "Partition", "partition_by", "boundary_values",
+           "Policy", "RequiredValues", "required_values", "PartitionError"]
 
 
 class ValueRef(NamedTuple):
@@ -86,7 +86,7 @@ class CallGraph(Protocol):
 
 
 @dataclass(frozen=True)
-class VerificationUnit:
+class ProofBlock:
     """A set of Call ids under a stable id.  The id is the query's (a module path, a layer index, ...); two queries that
     put the same Calls in a unit under different ids are different queries."""
 
@@ -99,7 +99,7 @@ class VerificationUnit:
 
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.
-Query = Callable[[CallGraph], Sequence[VerificationUnit]]
+Query = Callable[[CallGraph], Sequence[ProofBlock]]
 #: A query whose units are a partition of the Program's Calls (every Call in exactly one unit); :func:`boundary` requires this and
 #: checks it (:class:`PartitionError`).
 Partition = Query
@@ -109,17 +109,17 @@ class PartitionError(ValueError):
     """The units are not a partition of the Program's Calls (a Call in two units, or in none)."""
 
 
-def partition_by(key: Callable[[Call], str], *, order: Callable[[str], object] | None = None) -> Partition:
+def partition_by(key: Callable[[Call], Any], *, order: Callable[[Any], Any] | None = None) -> Partition:
     """The query whose units are the classes of ``key`` over the Program's Calls: unit id = the key, unit = every Call with that
     key.  Units are returned in first-seen body order unless ``order`` sorts the ids.  The canonical way to write a
     membership-derived query (``key`` = the owning module path, the layer, the Definition family, ...)."""
 
-    def Q(P: CallGraph) -> Sequence[VerificationUnit]:
-        groups: dict[str, set[int]] = {}
+    def Q(P: CallGraph) -> Sequence[ProofBlock]:
+        groups: dict[Any, set[int]] = {}
         for c in P.calls:
             groups.setdefault(key(c), set()).add(c.id)
-        ids: Iterable[str] = groups if order is None else sorted(groups, key=order)
-        return tuple(VerificationUnit(k, frozenset(groups[k])) for k in ids)
+        ids: Iterable[Any] = groups if order is None else sorted(groups, key=order)
+        return tuple(ProofBlock(k, frozenset(groups[k])) for k in ids)
 
     return Q
 
@@ -135,7 +135,7 @@ def _index(P: CallGraph) -> tuple[dict[int, Call], frozenset[int]]:
     return by_id, inputs
 
 
-def _check_partition(P: CallGraph, units: Sequence[VerificationUnit]) -> dict[int, str]:
+def _check_partition(P: CallGraph, units: Sequence[ProofBlock]) -> dict[int, str]:
     """Call id -> unit id; raises :class:`PartitionError` unless every Call is in exactly one unit."""
     owner: dict[int, str] = {}
     for u in units:
@@ -160,7 +160,7 @@ class Boundary:
     values: frozenset[ValueRef]
     produced_in: Mapping[ValueRef, str | None]
     read_by: Mapping[ValueRef, tuple[str, ...]]
-    units: tuple[VerificationUnit, ...]
+    units: tuple[ProofBlock, ...]
     owner: Mapping[int, str]
 
 
@@ -222,10 +222,6 @@ class Policy:
     prescribed_inputs: frozenset[ValueRef] = field(default_factory=frozenset)
     protocol_required: frozenset[ValueRef] = field(default_factory=frozenset)
 
-    @staticmethod
-    def none() -> "Policy":
-        return Policy()
-
 
 @dataclass(frozen=True)
 class RequiredValues:
@@ -261,16 +257,3 @@ def required_values(P: CallGraph, Q: Partition, policy: Policy) -> RequiredValue
         if v.call in by_id and v.port not in by_id[v.call].ports:
             raise ValueError(f"policy requires {v}, but Call {v.call} has ports {tuple(by_id[v.call].ports)}")
     return RequiredValues(boundary_values(P, Q), frozenset(policy.prescribed_inputs), frozenset(policy.protocol_required))
-
-
-def admissibility(required: Iterable[ValueRef], acquisition_support: Mapping[ValueRef, bool] | Callable[[ValueRef], bool] | Iterable[ValueRef]) -> list[ValueRef]:
-    """The required Values the acquisition cannot support, sorted.  ``acquisition_support`` is a table (a set of the supported
-    Values, a mapping Value -> bool, or a predicate) -- an *input*: this module has no collector.  Empty result = admissible."""
-    if isinstance(acquisition_support, Mapping):
-        ok = lambda v: bool(acquisition_support.get(v, False))  # noqa: E731
-    elif callable(acquisition_support):
-        ok = acquisition_support
-    else:
-        s = frozenset(acquisition_support)
-        ok = s.__contains__
-    return sorted(v for v in set(required) if not ok(v))

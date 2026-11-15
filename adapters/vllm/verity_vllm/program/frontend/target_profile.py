@@ -25,7 +25,12 @@ from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
+from verity_vllm.program.frontend.kernel_readback import (  # noqa: F401
+    applied_kernels,
+    fp8_block_gemm_kernel_of,
+    int8_exact_of,
+    moe_experts_class_of,
+)
 
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.gemm_targets import GemmTarget
@@ -75,8 +80,8 @@ class TargetProfile:
                            declaration).  `emulate_precision_casts` (Inductor's own switch) makes every fused Triton kernel perform the bf16
                            roundings the Program specifies at each op boundary; default Inductor carries fp32 through a fused region, so the
                            Program's intermediate values do not exist in that execution and any observation of them changes it
-                           (instrumented != production).  With the emulation the collection boundary is invisible by
-                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
+                           (instrumented != served).  With the emulation the collection boundary is invisible by
+                           construction (measured: served vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
@@ -118,7 +123,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity.definitions.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.definitions.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
@@ -145,14 +150,14 @@ class TargetProfile:
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
-                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
+                           SPOT alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, SPOT included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
-                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
+                           each of the Boolean version of that Definition, on bits (`verity_torch.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
     registered_values   -> where the Program's values live (a Program static, declared-and-bound, never attested).  None = in the
@@ -194,7 +199,7 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
-    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    #: the protocol set the run executes (None = SPOT alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
     #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
@@ -401,7 +406,7 @@ class TargetProfile:
 
     @property
     def int8_parts(self) -> tuple[str, ...]:
-        return self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
+        return () if self.int8_exact is None else self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
 
     @property
     def execution_label(self) -> str:
@@ -455,15 +460,15 @@ class TargetProfile:
                     "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
                     "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
-                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
+                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact ("
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
-                                       "compilation facts + kernel_set digest (DECISIONS-2 §7 S1)" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
+                                       "compilation facts + kernel_set digest" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
                                        else "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"),
                 "claim": ("P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay "
-                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes "
-                          "(S2: 4016/4016 launches on the B1 row); the eager Program is NOT a model of this execution (P_compiled != P_eager: "
+                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; "
+                          "the eager Program is NOT a model of this execution (P_compiled != P_eager: "
                           "roundings elided, residual recomputed unrounded, other reduction orders; tokens diverge from eager). Attention = eager "
-                          "FA2 splitting op; lm_head eager (DECISIONS-2 §7, ruling M-0380)")}
+                          "FA2 splitting op; lm_head eager")}
 
     # -- serialisation ---------------------------------------------------------------------------------------------------
     def to_json(self) -> dict:
@@ -490,7 +495,7 @@ class TargetProfile:
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         if d.get("protocols") is None:
-            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+            d.pop("protocols", None)               # absent = SPOT alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:
@@ -508,7 +513,7 @@ class TargetProfile:
         return None if self.moe_backend is None else self.MOE_BACKEND_KERNELS[self.moe_backend]
 
     @classmethod
-    def from_json(cls, d: dict) -> "TargetProfile":
+    def from_json(cls, d: dict) -> TargetProfile:
         unknown = set(d) - set(cls.__dataclass_fields__)
         if unknown:
             raise ValueError(f"unknown TargetProfile fields: {sorted(unknown)}")
@@ -520,14 +525,16 @@ class TargetProfile:
     def digest(self) -> str:
         return sha256_hex(self.canonical())
 
-    def with_overrides(self, **kw: Any) -> "TargetProfile":
+    def with_overrides(self, **kw: Any) -> TargetProfile:
         return replace(self, **kw)
 
     # -- derived GEMM target facts (one source: this profile's capability -> verity_vllm.program.frontend.gemm_targets) ----------------
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
+        from verity_vllm.program.frontend.gemm_targets import (
+            vllm_tuned_gemm_arch_family,  # lazy: keeps this module light
+        )
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -539,12 +546,12 @@ class TargetProfile:
         return gemm_target_for(self.compute_capability, arch_family)
 
     @classmethod
-    def default(cls) -> "TargetProfile":
+    def default(cls) -> TargetProfile:
         """The admitted record's target (profile `vllm_d9105ea80_sm89_eager`: sm_89 / 128 SMs / batch-invariant / FA2 by selector)."""
         return cls()
 
     @classmethod
-    def from_device(cls, device: int = 0) -> "TargetProfile":
+    def from_device(cls, device: int = 0) -> TargetProfile:
         """[X-01] The target = THIS host's GPU, queried ONCE through `torch.cuda.get_device_properties(device)`: `multi_processor_count`
         is `num_sms` (vLLM's `num_compute_units()`, the persistent-GEMM grid) and `(major, minor)` the compute capability.  The one
         source of the SM count for a construction on a GPU host: the builder applies it (shim), pins it (GEMM rule), and the artifact
@@ -553,9 +560,8 @@ class TargetProfile:
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
 
-
     @classmethod
-    def from_gpu_document(cls, doc: Any) -> "TargetProfile | None":
+    def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
         """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.engine.engine_profile.gpu_info`,
         or `versions.gpu` of a bench run): `multi_processor_count` (or `sms`) and `compute_capability` (`[8, 9]` or `"8.9"`, or `cc`).
         The eager Match resolver reads the target from here — the record's own host, not a literal.  None when the document carries no
@@ -578,7 +584,7 @@ class TargetProfile:
         return cls.default().with_overrides(**over)
 
     @classmethod
-    def from_run_profile(cls, profile_doc: Any) -> "TargetProfile | None":
+    def from_run_profile(cls, profile_doc: Any) -> TargetProfile | None:
         """The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
         built with when the capture recorded one (`profile["target"]`, written by `vllm_adapter.build_engine(target=...)` — exact,
         including `flash_attn_version`), else the X-01 device document (`from_gpu_document`) with the FA version the runner's attention
@@ -595,11 +601,11 @@ class TargetProfile:
         tp = cls.from_gpu_document(profile_doc.get("gpu"))
         if tp is None:
             return None
-        fav = ((profile_doc.get("backends") or {}).get("attention_flash_attn_version"))
+        backends = profile_doc.get("backends")
+        fav = backends.get("attention_flash_attn_version") if backends else None
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
-
 
     @property
     def capability_str(self) -> str:
@@ -678,7 +684,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     return bad
 
 
-
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------
 
 
@@ -700,7 +705,7 @@ class ArtifactIdentity:
         return h.hexdigest()
 
     @classmethod
-    def build(cls, construction_version: dict, target_profile: TargetProfile, applicability: dict, program_digest: str) -> "ArtifactIdentity":
+    def build(cls, construction_version: dict, target_profile: TargetProfile, applicability: dict, program_digest: str) -> ArtifactIdentity:
         tp = target_profile.to_json()
         return cls(construction_version=construction_version, target_profile=tp, applicability=applicability, program_digest=program_digest,
                    identity=cls.compute(construction_version, tp, applicability, program_digest))
@@ -711,7 +716,7 @@ class ArtifactIdentity:
                 "identity_definition": "sha256(len8||canonical(construction_version) || len8||canonical(target_profile) || len8||canonical(applicability) || len8||program_digest)"}
 
     @classmethod
-    def from_json(cls, d: dict) -> "ArtifactIdentity":
+    def from_json(cls, d: dict) -> ArtifactIdentity:
         if d.get("schema") != SCHEMA:
             raise ValueError(f"artifact schema {d.get('schema')!r} is not {SCHEMA!r}")
         return cls(construction_version=d["construction_version"], target_profile=d["target_profile"], applicability=d["applicability"],
@@ -767,7 +772,7 @@ def load_artifact(path: str, profile: TargetProfile, applicability_now: dict | N
     return check_reuse(art, profile, applicability_now, construction_version_now)
 
 
-def parse_target_arg(s: str | None, *, base: "TargetProfile | None" = None) -> TargetProfile:
+def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> TargetProfile:
     """CLI helper: None -> default; a JSON object -> overrides laid over `base` (`{"compute_capability": [9, 0]}`); a path to a JSON
     file -> the whole profile.  `base` defaults to THIS host's device profile when CUDA is available, else `default()` -- the same
     layering `vllm_adapter.target_of_workload` gives the workload's `target` block, so a row that declares only a knob
@@ -788,12 +793,12 @@ def parse_target_arg(s: str | None, *, base: "TargetProfile | None" = None) -> T
             base = TargetProfile.from_device() if torch.cuda.is_available() else TargetProfile.default()
         except Exception:                                   # no torch on this host: the documented default
             base = TargetProfile.default()
-    base = base.to_json()
+    doc = base.to_json()
     unknown = set(d) - set(TargetProfile.__dataclass_fields__)   # the fields, not the serialised keys (`compilation` / `fp8_block_gemm` are omitted when None)
     if unknown:
         raise ValueError(f"unknown TargetProfile fields: {sorted(unknown)}")
-    base.update(d)
-    return TargetProfile.from_json(base)
+    doc.update(d)
+    return TargetProfile.from_json(doc)
 
 
 __all__ = ["TargetProfile", "DEFAULT_TARGET", "ArtifactIdentity", "ApplicabilityError", "canonical_bytes", "sha256_hex", "profile_mismatches",

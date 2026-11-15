@@ -26,10 +26,25 @@ import json
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, config_value, counts,
-                                            dim, evaluate, layer_set, load, route_sites, symbols, tap_layers)
+from verity_vllm.commit.capture_map import (
+    DISPOSITIONS,
+    LAYER_VAR,
+    STATUSES,
+    TP_KINDS,
+    MapError,
+    at_layer,
+    config_value,
+    counts,
+    dim,
+    evaluate,
+    layer_set,
+    load,
+    route_sites,
+    symbols,
+    tap_layers,
+)
 from verity_vllm.commit.identity import NAMED_LAYERS
-from verity_vllm.properties.record import REGISTRY as PROPERTIES
+from verity_vllm.records.property_record import REGISTRY as PROPERTIES
 
 
 def _walk(rec: dict[str, Any], path: str) -> Any:
@@ -211,21 +226,21 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
         elif alt not in used:
             problems.append(f"program {pid} is the alternative to {alt!r}, which no tap cites")
 
-    for e in cmap.get("expect", []):
-        g = groups.get((e["pattern"], e["type"]))
-        want = e["value"]
+    for exp in cmap.get("expect", []):
+        g = groups.get((exp["pattern"], exp["type"]))
+        want = exp["value"]
         if isinstance(want, str) and want.startswith("="):
             want = evaluate(want[1:], env)
         if g is None:
-            problems.append(f"expect {e['pattern']} ({e['type']}): not in the inventory")
+            problems.append(f"expect {exp['pattern']} ({exp['type']}): not in the inventory")
             continue
         try:
-            got = _walk(g, e["path"])
+            got = _walk(g, exp["path"])
         except KeyError:
-            problems.append(f"expect {e['pattern']} {e['path']}: not recorded")
+            problems.append(f"expect {exp['pattern']} {exp['path']}: not recorded")
             continue
         if got != want:
-            problems.append(f"expect {e['pattern']} {e['path']} = {want!r}, the inventory has {got!r}")
+            problems.append(f"expect {exp['pattern']} {exp['path']} = {want!r}, the inventory has {got!r}")
     return problems
 
 
@@ -260,7 +275,7 @@ def report(map_path: str | Path, config_path: str | Path, inventory_path: str | 
            tp: int | None = None) -> tuple[int, str]:
     """`check_document` of the inventory at ``inventory_path`` against the map, with the registry's Definitions: 1 and its
     report if any problem is found, else 0."""
-    from verity.definitions.registry import catalog
+    from verity_vllm.definitions.registry import catalog
 
     cmap = load(map_path)
     config = json.loads(Path(config_path).read_text())

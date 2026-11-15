@@ -100,6 +100,7 @@ def _tp1() -> dict:
     (lambda d: d["step"].update(ok="yes"), RecordError, "step.ok"),
     (lambda d: d["request"].update(correspondence_digest=7), RecordError, "request.correspondence_digest"),
     (lambda d: d.update(step=[1]), RecordError, "step"),
+    (lambda d: d.update(workload=[1]), RecordError, "workload"),
 ])
 def test_a_tp1_summary_is_refused_by_field(edit, error, field):
     doc = copy.deepcopy(_tp1())

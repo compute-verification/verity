@@ -29,14 +29,14 @@ first alone in a second (`<out>/solo/`). It records each window's step rows agai
 u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
-``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
+``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor device's
 challenger, in the challenge phase the challenger gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
 (`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one challenge phase a window, so the fill
 workload serves only the 64's window. With ``--peer NAME`` in place of ``--session`` each window the run serves reserves
 a challenge phase of its own (`window_sessions`: ``CMD reserve --peer NAME``) just before it is installed, and the next is
 reserved only once that challenge phase's end entry is in the gate's ``status`` (`session_end`), so ``--commit``'s windows
-and the solo window all take the auditor host's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
+and the solo window all take the auditor device's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
 ...] --pins HEAD [--pins HEAD ...] --main FILE`` is the verifier's side on no GPU, ``--ledger`` given once per head
 the gate published, ``--pins`` once per head of the host's pins log the gate published and ``--main`` the auditor's ``git
 rev-list --first-parent origin/main`` (without them every window is refused). With ``--window WINDOW_JSON``
@@ -64,8 +64,8 @@ its registration's seconds a step (``registered_s``), the part of them inside `p
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
-serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units
-(``benchmarks/pouw/served_h1/producer.py``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
+serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units (their producer module, which
+``main`` is handed by ``benchmarks/pouw/served_h1/h1_gpu.py``, the way this run is started with ``--receipts``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
 ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
 window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
 (`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``pouw_cuda/noise.cu``'s) computes
@@ -96,7 +96,7 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
 `pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window samples its salt, round and flip coins from a
-challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
+challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coins' origin, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
@@ -108,27 +108,38 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
-import functools
+import dataclasses
 import gc
 import gzip
-import resource
 import hashlib
-import importlib.util
 import json
 import os
+import resource
 import shlex
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.accounting.pouw.verifier.coins import (
+    Challenger,
+    CoinCommitment,
+    CoinOpening,
+)
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
 from tests.engine.int8_exact_gpu import generate, pin, scratch_checkpoints
+from verity_vllm import protocols as PO
+from verity_vllm.engine.hooks import patched
 
 SCHEMA = "verity-vllm/pouw-h1-gpu/v1"
 RECORD = "pouw_h1_gpu.json"
@@ -140,13 +151,13 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
 
 PERIOD_DIGEST = """
 import json, resource, sys, time
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
-    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
 digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps,
@@ -162,9 +173,10 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
-    from verity.protocols.pouw.prover.circuit import h1window as HW
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
 
@@ -177,8 +189,8 @@ def period_program(model: Any, rows: int, steps: int, j10r: bool = False, arch: 
     The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window pays, so
     this process's RSS is the windows' own."""
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity_vllm.protocols.pouw import h1_hooks as PHK
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     layers = PHK.layers(model, pouw.linear_types(), ks)
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
@@ -240,7 +252,20 @@ def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
     return status()
 
 
-def gate_command(argv: list[str]) -> Any:
+@dataclasses.dataclass(frozen=True, eq=False)
+class GateCommand:
+    """What `gate_command` answers. Called with a challenge phase and its root it is ``call``, the gate's open of it;
+    ``argv`` is the command its verbs run through, and ``reserve`` and ``ended`` are as `gate_command` says."""
+    call: Callable[..., dict[str, Any]]
+    argv: list[str]
+    reserve: Callable[[str, int | None], dict[str, Any]]
+    ended: Callable[[str], dict[str, Any]]
+
+    def __call__(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
+        return self.call(session, root, withhold)
+
+
+def gate_command(argv: list[str]) -> GateCommand:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a sample's
@@ -254,7 +279,7 @@ def gate_command(argv: list[str]) -> Any:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
     def gate(session: str, root: str, withhold: bool = False) -> dict[str, Any]:
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
         answer = verb("open", "--session", session, "--root", root)
         if withhold:
             if answer.get("withheld") is not True or answer.get("commitment") is not None or answer.get("signed") is not True:
@@ -268,8 +293,8 @@ def gate_command(argv: list[str]) -> Any:
         return answer
 
     def reserve(peer: str, steps: int | None) -> dict[str, Any]:
-        from verity_vllm.protocols.pouw.h1 import challenger as PHC
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
         families = PHC.draw_families() if steps is None else PHC.families(steps)
         p = subprocess.run(gate_argv(argv, ["reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families",
                                             families, *(("--withhold",) if steps is None else ())]),
@@ -284,18 +309,29 @@ def gate_command(argv: list[str]) -> Any:
             raise ValueError(f"the gate reserved draw challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
         return answer
 
-    gate.argv, gate.reserve, gate.ended = argv, reserve, lambda session: await_end(lambda: verb("status", session))
-    return gate
+    return GateCommand(gate, argv, reserve, lambda session: await_end(lambda: verb("status", session)))
 
 
-def window_sessions(gate: Any, peer: str, steps: int) -> Any:
+@dataclasses.dataclass(frozen=True)
+class WindowSessions:
+    """What `window_sessions` answers. Called with a window's name it is ``answer(name)``, that window's reserve answer;
+    ``held`` maps each window served so far to that answer, and the other map each to its sample session's."""
+    answer: Callable[[str], dict[str, Any]]
+    held: dict[str, dict[str, Any]]
+    draws: dict[str, dict[str, Any]]
+
+    def __call__(self, name: str) -> dict[str, Any]:
+        return self.answer(name)
+
+
+def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
-    before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
+    before the window is installed, since the auditor device's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
     is refused (ValueError), as is a reserve the gate refuses. Each window's sample session is reserved with it
     (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
     answer."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
     held: dict[str, dict[str, Any]] = {}
     draws: dict[str, dict[str, Any]] = {}
 
@@ -313,8 +349,7 @@ def window_sessions(gate: Any, peer: str, steps: int) -> Any:
         held[name] = fresh(name, steps, "session")
         draws[name] = fresh(name, None, "draw session")
         return held[name]
-    sessions.held, sessions.draws = held, draws
-    return sessions
+    return WindowSessions(sessions, held, draws)
 
 
 def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
@@ -384,7 +419,7 @@ def model_key_of(gate: Any, model: str, circuit: str) -> Any:
     """The auditor's registration of `model` under the period's `circuit` and its salt key
     (`pouw_h1_served.ModelKey`), as the gate's ``model-key --model M --circuit C`` answers the lane's gate key; the key
     is never printed or written here."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     p = subprocess.run(gate_argv(gate.argv, ["model-key", "--model", model, "--circuit", circuit]), capture_output=True,
                        text=True)
     try:
@@ -397,7 +432,7 @@ def model_key_of(gate: Any, model: str, circuit: str) -> Any:
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
                 draw_session: Any = None, **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
-    the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
+    the window's coins, its salt coin and one live round coin a step: the auditor device's at `challenger` (``HOST:PORT``, one
     challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate`
     opens on the window's open root, and its sampling coin from the `draw_session` the gate reserved beside it, which `gate`
     opens withheld on the window's sample root; else held in this process, which no verifier trusts and which credits
@@ -405,10 +440,6 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "draw_session": draw_session, "gate": gate,
                          "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.pouw.verifier.coins import Challenger
-    from verity.protocols.spot.device.challenger import LiveRecord
     rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
     return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
                      "steps": steps, **kw}}
@@ -422,8 +453,8 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live: their
     leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its proof block's
     circuit evaluated on its statement) in place of the openings."""
-    from verity_vllm.protocols.pouw.h1 import live as LV
-    from verity_vllm.protocols.pouw.h1 import requests as RQ
+    from verity.protocols.accounting.pouw.prover.serving.h1 import live as LV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
     coins = h1.rounds.challenger.commitment
     live = LV.verdicts(h1)
     why = [] if live else [w for e in h1.requests if (w := RQ.request_reason(
@@ -453,13 +484,12 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm import protocols as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity_vllm.protocols.pouw import h1_hooks as PHK
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -562,11 +592,15 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
 
 #: candidates for `fill_prompts`: each word's first token (no BOS) is one prompt
-FILL_WORDS = ("The capital France def Water Once In A To Photosynthesis Columbus Light Gold Tea Autumn Square Planet Primary Speed "
-              "Village Number Return Import Class If When Why How What Where Who My Our Your Their This That These Those Every "
-              "Some Many Most All Each Today Yesterday Tomorrow Science History Music Art Math Code Data River Mountain Ocean "
-              "Forest City Market Doctor Teacher Engine Garden Winter Summer Spring Morning Evening Night Story Letter Question "
-              "Answer Problem").split()
+FILL_WORDS = [
+    "The", "capital", "France", "def", "Water", "Once", "In", "A", "To", "Photosynthesis", "Columbus", "Light",
+    "Gold", "Tea", "Autumn", "Square", "Planet", "Primary", "Speed", "Village", "Number", "Return", "Import", "Class",
+    "If", "When", "Why", "How", "What", "Where", "Who", "My", "Our", "Your", "Their", "This", "That", "These",
+    "Those", "Every", "Some", "Many", "Most", "All", "Each", "Today", "Yesterday", "Tomorrow", "Science", "History",
+    "Music", "Art", "Math", "Code", "Data", "River", "Mountain", "Ocean", "Forest", "City", "Market", "Doctor",
+    "Teacher", "Engine", "Garden", "Winter", "Summer", "Spring", "Morning", "Evening", "Night", "Story", "Letter",
+    "Question", "Answer", "Problem",
+]
 
 
 def fill_prompts(tokenizer: Any, n: int) -> list[int]:
@@ -610,14 +644,13 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
 
 
 def fill(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm import protocols as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity_vllm.protocols.pouw import h1_hooks as PHK
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     decl = declared_of(a)
     outdir = Path(a.out)
@@ -752,7 +785,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             for m in layers:
                 lie.wrap(m.quant_method, "observe", lambda orig: edited(orig, ed))
         h1 = pouw.h1_run(entry_name)
-        made = receipts_producer(a.receipts, served, h1, layers, decl.steps) if a.receipts and served is not None else None
+        made = receipts_producer(a.receipts, served, h1, layers, decl.steps, a.producer) if a.receipts and served is not None else None
         if served is not None:
             out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
         bad: list[str] = []
@@ -791,7 +824,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
                   f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
-                from verity_vllm.protocols.pouw.h1 import commit as CT
+                from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
                 rc = com.finalize()
                 out["committer"] = {**CT.committed(com, rc, ("values_retained_bytes", "expected_tensors", "committed_tensors",
                                                              "errors_n", "errors")),
@@ -810,14 +843,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     out["ok"] = bool(out["ok"] and out["call_ks"] == list(a.ks))
                 if made is not None:
                     t1 = time.monotonic()
-                    out["receipts"] = {**receipts_check(made), "check_s": round(time.monotonic() - t1, 1)}
+                    out["receipts"] = {**receipts_check(made, a.producer), "check_s": round(time.monotonic() - t1, 1)}
                     print(f"[fill] {name} receipts {json.dumps(out['receipts'])}", flush=True)
                     out["ok"] = bool(out["ok"] and out["receipts"]["ok"])
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
                     if a.live_dump and out["requests"].get("live"):
-                        from verity_vllm.protocols.pouw.h1 import live as LV
+                        from verity.protocols.accounting.pouw.prover.serving.h1 import live as LV
                         out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
             SV.NR.commit = nr_commit
@@ -851,8 +884,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     if a.commit:
         if a.period:
-            from verity_vllm.protocols.pouw.h1 import challenger as PHC
-            from verity_vllm.protocols.pouw.h1 import served as SV
+            from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+            from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
             layout = SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps)
             draw_k, files = PHC.draw_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
             doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": draw_k, "circuit_files": files,
@@ -940,7 +973,7 @@ def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: 
                     stamps: dict[int, float]) -> dict[str, Any]:
     """What only the serving process sees of a fill window: its rate, each step's seconds (at linear 0 of the next), its
     tokens against the plain run's and the static schedule's check."""
-    step_s = [round((stamps[s + 1] if s + 1 in stamps else end) - stamps[s], 4) for s in sorted(stamps)]
+    step_s = [round(stamps.get(s + 1, end) - stamps[s], 4) for s in sorted(stamps)]
     return {"serve": rate(got, end - t0, served_steps), "step_s": step_s, "served_end_unix": round(time.time(), 3),
             "decode_step_s_median": float(np.median(step_s[1:])) if len(step_s) > 1 else None,
             "same_tokens": [g["token_ids"] for g in got] == [g["token_ids"] for g in want], "tokens_digest": tokens_digest(got),
@@ -950,7 +983,7 @@ def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: 
 def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad: list[str], decl: Any = None) -> None:
     """A fill window's measures once closed (`want` requests served, linear w's weight `weight_of(w)`, the listener's
     complaints `bad`, `decl` its declaration, default `pouw_h1.FILL`), into `out`, and its ``ok`` before its release."""
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     decl = decl or PH.FILL
     cap = decl.max_tokens
     rows = h1.step_rows()
@@ -1001,7 +1034,7 @@ def hand_off(h1: Any, a: argparse.Namespace, doc: dict[str, Any]) -> dict[str, A
     """With ``--handoff SOCK --handoff-state DIR``: the served window saved to DIR and its challenge phase's stream handed to the
     holder at SOCK (`pouw_h1_handoff`), its record so far in ``SERVING``; this process then exits, and with it its GPU
     lease, and ``--close-from DIR`` closes and releases the window on the CPU (`fill_close`)."""
-    from verity_vllm.protocols.pouw.h1 import handoff as HO
+    from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
     t0 = time.monotonic()
     HO.suspend(h1, a.handoff_state)
     h = doc["h1"]
@@ -1020,8 +1053,8 @@ def fill_close(a: argparse.Namespace) -> dict[str, Any]:
     """The close phase, on no GPU: the window ``--close-from`` holds, its challenge phase the stream ``--stream-fd``,
     closed and released as the serving process would have (`pouw_h1_handoff`), its sample's challenge phase opened through
     ``--gate``, and the fill record completed from ``SERVING``."""
-    from verity_vllm.protocols.pouw.h1 import handoff as HO
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
     outdir = Path(a.out)
     doc = json.loads((outdir / SERVING).read_text())
     doc["close_argv"], h = sys.argv, doc["h1"]
@@ -1073,7 +1106,7 @@ def host_memory() -> dict[str, float | None]:
 def declared_of(a: argparse.Namespace) -> Any:
     """The fill workload's declaration: `pouw_h1.FILL`, or with ``--declare SLOTS,CAP,T,S`` SLOTS one-token prompts at
     cap CAP, T rows a call and S steps (`pouw_h1.Static`)."""
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     if not a.declare:
         return PH.FILL
     slots, cap, rows, steps = a.declare
@@ -1085,7 +1118,7 @@ def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: 
     (`pouw._install_h1`'s shapes and names, on the serving card's ``arch``; ``period``'s, from `period_program`, when
     given), for a window with no auditor's registration (no ``--model``)."""
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
     given = {} if period is None else {"program": period[0], "program_digest": period[1]}
@@ -1105,11 +1138,23 @@ CORE_EVIDENCE = "core_evidence.json.gz"
 def negatives_of(layers: list[Any]) -> tuple[str, ...]:
     """The windows ``--negatives`` serves over H1's linears ``layers``: `NEGATIVES`, and `EXPERT_NEGATIVE` when some are
     routed experts (`pouw_h1_hooks.expert_names`)."""
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
+    from verity_vllm.protocols.pouw import h1_hooks as PHK
     return NEGATIVES + ((EXPERT_NEGATIVE,) if PHK.expert_names(layers) else ())
 
 
-def editor(kind: str) -> Any:
+class Edit:
+    """An edit of the arm's codes, called as ``codes(layer, xq)`` is (`edited`); ``at`` names the expert site it zeroed,
+    None while it has zeroed none."""
+
+    def __init__(self, codes: Callable[[Any, Any], Any]) -> None:
+        self.codes = codes
+        self.at: str | None = None
+
+    def __call__(self, layer: Any, xq: Any) -> Any:
+        return self.codes(layer, xq)
+
+
+def editor(kind: str) -> Edit:
     """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
@@ -1117,7 +1162,7 @@ def editor(kind: str) -> Any:
     from verity_vllm.engine import int8_experts as X
     done = [False]
 
-    def edit(layer: Any, xq: Any) -> Any:
+    def codes(layer: Any, xq: Any) -> Any:
         if kind == "a-zero":
             return torch.zeros_like(xq)
         if kind == EXPERT_NEGATIVE:
@@ -1130,7 +1175,7 @@ def editor(kind: str) -> Any:
         done[0], xq = True, xq.clone()
         xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
         return xq
-    edit.at = None
+    edit = Edit(codes)
     return edit
 
 
@@ -1144,7 +1189,7 @@ def edited(orig: Any, edit: Any) -> Any:
 def core_tie(record: dict[str, Any], program: Any, tdir: Path) -> dict[str, Any]:
     """`core_verdict` of a window's own evidence: its record (commitment and manifest, `pouw_h1.CALLS_FILE`'s) and its
     declared Program's descriptor (`pouw_h1_served.descriptor`), saved to ``<tdir>/CORE_EVIDENCE`` for ``--core-from``."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     c = record["commitment"]
     ev = {"commitment": c, "calls": record["calls"], "descriptor": SV.descriptor(program).hex()}
     tdir.mkdir(parents=True, exist_ok=True)
@@ -1156,11 +1201,8 @@ def record_reason(record: dict[str, Any]) -> str | None:
     """`pouw_h1_challenger.manifest_reason` of a window's record, its Program salt read from in-process coins too: their
     coin commitment is `coins.CoinCommitment`'s rather than the live challenger's, and their salt coin opens after the
     weights' root `pouw` keys it on (`audit.Epoch.start`'s, the opening's ``after``), not the served one."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-    from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-    from verity_vllm.engine.hooks import patched
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
     c = record["commitment"]
     if c.get("coin_source") == PH.CHALLENGER:
         return PHC.manifest_reason(record)
@@ -1179,7 +1221,7 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
     the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
     leaves a row past K = 4096). ``tied`` when none refuses."""
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
@@ -1207,10 +1249,10 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
 
 
 def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
-    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
+    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coins' origin,
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
-    when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete,
+    when every window's coins are the auditor device's from a challenge phase of its own that ended closed and complete,
     and the honest Commit window's gate passes rows and refuses none of its calls, its sample's challenge phase ended
     closed and complete too (a refused negative may never open its own)."""
     wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
@@ -1278,7 +1320,7 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     hundreds of MB, and the window's 2304 about a TB. Without ``register`` (``--commit``'s windows, ``--skip-register``)
     only the entries: at FILL `register`'s template partition (`partition.evaluate`) encodes the window Program again,
     past 197 GB and 17 min."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     held = sum(len(r.bcs) * 128 + 64 * sum(map(len, r.levels)) for r in served.registered.values())
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "held_mib": round(held / 2**20, 1),
                            "rows": sum(r.leaves for r in served.registered.values()),
@@ -1302,42 +1344,30 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     return doc
 
 
-PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served_h1" / "producer.py"
-
-
-@functools.cache
-def producer() -> Any:
-    """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
-    spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
+def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int, producer: Any) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`pouw_h1_receipts.Receipts`) for the
-    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (`producer().Units`) over each linear's int8 weight in
+    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (kernels' `producer.Units`) over each linear's int8 weight in
     `layers` in place (no second copy on the GPU), or with a ``.cubin`` SO (noise.cu's) the torch chain over noise.cu's
     noise, keeping the first layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the
     window Program's form, v1's or J10-R's (``--j10r``)."""
-    from verity_vllm.protocols.pouw.h1 import receipts as RC
+    from verity_torch.pouw.h1 import receipts as RC
 
-    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer().Units(so)}
+    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer.Units(so)}
     made = RC.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
                        keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
 
-def receipts_check(made: Any) -> dict[str, Any]:
+def receipts_check(made: Any, producer: Any) -> dict[str, Any]:
     """The kept calls' receipts (`receipts_producer`) at the first proof block of each row block against `h1tile.reference`
-    seeded from the proof block's public row as the verifier builds it, word for word (`producer().check`; a proof block is bad unless
+    seeded from the proof block's public row as the verifier builds it, word for word (kernels' `producer.check`; a proof block is bad unless
     that row is also the producer's salt, position and roots); ``ok`` needs live and dead row blocks both."""
     rows = []
     for c, kept in sorted(made.kept.items()):
         ncb = kept["b"].shape[0] // 32
         rows += [(c, u, v["live"], v["ok"] and v["pub"])
-                 for u, v in producer().check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
+                 for u, v in producer.check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
     live = sum(r[2] for r in rows)
     return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
             "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
@@ -1350,8 +1380,8 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     t0 = time.monotonic()
     w = PC.of_run(h1, served)
     units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
@@ -1379,7 +1409,7 @@ def _check(h1: Any) -> tuple[dict[str, Any], bool]:
 def compile_from(calls_file: str, out: str) -> dict[str, Any]:
     """The record's calls compiled on the host: every shape by `H1Run.check`, the window static, and each call (s, w) at
     s·U + off(w) counted in its shapes' compiled proof blocks."""
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 
     rec = json.loads(Path(calls_file).read_text())
     pub = rec["public"]
@@ -1433,10 +1463,10 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.protocols.spot.device import remote
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import answers as A
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.proofs.spot.device import remote
+
+    from verity.protocols.accounting.pouw.prover.serving.h1 import answers as A
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"
@@ -1497,7 +1527,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     return doc
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, producer: Any = None) -> int:
+    """`producer` is kernels' producer module, which ``--receipts`` needs (``benchmarks/pouw/served_h1/h1_gpu.py`` hands
+    it in)."""
     ap = argparse.ArgumentParser(description="int8 Llama served with PoUW's H1 + fx1 on the eager int8_exact row, checked on the host")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
@@ -1521,8 +1553,8 @@ def main(argv: list[str] | None = None) -> int:
                          "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
-    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
-                                                              "challenger (verity/composite/device/live_challenger/run.sh, SCHEME "
+    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor device's "
+                                                              "challenger (verity/protocols/compose/device/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
@@ -1630,7 +1662,7 @@ def main(argv: list[str] | None = None) -> int:
                          "ROOTS1 steps (core_verdict)")
     ap.add_argument("--credit", action="store_true",
                     help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
-                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in for the verifier, _proved, "
                          "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
                          "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
@@ -1639,6 +1671,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
+    a.producer = producer
     from verity_vllm.engine.build import parse_engine_args
     a.engine_arg = parse_engine_args(a.engine_arg)
     if a.core_from:
@@ -1646,6 +1679,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
+    if a.receipts and producer is None:
+        ap.error("--receipts needs kernels' producer: start this run with benchmarks/pouw/served_h1/h1_gpu.py, which "
+                 "hands it in")
     if a.j10r and not (a.served and a.workload == "fill"):
         ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.ks and not (a.served and a.workload == "fill"):
@@ -1684,12 +1720,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.check_challenger:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        from verity.protocols.spot.device import remote
+        from verity.protocols.proofs.spot.device import remote
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
         main = None if a.main is None else remote.main_lines(a.main)
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
         live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
+        calls_file, directory = a.check_challenger
+        return 0 if check_challenger(calls_file, directory, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
                                      a.pins, main, statements, live, a.draw_dir, a.lean_answers)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")

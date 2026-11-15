@@ -1,4 +1,4 @@
-"""Sampled proofs as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
+"""SPOT as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
 
 Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte run
 roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
@@ -15,14 +15,14 @@ cut at (`protocol_options.CUT`): serve-openai's Commit windows under Pearl+ (`se
 """
 from __future__ import annotations
 
-from verity_vllm.commit import step_rows
 from verity_vllm.commit import scheme as recorded_scheme
+from verity_vllm.commit import step_rows
 from verity_vllm.protocols.interface import Context, Option, Target
 
 NAME = "sampled-proofs"
 DEFAULT_SCHEME = step_rows.NAME
 RECORDED = recorded_scheme.NAME
-LAW = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
+DESIGN = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
        "--replay-per-stratum (commit.challenge.stratum_picks)")
 #: its settings: ``cut``, the executor whose sites the window's circuit is cut at (`protocol_options.CUT`)
 KEYS = ("cut",)
@@ -34,22 +34,22 @@ def schemes() -> tuple[str, ...]:
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if ctx.stage != "commit":
-        return ("SPOT runs in the Commit stage: a row's (`verity-vllm row`, declared by the target's `protocols`) "
-                "or serve-openai's Commit windows; verity_vllm.LLM commits nothing",)
+        return (("SPOT runs in the Commit stage: a row's (`verity-vllm row`, declared by the target's `protocols`) "
+                 "or serve-openai's Commit windows; verity_vllm.LLM commits nothing"),)
     if scheme == RECORDED:
-        return (f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "
-                f"{DEFAULT_SCHEME}, so declare {NAME}:{DEFAULT_SCHEME}",)
+        return ((f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "
+                 f"{DEFAULT_SCHEME}, so declare {NAME}:{DEFAULT_SCHEME}"),)
     own = ctx.settings_of(NAME)
     if stray := sorted(set(own) - set(KEYS)):
         return (f"the {NAME} settings {stray} are none of its ({', '.join(KEYS)})",)
     if "cut" in own and not (isinstance(own["cut"], str) and own["cut"] in ctx.enabled):
-        return (f"the {NAME} setting 'cut' is the enabled executor's entry (name:scheme) whose sites the window's circuit is "
-                f"cut at, not {own['cut']!r} (enabled: {', '.join(ctx.enabled)})",)
+        return ((f"the {NAME} setting 'cut' is the enabled executor's entry (name:scheme) whose sites the window's circuit is "
+                 f"cut at, not {own['cut']!r} (enabled: {', '.join(ctx.enabled)})"),)
     return ()
 
 
 def requires_build(scheme: str, ctx: Context) -> bool:
-    """Sampled proofs verifies the Program emitted by the row's Build."""
+    """SPOT verifies the Program emitted by the row's Build."""
 
     return True
 
@@ -57,5 +57,8 @@ def requires_build(scheme: str, ctx: Context) -> bool:
 def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),
-                  details={"commitment_scheme": scheme, "law": LAW,
+                  details={"commitment_scheme": scheme, "law": DESIGN,
                            "challenge": "verity.commitments.randomness.derive from an auditor key"})
+
+
+__all__ = ["DEFAULT_SCHEME", "NAME"]

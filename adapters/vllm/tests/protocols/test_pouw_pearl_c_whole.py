@@ -9,22 +9,26 @@ kept from them, and a deferred capture's forks and joins over stand-in streams).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.pouw.verifier.serving import SERIAL
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.serving import DEFERRED_A, SERIAL
+
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import graphs as PG
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
-from verity_vllm.protocols.pouw.pearl_c.host import joined
-from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity_torch.pouw.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import graphs as PG
+from verity_torch.pouw.pearl_c import lanes_device as L
+from verity_torch.pouw.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity_torch.pouw.pearl_c.ends import PassEnds
+from verity_torch.pouw.pearl_c.host import joined
+from verity_torch.pouw.pearl_c.whole import VLLM, WholeStep
 
 NONE, FULL = "NONE", "FULL"
 
@@ -80,7 +84,7 @@ class Run:
         self.replays: list = []
         self.replayed: list = []
         self.begun: list = []
-        self.details = {"passes": []}
+        self.details: dict[str, list] = {"passes": []}
         self.eager = 0
 
     def eager_forward(self):
@@ -157,7 +161,8 @@ def test_vllms_own_graphs_serve_while_no_pearl_c_arm_executes():
 
 
 CALLS = tuple(PG.WholeCall(w, 32, 4096, 4096, 32, 64) for w in (0, 1, 2))
-HASHED, RETAINED = (True, frozenset(), "serial", False), (True, frozenset(), "serial", True)
+HASHED: tuple = (True, frozenset(), "serial", False)
+RETAINED: tuple = (True, frozenset(), "serial", True)
 
 
 def test_an_arm_runs_eagerly_until_prepared_then_replays_its_own_graphs_with_the_captured_calls():
@@ -275,7 +280,8 @@ class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
     call."""
 
     def __init__(self, torch):
-        self.entry, self.hashing, self.graphs, self.omit = "test", True, True, frozenset()
+        self.entry, self.hashing, self.graphs = "test", True, True
+        self.omit: frozenset[str] = frozenset()
         self.schedule, self.capacity = PPD.schedule_of(SERIAL, PPD.scheme_of(PPD.SCHEMES[0])), PPD.LEAF_CAPACITY
         self.order, self.nb = {7: 0, 8: 1, 9: 2}, 64
         self.roots = {w: bytes([w]) * 32 for w in self.order}
@@ -286,7 +292,7 @@ class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
         self._slots_copied, self._predicted = Event(), {}
         self.roots_buf, self.flag_buf = torch.zeros(64 * 8, dtype=torch.uint8), torch.zeros((256, 2), dtype=torch.uint8)
         self.salt, self.salt_key = bytes(range(64)), bytes(range(32))
-        self.cur = PPD._Pass(None)
+        self.cur = PPDR._Pass(None)
         self.shapes, self._graphs = {}, {}
 
 
@@ -310,9 +316,14 @@ def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
 
 def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_were_staged_for():
     torch = pytest.importorskip("torch")
-    run, made = Calls(torch), []
+    run = Calls(torch)
+    made: list[tuple] = []
     make = run.keys
-    run.keys = lambda *a: made.append(a[1:]) or make(*a)
+
+    def counted(*a):
+        made.append(a[1:])
+        return make(*a)
+    run.keys = counted
     calls = (PG.WholeCall(9, 32, 4096, 1024, 32, 8), PG.WholeCall(7, 32, 1024, 4096, 32, 32))
     run.whole_replay(calls)
     assert made == [(0, 32), (1, 32)]
@@ -325,11 +336,45 @@ def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_wer
     assert keys[2, :168].tobytes() == run.keys(run.roots[9], 2, 32) and keys[0, :168].tobytes() == run.keys(run.roots[7], 3, 32)
     assert offs[2].tolist() == [64 * 40, 2 * 64, 64 * 2] and offs[0].tolist() == [64 * 48, 2 * 96, 64 * 3]
     assert run._predicted == {9: (2, 32, 40, 64), 7: (3, 32, 48, 96)} and run._slots_copied.recorded == 2
-    run.cur = PPD._Pass(None)                                 # a new pass is elsewhere (numbered on from the epoch's 4)
+    run.cur = PPDR._Pass(None)                                 # a new pass is elsewhere (numbered on from the epoch's 4)
     assert run.whole_replay(calls) is False and offs[2].tolist() == [0, 0, 0]
     run.whole_replayed(calls)
     assert run.whole_replay(calls[:1]) is False               # and so do other calls
     assert keys[2, :168].tobytes() == run.keys(run.roots[9], 4 + 2, 32)
+
+
+def test_a_graphed_calls_slots_are_predicted_at_the_first_weight_and_a_call_they_do_not_hold_uploads_its_own():
+    """`GraphCalls._slot`, a call's keys and offsets where its own graph reads them.  At the weight first in the run's
+    order every weight's slot is written as the forward is predicted to go on (the next indices, the same rows, the pass's
+    running offsets) and uploaded in one copy, behind the last one's and marked on the caller's stream.  A call the
+    prediction holds uploads nothing.  One it does not hold uploads its own keys and offsets alone, so the slot it reads
+    says the call's values."""
+    torch = pytest.importorskip("torch")
+    run = Calls(torch)
+    run.kernel = SimpleNamespace(run=SimpleNamespace(TILE=16, cdiv=lambda a, b: -(-a // b)))
+    run.weights = {7: SimpleNamespace(n=64), 8: SimpleNamespace(n=32), 9: SimpleNamespace(n=64)}
+    run.cur = PPDR._Pass(None, base=2, tiles=5, flag_rows=16)
+    put: list = []
+
+    def upload(dst, data, stream):
+        dst[:len(data)].copy_(torch.frombuffer(bytearray(data), dtype=torch.uint8))
+        put.append((len(data), stream))
+    run.uploads = SimpleNamespace(put=upload)
+    run._slot(7, 4, 32, 30, "the caller's")
+    keys, offs = run.key_slots.numpy(), run.offs.numpy()
+    assert [keys[i, :168].tobytes() for i in range(3)] == [run.keys(run.roots[w], 4 + i, 32) for i, w in enumerate(run.order)]
+    assert offs.tolist() == [[64 * 5, 2 * 16, 64 * 2], [64 * 13, 2 * 46, 64 * 3], [64 * 17, 2 * 76, 64 * 4]]
+    assert run._predicted == {7: (4, 32, 5, 16), 8: (5, 32, 13, 46), 9: (6, 32, 17, 76)} and put == []
+    assert (run._slots_copied.synced, run._slots_copied.recorded) == (1, 1)
+    run.cur.tiles, run.cur.flag_rows = 13, 46
+    run._slot(8, 5, 32, 30, "the caller's")                   # as predicted: its slot holds it
+    assert put == [] and (run._slots_copied.synced, run._slots_copied.recorded) == (1, 1)
+    run.cur.tiles, run.cur.flag_rows = 18, 70
+    run._slot(9, 6, 16, 14, "the caller's")                   # other rows, at other offsets
+    assert put == [(168, "the caller's"), (24, "the caller's")] and run._predicted[9] == (6, 16, 18, 70)
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 6, 16) and offs[2].tolist() == [64 * 18, 2 * 70, 64 * 4]
+    assert keys[1, :168].tobytes() == run.keys(run.roots[8], 5, 32) and offs[1].tolist() == [64 * 13, 2 * 46, 64 * 3]
+    assert run._host_keys.numpy()[2, :168].tobytes() == run.keys(run.roots[9], 6, 32)     # the host copy is the prediction
 
 
 def test_a_replay_without_hashing_appends_the_matmuls_only():
@@ -357,9 +402,13 @@ def test_a_replay_over_the_passs_capacity_is_refused():
 def test_inside_vllms_capture_a_call_is_recorded_and_launched_into_it(monkeypatch):
     torch = pytest.importorskip("torch")
     run = Calls(torch)
-    into = []
+    into: list[tuple] = []
+
+    def _into(*a):
+        into.append(a)
+        return "y", True
     monkeypatch.setattr(PG, "_capturing", lambda: True)
-    monkeypatch.setattr(run, "_into", lambda *a: into.append(a) or ("y", True), raising=False)
+    monkeypatch.setattr(run, "_into", _into, raising=False)
     sh = type("Sh", (), {"m16": 32, "k": 1024, "n": 4096})()
     run.whole_capture_begin()
     assert run._graph_call(7, sh, "pipe", 0, 32, 32, 0, None) == ("y", True)
@@ -409,7 +458,7 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     run = Calls(torch)
     name = run.schedule.name
     assert run.whole_key() == (True, frozenset(), name, False, False) and run.whole_key(True) == (True, frozenset(), name, True, False)
-    run.cur = PPD._Pass(Path("/tmp/retained"))
+    run.cur = PPDR._Pass(Path("/tmp/retained"))
     assert run.whole_key() == (True, frozenset(), name, True, False) and run.whole_key(False) == (True, frozenset(), name, False, False)
     run.whole_defer = True
     assert run.whole_key() == (True, frozenset(), name, True, True)
@@ -425,7 +474,7 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats", "prefetch_b", "shape_joins")
     run.hashing = False
     assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
-    run.cur, run.graphs = PPD._Pass(None), False
+    run.cur, run.graphs = PPDR._Pass(None), False
     assert run.whole_key() is None
     run.graphs, run.schedule = True, PPD.schedule_of("deferred", PPD.scheme_of(PPD.SCHEMES[0]))
     assert run.whole_key() is None
@@ -466,7 +515,8 @@ def test_a_retained_kinds_capture_copies_each_calls_a_words_tree_and_y_to_the_st
 
 def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commits_after_each_replay(monkeypatch):
     torch = pytest.importorskip("torch")
-    run, capturing, log = Calls(torch), [False], []
+    run, capturing = Calls(torch), [False]
+    log: list[tuple] = []
     monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
     for name in ("_into", "_replay", "_slot"):
         monkeypatch.setattr(run, name, lambda *a: ("y", True))
@@ -503,7 +553,7 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     torch = pytest.importorskip("torch")
     run = Calls(torch)
     run.weights = {7: SimpleNamespace(excluded=(3,)), 9: SimpleNamespace(excluded=())}
-    run.cur = PPD._Pass(tmp_path)
+    run.cur = PPDR._Pass(tmp_path)
     ys = {w: torch.arange(32 * 16, dtype=torch.float32).reshape(32, 16).to(torch.bfloat16) + w for w in (7, 9)}
     run._stages = {(9, 32): (torch.full((32, 4), 2.0), torch.full((16,), 4, dtype=torch.uint8), ys[9]),
                    (7, 32): (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8), ys[7])}
@@ -526,7 +576,7 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
                                                       {"path": "y/1.rows.bf16", "bytes": len(real)}]
     assert (tmp_path / "y/1.rows.bf16").read_bytes() == real
     assert run.cur.files[1]["y"]["root"] == SY.commit_y(real, 16, run.salt, 1, run.salt_key)[0].hex()
-    run.cur = PPD._Pass(None)
+    run.cur = PPDR._Pass(None)
     run.whole_replay(calls)
     run.whole_replayed(calls)                                 # an unretained pass keeps nothing
     assert run.cur.records == [] and run.cur.files == []
@@ -574,7 +624,7 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
     run.flag_buf[3, 0] = 1                                    # the first call's row 3 fails the screen
     for m16, m in sizes:
         assert calls[m16] == tuple(PG.WholeCall(w, m, wt.k, 16, m16, m16 // 4) for w, wt in run.weights.items())
-        run.cur, alone = PPD._Pass(tmp_path / f"whole-{m16}"), PPD._Pass(tmp_path / f"alone-{m16}")
+        run.cur, alone = PPDR._Pass(tmp_path / f"whole-{m16}"), PPDR._Pass(tmp_path / f"alone-{m16}")
         run.whole_replay(calls[m16])
         run.whole_replayed(calls[m16])
         for i, (mm, w) in enumerate(zip(run.cur.matmuls, run.weights, strict=True)):
@@ -641,7 +691,8 @@ def _lanes(monkeypatch, torch, log):
 
 def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a_tree(monkeypatch):
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.device, run._graphs = True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -699,7 +750,8 @@ def test_a_deferred_a_capture_runs_each_calls_a_tree_beside_its_forming_and_gemm
     to its stage.  The forward's last call joins the tree stream, and a call
     joining a call of its shape joins that call's tree through its side steps."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.device, run._graphs = True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -762,7 +814,8 @@ def test_a_shape_joining_capture_joins_a_calls_side_steps_only_before_the_next_c
     events before it (the one side stream ran them first); at the last pending call's it waits for the side stream itself,
     and the forward's last call joins the side and tree streams.  Every step keeps its stream and order."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_shape_joins, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -803,7 +856,8 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
     are launched there before the commitment, the join not waiting for the prefetch, which the forward's last call joins;
     alone, the prefetch forks only itself."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -871,7 +925,8 @@ def test_a_stats_forking_capture_widens_a_calls_a_words_beside_its_commitment_wh
     call's rows set on the pipeline (`rows_bf16`, cleared after) and the widening goes on the stats stream before
     ``stats_a``, plainly; else the widening runs first on the capturing stream, as `_stage_a` launches it."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
     current = _lanes(monkeypatch, torch, log)
     monkeypatch.setattr(PG, "_capturing", lambda: True)
@@ -925,7 +980,8 @@ def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_
     see the pipeline's ``beside`` at 1, so its persistent GEMMs leave the tree's CTA its SM; its A commitment before them,
     its tile hashing after them, and every step without the option or without a forked tree see 0."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_tree_sm, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     _lanes(monkeypatch, torch, log)
@@ -958,7 +1014,8 @@ def test_a_pd_shared_capture_launches_every_step_with_the_pipelines_pd_shared_se
     without it; the capture's key carries ``pd_shared``, its call graphs' don't.  Without the option, or without hashing,
     no step sees it and no key carries it."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_pd_shared, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     _lanes(monkeypatch, torch, log)
@@ -990,16 +1047,16 @@ def test_a_pd_shared_capture_launches_every_step_with_the_pipelines_pd_shared_se
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
     pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x != "pad_a"])
     run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())
-    run._call_names = lambda p: PPD.PearlCDeviceRun._call_names(run, p)
-    a, b = PPD.PearlCDeviceRun._call_cuts(run, pipe)
+    run._call_names = lambda p: PPDR.PearlCDeviceRun._call_names(run, p)
+    a, b = PPDR.PearlCDeviceRun._call_cuts(run, pipe)
     names = [x for x in run._call_names(pipe) if x != "pad_a"]
     # A's tree with its row digests and row seeds, before forming; the tile hashing is the leaves alone
     assert names[:a] == ["rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a"] and names[b:] == ["hash_leaf"]
     run.hashing = False
-    assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names(pipe)))
+    assert PPDR.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names(pipe)))
     run._call_names = lambda p: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_leaf")
     with pytest.raises(RuntimeError, match="A's commitment"):
-        PPD.PearlCDeviceRun._call_cuts(run, pipe)
+        PPDR.PearlCDeviceRun._call_cuts(run, pipe)
 
 
 def test_a_fused_step_takes_its_parts_place_and_an_omitted_part_drops_it():
@@ -1007,10 +1064,10 @@ def test_a_fused_step_takes_its_parts_place_and_an_omitted_part_drops_it():
     pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in ("commit_a", *PPD.CALL_STEPS) if x not in parts],
                            FUSED={"commit_a": parts})
     run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())
-    run._call_names = lambda p: PPD.PearlCDeviceRun._call_names(run, p)
+    run._call_names = lambda p: PPDR.PearlCDeviceRun._call_names(run, p)
     names = run._call_names(pipe)
     assert names == ("commit_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc", "hash_leaf")
-    assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (1, 7)
+    assert PPDR.PearlCDeviceRun._call_cuts(run, pipe) == (1, 7)
     run.omit = frozenset({"seeds_a"})
     assert "commit_a" not in run._call_names(pipe) and run._call_names(pipe)[0] == "stats_a"
     run.omit, run.hashing = frozenset(), False
@@ -1040,14 +1097,14 @@ def test_a_split_commitments_tree_forks_from_the_step_before_the_first_cut():
                             FUSED=fused)
     whole = SimpleNamespace(steps=lambda: [(x, None, None) for x in ("commit_a", *PPD.CALL_STEPS) if x not in parts], FUSED=fused)
     run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())
-    run._call_names = lambda p: PPD.PearlCDeviceRun._call_names(run, p)
-    run._call_cuts = lambda p: PPD.PearlCDeviceRun._call_cuts(run, p)
+    run._call_names = lambda p: PPDR.PearlCDeviceRun._call_names(run, p)
+    run._call_cuts = lambda p: PPDR.PearlCDeviceRun._call_cuts(run, p)
     assert run._call_names(split)[:3] == ("rows_a", "tree_seed_a", "stats_a") and run._call_cuts(split) == (2, 8)
-    assert PPD.PearlCDeviceRun._call_tree(run, split) == 1 and PPD.PearlCDeviceRun._call_tree(run, whole) is None
-    assert PPD.PearlCDeviceRun._call_stats(run, split) == 2 and PPD.PearlCDeviceRun._call_stats(run, whole) == 1
+    assert PPDR.PearlCDeviceRun._call_tree(run, split) == 1 and PPDR.PearlCDeviceRun._call_tree(run, whole) is None
+    assert PPDR.PearlCDeviceRun._call_stats(run, split) == 2 and PPDR.PearlCDeviceRun._call_stats(run, whole) == 1
     run._call_names = lambda p: ("tree_seed_a", "rows_a", "stats_a", "gemm_pearlc", "hash_leaf")
     with pytest.raises(RuntimeError, match="A's tree"):
-        PPD.PearlCDeviceRun._call_tree(run, split)
+        PPDR.PearlCDeviceRun._call_tree(run, split)
 
 
 def test_deferring_a_trees_needs_a_deferred_whole_capture_on_a_kernel_that_splits_a_commitment():
@@ -1055,13 +1112,13 @@ def test_deferring_a_trees_needs_a_deferred_whole_capture_on_a_kernel_that_split
         return SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED=fused)))
     for k, defer in ((kernel({"commit_a": ()}), True), (kernel({"tree_seed_a": ()}), False)):
         with pytest.raises(ValueError, match="whole_defer_a"):
-            PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=defer, whole_defer_a=True)
+            PPDR.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=defer, whole_defer_a=True)
 
 
 def test_forking_a_scales_needs_a_deferred_whole_capture():
     k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
     with pytest.raises(ValueError, match="whole_fork_stats"):
-        PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_fork_stats=True)
+        PPDR.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_fork_stats=True)
 
 
 def test_leaving_a_tree_its_sm_needs_a_deferred_a_tree_on_a_kernel_whose_gemms_take_beside():
@@ -1069,26 +1126,26 @@ def test_leaving_a_tree_its_sm_needs_a_deferred_a_tree_on_a_kernel_whose_gemms_t
     for pipeline, defer_a in ((SimpleNamespace(FUSED=splits_a, beside=0), False), (SimpleNamespace(FUSED=splits_a), True)):
         k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
         with pytest.raises(ValueError, match="whole_tree_sm"):
-            PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=True, whole_defer_a=defer_a, whole_tree_sm=True)
+            PPDR.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=True, whole_defer_a=defer_a, whole_tree_sm=True)
 
 
 def test_joining_side_steps_by_shape_needs_a_deferred_whole_capture():
     k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
     with pytest.raises(ValueError, match="whole_shape_joins"):
-        PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_shape_joins=True)
+        PPDR.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_shape_joins=True)
 
 
 def test_prefetching_b_needs_a_deferred_whole_capture_on_a_kernel_with_the_prefetch():
     for pipeline, defer in ((SimpleNamespace(FUSED={}, prefetch_b=None), False), (SimpleNamespace(FUSED={}), True)):
         k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
         with pytest.raises(ValueError, match="whole_prefetch_b"):
-            PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=defer, whole_prefetch_b=True)
+            PPDR.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=defer, whole_prefetch_b=True)
 
 
 def test_an_end_aside_needs_lagged_ends():
     k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
     with pytest.raises(ValueError, match="aside_ends"):
-        PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, aside_ends=True)
+        PPDR.PearlCDeviceRun(None, "test", k, {}, {}, None, None, aside_ends=True)
 
 
 def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_copy_and_fill(monkeypatch):
@@ -1096,7 +1153,6 @@ def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_cop
     stream over the call's rows and the padding up to `filled`, or none, left to the call's `_into` (`_widening`), where
     `GraphCalls._widen_later`; with an older cubin, torch's copy and fill, the same words."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.protocols.pouw.pearl_c import lanes as L
     monkeypatch.setattr(L, "_stream", lambda device: 77)
     x, launched = torch.arange(24, dtype=torch.float32).reshape(3, 8).to(torch.bfloat16), []
     for has, later in ((True, False), (True, True), (False, True)):
@@ -1116,18 +1172,91 @@ def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_cop
             assert calls._widening is None
 
 
+def test_an_eager_calls_lanes_take_over_at_events_and_a_tree_aside_runs_apart_from_a_full_tile(monkeypatch):
+    """`LaneCalls._lanes` without a graph, on the card, under ``deferred-a``: each event's record and each wait, in `log`,
+    over stand-ins of the device, the streams and the events.  The main lane starts behind the caller.  A's tree, aside,
+    starts at an event the main lane records after its per-row keying, and copies A's root to the pass on its lane: the
+    side lane after the call's from `TREE_APART_ROWS` rows, the call's own below.  The call's side lane runs the rest
+    behind the main lane's end, waits for a tree that ran apart, and its end is the set's event, which the set's next
+    call waits for on the main lane before its steps.  The caller waits for the main lane's end."""
+    torch = pytest.importorskip("torch")
+    log: list = []
+    on = ["caller"]
+
+    class Stream:
+        def __init__(self, name):
+            self.name = name
+
+        def wait_event(self, event):
+            log.append(f"{self.name} waits for {event.name}, recorded on {event.at}")
+
+    class Event:
+        def __init__(self, name):
+            self.name, self.at = name, None
+
+        def record(self, stream):
+            self.at = stream.name
+            log.append(f"{self.name} on {stream.name}")
+
+    @contextlib.contextmanager
+    def stream(s):
+        held, on[0] = on[0], s.name
+        try:
+            yield
+        finally:
+            on[0] = held
+
+    def lane(name, raw):
+        return SimpleNamespace(raw=raw, stream=Stream(name), event=Event(f"{name}'s event"),
+                               tree_event=Event(f"{name}'s tree event"))
+
+    def buf(name):
+        log.append(f"{name} read on {on[0]}")
+        return tree
+    monkeypatch.setattr(torch.cuda, "stream", stream)
+    monkeypatch.setattr(L, "_event", lambda: Event("the set's end"))
+    kernel, tree = SimpleNamespace(dev=SimpleNamespace(stream=None)), torch.arange(128, dtype=torch.uint8)
+    run = SimpleNamespace(device=SimpleNamespace(type="cuda"), schedule=DEFERRED_A, main=lane("main", 1),
+                          sides=[lane("side 0", 2), lane("side 1", 3)], _side_turn=0, hashing=False, nb=64, kernel=kernel,
+                          _launching=None, roots_buf=torch.zeros(256, dtype=torch.uint8), cur=SimpleNamespace(first=5))
+    steps, side = ([lambda x=x: log.append(f"{x} ({kernel.dev.stream})") for x in names]
+                   for names in (("rows_a", "forming"), ("tree_seed_a", "hash_leaf")))
+    full, part = (SimpleNamespace(turn=0, sets=[dict.fromkeys(L.rotated(DEFERRED_A), tree)], m16=m16, done=[None], buf=buf)
+                  for m16 in (L.TREE_APART_ROWS, L.TREE_APART_ROWS // 2))
+
+    def launched(sh, index):
+        pipe = SimpleNamespace(b={}, keys={}, lane_cuts=(1, 1), size={"tree_a": 128})
+        log.clear()
+        assert L.LaneCalls._lanes(run, 7, sh, pipe, steps, side, 9, Stream("caller"), index, True) == (None, False)
+        assert kernel.dev.stream is None and run._launching is None and on == ["caller"]
+        return list(log)
+
+    behind_caller = ["keys read on caller", "main's event on caller", "main waits for main's event, recorded on caller"]
+    keyed = ["rows_a (1)", "side 1's event on main", "forming (1)",
+             "side 1 waits for side 1's event, recorded on main", "tree_seed_a (3)", "tree_a read on side 1"]
+    ended = ["main's event on main", "caller waits for main's event, recorded on main"]
+    apart = [*keyed, "side 0's tree event on side 1",
+             "side 0's event on main", "side 0 waits for side 0's event, recorded on main", "hash_leaf (2)",
+             "side 0 waits for side 0's tree event, recorded on side 1", "the set's end on side 0", *ended]
+    assert launched(full, 6) == behind_caller + apart
+    assert launched(part, 7) == [*behind_caller, *keyed,
+                                 "side 1's event on main", "side 1 waits for side 1's event, recorded on main",
+                                 "hash_leaf (3)", "the set's end on side 1", *ended]
+    assert launched(full, 8) == [*behind_caller, "main waits for the set's end, recorded on side 0", *apart]
+    assert (full.turn, part.turn, run._side_turn) == (2, 1, 3)
+    assert run.roots_buf.tolist() == [0] * 64 + 3 * tree[64:].tolist()
+
+
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():
     """A lagged end's readback (its copies behind an event) completes at `settle`: the next end's first step, and
     `finish`'s.  It waits for the event once and fills the ended pass's own dict, the one `details["passes"]` and the
     stack hold, and `commits`.  The executor's pass end and `end_pass` with ``step`` lag where the run's `lag_ends` is
     set; `end_pass` without it (a caller's) never does."""
-    import hashlib
-
     import torch
 
-    run = PPD.PearlCDeviceRun.__new__(PPD.PearlCDeviceRun)
+    run = PPDR.PearlCDeviceRun.__new__(PPDR.PearlCDeviceRun)
     run.commits, run._lagged, waited = {"transcript_root": None}, None, []
-    run.cur, run.hashing, run.schedule, run.details = PPD._Pass(None), False, SimpleNamespace(name="serial"), {"passes": []}
+    run.cur, run.hashing, run.schedule, run.details = PPDR._Pass(None), False, SimpleNamespace(name="serial"), {"passes": []}
     run.kernel = None
     roots_a, root = bytes(range(128)), bytes(range(64, 128))
 
@@ -1151,12 +1280,16 @@ def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_e
     run.finish()
     assert waited == [2, 4] and out["transcript_root"] == root.hex() and run.commits["tiles"] == 9
 
-    lags = []
-    run.end, run.begin = (lambda lag=False, behind=False: lags.append(lag) or {}), (lambda *a, **kw: None)
-    run.cur = PPD._Pass(None, matmuls=[None])
+    lags: list[bool] = []
+
+    def end(lag=False, behind=False):
+        lags.append(lag)
+        return {}
+    run.end, run.begin = end, (lambda *a, **kw: None)
+    run.cur = PPDR._Pass(None, matmuls=[None])
     for flag in (False, True):
         run.lag_ends = flag
-        PPD.PearlCDeviceRun.end_pass(run, step=True)
-        PPD.PearlCDeviceRun.end_pass(run)
-        PPD._ExecutorPass.end(SimpleNamespace(run=SimpleNamespace(end=run.end, lag_ends=flag, omit=None)))
+        PPDR.PearlCDeviceRun.end_pass(run, step=True)
+        PPDR.PearlCDeviceRun.end_pass(run)
+        PPDR._ExecutorPass.end(SimpleNamespace(run=SimpleNamespace(end=run.end, lag_ends=flag, omit=None)))
     assert lags == [False, False, False, True, False, True]

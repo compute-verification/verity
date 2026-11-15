@@ -37,21 +37,22 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.prims import const
 from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Value
 from verity.commitments.gates import sha512 as H
 from verity.commitments.gates.lms import Sha512Compress
-from verity.definitions.registry.sampling import bit_at
+from verity.circuits.ops.prims import const
+from verity_vllm.definitions.registry.sampling import bit_at
+
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
-           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values"]
+           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values",
+           "rid_of_ids", "rid_in", "inputs"]
 
 BIT = BL.BIT
 U8 = Array(8, BIT)
@@ -226,15 +227,15 @@ def check(B: Any, seed: Coll, ins: Sequence[Coll]) -> tuple[Coll, str]:
                          f"the id's bytes, not {[str(c.type) for c in ins]}")
     fn = definition(RID)
     return (B.call(fn, Coll(I64, seed.refs), *ins, name=NAME),
-            f"the seed rule ({fn.id} of SeedCheck_v1): the sampler's seed is the body's, else derived from the window's seed salt "
-            f"and the request's id")
+            (f"the seed rule ({fn.id} of SeedCheck_v1): the sampler's seed is the body's, else derived from the window's seed salt "
+             f"and the request's id"))
 
 
 def in_derive(ctx: Any, at: Any) -> None:
     """Where the traced source takes `PARAMS` (a stochastic request wrapper, `vllm_meta.StochasticRequest`), `check` of its
     ``seed`` and them as the Program's next Call and check (`Ctx.check`), which no fx node lowers; one it can't take refuses at fx
     node ``at``."""
-    from verity_vllm.program.frontend.outcomes import refuse
+    from verity_torch.frontend.outcomes import refuse
     have = [n for n in PARAMS if n in ctx.user_inputs]
     if not have:
         return

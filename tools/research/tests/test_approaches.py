@@ -72,7 +72,7 @@ def test_without_a_remote_the_claim_is_a_pending_file_the_steward_records(env, t
     assert A.read_pending(p)["approach"] == NAME and A.read_pending(p)["cites"] == "verity#166"
     assert notes.main(["claim", "pous/other", "--lane", "pous-ec", "--root", str(root), "--store", str(tmp_path / "s")]) == 4
     done: list[str] = []
-    now = dt.datetime(2026, 9, 28, 6, 0, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 9, 28, 6, 0, tzinfo=dt.UTC)
     lines = A.import_pending(store(env), root, now, done)
     assert lines[0].startswith("06:00Z CLAIM-REFUSED lanes/pous-ec/") and "refused: pous/other is new" in lines[0]
     assert lines[1].startswith("06:00Z CLAIM lanes/pous-mvp/") and "claimed pous/band-d12 for pous-mvp" in lines[1]
@@ -276,7 +276,7 @@ def test_the_steward_rule_renders_on_its_interval(env):
     st, root = store(env), env / "notes"
     A.claim(st, NAME, "pous-mvp", **NEW)
     (root / "steward.toml").write_text(f'[approaches]\nstore = "{env / "steward-store"}"\nevery_min = 10\n')
-    state, now = {}, dt.datetime(2026, 9, 28, 6, 0, tzinfo=dt.timezone.utc)
+    state, now = {}, dt.datetime(2026, 9, 28, 6, 0, tzinfo=dt.UTC)
     assert A.steward_lines(root, now, state) == ["06:00Z RENDERED campaigns/pous/APPROACHES.md"]
     assert A.steward_lines(root, now + dt.timedelta(minutes=5), state) == []        # inside the interval
     assert A.steward_lines(root, now + dt.timedelta(minutes=11), state) == []       # nothing changed

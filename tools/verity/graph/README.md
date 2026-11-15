@@ -2,7 +2,7 @@
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
 with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
-the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
+the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
@@ -66,7 +66,7 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 - `files` holds every input of any task and every env's spec files, once, each `file_digest`. The tree's files are git's,
   tracked and untracked-unignored (`git ls-files -co --exclude-standard`), as POSIX paths from the root.
 - An env's `spec` is its `tasks.toml` globs resolved over the tree's files, sorted. `py`: `uv.lock` and the root
-  `pyproject.toml`; `lean`: every `lean-toolchain` and `lake-manifest.json`; `rust`: `verity/protocols/flock/prover/check_build.sh`, which
+  `pyproject.toml`; `lean`: every `lean-toolchain` and `lake-manifest.json`; `rust`: `verity/protocols/proofs/flock/prover/check_build.sh`, which
   pins the Rust toolchain and the Flock commit.
 - Tasks are sorted by id. An id is `<kind>:<name>`, unique in the graph.
 - `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`. Both are in the key, so a lister puts in
@@ -179,20 +179,20 @@ retried; a task whose read didn't pass is cancelled. Each task's last result/v1 
 
 ## The build family
 
-The check's steps that build the Flock verifier and run what it built, and Flock's Rust, as `tools/verity/check/check.py`
+The check's steps that build the Flock verifier and run what it built, and Flock's Rust, as `tools/check/check.py`
 runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
-| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` and Markdown | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>`; `lake-build`, each of those packages' `.lake/build` but the executables, in one archive |
-| `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
-| `lean-agreement:verity/protocols/flock/agreement` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory and the verifier's package, but their Markdown, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
+| `lean-build:verity/protocols/proofs/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` and Markdown | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>`; `lake-build`, each of those packages' `.lake/build` but the executables, in one archive |
+| `lean-unit-cut:verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
+| `lean-agreement:verity/protocols/proofs/flock/prover/agreement` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory and the verifier's package, but their Markdown, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
 | `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits by test file, or of one that declares `parts`, by test id; a parallel suite on the family's slot, another in one process | the whole tree but its Markdown, which no Lake build reads (as suites.py keys a suite, one that lists a `.md` among its inputs keeps the Markdown under its directory and inputs): those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
-| `flock-circuit-build:verity/protocols/flock/prover/live` | rust | `verity/protocols/flock/prover/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
-| `flock-rust-tests:verity/protocols/flock/prover/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
+| `flock-circuit-build:verity/protocols/proofs/flock/prover/live` | rust | `verity/protocols/proofs/flock/prover/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
+| `flock-rust-tests:verity/protocols/proofs/flock/prover/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
-`artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
+`artifacts`); `lean-unit-cut` and `lean-agreement` read the Lean verifier's executable and get its path as their var `verify`, and
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`), and unpacks
 `lake-build` into the tree and runs `lake build` there under check's lock (its var `tree`), once a tree (the stamp
 `.lake/graph-build.sha512`, which lean-build writes in its own), so the tree is as check's lean-build step leaves it: the

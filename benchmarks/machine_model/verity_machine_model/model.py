@@ -145,15 +145,15 @@ def device(name: str = DEVICE) -> Path:
 
 
 def card(data: Path = DATA, of: str = "card") -> dict:
-    """The device's card file (`verity.hardware.cards`), the one source of its ceilings: the SKU `model.toml` names as
+    """The device's card file (`verity.device.load_card`), the one source of its ceilings: the SKU `model.toml` names as
     `card`, or with `of="host"` as `host`, the card of the host the device sits in."""
-    from verity.hardware.cards import load   # here: only a reader of the card needs verity
+    from verity.device import load_card   # here: only a reader of the card needs verity
 
     sku = tomllib.loads((data / "model.toml").read_text()).get(of)
     if sku is None:
-        raise SystemExit(f"{data / 'model.toml'} names no {of}; add {of} = \"SKU\", a file of verity/hardware/cards/")
+        raise SystemExit(f"{data / 'model.toml'} names no {of}; add {of} = \"SKU\", a file of hardware/cards/")
     try:
-        return load(sku)
+        return load_card(sku)
     except KeyError as e:
         raise SystemExit(f"{data / 'model.toml'}: {e.args[0]}") from None
 

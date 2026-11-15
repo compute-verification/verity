@@ -12,9 +12,10 @@ torch = pytest.importorskip("torch")
 
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
+from verity_vllm.definitions.registry import tp_allreduce as TA  # noqa: E402
+
 from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
 from verity_vllm.pipeline.tp import xrank_dump as XD  # noqa: E402
-from verity.definitions.registry import tp_allreduce as TA  # noqa: E402
 
 W = 8
 M, NC = 6, 24                       # 144 words: multimem's 32-word owner slices and custom's 2-stage packs cross the rows
@@ -289,7 +290,7 @@ def test_a_routed_family_no_phase_stratum_drew_gets_its_own_stratum() -> None:
     assert extra
 
 
-def test_the_rank_dump_binds_each_request_call_and_draws_every_routed_family(tmp_path) -> None:
+def test_the_rank_dump_binds_each_request_call_and_samples_every_routed_family(tmp_path) -> None:
     N, site = 6144, "model.layers.0.input_layernorm"
     s = TA.settings_of(False, {})
     sizes = {0: 256, 1: 100, 2: 90, 3: 80, 4: 3}

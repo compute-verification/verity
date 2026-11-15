@@ -26,13 +26,11 @@ Tensor = Any
 
 @dataclass(frozen=True)
 class Shard:
-    """``axis`` ``n`` is column-parallel (qkv, gate_up), ``k`` row-parallel (o, down), None replicated; vLLM adds a
-    row-parallel layer's bias on rank 0 only (``bias_here``)."""
+    """``axis`` ``n`` is column-parallel (qkv, gate_up), ``k`` row-parallel (o, down), None replicated."""
 
     rank: int = 0
     world: int = 1
     axis: str | None = None
-    bias_here: bool = True
 
 
 @dataclass(frozen=True)
@@ -196,14 +194,17 @@ class Stack:
         recorded."""
         if self._pass is not None:
             raise RuntimeError("a pass is already open")
-        if not self.executing:
+        arm, executor = self.active, self.executor
+        if arm is None or arm.executor is None:
             yield None
             return
-        spec = self.active.spec if spec is None else spec
+        spec = arm.spec if spec is None else spec
         bad = self.refusals(spec)
         if bad:
             raise Refused(bad, "linear stack")
-        self._pass = self.executor.begin(spec)
+        if executor is None:        # below the refusals: a spec the stack refuses is `Refused` on every stack
+            raise RuntimeError(f"arm {arm.name!r} runs {arm.executor}, and this stack has no executor")
+        self._pass = executor.begin(spec)
         try:
             yield self._pass
         except BaseException:
@@ -230,10 +231,12 @@ class Stack:
         """What a patched ``quant_method.apply`` calls: the executor's pass when an arm executes, else vLLM's `original`,
         either one with the source's weight when there is a source."""
         weight = self.source.weight(site, self._forward) if self.source is not None else None
-        if not self.executing:
+        arm = self.active
+        if arm is None or arm.executor is None:
             return original(layer if weight is None else _WithWeight(layer, weight), x, bias)
         if self._pass is None:
-            raise RuntimeError(f"{self.executor.name} is active outside a pass: open one (Stack.pass_) before the forward")
+            name = arm.executor if self.executor is None else self.executor.name
+            raise RuntimeError(f"{name} is active outside a pass: open one (Stack.pass_) before the forward")
         return self._pass.call(site, x, layer.weight if weight is None else weight, bias)
 
 

@@ -1,5 +1,5 @@
 """A day's (c, k)-inference blocks, counted from its served windows' circuit records and judged against the day's declared
-c, k and n (`NciCheck.Count`'s rule): ``verity-vllm block-counts``. The public output is the judgment alone
+c, k and n (`InferenceOnlyCheck.Count`'s rule): ``verity-vllm block-counts``. The public output is the judgment alone
 (`records.block_counts`); the exact counts go only to a private file.
 
 **Blocks.** A window's inference blocks are B's (`inference_blocks`): one a slot, its class Program over every step, which is
@@ -9,8 +9,8 @@ window's session (`session`): ``TemplatePopulations_v1`` of each template at its
 a window circuit, and a window is m activations of it. A block class is that Definition, which the report names by its
 SHA-512 (`partition_v2.id_digest`).
 
-**Gates** are counted as `NciCheck.Count` counts a block Definition's (``boolGates``,
-`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
+**Gates** are counted as `InferenceOnlyCheck.Count` counts a block Definition's (``boolGates``,
+`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
 table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
 (`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
@@ -21,12 +21,12 @@ published with the judgment.
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
 verifier's pins (`interface.input_count`: θ the weights pinned before the run at the roots the window's registration
 records) over its m slots, since no wire crosses slots. The wires are the record's declarations, which the session
-Definition doesn't carry, so this is the record's count and not `NciCheck.Count`'s ``fresh`` on the session Definition,
+Definition doesn't carry, so this is the record's count and not `InferenceOnlyCheck.Count`'s ``fresh`` on the session Definition,
 which would count every wired read.
 
 **The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
 declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
-named by its SHA-512. Its rules, in `NciCheck.Count`'s order: every class's block at most c gates (undecided where a block
+named by its SHA-512. Its rules, in `InferenceOnlyCheck.Count`'s order: every class's block at most c gates (undecided where a block
 reaches an unpriced primitive, its gates then a lower bound, unless that bound already passes c) and k fresh bits, and the
 day's blocks at most n. The day is accepted when every rule accepts, and refused otherwise, its reason the first rule that
 doesn't, naming c, k or n and never a count. The work is per distinct circuit record (a class's windows share theirs, by
@@ -50,13 +50,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.circuits import codec, partition_v2 as PV2
+from verity.circuits import codec
+from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
-from verity.definitions.boolean import gate_table
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
+from verity.circuits.ops.boolean.versions import gate_table
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
+
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration
@@ -69,6 +72,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
     blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    per: Counter[str]
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
@@ -79,7 +83,8 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
 def resolve(tid: str) -> Any:
     """`interface.resolve` over the whole registry (`catalog.load`), a refusal naming any registry module that failed to
     import."""
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load  # no registry load at import
+
     _, errors = load()
     try:
         return IF.resolve(tid)
@@ -90,7 +95,7 @@ def resolve(tid: str) -> Any:
 
 
 def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Counter]] | None = None) -> tuple[int, Counter]:
-    """``fn``'s Boolean gates an activation by ``table`` (`NciCheck.Count`'s ``boolGates``), and its activations of each
+    """``fn``'s Boolean gates an activation by ``table`` (`InferenceOnlyCheck.Count`'s ``boolGates``), and its activations of each
     primitive the table lacks."""
     memo = {} if memo is None else memo
     if (hit := memo.get(id(fn))) is not None:
@@ -99,6 +104,7 @@ def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Cou
         key = codec.descriptor_id(fn)
         got = (0, Counter()) if is_input(fn) else (table[key], Counter()) if key in table else (0, Counter({key: 1}))
     else:
+        miss: Counter[str]
         g, miss = 0, Counter()
         for nd in fn.body.nodes:
             cg, cm = gates(nd.fn, table, memo)
@@ -125,14 +131,15 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     (ValueError) where it isn't a JSON object holding them."""
     if not isinstance(doc, Mapping):
         raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
-    got = [doc.get(f) for f in ("c", "k", "n")]
+    got: list[Any] = [doc.get(f) for f in ("c", "k", "n")]
     if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
         raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
-    return (hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), *got)
+    c, k, n = got
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), c, k, n
 
 
-def judge(classes: Sequence[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
-    """`NciCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
+def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
+    """`InferenceOnlyCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
     the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
     checks = {**RBC.shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}
     over = next((x for x in classes if x.gates > c), None)

@@ -12,7 +12,7 @@ batches, plain and Lean, and each class gives four measurements:
 | `ci/plain-within-2h`, `ci/lean-within-2h` | the share of them on `main` within 2 h of the mark |
 
 The two p90s are the metrics of the goals that a plain PR, and one that changes Lean, lands within two hours of its mark
-(`benchmarks/metrics.toml`). `landing.json`, beside the result, holds every landing's row: the PR, its head, the `main` it
+(`benchmarks/landing/metrics.toml`). `landing.json`, beside the result, holds every landing's row: the PR, its head, the `main` it
 landed on, its mark, its hours and its class.
 
 - **The window**: the 7 days before the run (`--days N`, `--until TIME` for another).
@@ -40,5 +40,5 @@ It runs as a local research run, from a checkout on an agent VM with the team's 
 (`research pods ssh vy-control-verity`), GitHub (`gh`, for restacks) and the evidence store's labels, and a CPU node reaches
 none of the three. It reads for about a minute and computes nothing heavy.
 
-`uv run tools/verity/check/suites.py benchmarks/landing` runs its tests: the computation on a small fixture, with stand-ins
+`uv run tools/check/suites.py benchmarks/landing` runs its tests: the computation on a small fixture, with stand-ins
 for the pod, GitHub, the store and git.

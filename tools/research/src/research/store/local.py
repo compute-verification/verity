@@ -9,7 +9,7 @@ disposable catalog, under `~/.research/store` (or `$RESEARCH_STORE`).
     catalog.sqlite                LOCAL ONLY: index.Index; `reindex()` rebuilds it from the three directories above
     scratch/                      LOCAL ONLY: tool caches keyed by reuse_key (owned by the run integration, §6.5)
 
-Replica resolution for a blob (`fetch`): local objects -> repo replica map `<repo>/fixtures/artifacts.json` (`{art id: repo-relative
+Replica resolution for a blob (`fetch`): local objects -> repo replica map `<repo>/artifacts.json` (`{art id: repo-relative
 path}`, every blob sha256-checked against the manifest before use, mismatch warns and falls through) -> remote (`remote.py`).  Bytes
 that arrive from a repo or the remote are checked against the manifest before they enter `objects/`.  `push` uploads an artifact's
 blobs concurrently (conditional create per object, verified by HEAD size + MD5 ETag or by read-back) and the manifest last; `verify`
@@ -42,7 +42,12 @@ from .remote import ConfigError, Remote, config_path, load_remote
 from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
-REPLICA_MAP = Path("fixtures") / "artifacts.json"
+REPLICA_MAP = Path("artifacts.json")
+#: each place a tree or a commit may hold the registry, the first it holds taken: a `research run` puts the launcher's research
+#: ahead of the tree's, so a tree read by an older or newer research may hold it at the place the other doesn't name.
+#: The second stays because trees and commits from before the registry moved to the root live on nodes and branches; it is
+#: written as two parts, which a rerun of that move's rewrite of the registry's path leaves two places
+REPLICA_MAPS = (REPLICA_MAP, Path("fixtures", "artifacts.json"))
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
 VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
@@ -76,9 +81,14 @@ def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
     return Path(os.environ.get("RESEARCH_STORE", DEFAULT_ROOT)).expanduser()
 
 
+def replica_map_file(repo: Path) -> Path:
+    """``repo``'s registry file: the first of `REPLICA_MAPS` it holds, else `REPLICA_MAP` under it."""
+    return next((repo / p for p in REPLICA_MAPS if (repo / p).is_file()), repo / REPLICA_MAP)
+
+
 def find_repo(start: Path | None = None) -> Path | None:
-    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding `fixtures/artifacts.json`; None when there is none, or no cwd
-    (a run's source tree removed under it)."""
+    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding the registry (`replica_map_file`); None when there is none,
+    or no cwd (a run's source tree removed under it)."""
     if os.environ.get("RESEARCH_REPO"):
         return Path(os.environ["RESEARCH_REPO"]).expanduser()
     try:
@@ -87,7 +97,7 @@ def find_repo(start: Path | None = None) -> Path | None:
         _warn(f"no working directory ({e}): it was removed, so no repository is found from it")
         return None
     for d in (p, *p.parents):
-        if (d / REPLICA_MAP).is_file():
+        if replica_map_file(d).is_file():
             return d
     return None
 
@@ -255,15 +265,16 @@ class LocalStore:
         return self._repo
 
     def replica_map(self) -> dict[str, str]:
-        """`<repo>/fixtures/artifacts.json`: art id -> repo-relative path of the payload (a file, or a tree's directory)."""
+        """The repository's registry (`replica_map_file`): art id -> repo-relative path of the payload (a file, or a tree's
+        directory)."""
         if self._map is None:
             self._map = {}
-            if self.repo and (self.repo / REPLICA_MAP).is_file():
+            if self.repo and (p := replica_map_file(self.repo)).is_file():
                 try:
-                    doc = json.loads((self.repo / REPLICA_MAP).read_text(encoding="utf-8"))
+                    doc = json.loads(p.read_text(encoding="utf-8"))
                     self._map = {k: v for k, v in doc.items() if ids.is_art(k) and isinstance(v, str)} if isinstance(doc, dict) else {}
                 except (OSError, json.JSONDecodeError) as e:
-                    _warn(f"ignoring unreadable replica map {self.repo / REPLICA_MAP}: {e}")
+                    _warn(f"ignoring unreadable replica map {p}: {e}")
         return self._map
 
     def object_path(self, hex_: str) -> Path:
@@ -801,7 +812,7 @@ class LocalStore:
     def push_labels(self, targets: list[str], *, jobs: int = 16) -> dict:
         """Push the assertions about `targets` (art / drv / run ids) the remote lacks, each under `labels/<target>/<content sha256>.json`
         (`labels_sync.push_targets`).  Per-assertion failures are in the report's `failed`, never raised; a missing remote is."""
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         return LS.push_targets(self, targets, jobs=jobs)
 
@@ -810,7 +821,7 @@ class LocalStore:
         `artifacts` without a verified remote replica whose manifest the remote lacks, or whose blobs are all here to verify
         cheaply (an artifact pulled from the remote without its blobs is the remote's already: `preserved` verifies it on demand);
         `attempts` the remote lacks; `labels` (content hashes) the remote lacks."""
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         r = self._require_remote()
         on_remote = {k[len("manifests/"):-len(".json")] for k in r.list("manifests/") if k.endswith(".json")}
@@ -825,7 +836,8 @@ class LocalStore:
                 try:
                     if not self._blobs_local(self._read_manifest(self.manifest_path(h), h)):
                         continue
-                except (IntegrityError, ValueError, json.JSONDecodeError):
+                except (IntegrityError, ValueError, json.JSONDecodeError) as e:
+                    _warn(f"artifact {h[:20]}'s manifest unread, so it is not listed as held here ({type(e).__name__}: {e})")
                     continue
             arts.append(a)
         mine, theirs = LS.local_labels(self), LS.remote_labels(r)
@@ -842,8 +854,8 @@ class LocalStore:
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
         `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
-        attempts whose ids sort after it, listed from there (`research queue ready`'s records gate)."""
-        from . import labels_sync as LS  # noqa: PLC0415
+        attempts whose ids sort after it, listed from there (`research lean-times`)."""
+        from . import labels_sync as LS
 
         t0 = time.monotonic()
         r = self._require_remote()

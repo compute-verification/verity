@@ -34,9 +34,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy
+from . import carry, policy, settings
 from .notes import ART_RE
-from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, unreviewed
+from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
 
 #: who hears what the queue can't settle
@@ -112,7 +112,7 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     """The queue's `git -c` options (`credential_args`) as GIT_CONFIG_* variables, after any the caller carries, so every git a
     child runs in the queue's clone authenticates as the queue's own does."""
     pairs = [o.split("=", 1) for flag, o in zip(auth[::2], auth[1::2]) if flag == "-c"]
-    n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    n = int(settings.get("GIT_CONFIG_COUNT") or 0)
     env = {"GIT_CONFIG_COUNT": str(n + len(pairs))}
     for i, (k, v) in enumerate(pairs, n):
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
@@ -125,7 +125,7 @@ def authed(auth: tuple[str, ...]):
     (`merge.caught_up`, `_sweep_after`), whose git children read os.environ (a git that prompts, as `caught_up`'s `ls-remote` in the
     queue's clone would, waits on a password at the tty and holds the queue)."""
     extra = {**auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
-    was = {k: os.environ.get(k) for k in extra}
+    was = {k: settings.named(k) for k in extra}
     os.environ.update(extra)
     try:
         yield
@@ -141,7 +141,7 @@ def takes_bookkeeping(repo: Path) -> bool:
     """Whether ``repo``'s train.sh, which a records run launches from, takes `--bookkeeping-warn` (the run repairs bookkeeping
     and warns); one that predates it would refuse every records run."""
     try:
-        return "--bookkeeping-warn" in (repo / "tools" / "verity" / "check" / "train.sh").read_text()
+        return "--bookkeeping-warn" in (repo / "tools" / "check" / "train.sh").read_text()
     except OSError:
         return False
 
@@ -163,7 +163,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one.
     ``bookkeeping_warn`` (a records run) has its lean-audit repair the locks' bookkeeping and warn (`--bookkeeping-warn`).
     ``script_from``, detached, is the train.sh that runs instead of the clone's (the loop's own)."""
-    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
+    argv = ["bash", "tools/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
     if not cc_records:
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
@@ -185,7 +185,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
 
 #: the check slot rank (`slot.py --rank`) of every part of a candidate's check and of its records run: a ranked
 #: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
-POSTLAND_SLOT_RANK = 0
+AFTER_LANDING_SLOT_RANK = 0
 #: where detached launches (`detach`) keep their output and exit, under the queue's TMPDIR
 LAUNCHES = "drive-launches"
 #: how long a detached launch may print no run ids before it is taken as having registered none: train.sh stops its launcher
@@ -211,11 +211,39 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
+#: a quick tier's launch job (`quick_launch`): a worktree of its commit in its directory, the `research run` there, the worktree
+#: removed once the run has shipped it, and `RUN <id>` (`RUN_RE`, which `launched` reads) once the run registered
+QUICK_JOB = ('t=$1 c=$2 rid=$3; shift 3; git worktree add -q --detach "$t/tree" "$c" || exit; (cd "$t/tree" && "$@"); rc=$?; '
+             'git worktree remove --force "$t/tree"; rm -rf "$t"; git worktree prune; [ "$rc" = 0 ] && echo "RUN $rid"; exit "$rc"')
+#: how long a candidate's quick tier waits for a check slot, and runs in one
+QUICK_WAIT_S, QUICK_RUN_S = 3600, 3 * 3600
+
+
+def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[str, ...] = ()) -> dict:
+    """The quick tier of candidate ``commit`` since ``base`` (`queue.QUICK_TIER`, as `research queue ready` runs it remotely:
+    `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there, from
+    a worktree of ``commit`` of its own: the record `launched` reads, whose `RUN` line names the run."""
+    from . import runs as R
+    from .queue import quick_run
+
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    t = tempfile.mkdtemp(prefix="quick-", dir=root)
+    rid = R.new_run_id()
+    argv = quick_run(rid, machine, Path(t) / "tree", commit, base, by="ci", wait_s=QUICK_WAIT_S, timeout_s=QUICK_RUN_S,
+                     priority=True)
+    env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
+    return detach(repo, ["sh", "-c", QUICK_JOB, "sh", t, commit, rid, *argv], env)
+
+
 def _epoch(ts: object) -> float | None:
     """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
+    if ts is None or ts == "":
+        return None
     try:
         t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except ValueError:
+    except ValueError as e:
+        print(f"landing: {str(ts)[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     return (t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp()
 
@@ -246,9 +274,11 @@ def shard_machines(on: str, n: int) -> list[str]:
     """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: first its own, every Nth from the Kth for shard K, so
     no machine is the own of two shards (with fewer machines than shards, the ((K-1) mod M)th of the M, shared); then every
     other machine of ``on`` in its order from the Kth on, so each shard falls back on the next one's machines first.  check.py
-    places a check on the first machine of its list with a slot free for it, and twins it on every machine of the list only
-    when none has one: with slots free the shards keep to their own machines (and their warm caches), and a shard whose own
-    are busy takes a free slot anywhere rather than waiting in one machine's line."""
+    places a check on the first machine of its list with a slot free for it and twins it on the two others with the most
+    slots free, which join their lines only after a delay, and only if it hasn't started there by then (with no slot free
+    anywhere, on every machine of the list at once): with slots
+    free the shards keep to their own machines (and their warm caches), and a shard whose own are busy, or whose slot was taken
+    after its launch, takes a free slot anywhere rather than waiting in one machine's line."""
     ms = on.split(",")
     out = []
     for k in range(n):
@@ -302,12 +332,12 @@ AUTO_PLAN = "check-shard-plan.json"
 #: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
 #: the worktree removed after; its venv kept between plans.  The job exits as check.py did: on an NFS TMPDIR (the control
 #: pod's) `git worktree remove` can stop at a directory a silly-renamed file keeps from emptying and exit 255, so `rm -rf`
-#: takes what it left, as train.sh does, and a worktree that won't go fails no plan
+#: takes what it left, and a worktree that won't go fails no plan
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
             'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
             'rm -rf "$t"; git worktree prune; exit $s\' EXIT; cd "$t"; shift 2; '
-            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
+            'uv run -q python tools/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
 def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None, n: int | None = None) -> dict:
@@ -340,9 +370,9 @@ def planned(rec: dict) -> tuple[dict | None, str | None]:
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
 #: `--json`), fetched with its records
 PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
-#: a check's trace/v1 spans (`tools/verity/check/spans.py`), whose root span opens as the check starts its steps
+#: a check's trace/v1 spans (`tools/check/spans.py`), whose root span opens as the check starts its steps
 SPANS = "spans.jsonl"
-#: a check's live record (`tools/verity/check/live.py`): each step it planned, pending until it starts and running until it ends
+#: a check's live record (`tools/check/live.py`): each step it planned, pending until it starts and running until it ends
 LIVE = "check-live.json"
 #: the steps a check runs first, one after another, before its groups start (check.py's `preflight`)
 PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))
@@ -355,20 +385,25 @@ def failing(run_dir: Path) -> str | None:
     """What has failed so far in a check still running under `--keep-going`, which fails it whatever else it finds, or None."""
     out = []
     try:
-        lines = (run_dir / PROGRESS[0]).read_text().splitlines()
-    except OSError:
+        lines = (run_dir / PROGRESS[0]).read_text().splitlines() if (run_dir / PROGRESS[0]).exists() else []
+    except OSError as e:
+        print(f"landing: {run_dir / PROGRESS[0]} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         lines = []
     for line in lines:
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"landing: a line of {PROGRESS[0]} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if rec.get("status") == "failed":
             out.append(f"step {rec.get('step')}")
     for name in PROGRESS[1:]:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         for s in doc if isinstance(doc, list) else ():
             tests = s.get("failed_tests") or []
@@ -604,9 +639,12 @@ def _docs(run_dir: Path, *names: str) -> list[dict]:
     """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
@@ -642,7 +680,8 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
     r = _git(repo, "show", f"{commit}:{own}", check=False)
     try:
         return tomllib.loads(r.stdout) if not r.returncode else {}
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"landing: {own} at {commit[:12]} did not parse, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -897,7 +936,7 @@ def not_run(st: dict) -> bool:
 
 class Landing:
     """The queue's side of a landing on ``q`` (the module's docstring).  ``on`` is drive.toml's machines at `main`, which its
-    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_postland`
+    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_after_landing`
     and `launch_locks` wrap; ``states``, ``evidence`` and ``cancel`` read and stop runs (`run_states`, `evidence`,
     `cancel_runs`); ``post`` posts to the merge thread (`merge_thread_post`); ``now`` is the clock; ``warn_steps`` is
     drive.toml's `warn_steps`, the steps whose failure doesn't hold `main`; ``reviews`` and ``ready_by`` read a PR head's
@@ -927,23 +966,26 @@ class Landing:
         self.plan_shards: Callable[..., dict] = plan_shards
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
-        #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
-        self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
+        #: (`_started`), its check at `AFTER_LANDING_SLOT_RANK`; an injected `launch` launches it too
+        self.launch_after_landing: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
                     train_from=None, deselect=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from, deselect=deselect))
+                          ratchet_base=ratchet_base, rank=AFTER_LANDING_SLOT_RANK, script_from=train_from, deselect=deselect))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit`, detached, its check
-        #: at `POSTLAND_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
+        #: at `AFTER_LANDING_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
         self.launch_locks: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
-                                                        detached=True, rank=POSTLAND_SLOT_RANK,
+                                                        detached=True, rank=AFTER_LANDING_SLOT_RANK,
                                                         bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
+        #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
+        self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (
+            lambda repo, commit, base, machine: quick_launch(repo, commit, base, machine, auth=q.auth))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
         if launch is train_launch:
@@ -966,7 +1008,7 @@ class Landing:
 
     @staticmethod
     def _started(got: tuple[list[str], str] | dict) -> tuple[dict | None, str]:
-        """A launch record's fields from what `launch_locks` or `launch_postland` returned: {"ids"} of a launch that printed
+        """A launch record's fields from what `launch_locks` or `launch_after_landing` returned: {"ids"} of a launch that printed
         them, {"ids": [], "launch"} of one still running detached (`detach`), which `_resolve` reads on later ticks and which
         counts as running until then; None, with train.sh's output's tail, of one that registered no run."""
         if isinstance(got, dict):
@@ -1142,7 +1184,8 @@ class Landing:
             r = _git(self.repo, "show", f"origin/main:{REGISTRY}", check=False)
             try:
                 reg = json.loads(r.stdout) if not r.returncode else {}
-            except ValueError:
+            except ValueError as e:
+                print(f"landing: origin/main's {REGISTRY} is not JSON, so no handle owns a path ({e})", file=sys.stderr, flush=True)
                 reg = {}
             self._reg = reg = reg if isinstance(reg, dict) and isinstance(reg.get("handles"), list) else {"handles": []}
         try:
@@ -1262,7 +1305,8 @@ class Landing:
 
     def _stacked(self, state: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
-        contains that member's head (a PR stacked on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one
+        contains that member's head (a PR stacked on it) that its base landed and how to take `main` (`queue.merge_main`), once
+        per (PR, base) (`stacked:P<Q`): not one
         marked ready at its head, which lands as it is.  A PR based
         on another branch (a long-lived one, as the remote demo's) takes `main` through that branch, and isn't told."""
         from .stale import pull_refs
@@ -1293,11 +1337,12 @@ class Landing:
                 continue
             names = ", ".join(f"#{b}" for b in below)
             self.tell(state, [f"stacked:{n}<{b}" for b in below],
-                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}; merge main into #{n}",
+                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}: "
+                      f"{merge_main(f'#{n}', rest[n].branch)}",
                       self._handle(n))
 
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
-        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_postland`'s
+        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
         when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
         lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the

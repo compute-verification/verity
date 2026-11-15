@@ -31,8 +31,9 @@ The result (checks below):
   the 2-instruction slot are ruled out, so **fx1's (y', z') needs >= 4 instructions** = honest's count. fx2 adds one
   more irreducible op (the leading XOR before the multiply), so **fx2 needs >= 5**.
 - **Two-word instructions.** sm_120 has four lane forms that write two words: IMAD.WIDE and IADD.64 (ptxas 13.0 for
-  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (TS.lean's fan-in table) and SEL.64 (harness/sass_pins.json). So the
-  count above holds only once no instruction writes both outputs. Here, at width 4, no program of at most 2
+  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (TS.lean's fan-in table) and SEL.64
+  (verity/protocols/accounting/pouw/prover/sass_pins.json). So the count above holds only once no instruction writes both
+  outputs. Here, at width 4, no program of at most 2
   instructions ending on an IMAD.WIDE writes them, which also completes fold_opt.py's >= 3 for duo. `--wide3` (fold_wide3.c,
   CPU minutes, outside the test suite) settles all four at width 4: neither output is a word of a program of at most 2
   instructions, so a 3-instruction program would write both as its last instruction's two words, and none does, nor as
@@ -70,9 +71,13 @@ import itertools
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 from exact_kit.checks import Checks
+
+__all__ = ["add64", "fx_word", "key_mul", "key_xor", "lcg", "main", "mnmx64", "modinv", "new_word_sets", "rot_of",
+           "wide3_controls", "width_wide3"]
 
 M32 = 0xFFFFFFFF
 NPOS = 16
@@ -197,7 +202,7 @@ def fx_word(y: int, z: int, w: int, n: int, a: int, kx: int, r: int, tile: int =
 SHIFTS = tuple(range(32))
 
 
-def arith_templates():
+def arith_templates() -> list[tuple[str, int, Callable[..., int]]]:
     out = []
     for signs in itertools.product((1, -1), repeat=3):
         out.append((f"IADD3{signs}", 3, lambda x, y, z, s=signs: u32(s[0] * x + s[1] * y + s[2] * z)))
@@ -219,7 +224,7 @@ def arith_templates():
 ARITH = arith_templates()
 
 
-def is_lop3(target_bits, pool_bits):
+def is_lop3(target_bits: list[int], pool_bits: dict[str, list[int]]) -> tuple[str, str, str] | None:
     """True (returns the operand triple) iff `target` is some 3-input bitwise LUT of three pool operands."""
     names = list(pool_bits)
     for a, b, c in itertools.product(names, repeat=3):
@@ -241,7 +246,7 @@ def is_lop3(target_bits, pool_bits):
     return None
 
 
-def single_instruction(target, pool):
+def single_instruction(target: list[int], pool: dict[str, list[int]]) -> str | None:
     """The name of a single modelled instruction computing `target` (over the test vectors) from the pool, or None."""
     triple = is_lop3(target, pool)
     if triple is not None:
@@ -315,13 +320,13 @@ def _width_ops(width: int, names, cols, nv, target, wide_hi: bool = False):
     return None
 
 
-def width_single_instruction(width: int, target, inputs):
+def width_single_instruction(width: int, target: list[int], inputs: dict[str, list[int]]) -> str | None:
     """Is `target` a single instruction of `inputs` at `width` bits? Exhaustive over the full modelled ISA, both words of
     IMAD.WIDE included."""
     return _width_ops(width, list(inputs), {nm: inputs[nm] for nm in inputs}, len(target), target, wide_hi=True)
 
 
-def width_wide_writes_both(width: int, t1, t2, inputs):
+def width_wide_writes_both(width: int, t1: list[int], t2: list[int], inputs: dict[str, list[int]]) -> str | None:
     """Does a program of at most two instructions, the last an IMAD.WIDE or IMAD.WIDE.U32, write `t1` and `t2` as its two
     words (either way round)? Exhaustive at `width` bits: the first instruction ranges over every distinct
     single-instruction value of `inputs` (or none), and the last over every operand choice, its low word fixing c_lo and
@@ -402,7 +407,7 @@ def _single_values(width: int, inputs):
     return out
 
 
-def width_le2_value(width: int, target, inputs):
+def width_le2_value(width: int, target: list[int], inputs: dict[str, list[int]]) -> str | None:
     """Is `target` a word of a length-<=2 straight-line program over the width-`width` ISA from `inputs`? Exhaustive: it
     is a single instruction's word, or a word of one instruction over `inputs` plus the first instruction's words. The
     first ranges over every `_firsts` (every distinct one-word value, all 256 LOP3 LUTs included, and both words of every
@@ -456,7 +461,8 @@ def width_le2_value(width: int, target, inputs):
     return None
 
 
-def width_wide3(exe, width: int, inputs, jobs):
+def width_wide3(exe: Path, width: int, inputs: dict[str, list[int]],
+                jobs: dict[str, tuple[list[int], list[int]]]) -> dict[str, dict]:
     """`fold_wide3.c` (built at `exe`) over `inputs` at `width` bits, for each of `jobs` ({label: (t1, t2)}): {label:
     {found, sel, le2, firsts, prefixes, witnesses}}. found counts the programs of at most 3 instructions whose last
     (IMAD.WIDE, IADD.64 or IMNMX.64) writes the pair, either way round; sel those whose last SEL.64 does under some
@@ -474,7 +480,7 @@ def width_wide3(exe, width: int, inputs, jobs):
     return res
 
 
-def wide3_controls(width: int, cols):
+def wide3_controls(width: int, cols: dict[str, list[int]]) -> dict[str, tuple[list[int], list[int]]]:
     """Target pairs fold_wide3.c must find, over `cols` (y, z, w, kx, a, m1), between them reading every form it
     enumerates and every way it reaches a last instruction: {label: (t1, t2)}. A `ctl_` pair is a last instruction's
     two words (found), the `sel_` pair a SEL.64's under a predicate no IMNMX.64 computes (sel), and the `le2_` pair has a
@@ -564,7 +570,7 @@ def _two_word_pairs(width: int, inputs):
     return out
 
 
-def _new_word_sets(width: int, inputs) -> int:
+def new_word_sets(width: int, inputs: dict[str, list[int]]) -> int:
     """How many distinct sets of new words one instruction over `inputs` adds (fold_wide3.c's first instructions)."""
     have = {tuple(v) for v in inputs.values()}
     sets = {frozenset([v]) for v in _single_values(width, inputs) if v not in have}
@@ -574,14 +580,14 @@ def _new_word_sets(width: int, inputs) -> int:
 
 # ---- helpers -------------------------------------------------------------------------------------------------------------
 
-def lcg(seed: int):
+def lcg(seed: int) -> Iterator[int]:
     s = seed & M32
     while True:
         s = (1664525 * s + 1013904223) & M32
         yield s
 
 
-def is_affine_in_w(f) -> bool:
+def is_affine_in_w(f: Callable[[int], int]) -> bool:
     """True iff f(w) = w*C + D over Z/2^32 for constants C, D (so the map factors as one IMAD of w). Fits C, D from two
     points and checks the rest."""
     f0 = f(0)
@@ -595,7 +601,8 @@ def is_affine_in_w(f) -> bool:
     return True
 
 
-def make_pool(a: int, kx: int, r: int, m1: int, x1: int, vectors):
+def make_pool(a: int, kx: int, r: int, m1: int, x1: int,
+              vectors: Sequence[tuple[int, int, int]]) -> dict[str, list[int]]:
     """Operand pool: inputs y, z, w; the per-call constants (a, kx, r, m1, x1 and inverses); a rich immediate set."""
     consts = {
         "0": 0, "1": 1, "-1": M32, "a": a, "kx": kx, "r": r & M32, "m1": m1, "x1": x1,
@@ -735,11 +742,11 @@ def main() -> int:
                     wit = [x for x in res["witnesses"] if x[0] == {"found": "F", "sel": "S", "le2": "L"}[key]]
                     checks.check(f"fold_wide3.c finds its control {lab} ({key})", res[key] > 0, wit[:1])
             checks.check("fold_wide3.c's first instructions are this file's (6 inputs)",
-                         ctl["fx1"]["firsts"] == _new_word_sets(w4, small),
-                         (ctl["fx1"]["firsts"], _new_word_sets(w4, small)))
+                         ctl["fx1"]["firsts"] == new_word_sets(w4, small),
+                         (ctl["fx1"]["firsts"], new_word_sets(w4, small)))
             big = width_wide3(exe, w4, wins, {"fx1": (y1w, z1w)})["fx1"]
             checks.check("fold_wide3.c's first instructions are this file's (10 inputs)",
-                         big["firsts"] == _new_word_sets(w4, wins), (big["firsts"], _new_word_sets(w4, wins)))
+                         big["firsts"] == new_word_sets(w4, wins), (big["firsts"], new_word_sets(w4, wins)))
             seen = {k: big[k] for k in ("found", "sel", "le2", "firsts", "prefixes", "witnesses")}
             checks.check("width-4 exhaustive: neither of fx1's outputs is a word of a program of at most 2 instructions, "
                          "IMAD.WIDE, IADD.64 and IMNMX.64 included", big["le2"] == 0 and ctl["fx1"]["le2"] == 0, seen)

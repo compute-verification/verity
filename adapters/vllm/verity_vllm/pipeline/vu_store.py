@@ -1,6 +1,6 @@
-"""The hierarchical VU store: a run's sampled proof blocks kept inside the circuit they came from, and the query that cuts instance sets.
+"""The hierarchical VU store: a run's sampled proof blocks kept inside the circuit they came from, and the query that cuts input sets.
 
-The stored form of a VU export (`vllm-vu-store/v1`); flat instance sets (`vllm-vu-set/v1`) are the output of `extract`, and the
+The stored form of a VU export (`vllm-vu-store/v1`); flat input sets (`vllm-vu-set/v1`) are the output of `extract`, and the
 default extraction is exactly the sets `vu_export` defines.
 
     <out>/store/run.json                               run root, provenance (row, model, serving, run, source, epoch, manifest digest),
@@ -29,18 +29,27 @@ import hashlib
 import json
 import time
 from collections import Counter
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
 
 import numpy as np
-
 from verity.circuits.query_ast import NameSel
 
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.check.replay.population import phase_anchor, population, split_not_executed
-from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay.population import (
+    phase_anchor,
+    population,
+    split_not_executed,
+)
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import vu_export as VX
+
+__all__ = ["after_replay"]
+
+logger = init_logger(__name__)
 
 STORE_SCHEMA = "vllm-vu-store/v1"
 SR.keep_population(True)            # the Commit imports this module before its replay: the export reuses that replay's population
@@ -66,7 +75,7 @@ def _evaluation(k: tuple, fam: str, st: dict, ops: list, out: dict, refs: list, 
     wg, rows_of = VX.WEIGHT_ROWS_OF.get(fam, (None, None))
     for g, a in enumerate(ops):
         ref = refs[g] if g < len(refs) else None
-        if ref is not None and g == wg:
+        if ref is not None and g == wg and rows_of is not None:
             w, extra = rows_of(st, ops)
             N, K = w.shape
             rows = VX._Picker(k[0], k[1])(N, limits.gemm_coords_per_row)
@@ -108,6 +117,7 @@ def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tupl
             yield None if time.perf_counter() - t0 > budget_s else _one_vu(k)
         return
     import gc
+
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.check.replay.fork import fork_pool
     SR._prewarm_weights(_FORK["indices"], _FORK["picked"], _FORK["weights"])
@@ -144,7 +154,8 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     by_inst: dict[int, ProgramIndex] = {}
     all_vus: list[dict] = []
     skipped: list[str] = []
-    reuse = population_of_record if (population_of_record or {}).get("indices") and set(population_of_record["indices"]) >= set(map(str, programs)) else None
+    reuse = population_of_record if (population_of_record and population_of_record.get("indices")
+                                     and set(population_of_record["indices"]) >= set(map(str, programs))) else None
     for n_built, (rid, inst) in enumerate([] if reuse else programs.items()):
         # the population build has its own budget, checked between request Programs (a B32 row's 33 Programs took > 18 min):
         # the requests left are named, the sampling runs over the ones built
@@ -164,14 +175,14 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     key = VX.selection_key(run_root)
     picked = VX.select(pool, limits, key)
     t_draw = time.perf_counter()                                             # the sampling budget starts here, never inside the build
-    print(f"[vu-export] population: {len(indices)}/{len(programs)} request Programs, {len(all_vus)} VUs, {len(picked)} sampled, "
-          f"{t_draw - t0:.0f} s" + (" (the replay's own)" if reuse else "") + (f"; {len(skipped)} Programs past the population budget" if skipped else ""),
-          flush=True)
+    logger.info("[vu-export] population: %d/%d request Programs, %d VUs, %d sampled, %.0f s%s%s", len(indices), len(programs), len(all_vus),
+                len(picked), t_draw - t0, " (the replay's own)" if reuse else "",
+                f"; {len(skipped)} Programs past the population budget" if skipped else "")
     _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
                  arrivals=arrivals, key=key, limits=limits)
     digest_of = {rid: str(inst.get("digest") or "program") for rid, inst in programs.items()}
     fam_stats: dict[str, Counter] = {}
-    fam_time: Counter = Counter()
+    fam_time: dict[str, float] = {}
     units: dict[str, list[dict]] = {}
     try:
         for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t_draw)):
@@ -181,19 +192,19 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                 continue
             unit, blobs, dt = res
             st["drawn"] += 1
-            fam_time[unit["family"]] += dt
+            fam_time[unit["family"]] = fam_time.get(unit["family"], 0) + dt
             if unit["result"] is True:
                 st["replayed_equal"] += 1
                 st["stored" if unit.get("stored") else "not_stored_operand_too_large"] += 1
             else:
                 st["not_exported_" + ("mismatch" if unit["result"] is False else "not_evaluated")] += 1
             for h, (dt_, b) in blobs.items():
-                f = root / "values" / f"{h}.{dt_}"
-                if not f.exists():
-                    f.write_bytes(b)
+                blob = root / "values" / f"{h}.{dt_}"
+                if not blob.exists():
+                    blob.write_bytes(b)
             units.setdefault(digest_of[unit["request"]], []).append(unit)
             if k % 100 == 0:
-                print(f"[vu-export] {k}/{len(picked)} VUs, {time.perf_counter() - t_draw:.0f} s", flush=True)
+                logger.info("[vu-export] %d/%d VUs, %.0f s", k, len(picked), time.perf_counter() - t_draw)
     finally:
         _FORK.clear()
     prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
@@ -219,14 +230,14 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                                                           "phase", "result", "why", "inputs", "stored")}, separators=(",", ":"), default=str) + "\n")
     t_extract = time.perf_counter()
     sets, inst_by_family = extract(root, out / "sets")
-    for f, n in inst_by_family.items():
-        fam_stats.setdefault(f, Counter())["instances"] += n
+    for family, n in inst_by_family.items():
+        fam_stats.setdefault(family, Counter())["instances"] += n
     summary = {"schema": VX.EXPORT_SCHEMA, "provenance": prov, "limits": dataclasses.asdict(limits),
                "population": {"vus": len(all_vus), "pool": len(pool), "not_executed": len(_not_exec),
                               "programs": len(programs), "programs_built": len(indices), "programs_past_budget": skipped,
                               "source": "the sampled replay's own population (reused)" if reuse else "built here",
                               "pool_by_family": dict(Counter(v["family"] for v in pool)), "not_exported_families": VX.NOT_EXPORTED},
-               "by_family": {f: dict(c) | {"seconds": round(fam_time[f], 3)} for f, c in sorted(fam_stats.items())},
+               "by_family": {f: dict(c) | {"seconds": round(fam_time.get(f, 0), 3)} for f, c in sorted(fam_stats.items())},
                "store": {"values": len(list((root / "values").iterdir())), "bytes": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())},
                "sets": sets, "wall_s": round(time.perf_counter() - t0, 3),
                "timing": {"population_s": round(t_draw - t0, 3), "draw_s": round(t_extract - t_draw, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
@@ -257,7 +268,7 @@ def _value(root: Path, a: dict[str, Any]) -> np.ndarray:
 
 
 def _operands(root: Path, ev: dict[str, Any], weights: Callable | None) -> list:
-    ops = []
+    ops: list = []
     for a in ev["args"]:
         if "sample" in a:
             w = a["weight"]
@@ -273,7 +284,7 @@ def _operands(root: Path, ev: dict[str, Any], weights: Callable | None) -> list:
 
 def extract(store: str | Path, out_dir: str | Path, *, where: str | None = None, module: str | None = None,
             limits: VX.Limits | None = None, weights: Callable[[str, int, int], np.ndarray | None] | None = None) -> tuple[list[dict], dict[str, int]]:
-    """Flat instance sets of the stored units the query selects, written under `out_dir`: (set summaries, instances by family).
+    """Flat input sets of the stored units the query selects, written under `out_dir`: (set summaries, instances by family).
     No query = the default extraction: every stored unit, the sample's own limits."""
     root = Path(store)
     run = json.loads((root / "run.json").read_text())
@@ -296,7 +307,7 @@ def extract(store: str | Path, out_dir: str | Path, *, where: str | None = None,
                 insts = VX.decompose(ev["family"], ev["statics"], _operands(root, ev, weights), outs, pick, limits)
             except VX.DecompositionMismatch as e:
                 by_family[f"decomposition_error:{u['family']}"] += 1
-                print(f"[vu-export] unit {u['vu']} evaluation {j}: {e}", flush=True)
+                logger.warning("[vu-export] unit %s evaluation %s: %s", u["vu"], j, e)
                 continue
             for inst in insts:
                 w = writers.get(inst.set_name) or writers.setdefault(inst.set_name, VX._SetWriter(inst.set_name, inst.relation))
@@ -317,7 +328,8 @@ def verify_store(store: str | Path) -> dict[str, Any]:
     missing = 0
     for p in (root / "programs").glob("*/units.jsonl"):
         for line in p.read_text().splitlines():
-            for ev in json.loads(line).get("evaluations") or []:
+            evaluations = json.loads(line).get("evaluations")   # a unit that states none names no value
+            for ev in evaluations if evaluations else ():
                 for a in [*ev["args"], *ev["outs"].values()]:
                     a = a.get("sample", a)
                     missing += f"{a['value']}.{a['dtype']}" not in have
@@ -338,7 +350,7 @@ def memory_headroom() -> float | None:
             lim, cur = Path(lim_f).read_text().strip(), int(Path(cur_f).read_text().strip())
         except (OSError, ValueError):
             continue
-        if lim.isdigit() and int(lim) < (1 << 60):
+        if lim.isdecimal() and int(lim) < (1 << 60):
             return max(0.0, 1.0 - cur / int(lim))
     try:
         mi = {ln.split(":")[0]: int(ln.split()[1]) for ln in Path("/proc/meminfo").read_text().splitlines() if ln.split()[1:]}
@@ -349,7 +361,8 @@ def memory_headroom() -> float | None:
 
 def _limits_for(out: Path, sr: dict[str, Any], headroom: float | None = None) -> VX.Limits:
     lim = VX.Limits.from_dir(out)
-    if (sr.get("evaluator") or {}).get("retention") == "device":
+    evaluator = sr.get("evaluator")   # how the replay evaluated; a record without it kept no block on the device
+    if evaluator and evaluator.get("retention") == "device":
         lim.workers = 1                                                      # forked children cannot read device-retained blocks
     free = memory_headroom() if headroom is None else headroom
     if free is not None and free < HEADROOM_MIN:
@@ -368,18 +381,19 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
     out = Path(out_dir)
     extra = json.loads((out / "provenance.json").read_text()) if (out / "provenance.json").is_file() else {}
     man = manifest if isinstance(manifest, dict) else None
+    weights_of_record = sr.get("weights")   # the replay's weights check; a record without it states no committed root
     prov = dict(extra, model=(getattr(eng, "cp", None) or {}).get("repo"), revision=(getattr(eng, "cp", None) or {}).get("revision"),
                 program_digests=program_digests, manifest_digest=(man or {}).get("manifest_digest"), pair=pair,
                 versions={k: v for k, v in versions.items() if isinstance(v, (str, int, float))},
                 weights={"checkpoint": {"repo": (getattr(eng, "cp", None) or {}).get("repo"), "revision": (getattr(eng, "cp", None) or {}).get("revision"),
-                                        "weights_of_record_root": (sr.get("weights") or {}).get("committed_root")}})
+                                        "weights_of_record_root": weights_of_record.get("committed_root") if weights_of_record else None}})
     try:
         s = export_vus(programs, bmap, reader, weights, out_dir=out, run_root=run_root, arrivals=arrivals, manifest=man,
                        executed_prefix=replay_kw.get("executed_prefix"), program_dirs={k: v["dir"] for k, v in loaded.items() if v.get("dir")},
                        provenance=prov, limits=_limits_for(out, sr), population_of_record=kept)
     except Exception as e:  # noqa: BLE001  -- not part of the record: named, never a verdict
-        print(f"[vu-export] FAILED: {e!r}"[:400], flush=True)
+        logger.warning("[vu-export] FAILED: %s", repr(e)[:380])
         return {"ok": False, "why": repr(e)[:400]}
-    print(f"[vu-export] {len(s['sets'])} sets, {sum(x['n'] for x in s['sets'])} instances, {sum(x['bytes'] for x in s['sets'])} bytes "
-          f"in {s['wall_s']} s -> {out}", flush=True)
+    logger.info("[vu-export] %d sets, %d instances, %d bytes in %s s -> %s", len(s["sets"]), sum(x["n"] for x in s["sets"]),
+                sum(x["bytes"] for x in s["sets"]), s["wall_s"], out)
     return s

@@ -13,14 +13,18 @@ cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``-
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
 the scheduler's ``schedule``), and where it arrived after schedules that held every request back, after as many
 (``after_empty``); the scheduler decides the rest as it did while serving, and a step it has in flight when the last
-request finishes is taken as serving took it. Where the arm served with other vLLM general
+request finishes is taken as serving took it. Of a request's served sampling the engine is given the temperature, top-p,
+top-k, seed, length and ignore-EOS (`params`); a window with a request served at another value than vLLM's own in any other
+field (min-p, a penalty, a stop, a logit bias: from the request or from the checkpoint's generation config) is refused
+(`unapplied`), since its replay would sample without it. Where the arm served with other vLLM general
 plugins (the canonical DSA top-k: ``canonical-topk``, ``two-stage``, ``prod-record``), the replay's processes load them
 too, under the arm's environment (`served_under`), and ``--private`` is where they keep what the arm keeps on the node
 (the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
-(first arrival to last step) and the value settings in force in its engine's environment (``settings``, as the served
+(first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
+settings in force in its engine's environment (``settings``, as the served
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
 later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
@@ -39,9 +43,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
 import serve_tax as S  # noqa: E402 (beside this file)
 
 
@@ -58,10 +62,29 @@ def served_ids(arm_dir: Path, tag: str) -> dict[str, dict]:
     return kept
 
 
+#: the sampling fields a served request's arrival holds (`verity_vllm.engine.step_trace.SAMPLING`) that the replay does
+#: not give its engine (`params`), each with the values at which vLLM's sampler does nothing for it (vLLM's own
+#: defaults): a request served at another is refused (`unapplied`). The server puts a field there from the request or,
+#: where the request leaves it out, from the checkpoint's generation config, so a window can hold one no client sent.
+UNAPPLIED = {"min_p": (0, 0.0), "presence_penalty": (0, 0.0), "frequency_penalty": (0, 0.0), "repetition_penalty": (1, 1.0),
+             "min_tokens": (0,), "logit_bias": ({},), "n": (1,), "stop": ([], ""), "stop_token_ids": ([],)}
+
+
+def unapplied(sampling: dict) -> dict:
+    """The fields of a served request's ``sampling`` that a replay would sample it without (`UNAPPLIED`), each with its
+    served value. ``stop_token_ids`` counts only for a request that decodes past its end of text (``ignore_eos``): for
+    one that stops there vLLM itself adds the checkpoint's other end-of-text ids to the field, in the replay's engine
+    as in the served one."""
+    return {k: sampling[k] for k, neutral in UNAPPLIED.items()
+            if sampling.get(k) is not None and sampling[k] not in neutral
+            and (k != "stop_token_ids" or sampling.get("ignore_eos"))}
+
+
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
     step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
-    pass whose client kept none, the ones the arm's server kept (`served_ids`)."""
+    pass whose client kept none, the ones the arm's server kept (`served_ids`). A request served with a sampling field
+    the replay does not apply is refused (`unapplied`)."""
     rep_dir = arm_dir / load / f"rep-{rep}"
     tag = json.loads((rep_dir / "meta.json").read_text())["tag"]
     kept = None if (rep_dir / "client.jsonl").is_file() else served_ids(arm_dir, tag)
@@ -101,6 +124,10 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
             prompt, served = kept[rid]["prompt_ids"], kept[rid]["output_ids"]
         else:
             raise SystemExit(f"{rid} arrived in the window and the server kept no ids for it: it did not finish there")
+        if off := unapplied(a["sampling"]):
+            raise SystemExit(f"{rid} was served with {off}, which the replay does not give its engine (replay.params): it "
+                             f"would be sampled without and its tokens would differ. A window whose requests leave these "
+                             f"at vLLM's own values replays; to replay this one, have params pass the field")
         reqs.append({"engine_id": rid, "before_step": a["before_step"] - first, "after_empty": a.get("after_empty", 0),
                      "prompt_ids": prompt, "max_tokens": a["sampling"].get("max_tokens"), "sampling": a["sampling"],
                      "served": served})
@@ -317,6 +344,18 @@ def write_tokens(replay_dir: Path, tokens: dict[str, list[int]]) -> None:
             f.write(json.dumps({"request": rid, "tokens": tokens[rid]}, separators=(",", ":")) + "\n")
 
 
+def capture_template(meta: dict, given: str | None = None) -> str:
+    """The token select a capture's rows are units of: ``given``, else the check the served arm's boundary commitment was
+    made under (its meta.json's ``boundary_rows``), else its model's (`serve_tax.Model.check`). The second stage reads a
+    capture only as the class's own check's (`two_stage.spans_of`), so a replay takes the serve's unless told otherwise."""
+    model = S.MODELS.get(str(meta.get("model_id")))
+    t = given or (meta.get("boundary_rows") or {}).get("check") or (model.check if model else None)
+    if not t:
+        raise SystemExit("the served arm made no boundary commitment and its model names no check template: "
+                         "--capture-template T")
+    return t
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--arm-dir", type=Path, required=True)
@@ -330,7 +369,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tp", type=int, default=1, help="the tensor-parallel width the window was served at")
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
                                       "OUT/capture, each a span of --capture-template's units")
-    ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
+    ap.add_argument("--capture-template", help="the token select the captured rows are units of (default: the check the "
+                                               "served arm committed under, `capture_template`)")
     ap.add_argument("--private", type=Path, help="a directory outside every run's, for what the served arm's other "
                                                  "plugins keep on the node (the canonical top-k's counters)")
     ap.add_argument("--out", type=Path, required=True)
@@ -354,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
     capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
+    template = capture_template(meta, a.capture_template) if capture else None
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
@@ -362,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
            "settings": settings,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
-           "engine_ready_s": got["ready_s"], **compare(w, got)}
+           "engine_ready_s": got["ready_s"], "gpus": a.tp, **compare(w, got)}
     if a.against:
         d = token_diff(read_tokens(a.against), got["tokens"])
         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
@@ -371,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     if capture:
         from verity_vllm.engine import sampler_capture as SC
         spans = SC.spans(got["takes"], got["steps"])
-        SC.write(a.out / "capture", a.capture_template, spans)
+        SC.write(a.out / "capture", template, spans)
         served = {r["engine_id"]: r["served"] for r in w["requests"]}
         out["capture"] = {rid: {"tokens": len(s["tokens"]), "as_served": s["tokens"] == served[rid], "program": s["program"]}
                           for rid, s in spans.items()}

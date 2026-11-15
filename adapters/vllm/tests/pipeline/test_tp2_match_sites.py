@@ -22,10 +22,10 @@ def _links(rank: int, *, drop_k: int | None = None, v1: bool = False) -> dict:
     frozen v1 Build spelled it (no root: the readers fall back to dotted-suffix identity, `same_module_path`)."""
     ls = []
     for k, (site, kind, w) in enumerate(SITES):
-        l = {"k": k, "kind": kind, "shape": [1, w], "module_path": f"inner.model.{site} (Cls)"}
+        link = {"k": k, "kind": kind, "shape": [1, w], "module_path": f"inner.model.{site} (Cls)"}
         if k == drop_k:
-            l.pop("module_path")
-        ls.append(l)
+            link.pop("module_path")
+        ls.append(link)
     doc = {"rank": rank, "world": 2, "program_digest": f"d{rank}", "links": ls}
     if not v1:
         doc["model_root"] = "inner.model"

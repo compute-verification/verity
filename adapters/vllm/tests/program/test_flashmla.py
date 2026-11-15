@@ -13,16 +13,15 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.kernels import tc as CK
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.registry import boolean_flashmla as BF
-from verity.definitions.registry import flashmla as F
+from verity.circuits.kernels import tc as CK
+from verity.circuits.ops.boolean import versions as SW
+from verity_vllm.definitions.numerics import flashmla_twin as T
+from verity_vllm.definitions.registry import boolean_flashmla as BF
+from verity_vllm.definitions.registry import flashmla as F
 
 U = np.uint32
 DEFS = {d.id: d for d in F.FLASHMLA_COMPOSITES}
@@ -30,10 +29,6 @@ TWIN_TARGETS = [t for family in T.KERNELS for t in T._targets(DEFS, family)]
 NAN, PINF, NINF = 0x7FFFFFFF, 0x7F800000, 0xFF800000
 SPECIAL = [0, 0x80000000, PINF, NINF, 0x7FC00000, NAN, 0xFFFFFFFF, 1, 0x80000001, 0x00800000, 0x3F800000, 0xBF800000,
            0xC2FC0000, 0xC3000000, 0x42FE0000, 0x7F7FFFFF, 0xFF7FFFFF]
-
-
-def _f32(x) -> np.ndarray:
-    return np.asarray(x, dtype=np.float32).view(U)
 
 
 def _bf16_f64(w) -> np.ndarray:
@@ -50,8 +45,8 @@ def test_the_twin_is_the_reference(target):
 
 
 def test_the_twin_claims_only_the_hopper_step():
-    from verity.definitions.ops.prims import AmpereBF16TcDot16
-    from verity.definitions.numerics import kernel_registry as KR
+    from verity.circuits.ops.prims import AmpereBF16TcDot16
+    from verity_vllm.definitions.numerics import kernel_registry as KR
 
     hopper = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=F.HopperBF16WgmmaDot16, SCALE=0.25)
     ampere = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=AmpereBF16TcDot16, SCALE=0.25)
@@ -88,7 +83,7 @@ def test_the_primitives_on_their_edge_words():
 
 
 def _ulps(got: np.ndarray, want: np.ndarray) -> np.ndarray:
-    w32 = want.astype(np.float32)
+    w32: np.ndarray = want.astype(np.float32)
     ok = np.isfinite(w32) & (np.abs(w32) >= np.float32(2.0 ** -126))
     return (np.abs(got.view(np.float32).astype(np.float64) - want) / np.spacing(np.abs(w32)).astype(np.float64))[ok]
 
@@ -152,7 +147,7 @@ def _operands(rng, N: int, NW: int, swa: int, extra: int, NH: int = 16):
     return q, nope, (e + 127).astype(np.uint8), rope, idx, lens, rng.standard_normal(NH).astype(np.float32).view(U)
 
 
-def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.ndarray:
+def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, *, NW: int) -> np.ndarray:
     valid = T.row_valid(idx, lens, NW)
     k = _bf16_f64(T.kv_rows(nope, scale, rope, valid, DSV4["QT"]))
     s = np.where(valid[None, :], _bf16_f64(q) @ k.T * DSV4["SCALE"], -np.inf)
@@ -233,7 +228,7 @@ def test_the_scheduler_constants():
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     extra = {k: v for k, v in (("DOT", F.HopperBF16WgmmaDot16), ("SCALE", 0.25)) if k in fn.statics}
     with pytest.raises(ValueError, match=needle.replace("(", r"\(").replace(")", r"\)")):
-        bind(fn, **kw, **extra).body
+        _ = bind(fn, **kw, **extra).body
 
 
 # --- the Boolean Definitions --------------------------------------------------------------------------------------------------------

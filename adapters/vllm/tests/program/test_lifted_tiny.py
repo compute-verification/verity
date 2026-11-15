@@ -34,13 +34,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
-from verity.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 from verity.circuits.types import Array, RecordType, Tuple, Value
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.b1 import weights_type
 
-I32, BF16, F32 = Value(32), Value(16), Value(32)
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
+
+I32, BF16 = Value(32), Value(16)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
 BOT32, BOT16, INV32, INV16 = L.enc_bot(32), L.enc_bot(16), L.inv(32), L.inv(16)
 RNG = np.random.default_rng(1601)
@@ -137,7 +141,7 @@ def test_strict_payload_agreement_bot_and_inv(p):
     ws = _widths(p)
     assert lp.id == f"Lifted[{p.id}]_v1" and lp.ret == Value(p.ret.w + 1)
     assert [t for _, t in lp.params] == [L.lift_type(t) for _, t in p.params]
-    assert getattr(lp, "lift_class") == "strict" and lp.lifted_from is p
+    assert lp.lift_class == "strict" and lp.lifted_from is p
     bot_out, inv_out = L.enc_bot(p.ret.w), L.inv(p.ret.w)
     special = {16: [0x0000, 0x3F80, 0x7FFF, 0x7FC0, 0x8000, 0xFF80], 32: [0, 1, 0x3F800000, 0x7F800000, 0x7FC00000, 0x80000000, 0xFFFFFFFF, 7], 1: [0, 1]}
     for trial in range(12):
@@ -169,7 +173,7 @@ def test_enabled_lift_is_the_relation_at_enable_1_bot_at_enable_0_whatever_the_o
     ws = _widths(p)
     assert lp.id == f"Lifted[{p.id}]_v2" and lp.ret == Value(p.ret.w + 1) and lp is L.lifted_prim(p)
     assert lp.params[:-1] == lv1.params and lp.params[-1] == (L.ENABLE_PARAM, Value(2)) and L.has_enable(lp) and not L.has_enable(lv1)
-    assert getattr(lp, "lift_class") == "strict" and lp.lifted_from is p and lp.lifted_v1 is lv1
+    assert lp.lift_class == "strict" and lp.lifted_from is p and lp.lifted_v1 is lv1
     bot_out, inv_out = L.enc_bot(p.ret.w), L.inv(p.ret.w)
     for trial in range(8):
         ops = [_rand(w, 1)[0] for w in ws]
@@ -250,7 +254,7 @@ def test_lis_active_and_lbot():
     assert ia.evaluate(INV32) == 0b11 and ia.evaluate(_bad(32)) == 0b11  # negative: INV_1
     for w in (1, 16, 32):
         bp = L.l_bot(w)
-        assert bp.id == f"LBot{w}_v1" and bp.evaluate() == L.enc_bot(w) and bp.params == () and getattr(bp, "family") == "Const"
+        assert bp.id == f"LBot{w}_v1" and bp.evaluate() == L.enc_bot(w) and bp.params == () and bp.family == "Const"
     assert L.l_bot(32).evaluate() != b1.const(33, 0).evaluate()  # ⊥ is not Active(0)
 
 
@@ -269,7 +273,7 @@ def test_lgather_row_indexing():
     assert g.evaluate(5, *poisoned) == BOT16 == lazy(5, poisoned)  # reading the inactive row yields that row's ⊥
     assert g.evaluate(BOT32, *rows) == BOT16 == lazy(BOT32, rows)  # an inactive index yields ⊥, whatever the rows hold
     # out-of-range Active index: payload agreement with the ORIGINAL's registered total extension — `GatherBf16x{V}` (prims.py):
-    # "out-of-range or negative token -> 0x7FFF (a total, documented extension; production would fault)" — forced by A6/§3.3,
+    # "out-of-range or negative token -> 0x7FFF (a total, documented extension; serving would fault)" — forced by A6/§3.3,
     # nothing invented here; never INV ([P3]: range is a boundary fact).  Measured against the original, both evaluators.
     orig = P.gather_bf16(8)
     assert "out-of-range or negative" in orig.doc and "token -> 0x7FFF (a total, documented extension" in orig.doc
@@ -303,7 +307,7 @@ def test_every_registered_gather_family_is_specified_with_its_own_extension():
     reference gather `GatherF32x{V}_v1` (ref_prims, OOR 0x7FC00000) lifts to `LGatherRow32x{V}` with ITS extension, read from
     the original; a strict lift would let an unselected ⊥ row poison an Active read (A5).  Two originals of one `(w, N)` with
     different extensions cannot share the id: refused by name."""
-    from verity.definitions.registry import ref_prims as R
+    from verity_vllm.definitions.registry import ref_prims as R
     g32 = R.gather_f32(4)
     lg = L.lifted_prim_v1(g32)
     assert lg is L.l_gather_row(32, 4) and lg.id == "LGatherRow32x4_v1" and getattr(lg, "lift_class", None) == "specified"
@@ -494,7 +498,7 @@ def test_lifted_embedding_reads_through_an_inactive_table_row():
 # ---------------------------------------------------------------------------------------------------------
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _lserve(eos: tuple[int, ...]):
     prompt, w = _inputs()
     prog = Program(L.lserve(TINY, LP, D_MAX, eos, lag=0))
@@ -550,10 +554,6 @@ def test_lserve_prefix_property_gate_for_gate(n):
         covered += c1.hi - c1.lo
     assert covered == p1.gates - p1.input_gates
     assert [L.payload(32, x) for x in out[:n + 1]] == y1
-
-
-def fid_is_strict(prim) -> bool:
-    return getattr(prim, "lift_class", None) == "strict"
 
 
 def _is_const(prim) -> bool:
@@ -676,7 +676,7 @@ def test_lserve_structure_and_digests():
     sp1 = bind(b1.Serve, C=TINY, LP=LP, STEPS=D_MAX)
     for eos in ((15,), (17,), (63,), (17, 63)):
         sp = L.lserve(TINY, LP, D_MAX, eos, lag=0)
-        # the guard's gates + the Continuation_v1 controller's (3 per slot over cap = D_MAX + 1 slots) — PAD-03 (address stability across them)
+        # the guard's gates + the Continuation_v1 controller's (3 per slot up to the bound = D_MAX + 1 slots) — PAD-03 (address stability across them)
         assert sp.gates == sp1.gates + 2 * D_MAX + len(eos) + 2 + 3 * (D_MAX + 1) == sp1.gates + L.continuation_gate_count(D_MAX + 1, len(eos), 0)  # +2: bot32, enable/one
         prog = Program(sp)
         assert len(_steps(prog)) == D_MAX
@@ -787,12 +787,12 @@ def test_codec_round_trip_of_a_lifted_program():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Stage 1 of the padded acceptance: a test for each named item
+# Part 1 of the padded acceptance: a test for each named item
 # ---------------------------------------------------------------------------------------------------------
 
 
-def test_stage1_state_step_is_select_update_new_old_and_preserves_old_bit_identically():
-    """Stage-1 item 4 'state preservation' as a tiny circuit: the state transition is `Select(update, new, old)` (LSelect, non-strict) --
+def test_part1_state_step_is_select_update_new_old_and_preserves_old_bit_identically():
+    """Phase-1 item 4 'state preservation' as a tiny circuit: the state transition is `Select(update, new, old)` (LSelect, non-strict) --
     with `update = Active(0)` the state is the OLD word bit for bit even when the pending `new` value is bot (nothing happened, so the
     state is not bot); with `update = Active(1)` it is the new word; an inactive `update` (the request itself inactive) is bot, which
     a step of ANOTHER request never sees (the cross-request fixture is test_lifted_mixed.py)."""
@@ -807,8 +807,8 @@ def test_stage1_state_step_is_select_update_new_old_and_preserves_old_bit_identi
         assert st.evaluate(0, L.enc_bot(w), L.enc_bot(w)) == L.enc_bot(w)  # never-written state of an inactive request stays bot
 
 
-def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
-    """Stage-1 item 5 'malformed encodings': flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
+def test_part1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
+    """Phase-1 item 5 'malformed encodings': flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
     the lifted relation names it (INV out; the encoding predicates say neither Active nor bot); it is never rewritten (the operand the
     evaluator saw is the raw word; the caller still holds the raw bits to commit)."""
     for w in (1, 16, 32):
@@ -842,8 +842,8 @@ def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_re
 
 
 @pytest.mark.slow
-def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
-    """Stage-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
+def test_part1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
+    """Phase-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
     assignment back with each gate's class / width / raw word / A3 reading; on the tiny serve fixture with EOS at the raw event the
     bot population is exactly the inactive suffix of the transcript and no INV word exists anywhere."""
     from verity_vllm.program.lifting import dump as D
@@ -858,12 +858,14 @@ def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_w
     assert all(r["width"] is not None and r["width"] >= 2 for r in rs if r["class"] in ("strict", "specified"))  # lifted widths w+1
     assert all(r["word"] == t[r["gate"]] for r in rs)  # raw words, byte for byte the transcript's
     s2 = D.dump(prog, t, tmp_path / "dump.jsonl")
-    assert s2 == s and sum(1 for _ in open(tmp_path / "dump.jsonl")) == prog.gates
+    with open(tmp_path / "dump.jsonl") as fh:
+        n_lines = sum(1 for _ in fh)
+    assert s2 == s and n_lines == prog.gates
 
 
-def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
+def test_part1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
     """`FixedSelect(r_j, z_0..z_{E-1})` as the specified member `LFixedSelect<E>x<w>_v1` (MOE-PAD-SPEC §2), against
-    Stage 1 item 3 of the padded acceptance: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
+    Phase 1 item 3 of the padded acceptance: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
     is; (b) output = `z_r` for every admitted `r`, INCLUDING an inactive slot (-> bot), an unselected bot slot never poisons the read;
     (c) `r` out of range (E, E+1, -1, i32 min/max) -> INV_w NAMED, never a wrap, never a default slot; `r` bot -> bot; INV anywhere -> INV."""
     E = 4
@@ -871,12 +873,12 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
         fs = L.l_fixed_select(E, w)
         assert fs.id == f"LFixedSelect{E}x{w}_v1" and fs is L.l_fixed_select(E, w) and fs.id in L.specified_ids()
         assert [t for _, t in fs.params] == [Value(33), Array(E, Value(w + 1))] and fs.ret == Value(w + 1)
-        assert getattr(fs, "lift_class") == "specified" and "named failure" in getattr(fs, "lift_reason")
+        assert fs.lift_class == "specified" and "named failure" in fs.lift_reason
         bot, inv_ = L.enc_bot(w), L.inv(w)
         z = _rand(w, E)
         for r in range(E):  # (b) every admitted route: z_r bit for bit; the SAME object (a)
             assert fs.evaluate(r, *z) == z[r]
-            assert fs.evaluate_lazy(lambda i, _r=r: _r if i == 0 else z[i - 1]) == z[r]
+            assert fs.evaluate_lazy(lambda i, _r=r, _z=z: _r if i == 0 else _z[i - 1]) == z[r]
             zb = list(z)
             zb[(r + 1) % E] = bot  # an UNSELECTED slot inactive: no effect on the read
             assert fs.evaluate(r, *zb) == z[r]
@@ -886,11 +888,12 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
         assert fs.evaluate(L.enc_bot(32), *z) == bot  # r bot (an inactive token): nothing selected
         assert fs.evaluate(L.enc_bot(32), *([bot] * E)) == bot
         for oor in (E, E + 1, 0xFFFFFFFF, 0x80000000, 0x7FFFFFFF):  # (c) out of range: NAMED, not z[oor % E], not a default
-            assert fs.evaluate(oor, *z) == inv_ and fs.evaluate_lazy(lambda i, _o=oor: _o if i == 0 else z[i - 1]) == inv_
-        assert not hasattr(fs, "oor_payload") and getattr(fs, "oor_named") == "INV"  # no registered extension VALUE (unlike LGatherRow)
+            assert fs.evaluate(oor, *z) == inv_ and fs.evaluate_lazy(lambda i, _o=oor, _z=z: _o if i == 0 else _z[i - 1]) == inv_
+        assert not hasattr(fs, "oor_payload") and fs.oor_named == "INV"  # no registered extension VALUE (unlike LGatherRow)
         # INV anywhere -> INV: the route, a selected row, an unselected row, a bot route beside an INV row
         assert fs.evaluate(L.inv(32), *z) == inv_ and fs.evaluate(_bad(32), *z) == inv_
-        zi = list(z); zi[1] = inv_
+        zi = list(z)
+        zi[1] = inv_
         assert fs.evaluate(1, *zi) == inv_ and fs.evaluate(0, *zi) == inv_ and fs.evaluate(L.enc_bot(32), *zi) == inv_
         zi[1] = _bad(w)
         assert fs.evaluate(3, *zi) == inv_
@@ -918,7 +921,7 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
     assert program_digest(dec) == d0
 
 
-def test_stage1_cold_decode_resolves_the_continuation_members_by_id():
+def test_part1_cold_decode_resolves_the_continuation_members_by_id():
     """`LIsEOS<E>_v1` / `LEmitNext[H=h]_v1` and `LFixedSelect<E>x<w>_v1` resolve through the codec's lazy family table -- a Program
     decoded in a fresh registry state (no prior materialisation) finds them by id; the digest round-trips."""
     from verity.circuits.codec import _lookup_primitive
@@ -970,7 +973,6 @@ def test_b10_new_node_classes_of_the_padded_dense_request_are_named_with_counts(
     """v0.6 B10 (S-r17b-40 N3): every NEW node class of Lift(P) has a name and a count: guard (`guard_gate_count`, includes the one enable
     gate `enable/one` = `enable_gate_count`), controller (`continuation_gate_count - guard_gate_count = 3·cap`), state selects (0 for the
     dense chain).  Checked on the request component: the non-mapped nodes are exactly guard + controller."""
-    from tests.program.test_lifted_request import CAP as _CAP, component as _component_fixture  # noqa: F401
     for cap, n_eos, lag in ((3, 1, 0), (9, 2, 1), (5, 1, 0)):
         assert L.enable_gate_count(cap, n_eos, lag) == 1 and L.state_select_count(cap, n_eos, lag) == 0
         assert L.continuation_gate_count(cap, n_eos, lag) == L.guard_gate_count(cap, n_eos, lag) + 3 * cap
@@ -987,7 +989,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     from verity.circuits.codec import decode_program, encode_program
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.refs import coll_concat
-    from verity.definitions.registry.prims import I32
+    from verity_vllm.definitions.registry.prims import I32
 
     def twin_sig(S):
         return (("x", Array(S.N, I32)),), Array(S.N, I32)
@@ -1062,7 +1064,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
 
 def test_every_lift_of_a_primitive_declares_its_tables():
     """The data guard sees a table only through its primitive's declaration, and a lift runs its base's evaluator."""
-    from verity.definitions.ops.mufu import MufuEx2Ftz
+    from verity.circuits.ops.mufu import MufuEx2Ftz
     lp = L.lifted_prim(MufuEx2Ftz)
     assert MufuEx2Ftz.tables == (("ex2", "library"),)
     assert L.lifted_prim_v1(MufuEx2Ftz).tables == lp.tables == L.with_ordinary(lp, 1).tables == MufuEx2Ftz.tables
