@@ -1,0 +1,12 @@
+# A suite of `verity`'s tests (the root's pyproject.toml is the distribution): the serve-time commit's SHA-512 engine on
+# sm_90a, hm96-sha512 rows under hiding leaves and frame-v3-sha512 levels.
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["test_engine.py"]
+# engine.py reads no settings; the tests read the H200 layer's rows from commit_slots' frozen layout (slots.py).
+# The tests import `verity` by its dotted names: what they load of it is listed after slots.py.
+inputs = ["verity/commitments/cuda/commit_slots/slots.py",
+          "verity/__init__.py", "verity/errors.py", "verity/commitments", "verity/circuits"]
