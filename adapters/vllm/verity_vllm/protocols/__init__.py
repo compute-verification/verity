@@ -57,13 +57,15 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity_vllm import config
 from verity_vllm.engine import hooks
-from verity_vllm.errors import Refused
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
+
+if TYPE_CHECKING:
+    from verity_vllm.errors import Refused
 
 __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
            "adapter", "driver",
@@ -93,9 +95,22 @@ RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 parse = config.parse_protocols
 
 
+def _refused() -> type[Refused]:
+    """`errors.Refused`, imported where it is raised or caught: it is core's class, and the row stage reads this module
+    with no core installed."""
+    from verity_vllm.errors import Refused
+    return Refused
+
+
+def __getattr__(name: str) -> Any:
+    if name == "Refused":
+        return _refused()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def refused(reasons: str | Sequence[str]) -> Refused:
     """The refusal of a set, for a caller to raise: `errors.Refused` reading "protocol options refused: <reasons>"."""
-    return Refused(reasons, "protocol options")
+    return _refused()(reasons, "protocol options")
 
 
 def _imported(name: str, module: str, what: str) -> ModuleType:
@@ -170,7 +185,7 @@ def engine_fills(ctx: Context) -> dict[str, tuple[str, ...]]:
         name, _, scheme = entry.partition(":")
         try:
             fills = getattr(adapter(name), "fills", None)
-        except Refused:
+        except _refused():
             continue
         keys = tuple(fills(scheme, ctx.settings_of(name))) if callable(fills) else ()
         if keys:
@@ -188,7 +203,7 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
         name, _, scheme = entry.partition(":")
         try:
             fill = getattr(adapter(name), "from_engine", None)
-        except Refused:
+        except _refused():
             continue
         if not callable(fill):
             continue
@@ -208,7 +223,7 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
 def _has_circuit(name: str, scheme: str, out: list[str]) -> bool:
     try:
         reg = circuit_registry(name)
-    except Refused as r:
+    except _refused() as r:
         out.extend(r.reasons)
         return False
     return reg is not None and scheme in reg.SCHEMES
@@ -230,7 +245,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         scheme = entry.partition(":")[2]
         try:
             mod = adapter(name)
-        except Refused as r:
+        except _refused() as r:
             out.extend(r.reasons)
             continue
         known = tuple(mod.schemes())
@@ -485,7 +500,7 @@ def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, setting
         if commit_scheme is not None and declared is not None and declared != commit_scheme:
             raise refused([(f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
                             f"commits under {commit_scheme}: run it with --commit-scheme {declared}")])
-    except Refused as e:
+    except _refused() as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None
     return profile
