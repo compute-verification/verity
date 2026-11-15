@@ -171,11 +171,11 @@ def test_the_runs_gates_at_s_read_the_mean_of_c_over_seeds_that_differ():
     """The run at S is the mean |C| over the final seeds times the record's slowdown: not their least, their greatest, or the search
     record's |C| that its slowdown was read at."""
     s = graded([reach(5, 0), reach(7, 1), traced([OVER, UNDER, UNDER])], [reach(2, 0), reach(4, 1)])
-    C, slowdown = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
+    C, slowdown = s["attack"]["splits"]["final"]["C"], s["record_slowdown"]["slowdown"]
     assert C["min"] < C["mean"] < C["max"] and slowdown > 1
     per_and = gates.per_and("gemm/bf16")
     assert s["per_period"]["run_and_gates"] == pytest.approx(C["mean"] * slowdown / per_and)
-    for other in (C["min"], C["max"], s["rho"]["C_gates"]):
+    for other in (C["min"], C["max"], s["record_slowdown"]["C_gates"]):
         assert s["per_period"]["run_and_gates"] != pytest.approx(other * slowdown / per_and)
     assert s["S"]["honest"] == pytest.approx(2.0 * slowdown)
 
@@ -187,12 +187,12 @@ def test_the_records_slowdown_reads_the_first_planned_search_seed():
     runs, ref = [reach(5, 0), reach(7, 1), early, late], [reach(2, 0)]
     first = graded(runs, ref, CONFIG | {"seeds": {"search": [0, 1], "final": [0, 1]}})
     second = graded(runs, ref, CONFIG | {"seeds": {"search": [1, 0], "final": [0, 1]}})
-    assert (first["rho"]["seed"], first["rho"]["checkpoint_step"]) == (0, 2 * PER - 1)
-    assert (second["rho"]["seed"], second["rho"]["checkpoint_step"]) == (1, 4 * PER - 1)
-    assert first["rho"]["C_gates"] < second["rho"]["C_gates"] and first["rho"]["rho"] != second["rho"]["rho"]
+    assert (first["record_slowdown"]["seed"], first["record_slowdown"]["checkpoint_step"]) == (0, 2 * PER - 1)
+    assert (second["record_slowdown"]["seed"], second["record_slowdown"]["checkpoint_step"]) == (1, 4 * PER - 1)
+    assert first["record_slowdown"]["C_gates"] < second["record_slowdown"]["C_gates"] and first["record_slowdown"]["slowdown"] != second["record_slowdown"]["slowdown"]
     swapped = graded([reach(5, 0), reach(7, 1), late, early], ref,
                      CONFIG | {"seeds": {"search": [0, 1], "final": [0, 1]}})
-    assert swapped["rho"]["seed"] == 0 and swapped["rho"]["rho"] == first["rho"]["rho"]
+    assert swapped["record_slowdown"]["seed"] == 0 and swapped["record_slowdown"]["slowdown"] == first["record_slowdown"]["slowdown"]
 
 
 def test_a_route_that_does_not_reach_the_gain_has_no_p_and_no_s():
@@ -200,7 +200,7 @@ def test_a_route_that_does_not_reach_the_gain_has_no_p_and_no_s():
     final = s["attack"]["splits"]["final"]
     assert final["reached"] == 0 and final["C"] is None and s["p"] == {"honest": None, "any": None}
     assert all(not v["reached"] and v["step"] == 1 and v["gain"] < 1.1 for v in final["seeds"].values())
-    assert s["rho"]["rho"] is not None and "doesn't reach" in s["rho"]["at"]
+    assert s["record_slowdown"]["slowdown"] is not None and "doesn't reach" in s["record_slowdown"]["at"]
     assert s["S"]["any"] is None and "no seed of the config reaches 1.1x" in s["S"]["why"] and s["per_period"] is None
     assert "none: no seed of the config reaches" in G.text(s)
 
@@ -259,18 +259,18 @@ def test_the_records_slowdown_is_the_traced_search_records_at_the_policy_and_s_i
     s = graded(runs, ref)
     row = G.traced(search["record"], G.rows_of(search["record"])[1])
     want = F.published(F.measure(row, SHAPE | {"forward_macs_per_token": 51_342_080}), *policy.CONSOLE)
-    assert want["rho"] > 1 and s["rho"]["rho"] == want["rho"] and s["rho"]["rests_on"] == want["rests_on"]
-    assert (s["rho"]["checkpoint_step"], s["rho"]["at"]) == (2 * PER - 1, "its first checkpoint reaching the gain")
-    assert s["rho"]["work"]["N"] > 0 and s["rho"]["work"]["C_gates"] == s["rho"]["C_gates"]
-    assert s["S"] == {"honest": pytest.approx(1.5 * want["rho"]), "any": pytest.approx(1.5 * want["rho"]),
+    assert want["slowdown"] > 1 and s["record_slowdown"]["slowdown"] == want["slowdown"] and s["record_slowdown"]["rests_on"] == want["rests_on"]
+    assert (s["record_slowdown"]["checkpoint_step"], s["record_slowdown"]["at"]) == (2 * PER - 1, "its first checkpoint reaching the gain")
+    assert s["record_slowdown"]["work"]["N"] > 0 and s["record_slowdown"]["work"]["C_gates"] == s["record_slowdown"]["C_gates"]
+    assert s["S"] == {"honest": pytest.approx(1.5 * want["slowdown"]), "any": pytest.approx(1.5 * want["slowdown"]),
                       "why": None, "lower_bound": want["partial"]}
-    assert s["rests_on"]["rho"] == want["rests_on"] and "4 of the 5 starts on data d" in s["rests_on"]["gain"]
+    assert s["rests_on"]["record_slowdown"] == want["rests_on"] and "4 of the 5 starts on data d" in s["rests_on"]["gain"]
     premise = f"attention: that {products.ATTENTION_PREMISE}"
     assert s["rests_on"]["attention"] is None and premise not in G.text(s)
     assert premise in G.text(s | {"rests_on": s["rests_on"] | {"attention": products.ATTENTION_PREMISE}})
     at = graded(runs, ref, CONFIG | {"policy": "v4-pro-session"})
-    assert at["policy"]["kind"] == policy.FIXED and at["rho"]["rho"] is None and at["S"]["any"] is None
-    assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
+    assert at["policy"]["kind"] == policy.FIXED and at["record_slowdown"]["slowdown"] is None and at["S"]["any"] is None
+    assert at["S"]["why"] == at["record_slowdown"]["why"] and at["p"] == s["p"] and at["per_period"] is None
 
 
 def test_a_grown_models_own_numbers_price_neither_the_policy_nor_c0():
@@ -348,15 +348,15 @@ def test_the_traces_circuit_gives_the_parts_their_structure_and_both_sensitiviti
     c, k, total = s["policy"]["c_gates"], s["policy"]["k_bits"], 2 * PER * g
     b = math.ceil(0.9 * g / c)
     assert b >= 2 and math.ceil(g / c) >= 2
-    assert s["rho"]["sensitivities"] == pytest.approx({"reduction": c * n * (b - 1) * 2e6 / (k * total),
+    assert s["record_slowdown"]["sensitivities"] == pytest.approx({"reduction": c * n * (b - 1) * 2e6 / (k * total),
                                                         "update": c * n * 3e6 / (k * total)})
-    assert s["rho"]["blank"] == {} and s["rho"]["capture_code"] == s["rests_on"]["capture_code"] == "9.9"
-    assert set(s["rho"]["unmeasured"]) == {"reduction", "update"} and all(
-        why.endswith("the term sums the parts that have it") for why in s["rho"]["unmeasured"].values())
-    red, upd = s["rho"]["sensitivities"].values()
+    assert s["record_slowdown"]["blank"] == {} and s["record_slowdown"]["capture_code"] == s["rests_on"]["capture_code"] == "9.9"
+    assert set(s["record_slowdown"]["unmeasured"]) == {"reduction", "update"} and all(
+        why.endswith("the term sums the parts that have it") for why in s["record_slowdown"]["unmeasured"].values())
+    red, upd = s["record_slowdown"]["sensitivities"].values()
     text = G.text(s)
     assert f"reduction {red:,.6g}, update {upd:,.6g}, beside the record's slowdown and never in it" in text
-    assert f"reduction: partial: {s['rho']['unmeasured']['reduction'].removeprefix('unmeasured: ')}" in text
+    assert f"reduction: partial: {s['record_slowdown']['unmeasured']['reduction'].removeprefix('unmeasured: ')}" in text
     assert "unmeasured" not in text and ", its code 9.9" in text
     assert "blank" not in text
 
@@ -372,24 +372,24 @@ def test_a_trace_without_its_circuit_or_code_version_still_grades_and_says_what_
     bare = heavy(traced([OVER, UNDER]))
     bare["record"] |= here
     s = graded([final, bare], ref)
-    assert s["rho"]["rho"] == full["rho"]["rho"] > 1 and s["S"] == full["S"] and s["S"]["any"] is not None
-    assert s["rho"]["sensitivities"] == {"reduction": None, "update": None} and s["rests_on"]["capture_code"] is None
+    assert s["record_slowdown"]["slowdown"] == full["record_slowdown"]["slowdown"] > 1 and s["S"] == full["S"] and s["S"]["any"] is not None
+    assert s["record_slowdown"]["sensitivities"] == {"reduction": None, "update": None} and s["rests_on"]["capture_code"] is None
     again = (f"re-trace it at the record's commit c0ffee and config.text with a CPU job, `{G.RETRACE}`, RUN_JSON the "
              f"record: the tree the job runs in takes the trace with its own capture, and refuses a config it reads "
              f"as another program than the record's")
     no_circuit = (f"the search record's trace has no circuit, the measured step's cut of its gradient and its "
                   f"structure, which the reduction and update sensitivities read; {again}")
     no_code = f"the search record's trace has no capture_code, the version of the code that took the trace; {again}"
-    assert s["rho"]["blank"] == {"reduction": no_circuit, "update": no_circuit, "capture_code": no_code}
+    assert s["record_slowdown"]["blank"] == {"reduction": no_circuit, "update": no_circuit, "capture_code": no_code}
     text = G.text(s)
     assert "reduction blank, update blank, beside the record's slowdown and never in it" in text
     assert f"reduction: blank: {no_circuit}" in text and f"update: blank: {no_circuit}" in text
     assert f", its code blank: {no_code}" in text
-    coded = graded([final, heavy(traced([OVER, UNDER], capture_code="9.9"))], ref)["rho"]
+    coded = graded([final, heavy(traced([OVER, UNDER], capture_code="9.9"))], ref)["record_slowdown"]
     assert set(coded["blank"]) == {"reduction", "update"} and coded["capture_code"] == "9.9"
     assert coded["blank"]["update"].endswith("; the record has no config.text and no commit, so no config to re-trace from")
-    uncoded = graded([final, heavy(traced([OVER, UNDER], circuit=CIRCUIT))], ref)["rho"]
-    assert set(uncoded["blank"]) == {"capture_code"} and uncoded["sensitivities"] == full["rho"]["sensitivities"]
+    uncoded = graded([final, heavy(traced([OVER, UNDER], circuit=CIRCUIT))], ref)["record_slowdown"]
+    assert set(uncoded["blank"]) == {"capture_code"} and uncoded["sensitivities"] == full["record_slowdown"]["sensitivities"]
 
 
 def test_a_step_is_after_the_first_update_when_it_reads_a_changed_weight():
@@ -420,9 +420,9 @@ def test_no_slowdown_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_
     def why(search: dict, **record) -> str:
         search = search | {"record": search["record"] | record}
         s = graded([job([UNDER]), search], ref)
-        assert s["rho"] == {"rho": None, "why": s["S"]["why"]} and s["S"]["any"] is None and s["p"]["any"]["p"] == 1
-        assert f"none: {s['rho']['why']}" in G.text(s)
-        return s["rho"]["why"]
+        assert s["record_slowdown"] == {"slowdown": None, "why": s["S"]["why"]} and s["S"]["any"] is None and s["p"]["any"]["p"] == 1
+        assert f"none: {s['record_slowdown']['why']}" in G.text(s)
+        return s["record_slowdown"]["why"]
 
     here = {"config": {"text": 'start = "s"\n'}, "commit": "c0ffee"}
     again = (f"re-trace it at the record's commit c0ffee and config.text with a CPU job, `{G.RETRACE}`, RUN_JSON the "
@@ -461,20 +461,20 @@ def test_no_slowdown_from_a_step_the_formalism_refuses_or_a_prefix_no_update_pre
     ref = [job([UNDER])]
     read_back = {"kind": "a comparison of a read-back float", "where": "train.py:9", "steps": [0, 3]}
     s = graded([job([UNDER]), traced([OVER, UNDER], data_dependent=[read_back])], ref)
-    assert s["rho"]["rho"] is None and s["rho"]["why"].startswith("refused: data-dependent: not measured")
-    assert s["S"]["why"] == s["rho"]["why"] and s["p"]["any"]["p"] == 1
+    assert s["record_slowdown"]["slowdown"] is None and s["record_slowdown"]["why"].startswith("refused: data-dependent: not measured")
+    assert s["S"]["why"] == s["record_slowdown"]["why"] and s["p"]["any"]["p"] == 1
     assert s["attack"]["splits"]["search"]["seeds"]["0"]["reached"]
     still = trace()
     for b in (still, *still["at"].values()):
         b["rows"] = [r | {"affected": [False, False]} for r in b["rows"]]
     s = graded([job([UNDER]), traced([OVER, UNDER], **still)], ref)
-    assert s["rho"]["why"] == ("refused: update-free trace: E is 100000000 bytes, but the traced step shows no update "
+    assert s["record_slowdown"]["why"] == ("refused: update-free trace: E is 100000000 bytes, but the traced step shows no update "
                                "(its affected share is 0)")
     idle = traced([OVER, UNDER])
     for step in idle["record"]["steps"]:
         step["weights"] = {"new/0": ["t"]}
     s = graded([job([UNDER]), idle], ref)
-    assert s["rho"]["why"] == ("refused: update-free prefix: E is not empty, but no step through checkpoint "
+    assert s["record_slowdown"]["why"] == ("refused: update-free prefix: E is not empty, but no step through checkpoint "
                                f"{2 * PER - 1} reads a weight the run changed")
 
 
@@ -487,10 +487,10 @@ def test_a_records_provenance_is_passed_on_and_never_read():
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1)], [job([UNDER])]
     a, b = graded([*runs, plain], ref), graded([*runs, marked], ref)
     assert a["rests_on"]["provenance"] is None and all("provenance" not in x for x in a["records"])
-    assert b["rests_on"]["provenance"] == said and b["rho"]["provenance"] == said
+    assert b["rests_on"]["provenance"] == said and b["record_slowdown"]["provenance"] == said
     assert [x.get("provenance") for x in b["records"]] == [None, None, said, None]
     drop = {"rests_on": None, "records": None}
-    assert {**b, **drop, "rho": b["rho"] | {"provenance": None}} == {**a, **drop}
+    assert {**b, **drop, "record_slowdown": b["record_slowdown"] | {"provenance": None}} == {**a, **drop}
     line = json.dumps(said, sort_keys=True)
     assert f"; the record's provenance: {line}" in G.text(b) and f", provenance: {line}" in G.text(b)
     assert "provenance" not in G.text(a)
@@ -532,7 +532,7 @@ def test_records_priced_two_ways_give_no_p_and_no_s_and_the_reason_names_both_wa
              "0/final, attack 1/final, reference 0/final (3 in all).")):
         s = graded(runs, honest)
         assert s["p"] == {"honest": None, "any": None} and s["per_period"] is None and s["schema"] == "slowdown/v1"
-        assert (s["S"]["honest"], s["S"]["any"]) == (None, None) and s["rho"]["rho"] is not None
+        assert (s["S"]["honest"], s["S"]["any"]) == (None, None) and s["record_slowdown"]["slowdown"] is not None
         assert s["S"]["why"].startswith("the records read are priced two ways") and which in s["S"]["why"]
         assert s["S"]["why"].endswith(f". Either {G.MIXED}") and "--as-if-assumed" in G.MIXED
         assert "again with a job of this version" in G.MIXED
@@ -730,7 +730,7 @@ def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_t
 
     exact, tf32 = stating(run), stating(as_tf32(run), on)
     a, b = (G.grade(config, starts, [r], [run]) for r in (exact, tf32))
-    assert a["rho"]["rho"] is not None and b["rho"]["rho"] is not None
+    assert a["record_slowdown"]["slowdown"] is not None and b["record_slowdown"]["slowdown"] is not None
     assert [x["tf32"] for x in a["records"]] == [False, False] and [x["tf32"] for x in b["records"]] == [True, False]
     assert "TF32 on, counted" in G.text(b) and "TF32 off, counted" in G.text(a)
     rows = [G.rows_of(r["record"])[-1] for r in (exact, tf32)]
@@ -758,8 +758,8 @@ def test_a_product_of_m_named_tf32_is_priced_apart_from_its_trace(adapted):
     apart = G.priced_apart(adapted["trace"], G.rows_of(renamed["record"])[-1]["macs_log"])
     assert apart and {(x["priced"], *x["named"]) for x in apart} == {("float32", "tf32")}
     out = G.grade(config, starts, [renamed], [run])
-    assert out["rho"]["rho"] is None and "priced in float32 where the record names tf32" in out["rho"]["why"]
-    assert out["S"]["why"] == out["rho"]["why"] and (out["S"]["honest"], out["S"]["any"]) == (None, None)
+    assert out["record_slowdown"]["slowdown"] is None and "priced in float32 where the record names tf32" in out["record_slowdown"]["why"]
+    assert out["S"]["why"] == out["record_slowdown"]["why"] and (out["S"]["honest"], out["S"]["any"]) == (None, None)
 
 
 def test_a_record_that_states_no_tf32_switch_is_read_as_before_and_its_line_says_so():
@@ -793,16 +793,16 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     starts = registry("tiny", synthetic.SHAPE)
     runs = [{"seed": 0, "split": "search", "record": ran}]
     s = G.grade(config, starts, runs, runs)
-    assert s["basis"]["split"] == "search" and s["rho"]["checkpoint_step"] == 2
-    assert s["rho"]["rho"] is not None and s["rho"]["rho"] >= 1, s["rho"]
+    assert s["basis"]["split"] == "search" and s["record_slowdown"]["checkpoint_step"] == 2
+    assert s["record_slowdown"]["slowdown"] is not None and s["record_slowdown"]["slowdown"] >= 1, s["record_slowdown"]
     assert s["rests_on"]["capture"] == products.CAPTURE and s["rests_on"]["capture_code"] == VERSION
-    assert s["rho"]["blank"] == {} and ", its code blank" not in G.text(s)
-    assert s["rho"]["terms"]["products"] is not None and s["rests_on"]["provenance"] is None
-    assert (s["rho"]["work"] is None) == (not s["bound_of_record"]["available"])
+    assert s["record_slowdown"]["blank"] == {} and ", its code blank" not in G.text(s)
+    assert s["record_slowdown"]["terms"]["products"] is not None and s["rests_on"]["provenance"] is None
+    assert (s["record_slowdown"]["work"] is None) == (not s["bound_of_record"]["available"])
     here = f"re-trace it at the record's commit {ran['commit']} and config.text with a CPU job, `{G.RETRACE}`"
     refused = {"refused": {"reason": "unsupported", "op": "aten::foo", "message": "foo has no trace"}}
     s = G.grade(config, starts, [runs[0] | {"record": ran | {"trace": refused}}], runs)
-    assert s["rho"]["rho"] is None and here in s["rho"]["why"] and s["S"]["why"] == s["rho"]["why"]
+    assert s["record_slowdown"]["slowdown"] is None and here in s["record_slowdown"]["why"] and s["S"]["why"] == s["record_slowdown"]["why"]
 
 
 def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an_earlier_captures(ran):
@@ -866,8 +866,8 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     a = G.grade(config, registry("tiny", synthetic.SHAPE), runs, runs)
     b = G.grade(config, registry("tiny", synthetic.SHAPE), [runs[0] | {"record": ran | {"trace": old}}], runs)
     assert (a["rests_on"]["capture"], b["rests_on"]["capture"]) == (products.CAPTURE, earlier)
-    same = ("rho", "terms", "C_gates", "work", "checkpoint_step")
-    assert {k: b["rho"][k] for k in same} == {k: a["rho"][k] for k in same} and a["rho"]["rho"] is not None
+    same = ("slowdown", "terms", "C_gates", "work", "checkpoint_step")
+    assert {k: b["record_slowdown"][k] for k in same} == {k: a["record_slowdown"][k] for k in same} and a["record_slowdown"]["slowdown"] is not None
     assert b["bound_of_record"] == a["bound_of_record"] and b["p"] == a["p"] and b["S"] == a["S"]
     assert "priced" not in (a["S"]["why"] or "") and {x["priced"] for x in a["records"] + b["records"]} == {
         G.PRICED[True]}
@@ -921,13 +921,13 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     runs = [{"seed": 0, "split": "search", "record": adapted}]
     a = G.grade(config, registry("tiny", synthetic.SHAPE), runs, runs)
     b = G.grade(config, registry("tiny", synthetic.SHAPE), [runs[0] | {"record": adapted | {"trace": old}}], runs)
-    assert a["rho"]["rho"] is not None and a["rests_on"]["capture"] == products.CAPTURE
-    assert b["rho"]["rho"] is None and b["rho"]["why"] == f"refused: {said}" and b["S"]["why"] == b["rho"]["why"]
+    assert a["record_slowdown"]["slowdown"] is not None and a["rests_on"]["capture"] == products.CAPTURE
+    assert b["record_slowdown"]["slowdown"] is None and b["record_slowdown"]["why"] == f"refused: {said}" and b["S"]["why"] == b["record_slowdown"]["why"]
     assert (b["S"]["honest"], b["S"]["any"]) == (None, None) and b["p"] == a["p"]
     assert f"none: refused: {said[:60]}" in G.text(b)
     as_if = G.grade(config, registry("tiny", synthetic.SHAPE), [runs[0] | {"record": adapted | {"trace": old}}], runs,
                     as_if_assumed=True)
-    assert as_if["rho"]["rho"] is not None and as_if["schema"] == G.SCHEMA_AS_IF
+    assert as_if["record_slowdown"]["slowdown"] is not None and as_if["schema"] == G.SCHEMA_AS_IF
     assert G.priced_apart(old, G.rows_of(G.without_dtypes(adapted))[-1]["macs_log"]) == []
     elsewhere = old | {"rows": [r | {"dims": r["dims"] | {"k": r["dims"]["k"] + 1}} if r in builds else r
                                 for r in tr["rows"]]}
@@ -998,12 +998,12 @@ def test_the_records_slowdown_is_the_bound_of_record_where_products_bind():
     (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products bind, the
     record's slowdown is the bound's and S is p times it, and the block says so under the bound."""
     s = graded([job([OVER, UNDER], 0), traced([OVER, UNDER])], [job([UNDER])])
-    w, got = s["rho"]["work"], s["bound_of_record"]
+    w, got = s["record_slowdown"]["work"], s["bound_of_record"]
     c, k = policy.CONSOLE
     solved = calculator._min_cut().blocks_at_least(w["N"], w["O"], k, w["beta_w"] * w["beta_x"], w["b_y"], w["F"])
     assert got["blocks"] == solved and got["slowdown"] == solved * c / w["C_gates"] > 1
-    assert s["rho"]["binding_kind"] == "products"
-    assert s["rho"]["rho"] == s["rho"]["terms"]["products"] == got["slowdown"]
+    assert s["record_slowdown"]["binding_kind"] == "products"
+    assert s["record_slowdown"]["slowdown"] == s["record_slowdown"]["terms"]["products"] == got["slowdown"]
     assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * got["slowdown"])
     assert f"\n  {'':<17} {G.BOUND_IS_SLOWDOWN}\n" in G.text(s) and "this attack pays" not in G.text(s)
     assert "the record's slowdown is it" in G.BOUND_IS_SLOWDOWN and "closed form" not in G.text(s) and "overhead" not in G.text(s)
@@ -1030,12 +1030,12 @@ def test_the_bound_of_record_is_the_calculators_and_the_records_slowdown_follows
     stubbed = SimpleNamespace(**vars(real) | {"slowdown_of": stub, "HE": "the statement"})
     monkeypatch.setattr(calculator, "_min_cut", lambda: stubbed)
     s = graded(runs, ref)
-    w, got = s["rho"]["work"], s["bound_of_record"]
+    w, got = s["record_slowdown"]["work"], s["bound_of_record"]
     assert len(calls) > 1 and all(call[:3] == (*policy.CONSOLE, None) for call in calls)
     assert calls[-1][3] == w["C_gates"]
     slowdown = 300.0 * policy.CONSOLE[0] / w["C_gates"]
     assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, slowdown, 300.0, "HE")
-    assert s["rho"]["rho"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
+    assert s["record_slowdown"]["slowdown"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
     assert f"pays at least {slowdown:,.6g}x (HE: at least 300 blocks" in G.text(s)
     assert "rests on: given (H) and (E)" in G.text(s)
     made = len(calls)
@@ -1047,13 +1047,13 @@ def test_the_bound_of_record_is_the_calculators_and_the_records_slowdown_follows
     for b in (flat, *flat["at"].values()):
         b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
     empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
-    assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
+    assert empty["record_slowdown"]["terms"] == {"products": 0.0} and empty["record_slowdown"]["slowdown"] == 1 and empty["record_slowdown"]["work"] is None
     assert not empty["bound_of_record"]["available"]
 
 
 def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
-    """Where Fit fails, the grade's `rho`, the bound of record and S are the entry point's and the grade computes
-    none: with `calculator.slowdown` replaced by one that gives 7.25 wherever the real one gives a slowdown, `rho`
+    """Where Fit fails, the record's slowdown, the bound of record and S are the entry point's and the grade computes
+    none: with `calculator.slowdown` replaced by one that gives 7.25 wherever the real one gives a slowdown, the record's slowdown
     and the bound of record's slowdown are 7.25, S is p times it, and the products term beside them stays the real
     one's."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
@@ -1065,11 +1065,11 @@ def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
 
     monkeypatch.setattr(calculator, "slowdown", entry)
     s = graded(runs, ref)
-    assert s["rho"]["rho"] == s["bound_of_record"]["slowdown"] == 7.25 != honest["rho"]["rho"]
-    assert s["rho"]["binding_kind"] == "products" and s["rho"]["terms"] == honest["rho"]["terms"]
+    assert s["record_slowdown"]["slowdown"] == s["bound_of_record"]["slowdown"] == 7.25 != honest["record_slowdown"]["slowdown"]
+    assert s["record_slowdown"]["binding_kind"] == "products" and s["record_slowdown"]["terms"] == honest["record_slowdown"]["terms"]
     assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * 7.25) and s["p"] == honest["p"]
-    assert s["rho"]["work"] == s["bound_of_record"]["work"] == honest["rho"]["work"]
-    assert s["rho"]["work"]["C_gates"] == s["rho"]["C_gates"]
+    assert s["record_slowdown"]["work"] == s["bound_of_record"]["work"] == honest["record_slowdown"]["work"]
+    assert s["record_slowdown"]["work"]["C_gates"] == s["record_slowdown"]["C_gates"]
 
 
 def test_the_bound_call_fits_the_calculator_as_it_is():
@@ -1089,7 +1089,7 @@ def test_the_periods_and_fleets_are_the_calculators():
     calculator's at its peak, for the census's window and core's periods."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     per = s["per_period"]
-    assert per["run_and_gates"] == pytest.approx(2 * STEP_GATES * s["rho"]["rho"] / gates.per_and("gemm/bf16"))
+    assert per["run_and_gates"] == pytest.approx(2 * STEP_GATES * s["record_slowdown"]["slowdown"] / gates.per_and("gemm/bf16"))
     assert [(x["over"], x["period"]) for x in per["rows"]] == [
         (over, p) for over in ("one datacenter", "the world") for p in ("window", "week", "month", "year")]
     fleets, periods = {f["over"]: f for f in calculator.fleets()}, calculator.periods()
@@ -1138,7 +1138,7 @@ def test_a_records_rows_carry_its_prefix_and_the_command_reads_a_tree_of_jobs(tm
                    str(tmp_path / "attack"), "--honest", str(tmp_path / "reference"), "--out", str(tmp_path / "out")]) == 0
     s = json.loads((tmp_path / "out" / "slowdown.json").read_text())
     assert s["schema"] == "slowdown/v1" and s["config"] == "attack" and s["p"]["honest"]["p"] == pytest.approx(2.5)
-    assert s["S"]["any"] == pytest.approx(2.5 * s["rho"]["rho"])
+    assert s["S"]["any"] == pytest.approx(2.5 * s["record_slowdown"]["slowdown"])
     assert [(x["config"], x["seed"], x["split"]) for x in s["records"]] == [
         ("attack", 0, "final"), ("attack", 0, "search"), ("attack", 1, "final"), ("reference", 0, "final")]
     assert all("form" not in x and x["source"].endswith("run.json") for x in s["records"])
