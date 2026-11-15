@@ -132,7 +132,7 @@ def _certificates(c):
 
 
 def _syncs(c):
-    w = c.draw.registration.record["window"]["window"]
+    w = c.draw.docket.record["window"]["window"]
     s = c.syncs[w]
     moved = lambda new: c.syncs[:w] + [new] + c.syncs[w + 1:]
     return [[], c.syncs[:w], moved(ClockSync(s.delta + 7, s.rho)), moved(ClockSync(s.delta, s.rho * 3)),
