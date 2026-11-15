@@ -10,7 +10,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-MOVE = Path(__file__).resolve().parents[1]
+MOVE = Path(__file__).resolve().parents[3] / "tools" / "move"
 spec = importlib.util.spec_from_file_location("tests_root_under_test", MOVE / "tests_root.py")
 TR = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(TR)
@@ -39,7 +39,8 @@ TREE = {
     "adapters/dist/tests/__init__.py": "",
     "adapters/dist/tests/conftest.py": "INNER = 1\n",
     "adapters/dist/tests/helpers.py": "H = 1\n",
-    "adapters/dist/tests/test_d.py": "from tests.helpers import H\n\n\ndef test_d():\n    assert H\n",
+    "adapters/dist/tests/test_d.py": "from pathlib import Path\n\nfrom tests.helpers import H\n\nHERE = Path(__file__).resolve().parent\n"
+                                     "CODE = HERE.parent / \"dist\" / \"__init__.py\"\n\n\ndef test_d():\n    assert H and CODE.is_file()\n",
     "tools/plain/pyproject.toml": '[project]\nname = "plain"\nversion = "0"\n\n[tool.uv]\npackage = false\n\n'
                                   '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["../../verity/a"]\n',
     "tools/plain/tests/test_p.py": "def test_p():\n    pass\n",
@@ -101,12 +102,14 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
 
 
 def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path):
-    """After `split`, `maps`, its move, `suites-map` and its move: every test is under `tests/`, each suite's pyproject beside
-    its tests collects them from its own directory and puts the same directories on its path, a suite whose own directory
-    held more than its tests reads it still, and a test's relative reference to its code still reaches it."""
+    """After `split`, `maps`, its move, `suites-map`, its move and `anchors`: every test is under `tests/`, each suite's
+    pyproject beside its tests collects them from its own directory and puts the same directories on its path, a suite
+    whose own directory held more than its tests reads it still, and a test's relative reference to its code, through
+    `Path(__file__)` or a name bound to it, still reaches it."""
     r = repo(tmp_path)
     TR.run_split(TR.Tree(r), [])
     git(r, "commit", "-q", "-m", "split")
+    base = git(r, "rev-parse", "HEAD").strip()
 
     def move(m: str):
         git(r, "add", "-A")
@@ -142,3 +145,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert plain["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
     members = tomllib.loads((r / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]
     assert members == ["adapters/dist", "tests/adapters/dist/tests", "tests/tools/plain"]
+    assert TR.main(["anchors", base, "--write"], root=r) == 0
+    assert 'CODE = HERE.parents[3] / "adapters" / "dist" / "dist" / "__init__.py"' in (
+        r / "tests/adapters/dist/tests/test_d.py").read_text()
+    assert TR.anchors(TR.Tree(r), base, write=False) == {}
