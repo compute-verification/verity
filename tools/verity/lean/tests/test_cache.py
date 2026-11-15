@@ -326,6 +326,20 @@ def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
     assert "no cached build of an ancestor" in lines[-1]
 
 
+def test_the_packages_get_restores_by_default_leave_the_auditors_fixtures_out(tmp_path):
+    """The fixtures are wherever `check.FIXTURES` says, under the tool or under the root `tests/`."""
+    spec = importlib.util.spec_from_file_location("lean_check_for_test_cache", Path(C.__file__).with_name("check.py"))
+    A = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(A)
+    r, _ = repo(tmp_path)
+    at = A.FIXTURES.relative_to(A.ROOT).as_posix()
+    for d in (f"{at}/control", f"{at}/unread/code"):
+        (r / d).mkdir(parents=True)
+        (r / d / "lean-audit.json").write_text("{}\n")
+    sh("git", "add", ".", cwd=r)
+    assert C.packages(r) == ["pkg"]
+
+
 def test_a_build_published_before_a_layout_move_restores_at_the_packages_new_path(s3, tmp_path, lake):
     """A record is keyed by the package's directory. A move renames it and changes no byte Lake hashes, so until
     integration publishes a commit after the move, the package's build is the one under its former path."""
