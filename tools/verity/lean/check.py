@@ -1596,8 +1596,9 @@ def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]
 
 def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
     """Why ``moved`` cannot be read back: a name moved to itself, two old names moved to one new name (a name of the build
-    under it has no one old name), a new name at or under another entry's old name (a chain or a swap: `rename.py` has
-    already renamed the lock's hand-kept lines, which `renamed_witnesses` would then move a second time), or a name of ``names`` (a lock's, `lock_names`) whose new name maps back to another
+    under it has no one old name), a new name at, under or over another entry's old name (a chain or a swap: `rename.py`
+    has already renamed the lock's hand-kept lines, which `renamed_witnesses` would then move a second time), or a name of
+    ``names`` (a lock's, `lock_names`) whose new name maps back to another
     (`unrenamed`).  Both maps take the longest prefix, so the names under an entry nested under another's new name map
     back under its own old name whether or not the old names nest alike; only a name that falls under a longer entry
     than its own on one way, and not on the other, fails to come back.  Which names do is a fact of the lock and the
@@ -1607,12 +1608,17 @@ def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
     errs += [f"{', '.join(sorted(olds))} all move to {new}" for new, olds in sorted(by_new.items()) if len(olds) > 1]
+    def above(name: str) -> list[str]:
+        return [name.rsplit(".", i)[0] for i in range(name.count(".") + 1)]
+    under: dict[str, set[str]] = {}
+    for o in moved:
+        for p in above(o):
+            under.setdefault(p, set()).add(o)
     for old, new in sorted(moved.items()):
-        for other in (new.rsplit(".", i)[0] for i in range(new.count(".") + 1)):
-            if other in moved and other != old:
-                errs.append(f"{old} moves to {new}, at or under {other}, which moves to {moved[other]}: a chain or a "
-                            f"swap, which the lock's lines `rename.py` already renamed would follow twice; split it into "
-                            f"two passes, each its own moves file")
+        for other in sorted(({o for o in above(new) if o in moved} | under.get(new, set())) - {old}):
+            errs.append(f"{old} moves to {new}, and {other}, which moves to {moved[other]}, is at, under or over it: a "
+                        f"chain or a swap, which the lock's lines `rename.py` already renamed would follow twice; split "
+                        f"it into two passes, each its own moves file")
     if errs:
         return errs
     for n in sorted(set(names)):

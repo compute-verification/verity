@@ -3682,13 +3682,15 @@ def test_a_move_map_and_lock_it_accepts_come_back_and_keep_each_sections_names_a
     lock, every name of the lock the map moves maps forward and back to itself and no two names of one section land on
     one new name; whenever it refuses them, it refuses each such name or pair and names it: a name with the other old name
     its new name maps back to, or the names that land together and their section.  The draws hold nested entries whose
-    old names nest otherwise, names that don't come back (shadows) and names of one section that land together, each
-    refused alone in some draw, so a rule without either check accepts a draw this rejects; and accepted locks where a
-    guarantee's record meets a witness line on one new name, as the landing's pass had them."""
+    old names nest otherwise, names that don't come back (shadows) and names of one section that land together, the
+    last refused alone in some draw; a map whose names overlap (`move_errors`' chains) is refused before the lock is
+    read, which leaves no draw refused for a shadow alone (the round trip's own case is
+    `test_moves_refused_against_a_lock_are_refused_before_anything_is_written`); and accepted locks where a guarantee's
+    record meets a witness line on one new name, as the landing's pass had them."""
     rng, parts = random.Random(20261115), ["a", "b"]
     universe = [".".join(p) for k in range(1, 5) for p in itertools.product(parts, repeat=k)]
-    otherwise = shadows = together = only_shadows = only_together = accepted = met = 0
-    for _ in range(400):
+    otherwise = shadows = together = only_together = accepted = met = 0
+    for _ in range(1200):
         moved: dict[str, str] = {}
         for _ in range(rng.randint(1, 4)):
             moved.setdefault(rng.choice(universe[:14]), rng.choice(universe[:14]))
@@ -3720,9 +3722,8 @@ def test_a_move_map_and_lock_it_accepts_come_back_and_keep_each_sections_names_a
              for n, b in stray.items()] + crowded), moved
         assert {c for c, _ in refusals} <= {"moved.round-trip", "moved.collision"}, moved
         shadows, together = shadows + len(stray), together + len(crowded)
-        only_shadows, only_together = only_shadows + (not crowded), only_together + (not stray)
-    assert otherwise >= 20 and shadows >= 20 and together >= 20 and accepted >= 20 and met >= 5
-    assert only_shadows >= 5 and only_together >= 5
+        only_together += not stray
+    assert otherwise >= 20 and shadows >= 10 and together >= 20 and accepted >= 20 and met >= 5 and only_together >= 5
 
 
 def test_names_of_one_section_that_land_together_are_refused_and_a_record_meeting_its_own_lines_is_not():
@@ -3767,7 +3768,8 @@ def test_a_move_holds_the_names_of_the_base_lock_unless_they_move_away():
     assert A.move_refusals(moved, working, [base]) == [
         ("moved.collision", "P.A.t, P.X.t (in the base's lock) all land on P.X.t in guarantees")]
     assert A.move_refusals(moved, working, [working, {"guarantees": {"P.A.t": {}, "P.A.u": {}}}]) == []
-    assert A.move_refusals({"P.A": "P.X", "P.X": "P.Y"}, working, [base]) == []
+    assert [c for c, _ in A.move_refusals({"P.A": "P.X", "P.X": "P.Y"}, working, [base])] == ["moved.map"]
+    assert A.section_collisions(working, {"P.A": "P.X", "P.X": "P.Y"}, [base]) == []
 
 
 def test_a_move_re_keys_the_premises_and_claims_with_every_field_of_their_entries():
@@ -7922,22 +7924,27 @@ def test_a_base_commit_without_the_lock_is_reported_and_one_git_cannot_read_refu
     assert f"--moved: the base's lock: git can't show s/{A.POLICY} at {head}" in capsys.readouterr().err
     (s / A.POLICY).write_text("{not json")
     git_in(tmp_path, "commit", "-q", "-am", "broken")
-    with pytest.raises(ValueError, match=f"s/{A.POLICY} at {git_in(tmp_path, 'rev-parse', 'HEAD')} is not JSON"):
-        A.base_locks(s, ["HEAD"], tmp_path)
+    broken = git_in(tmp_path, "rev-parse", "HEAD")
+    with pytest.raises(ValueError, match=f"s/{A.POLICY} at {broken} is not JSON"):
+        A.base_locks(s, [broken], tmp_path)
 
 
 def test_a_chain_or_a_swap_in_a_moves_file_is_refused_and_told_to_split(tmp_path):
     """`rename.py` has already renamed the lock's hand-kept lines when `--moved` re-keys them, which is the identity only
-    while no entry's new name lies at or under another entry's old name; a chain or a swap would move Period's lines
-    onto Window's, so it is refused, saying to split it into two passes.  Monday's map and a nested pair pass."""
+    while no entry's new name lies at, under or over another entry's old name; a chain or a swap would move Period's
+    lines onto Window's, and `{P.A: P.X, P.X.Q: R}` the lines `rename.py` put at `P.X.Q.t` (for `P.A.Q.t`) on to `R.t`, so
+    each is refused, saying to split it into two passes.  Monday's map and nested pairs pass."""
     chain = {"N.Window": "N.ExecutionPhase", "N.Period": "N.Window"}
     assert A.move_errors(chain) == [
-        "N.Period moves to N.Window, at or under N.Window, which moves to N.ExecutionPhase: a chain or a swap, which the "
-        "lock's lines `rename.py` already renamed would follow twice; split it into two passes, each its own moves file"]
+        "N.Period moves to N.Window, and N.Window, which moves to N.ExecutionPhase, is at, under or over it: a chain or a "
+        "swap, which the lock's lines `rename.py` already renamed would follow twice; split it into two passes, each its "
+        "own moves file"]
     assert len(A.move_errors({"N.X": "N.Y", "N.Y": "N.X"})) == 2
-    assert A.move_errors({"A": "B.C", "B": "D"})[0].startswith("A moves to B.C, at or under B, which moves to D")
-    assert A.move_errors({"A": "C", "A.x": "A.y"})[0].startswith("A.x moves to A.y, at or under A, which moves to C")
-    for fine in ({"Accounting": "ResourceAccounting"}, {"A": "C", "A.x": "C.y"}, {"A.x": "A.y"}, {"A": "A.B"}):
+    assert A.move_errors({"A": "B.C", "B": "D"})[0].startswith("A moves to B.C, and B, which moves to D, is at")
+    assert A.move_errors({"A": "C", "A.x": "A.y"})[0].startswith("A.x moves to A.y, and A, which moves to C, is at")
+    assert A.move_errors({"P.A": "P.X", "P.X.Q": "R"})[0].startswith("P.A moves to P.X, and P.X.Q, which moves to R")
+    for fine in ({"Accounting": "ResourceAccounting"}, {"A": "C", "A.x": "C.y"}, {"A.x": "A.y"}, {"A": "A.B"},
+                 {"a": "b", "a.a": "b.b"}):
         assert A.move_errors(fine) == [], fine
     s = tmp_path / "s"
     s.mkdir()
@@ -7983,7 +7990,7 @@ def test_every_name_name_error_accepts_lean_reads_back_as_itself(tmp_path):
     pkg, f = tmp_path / "control", tmp_path / "Names.lean"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     f.write_text("def cases : List String := [" + ", ".join(json.dumps(c, ensure_ascii=False) for c in cases) + "]\n"
-                 "#eval cases.forM fun s => IO.println (if s.toName.isAnonymous then \"-\" else s.toName.toString)\n")
+                 "#eval cases.forM fun s => IO.println (if s.toName == .anonymous then \"-\" else s.toName.toString)\n")
     r = subprocess.run(["lake", "env", "lean", str(f)], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
     assert r.returncode == 0 and len(r.stdout.splitlines()) == len(cases), r.stdout + r.stderr
     read = dict(zip(cases, r.stdout.splitlines(), strict=True))

@@ -266,8 +266,8 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 - **A move is not a change**: `--update --moved MOVES.json` compares the build with the records under the old names
   (`review`, `facts_of`, `move_refusals`, `Facts.lean`). Both ways take the longest moved prefix, and a name of the lock
   or of the compared texts that does not come back to itself is refused, as are two names of one section that land on
-  one (`section_collisions`), a map in which one entry's new name is at or under another's old name (a chain or a
-  swap: split it into two passes), and a name of the moves file that is not a Lean name (`name_error`: an unescaped
+  one (`section_collisions`), a map in which one entry's new name is at, under or over another's old name (a chain or
+  a swap: split it into two passes), and a name of the moves file that is not a Lean name (`name_error`: an unescaped
   component must be an identifier or a number as `String.toName` reads it). The premises (`open`, `domain`,
   `assumptions`), `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each entry's fields kept;
   a moved premise's definition is compared in its `reads` record, and one that no record holds is a statement change,
