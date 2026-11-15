@@ -95,8 +95,9 @@ def test_one_mathlib():
 # security's list: Flock.SecurityProofs.SpotExfilTwo, SpotKSTwo and SpotOneWaitTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
-# restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 192, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
+# restated at the deployed session its domain hypothesis fixes; Pous.SecurityProofs.ObligationWide320 carries its honest
+# one, and its nontrivial one is due with the guarantee restated at the registered point, RoundsBound proved inside
+UNWITNESSED = {"security": 193, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
