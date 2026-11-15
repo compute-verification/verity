@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Spot
-public import VStarRecursive.Protocol
+public import VStarRecursion.Protocol
 import Proofs.Properties.Challenger
 
 /-!
