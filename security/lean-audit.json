@@ -4475,7 +4475,7 @@
   },
   "Flock.SecurityProofs.SampledKSTwo": {
    "honest": ["Flock.SecurityProofs.SampledKSTwo_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+   "nontrivial": "Flock.SecurityProofs.SampledKSTwo_nontrivial"
   },
   "Claims.SecurityProofs.InfluenceTwoPatterns": {
    "honest": ["Claims.Witness.SamplingGeneric.influenceTwoPatterns_honest"],
