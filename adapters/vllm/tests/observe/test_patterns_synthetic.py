@@ -1005,7 +1005,7 @@ DRAFT_KERNELS = ("_combine_sampled_and_draft_tokens_kernel", "_get_num_sampled_a
 
 def _draft_metadata_launches(step, num_reqs, num_logits, k):
     """vLLM V2's `_combine_sampled_and_draft_tokens_kernel` and `_get_num_sampled_and_rejected_kernel` (`gpu/input_batch.py`)
-    with the arguments a capture records for them (r20261115-111119-1e87's rank 0 at k = 0), each a root of phase `other`,
+    with the arguments a V2 capture records for them (at k = 0, an engine that drafts none), each a root of phase `other`,
     at ids past the decode step's."""
     b = Builder(step)
     b.next_id = 9000
@@ -1036,8 +1036,7 @@ def _with_draft_metadata(events, k):
 
 @pytest.mark.parametrize("k", [0, 5])
 def test_a_step_without_drafts_folds_the_draft_metadata_kernels_as_today(k):
-    """A step that verifies no draft token (one logits row a request), on an engine that drafts none (k = 0, as 1e87 served) or
-    five: each of the two launches is the integer metadata noop it was before the refusal, and every other root of the step
+    """A step that verifies no draft token (one logits row a request), on an engine that drafts none (k = 0) or five: each of the two launches is the integer metadata noop it was before the refusal, and every other root of the step
     resolves as it does without them."""
     events, start = decode_step(metadata_kernel=True)
     se, se0 = step_events(_with_draft_metadata(events, k)), step_events(events)
