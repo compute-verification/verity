@@ -1,7 +1,7 @@
 """The FP8 cache stand-in (`fp8_cache_replay_gpu`) on the CPU, with Model Runner V2 stood in for: `Rows` reads each request's
 cached rows by position, in a bf16 cache and in a 656-byte FP8 one, across chunked prefill, a prefix-cache hit and a recompute
-after a preemption; what of ours it records (the history tables' guard passes the bf16 cache and refuses the FP8 one by name,
-and the tables' hook reads `Rows`' bytes); its comparison of a replay with its serve, which finds one differing byte of
+after a preemption; what of ours it records (the history tables' guard passes the bf16 cache and the FP8 one,
+and the tables' hook reads `Rows`' bytes in each); its comparison of a replay with its serve, which finds one differing byte of
 one row, a replay on another cache format, and a differing token; and its count of the attention's routes and the write
 kernel's PTX it keeps."""
 from __future__ import annotations
@@ -132,14 +132,12 @@ def test_rows_are_each_requests_cache_rows_by_position_across_chunks_a_hit_and_a
     assert {x["row_bytes"] for by in digests.values() for n, x in by.items() if "indexer" not in n} == {FORMATS[fmt][1] * (2 if fmt == "auto" else 1)}
 
 
-def test_the_tables_guard_passes_a_bf16_cache_and_refuses_an_fp8_one_by_name():
-    _runner, rows, said, tables = serve("auto", hook=True)
-    assert said == {"header_kv_cache_dtype": None, "tables_guard": {"verdict": "ok", "layers": [0, 3]}}
+@pytest.mark.parametrize("fmt", FORMATS)
+def test_the_tables_guard_passes_a_bf16_and_an_fp8_cache_and_the_hook_reads_rows_bytes(fmt):
+    _runner, rows, said, tables = serve(fmt, hook=True)
+    assert said == {"header_kv_cache_dtype": None if fmt == "auto" else fmt, "tables_guard": {"verdict": "ok", "layers": [0, 3]}}
     # seven blocks of sixteen rows in all at each of two layers, c's from its hit on, each `Rows`' bytes
     assert X.tables_rows(tables, rows) == {"failed": None, "blocks": 14, "rows": 32, "differing": []}
-    _runner, _rows, said, tables = serve("fp8_ds_mla")
-    assert tables is None and said["header_kv_cache_dtype"] == "fp8_ds_mla" and said["tables_guard"]["verdict"] == "refuses"
-    assert "uint8" in said["tables_guard"]["message"] and "--kv-cache-dtype auto" in said["tables_guard"]["message"]
 
 
 def doc(tmp_path, tag: str, fmt: str, flip: tuple[str, int, int] | None = None, tokens: dict | None = None) -> tuple[dict, Path]:
