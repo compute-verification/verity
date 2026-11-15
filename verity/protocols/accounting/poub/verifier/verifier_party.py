@@ -75,8 +75,8 @@ class Remote:
             raise ValueError("a pass is answered {\"root\": hex}")
         return bytes.fromhex(root)
 
-    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
-        _send(self.f, {"open": {"draws": [list(d) for d in draws], "t": t}})
+    def open(self, t: int, sampled: Sequence[tuple[int, int]]) -> list[audit.Opening]:
+        _send(self.f, {"open": {"draws": [list(d) for d in sampled], "t": t}})
         body = _recv(self.f).get("openings")
         got = wire.decode_openings(bytes.fromhex(body)) if isinstance(body, str) else None
         return [] if got is None else got

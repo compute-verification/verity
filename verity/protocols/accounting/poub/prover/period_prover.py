@@ -52,8 +52,8 @@ class Local:
         self.made[t, i] = ps
         return ps.root
 
-    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
-        return [self.prover.open(self.made[t, i], q) for i, q in draws]
+    def open(self, t: int, sampled: Sequence[tuple[int, int]]) -> list[audit.Opening]:
+        return [self.prover.open(self.made[t, i], q) for i, q in sampled]
 
     def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
         self.prover.end(commitment, openings)

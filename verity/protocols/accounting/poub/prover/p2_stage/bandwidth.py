@@ -612,13 +612,13 @@ class Prover:
         self.log(json.dumps({"pass": rec}))
         return tree.root
 
-    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
+    def open(self, t: int, sampled: Sequence[tuple[int, int]]) -> list[p2.Opening]:
         t0 = time.perf_counter()
         plan = self.engine.plan
-        blocks = sorted({UNIT * plan.block(p) + b for _, p in draws for b in range(UNIT)})
+        blocks = sorted({UNIT * plan.block(p) + b for _, p in sampled for b in range(UNIT)})
         paths = self.vk.paths(blocks)
         out = []
-        for i, p in draws:
+        for i, p in sampled:
             ys, salts, tree = self.passes[t, i]
             c, g = p // PER_LEAF, plan.block(p)
             unit = self.engine.unit_bytes(g)

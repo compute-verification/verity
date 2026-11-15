@@ -255,8 +255,8 @@ BINDING_ROOT_BITS = 64
 """The bits below the point at which `binding_over` rounds its square root up."""
 
 
-def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fraction:
-    """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
+def binding_over(count: int, receipts: int, samples: int, queries: int) -> Fraction:
+    """`binding` over a session of `count` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
     the session: samples·√(receipts·s)·q/2^256.5, its √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`, so the exact
     value is at least the term."""
@@ -264,7 +264,7 @@ def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fract
     m = receipts * s << (2 * BINDING_ROOT_BITS - 1)
     root = math.isqrt(m)
     root += root * root < m
-    return Fraction(draws * root * (2 * queries + 2 * s * OPENING_HASHES), 2 ** (256 + BINDING_ROOT_BITS))
+    return Fraction(count * root * (2 * queries + 2 * s * OPENING_HASHES), 2 ** (256 + BINDING_ROOT_BITS))
 
 
 def binding(record: audit.Record) -> Fraction:
