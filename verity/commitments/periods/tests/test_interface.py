@@ -1158,7 +1158,7 @@ def test_a_history_writers_rows_are_hashed_once_as_the_tables_strings(monkeypatc
         real(window, data, **{**kw, "salts_of": {p: s for p, s in kw["salts_of"].items() if p != port}})
 
 
-def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_strings():
+def test_the_verifier_holds_the_registered_history_root_to_the_writers_strings():
     """The verifier's history tables (`history.params`) hold the period's registered root to the root over its writers'
     public strings, the root of the pin the reads are made from (`history.pins`): a registered root over other rows, a
     body whose strings another unit wrote (under the leaf layer over it, or the period's), a registration naming no root

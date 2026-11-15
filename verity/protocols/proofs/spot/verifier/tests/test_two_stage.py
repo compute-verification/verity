@@ -1032,7 +1032,7 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
 def test_nothing_of_record_turns_the_wired_key_on():
     """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
     `spot-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
-    difftest names it: the service's run, the verifier of record and every script take the switch as the code holds it,
+    difftest names it: the service's run, the verifier and every script take the switch as the code holds it,
     off."""
     root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
     spot = root / "verity/protocols/proofs/spot/verifier"
@@ -1185,7 +1185,7 @@ def test_the_rule_and_the_spec_state_one_form():
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
 
-def test_the_verifier_of_record_samples_both_stages():
+def test_the_verifier_samples_both_stages():
     """The verifier's executable (`Pieces.verifier`, `verifier.EXE`) samples a two-stage rule's first stage, `Q`
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
     assert V.EXE == "spot-verifier" and _spec().selection == RULE
