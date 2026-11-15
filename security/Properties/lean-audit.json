@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": [
   "Properties.Pouw",
   "Properties.Pouw.Check",
@@ -112,14 +112,17 @@
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
  "assumptions": {
   "Accounting.Assumptions.KeyBinding": {
+   "id": "key-binding",
    "owner": "@compute-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
   "Hash.Assumptions.Sha512Prf": {
+   "id": "prf/sha-512",
    "owner": "@memory-accounting",
    "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
   },
   "Pous.Period.Instantiates": {
+   "id": "pous-ring-instantiation",
    "owner": "@memory-accounting",
    "digest": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e"
   }
@@ -282,24 +285,28 @@
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.Parties.Confined": {
+   "id": "confined",
    "owner": "@memory-accounting",
    "digest": "4baa7d4cf7feea9d9b3aa14840b4567972a9b07482305a4d7da4c843b404949b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.Parties.Faithful": {
+   "id": "faithful",
    "owner": "@memory-accounting",
    "digest": "a55fd7568be21fc26d7215347fde10b58ec3a85fd8bdc9486d40494c4c2b0851",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.Parties.Secret": {
+   "id": "secret",
    "owner": "@memory-accounting",
    "digest": "b30ca1da8b01036e855776b3312b906339c106c4321bce2f51729133210a9781",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.Parties.WitnessPathPrivate": {
+   "id": "witness-path-private",
    "owner": "@memory-accounting",
    "digest": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f",
    "issue": "LEAN-186",
@@ -324,24 +331,28 @@
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.OperandHMu": {
+   "id": "accounting-ts-operand-h-mu",
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ProofSoundAt": {
+   "id": "accounting-ts-proofs-sound",
    "owner": "@compute-accounting",
    "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ReceiptLuckAt": {
+   "id": "accounting-ts-receipt-luck",
    "owner": "@compute-accounting",
    "digest": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.UnitFixed": {
+   "id": "accounting-ts-unit-fixed",
    "owner": "@compute-accounting",
    "digest": "ef200f592030ee7b72ed3b8f6cb7d7557c0ab56bd6e7cd30b2c4d660748453d6",
    "issue": "LEAN-186",
@@ -414,6 +425,7 @@
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Covered": {
+   "id": "certifier-coverage",
    "owner": "@memory-accounting",
    "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
    "issue": "MEM-289",
@@ -468,6 +480,7 @@
    "due": "2026-11-30"
   },
   "Claims.ExpectedCR": {
+   "id": "ecr/sha-512",
    "owner": "@proofs",
    "digest": "83125752f67066703612e6c2f5f7f9a3da5f44b0db4f4072efface41ec981eaf",
    "issue": "LEAN-186",
@@ -612,6 +625,7 @@
    "due": "2026-11-30"
   },
   "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+   "id": "p2-ring-round-secure-wide",
    "owner": "@memory-accounting",
    "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921",
    "issue": "LEAN-186",
@@ -642,6 +656,7 @@
    "due": "2026-11-17"
   },
   "Pous.Period.RingDeviceAt": {
+   "id": "pous-ring-device-at",
    "owner": "@memory-accounting",
    "digest": "0f9fc9043bb966b689953434e29cba1e8e6127551b39c0506ee67693ef27a2df",
    "issue": "LEAN-186",
