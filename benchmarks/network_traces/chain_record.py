@@ -88,14 +88,14 @@ CLEAR = {
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
-    "network_certifier_certificates": "at the auditor, on the network certifier's witness: the network certifier's own offline check "
+    "warden_certificates": "at the auditor, on the network certifier's witness: the network certifier's own offline check "
                            "(network_certifier_serve.check: each record's certificate and its rows' registration under the "
                            "network certifier's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
-    "network_certifier_endpoint": "at the auditor, on the endpoint's records and the network certifier's certified I/O (network_certifier_chain.io, off "
+    "warden_endpoint": "at the auditor, on the endpoint's records and the network certifier's certified I/O (network_certifier_chain.io, off "
                        "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
                        "from the certified I/O",
-    "network_certifier_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
+    "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
                               "each Commit window's advice opened to its registered root and rebuilt from the network certifier's "
                               "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
     "tie": "at the verifier: each ingress bucket unit's pub row opened to the verifier's own copy (the advice's prompt "
@@ -291,7 +291,7 @@ def network_certifier_endpoint_step(e: dict | None) -> dict:
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
-                "in_the_clear": CLEAR["network_certifier_endpoint"]}
+                "in_the_clear": CLEAR["warden_endpoint"]}
     b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
     windows = b.get("commit_windows") or []
     advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
@@ -302,7 +302,7 @@ def network_certifier_endpoint_step(e: dict | None) -> dict:
            else advice["why"] or "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
     return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
             "advice": advice, "advice_bits": advice_bits(b), "at": e.get("at"),
-            "in_the_clear": CLEAR["network_certifier_endpoint_served" if e.get("at") == SERVED_NODE else "network_certifier_endpoint"]}
+            "in_the_clear": CLEAR["warden_endpoint_served" if e.get("at") == SERVED_NODE else "warden_endpoint"]}
 
 
 def tie_step(t: dict | None, job: dict | None = None) -> dict:
@@ -1039,7 +1039,7 @@ def main(argv=None) -> int:
     elif a.command == "certs":
         from benchmarks.network_traces import network_certifier_chain as WC
         doc, private = WC.checked(a.network_certifier_run, a.deployed)
-        doc |= {"in_the_clear": CLEAR["network_certifier_certificates"]}
+        doc |= {"in_the_clear": CLEAR["warden_certificates"]}
         if a.witness is not None:
             a.witness.parent.mkdir(parents=True, exist_ok=True)
             a.witness.write_text(json.dumps(private, indent=1, sort_keys=True))

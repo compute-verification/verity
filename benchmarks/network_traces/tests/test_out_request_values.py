@@ -110,19 +110,19 @@ def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_pa
     whole = {"wiring": "17" * 64, "root": "ab" * 64}
     put(step, {"summary.json": {"ok": True}, "answers.json": {"windows": [{"registrations": [whole]}]},
                "honest/registration.json": {"roots": [{"root": "ab" * 64}]}, "honest/registered.json": {"ports": {}},
-               "honest/verifier/network-certifier-registration-egress-0.json": whole,
-               "honest/verifier/network-certifier-registration-ingress-0.json": whole,
-               "tampered/verifier/network-certifier-registration-egress-0-tampered.json": whole,
-               "egress/network-certifier-registration.json": whole, "tie/w0-registration.json": {"roots": []},
+               "honest/verifier/warden-registration-egress-0.json": whole,
+               "honest/verifier/warden-registration-ingress-0.json": whole,
+               "tampered/verifier/warden-registration-egress-0-tampered.json": whole,
+               "egress/warden-registration.json": whole, "tie/w0-registration.json": {"roots": []},
                "honest/circuit.txt": "c", "honest/inst-4.bin": "i", "honest/archive/answers.json": whole,
                "honest/archive/session.json": {}})
     copy = block("chain_record.sh", "WHOLE=(", "}")
     got = run(copy + 'keep "$W/scan" "$OUT/scan"', W=step.parent, OUT=out, Q=q)
     assert got.returncode == 0, got.stderr
-    private = ["scan/answers.json", "scan/egress/network-certifier-registration.json",
-               "scan/honest/verifier/network-certifier-registration-egress-0.json",
-               "scan/honest/verifier/network-certifier-registration-ingress-0.json",
-               "scan/tampered/verifier/network-certifier-registration-egress-0-tampered.json"]
+    private = ["scan/answers.json", "scan/egress/warden-registration.json",
+               "scan/honest/verifier/warden-registration-egress-0.json",
+               "scan/honest/verifier/warden-registration-ingress-0.json",
+               "scan/tampered/verifier/warden-registration-egress-0-tampered.json"]
     assert sorted(p.relative_to(q / "witness").as_posix() for p in (q / "witness").rglob("*") if p.is_file()) == private
     assert published(out) == ["scan/honest/registered.json", "scan/honest/registration.json", "scan/summary.json",
                               "scan/tie/w0-registration.json"]

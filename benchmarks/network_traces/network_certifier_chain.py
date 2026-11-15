@@ -243,7 +243,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},
            "parameters": dep["digest"], "records_file": "certified.jsonl",
            "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
-           "network_certifier_check": verdict(check),
+           "warden_check": verdict(check),
            "public_is_the_records": None if public is None else theirs == mine}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
            else "the public certificates.jsonl isn't the certified records' certificates" if public and theirs != mine

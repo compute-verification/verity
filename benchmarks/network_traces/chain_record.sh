@@ -53,7 +53,7 @@
 # state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
 # nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows),
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
-# (network-certifier-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
+# (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
 # found of the traffic (which execution phases were certified or refused, and how many problems: network_certifier_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
 # which execution phases its members' signer refused, and its log of them, n2.log). Those are witness,
@@ -138,8 +138,8 @@ for g in ${CR_GATES:?CR_GATES: the gate tarballs, art: ids or directories}; do
   fi
   log "chain: gate $k $g: $(find "$G/g$k" -name end.json | sed "s|$G/g$k/||" | tr '\n' ' ')"
 done
-CR_PATH=${CR_PATH:-network-certifier}
-[ "$CR_PATH" = network_certifier ] || { log "chain: CR_PATH=$CR_PATH: the network certifier path is the only one"; exit 3; }
+CR_PATH=${CR_PATH:-warden}
+[ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the network certifier path is the only one"; exit 3; }
 PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
 [ -z "$PROXY" ] || { log "chain: the network certifier path reads no certifier rehearsal's run (its records through" \
   "the older certifier's proxy), and ${PROXY#$G/} is one's"; exit 3; }
@@ -185,7 +185,7 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "chain: no ZK server frame"; exit 7; }
 
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
-WHOLE=(-name 'network-certifier-registration*.json' -o -name answers.json)   # a step's files that hold a row registration whole
+WHOLE=(-name 'warden-registration*.json' -o -name answers.json)   # a step's files that hold a row registration whole
 keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive;
            # a file holding a row registration whole goes to the chain's private side, $Q/witness/STEP, and not to TO
   mkdir -p "$2" "$Q/witness/${2##*/}"
