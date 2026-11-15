@@ -47,6 +47,8 @@ from . import store_io
 
 HERE = Path(__file__).resolve().parent
 VLLM_ROOT = HERE.parents[4] / "adapters" / "vllm"  # adapters/vllm
+#: tests/adapters/vllm, where `tests` (this suite's package) imports from
+TESTS_ROOT = HERE.parents[1]
 FIXTURES = HERE / "fixtures.toml"
 FILES = HERE / "files.toml"
 EXPECTED_DIR = HERE / "expected"
