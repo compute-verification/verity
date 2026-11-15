@@ -228,10 +228,11 @@ def in_tree(pkg: str, entry: str, file: str) -> str:
     """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a kept build
     is taken into it and its `.lake` built, so one outside the tree is refused (`check.OutsideTree`)."""
     p = os.path.relpath(os.path.normpath(ROOT / pkg / entry), ROOT)
-    if p == ".." or p.startswith("../"):
-        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} "
-                                       f"would write: a package it requires by path or names under proved_in must lie in "
-                                       f"the tree")
+    real = (ROOT / p).resolve()
+    if p == ".." or p.startswith("../") or not real.is_relative_to(ROOT.resolve()):
+        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p!r}, which resolves to {str(real)!r}, outside the "
+                                       f"tree, whose .lake a build of {pkg} would write: a package it requires by path or "
+                                       f"names under proved_in must lie in the tree")
     return p
 
 
@@ -1545,13 +1546,16 @@ def _move(src: Path, dst: Path) -> None:
 
 
 def scratch_tree(dest: Path, files: list[str]) -> None:
-    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`."""
+    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`. A symbolic link among them is refused
+    (`check.OutsideTree`): copied as a link, it would let the tree choose where the audit's steps write outside any sandbox
+    (`WarmDeps.take` and `WarmBuilds.take` into a package's `.lake`), and the tree holds none."""
     for f in dict.fromkeys([*files, *(LEAN_TOOL + c for c in CARRIED)]):
         s, d = ROOT / f, dest / f
-        d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_symlink():
-            d.symlink_to(os.readlink(s))
-        elif s.is_file():
+            raise lean_check().OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(s)!r}), which a copy of the tree "
+                                           f"would keep and the audit then write through: the tree holds no links")
+        d.parent.mkdir(parents=True, exist_ok=True)
+        if s.is_file():
             shutil.copy2(s, d)
 
 

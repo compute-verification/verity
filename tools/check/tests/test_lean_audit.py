@@ -2444,3 +2444,20 @@ def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_an
     slots.write_text("build 2\n")
     assert LA.prune_records(store, slots=LA.build_slots(slots)) == 5
     assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "passes"]
+
+
+def test_a_scratch_tree_refuses_a_tracked_link_and_in_tree_resolves_before_it_compares(tmp_path, monkeypatch):
+    """`scratch_tree` recreated a tracked link, through which `WarmDeps.take` and `WarmBuilds.take` wrote outside the tree,
+    and `in_tree` compared the normalized name alone. A tracked link is refused, naming it, before anything is copied
+    after it; a path dependency named inside the tree that resolves out of it is refused too."""
+    root = _tree(tmp_path, monkeypatch)
+    (victim := tmp_path / "victim").mkdir()
+    (root / "pkg" / "b" / "deps").symlink_to(victim)
+    with pytest.raises(LA.lean_check().OutsideTree, match=r"'pkg/b/deps' is a symbolic link .*the tree holds no links"):
+        LA.scratch_tree(tmp_path / "scratch", ["pkg/b/B.lean", "pkg/b/deps"])
+    assert not (tmp_path / "scratch" / "pkg" / "b" / "deps").exists() and not any(victim.iterdir())
+    (root / "pkg" / "b" / "lake-manifest.json").write_text(
+        json.dumps({"packages": [{"name": "v", "type": "path", "dir": "deps"}]}))
+    with pytest.raises(LA.lean_check().OutsideTree, match=f"'pkg/b/deps', which resolves to '{victim}', outside the tree"):
+        LA.path_deps("pkg/b")
+
