@@ -20,7 +20,9 @@ a directory's):
 - `not_void`: the row has a rate: no `void`, `error` or `skipped`, and a `statements_per_s` above 0.
 - `flat`: the provers' statement caches had stopped filling (the row's `flat`, which the script decides).
 - `no_throttling`: the kernel throttled the row's CPUs no times while it ran (the row's `throttled.nr_throttled`, null
-  where the cgroup whose `cpu.max` is the quota has no `cpu.stat` that counts it: then it can't tell).
+  where the cgroup whose `cpu.max` is the quota has no `cpu.stat` that counts it: then it can't tell). It counts only
+  `/sys/fs/cgroup`'s own `cpu.stat`: throttling by a cgroup above `/sys/fs/cgroup` is not seen, nor by a tighter
+  `cpu.max` on the process's own cgroup below it (the row's `throttled.own_cgroup`).
 - `one_lease_own_card`: the run took one lease, of one card, that card is the row's `device`, and the row counts one
   GPU (`LEASES`, the row's `gpus`).
 - `card_clear_start_end`: at the row's start and at its end, no other run's lease held the row's card and no compute
