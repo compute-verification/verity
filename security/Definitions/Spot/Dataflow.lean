@@ -7,7 +7,7 @@ public import Mathlib.Data.Finset.Prod
 # Populations: units over committed value slots, with public dataflow
 
 SPOT certifies one thing: with high probability at most `m` units are incorrect. This file is the vocabulary for
-asking which object that statement must be about for a policy (integrity, non-exfiltration, skippable work) to follow
+asking which object that statement must be about for a policy (integrity, non-exfiltration, ε_skip work) to follow
 from it.
 
 A **population** (`Dataflow`) is a finite set of units `U` over value slots `S`. Some slots are inputs (`input`); every
