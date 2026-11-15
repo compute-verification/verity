@@ -76,7 +76,7 @@ open Flock FlockLevel3 FlockSoundness FlockSoundness.Discharge.Hm
 open Flock.HmNets hiding and
 open FlockDeploy.Concrete (UN)
 open SpotFlock.InstanceStmt.TraceRows
-open SpotFlock.InstanceStmt.TraceDelta (PIN ZERO consts EX OX cs srcA srcB leafX consts_count_zero delta_zero delta_R1
+open SpotFlock.InstanceStmt.TraceDelta (PIN ZERO consts EX OX msI padI cs srcA srcB leafX consts_count_zero delta_zero delta_R1
   delta_R2 delta_R3 delta_R4 delta_R5 delta_R6 delta_O1 delta_O2 delta_selfForm form_flip)
 open SpotFlock.InstanceStmt.TraceVal
 

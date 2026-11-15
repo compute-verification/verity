@@ -127,11 +127,11 @@ theorem zIX_unit_false {i : ℕ} (h1 : 786432 ≤ i) (h2 : i ≠ 786688) : zIX i
   exact decide_eq_false h2
 
 theorem zIX_unitConst : zIX 786688 = true := by
-  rw [zIX_u (by norm_num)]
+  rw [zIX_u (i := 786688) (by norm_num)]
   exact decide_eq_true rfl
 
 theorem zIX_pin (hn : Properties.Flock.Nets.FixedNetsBuild) : zIX 246784 = true := by
-  rw [zIX_h0 (by norm_num)]
+  rw [zIX_h0 (i := 246784) (by norm_num)]
   exact vHof_const hn _
 
 theorem zIX_h1Const (hn : Properties.Flock.Nets.FixedNetsBuild) : zIX 508928 = true := by
