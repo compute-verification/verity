@@ -29,7 +29,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.network_certifier import REFUSED, Released, NetworkCertifierParams
 
-from verity.protocols.accounting.certifier.prover.tests import verdict_records as TSV
+from verity.protocols.accounting.certifier.device.tests import verdict_records as TSV
 from verity.protocols.accounting.certifier.device.tests.relay_runs import _run, ws
 from verity.protocols.accounting.certifier.device import connection_rows_run, runner_parts as rp
 from verity.protocols.accounting.certifier.verifier import link_frame, network_certifier_rows as WR
