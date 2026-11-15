@@ -212,8 +212,9 @@ private def withField (o : Option Json) (k : String) (x : Json) : Option Json :=
 (`registration.pool_values`): the previous record's `pout`, reused, in `pout`'s row format, when the window carries the
 previous window's pool (`Registration.Pool.chains`, at `program`, the program's digest as R2 reads it), else filled from
 the empty pool's root, the one row `[{"bytes": genesis}]`. A malformed object is left as it is, for its own parse to
-refuse. -/
-private def poolValues (pool : Option Registration.Pool) (program : String) (log : Array Json)
+refuse. Public (not `private`) so a completeness proof can rewrite by its `none` case (an empty pool leaves the three
+values as they are, independent of the program digest) without evaluating it; its callers are unchanged. -/
+def poolValues (pool : Option Registration.Pool) (program : String) (log : Array Json)
     (supplied outputs schemas : Option Json) : Option Json × Option Json × Option Json :=
   match pool with
   | none => (supplied, outputs, schemas)

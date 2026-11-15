@@ -411,6 +411,12 @@ array) that `sortStrings_of_sorted` then rewrites away. -/
 private theorem keys?_mkObj (o : List (String × Lean.Json)) :
     Spot.keys? (Lean.Json.mkObj o) = some (Spot.sortStrings ((Std.TreeMap.Raw.ofList o).toArray.map (·.1))) := rfl
 
+/-- `Spot.OneStage.poolValues` on the empty pool: the supplied, output and row-format values pass through unchanged,
+independent of the program digest. Fed to the walk so it rewrites past the call (which is otherwise tainted by the
+blocked `program`, whose digest the `none` case never reads) instead of evaluating it. -/
+private theorem poolValues_none (program : String) (log : Array Lean.Json) (supplied outputs schemas : Option Lean.Json) :
+    Spot.OneStage.poolValues none program log supplied outputs schemas = (supplied, outputs, schemas) := rfl
+
 /-- `keys?` of a `.obj`, as its definitional equation. Keyed on the `.obj` constructor (not `mkObj`), for the objects a
 field read extracts from a literal: `getD (mkObj …) k` reduces (in the kernel, which the walk reaches through `normStep`
 once the sort taint stops it) to the stored `.obj <tree>`, never back to a syntactic `mkObj`, so `keys?_mkObj` cannot fire
@@ -471,7 +477,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     -- the sort (the walk's condition is otherwise stuck on `keys? query`'s `qsort`, buried in the partition object where the
     -- taint does not reach), so the walk rewrites by it.
     have hq : Spot.keys? query = some #["name", "params", "version"] := by
-      unfold query; rw [keys?_mkObj, sortStrings_eq_sortLt]; rfl
+      unfold query; rw [keys?_mkObj, sortStrings_eq_sortLt]; decide
     unfold paramsJ partitionObj Spot.Partition.build
     -- Detaint every canon-/hash-derived leaf so the field lookups reduce: the program digest in the partition, and the
     -- circuit and public digests in `proofs`. The digest facts are restated over the fresh names.
@@ -484,8 +490,8 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgp] at hdp
     rw [hgk] at hU
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, keys?_mkObj, keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt]
-      block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, poolValues_none, keys?_mkObj, keys?_obj,
+      sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
     case f3 => kernel_rfl'            -- own.circuit
