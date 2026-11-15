@@ -637,17 +637,17 @@ theorem stepMember_all {slice : Spot.OneStageZk.Member → Json}
     {z : Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member}
     (hst : ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a)
     (h : Spot.OneStageZk.stepMember st bs r z = .ok r') (ha : r'.all = true) :
-    r.all = true ∧ ∃ circuitB pubB rd, ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
-      (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB bs rd
+    r.all = true ∧ ∃ circuitB pubB rd tables, ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
+      (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB tables rd
         (z.2.population (slice z.2) pubB)) bs s := by
   unfold Spot.OneStageZk.stepMember at h
   have h := mapErrorOk h
   unfold Spot.OneStageZk.runFrom at h
   obtain ⟨a, ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨circuitB, pubB, rd, -, -, -, -, rfl⟩ := MemberChecks.statement_ok (hst a ha')
+  obtain ⟨circuitB, pubB, rd, tables, -, -, -, -, -, rfl⟩ := MemberChecks.statement_ok (hst a ha')
   rw [← Array.foldlM_toList] at h
   obtain ⟨har, hs⟩ := MemberChecks.foldl_all _ r r' h ha
-  exact ⟨har, circuitB, pubB, rd, hs⟩
+  exact ⟨har, circuitB, pubB, rd, tables, hs⟩
 
 /-- **The statements, run in order, accepting every session**: the run before them accepted every session, and each
 statement's sessions were accepted at its member's statement, where the statement `st` the steps read is each
@@ -657,8 +657,8 @@ theorem foldl_members {slice : Spot.OneStageZk.Member → Json}
     ∀ (l : List (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)) (r r' : Spot.OneStageZk.Run),
       (∀ z ∈ l, ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a) →
       l.foldlM (Spot.OneStageZk.stepMember st bs) r = .ok r' → r'.all = true →
-        r.all = true ∧ ∀ z ∈ l, ∃ circuitB pubB rd, ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
-          (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB bs rd
+        r.all = true ∧ ∀ z ∈ l, ∃ circuitB pubB rd tables, ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
+          (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB tables rd
             (z.2.population (slice z.2) pubB)) bs s
   | [], r, r', _, h, ha => by
     obtain rfl : r = r' := Except.ok.inj h
@@ -679,9 +679,9 @@ session, the statements' structure held, and each statement's each session was a
 theorem runMembers_sessions {slice : Spot.OneStageZk.Member → Json} {ms : Array Spot.OneStageZk.Member}
     {sts : Array Spot.OneStageZk.StatementFiles} {want : Array ℕ} {bs : Core.Blobs} {r : Spot.OneStageZk.Run}
     (h : Spot.OneStageZk.runMembers slice ms sts want bs = .ok r) (ha : r.all = true) :
-    ∃ held, Spot.OneStageZk.membersHeld ms sts = .ok held ∧ ∀ z ∈ (sts.zip held).toList, ∃ circuitB pubB rd,
+    ∃ held, Spot.OneStageZk.membersHeld ms sts = .ok held ∧ ∀ z ∈ (sts.zip held).toList, ∃ circuitB pubB rd tables,
       ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
-        (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB bs rd
+        (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB tables rd
           (z.2.population (slice z.2) pubB)) bs s := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
@@ -760,17 +760,17 @@ theorem setupAt_oneTable {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
 `s` at its member's statement, `recJ` is its record on the blobs, and `sessionTreeReason` holds that record to the
 logged tree `t` less its last opening, the session the verdict verified (`setupAt`'s, the one `Flock.Zk.verify`
 accepted the record at) has one table `T` alone, and `t`'s spec is that table's coin tree. -/
-theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {lt : List (String × ByteArray)} {bs : Core.Blobs}
     {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
     (hacc : MemberChecks.SessionAccepted
-      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop) bs s)
     {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) {lines : List String}
     {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
     (hS : Spot.Challenger.sessionTreeReason #[t.unclosed] tables recJ = none) :
     ∃ text dr proofs spec tabs rest T,
-      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I
-          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).rd dr = .ok (spec, tabs, rest) ∧
+      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I
+          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).rd dr = .ok (spec, tabs, rest) ∧
         Flock.Zk.verify spec tabs text proofs = .ok () ∧ spec.tables = #[T] ∧
         Verity.Sampled.Lines.SpecValue t.spec (Flock.Zk.coinSpec #[T]) := by
   obtain ⟨coinKeys, b, text, hg, hu, hv⟩ := hacc
@@ -778,11 +778,11 @@ theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {b
   obtain ⟨sess, hd⟩ := Verity.Sampled.zkVerify_decode hzk
   have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   have hh : (Flock.Witness.zkTags
-      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I).hiddenOutputs = true :=
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I).hiddenOutputs = true :=
     (Verity.Sampled.statement_zkTags htag _ _).1
-  have hc := setupAt_coinTree (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I)
+  have hc := setupAt_coinTree (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I)
     hh rfl hst
-  have htab := setupAt_oneTable (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I)
+  have htab := setupAt_oneTable (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I)
     hh rfl hst
   obtain ⟨j, cj, nonce, key, hp, -, -⟩ := Verity.Sampled.decode_coinTree hd hc
   have hrec' : Verity.Sampled.recordOn bs s = some ((Flock.JsonParse.parse text).toOption.getD Json.null) := by
@@ -801,10 +801,10 @@ theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {b
 
 /-- **A member's accepted session's tree lists a one-table session's streams** (`accepted_spec`): `t`'s spec lists
 the session stream and the statement's table's two rep streams. -/
-theorem sessionStreams_of_accepted {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+theorem sessionStreams_of_accepted {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {lt : List (String × ByteArray)} {bs : Core.Blobs}
     {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
     (hacc : MemberChecks.SessionAccepted
-      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop) bs s)
     {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) {lines : List String}
     {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
@@ -819,17 +819,17 @@ that record to the logged tree `t` less its last opening, `t`'s spec lists the s
 streams of the session the verdict verified (`Flock.SessionSpec.repStreams` of `setupAt`'s session, the one
 `Flock.Zk.verify` accepted the record at), in that session's order. So the order the form's check holds the tree's
 rounds to, the tree's spec's, is the session's own order of its rep streams. -/
-theorem treeStreams_repStreams {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+theorem treeStreams_repStreams {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {lt : List (String × ByteArray)} {bs : Core.Blobs}
     {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
     (hacc : MemberChecks.SessionAccepted
-      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop) bs s)
     {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) {lines : List String}
     {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
     (hS : Spot.Challenger.sessionTreeReason #[t.unclosed] tables recJ = none) :
     ∃ text dr proofs spec tabs rest,
-      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I
-          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).rd dr = .ok (spec, tabs, rest) ∧
+      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I
+          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).rd dr = .ok (spec, tabs, rest) ∧
         Flock.Zk.verify spec tabs text proofs = .ok () ∧
         Verity.Sampled.specStreams t.spec =
           #[Json.str Spot.Challenger.TREE_SESSION] ++ spec.repStreams.map fun x => Json.str x.2.2 := by

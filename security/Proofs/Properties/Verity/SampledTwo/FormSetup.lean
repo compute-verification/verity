@@ -71,7 +71,8 @@ whatever its sample and registered reads. -/
 theorem memberFields_stmtRaw (m : Spot.OneStageZk.Member) (circuitB pubB : ByteArray) (bs : Core.Blobs)
     (draw registered : Option ByteArray) :
     MemberChecks.MemberFields
-      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) draw registered) m circuitB pubB bs :=
+      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) draw registered) m circuitB pubB
+        (Spot.OneStageZk.tablesOf bs) :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- **A record's printed sample reads back as the record's sample**: where the record's sample is printable, Flock's
@@ -148,7 +149,7 @@ printed files read back and whose bytes decode as `w`, sets up under `--zk` (`Fl
 verified the record at. -/
 theorem setupOf_of_fields {w : FlockDeploy.Raw} {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray}
     {bs : Core.Blobs} {record : String} {rd : Spot.OneStageZk.Reads}
-    (hpl : Flock.Tags.circuit.plainLeaves = false) (hf : MemberChecks.MemberFields w m circuitB pubB bs)
+    (hpl : Flock.Tags.circuit.plainLeaves = false) (hf : MemberChecks.MemberFields w m circuitB pubB (Spot.OneStageZk.tablesOf bs))
     (hr : MemberChecks.ReadsBack w m record) (hdec : FlockDeploy.decode w.encode = some w)
     (hrd : Spot.OneStageZk.readsOf m.own.registered = .ok rd)
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {p o : Json}

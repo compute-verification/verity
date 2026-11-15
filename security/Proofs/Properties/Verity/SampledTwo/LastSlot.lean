@@ -103,14 +103,14 @@ the per-member form accepted the session `s` at its member's statement and `recJ
 form's setup of the session (`setupAt`'s, the one `Flock.Zk.verify` accepted the record at) has one table `T` alone,
 each of its statements under a scheme of the registry, the record's text parses as `recJ`, and `recJ` gives each of
 `T`'s two rep streams `FlockDeploy.repRounds` of the setup's first statement's rounds (`verify_reps`). -/
-theorem accepted_reps {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+theorem accepted_reps {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {lt : List (String × ByteArray)} {bs : Core.Blobs}
     {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
     (hacc : MemberChecks.SessionAccepted
-      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop) bs s)
     {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) :
     ∃ text dr proofs spec sts rest T,
-      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I
-          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).rd dr =
+      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I
+          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).rd dr =
             .ok (spec, FlockDeploy.tabsOf sts, rest) ∧
         Flock.Zk.verify spec (FlockDeploy.tabsOf sts) text proofs = .ok () ∧ (∀ st ∈ sts, st.merkle.Named) ∧
         Flock.JsonParse.parse text = .ok recJ ∧ spec.tables = #[T] ∧
@@ -121,12 +121,12 @@ theorem accepted_reps {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {b
   obtain ⟨sess, hd⟩ := Verity.Sampled.zkVerify_decode hzk
   have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   have hh : (Flock.Witness.zkTags
-      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I).hiddenOutputs = true :=
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I).hiddenOutputs = true :=
     (Verity.Sampled.statement_zkTags htag _ _).1
   have hc := SessionCoins.setupAt_coinTree
-    (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I) hh rfl hst
+    (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I) hh rfl hst
   have htab := SessionCoins.setupAt_oneTable
-    (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I) hh rfl hst
+    (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I) hh rfl hst
   obtain ⟨j, cj, nonce, key, hp, -, -⟩ := Verity.Sampled.decode_coinTree hd hc
   have hrec' : Verity.Sampled.recordOn bs s = some ((Flock.JsonParse.parse text).toOption.getD Json.null) := by
     simp [Verity.Sampled.recordOn, hg, hu, Except.toOption]
