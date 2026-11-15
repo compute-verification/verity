@@ -1241,13 +1241,17 @@ def test_answer_names_its_schemes_assumption():
     """An accepted Pearl+ answer's ``public.assumption`` (`verify_run.assumption_of`) is the named Prop its scheme's credit,
     (1 − ρ)·`creditDevRev1`, is at: TT_OUT(1/400) per audit tile, rev1, at the scheme's device record. The served scheme,
     ``pearl-c-h100-v1-h3``, is at `TTOutTilePearlCH100Rev1`, every other scheme the device path runs at
-    `TTOutTilePearlCDevRev1` at its record, and each is a def of `TTOutRev1.lean`; the Lean port's `ASSUMPTION` is the
-    H100's. Neither Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no
-    TT_OUT accounting, is ever named."""
+    `TTOutTilePearlCDevRev1` at its record, a def of `TTOutRev1.lean`, which the H100's is at `devH100` (a def of the
+    records Proofs/Pouw/PearlC/Records.lean keeps since 12b47061986); the Lean port's `ASSUMPTION` is the H100's. Neither
+    Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no TT_OUT accounting,
+    is ever named."""
     root = Path(__file__).resolve().parents[3]
     lean = (root / "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean").read_text()
-    for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV):
-        assert f"def {name.rsplit('.', 1)[1]} " in lean and name.startswith("Pouw.PearlC.Assumptions."), name
+    records = (root / "security/Proofs/Pouw/PearlC/Records.lean").read_text()
+    dev, h100 = (name.rsplit(".", 1)[1] for name in (VR.ASSUMPTION_DEV, VR.ASSUMPTION_H100))
+    assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV))
+    assert f"def {dev} " in lean, dev
+    assert re.search(rf"^def {h100} .*\n(?:.*\n)*?  {dev} CM devH100 sem ρ$", records, re.M), h100
     assert VR.assumption_of(PPD.scheme_of("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
     for scheme in map(PPD.scheme_of, PPD.SCHEMES):
         got = VR.assumption_of(scheme)
@@ -4782,7 +4786,7 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
     from verity_torch.pouw.pearl_c import host as PPH
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
+    from verity_torch.pouw.pearl_c import lanes_device as PPL
     make, *_ = sm90_run
     run = make()
     calls = []
