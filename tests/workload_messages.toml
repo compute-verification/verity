@@ -112,7 +112,7 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "day=\\(--day \"\\$DAY\" --day-log \"\\$DAY_LOG\" --day-program" },
 ]
 readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_day.py", find = "option\\(\"--day\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_day.py", find = "option\\(\"--day\"|^def _read\\(|G\\.params_of\\(" },
 ]
 
 [[message]]
