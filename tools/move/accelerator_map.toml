@@ -11,7 +11,7 @@ words = { "| device" = "| accelerator" }
 
 [[words_in]]
 files = ["security/Definitions/Core/Site.lean", "security/Properties/Core/Site.lean",
-         "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/Registration.lean",
+         "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/SiteExample.lean",
          "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Registered.lean"]
 words = { ".device" = ".accelerator" }
 
@@ -20,8 +20,8 @@ files = ["security/Proofs/Core/Site.lean"]
 words = { "kind := .device" = "kind := .accelerator" }
 
 [keep]
-# The function that reads a device's model off the site keeps its name.
-strings = ["Site.device"]
+# The function that reads a device's model off the site keeps its name, and so does the Python module `verity.device`.
+strings = ["Site.device", "verity.device"]
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
