@@ -15,7 +15,7 @@ When something gets in your way (a wrong command, a clumsy step, a check that fa
 first of sections 1 to 4 that applies. Four habits:
 
 - **Fix the kind, not the case:** make the incident's kind impossible or loud.
-- **Twice by hand makes a tool:** a `research` command, or a line in one.
+- **Twice makes a tool:** a step by hand, or a slip (AGENTS.md).
 - **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
 - **Look ahead:** rehearse what will stall next, before it does.
 
