@@ -47,7 +47,8 @@ untraced = [
 # with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
 # ε/B_♭ pair.
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through Flock's Python; harness/price_twins.py
-# reads the lifted PoUW guarantees' sources (Definitions/Pouw/Guarantees) and Security's lock. Of `verity`, the
+# reads the lifted PoUW guarantees' sources (Definitions/Pouw/Guarantees) and Security's lock, and its
+# `repository_names` every Lean file of Definitions/Pouw and Proofs/Pouw (the reads entry for test_ledger below). Of `verity`, the
 # difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
@@ -232,6 +233,10 @@ tests = [
     "tests/test_served_h1_producer.py",
 ]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_ledger.py"]
+paths = ["security/Definitions/Pouw", "security/Proofs/Pouw"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]
