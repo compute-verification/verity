@@ -69,7 +69,7 @@ mkdir -p "$S/lib" "$S/toy" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
 step ship $?
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
-{ (cd "$IN" && sha256sum h200-manifest.json store-layout.json store-toy.tar) && sha256sum "$D/served_weights.py"; } \
+{ (cd "$IN" && sha256sum h200-manifest.json store-layout.json store-toy.tar) && sha256sum benchmarks/torch_gpu/p2_stage/served_weights.py; } \
   > "$O/inputs.sha256"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1

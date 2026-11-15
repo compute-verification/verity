@@ -16,11 +16,14 @@ from types import SimpleNamespace
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[3]
 STUB = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
+
+zk_drivers.install()
 
 
 @pytest.mark.slow

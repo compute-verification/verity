@@ -265,7 +265,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
     verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in STZ.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -305,8 +305,8 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "registered": lv.get("registered"), "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
             "proof_bytes": proofs,
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)}}
+            "per_unit": {"prove_total_s": STZ._per(timing.get("prove_total_s"), n), "proof_bytes": STZ._per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": STZ._per(lv.get("verify_s"), n)}}
 
 
 def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:

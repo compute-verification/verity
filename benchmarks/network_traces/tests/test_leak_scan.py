@@ -13,8 +13,10 @@ from types import SimpleNamespace
 import pytest
 
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from benchmarks.network_traces import zk_drivers
 
-#: Flock's proof-format reader `leak_scan.reads` reads with, the suite's installed one (conftest.py)
+zk_drivers.install()
+#: Flock's proof-format reader `leak_scan.reads` reads with, the installed drivers' (`zk_drivers.py`)
 RD = proof_drivers.drivers().redigest
 
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")
