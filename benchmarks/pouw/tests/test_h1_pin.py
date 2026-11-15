@@ -6,16 +6,17 @@ template's id, query and layout to its Definition without the build; only the bu
 build takes about 3.5 minutes and 9.5 GB, so it runs when VERITY_POUW_H1_PIN is set."""
 from __future__ import annotations
 
-import os
-
 import h1unit as U
 import pytest
+from verity_config.settings import of
 
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+
+SETTINGS = of(__file__)
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_POUW_H1_PIN"),
+@pytest.mark.skipif(not SETTINGS.VERITY_POUW_H1_PIN,
                     reason="VERITY_POUW_H1_PIN builds the H1 unit's circuit at K = 64 (about 3.5 minutes, 9.5 GB)")
 def test_the_h1_units_circuit_is_its_pin(tmp_path):
     shape = U.Shape(64)

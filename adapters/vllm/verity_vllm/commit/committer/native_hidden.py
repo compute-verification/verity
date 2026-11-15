@@ -41,9 +41,9 @@ class NativeHiddenM1Source(HiddenM1Source):
         self._w.bound_words = self.tap_cap_bytes // 4
         self.telemetry_path: str | None = None           # commit_delta: <out>/fa2_tap_windows.jsonl (one line per tapped window / group)
         self._groups_cache: dict[tuple, Any] = {}         # per step: (cu_seqlens_q ptr, b, max_q, max_k) -> group plan (keeps the group tensors alive)
-        self._tel = {"windows": 0, "split_launches": 0, "split_steps": set(), "peak_group_bytes": 0, "peak_unsplit_bytes": 0,
-                     "torch_max_alloc": 0, "torch_alloc_peak_in_tap": 0, "largest_unbounded_bytes": 0, "cap_exceeded_seqs": 0}
-        self._tel_fh = None
+        self._tel: dict[str, Any] = {"windows": 0, "split_launches": 0, "split_steps": set(), "peak_group_bytes": 0, "peak_unsplit_bytes": 0,
+                                     "torch_max_alloc": 0, "torch_alloc_peak_in_tap": 0, "largest_unbounded_bytes": 0, "cap_exceeded_seqs": 0}
+        self._tel_fh: Any = None
 
     def _wrapper(self):
         if self.tap_cap_bytes <= 0:

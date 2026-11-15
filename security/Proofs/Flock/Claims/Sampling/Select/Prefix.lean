@@ -2,9 +2,9 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Take
 
-/-! # A draw from bytes draws the same from any extension of them
+/-! # A sample from bytes samples the same from any extension of them
 
-`Draw.drawUnits` reads its source in order (`Draw.take`) and stops when its law's draw ends, so a draw that ends on
+`Draw.drawUnits` reads its source in order (`Draw.take`) and stops when its sampling design's sample ends, so a sample that ends on
 `ξ`'s bytes reads only `ξ` and ends the same on `ξ ++ t` (`drawUnits_append`). -/
 
 @[expose] public section
@@ -144,7 +144,7 @@ theorem drawWith_append {ξ t : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p :
     dsimp only at h ⊢
     exact run_bind_of h (fun r hr => stratifiedWith_append hr) (fun _ _ hk => hk)
 
-/-- **A draw reads only what it needs.** The units a law draws from `ξ`'s bytes, and the bytes it read, are the same
+/-- **A sample reads only what it needs.** The units a sampling design samples from `ξ`'s bytes, and the bytes it read, are the same
 from `ξ ++ t`. -/
 theorem drawUnits_append {ξ t : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
     (h : Draw.drawUnits law n ξ = .ok r) : Draw.drawUnits law n (ξ ++ t) = .ok r := by

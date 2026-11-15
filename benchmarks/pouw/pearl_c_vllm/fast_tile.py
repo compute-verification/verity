@@ -1,5 +1,5 @@
 """Batch forms of a served tile's replay for `served_debit.py`: every place a Pearl-C v1 tile's check runs the device's E4M3
-atom one word at a time, run over all of the tile's words at once on numpy (`verity.definitions.kernels.tc.group_sum_total_batch`, the
+atom one word at a time, run over all of the tile's words at once on numpy (`verity.circuits.kernels.tc.group_sum_total_batch`, the
 atom's bit-exact batch form).
 
 - `_pairs`: `pearl_c.chain` on every (a, b) pair of two lists of code rows: C̃'s words (`checked`), the fused columns of the peel factors
@@ -13,7 +13,7 @@ atom's bit-exact batch form).
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
 exception) is the reference's own.  FP32 adds and products are numpy float32's, IEEE nearest-even with subnormals kept, as
-`verity.definitions.ops.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
+`verity.circuits.ops.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
 
 `install(scheme)` puts them in place of the scalar functions for a Pearl-C v1 scheme on a promoted device, with the `blake3`
 package's BLAKE3 (the same digests) for the plain-Python one, and returns the function that puts the scalar ones back:
@@ -25,11 +25,11 @@ import functools
 from collections.abc import Sequence
 
 import numpy as np
-from verity.definitions.kernels import tc as K
-from verity.definitions.silicon import fp32
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.circuits.kernels import tc as K
+from verity.circuits.silicon import fp32
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 _TOP = 0x7F7FFFFF
 _NEG_ZERO = np.uint32(0x80000000)
@@ -173,7 +173,7 @@ def gram(seed_b: bytes, k: int, norm: float = P.NOISE_NORM, device=C.H100) -> tu
     return _gram(seed_b, k, norm, device)
 
 
-# ---- the debit --------------------------------------------------------------------------------------------------------
+# ---- the inert work ---------------------------------------------------------------------------------------------------
 
 def _key(w: np.ndarray) -> np.ndarray:
     w = w.astype(np.int64)

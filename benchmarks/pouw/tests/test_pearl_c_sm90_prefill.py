@@ -22,16 +22,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.verifier import audit
-from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
-from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.verifier import audit
+from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[0] / "pearl_c_sm90"
 
 
 def load(name: str, path: Path):
-    """The module at `path` under its own name: other trees in the suite have a run.py too."""
+    """The module at `path` under its own name: other trees in the suite have a run.py too.  Not the suite's
+    `conftest.load`: test_pearl_c_vllm.py runs this file by path, and the suites of benchmarks/one_stage and
+    benchmarks/pouw/pearlplus_lean run that test, where `conftest` is not this suite's."""
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, path)
         mod = sys.modules[name] = importlib.util.module_from_spec(spec)

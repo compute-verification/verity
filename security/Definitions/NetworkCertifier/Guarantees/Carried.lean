@@ -23,8 +23,8 @@ rows' digests hashed (`PoolColl`). Serving picks the restarts, so their pattern 
 patterns serving may pick where every audit accepts (`Cs`), and a restart a public rule makes after a refused run costs
 nothing. The escape is bounded by `(1 - q)^Fmax` itself, which is at most `δ` at `Fmax ≥ ln(1/δ)/q`.
 
-It is conditional as `PooledLeakAccepted` is: its inputs are named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
-`PeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
+It is conditional as `PooledLeakAccepted` is: its inputs are named (`MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`,
+`MonitoringPeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
 an opening is one found from two witnesses. At the empty pool, with no opening or closing gate and one pattern that
 restarts no run, it bounds windows that each hold a pool of their own.
 -/
@@ -77,11 +77,11 @@ its checked inputs (`CheckedUnique`) and its closing row at `nrow` (`CheckedClos
 `chains` and opened rows `genesis` (at run 0 the previous period's closing row or the empty pool's, and the empty pool's
 at a restart), serving's choice at each secret and sample of the coins, which where every audit accepts lie in a
 registered finite set `Cs` (`ResetsIn`) and have the runs open the root of the row the rule names (`CarriedRoots`, at the
-`sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-host`, its one run giving
+`sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-device`, its one run giving
 the cells the client receives and its record of them, the runs' observations; a covert sender's channel
-(`PeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`PeriodAdaptive`), the
-conditional escape (`PeriodEscapes`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,
-`rout` (`PeriodLeaksCarried`):
+(`MonitoringPeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`MonitoringPeriodAdaptive`), the
+conditional escape (`MonitoringPeriodEscapes`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,
+`rout` (`MonitoringPeriodLeaksCarried`):
 
 * for every secret, every audit accepts and the good event at the picked pattern fails (`PooledGoodCarried`) with
   probability at most `(1 - q)^Fmax + Σ e + Σ e' + Σ_i Pr[PoolColl i]`, `PoolColl i` a collision of `G` among the
@@ -105,21 +105,21 @@ def PooledLeakCarried : Prop :=
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (Cs : Finset ((Fin m → Bool) × (Fin m → Hash.Row))) (chains : Z → (Fin m → Ω) → Fin m → Bool)
     (genesis : Z → (Fin m → Ω) → Fin m → Hash.Row) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (hcs : ResetsIn Zs acc Cs chains genesis)
     (hroot : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) →
       CarriedRoots G lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω))
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (had : PeriodAdaptive n acc W) (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (e e' : Fin m → ℝ)
+    (had : MonitoringPeriodAdaptive n acc W) (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (e e' : Fin m → ℝ)
     (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : PeriodEscapes Zs acc W q e)
-    (hleak : PeriodLeaksCarried lay k reg valid prow nrow Dj sw Pw ρ op Zs acc W rin rout
+    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hleak : MonitoringPeriodLeaksCarried lay k reg valid prow nrow Dj sw Pw ρ op Zs acc W rin rout
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ),
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧

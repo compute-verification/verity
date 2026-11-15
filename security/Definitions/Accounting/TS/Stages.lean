@@ -48,13 +48,13 @@ sampling design with rational weights, and the round passes when every sampled p
 * `CoinStages.skipped`, `CoinStages.passes`: a unit skipped, and its proof passing, along the round's coins.
 * `CoinStages.LuckAt p`: at every stage, whatever the past, a unit of that stage that is skipped passes with
   probability at most `p` over the stage's coin.
-* `StageWindow`: a window of rounds of `M` stages and `s` samples each; `StageWindow.LuckAt p` is `CoinStages.LuckAt p` in
+* `StageExecutionPhase`: a window of rounds of `M` stages and `s` samples each; `StageExecutionPhase.LuckAt p` is `CoinStages.LuckAt p` in
   every round.
-* `StageWindow.game`: its ideal game: round `w`'s share is the work weights of its skipped units, its check the sampled
+* `StageExecutionPhase.game`: its ideal game: round `w`'s share is the work weights of its skipped units, its check the sampled
   proof blocks' proofs.
-* `SampledRound`, `SampledWindow`: a sampled round reduced to what its budget reads, the coins `A` before the samples, a
+* `SampledRound`, `SampledExecutionPhase`: a sampled round reduced to what its budget reads, the coins `A` before the samples, a
   share on them and, per sample `D`, whether the sample lands on saved work (`hit`) and whether its check passes (`ok`);
-  `SampledWindow.game` is its ideal game and `SampledWindow.LuckAt p` the luck of its samples, `Pr[hit ∧ ok] ≤ p·Pr[hit]`
+  `SampledExecutionPhase.game` is its ideal game and `SampledExecutionPhase.LuckAt p` the luck of its samples, `Pr[hit ∧ ok] ≤ p·Pr[hit]`
   over `A × D` in every round. Route A's window is one (`hit`: the sampled proof block is skipped); so is a one-σ round whose
   closure fails every steered unit sampled (`hit`: the sampled proof block saves work, skipped or steered).
 -/
@@ -99,30 +99,30 @@ end CoinStages
 
 /-- **A window of sampled rounds under per-stage coins**: per round, its `M` stages, then the rest of the window, which
 may depend on the round's stage coins and its `s` samples (tickets on `D`). -/
-inductive StageWindow (C U D : Type) (M s : ℕ) : ℕ → Type
-  | done : StageWindow C U D M s 0
-  | round {n : ℕ} (T : CoinStages C U M) (next : Paths C M × (Fin s → D) → StageWindow C U D M s n) :
-      StageWindow C U D M s (n + 1)
+inductive StageExecutionPhase (C U D : Type) (M s : ℕ) : ℕ → Type
+  | done : StageExecutionPhase C U D M s 0
+  | round {n : ℕ} (T : CoinStages C U M) (next : Paths C M × (Fin s → D) → StageExecutionPhase C U D M s n) :
+      StageExecutionPhase C U D M s (n + 1)
 
-namespace StageWindow
+namespace StageExecutionPhase
 
 variable {C U D : Type} {M s : ℕ}
 
 /-- (L) at `p` per unit in every round (`CoinStages.LuckAt`). -/
-def LuckAt [Fintype C] (p : ℝ) (stg : U → ℕ) : {n : ℕ} → StageWindow C U D M s n → Prop
+def LuckAt [Fintype C] (p : ℝ) (stg : U → ℕ) : {n : ℕ} → StageExecutionPhase C U D M s n → Prop
   | _, .done => True
   | _, .round T next => T.LuckAt p stg ∧ ∀ a, LuckAt p stg (next a)
 
 /-- **The window's ideal game**: round `w`'s share is the work weights `w` of its skipped units, and its check passes
 when the proof of every unit its samples name (`tk`) passes. -/
 noncomputable def game [Fintype U] (stg : U → ℕ) (tk : D → U) (w : U → ℝ) :
-    {n : ℕ} → StageWindow C U D M s n → RoundGame (Paths C M × (Fin s → D)) n
+    {n : ℕ} → StageExecutionPhase C U D M s n → RoundGame (Paths C M × (Fin s → D)) n
   | _, .done => .done
   | _, .round T next =>
     .round (fun a => ∑ u, (by classical exact if T.skipped stg a.1 u then w u else 0))
       (fun a => ∀ i, T.passes stg a.1 (tk (a.2 i))) fun a => (next a).game stg tk w
 
-end StageWindow
+end StageExecutionPhase
 
 /-- **A sampled round** reduced to what its budget reads: on the coins `A` before the samples, the round's share and, per
 sample on `D`, whether it lands on saved work (`hit`) and whether its check passes (`ok`). -/
@@ -133,23 +133,23 @@ structure SampledRound (A D : Type) where
 
 /-- A window of sampled rounds with `s` samples each: per round, its sampled round, then the rest of the window, which may
 depend on the round's coins and samples. -/
-inductive SampledWindow (A D : Type) (s : ℕ) : ℕ → Type
-  | done : SampledWindow A D s 0
-  | round {n : ℕ} (R : SampledRound A D) (next : A × (Fin s → D) → SampledWindow A D s n) :
-      SampledWindow A D s (n + 1)
+inductive SampledExecutionPhase (A D : Type) (s : ℕ) : ℕ → Type
+  | done : SampledExecutionPhase A D s 0
+  | round {n : ℕ} (R : SampledRound A D) (next : A × (Fin s → D) → SampledExecutionPhase A D s n) :
+      SampledExecutionPhase A D s (n + 1)
 
-namespace SampledWindow
+namespace SampledExecutionPhase
 
 variable {A D : Type} {s : ℕ}
 
 /-- The window's ideal game: round `w`'s share is its sampled round's, and its check passes when every sample's does. -/
-def game : {n : ℕ} → SampledWindow A D s n → RoundGame (A × (Fin s → D)) n
+def game : {n : ℕ} → SampledExecutionPhase A D s n → RoundGame (A × (Fin s → D)) n
   | _, .done => .done
   | _, .round R next => .round (fun a => R.share a.1) (fun a => ∀ i, R.ok a.1 (a.2 i)) fun a => (next a).game
 
 /-- **The luck of the samples at `p`**: in every round, whatever the past, a sample lands on saved work and passes with
 probability at most `p` times that of landing on saved work, `Pr[hit ∧ ok] ≤ p·Pr[hit]` over the coins and one sample. -/
-def LuckAt [Fintype A] [Fintype D] (p : ℝ) : {n : ℕ} → SampledWindow A D s n → Prop
+def LuckAt [Fintype A] [Fintype D] (p : ℝ) : {n : ℕ} → SampledExecutionPhase A D s n → Prop
   | _, .done => True
   | _, .round R next =>
       prob (fun z : A × D => R.hit z.1 z.2 ∧ R.ok z.1 z.2) ≤ p * prob (fun z : A × D => R.hit z.1 z.2) ∧
@@ -157,10 +157,10 @@ def LuckAt [Fintype A] [Fintype D] (p : ℝ) : {n : ℕ} → SampledWindow A D s
 
 /-- **The share is priced by the samples at `r`**: in every round the share is at least 0 and at most `r` times the
 probability that one sample lands on saved work. -/
-def Priced [Fintype D] (r : ℝ) : {n : ℕ} → SampledWindow A D s n → Prop
+def Priced [Fintype D] (r : ℝ) : {n : ℕ} → SampledExecutionPhase A D s n → Prop
   | _, .done => True
   | _, .round R next => (∀ a, 0 ≤ R.share a ∧ R.share a ≤ r * prob (R.hit a)) ∧ ∀ a, Priced r (next a)
 
-end SampledWindow
+end SampledExecutionPhase
 
 end Accounting.TS

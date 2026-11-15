@@ -16,7 +16,6 @@ import itertools
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -82,7 +81,7 @@ def test_sinkhorn_against_float64() -> None:
     rng = np.random.default_rng(7)
     x = f32(rng, (16, 4, 4), 3.0)
     cm = W.sinkhorn(x, 20, EPS).view(np.float32).astype(np.float64)
-    v = x.view(np.float32).astype(np.float64)
+    v: np.ndarray = x.view(np.float32).astype(np.float64)
     e = np.exp(v - v.max(axis=-1, keepdims=True))
     ref = e / e.sum(axis=-1, keepdims=True) + EPS
     ref = ref / (ref.sum(axis=-2, keepdims=True) + EPS)
@@ -201,11 +200,11 @@ def test_tf32_step_twin_random() -> None:
 def test_tf32_step_twin_specials() -> None:
     pairs = np.array(list(itertools.product(F32_SPECIALS, repeat=2)), np.uint32)
     n = len(pairs)
-    a = np.zeros((n, 8), np.uint32)
-    b = np.zeros((n, 8), np.uint32)
+    a: np.ndarray = np.zeros((n, 8), np.uint32)
+    b: np.ndarray = np.zeros((n, 8), np.uint32)
     a[:, 0], b[:, 0] = pairs[:, 0], pairs[:, 1]
     a[:, 3], b[:, 3] = pairs[:, 1], np.uint32(0x3F800000)
-    acc = np.resize(F32_SPECIALS, n)
+    acc: np.ndarray = np.resize(F32_SPECIALS, n)
     want = np.array([M.HopperTf32WgmmaDot8.evaluate(int(c), *map(int, x), *map(int, y)) for c, x, y in zip(acc, a, b)], np.uint32)
     same(W.tf32_dot8(acc, a, b), want, "HopperTf32WgmmaDot8_v1 on specials")
 
@@ -240,10 +239,12 @@ def test_tf32_sqr_forms() -> None:
     normal = bf16(rng, (T, 64), 2.0)
     forms = {s: W.prenorm_sqrsum(normal, 1, s) for s in W.SQR_FORMS}
     assert all((v == forms["lo"]).all() for v in forms.values())
-    word = lambda e: (rng.integers(0, 2, T) << 15 | rng.integers(0, 128, T) | (rng.integers(*e, T) + 127) << 7).astype(np.uint16)
-    small, big = word((-75, -66)), word((-62, -60))
+    def word(lo: int, hi: int) -> np.ndarray:
+        return (rng.integers(0, 2, T) << 15 | rng.integers(0, 128, T) | (rng.integers(lo, hi, T) + 127) << 7).astype(np.uint16)
+
+    small, big = word(-75, -66), word(-62, -60)
     swap = rng.random(T) < 0.5
-    a = np.zeros((T, 64), np.uint16)
+    a: np.ndarray = np.zeros((T, 64), np.uint16)
     a[:, 1], a[:, 5] = np.where(swap, small, big), np.where(swap, big, small)
     forms = {s: W.prenorm_sqrsum(a, 1, s) for s in W.SQR_FORMS}
     for x, y in itertools.combinations(W.SQR_FORMS, 2):
@@ -252,7 +253,7 @@ def test_tf32_sqr_forms() -> None:
     assert (W.prenorm_tf32(a, b, 1)[1] == forms["lo"]).all()
     d = bind(M.MhcPrenormTf32Split, K=64, OUT=1)
     same(oracle(d, T, lambda t: (a[t], b))[:, 1:], forms["lo"].astype(np.uint64), d.id)
-    special = np.zeros((1, 64), np.uint16)
+    special: np.ndarray = np.zeros((1, 64), np.uint16)
     special[0, 3] = 0x7FC0
     assert W.prenorm_sqrsum(special, 1)[0, 0] == 0x7FFFFFFF
     y = np.array(evaluate(d, special[0].tolist(), b.reshape(-1).tolist()), np.uint32)
@@ -376,7 +377,7 @@ def test_boolean_tf32_compositions() -> None:
 ])
 def test_statics_refused(definition, statics) -> None:
     with pytest.raises(ValueError):
-        bind(definition, **statics).body
+        _ = bind(definition, **statics).body
 
 
 def test_served_splits() -> None:

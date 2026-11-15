@@ -20,24 +20,28 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.audit import weights_root
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from conftest import load
+from verity_config.settings import of
+
+from verity.protocols.accounting.pouw.verifier.audit import weights_root
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
-def load(name: str, path: Path):
-    """The module at `path` under its own name: other trees in the suite have a fixture.py and a run.py too."""
+def anew(name: str, path: Path):
+    """`path` run again as a module called `name`, which the caller takes out of ``sys.modules``: for what a script
+    reads when it is imported, since `load` runs a file once."""
     spec = importlib.util.spec_from_file_location(name, path)
     mod = sys.modules[name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-F = load("pearl_c_sm90_fixture", HERE / "fixture.py")
-S = load("pearl_c_sm90_sass_gate", HERE / "sass_gate.py")
-RUN = load("pearl_c_sm90_run", HERE / "run.py")
+F = load("pearl_c_sm90/fixture.py")
+S = load("pearl_c_sm90/sass_gate.py")
+RUN = load("pearl_c_sm90/run.py")
 
 SOURCE = (HERE / "pearl_c_sm90.cu").read_text()
 HASH_SOURCE = "".join(f.read_text() for f in (HERE.parent / "pearl_c" / "hash_h3.cuh", SM120_DIR / "hash_fast.cuh",
@@ -165,9 +169,9 @@ def test_descriptors_are_the_layouts_staged():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.pouw.prover.schemes.pearl_c_device import H100
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
@@ -186,14 +190,12 @@ def test_kernel_constants_match_the_reference():
 def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
     """BF16_ROWS is an opt-in: unset (or anything but ``1``) a split pipeline's pd_commit reads its FP32 words, as the
     registry declares, so a capture that would race on the rows doesn't run them by default."""
-    from verity_config.settings import of
-
     for raw, on in ((None, False), ("0", False), ("true", False), ("1", True)):
         if raw is None:
             monkeypatch.delenv("PEARLC_BF16_ROWS", raising=False)
         else:
             monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
-        assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
+        assert anew("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
         assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
@@ -226,10 +228,9 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
         def sync(self):
             self.log.append(("sync",))
 
-    monkeypatch.setattr(sys, "path", list(sys.path))
-    monkeypatch.setitem(sys.modules, "run", RUN)
     monkeypatch.setattr(RUN, "Dev", Dev)
-    deb = load("pearl_c_sm90_debit", HERE / "debit.py")
+    deb = load("pearl_c_sm90/debit.py")
+    assert deb.run is RUN
     rng = np.random.default_rng(7)
     a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
     budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
@@ -250,7 +251,6 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
     assert len(want) == len(r.dev.log) == 9
     for i, (got, ref) in enumerate(zip(r.dev.log, want)):
         assert named(r, got, r.live["a_all"][0] + i // 3 * deb.BLOCK_ROWS * k) == named(w, ref, w.live["a"][0])
-    sys.modules.pop("pearl_c_sm90_debit")
 
 
 def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
@@ -374,7 +374,7 @@ def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_c
     races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
     the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
     BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
-    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm/e2e.py")
     marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
     kernel = SimpleNamespace(run=RUN, dev=marked)
 
@@ -489,9 +489,9 @@ def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypa
     assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_POUW_NVCC"), reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
+@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
-    cuda = Path(os.environ["VERITY_POUW_NVCC"])
+    cuda = Path(of(__file__).VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
     with open(ptxas, "w") as err:
         subprocess.run([str(cuda / "bin" / "nvcc"), "-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "-fmad=false",
@@ -536,8 +536,8 @@ def test_widening_fixture_is_the_silicon_model(small_fixture):
     """The fixture's widened B: BF16 words as their FP32 words, and each E4M3 code times its block's scale as
     `silicon.fp32.mul` of `silicon.cast.e4m3_to_f32_word` (every element, subnormal products among them), its block the
     row's and column's 128 x 128 one; the decode is the silicon model's on every finite code."""
-    from verity.definitions.silicon import fp32
-    from verity.definitions.silicon.cast import e4m3_to_f32_word
+    from verity.circuits.silicon import fp32
+    from verity.circuits.silicon.cast import e4m3_to_f32_word
 
     codes = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint8)
     assert F.e4m3_values(codes).view(np.uint32).tolist() == [e4m3_to_f32_word(int(c)) for c in codes]

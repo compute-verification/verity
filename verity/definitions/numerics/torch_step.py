@@ -6,7 +6,7 @@ optimizer's widening, AdamW step and bf16 copy, each in its kernel's order on bf
 
 `MODELS` are these by family. `STEP_MODELS` adds `torch_blocks.MODELS`, so it models every node of `TrainStep_v1`'s body
 that is past the walk's bit budget, and a GEMM's shared weight is read once rather than once per token.
-`tests/test_torch_step.py` holds each model to its Definition's bits, and the norm and SiLU models to the GPU's words."""
+`verity/definitions/tests/test_torch_step.py` holds each model to its Definition's bits, and the norm and SiLU models to the GPU's words."""
 from __future__ import annotations
 
 from functools import cache
@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.definitions.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import bf16_gemm_check as GC
 from verity.definitions.registry import torch_train as TT
 

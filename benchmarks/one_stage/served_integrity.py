@@ -43,8 +43,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.protocols.spot.device.challenger import ChallengerKey
-from verity.protocols.spot.verifier.one_stage import audit as A, registration as R
+from verity.protocols.proofs.spot.device.challenger import ChallengerKey
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
 

@@ -13,7 +13,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.layout import WIDE_FAN_IN
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
-from verity.definitions.ops import scalar as S
+from verity.circuits.ops import scalar as S
 
 ROW = 64
 NAME = "t_small"

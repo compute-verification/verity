@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a0

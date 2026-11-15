@@ -15,7 +15,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Value
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.ops import fp32, prims, scalar
+from verity.circuits.ops import fp32, prims, scalar
 
 S32 = Value(32)
 

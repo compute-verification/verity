@@ -2,7 +2,7 @@
 row builds Boolean-first (`verity.definitions.boolean`).
 
     F32Rint_v2, F32ToS8Rzi_v2, S8ToF32_v2, F32MulWide_v2, F64Mul_v2, F64ToU32RniSat_v2, LutIndex_v2
-                        traced from `verity.definitions.ops.boolean.int8`'s builders; word views: their _v1
+                        traced from `verity.circuits.ops.boolean.int8`'s builders; word views: their _v1
     Exp2Lut127_v3       (t: Array<8, Value<1>>) -> Array<32, Value<1>>; word view: Exp2Lut127_v1.  `boolean.table.read` (the
                         multiplexer tree of `TableRead{IB}x{EW}_v2`) over fattn's 256 entries as constant bits, which fold: only
                         an entry's 7 low bits are ever set
@@ -31,7 +31,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import table as BT
 from verity.circuits.boolean.forms import const_bits
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import int8 as BI
+from verity.circuits.ops.boolean import int8 as BI
 from verity.circuits.types import Array
 from verity.definitions.boolean import sigma_lift
 from verity.definitions.registry import int8_exact as IE

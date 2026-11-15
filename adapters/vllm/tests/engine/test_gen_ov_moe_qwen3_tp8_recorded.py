@@ -28,14 +28,14 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.circuits.refs import Affine, runs
 
 from tests.engine.moe_scope_cut import cut, write
-from verity.circuits.refs import Affine, runs
 from verity_vllm.check.match import program_compare as PC
-from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.events import Note
 from verity_vllm.observe.fold import fold as FD
 from verity_vllm.observe.fold.memory import Unresolved
+from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.fold.resolve_log import resolve_log
 from verity_vllm.observe.fold.resolver import Compute, Group, Transparent
 from verity_vllm.observe.log import read_log
@@ -59,7 +59,7 @@ def fixture(rank: int) -> Path:
     return FIXTURES / f"qwen3_235b_a22b_tp8_moe_l{LAYER}.rank{rank}.jsonl.gz"
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def profile():
     cfg = json.loads(CONFIG.read_text())
     # this base's `generic.rank_hf_config` refuses 4 key/value heads over 8 ranks; vLLM gives each rank one of them (num_kv_head_replicas),
@@ -68,10 +68,10 @@ def profile():
 
 
 C = profile().config
-H, I, E, TOPK, V = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["V"]
+H, INTER, E, TOPK, V = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["V"]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _resolved(rank: int):
     header, results, roots, notes = resolve_log(fixture(rank), profile())
     return header, {sr.step: sr for sr in results}, roots, notes
@@ -80,7 +80,7 @@ def _resolved(rank: int):
 @pytest.mark.parametrize("rank", RANKS)
 def test_fixture_is_the_recorded_layer_scope_of_the_tp8_capture(rank):
     header, steps, roots, notes = _resolved(rank)
-    assert (C["WORLD"], H, I, E, TOPK, V) == (WORLD, 4096, 1536 // WORLD, 128, 8, 151936 // WORLD)
+    assert (C["WORLD"], H, INTER, E, TOPK, V) == (WORLD, 4096, 1536 // WORLD, 128, 8, 151936 // WORLD)
     assert header.profile["case"] == "QWEN3_235B_A22B" and header.profile["model"]["revision"] == REVISION
     assert header.profile["model"]["config_sha256"] == hashlib.sha256(CONFIG.read_bytes()).hexdigest()
     assert header.profile["vllm"]["commit"] == "d9105ea80" and header.profile["parallelism"]["tensor_parallel_size"] == WORLD
@@ -116,8 +116,8 @@ def test_recorded_tp8_scope_resolves_the_gate_gemm_ahead_of_the_router_and_the_r
     gemm, router, up, silu, down, msum = computes
     assert [c.spec.id for c in (gemm, router, up, down, msum)] == [
         f"Gemm_v2{{K={H},N={E},DOT={DOT}}}", f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}",
-        f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT={DOT}}}", f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT={DOT}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
-    assert re.fullmatch(rf"SiluMul_v\d+\{{I={I}\}}", silu.spec.id), silu.spec.id
+        f"MoeExpertGemm_v2{{E={E},K={H},N={2 * INTER},DOT={DOT}}}", f"MoeExpertGemmW_v2{{E={E},K={INTER},N={H},DOT={DOT}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+    assert re.fullmatch(rf"SiluMul_v\d+\{{I={INTER}\}}", silu.spec.id), silu.spec.id
     assert [c.rows for c in computes] == [M, M, M * TOPK, M * TOPK, M * TOPK, M]
     assert len([p for p in group.parts if isinstance(p, Transparent) and any("moe_align_block_size" in k for k in p.kernels)]) == int(aligned)
 
@@ -160,7 +160,7 @@ class _CutFold(FD._Fold):
             return Affine("p", -1, 0, args[0].numel)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _folded(rank: int):
     f = _CutFold(profile(), False)
     f.live_in = set()
@@ -186,7 +186,8 @@ def test_the_fold_gives_each_recorded_collective_one_peers_field_per_peer_rank(r
     assert [(c["step"], c["k"], c["kind"], c["site"], c["rows"], c["N"]) for c in res.collectives] == COLLECTIVES
     (layout,) = res.peers_layout
     peers = [r for r in range(WORLD) if r != rank]
-    want, off = [], 0
+    want: list[tuple[str, int, int, int]] = []
+    off = 0
     for step, k, _kind, _site, rows, N in COLLECTIVES:
         for pr in peers:
             want.append((f"s{step}_k{k}_r{pr}", off, len(want), rows))
@@ -262,7 +263,7 @@ def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> 
     reads = [("n", PEERS0 + i, j * N, (j + 1) * N) for i in range(len(mine))]
     A = _prog(f"build{rank}", m["spec"], own_spec, N, ins, {PEERS0 + i: [(0, x["ordinal"])] for i, x in enumerate(mine)},
               reads[:rank] + [("n", OWN, 0, N)] + reads[rank:], compact)
-    want = [("PEER", x["ordinal"], j * N, (j + 1) * N) for x in mine]
+    want: list[tuple] = [("PEER", x["ordinal"], j * N, (j + 1) * N) for x in mine]
     want.insert(rank, ("N", 0, 0, 0, N))
     return A, F, want
 
@@ -324,7 +325,7 @@ def _merged(rs: list[tuple]) -> list[tuple]:
     return out
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _folded_routed(rank: int):
     """`_folded` with a stand-in captured route for this model's [M, 4096] all-reduces at the capture's settings (batch-invariant
     pynccl over SHM on 8 RTX PRO 6000; no world-8 chain is recorded), so the fold takes the Build's one call per all-reduce."""

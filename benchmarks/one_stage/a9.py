@@ -49,8 +49,8 @@ import a11  # noqa: E402
 import a11_kinds as K  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
-from verity.definitions.ops.boolean import gemm as BG  # noqa: E402
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32  # noqa: E402
+from verity.circuits.ops.boolean import gemm as BG  # noqa: E402
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 

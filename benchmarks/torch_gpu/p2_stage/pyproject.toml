@@ -9,28 +9,35 @@ testpaths = ["tests"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_sketch.py"]
 # layout.py and stage.py read the store's load (benchmarks/pous/p2_v1/load.py), which reads the registered scheme
-# (verity.protocols.pous.verifier.schemes.p2), the P2 spec's reference (reference.py, pinned by vectors.json) and the
+# (verity.protocols.accounting.pous.verifier.schemes.p2), the P2 spec's reference (reference.py, pinned by vectors.json) and the
 # library's wrapper (gpu.py); the toy test reads P2's toy store (p2_v1/store-toy); gemm.py's check evaluates
 # ScaledMmS8Coordinate_v1 (verity.circuits), and what those import; full.py's GEMM is s8_linear's int_mm.py.
-# sketch.py's receipts are PoUB's (verity.protocols.poub.verifier, which imports
+# sketch.py's receipts are PoUB's (verity.protocols.accounting.poub.verifier, which imports
 # spot and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
-inputs = ["verity/configuration/config/verity_config",
-          "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/claims/__init__.py",
-          "verity/protocols/pous", "verity/protocols/interface",
-          "verity/protocols/pous/prover",
-          "verity/hardware/record.py",
-          "verity/protocols/poub/verifier", "verity/protocols/spot",
-          "verity/protocols/spot/verifier/profile.py",
+inputs = ["tools/config/verity_config",
+          "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/protocols/accounting/pous", "verity/protocols/interface",
+          "verity/protocols/accounting/pous/prover",
+          "verity/channel.py",
+          "verity/protocols/accounting/poub/verifier", "verity/protocols/proofs/spot",
+          "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/commitments/identity", "verity/commitments/randomness",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/circuits", "verity/definitions/kernels",
+          "verity/circuits", "verity/circuits/kernels",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/pous/p2_v1/load.py",
           "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/store-toy",
           "benchmarks/pous/p2_v1/serve.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/torch_gpu/sha512_rows",
           "benchmarks/torch_gpu/s8_linear/int_mm.py",
-          "verity/protocols/__init__.py",
-          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon",
-          "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/poub/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
+          "verity/circuits/ops", "verity/circuits/silicon",
+          "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_p2_stage.py"]
+paths = ["benchmarks/torch_gpu/p2_stage/served_weights.py"]

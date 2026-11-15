@@ -53,6 +53,8 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: a timed run's measurement of each point's γ, by the point's name (``C``, ``L``): the metric's id, OWNER/NAME
+GAMMA = "benchmarks/overhead.gamma-{}"
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
 
@@ -106,7 +108,7 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
     if measured:
         writer = kit.Writer(run_dir, run_id, kit.host_stamp())
         for m in measured:
-            writer.measurement(**m, inputs=[rel])
+            writer.measurement(**m, inputs=[rel], mark="measured")
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------
@@ -152,7 +154,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
         except ValueError as ex:
             why = str(ex)
     if why is None:
-        doc |= {"c": p.c, "l": p.l, "best_flop_per_ms": p.best_flop_per_ms,
+        doc |= {"c": p.c, "l": p.lat, "best_flop_per_ms": p.best_flop_per_ms,
                 "times_ms": {str(m): t for m, t in sorted(times.items())},
                 "tflops": {str(m): O.layer_flop(a.model, m) / t / 1e9 for m, t in sorted(times.items())},
                 "linears": {str(m): v for m, v in sorted(chosen.items())}}
@@ -223,7 +225,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         return 1
     model = pts["model"]
     at = {p: pts[p.lower()] for p in (O.POINTS if a.point == "all" else (a.point,))}
-    arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm else []
+    arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm and sch.arm_path else []
     prof = scratch / "prof"
     bench_json = out / "bench.json"
     rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
@@ -295,7 +297,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             p["epsilon"] = epsilon_at(sch, card, m, model)
             p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
             g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"cap": O.GAMMA_CAP, "passes": g <= O.GAMMA_CAP}
+            p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
             p["whys"] = O.point_whys(p)
             doc["points"][name] = p
     _write(out / "overhead.json", doc)
@@ -304,7 +306,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     write_result(a.run_dir, a.run_id, out, "overhead.json", ok,
                  "; ".join(f"γ at {n} {g:.4f}" if g is not None else f"no γ at {n}" for n, g in gammas.items())
                  or (whys[0] if whys else "nothing timed"),
-                 fingerprint, measured=[{"name": f"gamma_{n}", "value": gammas[n], "unit": "ratio",
+                 fingerprint, measured=[{"name": GAMMA.format(n.lower()), "value": gammas[n], "unit": "ratio",
                                          "interval": p["gamma"].get("ci95")}
                                         for n, p in doc["points"].items() if gammas[n] is not None])
     for n, p in doc["points"].items():

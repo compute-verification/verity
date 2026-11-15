@@ -88,9 +88,9 @@ theorem expectedRow_cast {a T W : Nat} (S : Array ClockSync) (h : S.size = W) (f
       _root_.NetworkCertifier.expectedRow a T W (syncsFn S W h) fr := by
   subst h; rfl
 
-theorem window_lt {P : List BlockGrid} {l : String} {W : Nat} (h : windowsOn l P = List.range W) {r : BlockGrid}
+theorem executionPhase_lt {P : List BlockGrid} {l : String} {W : Nat} (h : executionPhasesOn l P = List.range W) {r : BlockGrid}
     (hr : r ∈ P) (hl : r.link = l) : r.window < W := by
-  have : r.window ∈ windowsOn l P := List.mem_map_of_mem (List.mem_filter.2 ⟨hr, by simp [hl]⟩)
+  have : r.window ∈ executionPhasesOn l P := List.mem_map_of_mem (List.mem_filter.2 ⟨hr, by simp [hl]⟩)
   rw [h] at this
   exact List.mem_range.1 this
 
@@ -139,7 +139,7 @@ each certified in direction `d`, the commitment of what the assembly issued for 
 the certificate of that record. -/
 theorem recordsOf_one {c : Config} {i : Issuer} {rs : List BlockGrid} {crs : List CertifiedRecord}
     (hall : List.Forall₂ (Issued c i) rs crs) {l : String} {d : NetworkCheck.Direction} {W w : Nat}
-    (hW : windowsOn l rs = List.range W) (hw : w < W) (hld : ∀ r : BlockGrid, r.link = l → directionOf c r = d)
+    (hW : executionPhasesOn l rs = List.range W) (hw : w < W) (hld : ∀ r : BlockGrid, r.link = l → directionOf c r = d)
     (bytes : ByteArray) :
     ∃ r cr, r ∈ rs ∧ r.link = l ∧ r.window = w ∧ Issued c i r cr ∧
       Properties.NetworkCertifier.recordsOf (commitment crs bytes) d l w = [certified cr] := by
@@ -232,13 +232,13 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
     intro n _ r hrn
     have hr := List.mem_of_getElem? hrn
     rcases hof r hr with ⟨hl, hs, hp⟩ | ⟨hl, hs, hp⟩
-    · have hw := window_lt heW hr hl
+    · have hw := executionPhase_lt heW hr hl
       have hgr : gridOf c r = c.egress := by simp [gridOf, hl]
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
       rw [hgr, hss]
       exact ⟨eg, heg, prepare_of hI hsf (hsalt n) hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
         hge.2.2.1 hge.2.2.2 (hnf r hr)⟩
-    · have hw := window_lt hiW hr hl
+    · have hw := executionPhase_lt hiW hr hl
       have hgr : gridOf c r = c.ingress := by simp [gridOf, hl, hdi]
       have hss : syncSetOf c r = none := by simp [syncSetOf, hl, hdi]
       rw [hgr, hss]

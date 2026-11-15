@@ -14,11 +14,11 @@
                      Boolean Definition names
                      (`verity.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
                      (``word:<word>``): the Boolean Definition is the definition.  A
-                     registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
+                     registered table a Definition reads (`targets.table_probe`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read; an
-                     operand over the input budget (`targets.LAZY_OPERANDS`, a weight) takes its edge and random words one
+                     operand over the input budget (`targets.lazy_operands`, a weight) takes its edge and random words one
                      vector at a time and is read lazily (`vectors.wide_words`), recorded under ``wide`` with the reads of
-                     its words, plus a random vector per index probe (`targets.OPERAND_PROBES`: a shard's or an expert
+                     its words, plus a random vector per index probe (`targets.operand_probes`: a shard's or an expert
                      count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf.
                      Each realization is compared on at least ``Options.random_floor`` random vectors within
                      ``Options.random_budget``: a lowering on random ones added to the vectors (`floored`), a kernel on
@@ -33,7 +33,7 @@
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
-    redundant gates  a value computed twice inside one proof block: the gates `verity.definitions.word.Graph` finds recomputed
+    redundant gates  a value computed twice inside one proof block: the gates `verity.circuits.word.Graph` finds recomputed
                      (same primitive, same operands by value) that `word.units` puts in one proof block, and the ANDs of a
                      Boolean proof block on identical operands, its commits apart (`redundant_ands`); counted, with where
                      (primitive @ activation, or the named subcircuit)
@@ -67,7 +67,7 @@
                      (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
                      of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
                      past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
-                     window's templates each stage one, unless `block_held.HELD` says why not (the report's, `summarize`);
+                     window's templates each stage one, unless `block_held` says why not (the report's, `summarize`);
                      a Call serving stages as its cut (its module's ``CUTS``, `cut_of`), for each unit of the cut instead
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
@@ -110,7 +110,7 @@ _LIMB = (1 << 64) - 1
 class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
-    query; the word view draws 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
+    query; the word view samples 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
     ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
@@ -324,7 +324,7 @@ def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None
     for j in wide:
         if not names or names[j] not in listed:
             return (f"parameter {j} has {params[j].leaves} leaves, over the input budget, and is neither a registered table a probe "
-                    "reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily (`circuit_check.targets.LAZY_OPERANDS`)")
+                    "reads (`circuit_check.targets.table_probe`) nor an operand read lazily (`circuit_check.targets.lazy_operands`)")
         w = params[j].homogeneous_width()
         if w is None or w > 64:
             return f"parameter {j} ({names[j]!r}) is read lazily, so it needs one width of at most 64 bits"
@@ -343,10 +343,10 @@ def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None
 
 
 def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Options, F: Findings) -> tuple[dict, None, list]:
-    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`; how many,
+    """The reference on the vectors of a Definition with operands over the input budget (`targets.lazy_operands`; how many,
     `_lazy_vectors`): every parameter takes its edge and random words, the wide ones one vector at a time
     (`vectors.wide_words`), each read lazily as a `RegisteredTable`, then one random vector per index probe
-    (`targets.OPERAND_PROBES`) with its index parameters set.  An operand no vector reads is a warning.  No kernel takes them."""
+    (`targets.operand_probes`) with its index parameters set.  An operand no vector reads is a warning.  No kernel takes them."""
     from verity.circuits.evaluation import RegisteredTable
     from verity.circuits.types import Value
 
@@ -368,7 +368,7 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     for p in probes:
         if not set(p) <= set(scalars):
             raise ValueError(f"{t.id}: the operand probe {p} sets a parameter that isn't one of its Value parameters {scalars} "
-                             "(`circuit_check.targets.OPERAND_PROBES`)")
+                             "(`circuit_check.targets.operand_probes`)")
     E0 = edge_count(other)
     extra = vectors(other, E0 + len(probes), opts.seed + 1) if probes else []
 
@@ -418,7 +418,7 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     for j in wide:
         if not reads[j]:
             F.warn("correspondence", "operand-unread", t.id, 1, f"no vector read {names[j]!r}, so its words are checked on "
-                   "none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)")
+                   "none (`circuit_check.targets.operand_probes` sets an index that reads it)")
     lazy = ", ".join(repr(names[j]) for j in wide)
     for name in sorted(kernels(t)):
         rec["realizations"].append({"via": f"kernel:{name}", "declines": f"a kernel takes arrays, not {lazy} read lazily"})
@@ -638,7 +638,7 @@ def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], a
     into the word Definition's leaves (``words``, ``ret``) and each leaf into its bits, LSB first. For an element wider than its 64
     bits (PoUW's 576-bit sums of squares), and for a port of single bits: `Array<n, Value<1>>` is n one-bit words on the word side
     and, as `boolean.bit_type` leaves it, one n-bit element on bits, so the word view (`Value<n>`) is not the word's signature
-    (`DsaWaksmanRows_v2`'s settings)."""
+    (a switching network's settings)."""
     from verity.circuits.evaluation.batch import type_shape
     from verity.circuits.evaluation.bits import evaluate_bits
 
@@ -1110,7 +1110,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
     `word.unit_rule`'s count;
     None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     P = F if applies else Findings()
     v2 = applies and q_word == 2
@@ -1204,7 +1204,7 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
     over its own budget that it doesn't (``too-large``)."""
     from verity.circuits.cut import separable
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     if isinstance(fn, ScalarReference):
         return None
@@ -1270,7 +1270,7 @@ def callees_are_calls(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | N
 
 def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dict | None:
     """The partition of a Call of ``fn`` that `partition` can't check itself (``why``, `uncut`), when every Definition its body
-    calls is a Call (`targets.is_call`; `targets.CALLEE_CALLS` lists the families that are one for this reason): each callee's
+    calls is a Call (`targets.is_call`; `targets.callee_calls` lists the families that are one for this reason): each callee's
     partition checked as a Call's (`partition`; `q_call` for a primitive; one `uncut` itself, by its callees in turn), whose
     violations fail by the callee's name, so every gate of ``fn`` sits in a Call whose partition is checked; and, where ``fn``'s
     body nodes read only its parameters (`cut.separable`), the values two of its members compute (`cross_call.members_check`:
@@ -1281,7 +1281,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     targets."""
     from verity.circuits import boolean as BL
     from verity.circuits.cut import separable
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
@@ -1307,7 +1307,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1,
                             "max_out_bits": max((r.get("max_out_bits") or 0 for r in out.values()), default=0), "by_callees": out}
     if separable(fn) is not None:
-        from verity.definitions.cross_call import members_check
+        from verity.circuits.cross_call import members_check
 
         with spent("partition-members"):
             across = members_check(fn, word)
@@ -1483,13 +1483,17 @@ def cut_of(t: Any) -> list[tuple[Any, int]] | None:
 
 
 def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, str], list[dict]]:
-    """Of ``entries``, the Definitions `block_held.HELD` holds past the block, each with why, and a ``block/stale-hold``
+    """Of ``entries``, the Definitions `block_held.held` holds past the block, each with why, and a ``block/stale-hold``
     failure for each held one checked whole whose block fits (a cut Call's, each unit of its cut); over the whole catalog
     (``catalog``: an unsharded ``--all`` or every shard of one), a ``block/absent-hold`` failure for each held id no entry
     names, which nothing is checked as any longer."""
-    from .block_held import HELD
+    from . import block_held as BH
 
-    fix = "delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX"
+    HELD = BH.held()
+
+    def fix(d: str) -> str:
+        return f"delete its entry ({HELD[d][1]}) and lower MAX (block_held.py)"
+
     held, stale, seen = {}, [], set()
     for e in entries:
         d, b = e.get("definition") or e.get("target"), e.get("block") or {}
@@ -1497,24 +1501,24 @@ def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, 
         if d not in HELD or not b.get("applies"):
             continue
         if b["k_log"] > b["k_max"]:
-            held[d] = HELD[d]
+            held[d] = HELD[d][0]
             continue
         fits = (f"each unit of its cut fits 2^{b['k_max']} (the largest 2^{b['k_log']} bits)" if "cut" in b else
                 f"its block of 2^{b['k_log']} bits fits 2^{b['k_max']}")
         F = Findings()
-        F.fail("block", "stale-hold", d, f"{fits}, but block_held.HELD holds it ({HELD[d]}): {fix}", **b)
+        F.fail("block", "stale-hold", d, f"{fits}, but block_held holds it ({HELD[d][0]}): {fix(d)}", **b)
         stale += F.failures
     for d in sorted(set(HELD) - seen) if catalog else ():
         F = Findings()
-        F.fail("block", "absent-hold", d, f"block_held.HELD holds it ({HELD[d]}), but the catalog checks no Definition of that "
-               f"id any longer: {fix}")
+        F.fail("block", "absent-hold", d, f"block_held holds it ({HELD[d][0]}), but the catalog checks no Definition of that "
+               f"id any longer: {fix(d)}")
         stale += F.failures
     return held, stale
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
-    names (`verity.protocols.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    names (`verity.protocols.accounting.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
     place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
     over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
     from verity.circuits.codec import program_digest
@@ -1630,7 +1634,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
     if not isinstance(low, IL.Lowering):
         rec["compared"] = 0
-        rec["correspondence"] = ("verity/protocols/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
+        rec["correspondence"] = ("verity/protocols/proofs/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
                                  "vocabulary position of the row")
         return rec
     params, _ = signature_of(d)
@@ -1688,7 +1692,7 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     """A served workload's request Program (a Build's ``instances.json.gz``, or its directory), as the sidecar of the package
     that writes it reads it (`targets.request_program`): `word.check_query` over its Calls (the cross-Call conditions: every
     Value a Call reads or returns is committed) and every check on each distinct Definition."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     from .targets import request_program
 
@@ -1704,9 +1708,9 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
     try:
-        from verity.definitions import cross_call
+        from verity.circuits import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity.definitions.cross_call is not on this tree"}
+        out["cross_call"] = {"checked": False, "reason": "verity.circuits.cross_call is not on this tree"}
     else:
         x = cross_call.check_program(rows, strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
@@ -1793,7 +1797,7 @@ def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
     (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned by
     its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those whose
     correspondence read a table or an operand lazily (where kernels decline and no lowering runs); ``block_held``: each
-    Definition past the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted, and
+    Definition past the Flock block that `block_held.held` holds, with why, its ``block/past-range`` failure not counted, and
     over the whole catalog (``catalog``) each held id it no longer has failed (`_held_blocks`)."""
     entries = list(entries)
     fails: dict[str, dict] = {}

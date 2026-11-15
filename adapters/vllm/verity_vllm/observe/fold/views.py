@@ -4,13 +4,11 @@ Contract used by `memory.py`, `resolver.py` patterns and `fold.py`:
 
     row_view(v, i)            -> ViewDesc        v[i] along the leading axis (rank-1 lower; a 1-D view gives rank 0)
     rows_view(v, lo, hi)      -> ViewDesc        v[lo:hi] along the leading axis
-    flat_view(v)              -> ViewDesc        the same elements as a contiguous 1-D view iff `v` is contiguous, else ValueError
     element_runs(v)           -> list[(start_elem, count)]
                                  the storage elements of `v` in row-major logical order, merged into maximal
                                  contiguous runs (unit inner stride), in *elements of v.dtype* relative to the
                                  allocation start (i.e. including v.offset)
     is_contiguous(v)          -> bool
-    same_storage(a, b)        -> bool            same allocation id
     same_element(a, b)        -> bool            one element each, at the same storage offset of one allocation
     byte_extent(v)            -> (lo_byte, hi_byte)   the half-open byte range of the allocation `v` touches
 
@@ -86,12 +84,6 @@ def rows_view(v: ViewDesc, lo: int, hi: int) -> ViewDesc:
     return ViewDesc(v.alloc, v.offset + lo * v.strides[0], (hi - lo,) + v.shape[1:], v.strides, v.dtype, v.device)
 
 
-def flat_view(v: ViewDesc) -> ViewDesc:
-    if not is_contiguous(v):
-        raise ValueError(f"flat_view of a non-contiguous view {v!r}")
-    return ViewDesc(v.alloc, v.offset, (v.numel,), (1,), v.dtype, v.device)
-
-
 def is_contiguous(v: ViewDesc) -> bool:
     """Row-major with unit inner stride, size-1 axes free (torch's `is_contiguous`); empty views are contiguous."""
     _check(v)
@@ -128,10 +120,6 @@ def element_runs(v: ViewDesc) -> list[tuple[int, int]]:
         else:
             runs.append((s, count))
     return runs
-
-
-def same_storage(a: ViewDesc, b: ViewDesc) -> bool:
-    return a.alloc == b.alloc
 
 
 def same_element(a: ViewDesc, b: ViewDesc) -> bool:

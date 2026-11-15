@@ -320,7 +320,7 @@ def test_the_twin_is_the_reference(target):
 
 def test_the_twin_claims_only_the_hopper_step():
     from verity.definitions.numerics import kernel_registry as KR
-    from verity.definitions.ops.prims import AmpereBF16TcDot16
+    from verity.circuits.ops.prims import AmpereBF16TcDot16
 
     assert KR.covers(bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **HEAD), T.KERNEL) is None
     assert KR.covers(bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **{**HEAD, "DOT": AmpereBF16TcDot16}),

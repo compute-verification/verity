@@ -75,10 +75,10 @@ def shortOps : Words.Ops := ⟨shortSide, shortSide, #[], #[]⟩
 /-! ## One honest pass
 
 One pass of the deployed scheme (`pearl-c-h100-v1-h3`, `k_min` 1,024, 64 × 64 tiles): one call of A (16 × 1,024) against
-its weight's B (64 × 1,024), each element a BF16 value drawn from a standard normal, proved by the honest prover
+its fixed operand's B (64 × 1,024), each element a BF16 value sampled from a standard normal, proved by the honest prover
 (`clear_audit.Prover`) and declared by it (`clear_work.declare`: no row excluded), whose one tile `clear_audit.Verifier`
 and `clear_work.check_opened` pass. Every hm96 salt in it is zero, the challenger's (which its entropy may give) and the
-prover's rows' and leaf's. Its epoch's coins are the challenger's of epoch 0, the salt coin 0x11…11 and the draw coin
+prover's rows' and leaf's. Its epoch's coins are the challenger's of epoch 0, the salt coin 0x11…11 and the sampling coin
 0x22…22. The digests below are the Python's for these values, and the kernel computes the Lean's in each witness. -/
 
 /-- Bytes from hex, as `bytes.fromhex` reads them. -/
@@ -88,15 +88,15 @@ def hexBytes (s : String) : ByteArray := (pyFromHex s).toOption.getD .empty
 def honestCoinsRoot : String :=
   "16c3f3b6cefac407b74009f3250c4499d9649728c25a0038a8b3011b28d43d7d62a8848ca05dd9c8a50bde90124cffc7867492046358d2e6ff0143557a382b19"
 
-/-- The draw coin's position's value in the coin tree, the salt coin's opening's one sibling. -/
+/-- The sampling coin's position's value in the coin tree, the salt coin's opening's one sibling. -/
 def honestCoinSibling : String :=
   "19cf1c75456f465a808221091bdc5f6d5d4eec4f20b304492f839d6e7b8f42c0ff5d82ad71b4be1bab4ae67f69d0f1729666bca17b98ad35a05e737f8d5657c5"
 
-/-- The root of weight 0's B rows. -/
+/-- The root of fixed operand 0's B rows. -/
 def honestRootB : String :=
   "746b809ce5f8479b57f8f05fbc396e247942bea80d1cdd8a09d290eeb61201548284e97e60bd17f7e728033b2a4955681301c51f7c9e68701abba2b03765fea9"
 
-/-- The weights' root over weight 0's. -/
+/-- The fixed operands' root over fixed operand 0's. -/
 def honestWeightsRoot : String :=
   "5808746767aa035e79a2708d7ee82f8abf8c9c3b41f9f6cabfa2715fbde6e12457c01a11ffda028221a3130aeb25cc796531bbc0cd32f2264ca082dbde9336d1"
 
@@ -149,16 +149,16 @@ def honestPass : Pass where
   recordsRoot := hexBytes honestRecordsRoot
   yRoots := [none]
 
-/-- The verifier's 32-byte source of the draw (the Pearl+ difftest's). -/
+/-- The verifier's 32-byte source of the sample (the Pearl+ difftest's). -/
 def honestSource : ByteArray := "verifierverifierverifierverifier".toUTF8
 
-/-- A run of the one honest pass at `draws` draws, on the verifier's source. -/
+/-- A run of the one honest pass at `draws` samples, on the verifier's source. -/
 def honestRun (draws : Nat) : Input := { coins := honestCoins, manifests := [honestManifest], draws, source := some honestSource }
 
 /-! ## A test tile
 
 One tile of a test instance of the scheme (`capScheme`, a manifest's `"instance": {"k_min": 128, "tile": [1, 1]}`): one
-1 × 128 call of A against its weight's 1 × 128 B, each element a BF16 value drawn from a standard normal, proved by the
+1 × 128 call of A against its fixed operand's 1 × 128 B, each element a BF16 value sampled from a standard normal, proved by the
 honest prover (`clear_audit.Prover`) and declared by it (`clear_work.declare`: `capRecord`, no row excluded), whose tile
 `clear_audit.Verifier` and `clear_work.check_opened` pass. Every hm96 salt is zero and the epoch's coins are
 `honestPass`'s; each tree holds one leaf, so every opening's path is empty. The bytes are the Python's, written as
@@ -173,11 +173,11 @@ def beBytes (w : Nat) (ns : List Nat) : ByteArray :=
 def testSalt : ByteArray :=
   beBytes 32 [0xe95599b0336671b716b2158ad898723a2fcae2e1705360a7ebbfa64ab0f39694]
 
-/-- The root of weight 0's B row. -/
+/-- The root of fixed operand 0's B row. -/
 def testRootB : ByteArray :=
   beBytes 64 [0x5bc5f2360d97e9e83458b84ace98fcb1cca169d2dbdf63c5dcfdf32664fcc8142fb5076bdd16d521e08d7666e571d2f788833118e7d6911d1b17369d507c89cc]
 
-/-- The weights' root over weight 0's. -/
+/-- The fixed operands' root over fixed operand 0's. -/
 def testWeightsRoot : ByteArray :=
   beBytes 64 [0x461c56f0db558c3a6bf05f5087b11fbffe6ce51afe9b776fd8ec3e5311ff6c42f5d8841e120f74c2e378af4e35859006fe9c0e5f9a129543b40b5abe5c1d71f2]
 
@@ -901,7 +901,7 @@ def testNoise : Words.FixedNoise :=
     fbCols := (Array.range R).map (Words.column testFb), gram := testGram }
 
 /-- The test pass's manifest, a test instance's (`"instance": {"k_min": 128, "tile": [1, 1]}`): what `load` reads of it,
-its salt coin the epoch's opened after the test weights' root. -/
+its salt coin the epoch's opened after the test fixed operands' root. -/
 def testManifest : Lean.Json := Lean.Json.mkObj [
   ("schema", .str MANIFEST_SCHEMA),
   ("scheme", .str NAME),
@@ -918,14 +918,14 @@ def testManifest : Lean.Json := Lean.Json.mkObj [
   ("records_root", .str (hex testRecordsRoot)),
   ("commitment", Lean.Json.mkObj [("root", .str (hex testTranscriptRoot)), ("count", .num 1)])]
 
-/-- A run of the test pass at one draw on the verifier's source, read as a test instance's, so it credits nothing. -/
+/-- A run of the test pass at one sample on the verifier's source, read as a test instance's, so it credits nothing. -/
 def testRun : Input :=
   { coins := honestCoins, manifests := [testManifest], draws := 1, source := some honestSource, testInstance := true }
 
 /-- The test pass's honest prover: the test tile's openings, whatever tile is asked. -/
 def testOpener (_pass _tile : Nat) : Except String TileOpening := .ok testOpening
 
-/-- `testRun`'s plan: the test pass, its run commitment, the verifier's source, and the one tile its one draw names. -/
+/-- `testRun`'s plan: the test pass, its run commitment, the verifier's source, and the one tile its one sample names. -/
 def testPlan : Plan := ⟨[testPass], runCommitment [testPass], honestSource, [(0, 0)], 1, [(0, 0)], none⟩
 
 end Properties.Pouw.PearlPlus

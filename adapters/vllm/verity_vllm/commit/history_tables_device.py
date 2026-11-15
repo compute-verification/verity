@@ -1,5 +1,5 @@
 """`history.HistoryTable` on the GPU (`Table` with a ``device``) and its CPU twin (`Table` without one): a history table's tree
-built, appended to and opened by `protocols/pouw/pouw_cuda/row_table.cuh`'s history functions, the device's through
+built, appended to and opened by `row_table.cuh`'s history functions (in `row_tables_device.CUDA_DIR`), the device's through
 `row_table.cu`'s ``rt_hist_*`` kernels and the twin's through `row_table_host.cpp`, the same build `row_tables_device` loads.
 
 A `Table` reads as `history.HistoryTable` does where `commit.history_tables.Histories` reads one (its ``make``): ``rows``,
@@ -17,9 +17,9 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
 from verity.commitments import hm96
+
 from verity_vllm.commit import row_tables_device as D
 
 __all__ = ["Hist", "Table"]
@@ -54,7 +54,7 @@ def _host() -> ctypes.CDLL:
 def _device(lib: ctypes.CDLL) -> ctypes.CDLL:
     vp = ctypes.c_void_p
     lib.rt_hist_init.argtypes = [vp, _hp, vp]
-    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32] + [vp] * 6
+    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32, *[vp] * 6]
     lib.rt_hist_paths.argtypes = [vp, _hp, vp, vp, ctypes.c_uint32, vp]
     for f in (lib.rt_hist_init, lib.rt_hist_append, lib.rt_hist_paths):
         f.restype = ctypes.c_int
@@ -90,7 +90,7 @@ class Table:
         nodes = 8 * (2 * capacity - 1)
         if device is None:
             self._dev = None
-            self._tree = np.zeros(nodes, dtype=np.uint64)
+            self._tree: Any = np.zeros(nodes, dtype=np.uint64)  # an array here, a tensor on the device
             self._check("rt_hist_init_host", _host().rt_hist_init_host(ctypes.byref(h), self._tree))
         else:
             import torch

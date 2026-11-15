@@ -429,10 +429,10 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
   have e : P * (S + (L - ρ) + X + (lam + m * b)) = P * (L - ρ) + P * S + P * X + P * (lam + m * b) := by ring
   omega
 
-/-- `RemoteSessionConservationRelay`'s reading on any store `store ω` sampled before the session's coins, from a bound
+/-- `RemoteRunConservationRelay`'s reading on any store `store ω` sampled before the session's coins, from a bound
 `ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the samples' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
-theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem run_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)
     (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
     (hu : Pous.pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
@@ -479,16 +479,16 @@ open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **The remote bandwidth audit as deployed, with side sources that may relay receipts**
-(`Accounting.Guarantees.RemoteSessionConservationRelay`). -/
-theorem RemoteSessionConservationRelay : Accounting.Guarantees.RemoteSessionConservationRelay := by
+(`Accounting.Guarantees.RemoteRunConservationRelay`). -/
+theorem RemoteRunConservationRelay : Accounting.Guarantees.RemoteRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF
-  refine (session_relay_of_unpaid id A tier lam m rounds cRoot F dbar dw hn hP hN hb hdw _
+  refine (run_relay_of_unpaid id A tier lam m rounds cRoot F dbar dw hn hP hN hb hdw _
     (DeployedSession.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
   ring
 
 /-- **The deployed session with relaying side sources conserves its words as a run of the remote audit**
-(`Accounting.Guarantees.RemoteSessionRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteSessionRunConservationRelay : Accounting.Guarantees.RemoteSessionRunConservationRelay := by
+(`Accounting.Guarantees.RemoteMonitoringPeriodConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteMonitoringPeriodConservationRelay : Accounting.Guarantees.RemoteMonitoringPeriodConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF
   have hs := ofDeployed_sampled A tier (Deployed.rebuildBits b rounds cRoot F) Nd a dbar hn hP hN hb hdbar hab hC
   have hp := ofDeployed_paid_relay A tier Nd a hrc ha hab hal hW hF

@@ -85,7 +85,7 @@ namespace Site
 inductive Kind
   | site
   | host
-  | device
+  | accelerator
   | memory
   | certifier
   | challenger
@@ -97,8 +97,8 @@ site, a device under a host, memory under a device or a host, and the auditor's 
 def Kind.parents : Kind → List (Option Kind)
   | .site => [none]
   | .host => [some .site]
-  | .device => [some .host]
-  | .memory => [some .device, some .host]
+  | .accelerator => [some .host]
+  | .memory => [some .accelerator, some .host]
   | .certifier | .challenger => [some .site]
   | .outside => []
 
@@ -407,7 +407,7 @@ rounded up. No sheet states a device's CUDA-core ops or oracle queries a tick, o
 parameters, as in `Accel.Card.machine`. `none` for anything else. -/
 def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) (tick : ℚ≥0) {ι : Type} (cuda oracle : ℕ)
     (cap : ι → ℕ) : Option (Accounting.Device ι) :=
-  if x.kind = .device then
+  if x.kind = .accelerator then
     (S.sheet? digest x).bind fun k => (A.sheet k.sku).map fun a =>
       let f := k.figures.bounding (A.estimate a)
       { chip := k.chip
@@ -448,7 +448,7 @@ def Kinds : Prop :=
 /-- `sheetDigest`: each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered
 sheet's digest. -/
 def Sheets : Prop :=
-  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .device → x.sheet ∈ (S.add e).sheets.map D.sheet
+  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .accelerator → x.sheet ∈ (S.add e).sheets.map D.sheet
 
 /-- `figures`: each new sheet is accepted against the auditor's sheet `a` for its SKU: its figures against `a`'s estimate
 (`DeviceFigures.Accepted`: the SKU `a`'s, the clock and every peak rate within the tolerance of `a`'s both ways, every
@@ -459,7 +459,7 @@ def Figures : Prop :=
 /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
 def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
-    ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
+    ∀ x ∈ (S.add e).locs, x.kind = .accelerator → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
 /-- `owner`: each new certifier or challenger is one of the auditor's own devices, owned by it and with its key, and
 every other new location is the prover's. -/

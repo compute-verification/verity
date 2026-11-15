@@ -20,6 +20,7 @@ import gzip
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 
@@ -49,7 +50,7 @@ def make_match(tmp: str) -> str:
             data = _rows(L, member).tobytes()
             sha = hashlib.sha256(data).hexdigest()
             fn = f"values/0/{sha[:16]}.bin"
-            open(os.path.join(d, "capture", fn), "wb").write(data)
+            Path(os.path.join(d, "capture", fn)).write_bytes(data)
             alloc = 10 + 2 * L + j
             entries.append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [POS, H], [H, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [POS, H], "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
@@ -59,7 +60,7 @@ def make_match(tmp: str) -> str:
                               "name": f"t={pos}/rotary_emb", "hint": f"model.layers.{L}.self_attn.rotary_emb/{suf}", "request": U0, "position": pos,
                               "operand_views": [], "output_views": [{"alloc": alloc, "offset": pos * H, "shape": [H], "strides": [1], "dtype": "bfloat16", "device": "cuda:0"}]})
             ev += 1
-    json.dump({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}))
     with open(os.path.join(d, "instances.jsonl"), "w") as f:
         f.write(json.dumps({"schema": "verity-gen/instances/v1", "digest": "f" * 64, "n_instances": len(insts),
                             "requests": [{"index": 0, "request_id": U0, "prompt_len": POS, "served_samples": 1, "max_tokens": 1}]}) + "\n")
@@ -69,7 +70,7 @@ def make_match(tmp: str) -> str:
         f.write(json.dumps({"$e": "RunHeader", "schema": "verity-capture/log/v1", "created_utc": "2026-09-20T21:00:00Z", "profile_id": "abc", "profile": {"vllm": {"version": "t"}}}) + "\n")
         f.write(json.dumps({"$e": "StepStart", "step": 0, "rows": [[U0, p] for p in range(POS)]}) + "\n")
         f.write(json.dumps({"$e": "SampleEnd", "step": 0, "sampled_token_ids": [5]}) + "\n")
-    json.dump({"requests": [{"request_id": U0, "prompt_token_ids": [1, 2], "generated_token_ids": [5]}]}, open(os.path.join(d, "capture", "tokens.json"), "w"))
+    Path(os.path.join(d, "capture", "tokens.json")).write_text(json.dumps({"requests": [{"request_id": U0, "prompt_token_ids": [1, 2], "generated_token_ids": [5]}]}))
     return d
 
 
@@ -137,7 +138,8 @@ def test_an_invocation_bound_at_its_runtime_row_is_compared_with_the_folds_row(t
     last = N_LAYERS - 1
 
     def bound_at(row: int):
-        tensors, entries = [], []
+        tensors: list[tuple[str, bytes]] = []
+        entries: list[dict] = []
         for k in range(N_LAYERS):
             for member in ("query", "key"):
                 one = (k, member) == (last, "query")

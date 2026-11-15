@@ -1,6 +1,6 @@
 """Red team of property/v1 (the stacking program's int8 property, /tmp/stacking-context/PROGRAM.md I2): each mechanism is
 checked bit for bit through the registry's own evaluators and the s8 silicon model, on the CPU.  Nothing here is a kernel;
-what is measured is that the named registry primitive (or `verity.definitions.silicon.integer`'s IMMA) computes the exact
+what is measured is that the named registry primitive (or `verity.circuits.silicon.integer`'s IMMA) computes the exact
 nonlinearity claimed, and the class the stacking-budget classifier puts it in.
 
     uv run python benchmarks/property_redteam/demo.py [--out FILE.json] [--words N]
@@ -11,7 +11,7 @@ Sections (encode_in_circuit takes ~55 s a word on one core):
   floors  registry primitives that compute an exact floor, carry, comparison, select or mod, with the class the
           stacking-budget classifier (cursor/stack-property-6cd3, benchmarks/stacking_budgets/count_budgets.py) gives each
           and whether property/v1's "roundings" budget (cast + act) counts it;
-  codec   the store codec (p1024/k3/masked, verity.protocols.poub.verifier.codec): its encode/decode round-trip,
+  codec   the store codec (p1024/k3/masked, verity.protocols.accounting.poub.verifier.codec): its encode/decode round-trip,
           its per-byte squaring cost, the seed-key malleability a post-seed store would exploit, and the bound key that
           closes it (the composition the Lean guarantee rests on);
   encode_in_circuit  the codec's `encode_word` from u8 IMMA products (in range from C = 0) and registry integer and
@@ -27,18 +27,18 @@ import random
 import struct
 import sys
 
-import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.types import Array, Value
 from verity.definitions.registry import catalog
 from verity.definitions.registry.ref_prims import gather_f32
-from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
-from verity.definitions.silicon.integer import (
+from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
+from verity.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP,
 )
-from verity.definitions.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
-from verity.protocols.poub.verifier import codec as C
+from verity.circuits.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
+from verity.protocols.accounting.poub.verifier import codec as C
 
 M32 = (1 << 32) - 1
 
@@ -304,7 +304,7 @@ def _jacobi(a: int, n: int) -> int:
 # ---- the codec's encode from exact products and unbudgeted primitives ---------------------------------------------------
 
 #: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which the validating run also reproduced bit for bit
-#: (`verity.definitions.silicon.integer`'s docstring); its column sums here are at most 128 * 255^2 < 2^23, so every
+#: (`verity.circuits.silicon.integer`'s docstring); its column sums here are at most 128 * 255^2 < 2^23, so every
 #: chain is in range from C = 0 and passes a static operand-range and reduction-length check.
 IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="u8", operand_bits=8,
                      k_per_instruction=32, satfinite=True, validated="run r20261015-084000-06d8, form u8.u8 .satfinite")

@@ -3,16 +3,19 @@
 # suite reads records it writes itself.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the suite imports the scripts beside it by their module names, as they import each other
+pythonpath = ["."]
 addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_settings.py"]
-# settings.py declares the job's variables in a verity_config `Registry` and checks them with the harness's `check` (stdlib
-# only).
-inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py", "verity/configuration/config/verity_config",
-          "verity/errors.py", "verity/__init__.py", "verity/settings.py"]
+# settings.py declares the job's variables in a verity_config `Registry` and checks them with its `check` (stdlib only);
+# record.py writes the run's numbers through the harness kit (stdlib only with verity_config).
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py",
+          "benchmarks/harness/verity_bench/kit.py", "tools/config/verity_config",
+          "verity/errors.py", "verity/__init__.py", "tools/config/verity_config/verity_settings.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

@@ -5,11 +5,10 @@ import zlib
 
 import numpy as np
 import pytest
-
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import kernel_registry as KR
 from verity.definitions.numerics import twins as TW
-from verity.circuits.evaluation import evaluate
-from verity.circuits.defs import bind
 
 FAMILIES = sorted(TW.FAMILIES)
 

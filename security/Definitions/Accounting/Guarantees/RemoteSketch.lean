@@ -21,7 +21,7 @@ its query; per query, `2^-(8r)` that it named a block's sketch with a sector of 
 device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its values give one sketch,
 `Accounting.Guarantees.SketchRankFiber`); and `ε_ro`, the keys' distance from uniform.
 
-* `SketchBoundSession`: at every parameter.
+* `SketchBoundRun`: at every parameter.
 * `SketchBoundDeployed`: at the deployed receipts (`remote_bandwidth.receipts`: 4096-byte blocks of `m = 128` sectors,
   16 sign rows, SHA-512 tags, `h = 512`) and rank `r = 12`, with `Q` the SHA-512 compressions the prover can make over
   the session, the node's `C` times the outside-compute factor `F` (grinding a seed reads no block, so it can run off
@@ -51,21 +51,21 @@ are the session devices' (`Receipted`, `Present`), with SHA-512's keys at the ca
 uniform (`SketchHashRandom`), within the per-pass hash budget `qtot` (`KeyBudget`) and with signs whose rank tail below
 `r ≤ 32` is at most `ε` (`SketchRank`), `SketchBound` holds at
 `(Σ_j G_j)·(ε + N/2^h) + (Σ_j qtot_j)/2^(8r) + ε_ro`. -/
-def SketchBoundSession : Prop :=
+def SketchBoundRun : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N m h S L q ks r : ℕ) (G qtot : Fin P → ℕ) (ε εro : ℝ)
-    (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)),
+    (A : Remote.Sketch.Run β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)),
     r ≤ 32 → 0 ≤ ε → 0 ≤ εro → T.passes ≤ P →
     Accounting.Assumptions.SketchRank ks m r (ENNReal.ofReal ε) →
     Accounting.Assumptions.SketchHashRandom A εro → KeyBudget A qtot → Receipted A T → Present A T →
     SketchBound T (((∑ j, G j : ℕ) : ℝ) * (ε + N / 2 ^ h) + ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ (8 * r) + εro)
 
-/-- **The sketch bound at the deployed receipts.** `SketchBoundSession` at 4096-byte blocks (`m = 128`), 16 sign rows,
+/-- **The sketch bound at the deployed receipts.** `SketchBoundRun` at 4096-byte blocks (`m = 128`), 16 sign rows,
 SHA-512 tags and rank `r = 12`, for a prover of `Q` SHA-512 compressions over the session (the node's times the
 outside-compute factor `F`): at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-512's keys
 at them within `(Q + P)²/2^257` of uniform. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Session β Hs P N 128 512 S L q 16 G) (T : Trace (Outcome β Hs N 128)),
+    (A : Remote.Sketch.Run β Hs P N 128 512 S L q 16 G) (T : Trace (Outcome β Hs N 128)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 128 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →

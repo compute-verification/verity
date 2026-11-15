@@ -13,10 +13,10 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 # How many proof blocks the second stage proves (`size_proved_selectSecond`)
 
 The second stage's law has one cell per template `t` and sampled replay block, each sampling `k_t` of its `n_t` proof
-blocks (`flockLaw_second`); its draw returns each cell's count (`stratifiedWith_size`), and its sample object carries
+blocks (`flockLaw_second`); its sample returns each cell's count (`stratifiedWith_size`), and its sample object carries
 those units and no closure. So an accepted second stage proves exactly `|sample| · Σ_t k_t` proof blocks. At a
 registration the replay sample is `RegTwo.sample src₁`, the units the first stage proves, and this is the count
-`Kfirst · Σ_t k_t` of the drawn blocks whose gates the checked proof blocks need.
+`Kfirst · Σ_t k_t` of the sampled blocks whose gates the checked proof blocks need.
 -/
 
 @[expose] public section
@@ -73,7 +73,7 @@ theorem size_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "
   simp only [natsJson, Array.size_empty, Nat.add_zero]
   exact size_filterMap_map_some units _ int? (fun a : ℕ => (a : Int)) int_toJson
 
-/-- **A work law's draw returns its strata's counts**: `units` has `Σ_s k_s` entries. -/
+/-- **A work sampling design's sample returns its strata's counts**: `units` has `Σ_s k_s` entries. -/
 theorem drawUnits_work_size {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray} {units : Array ℕ}
     (h : Draw.drawUnits (.work K ws) n src = .ok (units, read)) : units.size = (ws.toList.map (·.k)).sum := by
   unfold Draw.drawUnits at h
@@ -150,7 +150,7 @@ theorem sum_range_getD (a : Array ℕ) : ((List.range a.size).map fun t => a.get
 
 /-- **The second stage proves `|sample| · Σ_t k_t` proof blocks**: an accepted second stage's sample proves exactly
 `k_t` proof blocks of each template `t`'s cell in each sampled replay block, and no others. At a registration,
-`sample` is the replay sample `RegTwo.sample src₁`, and this is the count `Kfirst · Σ_t k_t` of the drawn proof
+`sample` is the replay sample `RegTwo.sample src₁`, and this is the count `Kfirst · Σ_t k_t` of the sampled proof
 blocks. -/
 theorem size_proved_selectSecond {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :

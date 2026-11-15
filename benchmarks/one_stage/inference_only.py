@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its declared circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `NciCheck.Count`'s rule (`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean`), against a policy the run
+by `NciCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -90,7 +90,7 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
-NCI_PACKAGE = ROOT / "verity/protocols/inference_only/verifier/nci/lean"
+NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
 NCI_REFERENCE = NCI_PACKAGE / "scripts" / "nci_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64

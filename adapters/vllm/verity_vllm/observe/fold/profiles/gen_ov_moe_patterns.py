@@ -42,7 +42,7 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import act as _ACT
 from verity.definitions.registry import moe as _MOE
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.quarantine.ov_moe import moe as Q
+from verity.definitions.registry import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
@@ -240,7 +240,7 @@ class MoEFusedExperts:
                         continue
                     if not isinstance(r, Compute):
                         return unsupported(node, f"scope pattern {getattr(pt, 'name', type(pt).__name__)} refused {op_name(d.op)} inside {op_name(node.op)}",
-                                           child_id=d.id, child=d.op, reason=getattr(r, "reason", None), child_detail=getattr(r, "detail", None))
+                                           child_id=d.id, child=d.op, child_reason=getattr(r, "reason", None), child_detail=getattr(r, "detail", None))
                     extra.append(r)
                     keep |= {d.id} | set(d.ids())
                     break
@@ -304,7 +304,7 @@ class MoEFusedExperts:
         silu_r = SiluAndMul().match(silu, ctx)
         if not isinstance(silu_r, Compute):
             return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul",
-                               detail=getattr(silu_r, "detail", None), reason=getattr(silu_r, "reason", None))
+                               detail=getattr(silu_r, "detail", None), child_reason=getattr(silu_r, "reason", None))
         if silu_r.rows != P:
             return unsupported(node, "silu_and_mul rows are not the M*TOPK pair rows", rows=silu_r.rows, P=P)
         # the constructions' declared activation (`TargetProfile.MOE_CONSTRUCTIONS`: SiluMul_v2{I}, the Build's `silu_mul` kind)

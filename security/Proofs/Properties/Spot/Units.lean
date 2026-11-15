@@ -10,10 +10,10 @@ import all Lean.Data.Json.Basic
 /-!
 # v2's units, read off the values the verifier keeps
 
-One-stage v2 credits a session the public file's unit indices of the instances its record draws
+One-stage v2 credits a session the public file's unit indices of the instances its record samples
 (`Spot.OneStageZk.provedUnits`): it reads the record's `unit_draw` as `Flock.JsonParse.parse` built it, and the
 public file's header as `Spot.FilePart.header` reads the file's first line. The session keeps both rebuilt (`Flock.norm`):
-the draw as `Flock.Witness.recordDraw` keeps it, and the header as `Flock.HmIn.loadPublic` keeps it. The two readings
+the sample as `Flock.Witness.recordDraw` keeps it, and the header as `Flock.HmIn.loadPublic` keeps it. The two readings
 agree:
 
 * `getD_norm`, `nat?_norm`: a field of a rebuilt well-formed value is the field rebuilt, and a number reads the same
@@ -21,8 +21,8 @@ agree:
 * `headerOf_of`: v2's `FilePart.header` reads the header `RecDeploy.SetupValues.headerOf` reads, its first line up to the
   first newline (`headerLine_of_findByte`), so it reads the header the session's public file load keeps
   (`headerOf_loadPublic`, through `RecDeploy.SetupValues.loadPublic_counts`);
-* `provedUnits_eq`: at a record whose draw the verifier keeps as `D` and a public file whose header v2 reads as `h`,
-  v2's units are `unitsAt h D`, the units read off the rebuilt draw; `provedUnits_of_loadPublic`,
+* `provedUnits_eq`: at a record whose sample the verifier keeps as `D` and a public file whose header v2 reads as `h`,
+  v2's units are `unitsAt h D`, the units read off the rebuilt sample; `provedUnits_of_loadPublic`,
   `unitsAt_of_provedUnits`: at the header the load keeps.
 -/
 
@@ -193,15 +193,15 @@ theorem headerOf_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.
 
 /-! ## The units -/
 
-/-- **The units a draw proves, at a public header**: the header's `units.indices` (`FilePart.indicesOf`) at the
-instances the draw `D` names, ascending, as v2 credits a session's (`Spot.OneStageZk.provedUnits`). -/
+/-- **The units a sample proves, at a public header**: the header's `units.indices` (`FilePart.indicesOf`) at the
+instances the sample `D` names, ascending, as v2 credits a session's (`Spot.OneStageZk.provedUnits`). -/
 def unitsAt (h D : Json) : Option (Array Nat) := do
   let is ← (Spot.FilePart.indicesOf h).toOption
   let .arr ds := getD D "units" | none
   let units ← ds.mapM fun e => nat? e >>= (is[·]?)
   pure (units.qsort (· < ·))
 
-/-- **v2's units are the units read off the draw the verifier keeps**: at a record whose draw the verifier keeps as `D`
+/-- **v2's units are the units read off the sample the verifier keeps**: at a record whose sample the verifier keeps as `D`
 (`Flock.Witness.recordDraw`) and a public file whose header v2 reads as `h`. -/
 theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
     (hh : Spot.FilePart.header pubB = .ok h) (hD : Flock.Witness.recordDraw record = some D) :
@@ -240,14 +240,14 @@ theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
     · cases hD
   · cases hD
 
-/-- **v2's units at the session's public file**: the units read off the kept draw at the kept header. -/
+/-- **v2's units at the session's public file**: the units read off the kept sample at the kept header. -/
 theorem provedUnits_of_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {pubB : ByteArray}
     {P : Flock.Public} {record : String} {D : Json} (hp : Flock.HmIn.loadPublic tags c pi pubB = .ok P)
     (hD : Flock.Witness.recordDraw record = some D) :
     (Spot.OneStageZk.provedUnits pubB record).toOption = unitsAt P.header D :=
   provedUnits_eq (headerOf_loadPublic hp) hD
 
-/-- Where v2 credits a session units `us`, they are the units read off the kept draw at the kept header. -/
+/-- Where v2 credits a session units `us`, they are the units read off the kept sample at the kept header. -/
 theorem unitsAt_of_provedUnits {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {pubB : ByteArray}
     {P : Flock.Public} {record : String} {D : Json} {us : Array Nat} (hp : Flock.HmIn.loadPublic tags c pi pubB = .ok P)
     (hD : Flock.Witness.recordDraw record = some D)

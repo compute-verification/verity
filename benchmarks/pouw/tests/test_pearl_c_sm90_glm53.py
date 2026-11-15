@@ -73,8 +73,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), the gap 173561/22302500."""
-    from verity.protocols.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -200,7 +200,7 @@ def test_h200_session_runs_the_tables_shapes():
     prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
     graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
     and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
-    gives up the passes' rows over a debit cap, then verifies them at the verdict's draws and checks their outputs in full.
+    gives up the passes' rows over a debit cap, then verifies them at the verdict's samples and checks their outputs in full.
     With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
     rc.txt."""
     sh = (HERE / "h200.sh").read_text()
@@ -232,7 +232,7 @@ def test_h200_session_runs_the_tables_shapes():
     ("no uncredited", "1", "1", "ship rc 2"), ("", None, None, "volunteer-needed rc 2")])
 def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_its_cap(tmp_path, needed, volunteer, step, rc):
     """h200.sh asks ``served_passes.py volunteer-needed --verdict pass`` (a stand-in here) before the ship is unpacked:
-    while the verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap, VOLUNTEER defaults to 1 and
+    while the verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap, VOLUNTEER defaults to 1 and
     one that skips the give-up stops the session; once that verdict credits such a row nothing it defaults to 0, and any
     other answer stops the session too.  The stand-in ship is missing, so a session the guard lets through stops there."""
     tree, out = tmp_path / "tree", tmp_path / "out"
@@ -567,13 +567,13 @@ def retained(tmp_path_factory):
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
-    from verity.protocols.pouw.verifier import core_check as CC
-    from verity.protocols.pouw.verifier.audit import (
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier.audit import (
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
         ROW_SCHEMA,
@@ -587,23 +587,38 @@ def retained(tmp_path_factory):
         weight_binding,
         weights_root,
     )
-    from verity.protocols.pouw.verifier.coins import Challenger
-    from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
     from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
-    words = lambda r: (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
-    rows = lambda x: [r.tobytes() for r in x]
-    bf16 = lambda x: b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
-    laid = lambda d, leaves: b"".join(b"".join(level) for level in tree_levels(d, leaves))
+
+    def words(r):
+        return (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
+
+    def rows(x):
+        return [r.tobytes() for r in x]
+
+    def bf16(x):
+        return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
+
+    def laid(d, leaves):
+        return b"".join(b"".join(level) for level in tree_levels(d, leaves))
+
+    def inv(alpha):
+        return np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
+
     wrows, acts = {0: words(16), 1: words(32)}, {0: words(32), 1: words(16)}
     acts[0][20:] = 0
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes([1]) * 32)
-    salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)
+
+    def salted(v, nonce, i):
+        return v + hm96_salt(prover.salt_key, nonce, i)
+
     ch = Challenger(0, random.Random(7).randbytes)
     coins = ch.commitment, ch.open("salt", weights_root(prover.weight_roots))
     epoch = Epoch.start(work, prover.weight_roots, *coins)
@@ -636,7 +651,6 @@ def retained(tmp_path_factory):
         noise = s.noise(ctx)
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
         uu = np.array(s.checked(ctx, ops).u, np.uint32)[:rec.real_rows].view(np.float32)
-        inv = lambda alpha: np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
         y = torch.from_numpy((uu * inv(ops.a.alpha)[:rec.real_rows, None]) * inv(ops.b.alpha)[None, :]).to(torch.bfloat16)
         (d / "y" / f"{u.index}.bf16").write_bytes(y.view(torch.int16).numpy().tobytes())
         y_words += y.numel()
@@ -705,7 +719,7 @@ def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_cap
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = _copy(retained, tmp_path)
     before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}

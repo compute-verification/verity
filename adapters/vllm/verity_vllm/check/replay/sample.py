@@ -2,12 +2,13 @@
 challenge (`challenge_seed`, derived in `verity_vllm.commit.challenge`), and the honest-prover catch probability."""
 from __future__ import annotations
 
+import statistics
 from typing import Any
 
 from verity.commitments.randomness import Key
 
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import challenge as CH
+from verity_vllm.records import replay_codes as RC
 
 
 def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None,
@@ -59,7 +60,6 @@ def _catch_probability(strata: dict[str, dict]) -> dict[str, Any]:
     whole tensor -- is caught with probability 1 as soon as the stratum has one evaluation).  Reported per phase (min / median / mean over
     that phase's strata) and overall; the seed's freshness is `sample.seed_source` -- against an ADAPTIVE prover only a post-commitment
     verifier challenge makes these numbers the catch rate (v2)."""
-    import statistics
     by_phase: dict[str, list[float]] = {}
     for k, v in strata.items():
         pop, ev = int(v.get("population", 0)), int(v.get("evaluated", 0))

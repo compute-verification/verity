@@ -1,13 +1,14 @@
-/-
-Level 3, L3-A (`verity/ml/flock/verifier/README.md` stage 1d): the assembly. First the equality tensor: the executable's `eqTable r` holds,
-at index `b`, `eq(r, b) = Π_j (r_j if bit j of b, else 1 + r_j)` (the soundness model's `eqAt`), over the field GF128.
--/
 module
 
 public import Proofs.Flock.Level3.GF128Field
 public import Flock.Piop
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
+
+/-!
+Level 3, L3-A (`verity/ml/flock/verifier/README.md` stage 1d): the assembly. First the equality tensor: the executable's `eqTable r` holds,
+at index `b`, `eq(r, b) = Π_j (r_j if bit j of b, else 1 + r_j)` (the soundness model's `eqAt`), over the field GF128.
+-/
 
 @[expose] public section
 

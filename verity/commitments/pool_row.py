@@ -1,5 +1,5 @@
 """The block pool between two windows as one row, and its root: the row `CompileSlice_v6` carries from window to
-window (`verity.protocols.certifier.prover.compile_slice_v6`), and the one a serving stack exports from its prefix cache.
+window (`verity.protocols.accounting.certifier.prover.compile_slice_v6`), and the one a serving stack exports from its prefix cache.
 
 **The row**, field-major, each element least significant bit first: the free queue's ``head`` and ``tail`` (NW bits
 each, NW = bitlen(NB − 1)), then per block b = 1 … NB − 1 its links ``prev``, ``next``, ``cprev``, ``cnext`` (the free

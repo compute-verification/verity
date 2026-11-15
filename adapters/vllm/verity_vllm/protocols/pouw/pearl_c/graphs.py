@@ -23,11 +23,22 @@ Inside vLLM's own capture of a whole decode forward, a call launches the same st
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
-from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8
+import numpy as np
+
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState, _Stages
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _Driver,
+    _event,
+    _Lane,
+    _zeros,
+    torch_uint8,
+)
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
+
+__all__ = ["GRAPH_ROWS"]
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -78,7 +89,7 @@ class _Graph:
     poisoned: int | None = None
 
 
-class GraphCalls(WholeCalls):
+class GraphCalls(WholeCalls, _RunState):
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
     trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
     ``_graphs``, ``shapes``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
@@ -94,17 +105,17 @@ class GraphCalls(WholeCalls):
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
                 self._tree_joined()
-                xa, tree, y = self._stages[w, sh.m16]
+                xa, tree, y = cast("_Stages", self._stages)[w, sh.m16]
                 for stage, t in zip((xa, tree), self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
                 y[:m].copy_(out[0][:m])
             if self._statement_on():
                 self.statement.stage(w, sh)
             return out
-        if self._whole is not None and self._whole_retained and (w, sh.m16) not in self._stages:
+        if self._whole is not None and self._whole_retained and (w, sh.m16) not in cast("_Stages", self._stages):
             import torch
-            self._stages[w, sh.m16] = (*(t.new_empty(t.shape) for t in self._kept(sh, pipe)),
-                                       sh.xa.new_empty((sh.m16, sh.n), dtype=torch.bfloat16))
+            cast("_Stages", self._stages)[w, sh.m16] = (*(t.new_empty(t.shape) for t in self._kept(sh, pipe)),
+                                                        sh.xa.new_empty((sh.m16, sh.n), dtype=torch.bfloat16))
             self._stages_poisoned = None
         if self._whole is not None and self._statement_on():
             self.statement.prepare(w, sh)
@@ -195,7 +206,7 @@ class GraphCalls(WholeCalls):
         import torch
         if self.fork is None:
             self.fork = _Lane(self.device, "greatest", -2)
-        D, dev, fork = self.driver, self.kernel.dev, self.fork
+        D, dev, fork = cast("_Driver", self.driver), self.kernel.dev, self.fork   # no driver is unchecked: its steps fail
         start, first, end = _event(), _event(), _event()
 
         def go():
@@ -246,14 +257,13 @@ class GraphCalls(WholeCalls):
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (at its position in the pass,
         the index past the pass's base)."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.first)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
         weight's slot for the rest of the forward is predicted (the next indices, the same m, the pass's running offsets) and
         uploaded in one copy; a call whose slot doesn't hold its own values (another order or m) gets them uploaded alone, so
         the bytes don't depend on the prediction."""
-        import numpy as np
         cur, R = self.cur, self.kernel.run
         want = (index, m16, cur.tiles, cur.flag_rows)
         pos = self.order[w]

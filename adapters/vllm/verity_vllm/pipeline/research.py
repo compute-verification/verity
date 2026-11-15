@@ -35,11 +35,15 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.config import ROOT, UsageError
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline.row_driver import CLI, utc
+from verity_vllm.pipeline.row_json import field_of
+from verity_vllm.records.schema_ids import ROW_ATTEMPTS_SCHEMA
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
@@ -57,6 +61,11 @@ def abs_store_env(environ: dict[str, str]) -> dict[str, str]:
         if val and not val.startswith(("/", "~")):
             env[v] = os.path.abspath(val)
     return env
+
+
+def cli(*args: str, py: str) -> list[str]:
+    """The command line of ``verity-vllm ARGS...`` under the interpreter ``py``."""
+    return [py, *CLI, *args]
 
 
 def research_argv(research_bin: str | None, research_py: str, env: dict[str, str]) -> tuple[list[str], dict[str, str]]:
@@ -78,8 +87,9 @@ def job_input(run_dir: str | None, name: str) -> str:
     if not run_dir:
         return ""
     try:
-        d = json.load(open(os.path.join(run_dir, "job.json")))
-        return ((d.get("store") or {}).get("inputs") or {}).get(name) or ""
+        with open(os.path.join(run_dir, "job.json")) as f:
+            d = json.load(f)
+        return field_of(field_of(d.get("store"), "inputs"), name) or ""
     except (OSError, ValueError, AttributeError):
         return ""
 
@@ -98,7 +108,7 @@ def artifact_meta(research: tuple[list[str], dict[str, str]], art: str, key: str
     d = _show(research, art)
     if not isinstance(d, dict):
         return ""
-    v = ((d.get("manifest") or d).get("meta") or {}).get(key)
+    v = field_of((d.get("manifest") or d).get("meta"), key)
     return "" if v is None else str(v)
 
 
@@ -111,7 +121,7 @@ def _attempt(research: tuple[list[str], dict[str, str]], run_id: str) -> dict[st
 
 def attempt_output(research: tuple[list[str], dict[str, str]], run_id: str, name: str) -> str:
     """outputs[name] of a published attempt, "" when none."""
-    return str((_attempt(research, run_id).get("outputs") or {}).get(name) or "")
+    return str(field_of(_attempt(research, run_id).get("outputs"), name) or "")
 
 
 def _tee(path: str, line: str) -> None:
@@ -124,7 +134,7 @@ def build_input(py: str, d: str, row: str, build_in: str, env: dict[str, str],
                 research: Callable[[], tuple[list[str], dict[str, str]]]) -> tuple[str | None, str]:
     """(why the Build in row dir ``d`` is not the cited Build artifact ``build_in``, as the precheck's FAIL detail, else None; the
     Program digest of ``d``'s Build). ``research()``: the research CLI, as `research_argv` gives it."""
-    r = subprocess.run([py, *CLI, "research-outputs", "digest", d, row], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    r = subprocess.run(cli("research-outputs", "digest", d, row, py=py), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                        text=True, cwd=ROOT, env=env)
     here = r.stdout.strip() if r.returncode == 0 else ""
     if not here:
@@ -157,7 +167,7 @@ def stage(o: Any, run: Callable[[Any, str], int]) -> int:
         if env.research_run_dir:
             inputs = [*(["--input", f"build={build_in}"] if build_in else []), *(["--input", f"match={match_in}"] if match_in else [])]
             with open(f"{d}/row.log", "a") as f:
-                subprocess.run([env.py, *CLI, "research-outputs", "write", d, o.row, o.stage, *inputs], stdout=f, stderr=subprocess.STDOUT,
+                subprocess.run(cli("research-outputs", "write", d, o.row, o.stage, *inputs, py=env.py), stdout=f, stderr=subprocess.STDOUT,
                                cwd=ROOT, env=child)
             if env.research_run_id:
                 preserve(env.guard_preserve_file, env.research_run_id)
@@ -167,7 +177,10 @@ def preserve(path: str, run_id: str) -> None:
     """Register ``run_id`` on the pod guard's durability list (once)."""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        have = open(path).read().split("\n") if os.path.exists(path) else []
+        have: list[str] = []
+        if os.path.exists(path):
+            with open(path) as f:
+                have = f.read().split("\n")
         if run_id not in have:
             with open(path, "a") as f:
                 f.write(run_id + "\n")
@@ -179,12 +192,16 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
     """``value`` at ``path`` in ``row.json`` beside the row: a stage's Attempt under ``stages``, the record's at ``record``."""
     p = f"{d}/row.json"
     try:
-        doc = json.load(open(p)) if os.path.exists(p) else {"schema": "verity-sweep/row-v2/v1", "stages": {}}
+        doc: Any = {"schema": ROW_ATTEMPTS_SCHEMA, "stages": {}}
+        if os.path.exists(p):
+            with open(p) as f:
+                doc = json.load(f)
         node = doc
         for k in path[:-1]:
             node = node.setdefault(k, {})
         node[path[-1]] = value
-        json.dump(doc, open(p, "w"), indent=1)
+        with open(p, "w") as f:
+            json.dump(doc, f, indent=1)
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"row.json not updated: {e}", file=sys.stderr)
 
@@ -199,7 +216,6 @@ def publishing(o: Any) -> dict[str, str | None] | None:
         raise UsageError(f"{why}; the chain would publish it as one (or --no-publish)")
     ref = o.ref
     if not ref:
-        from verity_vllm.pipeline import source_identity
         ref = source_identity.tree_identity(REPO_ROOT).get("branch")
     if not ref or ref == "HEAD":
         raise UsageError(f"{o.row}: the chain publishes its record with the tree REF@SHA, and {REPO_ROOT} names no branch: --ref REF "
@@ -217,14 +233,16 @@ def publish(o: Any, d: str, runs: dict[str, dict[str, Any]], research: tuple[lis
     Commit's summary.json, each needed property's newest capture of record and the tree the Commit ran, ``how``'s ref at its
     Attempt's source commit.  A dirty or unknown source publishes nothing."""
     (b, _), (m, m_run), (c, c_run) = ((runs[s]["artifact"], runs[s]["run_id"]) for s in OF_RECORD)
-    src = _attempt(research, c_run).get("source") or {}
-    if not src.get("commit") or src.get("dirty") is not False:
+    src = _attempt(research, c_run).get("source")
+    commit = field_of(src, "commit")
+    if not commit or field_of(src, "dirty") is not False:
         _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: publishes nothing: the Commit {c_run} ran source {src or 'unknown'}, "
                              f"not a clean commit")
         return PUBLISH_REFUSED
-    argv = [sys.executable, *CLI, "records", "publish", d, o.row, "--build", b, "--match", m, "--match-run", m_run, "--commit", c,
-            "--commit-run", c_run, "--tree", f"{how['ref']}@{src['commit']}", "--by", how["by"],
-            *(["--tier", how["tier"]] if how["tier"] else []), "--summary", f"{d}/commit/summary.json", "--newest-captures"]
+    argv = cli("records", "publish", d, o.row, "--build", b, "--match", m, "--match-run", m_run, "--commit", c,
+               "--commit-run", c_run, "--tree", f"{how['ref']}@{commit}", "--by", how["by"],
+               *(["--tier", how["tier"]] if how["tier"] else []), "--summary", f"{d}/commit/summary.json", "--newest-captures",
+               py=sys.executable)
     _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: {' '.join(argv[1:])}")
     r = subprocess.run(argv, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=research[1])
     found = re.findall(r"art:[0-9a-f]{64}", r.stdout) if r.returncode == 0 else []
@@ -242,9 +260,9 @@ def cited_runs(o: Any) -> dict[str, str]:
 def cited(research: tuple[list[str], dict[str, str]], st: str, run_id: str) -> dict[str, Any]:
     """The chain's stage ``st`` when it cites one (``--<st>-run``): a ``vllm.<st>`` Attempt that exited 0 with its account artifact."""
     att = _attempt(research, run_id)
-    tool, status, art = (att.get("tool") or {}).get("name"), att.get("status") or {}, (att.get("outputs") or {}).get(ACCOUNT[st])
-    if tool != f"vllm.{st}" or status.get("rc") != 0 or not art:
-        raise UsageError(f"--{st}-run {run_id}: not a passing {st.title()} Attempt (tool {tool}, rc {status.get('rc')}, {ACCOUNT[st]} artifact {art})")
+    tool, art, rc = field_of(att.get("tool"), "name"), field_of(att.get("outputs"), ACCOUNT[st]), field_of(att.get("status"), "rc")
+    if tool != f"vllm.{st}" or rc != 0 or not art:
+        raise UsageError(f"--{st}-run {run_id}: not a passing {st.title()} Attempt (tool {tool}, rc {rc}, {ACCOUNT[st]} artifact {art})")
     return {"run_id": run_id, "artifact": art, "rc": 0}
 
 
@@ -266,7 +284,7 @@ def chain(o: Any, sweep_dir: str) -> int:
     for st, run_id in cited_runs(o).items():
         runs[st] = cited(research, st, run_id)
         _row_json(d, ("stages", st), runs[st])
-    build_art, match_art = ((runs.get(st) or {}).get("artifact") or "" for st in ("build", "match"))
+    build_art, match_art = (field_of(runs.get(st), "artifact") or "" for st in ("build", "match"))
     for st in o.stages.split(","):
         run_id = f"r{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{secrets.token_hex(2)}"
         args = ["run", "--id", run_id, "--tool", f"vllm.{st}", "--project", project, "--cwd", REPO_ROOT]
@@ -277,7 +295,7 @@ def chain(o: Any, sweep_dir: str) -> int:
         if st == "commit" and match_art:
             args += ["--input", f"match={match_art}"]
         _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: research {' '.join(args)} -- verity-vllm row stage {st} ...")
-        workload = [sys.executable, *CLI, "row", "stage", st, o.row, o.role, o.repo, o.rev, *o.flags]
+        workload = cli("row", "stage", st, o.row, o.role, o.repo, o.rev, *o.flags, py=sys.executable)
         rc = subprocess.run([*research[0], *args, "--", *workload], env=research[1]).returncode
         art = attempt_output(research, run_id, ACCOUNT[st])
         print(f"{st} {run_id} {art or '-'} rc={rc}", flush=True)

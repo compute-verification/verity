@@ -1,4 +1,4 @@
-// The streamed-label wipe's labels on one GPU (verity/protocols/pous/verifier/streamed_wipe.py):
+// The streamed-label wipe's labels on one GPU (verity/protocols/accounting/pous/verifier/streamed_wipe.py):
 //
 //   L_i = SHA-512(LABEL_TAG ‖ K ‖ u64be i)      75 bytes, one SHA-512 compression a 64-byte label
 //
@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "../../../verity/definitions/kernels/sha512.cuh"
+#include "../../../verity/circuits/kernels/sha512.cuh"
 
 #define CK(x)                                                                                    \
   do {                                                                                           \

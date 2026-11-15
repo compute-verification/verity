@@ -1,4 +1,9 @@
-/-
+module
+
+public import Identity.Domains.Pouw
+public import Identity.Domains.Shared
+
+/-!
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
 (`tests/test_domains.py`).
@@ -13,10 +18,6 @@ The table is `Identity.Domains.Pouw`'s entries (PoUW's, and Pearl's labels), the
 more than one protocol reads), then this module's. PoUW's Lean imports `Identity.Domains.Pouw`, which imports the shared
 ones, and never the other protocols' separators.
 -/
-module
-
-public import Identity.Domains.Pouw
-public import Identity.Domains.Shared
 
 @[expose] public section
 
@@ -123,9 +124,11 @@ abbrev POUS_STORAGE_PROFILE : String := "verity-pous/storage-profile/v1"
 abbrev POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512 : String :=
   "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 abbrev POUS_STREAMED_WIPE_BATCH_RECORDS : String := "verity-pous/streamed-wipe/batch-records/v1"
+abbrev POUS_STREAMED_WIPE_END : String := "verity-pous/streamed-wipe/end/v1"
 abbrev POUS_STREAMED_WIPE_LABEL : String := "verity-pous/streamed-wipe/label/v1"
-abbrev POUS_STREAMED_WIPE_SESSION : String := "verity-pous/streamed-wipe/session/v1"
-abbrev POUS_STREAMED_WIPE : String := "verity-pous/streamed-wipe/v1"
+abbrev POUS_STREAMED_WIPE_SESSION : String := "verity-pous/streamed-wipe/session/v2"
+abbrev POUS_STREAMED_WIPE_START : String := "verity-pous/streamed-wipe/start/v1"
+abbrev POUS_STREAMED_WIPE : String := "verity-pous/streamed-wipe/v2"
 abbrev POUS_W_COMMITMENT : String := "verity-pous/w-commitment/v2"
 abbrev MEMORY_CHALLENGER_RECORD : String := "verity/memory-challenger-record/v1"
 abbrev POUS_PERIOD_SESSION : String := "verity/pous-period/session/v1"

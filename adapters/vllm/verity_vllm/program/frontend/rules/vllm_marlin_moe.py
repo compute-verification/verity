@@ -23,17 +23,27 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import torch
-
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
-from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity.definitions.numerics import marlin_moe_rows as MR
 from verity.definitions.registry import marlin_moe as MM
-from verity.definitions.registry.prims import F32 as F32_WORD, I32 as I32_WORD
+from verity.definitions.registry.prims import F32 as F32_WORD
+from verity.definitions.registry.prims import I32 as I32_WORD
+
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    call_args,
+    from_rows,
+    known,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
+from verity_vllm.program.frontend.rules.vllm_iface import iface
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
@@ -97,7 +107,7 @@ class MarlinMoeAlignRule(OpRule):
         E, BM = a["num_experts"], a["moe_block_size"]
         if not (isinstance(E, int) and isinstance(BM, int) and E > 0 and BM > 0):
             return f"num_experts={E!r} moe_block_size={BM!r} are not static positive ints"
-        M = shape(ctx, a["topk_ids"])[0]
+        M = known(shape(ctx, a["topk_ids"]))[0]
         if (L := launch_tokens_of(node, M)) != M:
             return (f"numerics_unregistered: the launch routes {L} tokens, {L - M} of them other requests': moe_align_block_size sorts "
                     f"every pair of the launch, so this request's blocks and the launch's block count read their routing")
@@ -105,7 +115,7 @@ class MarlinMoeAlignRule(OpRule):
 
     def emit(self, node, ctx):
         a = call_args(node)
-        M, TOPK = shape(ctx, a["topk_ids"])
+        M, TOPK = known(shape(ctx, a["topk_ids"]))
         S = {"E": a["num_experts"], "P": M * TOPK, "BM": a["moe_block_size"]}
         ranks, blocks = ctx.kind("marlin_moe_rank", node, **S), ctx.kind("marlin_moe_align", node, P=S["P"], BM=S["BM"])
         ids = ctx.coll(a["topk_ids"]).reshape(Array(S["P"], I32_WORD))
@@ -123,11 +133,11 @@ class MarlinMoeGemmRule(OpRule):
     modes = frozenset({"profile"})
     info = RuleInfo("MarlinMoeGemm[vllm-marlin-moe]", 1, "op-binding", applies_to="vllm_iface.marlin_moe_mxfp4_gemm",
                     preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's)",
-                                   "w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
-                                   "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]",
+                                   ("w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
+                                   "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]"),
                                    "w a u8 value [E, N, K / 2] and w_scale a u8 value [E, N, K / 32] (the e8m0 bytes Mxfp4MoEMethod holds)",
-                                   "the capture gives the launch's config at its tokens (MARLIN_SERVED) and moe_block_size is "
-                                   "fused_marlin_moe's there"),
+                                   ("the capture gives the launch's config at its tokens (MARLIN_SERVED) and moe_block_size is "
+                                   "fused_marlin_moe's there")),
                     evidence_domain="structural; numerics: MarlinMoeExpertGemm_v1 / MarlinMoeExpertGemmW_v1 (registry.marlin_moe; the "
                                     "capture tests/properties/dsv4_marlin_capture_gpu.py)")
 
@@ -144,21 +154,21 @@ class MarlinMoeGemmRule(OpRule):
             return r
         if (r := _value(ctx, a["topk_ids"], I32, (None, None), "topk_ids")):
             return r
-        (M, TOPK), top_k, mul, BM = shape(ctx, a["topk_ids"]), a["top_k"], a["mul_topk_weights"], a["moe_block_size"]
+        (M, TOPK), top_k, mul, BM = known(shape(ctx, a["topk_ids"])), a["top_k"], a["mul_topk_weights"], a["moe_block_size"]
         if (top_k, mul) not in ((TOPK, False), (1, True)):
             return f"numerics_unregistered: top_k={top_k!r}, mul_topk_weights={mul!r} is neither the w13 launch (top_k {TOPK}) nor w2 (top_k 1)"
         P = M * TOPK
         if (r := _value(ctx, a["x"], BF16, (P // top_k, None), "x")):
             return r
-        K = shape(ctx, a["x"])[1]
+        K = known(shape(ctx, a["x"]))[1]
         if (r := _value(ctx, a["w"], U8, (None, None, K // 2), "w")):
             return r
-        E, N, _ = shape(ctx, a["w"])
+        E, N, _ = known(shape(ctx, a["w"]))
         if (r := _value(ctx, a["w_scale"], U8, (E, N, K // MM.GROUP), "w_scale") or _value(ctx, a["blk"], I32, (P,), "blk")
                 or _value(ctx, a["par"], I32, (1,), "par") or (mul and _value(ctx, a["topk_weights"], F32, (M, TOPK), "topk_weights"))):
             return r
         L = launch_tokens_of(node, M)
-        if BM != MR.moe_block(L, TOPK, E):
+        if MR.moe_block(L, TOPK, E) != BM:
             return f"moe_block_size {BM!r} is not fused_marlin_moe's at {L} tokens over {E} experts ({MR.moe_block(L, TOPK, E)})"
         cfg = served_config(E, TOPK, K, N, top_k, L)
         if isinstance(cfg, str):
@@ -171,11 +181,13 @@ class MarlinMoeGemmRule(OpRule):
 
     def emit(self, node, ctx):
         a = call_args(node)
-        M, TOPK = shape(ctx, a["topk_ids"])
+        M, TOPK = known(shape(ctx, a["topk_ids"]))
         P, top_k, mul = M * TOPK, a["top_k"], a["mul_topk_weights"]
-        K = shape(ctx, a["x"])[1]
-        E, N, _ = shape(ctx, a["w"])
-        TK, TN, GRID = served_config(E, TOPK, K, N, top_k, launch_tokens_of(node, M))
+        K = known(shape(ctx, a["x"]))[1]
+        E, N, _ = known(shape(ctx, a["w"]))
+        cfg = served_config(E, TOPK, K, N, top_k, launch_tokens_of(node, M))
+        assert not isinstance(cfg, str), cfg  # `applies` refused a launch with no served configuration
+        TK, TN, GRID = cfg
         S = {"E": E, "K": K, "N": N, "TK": TK, "TN": TN, "GRID": GRID}
         fn = ctx.kind(self._role(a), node, **S, DOT=MM.DOT)
         x, _ = rows_of(ctx.coll(a["x"]))
@@ -183,7 +195,7 @@ class MarlinMoeGemmRule(OpRule):
         g = ctx.coll(a["topk_weights"]).reshape(Array(P, F32_WORD)) if mul else None
         blk, par, wq, ws = ctx.coll(a["blk"]), ctx.coll(a["par"])[0], ctx.coll(a["w"]), ctx.coll(a["w_scale"])
         h = ctx.hint_name(node)
-        outs = [ctx.call(fn, x[p // top_k], ids[p], *((g[p],) if mul else ()), blk[p], par, wq, ws, node=node, rule=self, name=f"{h}[{p}]")
+        outs = [ctx.call(fn, x[p // top_k], ids[p], *((g[p],) if g is not None else ()), blk[p], par, wq, ws, node=node, rule=self, name=f"{h}[{p}]")
                 for p in range(P)]
         ctx.define(node, from_rows(outs, (P,)))
         ctx.bind_weight_role(a["w"], self, "moe.expert_weight_e2m1x2", E=E, K=K, N=N)

@@ -11,7 +11,7 @@ canonical digest.  Additive specializations leave both unchanged; anything else 
 versioned migration (a new corpus entry recorded by the integrator with the decision id), never a silent edit.
 
 Corpus manifest: `verity_vllm/properties/golden/corpus.json`.  Logs live under `data/logs/`, registered fixtures
-(`fixtures/artifacts.json`) that `check` fetches where they are not.
+(`artifacts.json`) that `check` fetches where they are not.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import UsageError, option
-from verity_vllm.properties.record import seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 
@@ -72,7 +72,7 @@ def load_corpus(path: Path = CORPUS) -> dict[str, Any]:
 
 def check(corpus_path: Path = CORPUS, only: list[str] | None = None) -> dict[str, Any]:
     corpus = load_corpus(corpus_path)
-    out: dict[str, Any] = {"schema": "verity-gen/golden-check/v1", "status": "pass", "utc": _utc(), "corpus": str(corpus_path), "entries": []}
+    out: dict[str, Any] = {"schema": REGISTRY["golden"].schema, "status": "pass", "utc": _utc(), "corpus": str(corpus_path), "entries": []}
     for e in corpus["entries"]:
         if only and e["name"] not in only:
             continue
@@ -112,7 +112,7 @@ def record(name: str, log: str, profile_name: str, *, decision: str | None = Non
 
 
 def _utc() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass(frozen=True, kw_only=True)

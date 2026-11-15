@@ -4,8 +4,9 @@ which runs before its check (`vqueue.Build.records`), and the records commit mad
 The run is a lock run (`Landing.launch_locks`: `train.sh SHA MACHINES --deferred lean-audit`, its check at
 `POSTLAND_SLOT_RANK`, its lean-audit regenerating each lock record it finds stale, with `--bookkeeping-warn` where train.sh
 takes it), on the queue's machines (`Landing.on`), judged by `lock_outcome`: one its machine failed (lost, killed, out of disk
-or memory: `machine_fault`) runs again once on the other machines (`resend_locks`); one that registered no run, never ran or was
-stopped is infra, which the loop launches again once; one that failed refuses.  A passed run passes once its Lean report
+or memory, its Lean pool closed: `machine_fault`) runs again once on the other machines (`resend_locks`); one that registered
+no run, never ran or was stopped is infra, which the loop launches again once; one that failed refuses.  A passed run passes
+once its Lean report
 (`merge.lean_report`) can be read: every package it regenerated is committed, and a change to what a guarantee says (the
 report's `statement_changes`: a guarantee's statement, a definition one reads, a listed premise or listed compile-time code)
 refuses nothing.  The records commit names each such change (`_changes`), and the spec DM shows each one once it lands on
@@ -49,9 +50,12 @@ NAMED = (("guarantees", re.compile(r"^guarantee (\S+): ")), ("assumptions", re.c
          ("domain", re.compile(r"^domain hypothesis (\S+): ")), ("open", re.compile(r"^open premise (\S+): ")))
 #: a review line of a definition the build's guarantees read, which names them
 READ_BY = re.compile(r"^definition .*, read by (.+): (?:new|gone|changed|in a changed module)$")
-#: a failed step's log saying its machine ran out of disk or memory: the machine's fault, not the change's (`machine_fault`)
+#: a failed step's log saying its machine ran out of disk or memory, or closed the Lean slot pool it asked for: the machine's
+#: fault, not the change's (`machine_fault`); pytest's `mktemp` drops the errno of a full disk, saying only that its numbered
+#: directory could not be made
 FAULT_RE = re.compile(r"No space left on device|\bENOSPC\b|\[Errno 28\]|Cannot allocate memory|\[Errno 12\]|\bMemoryError\b"
-                      r"|\b[Oo]ut of memory\b")
+                      r"|\b[Oo]ut of memory\b|could not create numbered dir with prefix \S+ in \S+ after \d+ tries"
+                      r"|pool '[^']+' is closed on this machine")
 #: a Lake package's lock, which a lock run may regenerate (`merge.LOCK`)
 LOCK = "lean-audit.json"
 #: the subject a lock commit opens with (`lock_message`), before the PRs whose records it regenerated
@@ -392,8 +396,8 @@ def lean_audit_ran(driver: Landing, rid: str) -> bool:
 
 def machine_fault(driver: Landing, ids: list[str]) -> str | None:
     """What says a lock run that failed failed by its machine rather than by the Lean it checked, or None: a step killed
-    (`killed`), a failed step's log saying its machine ran out of disk or memory (`FAULT_RE`), or lean-audit passed in a run
-    that failed anyway (a disk that fills after every audit passed is no failure of the change)."""
+    (`killed`), a failed step's log saying its machine ran out of disk or memory or closed its Lean pool (`FAULT_RE`), or
+    lean-audit passed in a run that failed anyway (a disk that fills after every audit passed is no failure of the change)."""
     for d in driver.evidence(driver.repo, ids):
         if d.name not in ids:
             continue

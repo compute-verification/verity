@@ -6,6 +6,7 @@ import importlib
 import sys
 import types
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -52,7 +53,7 @@ def test_inherited_method_is_inherited_again() -> None:
 
 def test_own_attribute_is_the_same_object_again() -> None:
     orig = Runner.sample
-    mod = types.ModuleType("fake_vllm_layer")
+    mod: Any = types.ModuleType("fake_vllm_layer")
     fn = mod.tensor_model_parallel_all_reduce = lambda x: x
     with hooks.Hooks() as h:
         h.patch(Runner, "sample", lambda self, x: None)
@@ -64,7 +65,7 @@ def test_own_attribute_is_the_same_object_again() -> None:
 
 
 def test_stacked_patches_unwind_to_the_original() -> None:
-    r = Runner()
+    r: Any = Runner()
     r.sample = own = lambda x: ("own", x)
     h = hooks.Hooks()
     h.wrap(r, "sample", lambda o: (lambda x: ("outer", o(x))))
@@ -116,11 +117,20 @@ def test_appended_hook_leaves_the_list() -> None:
 
 def test_a_service_stops_before_the_patches_it_serves_and_keeps_its_counters() -> None:
     log: list[str] = []
+
+    def start() -> int:
+        log.append("start")
+        return 7
+
+    def stop(handle: int) -> dict[str, int]:
+        log.append(f"stop {handle}")
+        return {"answered": 3}
+
     r = Runner()
     before = hooks.live()
     with hooks.Hooks(tag="pous:band-chain/d12/v1") as h:
         h.wrap(r, "sample", lambda o: (lambda x: ("decoded", o(x))))
-        s = h.service("responder", lambda: log.append("start") or 7, lambda handle: log.append(f"stop {handle}") or {"answered": 3})
+        s = h.service("responder", start, stop)
         assert log == ["start"] and s.handle == 7 and s.tag == h.tag
         assert hooks.live(h.tag) == (h.entries[0], s) and hooks.live("pouw:ncp-v1") == ()
         assert r.sample(1) == ("decoded", ("sample", 1))
@@ -271,7 +281,11 @@ def test_export_shims_restore_torch_and_vllm() -> None:
 
     from vllm.platforms import current_platform
 
-    from verity_vllm.program.frontend.export_compat import _NUM_CU_MODULES, apply_target_profile, moe_ops_traced
+    from verity_vllm.program.frontend.export_compat import (
+        _NUM_CU_MODULES,
+        apply_target_profile,
+        moe_ops_traced,
+    )
     cls = type(current_platform)
     cap = vars(cls).get("get_device_capability", hooks.ABSENT)
     mods = []
@@ -316,7 +330,11 @@ def test_export_shims_restore_torch_and_vllm() -> None:
 def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() -> None:
     """A plain kernel object keeps the original scale object; the shim refreshes it after export swaps the module Parameter."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.program.frontend.export_compat import _expert_weight_scales_through_owner
+    from torch import nn
+
+    from verity_vllm.program.frontend.export_compat import (
+        _expert_weight_scales_through_owner,
+    )
 
     class Experts:
         def __init__(self, w1_scale, w2_scale) -> None:
@@ -336,7 +354,7 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
         def apply(self, x):
             return x * self.w1_scale + self.w2_scale
 
-    class Layer(torch.nn.Module):
+    class Layer(nn.Module):
         def __init__(self) -> None:
             super().__init__()
             self.w13_weight_scale_inv = torch.nn.Parameter(torch.ones(4), requires_grad=False)
@@ -366,6 +384,8 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
 def test_a_routers_parameters_are_exported_from_their_registered_owner() -> None:
     """A plain router keeps the gate's correction bias and DeepSeek-V4's hash table; the shim reads both from the gate."""
     torch = pytest.importorskip("torch")
+    from torch import nn
+
     from verity_vllm.program.frontend.export_compat import _router_params_through_owner
 
     class Router:
@@ -375,7 +395,7 @@ def test_a_routers_parameters_are_exported_from_their_registered_owner() -> None
         def select_experts(self, logits, ids):
             return logits + self.e_score_correction_bias, self._hash_indices_table[ids]
 
-    class Moe(torch.nn.Module):
+    class Moe(nn.Module):
         def __init__(self) -> None:
             super().__init__()
             self.gate = torch.nn.Module()

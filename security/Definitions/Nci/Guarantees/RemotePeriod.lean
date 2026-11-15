@@ -17,7 +17,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks`, at window `t`'s play, for
   a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s premises; that
   bridge is not stated, and `δ_bind` and `δ_ks` have no value yet (`PouwSound`), so `p` is a parameter with none.
-  `ComposeMonitoringPeriod.CircuitCreditPeriod` credits live words over a period's accepted prefix, not time, so it
+  `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` credits live words over a period's accepted prefix, not time, so it
   does not give `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,

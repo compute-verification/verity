@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from verity_vllm.config import row_target
 
+__all__ = ["row_custom_all_reduce_off", "row_p2p_env"]
+
 #: Row-id target tokens whose TP boxes are SYS.
 P2P_SYS_TARGETS: frozenset[str] = frozenset({"l40s", "rtxpro6000"})
 #: Why a TP workload runs with what `row_p2p_env` and `row_custom_all_reduce_off` give it (a served Commit's record: `engine.served`).

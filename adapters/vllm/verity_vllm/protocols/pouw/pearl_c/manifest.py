@@ -4,14 +4,22 @@ execution phase's coins or, for a pass recorded before them, from its beacon.
 """
 from __future__ import annotations
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier.audit import Epoch, Workload
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.verifier.window import LIVE_SCHEME
-from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
+from typing import cast
+
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+    Shape,
+)
+from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
+
+__all__ = ["manifest_epoch", "session_head"]
 
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt execution phase's
 #: execution phase root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's
@@ -36,7 +44,7 @@ def manifest_schema(man: dict, recorded: bool = False) -> str:
                           "reads it")
     if schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise DomainError(f"schema {schema!r}, not {CC.MANIFEST_SCHEMA}" + (f" or {CC.MANIFEST_RECORDED}" if recorded else ""))
-    return schema
+    return cast(str, schema)
 
 
 def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, recorded: bool = False) -> tuple[Epoch, str]:
@@ -56,6 +64,9 @@ def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, rec
             raise DomainError("the pass has no salt coin")
         if coins is None:
             raise DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds")
+        for key in ("salt_opening", "coins"):
+            if key in man and not isinstance(man[key], dict):
+                raise DomainError(f"the pass's coins are malformed: {key} is not an object")
         live = isinstance(man.get("coins"), dict) and man["coins"].get("scheme") == LIVE_SCHEME
         try:
             opening = (LiveOpening if live else CoinOpening).from_json(man["salt_opening"])

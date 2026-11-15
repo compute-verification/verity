@@ -39,7 +39,7 @@ into the run's ``$OUT`` after each close and each seal.
 
 With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
 also commits the step rows the window ran
-(`verity.protocols.certifier.verifier.served_rows.register`, under the window's run root): each request named by its arrival
+(`verity.protocols.accounting.certifier.verifier.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
 its run root, written at the close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
@@ -60,9 +60,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.certifier.verifier import charge_chain as CC
-from verity.protocols.certifier.verifier import compile_slice as CS
-from verity.protocols.certifier.verifier import served_rows as SRW
+from verity.protocols.accounting.certifier.verifier import charge_chain as CC
+from verity.protocols.accounting.certifier.verifier import compile_slice as CS
+from verity.protocols.accounting.certifier.verifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
 from verity_vllm.errors import Refused

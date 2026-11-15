@@ -1,4 +1,4 @@
-"""The benchmark reaches the slowdown calculator (`verity/protocols/inference_only/rho`) through one module,
+"""The benchmark reaches the slowdown calculator (`benchmarks/rho`) through one module,
 `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
 
 - One door: no other module or test under this directory imports a module of the calculator or names its directory
@@ -7,10 +7,10 @@
   directly, on the work a step's products state.
 - One slowdown (`second`): outside the one module, no source of the benchmark reads a private name of it (an
   attribute `calculator._x` or `from ... calculator import _x`) or writes a `slowdown`, `rho` or `S` key in a function
-  `STATES` doesn't list; inside it, only `_bound` calls the calculator's `bound`, `blocks_at_least` or
-  `slowdown_at_least`, only `slowdown` and `_figure` call `_bound`, only `slowdown` calls `_figure`, and its public
-  functions are `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it. The one ratio
-  that is not the entry point's is Fit's c/(c − d), where a training fits one block (`formalism.at`)."""
+  `STATES` doesn't list; inside it, nothing calls the calculator's `bound`, `blocks_at_least` or `slowdown_at_least`,
+  only `_figure` calls its `slowdown_of`, only `slowdown` calls `_bound` and `_figure`, and its public functions are
+  `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it. The one ratio that is not the
+  entry point's is Fit's c/(c − d), where a training fits one block (`formalism.at`)."""
 import ast
 import math
 from pathlib import Path
@@ -25,28 +25,34 @@ from training_slowdown import formalism as F
 HERE = Path(__file__).resolve().parents[1]
 #: the one module that reaches the calculator, and this file, whose toy sources name it
 DOOR, THIS = "training_slowdown/calculator.py", "tests/test_one_calculator.py"
-#: the calculator's modules as its directory on the import path names them, and the part of a path only its
-#: directory and its policy's have
-MODULES, DIRECTORY = {"rho", "periods"}, "inference_only"
+#: the calculator's package, which has its directory's name
+PACKAGE = calculator.CALCULATOR.name
+#: the calculator's modules as its directory on the import path names them, and its directory's name: a part of every
+#: path to it, and alone a key of the benchmark's own records too
+MODULES, DIRECTORY = {PACKAGE, "periods"}, PACKAGE
 #: files that name the calculator's directory in a message and read nothing of it, each with why. It only shrinks.
 NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where the registry's tables are"}
 
 
 def reaches(source: str) -> list[str]:
     """`line: what` for each place `source` reaches the calculator: an import of one of its modules, or a string
-    outside a docstring that names its directory (a path to it, whole or in parts)."""
+    outside a docstring that names its directory as a part of a path: one of the parts of a path written whole
+    (`benchmarks/rho/data`), or the name alone where `/` joins it (a path in parts). The name alone anywhere else is the
+    benchmark's own key."""
     tree = ast.parse(source)
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     docstrings = {id(n.body[0].value) for n in ast.walk(tree) if isinstance(n, scopes) and n.body
                   and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+    joined = {id(side) for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+              for side in (n.left, n.right)}
     out = []
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
             out += [(n.lineno, f"import {a.name}") for a in n.names if a.name.split(".")[0] in MODULES]
         elif isinstance(n, ast.ImportFrom) and not n.level and (n.module or "").split(".")[0] in MODULES:
             out.append((n.lineno, f"from {n.module} import"))
-        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and DIRECTORY in n.value
-              and id(n) not in docstrings):
+        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings
+              and DIRECTORY in n.value.split("/") and ("/" in n.value or id(n) in joined)):
             out.append((n.lineno, repr(n.value[:60])))
     return [f"{line}: {what}" for line, what in sorted(out)]
 
@@ -63,40 +69,52 @@ def test_only_the_one_module_reaches_the_calculator():
 
 
 def test_a_reach_is_found():
-    """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
-    from its file and a path in parts are each found, and a docstring or a relative import of this package is not."""
-    assert reaches("import sys\nsys.path.insert(0, 'verity/protocols/inference_only/rho')\nimport periods\n"
-                   "from rho import min_cut\nimport rho.params\n") == [
-        "2: 'verity/protocols/inference_only/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
+    """The check above isn't vacuous: an import by name, one behind a path put on the import path (a path written
+    whole), a module loaded from its file and a path in parts (its directory, then its package, each an operand of
+    `/`) are each found, and a docstring, a relative import of this package, a dictionary's `rho` key or a
+    subscript's is not."""
+    home = calculator.CALCULATOR.relative_to(HERE.parents[1]).as_posix()
+    assert reaches(f"import sys\nsys.path.insert(0, '{home}')\nimport periods\n"
+                   f"from {PACKAGE} import min_cut\nimport {PACKAGE}.params\n") == [
+        f"2: '{home}'", "3: import periods", f"4: from {PACKAGE} import", f"5: import {PACKAGE}.params"]
     assert reaches("from pathlib import Path\nimport importlib.util\n"
-                   "P = Path('verity') / 'protocols' / 'inference_only' / 'rho' / 'rho' / 'min_cut.py'\n"
-                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'inference_only'"]
-    assert reaches('"""Reads verity/protocols/inference_only/rho through calculator."""\nfrom . import calculator\n'
-                   'from .rho import x\n\ndef f():\n    """As inference_only says."""\n    rho = 1\n') == []
+                   f"P = Path('benchmarks') / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
+                   "importlib.util.spec_from_file_location('m', P)\n") == [f"3: '{PACKAGE}'", f"3: '{PACKAGE}'"]
+    assert reaches(f'"""Reads {home}/data through calculator."""\nfrom . import calculator\n'
+                   f'from .{PACKAGE} import x\n\ndef f():\n    """As {home}/data says."""\n    {PACKAGE} = 1\n') == []
+    assert reaches(f'got = {{"{PACKAGE}": 1.0}}\n') == []
+    assert reaches(f'half = got["{PACKAGE}"] / 2\n') == []
 
 
 def test_the_products_term_is_the_calculators(monkeypatch):
-    """The entry point chooses which work is charged and computes none of the bound: with the calculator's module
-    replaced by one whose bound is 42 blocks on every work, its term is 42 blocks' slowdown, at the β and the F the
-    replaced module gives."""
+    """The entry point reads M into the calculator's products, priced, and chooses none of the work and computes none
+    of the bound: with the calculator's `slowdown_of` replaced by one that chooses 42 blocks at F = 1.25 on every
+    work, the figure and the bound are that choice's, and what the entry point handed over is M's group with its
+    activation at the replaced module's β(k)."""
     real = vars(calculator._min_cut())
     seen = []
 
-    def bound(c, k, n, **work):
-        seen.append((c, k, n, work))
-        return SimpleNamespace(slowdown=7.0, blocks=42.0, statement="a statement", rests_on="its premises")
+    def slowdown_of(c, k, n, *, size, work, scale):
+        seen.append((c, k, n, size, scale, work))
+        b = SimpleNamespace(slowdown=7.0, blocks=42.0, statement="a statement", rests_on="its premises")
+        term = 42.0 * c / size
+        return real["Chosen"](b, "M", (0,), term, {"M": term}, 8.0, q=48.0, beta_w=16.0, beta_x=3.0, b_y=16, F=1.25,
+                              alpha=0.5, N=1e9, O=1e7)
 
     monkeypatch.setattr(calculator, "_min_cut", lambda: SimpleNamespace(**real | {
-        "bound": bound, "beta": lambda k: 3.0, "share": lambda omega: 1.25}))
+        "slowdown_of": slowdown_of, "beta": lambda k: 3.0}))
     group = {"beta": [16.0, 16.0], "width": [16, 16], "weight": [False, True], "b_y": 16, "forward": False,
              "k_dim": 64, "dw": False, "head": False, "macs": 1e9, "wires": 1e7}
     he = {"k": 65_536.0, "groups": [group], "r_step": None, "candidates_macs": 1e9, "self_macs": 0.0,
           "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
     fig = figure(he, 1e11, 1e13)
-    assert (fig["rho"], fig["beta_x"], fig["beta_k"], fig["F"]) == (42.0 * 1e11 / 1e13, 3.0, 3.0, 1.25)
-    assert seen[0] == (1e11, 65_536.0, None, {"N": 1e9, "O": 1e7, "size": 1e13, "beta_w": 16.0, "beta_x": 3.0,
-                                              "b": 16, "F": 1.25})
-    assert fig["alpha"] == 1.25 * real["alpha"](65_536.0, 16.0 * 3.0, 16)
+    assert (fig["rho"], fig["subset"], fig["beta_w"], fig["beta_x"], fig["beta_k"], fig["F"], fig["alpha"]) == (
+        42.0 * 1e11 / 1e13, "M", 16.0, 3.0, 3.0, 1.25, 0.5)
+    assert (fig["beta"], fig["K_thr"], fig["subsets"], fig["macs_share"]) == (
+        48.0 ** 0.5, 8.0, {"M": 42.0 * 1e11 / 1e13}, 1.0)
+    assert seen == [(1e11, 65_536.0, None, 1e13, 1.0, [real["Product"](1e9, 1e7, (3.0, 16.0), (False, True), 16, 64)])]
+    got = calculator.slowdown({"c_gates": 1e11, "k_bits": 65_536.0}, {"k": 65_536.0, "he": he}, {"gates": 1e13})
+    assert (got["slowdown"], got["bound"]["blocks"], got["bound"]["theorem"]) == (7.0, 42.0, "a statement")
 
 
 def raw(phase: str, token_dims: list, m: int, k: int, n: int, count: int) -> dict:
@@ -199,9 +217,11 @@ STATES = {
     ("training_slowdown/library.py", "bound"): "the entry point's slowdown, or none with its reason",
     ("training_slowdown/library.py", "row"): "`bound`'s slowdown",
 }
-#: the calculator's functions that give a bound, and inside the one module who may call what
+#: the calculator's functions that give a bound, which nothing here calls; its one way from a work to a slowdown; and
+#: inside the one module who may call what
 BOUNDS = {"bound", "blocks_at_least", "slowdown_at_least"}
-CALLERS = {"_bound": {"slowdown", "_figure"}, "_figure": {"slowdown"}}
+ENTRY = "slowdown_of"
+CALLERS = {"_bound": {"slowdown"}, "_figure": {"slowdown"}}
 
 
 def second(name: str, source: str) -> list[str]:
@@ -217,9 +237,11 @@ def second(name: str, source: str) -> list[str]:
     for n in ast.walk(tree):
         at = inside.get(id(n), "the module")
         if name == DOOR:
-            asks = isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in BOUNDS
-            if asks and at != "_bound":
-                out.append((n.lineno, f"{at} calls the calculator's {n.func.attr}: only _bound does"))
+            asks = isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in BOUNDS | {ENTRY}
+            if asks and n.func.attr in BOUNDS:
+                out.append((n.lineno, f"{at} calls the calculator's {n.func.attr}: ask its {ENTRY}"))
+            elif asks and at != "_figure":
+                out.append((n.lineno, f"{at} calls the calculator's {ENTRY}: only _figure does"))
             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and at not in CALLERS.get(n.func.id, {at}):
                 out.append((n.lineno, f"{at} calls {n.func.id}: only {sorted(CALLERS[n.func.id])} do"))
             continue
@@ -251,8 +273,9 @@ def test_no_second_slowdown_is_computed():
 
 def test_a_second_slowdown_is_found():
     """The check above isn't vacuous: a private name of the one module read by attribute or imported, a slowdown
-    written by a function `STATES` doesn't list, and, inside the one module, a second caller of the calculator's
-    bound, a second caller of `_bound` and a public function beside the entry point are each found."""
+    written by a function `STATES` doesn't list, and, inside the one module, a caller of the calculator's bound, a
+    second caller of its `slowdown_of`, a second caller of `_bound` and a public function beside the entry point are
+    each found."""
     assert second("training_slowdown/other.py", "from . import calculator\n\ndef f(c, k, w):\n"
                   "    return calculator._bound(c, k, w)\n") == ["4: reads calculator._bound"]
     assert second("grader/other.py", "from training_slowdown.calculator import _figure, fleets\n") == [
@@ -262,12 +285,13 @@ def test_a_second_slowdown_is_found():
         "2: mine writes the key 'slowdown'"]
     assert second("training_slowdown/formalism.py", "def at(m):\n    return {'rho': m}\n\n"
                   "def other(m):\n    return {'S': m}\n") == ["5: other writes the key 'S'"]
-    assert second(DOOR, "def _bound(c):\n    return _min_cut().bound(c)\n\n"
+    assert second(DOOR, "def _figure(c):\n    return _min_cut().slowdown_of(c)\n\n"
                   "def slowdown(policy, step):\n    return _bound(policy)\n\n"
                   "def bound(c):\n    return _bound(c)\n\n"
-                  "def _other(c):\n    return _min_cut().blocks_at_least(c)\n") == [
-        "0: a public function beside the entry point: bound", "8: bound calls _bound: only ['_figure', 'slowdown'] do",
-        "11: _other calls the calculator's blocks_at_least: only _bound does"]
+                  "def _other(c):\n    return _min_cut().blocks_at_least(c), _min_cut().slowdown_of(c)\n") == [
+        "0: a public function beside the entry point: bound", "8: bound calls _bound: only ['slowdown'] do",
+        "11: _other calls the calculator's blocks_at_least: ask its slowdown_of",
+        "11: _other calls the calculator's slowdown_of: only _figure does"]
 
 
 def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):

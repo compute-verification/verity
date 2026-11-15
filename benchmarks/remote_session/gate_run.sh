@@ -22,8 +22,8 @@
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to the verifier host's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
-#                  COMMIT's remote_bandwidth tree, MODEL), the host's run, period-close, auditor.sh (the line of record,
-#                  its auditor_line.json and credit.md in the fire run's out/).
+#                  COMMIT's remote_bandwidth tree, MODEL unless BIND=0), the host's run, period-close, auditor.sh (the
+#                  line of record, its auditor_line.json and credit.md in the fire run's out/).
 #   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
 #
@@ -37,7 +37,13 @@
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
 # memory (default 32 GB an engine and HOST_GIB more). HOST_GIB (whole GiB, default 0: none) is the store's host part,
 # the node's `--host-gib`: host memory the prover holds beside the cards' and reads in every pass, split among the
-# engines' cards in whole 1 GiB chunks, the first cards taking what is left over. LEASE_BY (a UTC time) is when the
+# engines' cards in whole 1 GiB chunks, the first cards taking what is left over. LEAF_CTAS (a positive integer, default
+# unset: today's pass) asks the node for the leaf pass on that many reading CTAs, the node's `--leaf-ctas`: each card's
+# shard is hashed by the warps that read it (`rs_leaf_pass`), a host part still by today's pass, and the prover's gate
+# checks it before the first coin; the store refuses it where h0 is over 8. BIND (default 1) binds the verifier's
+# store to ROLE's pinned checkpoint (gate.sh's MODEL), and the period signs MODEL; BIND=0 binds it to none and the
+# period signs no model, so the verifier holds no checkpoint, the store is the developer's choice, and the line of
+# record credits nothing, its `bound` check failing. LEASE_BY (a UTC time) is when the
 # prover must hold its GPUs, or nothing runs: the prover asks through gate_lease.sh (sent beside) from LEASE_FROM
 # (default now) and gives up a minute before LEASE_BY, and fire opens no period for a lease that began after it.
 # ARENA_GIB (default 62) is each engine's weights arena
@@ -54,6 +60,11 @@
 # recorded as prover_commit). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
+#
+# No host's address is written here: the launcher's environment holds VY_CHALLENGER_1_HOST (the challenger host) and
+# VY_AUDITOR_1_HOST (the verifier host), which the gate steps are handed and the default VERIFIER_SSH is built from,
+# and VY_NEBIUS_2_HOST (the prover's node), which the default PROVER_SSH is built from. One that is needed and unset
+# ends the run, naming it, before anything is written or run; whatif reaches no host and reads none.
 #
 # Steps 1 and 3 take a slot of PROVER_NODE's SLOTS (default the GPU node's GPU slots; empty: none), the one way that node
 # takes a run (/etc/vy/runs-via-slot): `slot.py --by memory-accounting`, from the shipped tree. The slot pins the run to
@@ -72,7 +83,14 @@ PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh probe|prover|wha
 PIN=${PIN:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 GATE_ON=${GATE_ON:-vy-nebius-cpu-5}
 PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
-PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@81.85.2.121}
+need() {
+  # VAR WHOSE: the run ends, naming VAR, unless the environment holds that host's address
+  [ "$VERB" = whatif ] || [ -n "${!1:-}" ] || { echo "$1 is unset: the address of $2"; exit 3; }
+}
+need VY_CHALLENGER_1_HOST "the challenger host"
+need VY_AUDITOR_1_HOST "the verifier host"
+[ -n "${PROVER_SSH+given}" ] || need VY_NEBIUS_2_HOST "the prover's node, or PROVER_SSH (empty: GATE_ON's /etc/vy/peers line)"
+PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@${VY_NEBIUS_2_HOST:-}}
 MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
@@ -81,12 +99,18 @@ case $HOST_GIB in
   *[!0-9]*) echo "HOST_GIB is $HOST_GIB: the store's host part in whole GiB, 0 for none"; exit 3 ;;
 esac
 HOST_GIB=$((10#$HOST_GIB))
+LEAF_CTAS=${LEAF_CTAS:-}
+case $LEAF_CTAS in
+  '' | [1-9] | [1-9][0-9] | [1-9][0-9][0-9]) ;;
+  *) echo "LEAF_CTAS is $LEAF_CTAS: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"; exit 3 ;;
+esac
+BIND=${BIND:-1}
 bash "$HERE/gate.sh" form || exit 3
 LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES + HOST_GIB))} LEASE_BY=${LEASE_BY:-}
 LEASE_FROM=${LEASE_FROM:-}
 SLOTS=${SLOTS-/workspace/research/locks/gpu/slots} CHECKPOINT_WAIT_S=${CHECKPOINT_WAIT_S:-900} SLOT_WAIT_S=${SLOT_WAIT_S:-3600}
 PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625} ARENA_GIB=${ARENA_GIB:-62} UTIL=${UTIL:-0.8}
-VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
+VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@${VY_AUDITOR_1_HOST:-}}
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
 mkdir -p "$(dirname "$STATE")"
 touch "$STATE"
@@ -104,7 +128,7 @@ trap 'git -C "$ROOT" worktree remove --force "$W" > /dev/null 2>&1; rm -rf "$W"'
 git -C "$ROOT" worktree add -q --detach "$W" "$TREE" || exit 3
 read -r REPO REV < <(python3 -c 'import json, sys
 e = json.load(open(sys.argv[1]))[sys.argv[2]]
-print(e["repo"], e["revision"])' "$W/verity/protocols/pouw/verifier/lean/check/models.json" "$ROLE") \
+print(e["repo"], e["revision"])' "$W/verity/protocols/accounting/pouw/verifier/lean/check/models.json" "$ROLE") \
   || { echo "core's pin at $TREE has no role $ROLE"; exit 3; }
 SNAP=/workspace/hf/hub/models--${REPO//\//--}/snapshots/$REV
 echo "period $PERIOD, COMMIT $COMMIT, $ROLE at $SNAP on $PROVER_NODE, gate key on $GATE_ON${DRY:+ (dry run)}"
@@ -139,19 +163,20 @@ launch() {
 }
 
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
-  --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
+  --env "MODEL=$ROLE" --env "BIND=$BIND" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
   ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} --env "ARENA_BLOCKS=$((ARENA_GIB * 262144))" ${PACED:+--env "PACED=$PACED"}
   ${PACE_PASS_MS:+--env "PACE_PASS_MS=$PACE_PASS_MS"} ${SESSIONS:+--env "SESSIONS=$SESSIONS"}
-  ${WINDOWS:+--env "WINDOWS=$WINDOWS"} ${WINDOW_MS:+--env "WINDOW_MS=$WINDOW_MS"} ${SAMPLES:+--env "SAMPLES=$SAMPLES"})
+  ${WINDOWS:+--env "WINDOWS=$WINDOWS"} ${WINDOW_MS:+--env "WINDOW_MS=$WINDOW_MS"} ${SAMPLES:+--env "SAMPLES=$SAMPLES"}
+  --env "VY_CHALLENGER_1_HOST=${VY_CHALLENGER_1_HOST:-}" --env "VY_AUDITOR_1_HOST=${VY_AUDITOR_1_HOST:-}")
 gate_step() {
   # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step, or GATE_MEM=0
   # where reservations are full and a fire queued behind them would outwait the prover's tunnel, reserves none)
   local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
   shift 3
   [ -z "$DRY" ] && [ "$GATE_MEM" != 0 ] || mem=()
-  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" "${GATE_ENV[@]}" "${mem[@]}" "$@" \
-    -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
+  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
+    "${mem[@]}" "$@" -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
 
 if [ "$VERB" = whatif ]; then
@@ -192,7 +217,11 @@ fi
 if [ "$VERB" = prover ]; then
   :
 elif [ "$CHECKPOINT" = 0 ]; then
-  echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
+  if [ "$BIND" = 0 ]; then
+    echo "== 1. checkpoint skipped (CHECKPOINT=0), and BIND=0: nothing checks that the node serves the pin's checkpoint"
+  else
+    echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
+  fi
 else
   echo "== 1. checkpoint on $PROVER_NODE${FETCH:+ (FETCH: what the snapshot lacks is fetched first)}"
   on_node "$CHECKPOINT_WAIT_S" 1200 bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"'
@@ -208,6 +237,7 @@ fi
 echo "== 3. prover on $PROVER_NODE"
 NODE_ARGS="--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
 [ "$HOST_GIB" = 0 ] || NODE_ARGS+=" --host-gib $HOST_GIB"
+[ -z "$LEAF_CTAS" ] || NODE_ARGS+=" --leaf-ctas $LEAF_CTAS"
 PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib $ARENA_GIB --util $UTIL"

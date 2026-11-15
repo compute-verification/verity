@@ -13,29 +13,29 @@ import all Init.Data.Array.QSort.Basic
 # A checked unit's Flock witness opens its proof block correct (`SessionOpens`)
 
 At the record's statement every checked unit's session is the one flock-verify `--zk` session at the statement the
-draw file sets up (`sessionOf`). A Flock witness in that session's relation satisfies its one table (`tableLowers`),
-which is V5's drawn table for the unit (`tabOfZHJP_one`), so the message packing it (`packZ`) reveals openings that
+sample file sets up (`sessionOf`). A Flock witness in that session's relation satisfies its one table (`tableLowers`),
+which is V5's sampled table for the unit (`tabOfZHJP_one`), so the message packing it (`packZ`) reveals openings that
 make the unit's proof block correct wherever the values carry those that open (`correct_of_revealV5`).
 
-* **What a witness reveals** (`revealRec`, the record's `Ext.reveal`): at unit `u` of the run's draw file, V5's
-  openings (`revealV5`) of the message packing the witness's bits at the session's table, set up at that draw file and
+* **What a witness reveals** (`revealRec`, the record's `Ext.reveal`): at unit `u` of the run's sample file, V5's
+  openings (`revealV5`) of the message packing the witness's bits at the session's table, set up at that sample file and
   the unit (`TableSetup`); none where it doesn't set up. The openings are computed from the witness; only the table's
   setup is chosen, and it is unique (`DrawSetupZHJP.table_congr`). At most one per committed wire (`revealsLe`).
 * **What the record takes beside acceptance**:
   * `Names`, v2's reads of the registered file and `A`'s partition object as v2's: through them, wherever flock-verify
-    reads the session's statement at a draw file that fits its length words, the reading is `--zk` at `A`'s inputs,
-    with no public input words, and sets up as `A`'s session at the draw file's JSON (`SessionIns`, `sessionIns_of`
-    through `read_sess`); the draw file round keeps only a draw file that fits (`drawOk`, `fits_of_drawOk`);
-  * `ProvedIn`: every unit the coins draw is one the kept draw file proves, below the population. v2 credits the
-    public file's `units.indices` of the instances the draw names (`provedOf`), and refuses a public file whose
+    reads the session's statement at a sample file that fits its length words, the reading is `--zk` at `A`'s inputs,
+    with no public input words, and sets up as `A`'s session at the sample file's JSON (`SessionIns`, `sessionIns_of`
+    through `read_sess`); the sample file round keeps only a sample file that fits (`drawOk`, `fits_of_drawOk`);
+  * `ProvedIn`: every unit the coins sample is one the kept sample file proves, below the population. v2 credits the
+    public file's `units.indices` of the instances the sample names (`provedOf`), and refuses a public file whose
     `units.indices` are not the population's units in order, so the indices are the instances themselves
     (`provedIn_of_range`);
   * one table: `SetsUp`'s, as `Spot.OneStageZk.inputsOf` hands v2's inputs;
   * the record's commitment the deployed one (`A.Cd`), which `record_commit` gives at a circuit of `sha512/row/v2`
     rows: the record's commitment hashes each row as a `sha512/row/v2` row.
-* `sessionOpens`: `SessionOpens` at SHA-512, at any interior roots: an accepted run kept its draw file
+* `sessionOpens`: `SessionOpens` at SHA-512, at any interior roots: an accepted run kept its sample file
   (`accepted_draw`), whose session's witness satisfies the session's one table (`session_lowers`), the table V5 sets
-  up at each drawn unit (`session_table`). The statement stays a variable equal to `xOf A o` throughout (`parse_at`,
+  up at each sampled proof block (`session_table`). The statement stays a variable equal to `xOf A o` throughout (`parse_at`,
   `checked_at`, `session_at`).
 -/
 
@@ -54,7 +54,7 @@ variable (A : Live)
 
 /-! ## What a session's witness reveals -/
 
-/-- **The session's table set up at unit `u` and the draw `J`**, at some proved-unit count `kd`. -/
+/-- **The session's table set up at unit `u` and the sample `J`**, at some proved-unit count `kd`. -/
 abbrev TableSetup (u : Fin A.n) (J : Json) : Type :=
   Σ kd : ℕ, DrawSetupZHJP (inputsJ A.I 0) none (mPtsOf A.D.unroll.g (kd / nTab A.I)) {u} J
 
@@ -71,14 +71,14 @@ noncomputable def revealAt (u : Fin A.n) (J : Json) {mPts : ℕ} {S₀ : Finset 
     (Flock.Bridge.packZ (unitTab A u J y) (Flock.Readable.zOf 1 wF 0 (unitTab A u J y).S.m))
 
 open Classical in
-/-- `revealAt` at the draw file's reading, where the table sets up. -/
+/-- `revealAt` at the sample file's reading, where the table sets up. -/
 noncomputable def revealJ (u : Fin A.n) (wF : Claims.Flock.Wit) :
     Except String Json → List (List Msg × Opening Bool)
   | .ok J =>
     if h : Nonempty (TableSetup A u (Flock.norm J)) then revealAt A u (Flock.norm J) (Classical.choice h).2 wF else []
   | .error _ => []
 
-/-- **What a session's witness reveals at unit `u`**: `revealAt` at the run's draw file, at a unit of the population. -/
+/-- **What a session's witness reveals at unit `u`**: `revealAt` at the run's sample file, at a unit of the population. -/
 noncomputable def revealRec (_s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
     List (List Msg × Opening Bool) :=
   if hu : u < A.n then revealJ A ⟨u, hu⟩ wF (FlockDeploy.jsonOf "draw" ⟨(drawOf v).toArray⟩) else []
@@ -118,9 +118,9 @@ theorem revealsLe (o : Own) (e : Ext) (he : e.reveal = revealRec A) (hN : ∀ x,
 
 /-! ## What the record takes -/
 
-/-- **flock-verify reads the session's statement as `A`'s session**: wherever it reads the statement at a draw file
+/-- **flock-verify reads the session's statement as `A`'s session**: wherever it reads the statement at a sample file
 that fits its length words, the reading is `--zk` at `A`'s tags, with no public input words, set up at `A`'s inputs and
-the draw file's JSON. -/
+the sample file's JSON. -/
 def SessionIns (o : Own) : Prop :=
   ∀ (d : Msg) (r : Flock.Readable.Read), Fits A o d → FlockDeploy.readOf true (sessStmt A o d) = some r →
     ∃ J, FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧
@@ -129,7 +129,7 @@ def SessionIns (o : Own) : Prop :=
         A.I.publicFile (FlockSoundness.Discharge.ZkExec.zkCoins A.I) A.I.count A.I.tables (some (Flock.norm J))
         A.I.partition A.I.program
 
-/-- **Every unit the coins draw is one the kept draw file proves**, below the population. -/
+/-- **Every unit the coins sample is one the kept sample file proves**, below the population. -/
 def ProvedIn (o : Own) : Prop :=
   ∀ d cs (J : Json) (D : Flock.Draw.UnitDraw), drawOk A o d cs → FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J →
     Flock.Draw.UnitDraw.ofJson (Flock.norm J) = .ok D → ∀ u ∈ drawn A (drawBytes cs), u < A.n ∧ u ∈ D.proved
@@ -139,12 +139,12 @@ def ProvedIn (o : Own) : Prop :=
 v2 refuses a public file whose `units.indices` are not the population's units `0, …, n − 1` in order
 (`Spot.OneStageZk.publicHeld`, `indicesHeld`), and its acceptance gives that match at the loaded header
 (`Properties.Spot.Credited.units_of_checkBlobsAt`): `FilePart.indicesOf` reads `Array.range n`. There the
-entry at each slot is the slot, so the unit `unitsAt` reads at each instance a draw names is the instance itself. -/
+entry at each slot is the slot, so the unit `unitsAt` reads at each instance a sample names is the instance itself. -/
 
 theorem nat?_num (m : ℕ) : _root_.Spot.nat? (.num ⟨Int.ofNat m, 0⟩) = some m := by
   simp [_root_.Spot.nat?, _root_.Spot.int?]
 
-/-- **At such a header every unit a draw proves is a drawn unit, below the population**: `unitsAt` reads the draw's
+/-- **At such a header every unit a sample proves is a sampled proof block, below the population**: `unitsAt` reads the sample's
 instance `i` as the header's entry at slot `i`, which is `i`. -/
 theorem units_of_range {h D : Json} {n : ℕ} {us : Array ℕ} {Dd : Flock.Draw.UnitDraw}
     (hidx : _root_.Spot.FilePart.indicesOf h = .ok (Array.range n))
@@ -277,7 +277,7 @@ theorem seen_msgs (t : Claims.Transcript) : t.seen.msgs = t.msgs := rfl
 theorem drawOf_of {v : Seen} {d : Msg} {a : Claims.Out} (hv : v.msgs[DRAW_ROUNDS]? = some (d, a)) : drawOf v = d := by
   simp only [drawOf, List.getD_eq_getElem?_getD, List.getElem?_map, hv, Option.map_some, Option.getD_some]
 
-/-- A view whose draw file round kept `d` at the statement's numbers, `d` fitting its length words, shows the session
+/-- A view whose sample file round kept `d` at the statement's numbers, `d` fitting its length words, shows the session
 at `d`. -/
 theorem sessionOf_kept (o : Own) {v : Seen} {d : Msg} (hv : v.msgs[DRAW_ROUNDS]? = some (d, .msg []))
     (hn : numsOk A o d ∧ Fits A o d) :
@@ -285,8 +285,8 @@ theorem sessionOf_kept (o : Own) {v : Seen} {d : Msg} (hv : v.msgs[DRAW_ROUNDS]?
   unfold sessionOf
   simp only [hv, hn, and_self, ↓reduceIte]
 
-/-- **An accepted run kept its draw file**: at the record's statement the draw file round's check passed (`run_pre` at
-`prefixAt`), on the draw file the run shows and the draw coins. -/
+/-- **An accepted run kept its sample file**: at the record's statement the sample file round's check passed (`run_pre` at
+`prefixAt`), on the sample file the run shows and the sampling coins. -/
 theorem accepted_draw (o : Own) (e : Ext) {x : Msg} (hx : x = xOf A o) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin ((record A o e).V.k x) → FlockDeploy.Coin)
     (hacc : (run FlockDeploy.sha512 P (record A o e).V x ω r).out = .acc) :
@@ -319,7 +319,7 @@ theorem nTab_one (hc1 : A.I.count = 1) : nTab A.I = 1 := by
   exact ite_eq_left (by omega)
 
 /-- **A Flock witness the session's statement checks satisfies its one table**: flock-verify reads the statement at the
-kept draw file, which fits its length words (`fits_of_drawOk`), as `A`'s session at the draw file's JSON (`SessionIns`),
+kept sample file, which fits its length words (`fits_of_drawOk`), as `A`'s session at the sample file's JSON (`SessionIns`),
 which sets up one table (`setupTables_okHP`) that the witness satisfies (`tableLowers`). -/
 theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) {d : Msg}
     {cs : List FlockDeploy.Coin} (hdOk : drawOk A o d cs) {wF : Claims.Flock.Wit}
@@ -351,7 +351,7 @@ theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) {
     exact Flock.Readable.tableLowers (j := 0) (st := st) hpP ht hpin hR rfl hwf
   · exact absurd hc (by omega)
 
-/-- **The session's table at a drawn unit is V5's**: where the kept draw file proves the unit, the session's one table
+/-- **The session's table at a sampled proof block is V5's**: where the kept sample file proves the unit, the session's one table
 sets up at it (`TableSetup`, `drawSetupHP_of_setupHiddenI`), and every such setup is that table's. -/
 theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : Msg} {cs : List FlockDeploy.Coin}
     (hdOk : drawOk A o d cs) {J : Json} (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) {st : Flock.Stmt}
@@ -393,7 +393,7 @@ theorem table_satisfies {mPts : ℕ} {S₀ : Finset (Fin A.n)} {d₀ : Json}
   subst hy
   exact hsat y.x.wf.1
 
-/-- `revealRec` at a unit whose table sets up at the run's draw file is `revealAt` at the chosen setup. -/
+/-- `revealRec` at a unit whose table sets up at the run's sample file is `revealAt` at the chosen setup. -/
 theorem revealRec_eq {u : ℕ} (hun : u < A.n) {v : Seen} {d : Msg} (hdv : drawOf v = d) {J : Json}
     (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) (hne : Nonempty (TableSetup A ⟨u, hun⟩ (Flock.norm J)))
     (s : AuditStatement) (wF : Claims.Flock.Wit) :
@@ -431,7 +431,7 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) (hroots : Flock.Bridge.RootFixe
 correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one table among its inputs): where v2 reads
 `A`'s and `o`'s inputs (`Names`, with v2's reads and partition object), flock-verify reads the session as `A`'s
 (`sessionIns_of`); where the public file's `units.indices` are the population's units in order, as v2 holds them
-(`units_of_checkBlobsAt`), the kept draw file proves every drawn unit (`provedIn_of_range`); and where the record's
+(`units_of_checkBlobsAt`), the kept sample file proves every sampled proof block (`provedIn_of_range`); and where the record's
 commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is
 one under `A`'s, whose equal roots have one domain (`hroots`). -/
 theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]

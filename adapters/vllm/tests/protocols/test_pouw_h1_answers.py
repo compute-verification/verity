@@ -1,4 +1,4 @@
-"""`answers`: the verifier of record's answers on a window's statements, each run once as credit asks for it and shared
+"""`answers`: the verifier's answers on a window's statements, each run once as credit asks for it and shared
 by the steps that judge them (credit's window check and the period's, ``--lean-answers``). Over the statements kit of
 core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``flock-verify`` that accepts
 a session only when it proves every file credit hands it), under the Lean verdict of record and the Python reference:
@@ -15,13 +15,13 @@ import stat
 from pathlib import Path
 
 import pytest
+from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
-from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.verifier import verifier as V
-from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 
-STATEMENTS = Path(__file__).resolve().parents[4] / "verity/protocols/pouw/verifier/tests/test_pouw_credit_statements.py"
+STATEMENTS = Path(__file__).resolve().parents[4] / "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit_statements.py"
 SEEDS = range(2)
 
 
@@ -29,6 +29,7 @@ SEEDS = range(2)
 def kit():
     """credit's statements kit (`test_pouw_credit_statements`), as ``benchmarks/one_stage``'s pouw_piece tests load it."""
     spec = importlib.util.spec_from_file_location("pouw_credit_statements", STATEMENTS)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -97,7 +98,7 @@ def statements(windows: list[dict]) -> list[str]:
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("memo", ["scratch directory", "one process"])
 def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(seed, memo, record, exe, tmp_path):
-    """Credit's window check and the period's over one memo: the first runs the verifier once on each statement, drawn
+    """Credit's window check and the period's over one memo: the first runs the verifier once on each statement, sampled
     and live; the second runs it on none, taking each answer by key; both judge as they do with no memo. The memo's
     directory is the verifier's alone (0700, each answer 0600)."""
     d, windows = kit()._period(seed, tmp_path / "proofs")
@@ -107,7 +108,8 @@ def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(se
     assert want[1][1] is None and all(why is None for _got, why in want[0])
     assert sorted(plain.runs) == sorted(every * 2)
 
-    ran, said = Counted(), []
+    ran = Counted()
+    said: list[str] = []
     if memo == "scratch directory":
         scratch = tmp_path / "scratch" / "answers"
         piece = A.Answers(scratch, by="the challenger check", verify=ran, say=said.append)
@@ -130,12 +132,13 @@ def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(se
         assert (piece.ran, piece.taken) == (n, {"the verifier": n})
 
 
-def _flip(p: Path, at: int = -2) -> None:
-    """One byte of the file at `p` changed in place, its size kept."""
+def _flip(p: Path, at: int = -2) -> Path:
+    """One byte of the file at `p` changed in place, its size kept; `p` back."""
     b = bytearray(p.read_bytes())
     b[at] ^= 1
     with open(p, "r+b") as f:
         f.write(b)
+    return p
 
 
 #: each input of a run changed: its files in place (each keeping its size), its files at other paths, the verifier's
@@ -214,19 +217,20 @@ FAILURES = {
 
 @pytest.mark.parametrize("failure", FAILURES)
 def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, exe, tmp_path):
-    """Window 0's last drawn statement rejected, refused or not verifiable: its window check and the period's both
+    """Window 0's last sampled statement rejected, refused or not verifiable: its window check and the period's both
     refuse, with the refusals they give with no memo; the period's takes the window check's answer by key without
     running the verifier, except for a session that is missing, which has no key and which each step's verifier meets."""
     d, windows = kit()._period(0, tmp_path / "proofs")
     target = windows[0]["statements"][-1]
-    change, answer = FAILURES[failure]
+    change, answer_for = FAILURES[failure]
     change(target)
-    answer = answer(target["public"])
+    answer = answer_for(target["public"])
     want = steps(d, windows, Counted(answer), Counted(answer))
     assert want[0][0][0] is None and want[1][0] is None and want[1][1][0] == "window", want
     assert all(why is None for _got, why in want[0][1:])
 
-    scratch, ran, said = tmp_path / "scratch", Counted(answer), []
+    scratch, ran = tmp_path / "scratch", Counted(answer)
+    said: list[str] = []
     piece = A.Answers(scratch, by="the challenger check", verify=ran, say=said.append)
     got = [window_check(d, w, piece) for w in windows]
     assert got == want[0]

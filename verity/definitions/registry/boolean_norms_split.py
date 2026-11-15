@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Callable
 
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_norms as BN

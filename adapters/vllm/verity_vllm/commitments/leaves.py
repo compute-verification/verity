@@ -41,10 +41,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.errors import InvalidArtifact
-
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.scheme import sha as _sha
+from verity.errors import InvalidArtifact
 
 __all__ = [
     "DIGEST_BYTES",
@@ -116,7 +115,7 @@ def parse_shape_text(text: str) -> tuple[int, ...]:
         return ()
     dims = []
     for piece in inner.split(","):
-        if not piece.isdigit() or (len(piece) > 1 and piece[0] == "0"):
+        if not piece.isdecimal() or (len(piece) > 1 and piece[0] == "0"):
             raise InvalidArtifact(f"malformed shape text {text!r}")
         dims.append(int(piece))
     return tuple(dims)

@@ -5,7 +5,7 @@
 statics.  `DsaLatentRow_v2{KVL, R, EPS}` is `DsaLatentRow_v1` on bits, a composite of `DsaRMSNorm_v2` and
 `boolean_rope.RoPEHeadGptJ_v3`.
 
-    DsaRMSNormSumSq_v3{N, EPS}, DsaRMSNormApply_v3{G}, DsaRMSNorm_v3{N, EPS}   the `_v2`s' functions written as Calls; ``opt_in``
+    DsaRMSNormSumSq_v3{N, EPS}, DsaRMSNormApply_v3{G}, DsaRMSNorm_v3{N, EPS}   the `_v2`s' functions written as Calls
     DsaRMSNormSquares_v1            (x0, x1: bf16) -> f32     a thread's first two registers: fma(f32(x0), f32(x0), f32(x1)^2)
     DsaRMSNormSquareFma_v1          (x: bf16, s: f32) -> f32  each next register: fma(f32(x), f32(x), s)
     DsaRMSNormMeanRsqrt_v1{N, EPS}  (sum: f32) -> f32         rsqrt.approx.ftz(eps + div.full(sum, N)), N and eps folded
@@ -21,8 +21,7 @@ traced from the word body's steps over `bit_ops`, as the `_v2`s are, so a bf16 o
 operands and the constants N and eps are folded into its gates, and the pieces of a scale or apply unit together hold the
 `_v2`'s gates, count for count.  `DsaRMSNorm_v3` is the scale and then the apply unit over the row; an element's own gates,
 which one trace of the row shares between its square and its output, are computed by each (circuit-check counts them as
-redundant gates, a warning).  They are ``opt_in`` (`verity.definitions.boolean`): `boolean_version` keeps the `_v2`s, and a
-`_v3` serves only a caller that binds it."""
+redundant gates, a warning).  `boolean_version` gives the `_v3`s; a `_v2` serves only a caller that binds it."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -30,8 +29,8 @@ from types import SimpleNamespace
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
 from verity.definitions.registry import boolean_rope as BR
@@ -162,7 +161,6 @@ def _sum_sq_calls(B, S, x):
 
 DsaRMSNormSumSqV3 = EW.on_bits("DsaRMSNormSumSq", 3, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), _sum_sq_calls,
                                DN.DsaRMSNormSumSq)
-DsaRMSNormSumSqV3.opt_in = True  # type: ignore[attr-defined]
 
 _ELEMENT = (("x", BF16), ("w", BF16), ("r", F32))
 
@@ -197,7 +195,6 @@ def _apply_calls(B, S, x, w, r):
 DsaRMSNormApplyV3 = EW.on_bits("DsaRMSNormApply", 3, ["G"],
                                lambda S: ((("x", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("r", F32)), Array(S.G, BF16)),
                                _apply_calls, DN.DsaRMSNormApply)
-DsaRMSNormApplyV3.opt_in = True  # type: ignore[attr-defined]
 
 
 def _rms_calls(B, S, x, w):
@@ -208,7 +205,6 @@ def _rms_calls(B, S, x, w):
 
 DsaRMSNormV3 = EW.on_bits("DsaRMSNorm", 3, ["N", "EPS"],
                           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)), _rms_calls, DN.DsaRMSNorm)
-DsaRMSNormV3.opt_in = True  # type: ignore[attr-defined]
 
 BOOLEAN_DSA_NORM = [DsaRMSNormV2, DsaRMSNormSumSqV2, DsaRMSNormApplyV2, TritonBlockRMSNormV2, DsaLatentRowV2, DsaRMSNormSquares,
                     DsaRMSNormSquareFma, DsaRMSNormMeanRsqrt, DsaRMSNormSumSqV3, DsaRMSNormScale, DsaRMSNormOut,

@@ -111,7 +111,7 @@ def _is(obj, bases: tuple[str, ...]) -> bool:
     return obj is not None and any(c.__name__ in bases for c in type(obj).__mro__)
 
 
-def _arms(model, attr: str, bases: tuple[str, ...], skip: set[int] = frozenset()) -> set[str]:
+def _arms(model, attr: str, bases: tuple[str, ...], skip: set[int] | frozenset[int] = frozenset()) -> set[str]:
     return {getattr(v, "int8_arm", None) or "<none>" for m in model.modules()
             if id(m) not in skip and _is(v := getattr(m, attr, None), bases)}
 
@@ -122,3 +122,7 @@ def _quant_attrs(model, attr: str) -> list:
 
 def _one_name(names: set[str]) -> str | None:
     return None if not names else names.pop() if len(names) == 1 else "<mixed>"
+
+
+__all__ = ["INT8_ARM", "fp8_block_gemm_kernel_of", "moe_experts_class_of", "int8_exact_of", "int8_k_scales_of",
+           "is_attention_impl", "applied_kernels", "routers", "kept"]

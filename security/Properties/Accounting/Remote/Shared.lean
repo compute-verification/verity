@@ -20,7 +20,7 @@ draw `c`'s, `W + c`.
   share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
   on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
   the draw's windows, whose passes number its receipts (`lengthsOf`, `passCount`).
-* `SessionSamplesRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a sampled draw is `draws` over
+* `RunSamplesRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a sampled draw is `draws` over
   its windows' records (`sampleRecords`, `State.record`), each window holding its share, and a window of it is accepted
   only with an empty share (which the close accepts at `g ≥ 2`) or with `checkWindow` of its share passing on the
   session's appends: the hypotheses `AcceptSamplesOpenable` reads, each window's on the one array of appends. It needs
@@ -121,7 +121,7 @@ window of draw `c` (one of the session's, `c·g < W`), the draw is `draws` on th
 `coins[W + c]` over the records `ws` of `c`'s windows (`sampleRecords`), `U` their receipts (`lengthsOf`); window `k` of
 it holds its share (`shareOf`, from its passes' start, `passCount`); and once window `k` is accepted, its share is
 empty (the close accepts it) or `checkWindow` of its share passes on some openings and the session's appends. -/
-def SessionSamplesRecords : Prop :=
+def RunSamplesRecords : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
@@ -137,7 +137,7 @@ def SessionSamplesRecords : Prop :=
               (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size)
               openings = .accept)
 
-/-- **A draw's accepted windows open its values** (`SessionSamplesRecords` and `AcceptSamplesOpenable` joined): in a run
+/-- **A draw's accepted windows open its values** (`RunSamplesRecords` and `AcceptSamplesOpenable` joined): in a run
 from `State.init` that has accepted every window of draw `c` (`c·g < W`), the draw's values `us` are the sampler's on
 the openings key of `c` and the coin `coins[W + c]`, `U` its windows' receipts, and each value `v` is an openable
 receipt, on the session's appends, of the window `k` it falls in, its number there `v − receiptCount (ws.take k)`. -/

@@ -8,21 +8,26 @@ import hashlib
 import itertools
 import random
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.spot.device.challenger import LiveRecord  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine.hooks import Hooks  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import ranks as PHR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
+
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine.hooks import Hooks
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import ranks as PHR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 K = 64
 SALT = hashlib.sha512(b"salt").digest()

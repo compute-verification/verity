@@ -6,13 +6,18 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any, Protocol
 
 import numpy as np
 
-from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
+from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name
+from verity_vllm.check.oracle_compare import (
+    same_name_invocations as _same_name_invocations,
+)
 from verity_vllm.records.required_manifest import RequiredManifest
 
+__all__ = ["CommittedStore"]
 
 #: the binding map's `encoding.dtype` is the collector's torch dtype name; the manifest's short names are accepted too
 _ITEMSIZE = {"u8": 1, "bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
@@ -26,11 +31,12 @@ def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str,
     """`manifest.op_path_aliases` as ONE table: Program op_path -> (canonical op_path, invocation).  Shared modules
     (vLLM's one RotaryEmbedding instance called by every layer) are addressed by the required manifest at the FIRST layer's path with
     invocation = layer order; the per-layer Program paths are recorded as aliases ('model.layers.7.self_attn.rotary_emb' ->
-    ['model.layers.0.self_attn.rotary_emb', 7]).  The population reconciliation (`query_population._key`) and the committed store
+    ['model.layers.0.self_attn.rotary_emb', 7]).  The population reconciliation (`coverage._reach`) and the committed store
     (`CommittedStore.words`) resolve through THIS table and no other -- the two never disagree on which identity a Program path names."""
     if isinstance(manifest, RequiredManifest):
         return {str(k): (str(v[0]), int(v[1])) for k, v in (manifest.op_path_aliases or {}).items()}
-    return {str(k): (str(v[0]), int(v[1])) for k, v in ((manifest or {}).get("op_path_aliases") or {}).items()} if manifest is not None else {}
+    aliases = (manifest or {}).get("op_path_aliases")                            # no manifest, or one that states none: every path names itself
+    return {str(k): (str(v[0]), int(v[1])) for k, v in (aliases if aliases else {}).items()}
 
 
 def resolve_op_path(aliases: dict[str, tuple[str, int]], op_path: str) -> tuple[str, int]:
@@ -39,8 +45,22 @@ def resolve_op_path(aliases: dict[str, tuple[str, int]], op_path: str) -> tuple[
     return aliases.get(op_path, (op_path, 0))
 
 
+def bound_identity(e: dict) -> dict:
+    """The identity a binding-map entry binds (request, engine step, op_path, member, invocation, rank, element range); an entry that
+    states none binds nothing, and each reader has its own answer for a field such an identity leaves out."""
+    ident = e.get("identity")
+    return ident if ident else {}
+
+
 def _invocation(e: dict) -> int:
-    return int((e.get("identity") or {}).get("invocation", 0) or 0)
+    return int(bound_identity(e).get("invocation", 0) or 0)
+
+
+class WordStore(Protocol):
+    """What a replay reads of a store: `CommittedStore.words`, which a request's own replay answers as well
+    (`request_replay.Replay`, `recomputed_prefix.RecomputedPrefix`)."""
+
+    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]: ...
 
 
 class CommittedStore:
@@ -65,8 +85,9 @@ class CommittedStore:
         self.aliases: dict[str, tuple[str, int]] = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
         self.idx: dict[tuple, list[dict]] = {}
         self._ops: dict[tuple[str, int], dict[str, set[str]]] = {}
-        for e in bmap.get("entries") or []:
-            ident = e.get("identity") or {}
+        entries = bmap.get("entries")                                            # a map that states no entries binds nothing
+        for e in entries if entries else []:
+            ident = bound_identity(e)
             if "step" not in ident:
                 continue
             key = (str(ident.get("request_id", "r0")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")))
@@ -79,7 +100,7 @@ class CommittedStore:
 
     @classmethod
     def of_record(cls, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
-                  manifest: RequiredManifest | dict[str, Any] | None) -> "CommittedStore":
+                  manifest: RequiredManifest | dict[str, Any] | None) -> CommittedStore:
         """The store the replay of record uses: the binding map read through the manifest's alias table (None manifest = no aliases: a
         shared module's layer-N path is then missing by name, never silently the lowest invocation)."""
         return cls(bmap, committed, alias_table(manifest))
@@ -90,7 +111,8 @@ class CommittedStore:
     def entries(self, rid: str, step: int, op_path: str, member: str) -> tuple[list[dict], str, int, list[int]]:
         """The entries of the RESOLVED (canonical path, invocation) -> (entries, canonical, invocation, invocations bound under the key)."""
         canon, inv = self.resolve(op_path)
-        es_all = self.idx.get((rid, int(step), canon, member)) or []
+        bound = self.idx.get((rid, int(step), canon, member))
+        es_all = bound if bound else []                                          # None: the map binds nothing under the key
         return [x for x in es_all if _invocation(x) == inv], canon, inv, sorted({_invocation(x) for x in es_all})
 
     def has(self, rid: str, step: int, op_path: str, member: str) -> bool:
@@ -108,7 +130,7 @@ class CommittedStore:
             return None, f"no committed identity for ({rid}, step {step}, {op_path}/{member}){via}{have}"
 
         def _covers(x: dict) -> bool:
-            r = (x.get("identity") or {}).get("element_range") or [0, None]
+            r = bound_identity(x).get("element_range") or [0, None]
             return r[1] is not None and int(r[0]) <= elo and ehi <= int(r[1])
 
         cov = [x for x in es if _covers(x)]
@@ -117,11 +139,12 @@ class CommittedStore:
             return None, (f"ambiguous binding: {len(cov)} entries for ({rid}, step {step}, {op_path}/{member}) [invocation {inv_min}] cover "
                           f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity")
         e = cov[0] if cov else es[0]
-        ident = e.get("identity") or {}
+        ident = bound_identity(e)
         rng = ident.get("element_range") or [0, None]
         if not cov:
             return None, f"element slice [{elo}, {ehi}) outside the bound identity range {rng} of ({rid}, step {step}, {op_path}/{member})"
-        dtype = str((e.get("encoding") or {}).get("dtype") or "")
+        encoding = e.get("encoding")                                             # an entry that states none has no dtype the store knows
+        dtype = str((encoding if encoding else {}).get("dtype") or "")
         isz = _ITEMSIZE.get(dtype)
         if isz is None:
             return None, f"unknown dtype {dtype!r} of ({rid}, step {step}, {op_path}/{member})"
@@ -146,7 +169,7 @@ def model_weights_provider(model, prefix: str) -> Callable[[str, int, int], np.n
 
     def read(field: str, lo: int, hi: int) -> np.ndarray | None:
         name = field[len(prefix):] if prefix and field.startswith(prefix) else field
-        t = params[name] if name in params else (params[field] if field in params else None)     # never `or` on tensors
+        t = params[name] if name in params else params.get(field)                                # never `or` on tensors
         if t is None:
             return None
         if name not in cache:

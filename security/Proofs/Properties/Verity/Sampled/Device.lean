@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
-public import Proofs.Properties.NetworkCertifier.Check.LinkWindow
+public import Proofs.Properties.NetworkCertifier.Check.TransferBlocks
 public import Proofs.Core.Game.Tape
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic

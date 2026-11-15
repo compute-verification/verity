@@ -20,7 +20,7 @@ from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = step_rows.ROW_BYTES
-#: the run's positions coin, as the auditor host's challenger would open it after the run's root
+#: the run's positions coin, as the auditor device's challenger would open it after the run's root
 COIN = b"positions coin"
 
 

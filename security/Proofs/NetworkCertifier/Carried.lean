@@ -518,11 +518,11 @@ theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → Bounda
     (chains : Fin m → Bool) (genesis : Fin m → Hash.Row) {Ω Conn Cell Srv Dev Z : Type} [Fintype Conn]
     (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (hWn : ∀ z ω i, W z ω i ⊆ range (n i)) (Fmax : ℕ) (ω : Fin m → Ω) :
     {z | z ∈ Zs ∧ PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op chains genesis Fmax (W z ω)
         (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
@@ -667,15 +667,15 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (had : PeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : PeriodEscapes Zs acc W q e)
-    (hleak : PeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
+    (had : MonitoringPeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hleak : MonitoringPeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ) :
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
@@ -697,7 +697,7 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
       obtain ⟨-, -, -, -, _, -, _, -, -, hp, -, -⟩ := h i
       simp only [List.map_nil] at hp
       simp [poolOpen, ← hp]
-    have hleak' : PeriodLeaksCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) Zs acc W
+    have hleak' : MonitoringPeriodLeaksCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) Zs acc W
         (fun _ _ _ => []) (fun _ _ _ => []) (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e' := by
       intro z hz i
       refine le_trans (Pr_mono fun ω hω => ?_) (hleak z hz i)

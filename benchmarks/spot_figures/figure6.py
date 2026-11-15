@@ -6,10 +6,10 @@ exfiltration bound, with and without the tick, over the headline and secondary s
 (b) reads the sweep's points (`point.json`: `point`, `load`, `rate`, `tick` with `sat_ms` and `free_ms`, or null
 without the tick, `ttft_p50_s`, `ttft_p99_s`, `itl_p50_s`, `output_tok_per_s`, `goodput_ttft_req_per_s`, and
 `busy_cycle.mean_us` and `preemptions` where measured) and is pending without them. A tick point named by
-`--old-rule` took τ_sat from the no-tick step at its own load, the old rule, and is drawn hollow, off its load's line.
+`--old-rule` took τ_sat from the no-tick step at its own load, the old rule, and is sampled hollow, off its load's line.
 (c) reads an advice file: `machine_windows` by scope and `arms`, each a `label`, `tick` (true or false) and `bits`, the
 advice a machine window is charged, so its term is that times the scope's windows, and a `pending` reason where the
-arm's figure isn't a result yet, drawn hatched.
+arm's figure isn't a result yet, sampled hatched.
 
     uv run python benchmarks/spot_figures/figure6.py --model GLM-5.3 --advice ADVICE.json [--points POINT.json...]
         [--old-rule POINT...] [--out DIR]
@@ -294,7 +294,7 @@ def _advice(ax, out: dict) -> None:
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
-    """Draw the figure into `outdir` as figure6.png and .svg; returns their paths."""
+    """Sample the figure into `outdir` as figure6.png and .svg; returns their paths."""
     import matplotlib
 
     matplotlib.use("Agg")

@@ -45,7 +45,7 @@ for flag in "$@"; do
     --ids|--egress|--egress=*) log "the egress form is EGRESS's, not $flag's: EGRESS=id for the id form"; exit 4 ;;
   esac
 done
-"$PY" -c 'import verity.protocols.certifier.verifier.warden' 2> /dev/null \
+"$PY" -c 'import verity.protocols.accounting.certifier.verifier.warden' 2> /dev/null \
   || { log "PY has no verity: give a python with the tree's packages, or run this under uv run"; exit 4; }
 command -v tcpdump > /dev/null || { log "no tcpdump on this machine"; exit 4; }
 tcpdump -i lo -U -s 54 -w "$W/lo.pcap" tcp 2> "$W/tcpdump.log" &

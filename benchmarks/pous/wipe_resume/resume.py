@@ -45,20 +45,19 @@ import math
 import os
 import sys
 import tempfile
-import time
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/pous/verifier/tests")]
+sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/accounting/pous/verifier/tests")]
 
 import pous_test_signer as ts  # noqa: E402
-from verity.protocols.pous.verifier import streamed_wipe as sw  # noqa: E402
-from verity.protocols.pous.verifier import wipe_period as W  # noqa: E402
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw  # noqa: E402
+from verity.protocols.accounting.pous.verifier import wipe_period as W  # noqa: E402
 
-WIPE_VERDICT = ROOT / "verity/protocols/pous/device/lean/wipe_verdict.py"
+WIPE_VERDICT = ROOT / "verity/protocols/accounting/pous/device/lean/wipe_verdict.py"
 LABEL = sw.LABEL_BYTES
 BAND_SHARE = Fraction(5 * 200, 65_536)
 """What the band attack keeps of a block: five 200-byte SHAKE256 states of a 64 KiB block."""
@@ -233,7 +232,7 @@ def session(name: str, make: Callable[[int, sw.WipeMemoryChallenger], Any], *, n
     for start, data in c.fill(1 << 14):
         prover.receive(start, data)
     c.run(prover.answer)
-    signed = c.close(egress_bits=0)
+    signed = c.close()
     v, sides = judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=decide)
     kept = prover.keep()
     out = {"prover": name, "labels": n, "k": k, "limit_ns": limit_ns, "ended": signed.ended,
@@ -279,7 +278,7 @@ def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, de
             "expected": sessions * p, "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
 
 
-def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = time.perf_counter_ns,
+def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = sw.raw_clock_ns,
         untimed_tries: int = UNTIMED_TRIES, sample_n: int = 4096, sample_k: int = 12, sample_sessions: int = 600,
         judge: Callable[..., Any] | None = None, coin_secret: bytes | None = None) -> dict[str, Any]:
     """Every prover's session at `N = n`, `k` reads, then `sample_sessions` of `sampling` (none at 0)."""

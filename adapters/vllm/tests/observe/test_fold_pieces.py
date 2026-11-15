@@ -6,14 +6,24 @@ unshared constant is refused."""
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.defs import bind
-from verity_vllm.observe.fold.fold import FoldError, fold
-from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Group, Pieces, Profile
-from verity_vllm.observe.fold.views import row_view
 from verity.definitions.registry import b1
+
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.fold.fold import FoldError, fold
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Gather,
+    Group,
+    PerRow,
+    Pieces,
+    Profile,
+    whole_view,
+)
+from verity_vllm.observe.fold.views import row_view
 
 
 def _attention(v_operand):
@@ -71,3 +81,12 @@ def test_a_pieces_constant_that_is_not_shared_is_refused(memory):
         return Pieces(((Const(16, 0, "v0", count=len(slots) * T.C["KVH"] * T.C["D"]),),))
     with pytest.raises(FoldError, match="not a shared constant"):
         fold(T.toy_log(), _profile(_attention(unshared)), strict=True, with_program=False)
+
+
+def test_an_operand_names_its_one_view_and_pieces_name_none():
+    """`verity_vllm.observe.fold.resolver.whole_view`: a table read by rows or by index is one view, pieces and a constant are none."""
+    table = ViewDesc(7, 0, (3, 4), (4, 1), "float32", "cuda:0")
+    assert whole_view(PerRow(table)) is table and whole_view(Gather(table, (2, 0))) is table
+    for op in (Pieces(((row_view(table, 0),),)), Const(16, 0, "pad")):
+        with pytest.raises(TypeError, match="names no one view"):
+            whole_view(op)

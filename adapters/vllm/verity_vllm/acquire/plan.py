@@ -28,13 +28,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AcquireCorrespondence, ReturnSlot, RuntimeTree
-
-AnnotationCorrespondence = AcquireCorrespondence
+from verity_vllm.commit.committer.flush_points import (
+    GATHER_FLUSH_LEAVES,
+    PRE_FLUSH_LEAVES,
+)
+from verity_vllm.correspondence.reader_for_acquire import (
+    RUNNER_PATH,
+    AcquireCorrespondence,
+    ReturnSlot,
+    RuntimeTree,
+)
 
 SCHEMA = "acquisition-plan/v1"
 SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "analytic_table", "prescribed")
@@ -219,29 +227,23 @@ PROVENANCE_KEYS = ("plan_digest", "runtime_source", "correspondence")
 
 
 def plan_digest(body: Mapping[str, Any]) -> str:
-    """sha256 over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
+    """SHA-512's whole output over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
     manifest and runtime module tree give the same digest whether the tree was read off the meta-instantiated model or a live engine
     (the two agreed Value for Value on the reference row; only `runtime_source` differed), and whether the owning modules were read off
-    the correspondence record or the v1 annotations (`correspondence.source`; a Value whose site differs between the two is a finding
-    `gate.compare_plans` lists by Value)."""
+    the correspondence record or the v1 annotations (`correspondence.source`)."""
     doc = {k: v for k, v in body.items() if k not in PROVENANCE_KEYS}
-    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # the manifest's Values (one class per (op_path, output_member, family); hidden-stream geometries fold to `*`)
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def _identity_key(r: Mapping[str, Any]) -> tuple:
-    return (str(r.get("request_id")), str(r.get("step")), int(r.get("invocation") or 0), str(r.get("op_path")), str(r.get("output_member", "out")), int(r.get("rank") or 0))
-
-
-def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapping[str, Any]] = ()) -> list[ValuePlan]:
-    """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
-    prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
-    enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
-    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
-    padded = {_identity_key(p) for p in padding_identities}
+def value_classes(manifest: Mapping[str, Any]) -> list[ValuePlan]:
+    """One Value class per (op_path, output_member, family).  An identity whose row declares it padding or inactive (`boundary_class`,
+    `enablement`) is PRESCRIBED -- materialised by enablement, no runtime producer.  Any other row numbers its `invocation` and its
+    `rank` (absent or empty reads as 0): a value `int()` does not read raises what `int()` raises."""
+    rows: list[Mapping[str, Any]] = next((held for name in ("identities", "entries", "rows") if (held := manifest.get(name))), [])
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
         fam = str(r.get("family") or "")
@@ -256,7 +258,8 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         v.identities += 1
         if r.get("promoted"):
             v.promoted = True
-        for c in (r.get("consumers") or []):
+        named = r.get("consumers")
+        for c in (named if named else []):
             if str(c) not in v.consumers:
                 v.consumers.append(str(c))
         sp = r.get("spec")
@@ -266,8 +269,12 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
             if r.get(extra) and v.anchor is None:
                 v.anchor = str(r[extra])
         bc = str(r.get("boundary_class") or "")
-        if bc in PRESCRIBED_ENABLEMENT or str(r.get("enablement") or "") in PRESCRIBED_ENABLEMENT or _identity_key(r) in padded:
+        if bc in PRESCRIBED_ENABLEMENT or str(r.get("enablement") or "") in PRESCRIBED_ENABLEMENT:
             v.prescribed_identities += 1
+        else:
+            # a manifest is a file: a row that is not prescribed is refused here when `int()` does not read its invocation or its rank
+            int(r.get("invocation") or 0)
+            int(r.get("rank") or 0)
     return [out[k] for k in sorted(out)]
 
 
@@ -395,6 +402,8 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
                               "the module's cutlass_scaled_mm launch (computed from its scales)"))
         else:
             refuse("native_tap", module, v.output_member, "the linear module is not a module of the runtime tree")
+        return legal, refused
+
     if route == "call_boundary_tap":
         owner = module.rsplit("/", 1)[0]
         if rt.has_module(owner):
@@ -415,7 +424,6 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
 
     if fam == WEIGHTS_FAMILY:
         owner = module.rsplit(".", 1)[0] if "." in module else module
-        leaf = module.rsplit(".", 1)[-1]
         if rt.has_module(owner) or module in rt.buffers:
             legal.append(AcquisitionSite("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
@@ -437,7 +445,8 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
         return sites[0], "one legal site"
     order = ["producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "prescribed", "analytic_table"]
     if v.promoted:
-        order.remove("consumer_input"); order.insert(0, "consumer_input")
+        order.remove("consumer_input")
+        order.insert(0, "consumer_input")
     ranked = sorted(sites, key=lambda s: (order.index(s.kind) if s.kind in order else len(order), s.module, s.slot))
     return ranked[0], f"several legal sites ({', '.join(s.kind for s in ranked)}): policy chose {ranked[0].kind}"
 
@@ -448,7 +457,6 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
 
 def _lifetime_tables() -> dict[str, Any]:
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 
 
@@ -475,9 +483,9 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
             out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
     for b in sorted(rt.buffers):
-        table = analytic_table_of_buffer(b)
-        if table is not None and b not in weights:
-            out.append(Residual("ANALYTIC_TABLES", b, table, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
+        analytic = analytic_table_of_buffer(b)
+        if analytic is not None and b not in weights:
+            out.append(Residual("ANALYTIC_TABLES", b, analytic, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
                                 "the manifest names no weight Value for it"))
     return out
 
@@ -506,9 +514,9 @@ def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) ->
     return {"applicable": True, "confirmed": confirmed, "unconfirmed": unconfirmed}
 
 
-def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *, tables: Mapping[str, Any] | None = None,
-                     with_residuals: bool = True, padding_identities: Iterable[Mapping[str, Any]] = ()) -> AcquisitionPlan:
-    values = value_classes(manifest, padding_identities)
+def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *,
+                     tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
+    values = value_classes(manifest)
     for v in values:
         legal, refused = sites_of(v, correspondence)
         v.sites, v.rejected = legal, refused
@@ -519,30 +527,17 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
     prov = correspondence.provenance()
     prov["modules"] = confirm_modules(values, correspondence)
     rt = correspondence.runtime
-    if with_residuals:
-        tabs = tables if tables is not None else _lifetime_tables()
-        for v in values:                                     # lifetime of a module-output site from the table when the annotations carry none
-            if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
-                v.chosen = AcquisitionSite(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
-                v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
-        residuals = residuals_of(values, rt, tabs)
-    else:
-        residuals = []
-    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
-             "the plan's runtime sites are for the executed steps"]
+    tabs = tables if tables is not None else _lifetime_tables()
+    for v in values:                                         # lifetime of a module-output site from the table when the annotations carry none
+        if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
+            v.chosen = AcquisitionSite(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
+            v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
+    residuals = residuals_of(values, rt, tabs)
+    notes = [("every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
+              "the plan's runtime sites are for the executed steps")]
     pdig = str(manifest.get("program_digest") or "")
     mdig = str(manifest.get("manifest_digest") or "")
     return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes, correspondence=prov)
 
 
-def load_plan(path: str | Path) -> dict[str, Any]:
-    d = json.loads(Path(path).read_text())
-    if d.get("schema") != SCHEMA:
-        raise ValueError(f"{path}: schema {d.get('schema')!r} != {SCHEMA}")
-    if plan_digest(d) != d.get("plan_digest"):
-        raise ValueError(f"{path}: plan_digest does not match the body")
-    return d
-
-
-def hooks_of_doc(doc: Mapping[str, Any]) -> list[tuple[str, str, str]]:
-    return [(h["module"], h["kind"], h["slot"]) for h in doc.get("hooks") or []]
+__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer"]

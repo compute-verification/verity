@@ -42,7 +42,7 @@ answer for each:
                           runs in that commit's tree under `uv run --locked` (`DECLARED`, and `research merge`'s `PLAN`), which
                           refuses a lock that isn't current, so a plan exists only where it would pass; and every suite's key
                           holds the lock's resolution of what the suite imports.  Implied by every suite.
-    preflight-fixtures    fetches each fixture `fixtures/artifacts.json` lists that git doesn't hold.  A suite's key holds the
+    preflight-fixtures    fetches each fixture `artifacts.json` lists that git doesn't hold.  A suite's key holds the
                           art id of each such fixture it reads (`suites.fetched_fixtures`), and a suite whose fixture can't be
                           fetched fails, never passes; a fixture no suite reads decides no verdict.  Implied by every suite.
     flock-circuit-build   `check_build.sh`'s `cargo check` of flock-circuit in each CPU feature set.  flock-rust-tests' key

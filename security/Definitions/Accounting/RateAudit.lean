@@ -78,7 +78,7 @@ abbrev Oracle (N b h ρ : ℕ) : Type := Bits ρ × Fin N × Bits b → Bits h
 abbrev Pub (N b h ρ : ℕ) : Type := Bits ρ × Oracle N b h ρ
 
 /-- A window's coins: the live coins (`Verity.Coins`) with the certified stream and the oracle at the fresh seed as
-their public part, and the `s` sampled words as their draw. -/
+their public part, and the `s` sampled words as their sample. -/
 abbrev Coins (N b h ρ s : ℕ) : Type := Verity.Coins (Pub N b h ρ) s N
 
 /-- The coins are finite, as a product: an instance of its own, because instance search with its default size does not

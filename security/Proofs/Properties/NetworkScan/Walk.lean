@@ -9,10 +9,10 @@ public import Proofs.Properties.Nci.ReadsExact
 /-!
 # The walk lemma
 
-**The walk lemma** (`MemberReads`): in a Program C-Flock decodes, topological (`Flock.Program.Prog.orderViolation`) and
+**The walk lemma** (`MemberReads`): in a Program Flock decodes, topological (`Flock.Program.Prog.orderViolation`) and
 laid out (`NciCheck.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
 (by a batch or a call: a scan's iteration reads the one before) reads only gates of that activation, or a gate one of
-node `k`'s argument references resolves to from the root, what its arguments bind. It is where C-Flock's walk
+node `k`'s argument references resolves to from the root, what its arguments bind. It is where Flock's walk
 (`Flock.Program.Prog.gate`, `Flock.Program.resolve`) takes a gate's operands, and the scan's causality
 (`Proofs.Properties.NetworkScan.Causal`) rests on it.
 
@@ -30,7 +30,7 @@ operand it returns is such a resolution (`gate_below`): `memberReads`.
 
 namespace Properties.NetworkScan
 
-/-- **The walk lemma.** In a Program C-Flock decodes, topological and laid out, a gate `g` in the activation of member
+/-- **The walk lemma.** In a Program Flock decodes, topological and laid out, a gate `g` in the activation of member
 `m` of a root node `k` that calls a composite by a batch or a call reads (its operands, `Flock.Program.Prog.gate`) only
 gates of that activation, or a gate a reference of one of node `k`'s arguments resolves to from the root. -/
 def MemberReads : Prop :=

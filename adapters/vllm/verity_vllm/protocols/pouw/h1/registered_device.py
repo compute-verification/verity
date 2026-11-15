@@ -1,11 +1,11 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
-frame-v3-sha512 tree, computed by `protocol_options/pouw_cuda/registered_rows.cu` from the rows' words, the salts sampled on
-the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given, under the domain id the host
-computes (`registered.domain`).
+frame-v3-sha512 tree, computed by `verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
+rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
+under the domain id the host computes (`registered.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
-(`pouw_cuda/zy_commit.cu`, on `verity.definitions.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
+(`pouw_cuda/zy_commit.cu`, on `verity.circuits.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
 each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
 `host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
 
@@ -32,10 +32,15 @@ from functools import cache
 from typing import Any
 
 import numpy as np
+from verity.circuits.kernels import ROW_COMMIT, SHA512
 from verity.commitments import hm96
-from verity.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
-                                           sha512_row_seg_segments, sha512_row_v2_prefix)
-from verity.definitions.kernels import ROW_COMMIT, SHA512
+from verity.commitments.rowleaf import (
+    ROW_SEG_BYTES,
+    sha512_row_seg_prefix,
+    sha512_row_seg_segment_prefix,
+    sha512_row_seg_segments,
+    sha512_row_v2_prefix,
+)
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1.nodes import Nodes
@@ -226,7 +231,7 @@ def _root(words: np.ndarray) -> bytes:
 
 
 def host_zy(words: np.ndarray, key: bytes, nonce: int, domain_id: bytes, also: tuple[bytes, int]
-            ) -> tuple[bytes, tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+            ) -> tuple[bytes, Nodes, tuple[Nodes, ...]]:
     """`device_hash`'s ``also`` on the CPU, the device path's twin: the call table ``also`` ``(domain id, nonce)``'s root,
     then the value's ``b || c`` strings and tree levels, of ``words`` ``(n, W)`` u16."""
     rows = _rows(words)
@@ -357,7 +362,7 @@ class Hashing:
     def ready(self) -> bool:
         return bool(self.done.query())
 
-    def result(self) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+    def result(self) -> tuple[Nodes, tuple[Nodes, ...]]:
         self.done.synchronize()
         self.held = ()
         return _out(self.bcs.numpy().view(np.uint64), self.levels.numpy().view(np.uint64), self.W)
@@ -371,7 +376,7 @@ class Hashing:
 
 
 def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
-                  domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                  domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """`device_hash`'s strings and levels, waited for."""
     return device_hash(words, key, nonce, row_salts, domain_id).result()
 

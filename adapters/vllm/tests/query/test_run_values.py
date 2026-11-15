@@ -8,6 +8,18 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Tuple, Value
+from verity.definitions.registry import prims
+
+from verity_vllm.acquire import plan as PL
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    runtime_tree_from_paths,
+)
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.manifest import format as fmt
@@ -42,7 +54,8 @@ def _program(fields=(), reads=None, checked=False) -> ProgramView:
         lo += n
     if fields:
         params.append(InputView(-3, fmt.RUN_PARAM, "{...}", tuple(ports)))
-    calls, tok, checks = [], R(-2, "out"), []
+    calls: list[CallView] = []
+    tok, checks = R(-2, "out"), []
     for step in (0, 1):
         k0 = len(calls)
         calls += [_call(k0, "Embedding_v1{V=8,H=4}", f"{W}.embed/embedding[0]", [tok, R(-1, EMBED_W)]),
@@ -105,13 +118,6 @@ def test_the_checks_a_program_returns_are_never_required():
 
 def test_a_descriptors_last_returned_leaves_are_its_checks():
     """`from_descriptor(checks=n)`: the Values of the return's last n leaves are the view's checks, still among its outputs."""
-    from verity.circuits.codec import encode_program
-    from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.circuits.program import Program
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Tuple, Value
-    from verity.definitions.registry import prims
-
     i32 = Value(32)
     checked = CompositeDefinition("QChecked", 1, (), lambda S: ((("a", i32), ("b", i32)), Tuple(i32, Value(1))),
                                   lambda B, S, a, b: tuple_of(B.call(prims.I32Add, a, b), B.call(prims.I32Eq, a, b)), register=False)
@@ -129,16 +135,13 @@ def test_a_run_field_no_step_or_two_steps_read_is_unmodelled_by_name():
 
 
 def test_the_plan_anchors_one_value_class_per_layer_on_its_readers_module():
-    from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
-
     m = _served()
     assert PL.ROUTE_OF_FAMILY[fmt.RUN_FAMILY] == "run_tap"
     (v,) = [v for v in PL.value_classes(m) if v.family == fmt.RUN_FAMILY]
     assert (v.op_path, v.output_member, v.identities, v.anchor) == (ATTN, "*", 2, ATTN)
     rt = runtime_tree_from_paths({"": ["M"], ATTN: ["DeepseekV32Attention"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(rt, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(rt, wrapper_prefix="", aliases={}))
     assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", ATTN, "*")] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and "is not a module of the runtime tree" in refused[0]["why"]

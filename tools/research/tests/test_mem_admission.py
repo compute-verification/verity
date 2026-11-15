@@ -78,7 +78,7 @@ def test_the_reading_is_the_cgroup_not_the_host_and_reservations_count_what_they
 
 
 def test_a_run_in_its_own_scope_reads_the_slice_above_it_when_that_has_less_headroom(machine, monkeypatch):
-    scope = machine["cg"] / "session-7.scope"          # a Nebius node: each run's own scope under the user slice's cap
+    scope = machine["cg"] / "session-7.scope"          # a Nebius node: each run's own scope under the user slice's limit
     scope.mkdir()
     (scope / "memory.max").write_text(f"{600 * GB}\n")
     (scope / "memory.current").write_text("0\n")
@@ -114,7 +114,7 @@ def test_the_machines_reservations_count_against_the_slice_not_the_runs_own_scop
     for f in machine["ram"].glob("*.json"):
         f.unlink()
     s = M.snapshot(machine["ram"])
-    assert (s["source"], s["available_gb"]) == (str(scope), 966), "an empty ledger: the run's own cap binds, and says so"
+    assert (s["source"], s["available_gb"]) == (str(scope), 966), "an empty ledger: the run's own limit binds, and says so"
     assert M.describe(s).startswith(f"available 966 GB = limit 966 (v2 {scope}, this run's own) - in use 0; the machine's {machine['cg']} "
                                     "leaves 1576 = 1718 - in use 142 - reserved 0")
 

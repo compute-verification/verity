@@ -9,13 +9,22 @@ import json
 
 import pytest
 
-from verity_vllm.check.replay import driver as SR, index as IX, population as POP
-from verity_vllm.program.compact import expanded_file_args, file_items_from_runs
+from tests.check import test_sampled_replay as T
+from tests.check.test_sampled_replay import (  # noqa: F401  -- fixtures
+    _under_module_body,
+    attn_world,
+    biased_world,
+    moe_world,
+    rope_world,
+    world,
+)
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
 from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.program.compact import file_items_from_runs
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.required import Q_WORD_ID
-from tests.check import test_sampled_replay as T
-from tests.check.test_sampled_replay import _under_module_body, attn_world, biased_world, moe_world, rope_world, world  # noqa: F401  -- fixtures
 
 WORLDS = ("world", "biased_world", "rope_world", "attn_world", "moe_world")
 

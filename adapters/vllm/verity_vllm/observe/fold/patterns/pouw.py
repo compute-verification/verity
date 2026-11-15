@@ -14,13 +14,25 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
+from verity.definitions.registry import pouw_rows
+
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.patterns.resolutions import (
+    attribution_for,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Profile,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
-from verity.definitions.registry import pouw_rows
 
 OP = "verity_pouw.ncp_linear"
 

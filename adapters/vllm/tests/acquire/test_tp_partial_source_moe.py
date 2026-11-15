@@ -4,7 +4,6 @@ received output is the native collector's module hook, so binding it here too wo
 tensors / modules / committer); the acquisition order and names are what the manifest's `mlp.experts` rows require."""
 from __future__ import annotations
 
-import sys
 import types
 from typing import Any
 

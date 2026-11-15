@@ -7,13 +7,26 @@ import json
 import types
 
 import pytest
-from verity_vllm.query.manifest.bind import Binder
-from verity_vllm.query.units import ValueRef
+from verity.circuits import word as W_
+
+from verity_vllm.acquire import plan
+from verity_vllm.acquire import plan as PL
+from verity_vllm.acquire.sources import router_softmax_source as S
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    runtime_tree_from_paths,
+)
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.pipeline import manifest as M
+from verity_vllm.pipeline import manifest_verify as MV
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
+from verity_vllm.query.units import ValueRef
+from verity_vllm.query import program_view as PV
 
 W = "model.model"
 H, E, K = 8, 4, 2
@@ -23,8 +36,6 @@ R = ValueRef
 
 @pytest.mark.parametrize("E_,renorm", [(64, False), (64, True), (128, False), (128, True)])
 def test_the_committed_softmax_is_the_taps_layout_with_no_recompute(E_, renorm):
-    from verity.definitions import word as W_
-
     fn = RS.router_fn(E_, 8, 8, renorm)
     G = W_.Graph(fn)
     cut = W_.units(G, 16, 32)["cut"]
@@ -40,7 +51,7 @@ def program(rows: int = 3, family: str = "MoeRouterTopKOrdered_v1") -> ProgramVi
     weights = InputView(-1, "weights", "{...}", tuple(Port(f"{W}.{n}.weight", 8 * i, 8 * i + 8, 8, 16) for i, n in
                                                       enumerate(("embed", "layers.1.mlp.gate", "lm_head"))))
     ids = InputView(-2, "ids", f"Array<{rows},Value<32>>", (Port("ids", 0, rows, rows, 32),))
-    calls = []
+    calls: list[CallView] = []
 
     def add(spec, name, reads, ports=(("out", H),), width=16):
         calls.append(CallView(len(calls), spec, spec.split("{", 1)[0], "call", name, tuple(Port(p, 0, n, n, width) for p, n in ports), tuple(reads)))
@@ -103,8 +114,6 @@ def test_manifest_layers_refuses_a_layer_under_two_geometries():
 
 
 def test_the_family_is_in_every_vocabulary():
-    from verity_vllm.acquire import plan
-    from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
 
     assert RS.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[RS.FAMILY] == "router_tap" and RS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
@@ -115,46 +124,37 @@ def test_the_family_is_in_every_vocabulary():
 
 
 def test_the_plan_anchors_the_tap_on_the_moe_module():
-    from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
-
     man = _manifest(program(), on=True)
     mod = next(x["moe_module"] for x in man["identities"] if x["family"] == RS.FAMILY)
     rt = runtime_tree_from_paths({"": ["M"], mod: ["FusedMoE"]}, buffers=[], runner={"sample": True}, source="synthetic")
     (v,) = [v for v in PL.value_classes(man) if v.family == RS.FAMILY]
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(rt, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(rt, wrapper_prefix="", aliases={}))
     assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", "moe/L1", RS.MEMBER)] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and "is not a module of the runtime tree" in refused[0]["why"]
 
 
 def test_word_check_sees_the_tapped_softmax_as_committed():
-    from verity.definitions import word as W_
-
     groups = [{"family": fam, "statics": {"E": 64, "TOPK": 8, "VPT": 8}, "definition": f"{fam}{{E=64,TOPK=8,VPT=8}}", "calls": 3,
                "where": "model.layers.0.mlp.experts"} for fam in RS.ROUTERS]
-    tapped = W_.check_calls(groups, acquired=RS.TAP_WORDS)
+    tapped = W_.check_calls(groups, acquired=RS.TAP_WORDS, specialize=PV.specialization)
     assert tapped["ok"] and [g["acquired_interior_words"] for g in tapped["groups"]] == [3 * 130, 3 * 139]
     with pytest.raises(W_.QueryRuleViolation, match="interior-not-acquired"):
-        W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129})
+        W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129}, specialize=PV.specialization)
 
 
 def test_the_manifest_cli_and_verify_carry_the_policy(monkeypatch):
-    from verity_vllm.pipeline import manifest as M
-    from verity_vllm.pipeline import manifest_verify as MV
-
     assert M.taps_of() == () and M.taps_of(router_softmax=True) == (RS.FAMILY,) and M.TAPS[RS.FAMILY] is RS.POLICY
-    seen = {}
+    seen: dict[str, dict] = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and {})
     MV.rebuild(program="p", taps=M.taps_of(router_softmax=True))
     assert seen["kw"]["taps"] == (RS.FAMILY,)
 
 
 def test_the_source_attaches_only_with_a_build_and_a_manifest_that_names_the_family():
-    from verity_vllm.acquire.sources import router_softmax_source as S
-
-    com = types.SimpleNamespace(name="rec", sources=[], attach_source=lambda src: com.sources.append(src))
+    com = types.SimpleNamespace(name="rec", sources=[])
+    com.attach_source = com.sources.append
     assert S.attach(com, None, {}, ("a",)) == (("a",), None) and com.sources == []
     with pytest.raises(SystemExit):
         S.attach(com, "/nonexistent/verity_router_tap.so", _manifest(program()), ("a",))

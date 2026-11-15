@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.definitions.ops.scalar import F32Fmaxf, F32_NAN_PTX
-from verity.definitions.silicon.models import GroupSum
-from verity.definitions.kernels import tc as TC
+from verity.circuits.ops.scalar import F32Fmaxf, F32_NAN_PTX
+from verity.circuits.silicon.models import GroupSum
+from verity.circuits.kernels import tc as TC
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.moe_twins import nv_expf_bits
 from verity.definitions.registry import mhc as M

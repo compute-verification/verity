@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 from verity.definitions.registry import layer_norm as _LN
+
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    from_rows,
+    known,
+    norm_kind,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 
 
 class LayerNormAtenRule(OpRule):
@@ -48,7 +56,7 @@ class LayerNormAtenRule(OpRule):
                 return f"{nm} is not a value collection"
         if isinstance(eps, bool) or not isinstance(eps, (int, float)):
             return f"eps {eps!r} is not a static number"
-        xs = shape(ctx, x)
+        xs = known(shape(ctx, x))
         N = xs[-1]
         if not isinstance(ns, (list, tuple)) or tuple(ns) != (N,):
             return f"normalized_shape {ns} is not the last dim of x {xs}"

@@ -10,17 +10,34 @@ from __future__ import annotations
 import dataclasses
 
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
-from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import (and_mul_operands, attention_scale, dtype_is, from_rows, kv_logs, norm_kind,
-                                                      refuse_cached_prefix, row_value, rows_of, shape)
+from verity_vllm.program.frontend.rules.base import (
+    InPlaceRule,
+    OpRule,
+    RuleInfo,
+    StateRule,
+)
+from verity_vllm.program.frontend.rules.common import (
+    and_mul_operands,
+    attention_scale,
+    dtype_is,
+    from_rows,
+    known,
+    kv_logs,
+    norm_kind,
+    refuse_cached_prefix,
+    row_value,
+    rows_of,
+    shape,
+)
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.targets import UnregisteredTarget
+from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16
@@ -86,7 +103,7 @@ class ArgmaxTokenSelectRule(OpRule):
         r = row_value(ctx, node.args[0], "logits")
         if r:
             return r
-        shp = shape(ctx, node.args[0])
+        shp = known(shape(ctx, node.args[0]))
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim")
         keep = node.args[2] if len(node.args) > 2 else node.kwargs.get("keepdim", False)
         if keep:
@@ -218,7 +235,9 @@ def _without_batch_invariance(op: str, states: str) -> str | None:
     """A refusal when the active target is not batch-invariant, where ``op`` is the kernel vLLM dispatches without batch invariance
     (cuBLAS's GEMM, `layernorm_kernels.cu`'s `rms_norm_kernel` at a token-count-dependent block), not the batch-invariant one the
     rule's kind states."""
-    from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports this module
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+        active_target_profile,  # vllm_bindings imports this module
+    )
     if active_target_profile().batch_invariant:
         return None
     return f"numerics_unregistered: {op} on a target without batch invariance is the kernel vLLM dispatches there, not {states}"
@@ -247,7 +266,7 @@ class RmsNormRule(InPlaceRule):
             return r
         if not isinstance(ctx.val(out), (Alloc, Coll)):
             return "out is not an allocation/value"
-        if shape(ctx, w) != (shape(ctx, x)[-1],):
+        if shape(ctx, w) != (known(shape(ctx, x))[-1],):
             return f"weight {shape(ctx, w)} vs hidden {shape(ctx, x)[-1]}"
         if shape(ctx, out) != shape(ctx, x):
             return "out shape differs from x"
@@ -260,7 +279,9 @@ class RmsNormRule(InPlaceRule):
         xc, wc = ctx.coll(x), ctx.coll(w)
         rows, lead = rows_of(xc)
         N = rows[0].type.n
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports this module
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            active_target_profile,  # vllm_bindings imports this module
+        )
         fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps, TARGET=active_target_profile(), M=len(rows))
         outs = [ctx.call(fn, r, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
@@ -288,7 +309,7 @@ class FusedAddRmsNormRule(InPlaceRule):
             return "x/residual is an unwritten allocation"
         if shape(ctx, x) != shape(ctx, res):
             return "x and residual differ in shape"
-        if shape(ctx, w) != (shape(ctx, x)[-1],):
+        if shape(ctx, w) != (known(shape(ctx, x))[-1],):
             return "weight shape vs hidden size"
         if not isinstance(eps, float):
             return "eps is not a static float"
@@ -300,7 +321,9 @@ class FusedAddRmsNormRule(InPlaceRule):
         rr, _ = rows_of(ctx.coll(res))
         wc = ctx.coll(w)
         N = xr[0].type.n
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports this module
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            active_target_profile,  # vllm_bindings imports this module
+        )
         try:
             fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps, TARGET=active_target_profile(), M=len(xr))
         except UnregisteredTarget as e:
@@ -344,10 +367,10 @@ class RotaryEmbeddingRule(InPlaceRule):
                 return r
         if not is_neox:
             return "numerics_unregistered: GPT-J (interleaved) rotation has no registered kind"
-        cs = shape(ctx, cache)
+        cs = known(shape(ctx, cache))
         if len(cs) != 2 or cs[1] != head_size:
             return f"cos_sin_cache {cs} vs head_size {head_size}"
-        qs = shape(ctx, q)
+        qs = known(shape(ctx, q))
         if qs[-1] % head_size and (len(qs) < 2 or qs[-1] != head_size):
             return f"query last dim {qs[-1]} not a multiple of head_size"
         T = ctx.val(pos).shape[0] if ctx.val(pos).shape else 1
@@ -404,11 +427,11 @@ class SiluAndMulRule(InPlaceRule):
     def emit(self, node, ctx):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
-        I = rows[0].type.n // 2
-        fn = ctx.kind("silu_mul", node, I=I)
+        INTER = rows[0].type.n // 2
+        fn = ctx.kind("silu_mul", node, I=INTER)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 
 # -- state: attention over the request's KV history ------------------------------------------------------------
@@ -442,7 +465,7 @@ class UnifiedAttentionRule(StateRule):
                 return f"{nm} is an unwritten allocation"
         if not isinstance(layer_name, str):
             return "layer_name is not a static string"
-        qs, ks, vs = shape(ctx, q), shape(ctx, k), shape(ctx, v)
+        qs, ks, vs = known(shape(ctx, q)), known(shape(ctx, k)), shape(ctx, v)
         if qs[0] != ks[0] or ks != vs:
             return f"row counts differ q{qs} k{ks} v{vs}"
         return True
@@ -511,7 +534,8 @@ class ProfileLinearRule(LinearRule):
         return _without_batch_invariance("aten.linear", "the batch-invariant matmul the 'gemm' kind states") or super().applies(node, ctx)
 
 
-PROFILE_RULES = [ProfileLinearRule(), EmbeddingRule(), ArgmaxTokenSelectRule(), ResidualAddRule(), BroadcastBiasAddRule(),
-                 RmsNormRule(), FusedAddRmsNormRule(), RotaryEmbeddingRule(), SiluAndMulRule(), UnifiedAttentionRule()]
+PROFILE_TORCH_RULES = [ProfileLinearRule(), EmbeddingRule(), ArgmaxTokenSelectRule(), ResidualAddRule(), BroadcastBiasAddRule()]
+PROFILE_VLLM_RULES = [RmsNormRule(), FusedAddRmsNormRule(), RotaryEmbeddingRule(), SiluAndMulRule(), UnifiedAttentionRule()]
+PROFILE_RULES = PROFILE_TORCH_RULES + PROFILE_VLLM_RULES
 
-__all__ = ["PROFILE_RULES"]
+__all__ = ["PROFILE_RULES", "PROFILE_TORCH_RULES", "PROFILE_VLLM_RULES"]

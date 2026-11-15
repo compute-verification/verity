@@ -199,7 +199,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # a live coin flipped after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
     # (security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
-    # encoding, and each coin keys a block apart (verity/protocols/poub/verifier/tests/test_key_binding.py)
+    # encoding, and each coin keys a block apart (verity/protocols/accounting/poub/verifier/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
           "the codec and the coins of earlier appends (the registration being append 0, whose coin is the seed; every "
@@ -217,11 +217,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedHost` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedDevice` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
-    Entry("trusted-host", "assumption",
+    Entry("trusted-device", "assumption",
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
-          "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
+          "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted device",
           "standard"),
     # `Verity.Assumptions.ZkServerOwnUser` (security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
     # `Verity.Guarantees.RegisteredLeakage` and `Verity.Guarantees.RegisteredStreamLeakage`: a stack is the same function
@@ -282,14 +282,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
-    # session per audit cites trusted-host.
+    # session per audit cites trusted-device.
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
           "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
           "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
-          "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
+          "trusted-device, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
-    # its falsification test is the measurement behind ROOT_CALL_NS (verity/protocols/pous/verifier/PROTOCOL.md, P2's SeqRoot):
+    # its falsification test is the measurement behind ROOT_CALL_NS (verity/protocols/accounting/pous/verifier/PROTOCOL.md, P2's SeqRoot):
     # the timing red team's modelled floor and the 8-core cooperation run; a faster squaring on the stated device
     # falsifies it
     Entry("pous-ring-speed", "assumption",
@@ -492,7 +492,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
           "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
           "coin, which the last round needs); and the session's audit coins (Flock's --zk coin tree) come from the "
-          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-host). "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-device). "
           "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
           "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
           "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),

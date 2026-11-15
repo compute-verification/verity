@@ -209,7 +209,7 @@ def RP.bind {R α β : Type} : RP R α → (α → RP R β) → RP R β
   | .hash q k, f => .hash q fun a => (k a).bind f
   | .rerun r k, f => .rerun r fun v => (k v).bind f
 
-/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
+/-- The samples a program reruns at, in order, against `H` and the runs `run`. -/
 def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → List R
   | .ret _ => []
   | .hash q k => RP.rerunsAt H run (k (H q))
@@ -371,7 +371,7 @@ def trustedBase : List String :=
      "coin that the --zk verifier sends at Hello and opens round by round",
    "the decoder's count: the deployed decoder's step count (Flock.Deploy.dec) is the cost of running it, one step " ++
      "per field operation (arithmetic or a comparison), per position compared and per column entry read",
-   "trusted-host: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
+   "trusted-device: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"]
 
 /-! ## The claims -/

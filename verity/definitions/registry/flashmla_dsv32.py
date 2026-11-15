@@ -64,8 +64,8 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.numerics import flashmla_dsv32_twin
-from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.definitions.registry import flashmla as F
 
 _CONF = ("model-untested: read from FlashMLA 6bc49418's Hopper sparse_fp8 decode at its V32 instance (the module docstring's "

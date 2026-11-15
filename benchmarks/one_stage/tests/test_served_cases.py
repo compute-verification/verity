@@ -40,14 +40,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.verifier import weights as PW
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as DR
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import proofs as PF
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import weights as PW
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -374,8 +374,8 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
 
 
 def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
-    """Where the tree leaves the inference-only policy out (the public release: no module `SC.POLICY`, which names the
-    policy's Lean package and the Python its check is held to), the inference-only case is refused saying so, never
+    """Where the tree leaves the inference-only policy out (no module `SC.POLICY`, which names the policy's Lean package
+    and the Python its check is held to), the inference-only case is refused saying so, never
     skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
     package is refused the same way."""
     program, query = toy()
@@ -490,7 +490,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
 
 
 @lean
-def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
+def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
     """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
     the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
     same form is refused by name at its params, the reason remote's composite would give for a v1 case."""
@@ -776,7 +776,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
 def pearlplus_parts(serve: Path) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
     manifest (its salt key among its fields), the one file its opened tile reads by the blob holding it, and the Lean
-    verdict of record's verdict, tiles drawn and work."""
+    verdict of record's verdict, tiles sampled and work."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"

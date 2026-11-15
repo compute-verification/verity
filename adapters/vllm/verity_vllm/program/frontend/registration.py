@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType, Type, Value
-
 from verity.definitions.registry.tables import table_type
+
 from verity_vllm.program.inputs import run_field
 
 
@@ -37,7 +37,7 @@ class RegisteredInputs:
         """The field `name`, allocated at its first read; every read of one name is the same `width`-bit word.  `distinct`: a value
         of its own (a scalar of a generic kind) -- the field `name`, `name_1`, ... that holds these bits, in first-read order."""
         if distinct:
-            same = [f for f in self.fields if f["name"] == name or f["name"].startswith(name + "_") and f["name"][len(name) + 1:].isdigit()]
+            same = [f for f in self.fields if f["name"] == name or f["name"].startswith(name + "_") and f["name"][len(name) + 1:].isdecimal()]
             f = next((f for f in same if (f["width"], f["bits"]) == (width, bits)), None)
             name = f["name"] if f is not None else name if not same else f"{name}_{len(same)}"
         f = next((f for f in self.fields if f["name"] == name), None)
@@ -103,3 +103,6 @@ class RunInputs:
         return {"param": self.param, "name": "run",
                 "fields": [{"name": f["name"], "type": repr(f["type"]), "offset": f["offset"], "leaves": f["type"].leaves}
                            for f in self.fields]}
+
+
+__all__ = ["RegisteredInputs", "RunInputs"]

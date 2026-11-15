@@ -12,17 +12,26 @@ a runtime / source occurrence, as data beside the Program (`annotations["corresp
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 from pathlib import Path
 
 import pytest
 import torch
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
+from verity.definitions.registry import b1
+
 from verity_vllm.correspondence.runtime import (
-    JSON_SCHEMA, NAMESPACE, SCHEMA, ArgSpan, RuntimeCorrespondence, correspondence_digest, load_correspondence, validate_document,
+    JSON_SCHEMA,
+    NAMESPACE,
+    SCHEMA,
+    ArgSpan,
+    RuntimeCorrespondence,
+    correspondence_digest,
+    load_correspondence,
+    validate_document,
 )
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
@@ -47,7 +56,6 @@ def _tp_rank_program(rank=(2, 0), n=3):
 
 
 def _serve_program(**over):
-    from verity.definitions.registry import b1
     C = dict(b1.B0_CONFIG)
     C.update(NL=2, V=64, MAX_POS=64)
     C.update(over)
@@ -187,7 +195,8 @@ def test_without_correspondence_the_program_is_unchanged(dead_free):
 def test_without_correspondence_rank_and_session_are_refused():
     tp.ensure_ops()
     args = (tp._meta(3, tp.H), tp._meta(3, tp.Q), tp._meta(3, tp.Q), tp._meta(3, tp.H))
-    for kw in ({"rank": (2, 0)}, {"session": []}):
+    refused: tuple[dict[str, object], ...] = ({"rank": (2, 0)}, {"session": []})
+    for kw in refused:
         with pytest.raises(ValueError, match="correspondence=True"):
             derive_report(tp.Model(), args, **tp.PROF, rules=vllm_ruleset(), name="TpSite", correspondence=False, **kw)
 
@@ -218,7 +227,7 @@ def test_tp_rank_coordinate_and_collective_occurrence_are_explicit_integers():
     assert table.rank is not None and (table.rank.world, table.rank.rank) == (2, 1)
     coll = table.collective_calls()
     assert len(coll) == 9                         # 2 all_gather sites x 3 rows + 1 all_reduce site x 3 rows
-    kinds = {}
+    kinds: dict[str, set[int]] = {}
     for k in coll:
         rec = table.record(k)
         assert rec.rank is not None and (rec.rank.world, rec.rank.rank) == (2, 1)
@@ -255,8 +264,8 @@ def test_reader_lookups_owning_module_return_slot_arg_slot():
     assert isinstance(table, RuntimeCorrespondence)
     assert table.modules() == ["layers.0.o_proj", "layers.0.self_attn", "layers.0.self_attn.qkv_proj"]
     assert table.calls_of_module("layers.0.self_attn.qkv_proj") == [0, 1, 2]
-    assert table.calls_under("layers.0.self_attn") == [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    assert table.calls_under("") == list(range(15))
+    assert table.calls_of_module("layers.0.self_attn") == [3, 4, 5, 6, 7, 8]
+    assert len(table) == 15
     # Call 1 = row 1 of the qkv projection: owning module, its return slot inside the fx node's output, its arguments
     assert table.owning_module(1) == "layers.0.self_attn.qkv_proj"
     r = table.return_slot(1, 0)
@@ -282,3 +291,63 @@ def test_load_without_the_namespace_raises():
         load_correspondence(bare)
     with pytest.raises(KeyError):
         load_correspondence({"annotations": {}})
+    with pytest.raises(KeyError):
+        load_correspondence("descriptor.json.gz")                        # a path is neither a descriptor nor a program
+    assert correspondence_digest("descriptor.json.gz") is None
+
+
+def test_a_document_of_another_schema_and_a_batchs_record_are_refused():
+    doc = _tp_rank_program().program.annotations[NAMESPACE]
+    with pytest.raises(ValueError, match=r"not a runtime-correspondence/v1 document \(schema='runtime-correspondence/v0'\)"):
+        RuntimeCorrespondence.from_json(dict(doc, schema="runtime-correspondence/v0"))
+    batched = dict(doc, calls=[doc["calls"][0], {"members": [doc["calls"][1]]}, *doc["calls"][2:]])
+    with pytest.raises(ValueError, match=r"calls\[1\] is a batch's, its members' records"):
+        RuntimeCorrespondence.from_json(batched)
+    assert next(RuntimeCorrespondence.records(batched)).call == 0        # each record is built when it is reached: Call 0's is, before the refusal
+
+
+def test_validate_document_names_each_problem():
+    doc = _tp_rank_program().program.annotations[NAMESPACE]
+    assert validate_document(doc) == []
+    n_occ = len(doc["occurrences"])
+    with_inputs = next(o for o, occ in enumerate(doc["occurrences"]) if occ.get("inputs"))
+    collective = next(o for o, occ in enumerate(doc["occurrences"]) if occ.get("collective"))
+
+    def problems(change) -> list[str]:
+        d = copy.deepcopy(doc)
+        change(d)
+        return validate_document(d)
+
+    def no_keys(d):
+        del d["body"], d["calls"]
+        d["schema"] = "runtime-correspondence/v0"                        # not reported: the keys are, alone
+
+    def no_node_or_op(d):
+        del d["occurrences"][0]["node"], d["occurrences"][0]["op"]
+
+    assert problems(no_keys) == ["missing top-level key 'body'", "missing top-level key 'calls'"]
+    assert problems(lambda d: d.update(schema="runtime-correspondence/v0", body="root")) == [
+        f"schema 'runtime-correspondence/v0' != {SCHEMA!r}", "body 'root' != 'program_fn'"]
+    for rank in ({"world": 2, "rank": 2}, {"world": 2, "rank": -1}, {"world": "2", "rank": 0}, {"world": 2}, {}):
+        assert problems(lambda d, rank=rank: d.update(rank=rank)) == [f"rank coordinate {rank!r} is not integers 0 <= rank < world"]
+    assert problems(lambda d: d.update(rank=None)) == []
+    assert problems(no_node_or_op) == ["occurrences[0] lacks 'node'", "occurrences[0] lacks 'op'"]
+    assert problems(lambda d: d["occurrences"][0].pop("module")) == ["occurrences[0] lacks 'module'"]
+    assert problems(lambda d: d["occurrences"][with_inputs]["inputs"][0].update(source="elsewhere")) == [
+        f"occurrences[{with_inputs}].inputs[0].source 'elsewhere' not in the enum"]
+    assert problems(lambda d: d["occurrences"][with_inputs]["inputs"][0].pop("source")) == [
+        f"occurrences[{with_inputs}].inputs[0].source None not in the enum"]
+    assert problems(lambda d: d["occurrences"][with_inputs].update(inputs=None)) == []
+    assert problems(lambda d: d["occurrences"][with_inputs].pop("inputs")) == []
+    whole = doc["occurrences"][collective]["collective"]
+    unnumbered = {k: v for k, v in whole.items() if k != "occurrence"}
+    for changed in (dict(whole, occurrence="0"), dict(whole, operand_ranks=[0, "1"]), unnumbered, {}):
+        got = problems(lambda d, changed=changed: d["occurrences"][collective].update(collective=changed))
+        assert got == [f"occurrences[{collective}].collective has a non-integer rank coordinate: {changed!r}"]
+    assert problems(lambda d: d["occurrences"][collective]["collective"].pop("operand_ranks")) == []
+    assert problems(lambda d: d["calls"][0].pop("occ")) == ["calls[0] lacks 'occ'"]
+    assert problems(lambda d: d["calls"][0].update(occ=None)) == []
+    for occ in (n_occ, -1):
+        assert problems(lambda d, occ=occ: d["calls"][2].update(occ=occ)) == [f"calls[2].occ {occ} out of range"]
+    with pytest.raises(TypeError):                                       # no problem in the list: the comparison refuses an `occ` that is no number
+        problems(lambda d: d["calls"][0].update(occ=""))

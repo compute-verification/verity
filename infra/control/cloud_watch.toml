@@ -143,7 +143,7 @@ index_stale_s = 1800                 # the store index writes `listings` every p
 budgets = ["/workspace/steward/research-notes/budgets.toml", "~/.research/notes/budgets.toml"]   # the first that exists
 guard_state = "/root/.research/pods/guard-budgets.json"
 steward_log = "/data/steward/watch.log"   # its `ACCOUNT $B at $R/h` lines: RunPod's own rate for every pod and volume
-line_alert_share = 0.8               # a RunPod line at 80% of its cap (the guard itself terminates at 100%)
+line_alert_share = 0.8               # a RunPod line at 80% of its limit (the guard itself terminates at 100%)
 runpod_topup_below_usd = 100         # RunPod tops the account up by itself once the balance falls under this (to ~$300; the
                                      # steward log's ACCOUNT lines show each one), so a balance under it means the top-up failed:
                                      # at the guard's balance_floor every pod in scope is terminated, and an empty balance stops
@@ -187,7 +187,8 @@ instances_command = ["python3.12", "/data/infra/store-index-src/src/research/pod
 machines_d = ["/workspace/steward/research-notes/machines.d", "~/.research/notes/machines.d"]   # each VM's rate_usd_per_hour
 
 [github]
-token_env = "GH_TOKEN"
+# prints the pod's read-only App token, the one every watcher reads GitHub with; run each pass, so its limit is the one watched
+token_command = ["/data/infra/gh_read_token.sh", "--cached"]
 remaining_share = 0.1
 
 [jobs]

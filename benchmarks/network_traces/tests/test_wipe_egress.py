@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/composite/device/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
 import auditor as G  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import warden_serve as ws  # noqa: E402
@@ -34,6 +34,8 @@ ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))
 LINK, FAILS = ws.LINK, f"{ws.LINK}-fails"
+#: the device the gate's `end.json` names for a network certifier run
+DEVICE = "warden"
 MS = 1_000_000
 
 
@@ -73,7 +75,7 @@ def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset 
     (run / E.DEPLOYMENT).write_text(json.dumps(dep, indent=1))
     (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines))
     files = {Path(n).name: hashlib.sha512((run / n).read_bytes()).hexdigest() for n in (E.DEPLOYMENT, E.CERTIFICATES)}
-    (run / E.END).write_text(json.dumps({"device": "warden", "rc": 0, "run": "c-test", "pinned": "0" * 40,
+    (run / E.END).write_text(json.dumps({"device": DEVICE, "rc": 0, "run": "c-test", "pinned": "0" * 40,
                                          "verdict": {"accepted": accepted}, "files": files}))
     return run
 
@@ -136,7 +138,7 @@ def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tm
 
 def test_the_gates_verdict_and_its_hashes_of_out_bind_the_count(tmp_path: Path) -> None:
     refused = egress(gate_run(tmp_path / "refused", accepted=False), at(4_000), at(9_000))
-    assert refused["why"] == ["the gate's check didn't accept the run (device warden, rc 0, accepted False)"]
+    assert refused["why"] == [f"the gate's check didn't accept the run (device {DEVICE}, rc 0, accepted False)"]
     run = gate_run(tmp_path / "swapped")
     lines = (run / E.CERTIFICATES).read_text().splitlines()
     (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines[:-1]))

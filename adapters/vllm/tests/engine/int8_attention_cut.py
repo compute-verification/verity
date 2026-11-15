@@ -25,13 +25,31 @@ import numpy as np
 
 from tests.engine.moe_scope_cut import _views, write
 from verity_vllm.check.fold_compare import SnapshotStore, _storage_indices
-from verity_vllm.observe.fold.profiles import profile_for_case
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Event, Note, Root, RunHeader, StepEnd, StepStart, TritonLaunch, ViewDesc
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Event,
+    Note,
+    Root,
+    RunHeader,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope
 from verity_vllm.observe.fold.patterns.kv_cache import kv_layer_of
 from verity_vllm.observe.fold.patterns.ops import op_name
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.fold.resolve_log import collect_roots, make_context
-from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, Group, Shared, resolve_step
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    GatherMany,
+    Group,
+    Shared,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import TreeNode, step_events
 from verity_vllm.observe.log import read_log, split_steps
 
@@ -93,7 +111,7 @@ def image(group: Group, store: SnapshotStore, last: int) -> dict[int, tuple[np.n
     out = {}
     for a, have in got.items():
         el = np.array(sorted(have), dtype=np.int64)
-        cut = np.flatnonzero(np.diff(el) != 1) + 1
+        cut: np.ndarray = np.flatnonzero(np.diff(el) != 1) + 1
         starts, ends = el[np.r_[0, cut]], el[np.r_[cut - 1, el.size - 1]]
         out[a] = (np.stack([starts, ends - starts + 1], axis=1), np.array([have[e] for e in el.tolist()], dtype=dtype[a]))
     return out
@@ -101,6 +119,7 @@ def image(group: Group, store: SnapshotStore, last: int) -> dict[int, tuple[np.n
 
 def cut(capture: Path, layer: int, steps: set[int], source: dict) -> tuple[list[Event], dict[str, np.ndarray]]:
     store = SnapshotStore(capture)
+    roots: dict[int, list[Root]]
     header, roots, events, arrays = None, {}, [], {}
     root_events: list[Root] = []
     for pre, step in split_steps(read_log(capture / "log.jsonl.gz")):

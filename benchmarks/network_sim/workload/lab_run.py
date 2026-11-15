@@ -86,16 +86,16 @@ import active_replay as ar
 import graph
 import records
 from datacenter import Cadence
-from verity.protocols.certifier.verifier import calibration
-from verity.protocols.certifier.verifier import certificate as CT
-from verity.protocols.certifier.verifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, \
+from verity.protocols.accounting.certifier.verifier import calibration
+from verity.protocols.accounting.certifier.verifier import certificate as CT
+from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, \
     request_frames
-from verity.protocols.certifier.verifier.active import event as canonical_event
-from verity.protocols.certifier.verifier.audit import Audit
-from verity.protocols.certifier.verifier.certificate import Direction, parameters_digest, record_head
-from verity.protocols.certifier.verifier.schedule import ClockSync
-from verity.protocols.certifier.verifier.served import Admission, ServedProfile, derive
-from verity.protocols.certifier.verifier.service import LEAVES, LinkWindows
+from verity.protocols.accounting.certifier.verifier.active import event as canonical_event
+from verity.protocols.accounting.certifier.verifier.audit import Audit
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, parameters_digest, record_head
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
+from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, derive
+from verity.protocols.accounting.certifier.verifier.service import LEAVES, LinkWindows
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 

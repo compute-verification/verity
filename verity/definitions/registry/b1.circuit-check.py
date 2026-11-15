@@ -6,11 +6,11 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """This module's Definitions in tiny whole-model configurations (`verity.definitions.tiny`, the vLLM tests'), and the
+    """This module's Definitions in tiny whole-model configurations (`verity.circuits.tiny`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import b1
-    from verity.definitions.tiny import TINY
+    from verity.circuits.tiny import TINY
 
     return [
         ("Serve_v1", lambda: bind(b1.Serve, C=TINY, LP=3, STEPS=2)),

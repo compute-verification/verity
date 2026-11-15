@@ -1,9 +1,6 @@
 """Synthetic end-to-end fold: a toy configuration (H=16, NH=2, KVH=1, D=8, I=16, V=16, NL=1; LP=2, STEPS=1) of the REAL
 `b1` definitions, hand-written raw observation events (prefill step with 2 rows, decode step with a StepLink) and a
-toy pattern set, folded into `Captured_v1{PROFILE, WORKLOAD}` and compared with `Serve_v4` by `match_program`.
-
-When `memory.py` / `views.py` raise `NotImplementedError` the test installs a small in-file stub memory model
-through monkeypatching (`fold.MemoryModel`, `fold.row_view`); otherwise it uses them."""
+toy pattern set, folded into `Captured_v1{PROFILE, WORKLOAD}` and compared with `Serve_v4` by `match_program`."""
 
 from __future__ import annotations
 
@@ -11,19 +8,42 @@ import itertools
 from dataclasses import dataclass
 
 import pytest
-
-from verity_vllm.observe.fold import fold as fold_mod
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
-from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
-from verity_vllm.observe.fold.patterns.norms import eps_input
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
 from verity.circuits.defs import bind
-from verity.circuits.refs import Affine, Explicit, concat
+from verity.circuits.refs import Affine
+from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry import value_inputs as VI
-from verity.circuits.types import Array, RecordType, Value
+
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold import fold as fold_mod
+from verity_vllm.observe.fold.fold import FoldError, fold
+from verity_vllm.observe.fold.memory import Unresolved
+from verity_vllm.observe.fold.patterns.norms import eps_input
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    Pattern,
+    PerRow,
+    Profile,
+    Shared,
+    Supplied,
+    Transparent,
+)
+from verity_vllm.observe.fold.supplied import SuppliedInputs
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -119,7 +139,6 @@ def step_events(step: int, positions: list[int], ids: Ids, base_alloc: int, samp
     R = 1
     p0 = positions[0]
     a = itertools.count(base_alloc)
-    ids_view = V(A_IDS, (4,), dtype=ids_dtype)
     pos_view = V(A_POS, (4,), dtype=I64D)
     hidden, normed, qkv, attn, o, gu, act, down, gathered, logits, sampled_v = (V(next(a), s, dtype=d) for s, d in (
         ((M, 16), BF), ((M, 16), BF), ((M, 32), BF), ((M, 2, 8), BF), ((M, 16), BF), ((M, 32), BF), ((M, 16), BF), ((M, 16), BF),
@@ -199,6 +218,12 @@ def toy_log(ids_dtype: str = I32D, extra_unknown_op: bool = False, skip_norm0: b
     return evs
 
 
+def instance_nodes(result, *, spec_prefix: str | None = None, step: int | None = None) -> list[dict]:
+    """The fold result's instance records whose spec id starts with `spec_prefix` and whose step is `step`."""
+    return [m for m in result.instances
+            if (spec_prefix is None or m["spec"].startswith(spec_prefix)) and (step is None or m["step"] == step)]
+
+
 # ---------------------------------------------------------------------------------------------------------
 # toy patterns (the fold only sees resolutions; these are minimal stand-ins for a real profile)
 # ---------------------------------------------------------------------------------------------------------
@@ -232,6 +257,7 @@ def p_rms_triton(node, ctx):
     if not node.is_triton or not node.op.endswith("_rms_norm_kernel"):
         return None
     a = node.enter.args
+    operands: tuple
     spec, operands = bind(b1.RMSNormTriton, N=C["H"], EPS=C["EPS"]), (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]))
     if ctx.profile.registered_values:
         spec, operands = bind(VI.RMSNormTritonV3, N=C["H"]), operands + (eps_input(C["EPS"]),)
@@ -282,6 +308,7 @@ def p_attention(node, ctx):
     ch = node.children[0]
     q3, kc, vc, out = ch.args[:4]
     parts = []
+    operands: tuple
     for i, (req, p) in enumerate(ctx.start.rows):
         T = p + 1
         slots = tuple(_slot(ctx, req, j) for j in range(T))
@@ -298,6 +325,7 @@ def p_fused_norm(node, ctx):
     if node.op != "_C.fused_add_rms_norm.default":
         return None
     x, res, w, eps = node.args
+    operands: tuple
     spec, operands = bind(b1.RMSNormFusedCuda, N=C["H"], EPS=eps), (PerRow(x), PerRow(res), Shared(w))
     if ctx.profile.registered_values:
         spec, operands = bind(VI.RMSNormFusedCudaV4, N=C["H"]), operands + (eps_input(eps),)
@@ -335,115 +363,9 @@ def toy_profile(accepted=False, registered_values=False):
     return Profile("toy", PATTERNS, dict(C), weight_field, accepted, registered_values=registered_values)
 
 
-# ---------------------------------------------------------------------------------------------------------
-# stub memory model (only when the real one raises NotImplementedError)
-# ---------------------------------------------------------------------------------------------------------
-
-
-def stub_row_view(v: ViewDesc, i: int) -> ViewDesc:
-    if not v.shape:
-        raise ValueError("rank-0 view has no rows")
-    if not (0 <= i < v.shape[0]):
-        raise ValueError(f"row {i} outside {v!r}")
-    return ViewDesc(v.alloc, v.offset + i * v.strides[0], v.shape[1:], v.strides[1:], v.dtype, v.device)
-
-
-def stub_rows_view(v: ViewDesc, lo: int, hi: int) -> ViewDesc:
-    if not (0 <= lo <= hi <= v.shape[0]):
-        raise ValueError(f"rows [{lo}, {hi}) outside {v!r}")
-    return ViewDesc(v.alloc, v.offset + lo * v.strides[0], (hi - lo,) + v.shape[1:], v.strides, v.dtype, v.device)
-
-
-def _elements(v: ViewDesc):
-    for idx in itertools.product(*(range(n) for n in v.shape)):
-        yield v.offset + sum(i * s for i, s in zip(idx, v.strides))
-
-
-def _compact(refs):
-    parts = []
-    for r in refs:
-        if parts and parts[-1].space == r[0] and parts[-1].idx == r[1] and parts[-1].base + parts[-1].count == r[2]:
-            parts[-1] = Affine(r[0], r[1], parts[-1].base, parts[-1].count + 1)
-        else:
-            parts.append(Affine(r[0], r[1], r[2], 1))
-    return concat(parts) if parts else Explicit(())
-
-
-class StubMemory:
-    def __init__(self):
-        self.cells: dict[int, dict] = {}
-        self.writes = self.reads = 0
-
-    def alloc(self, ev):
-        self.cells[ev.alloc] = {}
-
-    def free(self, a):
-        self.cells.pop(a)
-
-    def write(self, view, refs):
-        if refs.count != view.numel:
-            raise ValueError(f"write of {refs.count} refs into {view!r}")
-        cells = self.cells[view.alloc]
-        for j, e in enumerate(_elements(view)):
-            cells[e] = (refs[j], view.bits)
-        self.writes += 1
-
-    def read(self, view):
-        cells = self.cells.get(view.alloc)
-        if cells is None:
-            raise Unresolved(view, [(0, view.numel)], "unknown or freed allocation")
-        out, missing = [], []
-        for j, e in enumerate(_elements(view)):
-            c = cells.get(e)
-            if c is None or c[1] != view.bits:
-                missing.append((j, j + 1))
-            else:
-                out.append(c[0])
-        if missing:
-            raise Unresolved(view, missing)
-        self.reads += 1
-        return _compact(out)
-
-    def read_rows(self, view, indices):
-        return concat([self.read(stub_row_view(view, i)) for i in indices])
-
-    def move(self, src, dst):
-        self.write(dst, self.read(src))
-
-    def coverage(self, view):
-        cells = self.cells.get(view.alloc, {})
-        return sum(1 for e in _elements(view) if e in cells) / max(view.numel, 1)
-
-    def stats(self):
-        return MemoryStats(len(self.cells), len(self.cells), self.writes, self.reads, 0, sum(len(c) for c in self.cells.values()))
-
-
-def _real_memory_available() -> bool:
-    try:
-        from verity_vllm.observe.fold.memory import MemoryModel
-        from verity_vllm.observe.fold.views import row_view
-        MemoryModel()
-        row_view(V(1, (2, 3)), 1)
-        return True
-    except NotImplementedError:
-        return False
-
-
-def install_stub_memory() -> None:
-    """Point fold.py at the in-test memory model / view helpers (only when the real ones raise NotImplementedError)."""
-    fold_mod.MemoryModel = StubMemory
-    fold_mod.row_view = stub_row_view
-    fold_mod.rows_view = stub_rows_view
-
-
 @pytest.fixture
-def memory(monkeypatch):
-    if _real_memory_available():
-        return "real"
-    monkeypatch.setattr(fold_mod, "MemoryModel", StubMemory)
-    monkeypatch.setattr(fold_mod, "row_view", stub_row_view)
-    monkeypatch.setattr(fold_mod, "rows_view", stub_rows_view)
-    return "stub"
+def memory():
+    return "real"
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -463,7 +385,7 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert r1.sampled == {REQ: [(0, 9), (1, 3)]}
     # per-specialization instance counts: prefill 2 rows + decode 1 row = 3 positions
     by = r1.report.by_spec
-    assert by[f"Embedding_v1{{V=16,H=16}}"] == 3
+    assert by["Embedding_v1{V=16,H=16}"] == 3
     assert by["RMSNormTriton_v1{N=16,EPS=1e-05}"] == 3
     assert by["Gemm_v1{K=16,N=32}"] == 6          # qkv + gate_up per position
     assert by["Gemm_v1{K=16,N=16}"] == 8          # o + down per position, lm_head per step
@@ -477,12 +399,111 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert r1.program.gates > 0 and r1.timings["program_s"] >= 0
 
 
+def test_the_header_supplies_the_configuration_a_profile_does_not_state(memory):
+    """`_Fold._header`: a profile with no configuration of its own folds under the run header's (`model.config`)."""
+    import dataclasses
+
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    config: dict | None
+    for config in (None, {}):
+        r = fold(toy_log(), dataclasses.replace(toy_profile(), config=config), strict=True, with_program=False)
+        assert r.weights_type == own.weights_type == b1.weights_type(C) and r.report.by_spec == own.report.by_spec
+
+
+#: what reads as no document: a null, and each empty or zero value
+EMPTY: tuple = (None, {}, [], 0, "", False)
+
+
+@pytest.mark.parametrize("workload", [*EMPTY, *({"requests": empty} for empty in EMPTY)])
+def test_a_header_without_requests_is_refused(memory, workload):
+    import dataclasses
+
+    evs = toy_log()
+    evs[0] = dataclasses.replace(evs[0], workload=workload)
+    with pytest.raises(FoldError, match="RunHeader.workload has no requests"):
+        fold(evs, toy_profile(), strict=True, with_program=False)
+
+
+def test_a_weight_root_ahead_of_the_run_header_is_refused(memory):
+    """`_Fold._weight_root`: the weights parameter is made by the run header, so a weight root logged ahead of it has no field to
+    bind and the fold refuses it by the root's name and path, as a lookup in no parameter."""
+    evs = toy_log()
+    alloc, root = evs[1], evs[2]
+    assert isinstance(root, Root) and root.name == "model.embed_tokens.weight"
+    with pytest.raises(FoldError) as refused:
+        fold([alloc, root, evs[0], *evs[3:]], toy_profile(), strict=True, with_program=False)
+    assert str(refused.value) == ("weight field path ('embed',) for 'model.embed_tokens.weight' is not in None: "
+                                  "'NoneType' object is not subscriptable")
+
+
+def test_a_weight_root_after_a_refused_run_header_is_refused():
+    """`_Fold._weight_root`: a run header refused for its workload has set the fold's header and its weights type and made no weights
+    parameter.  `fold` gives that fold no further event; a caller that holds the `_Fold` can, and a weight root is then refused as the
+    fold's own error, by the root's name and path and the weights type."""
+    import dataclasses
+
+    evs = toy_log()
+    root = evs[2]
+    assert isinstance(root, Root) and root.name == "model.embed_tokens.weight"
+    held = fold_mod._Fold(toy_profile(), True)
+    with pytest.raises(FoldError, match="RunHeader.workload has no requests"):
+        held._header(dataclasses.replace(evs[0], workload={"requests": []}))
+    with pytest.raises(FoldError) as refused:
+        held._weight_root(root)
+    assert str(refused.value).startswith(f"weight field path ('embed',) for 'model.embed_tokens.weight' is not in {held.weights_type!r}: ")
+
+
+def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
+    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null, and empty or zero each read as none."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    more: dict
+    notes: dict | None
+    for more in ({}, *({"children": empty, "sampling": empty} for empty in EMPTY)):
+        for notes in (None, {}, *({"tp2": empty} for empty in EMPTY), {"tp2": {"world_size": 1}}):
+            evs = toy_log()
+            evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+            r = fold(evs, toy_profile(), strict=True, with_program=False)
+            assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, (more, notes)
+
+
+@pytest.mark.parametrize("place", ["sampling", "tp2"])
+def test_a_header_copies_its_sampling_and_its_tensor_parallel_note_as_dict_reads_them(memory, place):
+    """A workload's `sampling` and the notes' `tp2` that are not empty are copied with `dict`: pairs read as the mapping they spell,
+    and `dict` itself refuses what is neither."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+
+    def folded(value):
+        more, notes = ({"sampling": value}, None) if place == "sampling" else ({}, {"tp2": value})
+        evs = toy_log()
+        evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+        return fold(evs, toy_profile(), strict=True, with_program=False)
+
+    pairs: list | tuple
+    for pairs in ([("world_size", 1)], (("world_size", 1),)):
+        r = folded(pairs)
+        assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, pairs
+    refused: tuple = ((7, TypeError, "'int' object is not iterable"), ("no", ValueError, "dictionary update sequence element #0 has length 1"))
+    for value, error, text in refused:
+        with pytest.raises(error, match=text):
+            folded(value)
+
+
 def test_registered_values_are_inputs_of_the_program(memory):
     """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
     import numpy as np
-
-    from verity.definitions.circuits.constants import REGISTRATION, RUN, inputs, program_data
+    from verity.circuits.constants import (
+        REGISTRATION,
+        RUN,
+        inputs,
+        program_data,
+    )
     from verity.definitions.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)
@@ -515,6 +536,50 @@ def test_a_supplied_value_must_agree_with_its_first_use(memory, monkeypatch):
     pats = [Pat(p.name, p_bad_fused) if p.name == "fused_norm" else p for p in PATTERNS]
     with pytest.raises(FoldError, match="value 'eps' is 32-bit 0x3f800000 here"):
         fold(toy_log(), Profile("toy", pats, dict(C), weight_field, False, registered_values=True), strict=True)
+
+
+def test_a_run_value_is_a_field_of_its_requests_parameter_and_a_registered_one_of_values():
+    """`SuppliedInputs.leaf`: one field a name in its owner's parameter, at the next offset, the same leaf at each later use."""
+    s, index = SuppliedInputs(), {"req-a": 0, "req-b": 1}
+    params: list = []
+    s.declare(params, 2)
+    assert [name for name, _ in params] == ["run_0", "run_1", "values"]
+    temperature = Supplied("run", "temperature", 32, 0x3F800000, "req-b")
+    assert list(s.leaf(temperature, Value(32), "T", index)) == [("p", 1, 0)]
+    assert list(s.leaf(Supplied("run", "top_p", 32, 0x3F000000, "req-b"), Value(32), "P", index)) == [("p", 1, 1)]
+    assert list(s.leaf(Supplied("run", "temperature", 32, 0x3F800000, "req-a"), Value(32), "T", index)) == [("p", 0, 0)]
+    assert list(s.leaf(Supplied("registration", "eps", 32, 1), Value(32), "eps", index)) == [("p", 2, 0)]
+    assert list(s.leaf(temperature, Value(32), "T", index)) == [("p", 1, 0)]
+    assert [f["name"] for f in s.fields[1]] == ["temperature", "top_p"] and [f["name"] for f in s.fields["values"]] == ["eps"]
+
+
+@pytest.mark.parametrize("op, width, message", [
+    (Supplied("run", "temperature", 32, 1, "req-a"), 16, "T: a 32-bit supplied value for a parameter of type"),
+    (Supplied("run", "temperature", 32, 1, "req-z"), 32, "T: run value 'temperature' names request 'req-z', which is not in the run header"),
+    (Supplied("step", "temperature", 32, 1, "req-a"), 32, "T: a value is bound per run or at registration, not 'step'"),
+    (Supplied("run", "temperature", 32, 2, "req-b"), 32, "T: value 'temperature' is 32-bit 0x2 here and 32-bit 0x3f800000 at its first use"),
+])
+def test_a_supplied_value_off_its_contract_raises_the_callers_error(op, width, message):
+    s, index = SuppliedInputs(), {"req-a": 0, "req-b": 1}
+    s.declare([], 2)
+    s.leaf(Supplied("run", "temperature", 32, 0x3F800000, "req-b"), Value(32), "T", index)
+    with pytest.raises(FoldError, match=message):
+        s.leaf(op, Value(width), "T", index, err=FoldError)
+    with pytest.raises(ValueError, match="T: a Supplied operand under a profile without registered_values"):
+        SuppliedInputs().leaf(Supplied("registration", "eps", 32, 1), Value(32), "T", index)
+
+
+def test_a_move_between_widths_is_refused(memory):
+    """`_Fold._move_reads`: a move's two operands hold words of one width."""
+    import dataclasses
+
+    def p_wide_index(node, ctx):
+        t = p_index(node, ctx)
+        return None if t is None else dataclasses.replace(t, dst=PerRow(dataclasses.replace(node.outs, dtype="float32")))
+
+    pats: list[Pattern] = [Pat(p.name, p_wide_index) if p.name == "index" else p for p in PATTERNS]
+    with pytest.raises(FoldError, match=r"move between widths bfloat16 -> float32 \(logits_indices\)"):
+        fold(toy_log(), Profile("toy", pats, dict(C), weight_field, False), strict=True, with_program=False)
 
 
 def test_step_link_and_kv_provenance(memory):

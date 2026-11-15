@@ -1,5 +1,5 @@
 """The Boolean Build's cost against the word Build's on one workload's specializations: the descriptor of their union and the
-`Q_word_v1{16,32}` proof-block rules the manifest computes for them (`verity.definitions.word`'s prefetch, then its check, one rule per
+`Q_word_v1{16,32}` proof-block rules the manifest computes for them (`verity.circuits.word`'s prefetch, then its check, one rule per
 distinct Definition), timed per Definition.
 
     uv run benchmarks/bool_build_cost/run.py [--workload qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
@@ -54,8 +54,7 @@ WORKLOADS = {"qwen3-06b": qwen3_06b, "small": small}
 def definitions(specs: list[str], ir: str) -> list:
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.definitions import boolean as BB
-    from verity.definitions.call_scope import specialization
-    from verity_vllm.query.program_view import spec_base, spec_statics
+    from verity_vllm.query.program_view import spec_base, spec_statics, specialization
     out = []
     for s in specs:
         fn = specialization(spec_base(s), spec_statics(s))
@@ -103,7 +102,7 @@ _PENDING: list = []
 
 
 def _rule(i: int):
-    from verity.definitions import word as WQ
+    from verity.circuits import word as WQ
     fn, limits = _PENDING[i]
     t = time.time()
     try:
@@ -122,7 +121,7 @@ def verdict(r: dict) -> dict:
 def rules(fns: list, jobs: int, log: Path) -> dict:
     """`word.prefetch`'s schedule (bodies cut as a whole first, then each separable body once its members are memoed), each rule
     timed in its worker, then `word.check_calls`'s lookups."""
-    from verity.definitions import word as WQ
+    from verity.circuits import word as WQ
     limits = WQ.gate_limits(None)
     memo = WQ._RULES.setdefault(tuple(sorted(limits.items())), {})
     depth: dict[str, int] = {}

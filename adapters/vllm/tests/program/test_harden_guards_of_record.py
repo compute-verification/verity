@@ -11,9 +11,18 @@ import re
 
 import pytest
 
-from tests.program.test_harden_guards import INTEGRATION, _record
-from tests.program.test_harden_guards import _dump_results  # noqa: F401  (`HARDEN_OUT`'s dump, autouse)
-from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, check_reuse, reuse_mismatches
+from tests.program.test_harden_guards import (
+    INTEGRATION,
+    _dump_results,  # noqa: F401  (`HARDEN_OUT`'s dump, autouse)
+    _record,
+)
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    check_reuse,
+    reuse_mismatches,
+)
 
 EVIDENCE = os.path.join(INTEGRATION, "out", "gen", "r10", "cb-fix", "evidence", "fix")
 DERIVE_STEP = os.path.join(INTEGRATION, "verity_vllm", "pipeline", "build.py")
@@ -164,7 +173,8 @@ def test_G4a_manifest_and_wrapper_agree_on_target_and_artifact():
 def test_G4b_mechanism_string_has_one_source():
     art, man = _load("base")
     a, b = art["construction_version"]["mechanism"], man["construction"]["mechanism"]
-    src = open(DERIVE_STEP).read()
+    with open(DERIVE_STEP) as f:
+        src = f.read()
     sites = re.findall(r'"mechanism":\s*"([^"]+)"', src)
     _record("G4b `mechanism` literal", "one site, one value", f"artifact={a!r}; manifest={b!r}; literal sites in derive_step.py={len(sites)}",
             "GAP (xfail)", "two literals, drifted")

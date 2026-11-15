@@ -48,7 +48,7 @@ SAID = (f" Against the recorded check of this commit (`{SHARDS[0]}`, `{SHARDS[1]
         "part, its targets not compared one by one.")
 SAID_AGREED = SAID % "11 agree, 0 disagree, 0 with no stored verdict"
 #: the recorded check skipped `lean-agreement` by name, as check does when the pinned upstream build was not sent
-NOT_SENT = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/flock/ requires this step: "
+NOT_SENT = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/proofs/flock/ requires this step: "
             "`check.py --record` sends its URLs)")
 SKIP = ["step `lean-agreement`", "the pinned upstream build was not sent"]
 SAID_SKIP = ", step `lean-agreement` skipped in the recorded check: the pinned upstream build was not sent"
@@ -167,7 +167,7 @@ def test_the_loop_in_watchers_toml_builds_the_nightly_command_from_its_settings(
     assert lp.argv[:3] == ["python3.12", "-s", "/data/watchers/src/infra/control/nightly_check.py"]
     cfg, ns = N.parse(lp.argv[3:])
     assert N.command(cfg, "python") == [
-        "python", "tools/verity/check/check.py", "--record", "--on", "vy-nebius-cpu-8", "--pool", "nightly",
+        "python", "tools/verity/check/check.py", "--record", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
         "--base", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "--no-cache", "--timeout", "36000"]
     assert N.command(cfg)[0] == sys.executable
     assert cfg.hour == 9 and not ns.once and not ns.dry_run
@@ -260,7 +260,7 @@ RECORDS = {
                    suites=[suite("tools/research", "passed"), suite("infra/ops", "cached")]),
     "failed": dict(status={"state": "failed", "rc": 1, "wall_s": 5700}, result=result("failed", STEPS_RED),
                    suites=[suite("tools/research", "failed"), suite("verity/circuits", "passed")],
-                   lean=[suite("verity/protocols/flock/verifier", "failed")]),
+                   lean=[suite("verity/protocols/proofs/flock/verifier", "failed")]),
     "contradicted": dict(status={"state": "failed", "rc": 1, "wall_s": 5700},
                          result=result("failed", STEPS_RED[:2], cache_contradictions=CONTRADICTS),
                          suites=[suite("verity/circuits", "failed", contradicts=CONTRADICTS[0]["contradicts"])]),
@@ -306,7 +306,7 @@ def test_a_passed_check_with_nothing_contradicted_is_passed(tmp_path):
 def test_a_failed_check_names_each_failed_step_and_suite(tmp_path):
     got = read(tmp_path, "failed")
     assert got == N.Read("failed", "failed steps: `pytest`, `lean-audit`; failed suites: `tools/research`, "
-                         "`verity/protocols/flock/verifier`. Its result names no cached pass it contradicts.", 95)
+                         "`verity/protocols/proofs/flock/verifier`. Its result names no cached pass it contradicts.", 95)
 
 
 def test_a_cached_pass_the_run_contradicts_outranks_the_verdict(tmp_path):

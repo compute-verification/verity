@@ -31,7 +31,7 @@ open Finset
 variable {L K S : ℕ} {Z Msg In Act Wire : Type}
 
 /-- The ingress bound at `n = m·T`, read per link-window. -/
-theorem ingress_bound_eq_perWindow (r : Fin L → ℕ) (T m D : ℕ) :
+theorem ingress_bound_eq_perExecutionPhase (r : Fin L → ℕ) (T m D : ℕ) :
     (∏ ℓ, (r ℓ + 1)) ^ (m * T) * D ^ (m * T) = ((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m := by
   rw [pow_mul', pow_mul', ← mul_pow, Finset.prod_pow]
 
@@ -111,7 +111,7 @@ theorem encard_accSeqs_le_constantRate_from {Adv : Type} [Fintype Adv] (T g E : 
 
 /-- **`|a|` bits per execution block, from any block's start.** `encard_accSeqs_le_constantRate_from` with `|a|`-bit
 advice. The steps counted need only lie within the `E` blocks: with `g·T = 0` there is one sequence, the empty one. -/
-theorem encard_accSeqs_le_constantRate_perWindow (T g E k : ℕ)
+theorem encard_accSeqs_le_constantRate_perExecutionPhase (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
     (e₀ m D : ℕ) (hn : (e₀ + m) * (g * T) ≤ E * (g * T)) (p : List (Obs L K S)) :
     {o | o ∈ AccSeqs (constantRate (S := S) T g E frames) op ((e₀ + m) * (g * T)) D ∧
@@ -133,7 +133,7 @@ theorem encard_accSeqs_le_constantRate_perWindow (T g E k : ℕ)
 /-- **`|a|` bits per execution block through the wire, from any block's start (W2 and J).** Secrets whose runs show
 the same `p` through the first `e₀` execution blocks, accepted through the `m` after them and decoded from the wire,
 number at most `(2^k · D^(g·T))^m`. -/
-theorem encard_decodable_le_constantRate_perWindow
+theorem encard_decodable_le_constantRate_perExecutionPhase
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (e₀ m D : ℕ)
     (hn : (e₀ + m) * (g * T) ≤ E * (g * T))
@@ -149,7 +149,7 @@ theorem encard_decodable_le_constantRate_perWindow
     rw [← hdec z hz, ← hdec z' hz', I.wireRun_eq view hW2, I.wireRun_eq view hW2, h]
   rw [← hinj.encard_image]
   refine le_trans (Set.encard_le_encard ?_)
-    (encard_accSeqs_le_constantRate_perWindow T g E k frames I.op e₀ m D hn p)
+    (encard_accSeqs_le_constantRate_perExecutionPhase T g E k frames I.op e₀ m D hn p)
   rintro _ ⟨z, hz, rfl⟩
   refine ⟨⟨I.length_obsRun z _, ?_, hacc z hz⟩, ?_⟩
   · intro x hx
@@ -158,24 +158,24 @@ theorem encard_decodable_le_constantRate_perWindow
   · rw [I.obsRun_take z (Nat.mul_le_mul_right _ (Nat.le_add_right _ _))]
     exact hpre z hz
 
-theorem encard_ingress_obsDecodable_le_perWindow (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
+theorem encard_ingress_obsDecodable_le_perExecutionPhase (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
     (r : Fin L → ℕ) (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
     (c : Fin L → List (List Bool)) (Ms : Set Msg)
     (hacc : ∀ msg ∈ Ms, StatusComplete (m * T) (I.obsRun msg (m * T)))
     (hc : ∀ msg ∈ Ms, ∀ ℓ, linkFrames (I.obsRun msg (m * T)) ℓ <+: c ℓ)
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg) :
     Ms.encard ≤ ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞) := by
-  rw [← ingress_bound_eq_perWindow]
+  rw [← ingress_bound_eq_perExecutionPhase]
   exact encard_ingress_obsDecodable_le I (m * T) D r hW4 hr hJ c Ms hacc hc dec hdec
 
-theorem encard_ingress_obsDecodable_le_contents_perWindow (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
+theorem encard_ingress_obsDecodable_le_contents_perExecutionPhase (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
     (r : Fin L → ℕ) (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
     (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
     (hacc : ∀ msg ∈ Ms, StatusComplete (m * T) (I.obsRun msg (m * T)))
     (hc : ∀ msg ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun msg (m * T)) ℓ <+: c ℓ)
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg) :
     Ms.encard ≤ Cs.encard * ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞) := by
-  rw [← ingress_bound_eq_perWindow]
+  rw [← ingress_bound_eq_perExecutionPhase]
   exact encard_ingress_obsDecodable_le_contents I (m * T) D r hW4 hr hJ Cs Ms hacc hc dec hdec
 
 end NetTiming

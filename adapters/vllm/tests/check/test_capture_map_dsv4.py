@@ -19,15 +19,15 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.definitions.registry import catalog
 
-from tests.check.test_capture_map_versions import violations
 from tests.check.capture_map_check import check, check_target, report
+from tests.check.test_capture_map_versions import violations
 from verity_vllm.acquire.sources import moe_source, route_source
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit import identity as ID
 from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
 from verity_vllm.engine import meta_inventory as MI
-from verity.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "deepseek_v4"
@@ -313,8 +313,8 @@ def test_deepgemm_off_or_another_moe_backend_fails():
     assert len(problems) == 1 and problems[0].startswith("expect model.layers.{i}.attn.wo_b kernels.quant_method.fp8_linear.type")
     inv = copy.deepcopy(RANK0)
     next(g for g in inv["groups"] if g["type"] == "RoutedExperts")["kernels"]["quant_method"]["mxfp4_backend"]["_value_"] = "TRITON"
-    assert _check(inv=inv) == ["expect model.layers.{i}.ffn.experts.routed_experts kernels.quant_method.mxfp4_backend._value_ = "
-                               "'MARLIN', the inventory has 'TRITON'"]
+    assert _check(inv=inv) == [("expect model.layers.{i}.ffn.experts.routed_experts kernels.quant_method.mxfp4_backend._value_ = "
+                               "'MARLIN', the inventory has 'TRITON'")]
 
 
 def test_an_unregistered_definition_fails(registry):
@@ -377,7 +377,7 @@ def test_the_decode_index_rows_are_programs(registry):
         p = CMAP["programs"][pid]
         assert p["status"] == "port" and p["definitions"] and all(d in registry for d in p["definitions"]), pid
     csa, hca = (set(CM.layer_set(CMAP, k, ENV)) for k in ("csa", "hca"))
-    by = {}
+    by: dict[tuple, list] = {}
     for t, layer in CM._step_taps(CMAP, ENV, "decode", DECODE):
         if t["op"] == "layers.{i}.attn.decode_indices":
             by.setdefault((t["port"], layer), []).append(t)

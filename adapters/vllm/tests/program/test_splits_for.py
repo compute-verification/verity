@@ -15,8 +15,11 @@ import json
 import os
 
 import pytest
-
-from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits, splits_for
+from verity.definitions.registry.topp_geometry import (
+    SPLIT_MAX_BATCH,
+    registered_splits,
+    splits_for,
+)
 
 DATA = os.path.join(os.path.dirname(__file__), "data", "topp_split_fixture")
 
@@ -26,7 +29,8 @@ def _table(num_sms: int, n_max: int = 200) -> list[tuple[int, int, int]]:
     for n in range(2, n_max + 1):
         s = splits_for(n, num_sms)
         if s != prev:
-            out.append((start, n - 1, prev)); start, prev = n, s
+            out.append((start, n - 1, prev))
+            start, prev = n, s
     out.append((start, n_max, prev))
     return out
 
@@ -70,7 +74,8 @@ def test_range_is_a_power_of_two_value6_monotone():
 
 
 def test_r15_b8_unpinned_record_kernel_S_equals_splits_for_of_live_at_every_step():
-    j = json.load(open(os.path.join(DATA, "b8_s_schedule_r15_attempt2.json")))
+    with open(os.path.join(DATA, "b8_s_schedule_r15_attempt2.json")) as fh:
+        j = json.load(fh)
     assert j["engine_steps"] == 157 and j["sampled_rows"] == 526 and j["num_sms"] == 142 and j["every_request_served_to_cap"]
     reqs = j["served_vs_cap"]
     steps = j["steps"]
@@ -82,8 +87,9 @@ def test_r15_b8_unpinned_record_kernel_S_equals_splits_for_of_live_at_every_step
         n_decl = sum(1 for r in reqs.values() if r["arrive"] <= t <= r["arrive"] + r["cap"] - 1)
         assert n_decl == st["live_declared"] == st["live_realized"] == len(st["requests"])
         S = splits_for(n_decl, 142)
-        assert S == st["S_kernel"], (t, n_decl, S, st["S_kernel"])
-        if S != prev:
-            flips.append((t, n_decl, S)); prev = S
+        assert st["S_kernel"] == S, (t, n_decl, S, st["S_kernel"])
+        if prev != S:
+            flips.append((t, n_decl, S))
+            prev = S
     assert flips == [(0, 1, 32), (32, 5, 16), (101, 4, 32)]
     assert sum(len(st["requests"]) for st in steps) == 526

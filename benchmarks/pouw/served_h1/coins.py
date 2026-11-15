@@ -1,7 +1,7 @@
 """A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
 * **Off the node** (`Endpoint`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
-  coin commitment's root the gate's open answered): the proof system's challenger on its auditor host
+  coin commitment's root the gate's open answered): the proof system's challenger on its auditor device
   (`spot.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
   window's session id; the reserve counts toward its lane's open period, and one not opened by its ``expires_utc`` is
@@ -36,7 +36,7 @@
 `check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's
 out/, with record.json, key.json, releases.jsonl, hellos.jsonl and challenger.json, its signed close) and every head of
 the auditor's signed ledger it was shown (``ssh GATE ledger``, or infra's published `challenger-ledger head`), never the
-prover's bundle. The session is core's to establish, the one check the auditor host and every verifier run
+prover's bundle. The session is core's to establish, the one check the auditor device and every verifier run
 (`remote.trusted_session`, through `audited_window`), under the challenger's key from its deployment record
 (``--key-record``, infra's challenger-key/v1, never the ledger's key_sha512; no key is pinned in code): the ledger's
 heads, signatures, chain and entries; the one session it opens on the window's root, binding its reserve and carrying
@@ -76,14 +76,14 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote as R
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote as R
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
 PEER_ENV, SSH_KEY_ENV = "POUW_CHALLENGER_PEER", "POUW_CHALLENGER_SSH_KEY"
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "config"))
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -482,7 +482,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
     `env_draw`), opened on the sample root when the window asks for its sample (`Coins.draw`)."""
     if at is None:
         if entropy is None:
-            from verity.protocols.pouw.verifier import verifier
+            from verity.protocols.accounting.pouw.verifier import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process", epoch=epoch, entropy=entropy)
     client = R.connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
@@ -613,7 +613,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

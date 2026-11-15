@@ -13,17 +13,17 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 from verity_vllm.protocols.pouw.h1 import drawn as D
 
-MODELS = Path(__file__).resolve().parents[3] / "verity" / "composite" / "device" / "live_challenger" / "models.py"
+MODELS = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "models.py"
 
 
 def _models():

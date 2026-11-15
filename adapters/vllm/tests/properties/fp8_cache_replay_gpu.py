@@ -5,7 +5,7 @@ bytes are held to the served ones.
 The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers, `EXPERTS` routed experts and `HEADS`
 attention heads (one rank's of tensor-parallel 8, which decides how an FP8 cache is read), served tensor-parallel 1 on one
 card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer. ``--weights dummy``
-keeps vLLM's values; ``--weights scaled`` redraws every weight at `STD` after the load (`rescale`), so a token depends on its
+keeps vLLM's values; ``--weights scaled`` resamples every weight at `STD` after the load (`rescale`), so a token depends on its
 whole context and one differing bit of a cached row shows in the tokens.
 
 Each arm of `ARMS` is one cache format, as a launch line names it (``auto`` is the bf16 cache). Each phase is a process of
@@ -67,7 +67,7 @@ LAYERS, EXPERTS = 7, 16
 #: backend reads an FP8 cache with its FP8 kernel at every token below 32 heads a rank; at 32 or more a prefill token reads
 #: a bf16 copy of the rows instead, a path GLM-5.3 on eight cards never takes
 HEADS = 8
-#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight drawn uniform on [-1, 1]
+#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight uniform on [-1, 1]
 STD = 0.02
 FP8_SCALE = STD * 3 ** 0.5
 #: an arm -> the ``kv_cache_dtype`` its served engine is given (None: vLLM's default, ``auto``)
@@ -148,7 +148,7 @@ def engine(model: Path, cfg: dict[str, Any], eager: bool) -> Any:
 
 
 def rescale(runner: Any) -> dict[str, int]:
-    """Redraw the model's weights from one seeded generator, in the modules' own order: a norm's gain 1, a quantization
+    """Resample the model's weights from one seeded generator, in the modules' own order: a norm's gain 1, a quantization
     scale `FP8_SCALE`, an FP8 weight uniform on [-1, 1], every other float weight normal at `STD`."""
     import torch
 
@@ -189,7 +189,7 @@ def kv_layers(model: Any) -> dict[str, Any]:
     and the ``prefix`` of an indexer's key cache, which has no ``layer_name``."""
     out: dict[str, Any] = {}
     for _path, m in model.named_modules():
-        cache = getattr(m, "kv_cache", None)
+        cache: Any = getattr(m, "kv_cache", None)
         name = next((n for n in (getattr(m, "layer_name", None), getattr(m, "prefix", None)) if isinstance(n, str)), None)
         if name is not None and hasattr(cache, "stride") and cache.numel() and name not in out:
             out[name] = m

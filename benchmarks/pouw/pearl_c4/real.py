@@ -2,7 +2,7 @@
 PouwCheck), per linear of a capture directory (``manifest.json``: each linear's input file and shape, and the model's
 ``snapshot``): X, the linear's input rows (float32 holding BF16 exactly), and its weight W (the snapshot's BF16
 safetensors); or of a capture npz file (X and W of each linear as float32 holding BF16), judged in the clear as
-the scheme (`verity.protocols.pouw.prover.schemes.pearl_c4`) judges a unit:
+the scheme (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`) judges a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
@@ -36,10 +36,10 @@ from types import SimpleNamespace
 import numpy as np
 from verity_config.settings import of
 
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 
 settings = of(__file__)
 TILE, ROWS_PER_TASK, ALIGN = 64, 2048, 128

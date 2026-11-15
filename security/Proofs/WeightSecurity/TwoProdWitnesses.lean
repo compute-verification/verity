@@ -36,7 +36,7 @@ open Claims Claims.Sampling Claims.SamplingGeneric
 open Claims.Witness (silentP run_accV_out)
 open Claims.Witness.SamplingGeneric
 open Claims.Witness.Sampling (toyStmt toyPart)
-open FlockSoundness.Game (periodG)
+open FlockSoundness.Game (monitoringPeriodG)
 open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}

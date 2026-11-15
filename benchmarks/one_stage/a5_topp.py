@@ -51,7 +51,7 @@ from verity.commitments.windows import rows as CS  # noqa: E402
 from verity.definitions.registry import sampling as SA  # noqa: E402
 from verity.definitions.registry import topp_keep_builder as K  # noqa: E402
 from verity.definitions.registry import topp_stages as T  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root

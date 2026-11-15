@@ -10,18 +10,18 @@ import contextlib
 import copy
 import functools
 import json
-import sys
 import types
 
 import numpy as np
 import pytest
-
-from tests.properties import dsv4_qnorm_insert_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as W
 from verity.definitions.registry import dsv4_qnorm_insert as R
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests import fake_vllm
+from tests.properties import dsv4_qnorm_insert_capture_gpu as X
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 M = X.M
 #: (token, head, word) of q_out: a pad head, and a real head of a DP-padded row (past the slots, normed and not inserted)
@@ -96,7 +96,7 @@ def test_the_sumsq_probe_separates_fused_from_unfused() -> None:
     fused = X.sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=True)
     unfused = X.sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=False)
     fn = bind(R.Dsv4QNormRope, D=X.D, DR=X.DR, EPS=X.SUMSQ_PROBE_EPS)
-    definition = np.asarray(X._flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
+    definition: np.ndarray = np.asarray(X._flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
     bad = np.flatnonzero(fused != unfused)
     assert np.array_equal(fused, definition)
     assert bad.tolist() == [16 * lane + i for lane in range(W.LANES) for i in (3, 9, 15)]
@@ -111,7 +111,7 @@ def test_the_table_is_ropes_and_its_special_rows() -> None:
     h = X.DR // 2
     assert cs.shape == (X.MAX_POS, X.DR) and cs.dtype == np.uint32
     assert np.all(cs[0, :h] == X.F32_ONE) and not cs[0, h:].any()
-    f = cs[:X.EDGE_POS].view(np.float32).astype(np.float64)
+    f: np.ndarray = cs[:X.EDGE_POS].view(np.float32).astype(np.float64)
     assert np.abs(f[:, :h] ** 2 + f[:, h:] ** 2 - 1).max() < 1e-6
     for j, (c, s) in enumerate(X.EDGE_CS):
         row = cs[X.EDGE_POS + j]
@@ -381,11 +381,10 @@ def test_main_end_to_end_on_stubbed_launches(padded, short, tmp_path, monkeypatc
     orchestration shows here and not on the H200."""
     o, paths, _ = padded
     good, _ = short
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
@@ -417,8 +416,6 @@ def test_main_end_to_end_on_stubbed_launches(padded, short, tmp_path, monkeypatc
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_qnorm_insert_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
     assert doc["sumsq_probe"]["served_statics"] is False and "insert/sumsq-probe" not in X.cases(doc)

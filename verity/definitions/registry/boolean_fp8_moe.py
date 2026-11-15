@@ -2,7 +2,6 @@
 one's word view is its `_v1` composite at the same statics (`elementwise.on_bits`).
 
     MoeExpertFp8BlockCoordinate_v2{K,G,KB,SWAP}, MoeExpertFp8BlockCoordinateW_v2{K,G,KB,SWAP}
-    MoeExpertFp8BlockGemm_v2{K,N,G,KB,SWAP}, MoeExpertFp8BlockGemmW_v2{K,N,G,KB,SWAP}
 
     SiluMulFp8BlockQuantResult_v2, SiluMulFp8BlockQuantGroup_v2{G}, SiluMulFp8BlockQuant_v2{I,G}
 
@@ -16,7 +15,7 @@ one's word view is its `_v1` composite at the same statics (`elementwise.on_bits
                     word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits
                     (`GatherE4m3x{E}_v2` for E <= 1024; `GatherF32x{E}_v2` is `boolean_gather.gather_f32`'s at every E)
 
-The callees are `verity.definitions.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.definitions.ops.boolean.scalar`'s FP32 pieces,
+The callees are `verity.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.circuits.ops.boolean.scalar`'s FP32 pieces,
 `boolean_moe.NvExpf_v2` and `boolean_fp8.Fp8RowScale_v2`; the constant words are constant bits and `-g` is one NOT gate on g's sign bit
 (`F32Neg_v1`).  Each callee is its word Definition on every word, NaN payloads included.  No table or lookup gate.
 """
@@ -28,9 +27,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.boolean.gather import gather
 from verity.circuits.boolean.trace import definition
 from verity.definitions.registry import boolean_gather as BGA
@@ -40,7 +39,6 @@ from verity.definitions.registry import fp8_moe as M
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry.boolean_attention import _Bits
 from verity.definitions.registry.boolean_fp8 import F448, F_NEG448, Fp8RowScaleV2
-from verity.definitions.registry.fp8 import weight_blocks
 from verity.definitions.registry.prims import bits_of
 
 BF16 = Array(16, BL.BIT)
@@ -76,32 +74,6 @@ MoeExpertFp8BlockCoordinateWV2 = EW.on_bits(
     lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("g", F32), ("wrow", Array(S.K, E4M3)),
                 ("sw", Array(S.K // S.G, F32))), BF16),
     _coordinate_w, M.MoeExpertFp8BlockCoordinateW)
-
-
-def _gemm(B, S, xq, sx, w, ws):
-    """`MoeExpertFp8BlockGemm_v1`'s body on bits."""
-    coord = bind(MoeExpertFp8BlockCoordinateV2, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP)
-    return M.rows(B, coord, S.N, S.G, w, ws, (xq, sx), BF16)
-
-
-MoeExpertFp8BlockGemmV2 = EW.on_bits(
-    "MoeExpertFp8BlockGemm", 2, ["K", "N", "G", "KB", "SWAP"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
-                ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
-    _gemm, M.MoeExpertFp8BlockGemm)
-
-
-def _gemm_w(B, S, xq, sx, g, w, ws):
-    """`MoeExpertFp8BlockGemmW_v1`'s body on bits."""
-    coord = bind(MoeExpertFp8BlockCoordinateWV2, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP)
-    return M.rows(B, coord, S.N, S.G, w, ws, (xq, sx, g), BF16)
-
-
-MoeExpertFp8BlockGemmWV2 = EW.on_bits(
-    "MoeExpertFp8BlockGemmW", 2, ["K", "N", "G", "KB", "SWAP"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("g", F32), ("w", Array(S.N, Array(S.K, E4M3))),
-                ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
-    _gemm_w, M.MoeExpertFp8BlockGemmW)
 
 
 def _coordinate_dot(B, S, xq, sx, wrow, sw):

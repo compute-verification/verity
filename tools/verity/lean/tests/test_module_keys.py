@@ -549,6 +549,40 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
     assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
 
 
+def test_a_build_that_read_its_tree_at_a_fixed_path_is_indexed_as_one_at_the_trees_own(tmp_path):
+    """A sandboxed build reads its tree at a fixed path (`sandbox.sh --at`), so every path Lake wrote into a `setup.json`
+    is under it. Told where the build read the tree (``at``), `indexable` reads each as the tree's and gives the verdicts
+    it gives a build at the tree's own path; untold, it finds no package's build there and refuses the module."""
+    root = _workspace(tmp_path)
+    pkgs = MK.workspace(root)[0]
+    keyed, owners = MK.keys(root), {}
+    fixed = Path("/var/tmp/verity")
+    at = (str(fixed), str(tmp_path))
+
+    def lib(p, m):
+        return fixed / p / ".lake" / "build" / "lib" / "lean" / MK.path_of(m, ".olean")
+
+    mathlib = fixed / "r" / ".lake" / "packages" / "mathlib" / ".lake" / "build" / "lib" / "lean" / "Mathlib.olean"
+    right = {"D.X": lib("d", "D.X"), "R.A": lib("r", "R.A"), "Mathlib": mathlib}
+    _setup(root, "R", "r", right)
+    assert MK.indexable("R", keyed, pkgs, owners, at) is None
+    assert owners["r", str(lib("d", "D.X").parent)] == "d" and owners["r", str(mathlib.parent)] is None
+    assert MK.indexable("R", keyed, pkgs) == f"{lib('d', 'D.X').parent} is in no root's fetched packages"
+    _setup(root, "R", "r", right | {"D.X": lib("r", "D.X")})
+    assert MK.indexable("R", keyed, pkgs, owners, at) == "D.X is built in r, not d"
+    _setup(root, "R", "r", right | {"Mathlib": fixed / "p/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean"})
+    assert MK.indexable("R", keyed, pkgs, {}, at) == f"{tmp_path / 'p'} has no keys, and a compile read mathlib under {tmp_path / 'p'}"
+    elsewhere = {"D.X": tmp_path / "d/.lake/build/lib/lean/D/X.olean", "R.A": lib("r", "R.A"), "Mathlib": mathlib}
+    _setup(root, "R", "r", elsewhere)
+    assert MK.indexable("R", keyed, pkgs, {}, at, own := set()) is None, "a path outside the fixed one is read as it is"
+    assert own == {"R"}, "and counted, for `put` to log"
+    _setup(root, "R", "r", right)
+    assert MK.indexable("R", keyed, pkgs, {}, at, own := set()) is None and own == set()
+    _setup(root, "R", "r", elsewhere)
+    MK.indexable("R", keyed, pkgs, {}, None, own)
+    assert own == set(), "a build that bound nothing is not counted"
+
+
 def test_a_build_is_indexed_only_where_it_read_the_fetched_packages_as_its_root_pins_them(tmp_path):
     """A key names the fetched packages by its root's pins. A package required by path is compiled again by a build of
     each root that requires it, over that root's packages: `r`'s modules by a build of `p`, which requires `r`. That

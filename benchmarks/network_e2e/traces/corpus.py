@@ -25,7 +25,7 @@ whether a cut moves any request's output ids, and each edge's record (``raw/cut.
 and its cost.
 
 `WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
-server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
+server, a process beside it on its host (``warden beside the server, not on the auditor device``), and the client
 (`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
 their own (`cpu_plan`), the relay under `warden_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
@@ -150,7 +150,7 @@ CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"e
 TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
            for name, c in CUT.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.protocols.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: active warden (`verity.protocols.accounting.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
@@ -160,7 +160,7 @@ TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every win
 #: D doesn't cover fails its connection late, which the summary counts (`summary.warden_summary`'s ``failed``), so it
 #: can't pass unseen.
 WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
-WARDEN_WHERE = "warden beside the server, not on the auditor host"
+WARDEN_WHERE = "warden beside the server, not on the auditor device"
 #: a stall of the client's event loop it records (`drive_warden`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
 #: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
@@ -549,7 +549,7 @@ def warden_modules():
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.protocols.certifier.verifier import warden
+    from verity.protocols.accounting.certifier.verifier import warden
 
     import warden_serve
     return warden, warden_serve

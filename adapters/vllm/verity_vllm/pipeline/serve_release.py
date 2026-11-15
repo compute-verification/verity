@@ -24,8 +24,8 @@ the leaves the sampled blocks open.
   another window or protocol, fails that window's release by name; the server serves on.
 * **At the stop** the pending seals wait for their windows' samples as they wait for their sealer: a drawer must sample every window
   whose line was written before it stops the server, or the stop waits on it.
-* **Failures.** A window that reaches no release (its draws fail, or its close or seal job does) is discarded (`Draws.discard`):
-  its device-held values dropped and its pool pieces freed, so later windows' steps don't wait on it; any later draw or read of it
+* **Failures.** A window that reaches no release (its samples fail, or its close or seal job does) is discarded (`Draws.discard`):
+  its device-held values dropped and its pool pieces freed, so later windows' steps don't wait on it; any later sample or read of it
   is refused by name. A failed run (`Draws.fail`, serve-openai's engine loop failing) ends every waiting release and every step
   waiting on the device pool by name.
 """
@@ -290,7 +290,7 @@ class RetentionOptions:
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:
-    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their draws, and the pool."""
+    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their samples, and the pool."""
     r = opts.retention
     return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
             "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
@@ -340,6 +340,6 @@ def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Draws | None, Dra
 
 
 def fail(draws: Draws | None, error: BaseException | None) -> None:
-    """A failed engine loop's end for ``draws``: no draw is coming, so every waiting release and pool take ends by name."""
+    """A failed engine loop's end for ``draws``: no sample is coming, so every waiting release and pool take ends by name."""
     if draws is not None and error is not None:
         draws.fail(f"the server failed: {error}")

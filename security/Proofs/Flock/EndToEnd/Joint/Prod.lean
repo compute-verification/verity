@@ -29,8 +29,8 @@ theorem period_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ)
     (miss : ρ → Prop) (esc : ρ → ℝ≥0∞) (good : (i : ℕ) → Strategy (G i) → Prop)
     (hstage : ∀ i τ, good i τ →
       ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, esc (rec i τ b) = e) ∧ prob (fun b => miss (rec i τ b)) (G i) τ ≤ e) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)) (c : ℝ≥0∞), PeriodGood G good i T s →
-      value (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (periodRun G rec i T s) ≤ c
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (c : ℝ≥0∞), MonitoringPeriodGood G good i T s →
+      value (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (monitoringPeriodRun G rec i T s) ≤ c
   | 0, i, s, c, _ => by
       classical
       show value (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (Game.ret []) ≤ _
@@ -42,8 +42,8 @@ theorem period_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ)
       classical
       obtain ⟨e, he, hw, hp⟩ := hstage i _ hs.1
       by_cases he0 : e = 0
-      · have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-          (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      · have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+          (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
           (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (fun b => miss (rec i (Strategy.ofBind _ (G i) s) b))
           1 (G i) s
           (atEnds_mono (fun b s' _ => by
@@ -56,8 +56,8 @@ theorem period_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ)
         refine h.trans ?_
         rw [mul_one]
         exact (hp.trans_eq he0).trans (zero_le)
-      · have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-          (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      · have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+          (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
           (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (fun b => miss (rec i (Strategy.ofBind _ (G i) s) b))
           (c / e) (G i) s
           (atEnds_mono (fun b s' hg => by
@@ -72,7 +72,7 @@ theorem period_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ)
             · rw [if_neg hm, value_map]
               refine (value_mono (q := fun _ => False) (fun l hl => hm (hl.1 _ List.mem_cons_self)) _).trans_eq ?_
               exact value_false _) (G i) s hs.2)
-        calc value (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (periodRun G rec i (T + 1) s)
+        calc value (fun l => (∀ r ∈ l, miss r) ∧ (l.map esc).prod < c) (monitoringPeriodRun G rec i (T + 1) s)
             ≤ prob (fun b => miss (rec i (Strategy.ofBind _ (G i) s) b)) (G i) (Strategy.ofBind _ (G i) s) *
                 (c / e) := h
           _ ≤ e * (c / e) := by gcongr

@@ -2,7 +2,7 @@
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
-implementation, such as the Lean port of `Q_word` (`verity/protocols/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
+implementation, such as the Lean port of `Q_word` (`verity/protocols/proofs/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
 
 - Reference: `verity.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`,
   `definition_digest`),
@@ -329,8 +329,8 @@ own bits, and a Program holds no data.
   primitive still holds. Outside an operation, a `registered` table is always listed, and a `library` one unless the library
   lists it.
 
-`verity.circuits` names no operations and no library tables, so the guard is `verity.definitions.circuits.operations.program_data`. It passes in the
-pinned list `verity/operations` v2 (`verity.definitions.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
+`verity.circuits` names no operations and no library tables, so the guard is `verity.circuits.operations.program_data`. It passes in the
+pinned list `verity/operations` v2 (`verity.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
 operation is a listed composite as the registry holds it, bound only to functions that hold no data, so a decoded Program's
 composites are no operations and their constants are listed.
 
@@ -458,7 +458,7 @@ parameters, so structure under `Q_word` v1 (§8), computed in no proof block.
 **Ids of the families.** A family member has one id, which the decoder materialises (§4.6) and nothing else does: the whole id
 matches its family's pattern, and the member it denotes carries exactly that id. `And<n>_v1` and `Xor<n>_v1` match
 `^(And|Xor)([2-9]|[1-9][0-9]+)_v1$`. The constant of width w ≥ 1 and value v, 0 ≤ v < 2^w, is
-`Const<w>[0x<h>]_v1` (`verity.definitions.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
+`Const<w>[0x<h>]_v1` (`verity.circuits.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
 v zero-padded to ⌊w/4⌋ digits, at least one (Python's `f"{v:0{w // 4}x}"`): `Const32[0x3f800000]_v1`, `Const16[0x3f80]_v1`,
 `Const5[0x5]_v1`, `Const5[0x1f]_v1`, `Const1[0x0]_v1`. So `And02_v1`, `And1_v1`, `And2_v1\n`, `Const32[0x0]_v1`,
 `Const32[0x03f800000]_v1`, `Const32[0x3F800000]_v1`, `Const5[0x05]_v1`, `Const032[0x3f800000]_v1`, `Const0[0x0]_v1` and
@@ -662,7 +662,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/protocols/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/protocols/accounting/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf

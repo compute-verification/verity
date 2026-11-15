@@ -5,8 +5,8 @@ public import Proofs.Properties.Verity.Sampled.Record
 /-!
 # The sampling record's facts at one-stage v2's session
 
-* `drawFixed`: the draw precedes the session (`DrawFixed`): every unit's session rounds are the second stage, and the
-  checked units read only the draw rounds (`Claims.Sampling.drawFixed_of_first`).
+* `drawFixed`: the sample precedes the session (`DrawFixed`): every unit's session rounds are the second stage, and the
+  checked units read only the sample rounds (`Claims.Sampling.drawFixed_of_first`).
 * `interiorFixed`: the interior values are committed under the session's roots, which the statement fixes, so the roots
   a run shows for them are the same at fresh second-stage coins (`InteriorFixed` at `fun _ _ _ => A.roots`).
 * `refuses_of_inScope`: the verifier refuses every statement but the record's at once, so it refuses what is out of
@@ -27,7 +27,7 @@ theorem record_parse_eq (x : Msg) :
 theorem record_parse : (record A o e).parse (xOf A o) = some (stmtA A) :=
   (record_parse_eq A o e (xOf A o)).trans (ite_eq_left rfl)
 
-/-- **The draw precedes the session.** -/
+/-- **The sample precedes the session.** -/
 theorem drawFixed : DrawFixed (record A o e) := by
   refine drawFixed_of_first _ (fun _ _ _ _ => subset_refl _) fun x r r' h => ?_
   have hc : @coinsAt ((V A o).k x) r = @coinsAt ((V A o).k x) r' := coinsAt_congr fun t ht => h t ht

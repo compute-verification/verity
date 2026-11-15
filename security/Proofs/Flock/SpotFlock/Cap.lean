@@ -11,14 +11,14 @@ public import Proofs.Flock.Bridge.Draw
 `replayCap`: at SPOT[Flock]'s code, the replay sample of record at outer coins some second-stage fork of which is
 accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
 
-* an accepted fork passed round `stage + 1` (`stmtOk`), whose reads check at template `0` reads the second stage's draw
+* an accepted fork passed round `stage + 1` (`stmtOk`), whose reads check at template `0` reads the second stage's sample
   (`stmtOk_draw`), so its second stage accepted the replay sample, which is then not empty: the first stage accepted,
   and the sample of record is the slots `Slots.checked` keeps of the units it proved. With no template there is no
   proof block;
 * each population slot `ρ` it keeps is unit `ρ`, whose cell of each template `t` is `blockOf ρ t` on `[0, n_t)`, and
   every proof block of an input slot is always checked (`regMatchesTwo`), so the sample has at most `|proved| · Σ_t n_t`
   proof blocks of population slots (`perBlock`) and always checked ones besides;
-* a first stage with no closure map whose law Flock reads as a uniform `K`-subset (`firstK`) proves `K` units.
+* a first stage with no closure map whose sampling design Flock reads as a uniform `K`-subset (`firstK`) proves `K` units.
 -/
 
 @[expose] public section
@@ -45,7 +45,7 @@ def firstKOf (g : Reg) : Option ℕ :=
   | .error _ => none
 
 /-- **The first stage's count** `K`, where it samples a uniform `K`-subset of the replay blocks: its rule is not
-`All`, it has no closure map, and Flock reads its law over the population as `subset K`. -/
+`All`, it has no closure map, and Flock reads its sampling design over the population as `subset K`. -/
 def firstK (g : Reg) : Option ℕ :=
   match g.closure, g.rule with
   | none, .law _ => firstKOf g
@@ -169,8 +169,8 @@ def cap (_ : Msg) : ℕ :=
   | some K => min (nBlocks h) (K * perBlock h + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card)
   | none => nBlocks h
 
-/-- **Round `stage + 1` passes only at coins whose second stage draws**, where there is a template: template `0`'s
-statement check reads the second stage's draw (`readsOk`). -/
+/-- **Round `stage + 1` passes only at coins whose second stage samples**, where there is a template: template `0`'s
+statement check reads the second stage's sample (`readsOk`). -/
 theorem stmtOk_draw {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     (hm : 0 < h.ms.length) : ∃ draw, secondDraw h c₀ c₁ = some draw := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by

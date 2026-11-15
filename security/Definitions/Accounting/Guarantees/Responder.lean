@@ -10,7 +10,7 @@ public import Definitions.Pous.Assumptions.P2
 # B2: a location as PoUS's responder (trusted)
 
 Obligation B2 of the actual-circuit model, on PoUS's ring model, for a location that does no arithmetic modulo `p`
-during a window (so no ring answer is in flight at a challenge, the row's `f = 0`; where it does, `B2Window` states the
+during a window (so no ring answer is in flight at a challenge, the row's `f = 0`; where it does, `B2Period` states the
 oracle-location form's core). A strategy `S` maps PoUS's outcome (the primitive `ω`, the encoder's coins, the `k`
 challenges) to a run, causal from every tick. PoUS sends each challenge when the last answer arrives, so the challenge
 ticks are read off the run: challenge `j` reaches the location `X` at tick `t x j`, the ticks increasing in each run,
@@ -47,13 +47,13 @@ a function of its state at the previous one and of what reached it in between.
 * `B2Adds`, lemma M through `B2Determines`: under `AuditSecureOn … N 0 0 0 c δ ε`, a location that keeps a uniform
   `q`-bit `z` passes while `q + N ≥ M + 1 + τ + H + k` with probability at most `δ + ε + c·2^-k`; `B2AddsP2Ring`, the
   same at P2's deployed point under `P2RingAuditSecure 0 0 0`, with `δ + 2^-129 + 2^-130 + 105·2^-k`.
-* `B2Window`, the core of the oracle-location form (B2's row): where the location does use the ring, at oracle locations
+* `B2Period`, the core of the oracle-location form (B2's row): where the location does use the ring, at oracle locations
   of its own (`RingResponder`), a window whose multiplications take at least `ℓ > 0` ticks to answer and which spans at
   most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the additions, `one` and the keys at
   once and holds each multiplication until the earliest held one could be due. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency
-  form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`. `B2WindowAudit`: so under
+  form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`. `B2PeriodAudit`: so under
   `AuditSecureOn … N D Q L`, a location that starts in an `N`-bit state and answers with such windows, each within
-  `(Q, L)`, answers every challenge with probability at most `δ + ε`; `B2WindowP2Ring`, the same at P2's deployed point
+  `(Q, L)`, answers every challenge with probability at most `δ + ε`; `B2PeriodP2Ring`, the same at P2's deployed point
   under `P2RingAuditSecure D Q L`, with `δ + 2^-129 + 2^-130`, paced: one challenge every `T` ticks and every
   multiplication at least `ℓ` ticks, with `T ≤ D·ℓ`. What is not stated yet: the windows read off a strategy's runs
   (oracle locations on `Actual.Run`, `Wd` from `CausalFrom` with the state's content, the help and the answers in flight
@@ -64,7 +64,7 @@ A fixed schedule is the case `t x = t` for every `x`: `ArrivalRule`, `SetupFixed
 fixed-schedule statements at `τ = 0`. The help is whatever the setup fixes that, with the challenge, determines what
 reaches `X`: under isolation nothing, and when the rest of the prover learns nothing that depends on the challenges or
 their ticks (the model's `e = 0` across the audit), what the rest sends `X` during the whole audit, with `H` the log of
-the number of values it takes. The proofs are in `Security/Proofs/Accounting/Responder.lean`, `B2Window`'s in
+the number of values it takes. The proofs are in `Security/Proofs/Accounting/Responder.lean`, `B2Period`'s in
 `Security/Proofs/Accounting/Responder/Latency.lean`.
 -/
 
@@ -210,7 +210,7 @@ encoder input `W`, public parameters, challenge index, `N`-bit state and challen
 answer and the next state: when every multiplication takes at least `ℓ > 0` ticks to answer and every window spans at most
 `D·ℓ` ticks, some `(N, D, Q, L)` sequential responder's step yields what the window yields, whatever the oracle
 locations answer, wherever the window asks at most `Q` key queries and `L` ring queries. -/
-def B2Window : Prop :=
+def B2Period : Prop :=
   ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N D Q L ℓ : ℕ)
     (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
       RingResponder B w (Pous.Bits sch.ℓ × Pous.Bits N)),
@@ -226,7 +226,7 @@ state set up from the codeword (`A₁`) and answers each challenge with a window
 least `ℓ > 0` ticks to answer, which spans at most `D·ℓ` ticks and asks at most `Q` key and `L` ring queries, answers
 every challenge with its block with probability at most `δ + ε`. Its answers are `seqAnswers` of the windows' results:
 each window yields the answer and the state the next one starts in. -/
-def B2WindowAudit : Prop :=
+def B2PeriodAudit : Prop :=
   ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N D Q L ℓ k : ℕ) (δ ε : ℝ≥0∞),
     Pous.AuditSecureOn sch .sequential N D Q L k δ ε →
     ∀ (W : Pous.Bits sch.n) (A₁ : Pous.Preprocessor sch N)
@@ -242,13 +242,13 @@ def B2WindowAudit : Prop :=
             0 (List.ofFn x.2.2) (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
           List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) ≤ δ + ε
 
-/-- **`B2WindowAudit` at P2's deployed point, paced.** Under `P2RingAuditSecure D Q L` (P2 in the ring model, 2,054
+/-- **`B2PeriodAudit` at P2's deployed point, paced.** Under `P2RingAuditSecure D Q L` (P2 in the ring model, 2,054
 payload bytes per block, 105 challenges, state bound `⌊ρ·|C|⌋`), with one challenge every `T` ticks (`T = Δ + RTT`;
 each window spans at most `T`) and every multiplication reaching its querier at least `ℓ > 0` ticks after it is asked,
 where `T ≤ D·ℓ` (the latency form of sequential speed, `ℓ ≥ (Δ + RTT)/D_p` at `D = D_p`): a location that starts in a
 `⌊ρ·|C|⌋`-bit state and answers with such windows, each within `(Q, L)`, answers every challenge with its block with
 probability at most `δ + 2^-129 + 2^-130`. -/
-def B2WindowP2Ring : Prop :=
+def B2PeriodP2Ring : Prop :=
   ∀ D Q L T ℓ : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
     ∀ (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
       (A₁ : Pous.Preprocessor (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432)

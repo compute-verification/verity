@@ -3,7 +3,7 @@ with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_
 ``benchmarks/pouw/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
-installed as `e2e.install` does (sites by type, the kernel directory's cubin, the weight roots, the epoch from a
+installed as `e2e.install` does (sites by type, the kernel directory's cubin, the fixed operands' roots, the epoch from a
 challenger's salt coin) but attached through the harness's ``target.hooks``, so the runner uninstalls it with the engine.
 One pass per engine step: ``llm_engine.step`` is wrapped to open `Stack.pass_` around each forward, which bounds a pass's
 tiles by the step's scheduled tokens, so the full sweep's long prefills fit the pass buffers that one generate's pass
@@ -20,8 +20,8 @@ build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``defe
 ``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
-peers) are set: then it is a live session's on the auditor host, reserved at install with its salt coin alone
-(`window.SALT_FAMILIES`), opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and epoch 0, the
+peers) are set: then it is a live session's on the auditor device, reserved at install with its salt coin alone
+(`window.SALT_FAMILIES`), opened on its salt epoch's root (`salt.epoch_open_root` of the fixed operands' root and epoch 0, the
 arm's one install under a fresh hm96 key) and its salt coin opened after it (`_LiveSession`), which the device run checks
 (`pouw_pearl_c_host.epoch_of`); the gate's result names the session (``coins``), and the arm's close ends it complete.
 ``PEARLC_CHALLENGER_LANE`` (default ``vllm``) is the lane the gate key is registered for: while that lane's open period
@@ -47,14 +47,14 @@ class _Coins:
     """`e2e.Coins`, trimmed: one epoch's challenger, each coin opened once."""
 
     def __init__(self, epoch: int) -> None:
-        from verity.protocols.pouw.verifier import verifier
-        from verity.protocols.pouw.verifier.coins import Challenger
+        from verity.protocols.accounting.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
         self.challenger, self.opened = Challenger(epoch, verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes) -> Any:
-        from verity.protocols.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 
         if label in self.opened:
             if self.opened[label].after != after:
@@ -65,17 +65,17 @@ class _Coins:
 
 
 class _LiveSession:
-    """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
+    """The epoch's salt coin from a session of the auditor device's challenger, through infra's gate: ``gate`` its argv
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through the node's certifier
     coin link. Reserved at
     construction (`commit_coins.ChallengerGate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
-    `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the weights' root once they are committed, its
+    `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the fixed operands' root once they are committed, its
     salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete. Refused before
     reserving while ``lane``'s open period in the auditor's ledger (``period``) is H1's, and before its open when the
     reserve joined another period (`pouw_h1_window.reserve_salt`)."""
 
-    #: the arm's salt epoch over its weights' root: one install, under a fresh hm96 key
+    #: the arm's salt epoch over its fixed operands' root: one install, under a fresh hm96 key
     k = 0
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
@@ -102,10 +102,10 @@ class _LiveSession:
 
 def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
                run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor host when `gate` (infra's
+    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor device when `gate` (infra's
     gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
     now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
-    epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
+    epoch's root (`salt.epoch_open_root` of the fixed operands' root and the epoch's number) and flips its salt coin from
     (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
     answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
     in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
@@ -123,15 +123,15 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
 
 
 class LiveDraw:
-    """`verify_run.verify_passes`' ``draw`` from a draw session of its own on the auditor host's challenger, through
+    """`verify_run.verify_passes`' ``draw`` from a sample session of its own on the auditor device's challenger, through
     infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
-    the run's commitment C, it reserves a session withheld with the draw coin alone (``reserve --withhold``,
-    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window draws), opens it on C and takes its
+    the run's commitment C, it reserves a session withheld with the sampling coin alone (``reserve --withhold``,
+    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window samples), opens it on C and takes its
     ``pouw/draw`` coin after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at
     its close.
     Refused (`CoinError`) before reserving while ``lane`` has a period open in the auditor's ledger, and before its open
-    when the reserve joined one, so the draw counts toward no period's sessions; and when the gate reserves it plain.
-    With ``period``, the Pearl-C period the run's salt session joined, the draw must be the lane's first reserve after
+    when the reserve joined one, so the sample counts toward no period's sessions; and when the gate reserves it plain.
+    With ``period``, the Pearl-C period the run's salt session joined, the sample must be the lane's first reserve after
     that period closed (`pouw_h1_window.after_close`, the compose's rule): refused before reserving unless the ledger
     closes it with no reserve of the lane since, and before its coin is asked unless the reserve is that first one.
     Returns (the coin's 64 bytes, the coin record's ``draw``: `verify_run`'s module docstring, "The coin record")."""
@@ -143,8 +143,8 @@ class LiveDraw:
         self.gate, self.peer, self.lane, self.at, self.period = ChallengerGate(gate, run), peer, lane, at, period
 
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
-        from verity.protocols.pouw.verifier import window as Wd
-        from verity.protocols.spot.device.challenger import CoinError
+        from verity.protocols.accounting.pouw.verifier import window as Wd
+        from verity.protocols.proofs.spot.device.challenger import CoinError
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
         lines = self.gate.ledger()
@@ -182,7 +182,7 @@ class LiveDraw:
 def live_draw(gate: str | None, peer: str | None, lane: str, run: Any = None,
               period: str | None = None) -> LiveDraw | None:
     """`LiveDraw` under ``gate`` and ``peer`` after the run's Pearl-C period ``period``, None when neither is given (the
-    node's draw); ValueError for one alone."""
+    node's sample); ValueError for one alone."""
     if (gate, peer) == (None, None):
         return None
     if gate is None or peer is None:
@@ -241,8 +241,8 @@ class PearlCArm:
         return max(leaf_default, pow2(tiles)), max(rows_default, pow2(rows))
 
     def ready(self, target: Any) -> None:
-        from verity.protocols.pouw.verifier.audit import weights_root
-        from verity.protocols.pouw.verifier.salt import epoch_open_root
+        from verity.protocols.accounting.pouw.verifier.audit import weights_root
+        from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack

@@ -16,6 +16,7 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.commitments.windows import interface as IF
+
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.weights_of_record import weight_param
 
@@ -149,7 +150,7 @@ class _Builder:
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
-    #: each attention Definition's head plan (`window_circuit._Program._plan`), read once whatever its slots and layers
+    #: each attention Definition's head plan (`window_lowering._Program._plan`), read once whatever its slots and layers
     plans: dict[str, list[tuple[Any, list[tuple[str, tuple[Any, ...]]]]]] = field(default_factory=dict)
     #: the weights record's weights, ``(label, first word, words)`` in order, and the registered parameters read of them
     weights: tuple[tuple[str, int, int], ...] = ()

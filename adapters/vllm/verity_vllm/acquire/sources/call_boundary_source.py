@@ -23,13 +23,23 @@ from __future__ import annotations
 import math
 import re
 import time
-from typing import Any, Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import int8_source
-from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
+from verity_vllm.acquire.sources.call_boundary_plan import (
+    FAMILY,
+    WORD_DTYPES,
+    Body,
+    Plan,
+)
+from verity_vllm.log import init_logger
+from verity_vllm.query.manifest.format import identity_rows
+
+logger = init_logger(__name__)
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
 WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
@@ -47,13 +57,13 @@ def claimed(r: Mapping[str, Any]) -> str | None:
 def unattached(manifest: Mapping[str, Any] | None, attached: Collection[str]) -> list[str]:
     """The `call_boundaries` identities of `manifest` whose claimant is not among `attached` (the sources the Commit attaches), each named
     with it: no source acquires them."""
-    return [f"{CP._label(r)}: claimed by {s}, a source the Commit does not attach" for r in (manifest or {}).get("identities") or []
+    return [f"{CP._label(r)}: claimed by {s}, a source the Commit does not attach" for r in identity_rows(manifest)
             if r.get("family") == FAMILY and (s := claimed(r)) is not None and s not in attached]
 
 
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
     """The `call_boundaries` identities of a manifest this source evaluates: every one no other source claims."""
-    return [r for r in (manifest or {}).get("identities") or [] if r.get("family") == FAMILY and claimed(r) is None]
+    return [r for r in identity_rows(manifest) if r.get("family") == FAMILY and claimed(r) is None]
 
 
 def plan_of(manifest: Mapping[str, Any], *roots: str | None) -> Plan:
@@ -206,13 +216,15 @@ class CallBoundarySource:
         if rows is None:
             self.error(f"call boundaries: no row order recorded at engine step {e} (step_rows); its packed rows cannot be split")
             return None
+        # imported here, not at the top: it loads the core's commitments, which importing this module does not
         from verity_vllm.commit.binding import logical_request
 
         got = [(self._request(logical_request(rid, self.plan.order)), int(hi) - int(lo)) for rid, lo, hi in rows]
-        declared = self.plan.composition.get(e) or {}
-        if sorted(got) != sorted(declared.items()):
+        declared = self.plan.composition.get(e)
+        ran, members = sorted(got), sorted(declared.items() if declared else ())
+        if ran != members:
             self.error(f"call boundaries: engine step {e} ran (request, rows) {got} in this order; the manifest declares "
-                       f"{sorted(declared.items())}: nothing of the step is committed")
+                       f"{members}: nothing of the step is committed")
             return None
         return [r for r, _n in got]
 
@@ -323,17 +335,17 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
     if not enabled:
         return required_classes, None
     if not manifest_sites(manifest):
-        print("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity", flush=True)
+        logger.error("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity")
         raise SystemExit(3)
     plan = plan if plan is not None else plan_of(manifest or {}, *programs)
     if plan.uncovered or not plan.bodies:
-        print(f"[delta] REFUSE: call boundaries: {len(plan.uncovered)} of {plan.identities} identities have no host evaluation "
-              f"(--program-dir / --programs-root {list(programs)}): {plan.uncovered[:4]}", flush=True)
+        logger.error("[delta] REFUSE: call boundaries: %d of %s identities have no host evaluation (--program-dir / --programs-root %s): %s",
+                     len(plan.uncovered), plan.identities, list(programs), plan.uncovered[:4])
         raise SystemExit(3)
     src = CallBoundarySource(com, model if model is not None else getattr(com, "model", None), plan)
     com.attach_source(src)
-    print(f"[delta] call-boundary source attached: {plan.covered} identities in {len(src.modules)} module bodies of {len(plan.program_dirs)} "
-          f"request Programs, {plan.bytes_per_token} bytes per token -> committer {com.name}", flush=True)
+    logger.info("[delta] call-boundary source attached: %s identities in %d module bodies of %d request Programs, %s bytes per token -> "
+                "committer %s", plan.covered, len(src.modules), len(plan.program_dirs), plan.bytes_per_token, com.name)
     if not explicit_classes and FAMILY not in required_classes:
         return (*required_classes, FAMILY), src
     return required_classes, src

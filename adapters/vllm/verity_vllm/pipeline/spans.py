@@ -20,9 +20,11 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
+
+__all__ = ["Spans"]
 
 COMPONENTS = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
 
@@ -105,7 +107,7 @@ def gc_of(rc: Any) -> dict[str, Any] | None:
     g = (getattr(rc, "extra", None) or {}).get("gc")
     if not g:
         return None
-    p = list(g.get("pauses") or [])
+    p = g["pauses"]
     return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
             "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
 

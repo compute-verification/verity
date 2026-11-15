@@ -69,10 +69,10 @@ from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import composite
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.boolean.forms import NOT, OR, and_reduce, const_bits, mux, or_reduce, sub
-from verity.definitions.ops.boolean.elementwise import specialized
-from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn
 from verity.definitions.registry import host_f64 as H
 from verity.definitions.registry.torch_train import _flag
 

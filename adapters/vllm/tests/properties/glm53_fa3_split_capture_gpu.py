@@ -3,7 +3,7 @@ default `FLASH_ATTN_MLA_SPARSE` decode (`forward_mqa` passes no `num_splits`, so
 heuristic and `FlashAttnFwdCombine` merges the splits), and for `MufuLg2Ftz_v1` on sm_90, at GLM-5.3's TP8 statics (8 heads,
 rope 64, latent 512, top-k 2048, the scale 1/16).
 
-One GPU process writes `<out>/glm53_fa3_split_capture.json`, the property record `glm53_fa3_split_capture` (`properties.record`),
+One GPU process writes `<out>/glm53_fa3_split_capture.json`, the property record `glm53_fa3_split_capture` (`records.property_record`),
 and prints one line per launch, then `GLM53-FA3-SPLIT GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first
 and nothing else runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the
 others.
@@ -57,7 +57,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fa3-split-capture/v2"
 RECORD = "glm53_fa3_split_capture.json"
@@ -267,7 +267,7 @@ COMPARE = {"attn": compare_attn, "lg2": compare_lg2, "mufu": compare_mufu}
 
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "differing": []}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "differing": []}
     try:
         COMPARE[job["kind"]](job, rec)
     except Exception as e:  # noqa: BLE001
@@ -293,12 +293,12 @@ def sweep_words() -> np.ndarray:
 
 def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """lg2 on the exponent bands, the sweep and the powers of two below 1; ex2 and rcp on core's table domains and the sweep."""
-    from verity.definitions.ops import mufu as MU
+    from verity.circuits.ops import mufu as MU
     from verity.definitions.numerics import sparse_mla_split_twins as TW
     from verity.definitions.registry import sparse_mla_split as W
 
     jobs: list[dict[str, Any]] = []
-    m = np.arange(1 << 23, dtype=np.uint32)
+    m: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
     exps = QUICK_LG2_EXPONENTS if quick else LG2_EXPONENTS
     band = {}
     for e in exps:
@@ -310,7 +310,7 @@ def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict
     jobs += lg2_jobs(work, "sweep", ys, x=sweep)
     powers = np.arange(1, 127, dtype=np.uint32) << np.uint32(23)
     yp = _mufu("lg2_ftz", powers)
-    exact = (np.float32(np.arange(1, 127)) - np.float32(127)).view(np.uint32)
+    exact: np.ndarray = (np.float32(np.arange(1, 127)) - np.float32(127)).view(np.uint32)
     prov = W.lg2_table()["provenance"]["measured"]
     sm120 = {"mantissas": prov["mantissas"].rsplit(" ", 1)[1], "sweep": prov["sweep"].rsplit(" ", 1)[1]}
     lg2 = {"phase": "mufu", "case": "lg2", "exponents": list(exps), "sweep_in": _sha(sweep), "sweep_out": _sha(ys),
@@ -320,7 +320,7 @@ def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict
            "same_as_sm120": {"sweep": _sha(ys) == sm120["sweep"], "mantissas": _sha(band[127]) == sm120["mantissas"] if 127 in band else None},
            "checks": {"sweep_input": _sha(sweep) in prov["sweep"], "open_are_the_powers": bool(TW.undetermined_words(powers).all())}}
     recs = [lg2]
-    j = np.arange(1 << 23, dtype=np.uint32)
+    j: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
     domains = {"ex2": (j.astype(np.float64) / (1 << 23)).astype(np.float32).view(np.uint32), "rcp": np.uint32(0x3F800000) | j}
     for op in ("ex2", "rcp"):
         y = _mufu(f"{op}_ftz", domains[op])
@@ -380,11 +380,12 @@ def bind_check() -> dict[str, Any]:
     from verity.definitions.registry import sparse_mla_split as W
 
     mla = _mla()
+    targets: dict[str, Any]
     targets = {"MufuLg2Ftz_v1": lambda: W.MufuLg2Ftz,
                f"SparseMlaSplit_v1{{T={TOPK},NS=16,NH={NH},...}}": lambda: bind(W.SparseMlaSplit, T=TOPK, NS=16, **M.SPARSE_MLA_GLM53)}
     for T, NS in ((130, 2), (1001, 8), (TOPK, 16), (TOPK, 28)):
         targets[f"SparseMlaHeadSplit_v1{{T={T},NS={NS},...}}"] = lambda T=T, NS=NS: bind(W.SparseMlaHeadSplit, T=T, NS=NS, **mla)
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

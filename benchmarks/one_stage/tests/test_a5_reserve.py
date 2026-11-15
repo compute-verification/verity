@@ -8,6 +8,8 @@ the 18-family partition's rank-0 window at step 16 (`glm53_all_families_tp8_step
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import random
 import sys
 import tempfile
@@ -18,9 +20,9 @@ import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -37,7 +39,7 @@ ALL_FAMILIES = [256, 1, 2, 1, 160, 9, 9, 1, 8, 1, 49152, 6144, 4096, 2048, 19360
 SILU_RULE, FAMILIES_RULE = "stratified-rate:4/675", "stratified-rate:1/90112"
 ROOT = "ab" * 64
 AFTER = bytes.fromhex("cd" * 64)
-STUB = AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def template(i: int):
@@ -67,13 +69,20 @@ def seeded(seed: int):
 
 
 def challenger_coins(layout: list) -> CC.ChallengerCoins:
-    """One rank's coins on an in-process challenger of `layout`, after the coin `Draws` opens after the window's root."""
+    """Rank 0's coins, its own family's, on an in-process challenger of `layout`, after the coin `Draws` opens after the
+    window's root in the window's family."""
     live = Ch.LiveChallenger(AC.SCHEME, 0, layout, seeded(1))
-    coins = CC.ChallengerCoins(Ch.LiveRecord(live, AC.FAMILY, clock=lambda: 0.0))
-    coins.commit(bytes.fromhex(ROOT))
-    coins(Ch.COIN_BYTES)
+    window = CC.ChallengerCoins(Ch.LiveRecord(live, AC.WINDOW_FAMILY, clock=lambda: 0.0))
+    window.commit(bytes.fromhex(ROOT))
+    window(Ch.COIN_BYTES)
+    coins = CC.ChallengerCoins(Ch.LiveRecord(live, AC.family(0), clock=lambda: 0.0))
     coins.commit(AFTER)
     return coins
+
+
+def layout(*ranks: int) -> list[list]:
+    """The session's layout with `ranks[r]` coins in rank r's family, after the window family's one."""
+    return [[AC.WINDOW_FAMILY, 1], *([AC.family(r), n] for r, n in enumerate(ranks))]
 
 
 def reads(rule: str, counts: list[int], seed: int) -> int:
@@ -90,14 +99,15 @@ def reads(rule: str, counts: list[int], seed: int) -> int:
 
 def test_the_silu_mul_window_keeps_todays_reserve():
     """38b2's SiluMul window reads 226 bytes a rank (a stratum of 675 at k 4, 144 bytes, and one of 3 at its floor of 1,
-    82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank and one more: 129 for 8
-    ranks."""
+    82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank, each rank's in a family
+    of its own, and one more in the window's: 129 for 8 ranks."""
     assert [s["k"] for s in law_of(SILU_RULE, SILU_MUL)["strata"]] == [4, 1]
     assert reads(SILU_RULE, SILU_MUL, 0) == 226
     need = need_of(SILU_RULE, SILU_MUL)
     assert need == -(-(226 + 144) // Ch.COIN_BYTES) == 6
     needs = dict.fromkeys(range(8), need)
-    assert AC.families(needs) == [[AC.FAMILY, 16 * 8 + 1]]
+    assert AC.families(needs) == layout(*[16] * 8) and sum(n for _, n in AC.families(needs)) == 16 * 8 + 1
+    assert [label for label, _ in AC.families(needs)] == ["window", *(f"draw/{r}" for r in range(8))]
     assert AC.reserve_reason(AC.families(needs), needs) is None
 
 
@@ -109,19 +119,19 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
     assert {reads(FAMILIES_RULE, ALL_FAMILIES, seed) for seed in range(4)} == {1496}
     assert 1496 > AC.COINS_PER_RANK * Ch.COIN_BYTES
     assert need_of(FAMILIES_RULE, ALL_FAMILIES) == -(-(1496 + 86) // Ch.COIN_BYTES) == 25
-    assert AC.families({0: 25}) == [[AC.FAMILY, 26]]
+    assert AC.families({0: 25}) == layout(25)
 
 
 def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
     """On a challenger of one rank's old reserve (17 coins), the 18-family sample runs out of coins (`every sampling coin of the
     epoch is open`), as the 18-family run did. On its need's reserve (`families`) it samples, opening 24 coins after the
-    rank's commitment."""
-    rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
-    with pytest.raises(Ch.CoinError, match="every draw coin of the epoch is open"):
-        S.select_draw(S.Law(rule), law, n, challenger_coins([[AC.FAMILY, 17]]))
+    rank's commitment, its family's first."""
+    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    with pytest.raises(Ch.CoinError, match="every draw/0 coin of the epoch is open"):
+        S.select_draw(S.Law(rule), design, n, challenger_coins(layout(16)))
     coins = challenger_coins(AC.families({0: need_of(rule, ALL_FAMILIES)}))
-    drawn = S.select_draw(S.Law(rule), law, n, coins)
-    assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24
+    drawn = S.select_draw(S.Law(rule), design, n, coins)
+    assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24 and coins.segments[-1].start == 0
 
 
 def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
@@ -132,12 +142,12 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
     t0, t1 = (P.template_id(template(i)) for i in range(2))
     table = {t0: {"work": 0, "floor": 32}, t1: {"work": 1, "floor": 1}}
     rule = S.Law("work-rate:1/20")
-    law = D.derive(program, query, S.selection_law(rule, n, D.strata_sizes(program, query)),
+    design = D.derive(program, query, S.selection_law(rule, n, D.strata_sizes(program, query)),
                    S.selection_table(rule, program, query, table))
-    assert law["k"] == 2 and [s["k"] for s in law["strata"]] == [32, 2]
+    assert design["k"] == 2 and [s["k"] for s in design["strata"]] == [32, 2]
     need = AC.need(rule.text, program, query, n, table)
     assert need == -(-(640 + 100 + 640) // Ch.COIN_BYTES) == 22
-    drawn = S.select_draw(rule, law, n, challenger_coins(AC.families({0: need})))
+    drawn = S.select_draw(rule, design, n, challenger_coins(AC.families({0: need})))
     assert set(range(32)) <= set(drawn["units"]) and len(drawn["units"]) == 34
     with pytest.raises(S.Refused) as e:
         AC.need(rule.text, program, query, n)
@@ -145,25 +155,29 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
 
 
 def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
-    """`reserve_reason` names the need (the coin after the root, then each rank's) and the reserve when the reserve is
-    short, and the challenger's own limit when the layout is past it."""
-    assert AC.reserve_reason([[AC.FAMILY, 17]], {0: 25}) == (
-        "the draws need 26 draw coins (1 after the window's root, then rank 0 25), and the reserve [['draw', 17]] holds 17")
+    """`reserve_reason` names the need (the coin after the root, then each rank's, a family each) and the reserve when
+    the reserve is short in a family or lacks one, and the challenger's own limit when the layout is past it."""
+    need = "the draws need {'window': 1, 'draw/0': 25} coins (1 after the window's root, then each rank's in its own family)"
+    assert AC.reserve_reason(layout(16), {0: 25}) == (
+        f"{need}, and the reserve [['window', 1], ['draw/0', 16]] holds fewer of ['draw/0']")
+    assert AC.reserve_reason([[AC.FAMILY, 26]], {0: 25}) == (
+        f"{need}, and the reserve [['draw', 26]] holds fewer of ['draw/0', 'window']")
     big = {r: Ch.MAX_COINS // 2 for r in range(2)}
     assert AC.reserve_reason(AC.families(big), big).endswith(f"a live coin layout holds at most {Ch.MAX_COINS} coins")
 
 
-def local(tmp_path: Path, monkeypatch, ranks: list[int], **kw):
-    """`a5_coins.start` on a local challenger session under `tmp_path`, pinned on this tree's commit. Its serve.py runs under
+def local(tmp_path: Path, monkeypatch, ranks: list[int], root: str | None = None, dest: str = "challenger", **kw):
+    """`a5_coins.start` on a local challenger session under `tmp_path` (on `ROOT`, or ``root``; finished into ``dest``),
+    pinned on this tree's commit. Its serve.py runs under
     live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `sampled-proofs-verifier`."""
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     main = tmp_path / "main.txt"
     main.write_text(AC.on_main([]) + "\n")
-    return AC.start("local", ROOT, ranks, tmp_path / "challenger", main, **kw)
+    return AC.start("local", ROOT if root is None else root, ranks, tmp_path / dest, main, **kw)
 
 
 def nothing_reserved(tmp_path: Path) -> bool:
@@ -172,83 +186,141 @@ def nothing_reserved(tmp_path: Path) -> bool:
 
 
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
-    """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins). The
-    18-family sample reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
-    rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
-    manager, draws, opener = local(tmp_path, monkeypatch, [0])
+    """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins:
+    the window family's one and 25 in the rank's own). The 18-family sample reads its 24 coins after the rank's
+    commitment, and its coins' evidence, which names no key, holds at the rank's family under the key the session's
+    start had (`coins.coins_reason`, `a5_coins.held`), at no other family and under no other key."""
+    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    manager, turns, opener = local(tmp_path, monkeypatch, [0])
     try:
-        coins = AC.RankCoins(draws, 0)
+        coins = AC.RankCoins(turns, 0)
         coins.plan(need_of(rule, ALL_FAMILIES))
         coins.commit(AFTER)
-        S.select_draw(S.Law(rule), law, n, coins)
+        S.select_draw(S.Law(rule), design, n, coins)
         segment = coins.drawn()
-        draws.skip(0)
+        turns.skip(0)
         opener.join()
-        published = draws.evidence()
+        published, ours = turns.evidence(), AC.held(turns)
     finally:
         manager.shutdown()
     assert "error" not in published, published.get("error")
     assert (tmp_path / "coins.log").read_text(), "the session's coins came from the stub, not a Lean build"
     plan = published["plan"]
-    assert plan["needs"] == {"0": 25} and plan["families"] == [[AC.FAMILY, 26]] and plan["session"]
-    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 24} and len(coins.read) == 1496
-    assert CC.coins_reason(AC.evidence(published, segment), ROOT, AFTER, bytes(coins.read), AC.lms_verify) is None
+    assert plan["needs"] == {"0": 25} and plan["families"] == layout(25) and plan["session"]
+    assert published["trusted"]["released"] == {AC.WINDOW_FAMILY: 1, AC.family(0): 24} and len(coins.read) == 1496
+    assert coins.label == segment["label"] == AC.family(0) and segment["start"] == 0
+    evidence = AC.evidence(published, segment)
+    assert sorted(evidence) == ["ledger", "main", "pins", "segment", "session"]
+
+    def reason(label: str, key: Ch.ChallengerKey = ours["key"]) -> str | None:
+        return CC.coins_reason(key, ours["main"], evidence, ROOT, label, AFTER, bytes(coins.read), AC.lms_verify)
+    assert reason(AC.family(0)) is None
+    for other in (AC.WINDOW_FAMILY, AC.FAMILY, AC.family(1)):
+        assert "family's" in reason(other)
+    other = dataclasses.replace(ours["key"], public=bytes(b ^ 1 for b in ours["key"].public))
+    assert reason(AC.family(0), other) is not None
+
+
+def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_path, monkeypatch):
+    """A ``local`` challenger kept in a directory (`start`'s ``host``) is reopened by a later `start` there: the later
+    session, on another root, is the same challenger's, signed under the same key (`held`, and `local_key` of the
+    directory), on a ledger that holds the earlier session's lines first; each session's evidence holds under that
+    key at its own root and at no other. A challenger of a command's own has another key, under which the kept one's
+    evidence is refused, and a directory that holds no challenger has no key to give (`NO_HOST`). The key's leaves
+    are spent across the sessions and never reused: the later session signs at leaves after the earlier's, as many
+    again, within the key's `LOCAL_PARAMS` height."""
+    rule, design, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
+    host, roots, sessions, spent = tmp_path / "kept", (ROOT, "ef" * 64), [], []
+    with pytest.raises(Ch.CoinError, match="holds no development challenger"):
+        AC.local_key(host)
+    for i, root in enumerate(roots):
+        manager, turns, opener = local(tmp_path, monkeypatch, [0], root, f"challenger-{i}", host=host)
+        try:
+            coins = AC.RankCoins(turns, 0)
+            coins.plan(need_of(rule, SILU_MUL))
+            coins.commit(AFTER)
+            S.select_draw(S.Law(rule), design, n, coins)
+            segment = coins.drawn()
+            turns.skip(0)
+            opener.join()
+            published, ours = turns.evidence(), AC.held(turns)
+        finally:
+            manager.shutdown()
+        assert "error" not in published, published.get("error")
+        sessions.append((AC.evidence(published, segment), ours, bytes(coins.read)))
+        spent.append(json.loads((host / "var" / "key" / "state.json").read_text())["next"])
+    (first, held, _), (later, again, _) = sessions
+    assert held == again and held["key"] == AC.local_key(host)
+    assert later["ledger"][:len(first["ledger"])] == first["ledger"] and len(later["ledger"]) > len(first["ledger"])
+    assert first["session"] != later["session"]
+
+    def reason(k: int, root: str, key: Ch.ChallengerKey = held["key"]) -> str | None:
+        evidence, _, read = sessions[k]
+        return CC.coins_reason(key, held["main"], evidence, root, AC.family(0), AFTER, read, AC.lms_verify)
+    assert [reason(k, root) for k, root in enumerate(roots)] == [None, None]
+    assert reason(0, roots[1]) is not None and reason(1, roots[0]) is not None
+    own = AC.Local(tmp_path / "own", held["main"]).key
+    assert own != held["key"] and all(reason(k, root, own) is not None for k, root in enumerate(roots))
+    assert 0 < spent[0] and spent[1] == 2 * spent[0] <= 2 ** AC.LOCAL_PARAMS[1]
 
 
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
     """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
-    rank samples in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
-    rule, law, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
-    manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
+    rank samples in its turn from its own family's first coin, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did
+    on each of its 8 ranks."""
+    rule, design, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
+    manager, turns, opener = local(tmp_path, monkeypatch, [0, 1])
     segments: dict[int, dict] = {}
 
     def rank(r: int) -> None:
-        coins = AC.RankCoins(draws, r)
+        coins = AC.RankCoins(turns, r)
         coins.plan(need_of(rule, SILU_MUL))
         coins.commit(bytes([r]) * Ch.COIN_BYTES)
-        S.select_draw(S.Law(rule), law, n, coins)
+        S.select_draw(S.Law(rule), design, n, coins)
         segments[r] = coins.drawn()
-        draws.skip(r)
+        turns.skip(r)
     try:
         other = threading.Thread(target=rank, args=(1,))
         other.start()
         rank(0)
         other.join()
         opener.join()
-        published = draws.evidence()
+        published = turns.evidence()
     finally:
         manager.shutdown()
     assert "error" not in published, published.get("error")
-    assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == [[AC.FAMILY, 33]]
+    assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == layout(16, 16)
     assert sorted(segments) == [0, 1] and all(len(s["openings"]) == 4 for s in segments.values())
-    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 4 + 4}
+    assert [(segments[r]["label"], segments[r]["start"]) for r in (0, 1)] == [(AC.family(0), 0), (AC.family(1), 0)]
+    assert published["trusted"]["released"] == {AC.WINDOW_FAMILY: 1, AC.family(0): 4, AC.family(1): 4}
 
 
 def test_a_too_small_reserve_is_refused_before_the_session_opens(tmp_path, monkeypatch):
     """A reserve short of the need refuses the rank's plan, naming both, and the local host reserves nothing."""
-    manager, draws, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: [[AC.FAMILY, 17]])
+    manager, turns, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: layout(16))
     try:
-        with pytest.raises(Ch.CoinError, match=r"need 26 draw coins .* holds 17: the root's one session was not opened"):
-            AC.RankCoins(draws, 0).plan(25)
-        draws.skip(0)
+        with pytest.raises(Ch.CoinError, match=r"need \{'window': 1, 'draw/0': 25\} coins .* holds fewer of "
+                                               r"\['draw/0'\]: the root's one session was not opened"):
+            AC.RankCoins(turns, 0).plan(25)
+        turns.skip(0)
         opener.join()
-        published = draws.evidence()
+        published = turns.evidence()
     finally:
         manager.shutdown()
-    assert published["plan"] == {"needs": {"0": 25}, "families": [[AC.FAMILY, 17]], "session": None}
+    assert published["plan"] == {"needs": {"0": 25}, "families": layout(16), "session": None}
     assert nothing_reserved(tmp_path)
 
 
 def test_a_rank_that_ends_before_planning_opens_nothing(tmp_path, monkeypatch):
     """A rank refused before its sample (or failed) ends without planning, so no rank's sample opens the session."""
-    manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
+    manager, turns, opener = local(tmp_path, monkeypatch, [0, 1])
     try:
-        draws.skip(1)
+        turns.skip(1)
         with pytest.raises(Ch.CoinError, match=r"rank\(s\) \[1\] ended before planning their draw"):
-            AC.RankCoins(draws, 0).plan(6)
-        draws.skip(0)
+            AC.RankCoins(turns, 0).plan(6)
+        turns.skip(0)
         opener.join()
-        published = draws.evidence()
+        published = turns.evidence()
     finally:
         manager.shutdown()
     assert published["plan"]["session"] is None and "was not opened" in published["error"]

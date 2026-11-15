@@ -1,6 +1,6 @@
-"""Every build gate on ptxas's report and cuobjdump's SASS (`harness/sass_gate.py`'s `mma_gate`, through each kernel's own
-`sass_gate.py`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in `fixtures/mma_gate/verdicts.json`
-(sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
+"""Every build gate on ptxas's report and cuobjdump's SASS (`verity/protocols/accounting/pouw/prover/sass_gate.py`'s `mma_gate`,
+through each kernel's own `sass_gate.py`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in
+`fixtures/mma_gate/verdicts.json` (sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
 
 The cases: a clean listing of every kernel the gate wants (`pass`, and `pass_sm120a` for a gate given ARCH), the same with
 one of each refusal (`refused`), and the harness's real sm_120a `cuobjdump -sass` listings (`fixtures/sass_gate/plain` and
@@ -24,10 +24,9 @@ FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
 GATES = {"pearl_c_sm90": ("benchmarks/pouw/pearl_c_sm90/sass_gate.py", None),
          "pearl_c_sm120": ("benchmarks/pouw/pearl_c_sm120/sass_gate.py", None),
-         "s8_linear": ("benchmarks/torch_gpu/s8_linear/sass_gate.py", None),
-         "attn_bf16": ("benchmarks/torch_gpu/attn_bf16/sass_gate.py", "sm_90a")}
+         "s8_linear": ("benchmarks/torch_gpu/s8_linear/sass_gate.py", None)}
 #: the arch each gate's real-listing cases are reported for
-REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a", "attn_bf16": "sm_120a"}
+REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a"}
 
 
 def _load(gate: str):
@@ -157,31 +156,6 @@ def s8_linear(arch: str, bad: bool) -> tuple[str, str]:
     return "".join(p), s.text()
 
 
-def attn_bf16(arch: str, bad: bool) -> tuple[str, str]:
-    G = _load("attn_bf16")
-    p, s = [], Listing()
-    for name, want in G.WANT.items():
-        if bad and name == "attn_pv_d64_ref":
-            continue
-        p.append(entry(name, arch, regs=40, used=not (bad and name == "attn_qk_d64_h8"), spills=8 if bad and name == "attn_pv_d128" else 0))
-        s.fn(name)
-        s.ins("HFMA2.MMA R4, -RZ, RZ, 0, 0")
-        s.ins("FSEL R5, R5, RZ, !P0")
-        s.ins("HMMA.16816.F32.BF16 R4, R8, R12, R4", (want or 1) - (bad and name == "attn_qk_d64"))
-        if bad and name == "attn_pv_d64":
-            s.ins("FFMA R3, R4, R5, R6")
-            s.ins("FSEL R3, -R4, R5, P0")
-        if bad and name == "attn_qk_d128":
-            s.ins("HMMA.1688.F32.TF32 R4, R8, R12, R4")
-            s.ins("IGMMA.64x8x32.S8.S8 R4, R8")
-        if not (bad and name == "attn_pv_d128_s16"):
-            s.ins("F2FP.BF16.F32.PACK_AB R3, R5, R4")
-        s.ins("EXIT")
-    if bad:
-        p.append("ptxas warning : Registers are spilled\n")
-    return "".join(p), s.text()
-
-
 def real(gate: str, listing: str) -> tuple[str, str]:
     sass = (FIX / "sass_gate" / f"{listing}.cuobjdump.txt").read_text()
     names = dict.fromkeys(re.findall(r"Function : (\w+)", sass))
@@ -226,6 +200,15 @@ def test_sass_functions_takes_each_functions_lines_and_a_repeated_header_starts_
     H = _load("pearl_c_sm90").H
     listing = "code for sm_90a\n  Function : a\n  /*0000*/ X ;\n  Function : b\n  /*0000*/ Y ;\n  Function : a\n  /*0000*/ Z ;\n"
     assert H.sass_functions(listing) == {"a": ["  /*0000*/ Z ;"], "b": ["  /*0000*/ Y ;"]}
+
+
+def test_an_hfma2_mma_constant_load_is_no_mma_form():
+    """ptxas loads a constant with an HFMA2.MMA of -RZ and RZ in most kernels; the gate's MMA pattern takes the tensor-core
+    forms beside it and not that, so no `allowed` has to name it."""
+    H = _load("pearl_c_sm90").H
+    forms = lambda text: [m.group(0) for m in H.MMA.finditer(text)]  # noqa: E731
+    assert forms("HFMA2.MMA R4, -RZ, RZ, 0, 0") == []
+    assert forms("HMMA.16816.F32.BF16 R4, R8, R12, R4") == ["HMMA.16816.F32.BF16"]
 
 
 def test_every_case_is_pinned_and_every_pin_is_a_case():

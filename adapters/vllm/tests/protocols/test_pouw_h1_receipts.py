@@ -18,11 +18,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+import pytest
 import torch
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 from verity_vllm.protocols.pouw.h1 import registered as NR
@@ -89,13 +90,14 @@ class Window:
     def roots(self, c: int) -> tuple[bytes, bytes]:
         """Call c's (root(a/<K>@<s>), root(b/<K>)) as the record registers them."""
         k, s = int(self.calls[c]["k"]), int(self.calls[c]["step"])
-        return tuple(bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
+        a, b = (bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
+        return a, b
 
     def operands(self, c: int) -> tuple[np.ndarray, np.ndarray]:
         """Call c's A over the Program's M slots (its served codes as the prover kept them, then zero rows) and its B."""
         row = self.calls[c]
         k, m = int(row["k"]), int(row["served"])
-        a = np.zeros((int(self.layout["m"]), k), np.int8)
+        a: np.ndarray = np.zeros((int(self.layout["m"]), k), np.int8)
         if m:
             with np.load(self.prover / PV.CALLS / f"{c}.npz") as kept:
                 a[:m] = kept["a"].reshape(m, k)
@@ -140,9 +142,24 @@ def test_serving_computes_on_the_served_weights_in_place_and_binds_the_run_once_
     assert made.weight_of(call, None) is layers[1].weight
     assert made.bind(run).run is run
     bare = RC.Receipts.serving(served, run, [layers[0], SimpleNamespace()])
-    handed = np.ones((32, 64), np.int8)
+    handed: np.ndarray = np.ones((32, 64), np.int8)
     got = bare.weight_of(call, handed)
     assert got is not layers[1].weight and np.array_equal(got.numpy(), handed) and bare.weight_of(call, handed) is got
+
+
+def test_a_windows_roots_are_the_roots_its_record_registers_once_for_the_calls_operands():
+    """`Window.roots`: call c's pair is the root of ``a/<K>@<s>`` and the root of ``b/<K>`` under the window's prefix,
+    each the record's one entry of that name; a name the record registers twice, or not at all, is the reader's refusal."""
+    window = object.__new__(Window)
+    window.prefix, window.calls = "p/", {3: {"k": 64, "step": 2}}
+    window.entries = {"p/a/64@2": [{"root": RA.hex()}], "p/b/64": [{"root": RB.hex()}]}
+    assert window.roots(3) == (RA, RB)
+    window.entries["p/b/64"].append({"root": RA.hex()})
+    with pytest.raises(AssertionError, match=r"^the window registers p/b/64 2 times, not once"):
+        window.roots(3)
+    del window.entries["p/a/64@2"]
+    with pytest.raises(AssertionError, match=r"^the window registers p/a/64@2 0 times, not once"):
+        window.roots(3)
 
 
 def test_the_producers_receipt_is_the_word_references_and_its_lane_partials_xor_to_it():
@@ -150,7 +167,8 @@ def test_the_producers_receipt_is_the_word_references_and_its_lane_partials_xor_
     position, a live and a dead row block alike, and the combine's ok on the live proof block's lane partials and its
     receipt is 1; one flipped receipt bit and it is 0."""
     rng = np.random.default_rng(20261101)
-    a, b, u0 = np.zeros((64, 64), np.int8), rng.integers(-127, 128, (32, 64), dtype=np.int8), 10
+    a: np.ndarray = np.zeros((64, 64), np.int8)
+    b, u0 = rng.integers(-127, 128, (32, 64), dtype=np.int8), 10
     a[:20] = rng.integers(-127, 128, (20, 64), dtype=np.int8)
     got = RC.call_receipts(RC.Call(torch.from_numpy(a), torch.from_numpy(b)), SALT, u0, RA, RB)
     assert got.shape == (2, 2 * (64 // 32 + 2))

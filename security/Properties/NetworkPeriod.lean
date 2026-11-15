@@ -7,14 +7,14 @@ public import Mathlib.Algebra.BigOperators.Fin
 # The network period check's bound: what its `K` counts in each form (`NetworkCheck.Period`)
 
 On acceptance, `NetworkCheck.Period.check` publishes `K`, the sum of a ceiling of `log2` of each factor of
-`NetTiming.Guarantees.PeriodLeakAccepted`'s count at the number the check reads for it: `terms`'s in the clock form,
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`'s count at the number the check reads for it: `terms`'s in the clock form,
 `rowsTerms`'s in the rows form. A sum of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of
 the count, not equal to it; `ClockKBoundsCount` and `RowsKBoundsCount` say the count at the check's numbers is at most
 `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves both.
 
 The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`
 windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k))`. A reader of `K` (the
-communication audit's bridge to `PeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
+communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
 supplies each of the statement's quantities as at most the check's number:
 
 - in the clock form the windows are the compute audits: `#Ss ≤ #Σ_sync ^ (link-windows)` (each link-window under one
@@ -56,7 +56,7 @@ namespace Properties.NetworkPeriod
 
 open NetworkCheck.Period
 
-/-- **The clock form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
+/-- **The clock form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, `n` compute audits `a` and their facts `w`, the jitter bound `jitter`, `#Σ_sync` `syncs` and `windows`
 link-windows: `#Ss` at `syncs ^ windows` (`schedules`), `∏_c (cap_c + 1)` at `∏_j (caps j + 1)` (`cells`), and audit
 `i`'s `2^#(free inputs)` at `2 ^ (a i).free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · (a i).bits)` (each of
@@ -68,7 +68,7 @@ def ClockKBoundsCount : Prop :=
         2 ^ ((w i).wrong * (a i).bits) * jitter ^ (a i).steps)) ≤
       2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
-/-- **The rows form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
+/-- **The rows form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, the facts `w` of `n` link-windows' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
 slot entry bits their tied audits' incorrect proof blocks can set `faulty` (`faultyEntries`), under one scan's terms `scan`, the
 jitter bound `jitter` and the charged audits' facts `charged`: `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)`

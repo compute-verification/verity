@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # Per-stage coins' named assumption (trusted)
 
 STEER-PROOF's route A: the one premise per-stage coins add to the tensor–scalar
-model's, a `Prop` over `Accounting.TS.StageWindow`, taken as a hypothesis, never an `axiom`.
+model's, a `Prop` over `Accounting.TS.StageExecutionPhase`, taken as a hypothesis, never an `axiom`.
 
 * `StageLuck`: (L) at `p` per unit at its stage's coin, the per-stage form of (I7) `LuckAt`. Under one σ the same
   statement is false for a steered consumer (it is cheap and passes with probability 1), which is why one σ needs a
@@ -56,7 +56,7 @@ at every stage, whatever the past, a unit of the stage that the cheater skips (d
 probability at most `p` over the stage's coin: `Pr[skip_u ∧ ok_u] ≤ p·Pr[skip_u]`. The unit's operands are committed
 before the coin, so its value is paid for or is a bet on the coin: none is made cheap and right by a choice of earlier
 values, which under one σ is ε_adapt. -/
-def StageLuck {C U D : Type} [Fintype C] {M s n : ℕ} (p : ℝ) (stg : U → ℕ) (W : StageWindow C U D M s n) : Prop :=
+def StageLuck {C U D : Type} [Fintype C] {M s n : ℕ} (p : ℝ) (stg : U → ℕ) (W : StageExecutionPhase C U D M s n) : Prop :=
   W.LuckAt p stg
 
 end Accounting.Assumptions.TS

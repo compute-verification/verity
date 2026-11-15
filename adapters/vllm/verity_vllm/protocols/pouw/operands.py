@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.protocol import Context as UnitContext
-from verity.protocols.pouw.prover.schemes import ncp
+from verity.protocols.accounting.pouw.prover.schemes import ncp
+from verity.protocols.accounting.pouw.verifier.protocol import Context as UnitContext
 
 _INV63 = np.float32(1.0) / np.float32(63.0)
 _M32 = 0xFFFFFFFF

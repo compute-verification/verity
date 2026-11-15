@@ -20,7 +20,7 @@ window closes at its deadline.
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
 leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
 the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/protocols/poub/verifier` is the interface). It is regenerated, not tracked: the repository's data
+`verity/protocols/accounting/poub/verifier` is the interface). It is regenerated, not tracked: the repository's data
 budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
@@ -41,13 +41,13 @@ if __package__ in (None, ""):
 else:
     from . import store as S
 
-from verity.protocols.pous.verifier import setup
-from verity.protocols.pous.verifier.schemes.p2 import expand_prefix
-from verity.protocols.poub.verifier import audit, coins, p2, receipts
+from verity.protocols.accounting.pous.verifier import setup
+from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
-FIXTURE_SHA512 = ("3f7f42d0121114b5f974c818fda2aabe00ab5694ed29e4f2b60f96381d27f24d"
-                  "21a670c89a9c109e3d2bf5f8727372a369a3b7a4ee83c4445a7bef3bb50d3cc3")
+FIXTURE_SHA512 = ("4108408908b13f0b4b7912ce55ecc92c70f37ec71afc8f0b65e9b421831b08f6"
+                  "6b824180d631d850c0190801432c68cdf324f942640f7799a561eff22d1b3840")
 NODE = b"p2-toy-node"
 EMBED = b"verity-pous/p2-serve/toy/embedding/v0\0"
 FIXTURE_CHALLENGE = hashlib.sha512(b"verity-pous/p2-serve/fixture/challenge/v0").digest()[:receipts.CHALLENGE_BYTES]
@@ -272,7 +272,7 @@ def fixture(passes: int = 2) -> dict:
         previous = root
     return {
         "schema": FIXTURE_SCHEMA,
-        "interface": "verity/protocols/poub/verifier/PROTOCOL.md §11",
+        "interface": "verity/protocols/accounting/poub/verifier/PROTOCOL.md §11",
         "store": {"toy": "toy.json", "c_star_sha512": doc["c_star_sha512"], "blocks": store.params.blocks,
                   "units": units, "unaudited": list(range(p2.UNIT_BLOCKS * units, store.params.blocks))},
         "registration": {"node": NODE.hex(), "rows": reg.rows, "digest": reg.digest.hex()},

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
 from verity.definitions.registry import b1
@@ -161,11 +160,11 @@ def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
     names = [n for n, _ in _root_named(p_l)]
     assert names == _lserve_names(D_MAX, len(EOS))
     # every named unlifted root node ↦ a lifted body node of the same gate count, in the same order (monotone), covering the body
-    u, l = _root_named(p_u), dict(_body_named(p_l))
-    assert len(u) == len(l) and [n for n, _ in u] == [n for n, _ in _body_named(p_l)]
+    u, lifted = _root_named(p_u), dict(_body_named(p_l))
+    assert len(u) == len(lifted) and [n for n, _ in u] == [n for n, _ in _body_named(p_l)]
     covered, prev_hi = 0, -1
     for name, cu in u:
-        cl = l[name]
+        cl = lifted[name]
         assert cl.hi - cl.lo == cu.hi - cu.lo, name
         assert cl.lo >= prev_hi  # monotone: the lifted map is the unlifted one with the guard nodes spliced in
         prev_hi = cl.hi

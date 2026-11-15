@@ -17,8 +17,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     proved block range, and `test_cublas_train` holds that shape to the capture's words."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops import gemm as G
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import cublas_bf16 as CB
 
     HOP = word_of(BG.HopperBF16WgmmaDot16)
@@ -54,7 +54,7 @@ def _boolean_roots() -> list[Any]:
     GEMM at T = 40 of K = 48, N = 3.  The f32-out, batched, bf16-workspace, serial, grid.z and padded ones again on the
     training routes' step (`CB.TRAIN_DOT`, `HopperBF16WgmmaDot16_v3`)."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import cublas_bf16 as CB
 
     HOP, TRAIN = BG.HopperBF16WgmmaDot16, CB.TRAIN_DOT

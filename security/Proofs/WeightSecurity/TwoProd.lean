@@ -162,9 +162,9 @@ noncomputable def twoAtRec (H : Msg → Msg) (L : CompiledTwo Coin A) (val : ℕ
 statement `x` and the prover `P` its strategy sends, with the count and the escape there (`regCountAt`, `escAt`). -/
 noncomputable def twoAtRun (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (T : ℕ)
-    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
+    (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
     Verity.Game (List (ServedEsc O V Tick Adv)) :=
-  periodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  monitoringPeriodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))) 0 T s
 
@@ -178,8 +178,8 @@ Outside it, when every verification phase is accepted, the escapes multiply to a
 however many verification phases the period has. -/
 def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
-  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
-    (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) →
     ∀ δ : ℝ, Verity.Game.value
         (fun l : List (ServedEsc O V Tick Adv) =>
@@ -198,8 +198,8 @@ and it gives `PeriodTwoProd`: a run whose verification phases are all accepted e
 incorrect proof block or multiplies every phase's escape. -/
 def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
-  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
-    (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) →
     ∀ δ : ℝ, Verity.Game.value (ServedEsc.UndetectedBelow δ) (twoAtRun H Lv val T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)

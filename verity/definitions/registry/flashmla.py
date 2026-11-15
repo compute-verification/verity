@@ -76,11 +76,11 @@ import numpy as np
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.fp32 import Bf16MulBf16, F32AddV2, F32FmaV2, F32MulV2, GuardNegInfZero
-from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
-from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz
-from verity.definitions.ops.prims import E4m3ToF32, F2fpBf16, HopperBF16WgmmaDot16, const
-from verity.definitions.ops.scalar import (BitAnd, BitNot, F32Eq, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Eq, I32Le, SelectBf16,
+from verity.circuits.ops.fp32 import Bf16MulBf16, F32AddV2, F32FmaV2, F32MulV2, GuardNegInfZero
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.ops.prims import E4m3ToF32, F2fpBf16, HopperBF16WgmmaDot16, const
+from verity.circuits.ops.scalar import (BitAnd, BitNot, F32Eq, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Eq, I32Le, SelectBf16,
                                            SelectF32)
 from verity.definitions.numerics import flashmla_twin
 from verity.definitions.registry import dsa as D

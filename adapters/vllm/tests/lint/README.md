@@ -33,6 +33,13 @@ failure message carries its fix.
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
  can't read, or puts a default where a value was, shrinks the evidence a verdict is decided on and leaves no trace of it.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
+- **Decimal reads** (`test_isdecimal.py`, no allowlist): in `verity_vllm/`, a string is asked whether it is a number
+ with `str.isdecimal`, never with `str.isdigit` or `str.isnumeric`. `int` reads the decimal digits and no other digit
+ (`"²".isdigit()` is true, and `int("²")` raises), so a line that asks `isdigit` and then calls `int` raises `int`'s
+ bare `ValueError` where it has an answer of its own for "no number", and a line that calls no `int` takes `²` for a
+ number. `bytes` has no `isdecimal`: a place that reads bytes asks their latin-1 text
+ (`b.decode("latin-1").isdecimal()`), which answers as `b.isdigit()` does. `tests/test_decimal_reads.py` holds one case
+ for each kind of place: one that refuses by name, one that answers None, one that sorts, one that reads bytes.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **vLLM's surface** (`test_vllm_surface.py`, list `vllm_surface.py`): every vLLM module the library imports whole, and
@@ -137,3 +144,18 @@ To retire an entry, fix what it allows and delete it: its rule's stale-entry che
 `test_no_new*` tests are the ones the gate runs, under the Python that runs it (with the pinned ruff, for the ruff lint), so
 `test_ratchet.py` holds every lint to having one that takes no fixture, to a `NAME` that is a string literal, and to
 importing only the standard library and this directory.
+
+**What other code reads from these tests.** A test in another directory of `tests/` imports four modules. Three name what
+they offer in `__all__`: `tests.fake_vllm` (`install`, `FakeVllm`, `Module`, `Unset`: vLLM stood in for a test, built from
+`vllm_surface.py`), `tests.regression.store_io` (`fetch`, `reachable`, `StoreUnavailable`: a fixture read from the evidence
+store, which `verity/circuits/evaluate`'s difftest loads by path too) and `tests.regression.checks.attempt_provenance`
+(`DEFAULT_QUERY`). The fourth is this directory's `_imports`, for `core` and `core_less_definitions` (which modules of
+`verity` are core), which `conftest.py`'s guard and the four boundary tests of `tests/program/` read. Two files run as
+commands: `python -m tests.regression.rebaseline run`, from `verity_vllm/ops/epoch_row.sh`, and
+`tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
+The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
+(`tools/verity/check/post_train.py`). Read by path: from each lint the gate reads `NAME`, its `test_no_new*` tests and its
+list, and for P9 `_imports.LAYER` and `test_p09_layering.PACKAGE_OF`; the public export rewrites each lint's list,
+`tests/census_roots.txt` and `tests/dead_code_keep.json` (`tools/verity/check/public_export.py`); and
+`benchmarks/census/workloads.json` names files of `tests/regression/expected/`. A change to one of these names, commands
+or formats changes its reader in the same PR.

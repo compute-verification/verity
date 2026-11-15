@@ -10,7 +10,7 @@ body follows, the wave-1 exhaustive GPU tables and the pod difftests that are it
 
 Conventions (checked against the exhaustive GPU tables): every ATen CUDA kernel here converts f32 -> bf16 with the hardware
 `cvt.rn.bf16.f32` (`c10::BFloat16(float)` on sm_80+ is `__float2bfloat16`), so NaN words are 0x7FFF (`F2fpBf16`), not the
-software 0x7FC0. `MufuTanh` (the FA2 softcap's `tanh.approx.f32`) stays a primitive of `registry/prims.py` with its measured table.
+software 0x7FC0. `MufuTanh` (the FA2 softcap's `tanh.approx.f32`) stays a primitive of `verity/definitions/registry/prims.py` with its measured table.
 """
 from __future__ import annotations
 

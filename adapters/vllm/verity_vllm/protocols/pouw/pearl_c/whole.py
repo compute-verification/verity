@@ -29,6 +29,8 @@ from typing import Any
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
 
+__all__ = ["WholeStep"]
+
 #: the key of vLLM's own graphs, captured at start
 VLLM = ("vllm",)
 
@@ -62,7 +64,7 @@ class WholeStep:
             raise ValueError(f"vLLM's graphs of {bad} tokens: a forward is captured whole only when its calls run as graphs "
                              f"(at most {GRAPH_ROWS} rows, filler rows to a multiple of {ROW_ALIGN} included)")
         self.run, self.stack, self.runner, self.mgr = run, stack, runner, mgr
-        self.sets: dict[tuple, dict] = {VLLM: mgr.graphs}
+        self.sets: dict[tuple | None, dict] = {VLLM: mgr.graphs}     # by key; a dispatch with no key asks it for None
         self.calls: dict[tuple, tuple] = {}
         self.counts = {"replayed": 0, "staged": 0, "eager": 0, "captured": 0}
         self.preparing = False

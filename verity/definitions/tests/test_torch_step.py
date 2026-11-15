@@ -16,10 +16,10 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.ops.boolean import cast as CA
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import mufu as BMU
+from verity.circuits.ops.boolean import cast as CA
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BMU
 from verity.definitions.numerics import program_walk as PW
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.numerics import torch_step as NS

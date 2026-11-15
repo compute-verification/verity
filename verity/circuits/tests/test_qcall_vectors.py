@@ -22,8 +22,8 @@ from verity.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import I32Add
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import I32Add
 
 PATH = Path(__file__).parent / "qcall_vectors.json"
 REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "

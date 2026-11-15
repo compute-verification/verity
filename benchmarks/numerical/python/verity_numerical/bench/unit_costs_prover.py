@@ -1,23 +1,24 @@
-"""Front F6's prover column: the inner Flock prover's wall time and peak memory per session at each bucket's nonzero
+"""The prover column: the inner Flock prover's wall time and peak memory per session at each bucket's nonzero
 bound, fitted from recorded prover runs, and where a session stops fitting on one node.
 
     python -m verity_numerical.bench.unit_costs_prover --inventory unit-costs.json --out DIR
 
 **Source runs** (:data:`SOURCE`): every ``flock-circuit prove --zk`` record of ``benchmarks/pouw/hidden_zk`` on the Nebius
 nodes (CPU prover, Rust, upstream Flock b684b12 with Flock's patches; Intel Xeon 6776P, 192 CPUs, 1,716 GiB): the session's
-instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in all, the circuit text's bytes (one unit
-netlist shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's wall time
-(circuit load included) and peak RSS (GiB), and the prover's threads.
+instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in all, the circuit text's bytes (one
+unit's description shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's
+wall time (circuit load included) and peak RSS (GiB), and the prover's threads.
 
-**The sampling design** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB), by
-least squares: RSS over every record, unweighted; the times over the 32-thread records, weighted by 1 / y² (relative
-residuals). The fitted coefficients and every residual are in the output.
+**The fit** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB, one
+block's bits 2^k_log / 2^30), prove time without the circuit bytes (:data:`FITS`), by least squares: RSS over every record,
+unweighted; the times over the 32-thread records, weighted by 1 / y² (relative residuals). The fitted coefficients and
+every residual are in the output.
 
 **A session** (:func:`session`) of B slots at bound Z, each slot one unit of at most Z nonzeros with ρ nonzeros per row:
 rows = Z / ρ; ``k_log`` = max(22, ceil(log2(rows + 1)) + 2), the slot rounded up to a power of two and at most doubled again
 by the SHA-512, hm96 and lookup ranges (every recorded block is at least 2^22); D = B 2^k_log; circuit bytes =
-:data:`GLUE_BYTES` + the netlists of the session's distinct unit types (at most B; a session's slots may hold different
-types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`netlists`): a registered type's one
+:data:`GLUE_BYTES` + the descriptions of the session's distinct unit types (at most B; a session's slots may hold different
+types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`descriptions`): a registered type's one
 unit (GEMM's tc-step: 263,933 nonzeros, shared by its K/16 units), a token-select tree's distinct members, a generic type's
 whole subcircuit; never more than Z nonzeros. ρ is the least nonzeros per committed row among the bucket's types (the
 inventory's ``nnz / committed``). A block is at most 2^:data:`K_MAX` bits (``Stmt.InRange``), so a session needing more
@@ -25,37 +26,38 @@ is out of range: flock-circuit refuses it.
 
 **Per workload** (:func:`audit`): the padding table's body in its dp4 buckets at B = 16 and its tail at B = 1
 (``unit_costs_padding``); each shape's sessions (mean and the public 1 − 2⁻⁴⁰ count), its session's RSS and prove time, and
-the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The cap** is the
-largest power of two Z at which a B = 16 session at the workload's least ρ is in range and fits one node's memory
-(:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap
-is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
-ceil(p X / B) for X of its units sampled); every other unit keeps its dp4 bucket.
+the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The limit**
+(:func:`find_limit`; the output's ``cap``) is the largest power of two Z at which a B = 16 session at the workload's least
+ρ is in range and fits one node's memory (:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU fit taken as a bound on
+the CUDA prover's). A unit over the limit is split below the subcircuit into ceil(z / limit) pieces, its pieces in a
+bucket of their own at the limit (sessions ceil(p X / B) for X of its units sampled); every other unit keeps its dp4
+bucket.
 
 **dp4t** (:func:`menu_t`): dp4 places on nonzeros alone, so a rare unregistered type in a bucket of registered ones pads
 every session's slots to its template. dp4t keys the body's buckets by (template class, Z): registered types by their
 registered unit's template (every GEMM tc step one class, at every K), generic types by their whole subcircuit's, each
 class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class sampled fewer than
-:data:`RARE_DRAWS` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
-its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
-the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_DRAWS` times
-as a tc-step-like unit.
+:data:`RARE_SAMPLES` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
+its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The limits are dp4's (the limit search's session
+holds the workload's largest templates). The what-if registers every generic body type sampled at least
+:data:`RARE_SAMPLES` times as a tc-step-like unit.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
-(``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on circuits'
+(``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on the
 staging ladder (:data:`STAGING`); a registered type lowers one unit, at least the measured registered staging
 (:data:`REGISTERED_STAGING`), a generic type its whole subcircuit, a tree its distinct members.
 
 **The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3): V* runs
 the slot sumcheck's verifier and opens the committed bits, so each session's prover adds, apart from Flock's prove, K1 ns
 per entry per rep x entries x reps seconds. A slot's entries are its type's *template*, the registered table: the
-nonzeros of what the circuit text holds for the type (:func:`netlists`: a registered type's one unit, a tree's distinct
+nonzeros of what the circuit text holds for the type (:func:`descriptions`: a registered type's one unit, a tree's distinct
 members, a generic type's whole subcircuit), at most Z. A session's entries are slots x its largest template's (the 16
-slots run as one sumcheck and the type is hidden, so every slot is padded to the session's largest; F4's table pads a
-template to n = 2^ν slots, whose padding pairs the kernel skips; proofs' ``vstar_c3.py`` takes the same shape). K1 is
+slots run as one sumcheck and the type is hidden, so every slot is padded to the session's largest; the sumcheck's table
+pads a template to n = 2^ν slots, whose padding pairs the kernel skips; V*'s ``vstar_c3.py`` takes the same shape). K1 is
 measured per ν: a template of 2^ν entries takes the measurement at the least measured ν' ≥ ν (the last beyond). Its memory
 is the committed bits of the bucket's stacked table (its T distinct templates, T padded to a power of two, each at the
 largest's size; bytes per entry) plus the sumcheck's working set (bytes per entry x the session's entries). A session's
-time is Flock's prove plus the sumcheck, its peak memory Flock's peak RSS plus the sumcheck's, and the cap and the prover
+time is Flock's prove plus the sumcheck, its peak memory Flock's peak RSS plus the sumcheck's, and the limit and the prover
 hours use those.
 """
 from __future__ import annotations
@@ -64,36 +66,71 @@ import argparse
 import json
 import math
 from collections import defaultdict
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
 
 from verity.commitments.windows.interface import K_MAX, PACK_LOG
 
 from . import unit_costs_padding as P
+from .unit_costs import retree
+
+__all__ = [
+    "HIDDEN_ZK",
+    "NODE_GIB",
+    "POSTED_FITS",
+    "REGISTERED_STAGING",
+    "RHO_TABLE",
+    "SLOT_SUMCHECK",
+    "SOURCE",
+    "STAGING",
+    "audit",
+    "check",
+    "descriptions",
+    "find_limit",
+    "fit",
+    "hours",
+    "k1",
+    "lstsq",
+    "main",
+    "menu_t",
+    "pieces_pmf",
+    "pieces_shape",
+    "prover",
+    "render",
+    "rhos",
+    "session",
+    "shape",
+    "staging",
+    "staging_fit",
+    "template_class",
+    "workload",
+]
 
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
 NODE_GIB = 1716
 #: one NVIDIA RTX PRO 6000 Blackwell Server Edition: 97,887 MiB
 GPU_GIB = 97_887 / 1024
 SLOTS = 16
-#: flock-ir-unit/v2 netlist text per nonzero: the largest of four registered units' (``ir_lower.netlist``: GEMM tc-step 4.93,
+#: bytes of flock-ir-unit/v2 text per nonzero: the largest of four registered units' (``ir_lower.netlist``: GEMM tc-step 4.93,
 #: RoPE pair 4.73, SiLU element 4.33, RMSNorm-Triton N=128 6.04)
 BYTES_PER_NNZ = 6.04
-#: the circuit text that is not a unit's netlist (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,
+#: the circuit text that is not a unit's description (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
 POW2 = tuple(range(16, 33))
-CAP_SEARCH = tuple(range(16, 41))
+LIMIT_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
-#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class sampled fewer than :data:`RARE_DRAWS` times
+#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class sampled fewer than :data:`RARE_SAMPLES` times
 #: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
 BUCKETS_T = 8
-RARE_DRAWS = 16
-#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (upper bounds,
+RARE_SAMPLES = 16
+#: candidate 3's slot sumcheck, K1 as measured on vy-nebius-2's 32 threads (upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
-#: and the working set per entry (peak RSS 37 GiB at ν = 28). F4's estimate before it: 13 ns (10-16) at ν = 20.
+#: and the working set per entry (peak RSS 37 GiB at ν = 28).
 SLOT_SUMCHECK: dict[str, Any] = {
     "k1_ns": ((20, 15.2), (28, 26.1)), "band": (((20, 12.2), (28, 19.3)), ((20, 18.2), (28, 32.9))), "reps": 2,
     "bits_bytes": 8.0, "work_bytes": 37 * 2 ** 30 / 2 ** 28,
@@ -165,7 +202,7 @@ HIDDEN_ZK: tuple[tuple[str, str, int, int, int, int, float, float, float, int], 
     ('r20261004-230455-eac8', 'Pc4RowAForm_v1{K=14336,KS=2048,J=5}', 16, 26, 30, 10328215509, 14.938, 222.25, 38.13, 16),
     ('r20261004-230501-ceb4', 'Pc4RowAForm_v1{K=14336,KS=2048,J=6}', 16, 26, 30, 10328215509, 15.1235, 221.66, 37.97, 16),
 )
-#: one GEMM tc-step unit's netlist (rows + A and B nonzeros), the registered unit of every gemm-coordinate K
+#: one GEMM tc-step unit's description (rows + A and B nonzeros), the registered unit of every gemm-coordinate K
 TC_STEP_NNZ = 9473 + 120_833 + 133_627
 #: registered GEMM-coordinate sessions, the column's check (``benchmarks/pouw/hidden_zk/registered.sh``, 16 instances, sm80
 #: bf16, vy-nebius-1): K (each slot K / 16 tc-step units) and the session in :data:`HIDDEN_ZK`'s form. The verifier checks
@@ -178,7 +215,7 @@ REGISTERED_SESSIONS: tuple[tuple[int, tuple[str, str, int, int, int, int, float,
 )
 SOURCE = HIDDEN_ZK + tuple(r for _, r in REGISTERED_SESSIONS)
 
-#: circuits' staging ladder, ``verity_flock`` staging (trace, units, lanes, stage) of a random G-gate class, 2 instances, on
+#: the staging ladder: ``verity_flock`` staging (trace, units, lanes, stage) of a random G-gate class, 2 instances, on
 #: vy-cpu-2: (run, G, ANDs lowered, wall s, peak RSS GiB). G = 4096's ANDs are its report's rounded 17.5M.
 STAGING: tuple[tuple[str, int, int, float, float], ...] = (
     ('r20261009-064739-e959', 256, 110_754, 25.57, 1.08),
@@ -220,18 +257,19 @@ def lstsq(xs: Sequence[Sequence[float]], ys: Sequence[float], ws: Sequence[float
     return _solve(A, b)
 
 
-#: each sampling design's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
-#: circuit text, whose coefficient fitted with it is negative and below its error
-LAWS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
-#: the column as posted at b41137f42: every sampling design over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
-POSTED_LAWS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
+#: each fit's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out
+#: the circuit text, whose coefficient fitted with it is negative and below its error
+FITS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
+#: the column as first posted: every fit over (D, circuit bytes), on :data:`HIDDEN_ZK`
+POSTED_FITS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
 
 
 def features(D: float, cb: float, block: float) -> tuple[float, float, float]:
     return D / 2 ** 30, cb / 2 ** 30, block / 2 ** 30
 
 
-def _law(xs: Sequence[Sequence[float]], ys: Sequence[float], use: Sequence[int], ws: Sequence[float] | None = None) -> list[float]:
+def _coef(xs: Sequence[Sequence[float]], ys: Sequence[float], use: Sequence[int],
+          ws: Sequence[float] | None = None) -> list[float]:
     c = lstsq([[x[j] for j in use] for x in xs], ys, ws)
     out = [c[0], 0.0, 0.0, 0.0]
     for j, v in zip(use, c[1:]):
@@ -243,12 +281,12 @@ def _at(c: Sequence[float], x: Sequence[float]) -> float:
     return c[0] + sum(a * v for a, v in zip(c[1:], x))
 
 
-def fit(source: Sequence[tuple] = SOURCE, laws: Mapping[str, Sequence[int]] = LAWS) -> dict[str, Any]:
-    """The three laws over ``laws``' features and each record's residuals."""
+def fit(source: Sequence[tuple] = SOURCE, fits: Mapping[str, Sequence[int]] = FITS) -> dict[str, Any]:
+    """The three fits over ``fits``' features and each record's residuals."""
     xs = [features(2.0 ** r[4], r[5], 2.0 ** r[3]) for r in source]
     t32 = [i for i, r in enumerate(source) if r[9] == 32]
-    coef = {"rss_gib": _law(xs, [r[8] for r in source], laws["rss_gib"]),
-            **{k: _law([xs[i] for i in t32], [source[i][j] for i in t32], laws[k], [source[i][j] ** -2 for i in t32])
+    coef = {"rss_gib": _coef(xs, [r[8] for r in source], fits["rss_gib"]),
+            **{k: _coef([xs[i] for i in t32], [source[i][j] for i in t32], fits[k], [source[i][j] ** -2 for i in t32])
                for k, j in (("prove_s", 6), ("wall_s", 7))}}
     points = []
     for r, x in zip(source, xs):
@@ -266,9 +304,9 @@ def fit(source: Sequence[tuple] = SOURCE, laws: Mapping[str, Sequence[int]] = LA
 
 def check(coef: Mapping[str, Sequence[float]], before: Sequence[tuple] = HIDDEN_ZK) -> list[dict[str, Any]]:
     """Each registered session against what the column predicted for it: the fit on ``before`` (the column as posted) at its
-    measured D and circuit bytes, and its bound Z under the posted session model (each slot its own netlist of Z nonzeros,
-    ρ = :data:`RHO_TABLE`), next to this model's prediction (one tc-step netlist, ``coef``)."""
-    old = fit(before, POSTED_LAWS)["coef"]
+    measured D and circuit bytes, and its bound Z under the posted session model (each slot its own description of Z
+    nonzeros, ρ = :data:`RHO_TABLE`), next to this model's prediction (one tc-step description, ``coef``)."""
+    old = fit(before, POSTED_FITS)["coef"]
     out = []
     for K, r in REGISTERED_SESSIONS:
         Z = K // 16 * TC_STEP_NNZ
@@ -293,8 +331,8 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
             glue: float = GLUE_BYTES, nets: Sequence[float] | None = None,
             slot: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One session of ``slots`` slots at bound Z (the module docstring): its rows per slot, k_log, whether it is in range, D,
-    circuit bytes, and the laws' RSS (GiB), prove and process wall seconds. ``nets``: the netlist bytes of the unit types
-    it may hold (None: each slot a netlist of its own Z nonzeros). ``slot``: the slot sumcheck's coefficients
+    circuit bytes, and the fits' RSS (GiB), prove and process wall seconds. ``nets``: the description bytes of the unit
+    types it may hold (None: each slot a description of its own Z nonzeros). ``slot``: the slot sumcheck's coefficients
     (:data:`SLOT_SUMCHECK`; None: no slot sumcheck), adding its entries, seconds and GiB, and the session's total seconds
     and peak GiB."""
     rows = Z / rho
@@ -328,16 +366,17 @@ def k1(ns: float | Sequence[tuple[int, float]], template: float) -> float:
     return next((v for m, v in pts if m >= nu), pts[-1][1])
 
 
-def cap(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int = SLOTS, **kw: Any) -> float | None:
+def find_limit(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int = SLOTS,
+               **kw: Any) -> float | None:
     """The largest power of two Z in 2^16..2^40 whose session is in range and whose peak (Flock's and the slot
     sumcheck's) fits ``gib`` (None when none does)."""
-    fits = [2.0 ** j for j in CAP_SEARCH
+    fits = [2.0 ** j for j in LIMIT_SEARCH
             if (s := session(2.0 ** j, rho, coef, slots, **kw))["in_range"] and s["peak_gib"] <= gib]
     return max(fits) if fits else None
 
 
-def netlists(inv: Mapping[str, Any], workload: str, bytes_per_nnz: float = BYTES_PER_NNZ) -> dict[str, dict[str, Any]]:
-    """Each unit type's netlist in the circuit text (the module docstring): its kind, nonzeros, bytes and the ANDs staging
+def descriptions(inv: Mapping[str, Any], workload: str, bytes_per_nnz: float = BYTES_PER_NNZ) -> dict[str, dict[str, Any]]:
+    """Each unit type's description in the circuit text (the module docstring): its kind, nonzeros, bytes and the ANDs staging
     lowers."""
     out = {}
     for r in inv["rows"]:
@@ -365,10 +404,10 @@ def staging_fit(ladder: Sequence[tuple] = STAGING) -> dict[str, list[float]]:
             "peak_gib": lstsq(xs, [r[4] for r in ladder], [r[4] ** -2 for r in ladder])}
 
 
-def staging(net: Mapping[str, Any], law: Mapping[str, Sequence[float]],
+def staging(net: Mapping[str, Any], coef: Mapping[str, Sequence[float]],
             registered: Sequence[tuple] = REGISTERED_STAGING) -> dict[str, float]:
-    """One template shape's staging: the sampling design at the ANDs it lowers, a registered type's at least its measured staging."""
-    out = {k: _at(c, [net["ands"] / 1e6]) for k, c in law.items()}
+    """One template shape's staging: the fit at the ANDs it lowers, a registered type's at least its measured staging."""
+    out = {k: _at(c, [net["ands"] / 1e6]) for k, c in coef.items()}
     if net["kind"] == "registered" and registered:
         out = {"wall_s": max(out["wall_s"], *(r[4] for r in registered)),
                "peak_gib": max(out["peak_gib"], *(r[5] for r in registered))}
@@ -388,7 +427,7 @@ def rhos(inv: Mapping[str, Any], workload: str) -> dict[str, float]:
 
 
 def _held(us: Sequence[P.Unit], nets: Mapping[str, Mapping[str, Any]] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """``session``'s netlists for a bucket of ``us`` (none without ``nets``), and the bucket's largest staging."""
+    """``session``'s descriptions for a bucket of ``us`` (none without ``nets``), and the bucket's largest staging."""
     if nets is None:
         return {}, None
     st = [dict(nets[u.label]["staging"], unit_type=u.label, kind=nets[u.label]["kind"]) for u in us
@@ -480,7 +519,7 @@ def template_class(u: P.Unit, nets: Mapping[str, Mapping[str, Any]] | None) -> t
 
 
 def menu_t(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[str, Any]] | None,
-           budget: int = BUCKETS_T, rare: float = RARE_DRAWS) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
+           budget: int = BUCKETS_T, rare: float = RARE_SAMPLES) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
                                                                        list[P.Unit]]:
     """``dp4t``: the body's buckets keyed by (template class, Z), and its rare types. Every GEMM tc step shares one class
     (one registered unit at every K). A class sampled at least ``rare`` times per audit gets one bucket, and the rest of
@@ -548,26 +587,26 @@ def audit(N: int, K: int, units: Sequence[P.Unit], rho: Mapping[str, float], coe
 
 
 def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[float]],
-             slaw: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
+             staging_coef: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
              **kw: Any) -> dict[str, Any]:
-    """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
-    type sampled at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
+    """One workload's audit under ``menu``, unsplit and at each limit. ``register_bulk``: a what-if with every generic body
+    type sampled at least :data:`RARE_SAMPLES` times per audit registered as a GEMM tc-step-like unit (its template, circuit
     text and staging those of one tc step)."""
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)
     rho = rhos(inv, name)
-    nets = netlists(inv, name, kw.get("bytes_per_nnz", BYTES_PER_NNZ))
+    nets = descriptions(inv, name, kw.get("bytes_per_nnz", BYTES_PER_NNZ))
     body, _tail, _thr = P.tail_split(units)
     registered = []
     if register_bulk:
         tc = {"kind": "registered", "nnz": TC_STEP_NNZ, "bytes": kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ,
               "ands": REGISTERED_STAGING[0][3]}
         for u in body:
-            if u.label in nets and nets[u.label]["kind"] == "generic" and K * u.n / N >= RARE_DRAWS:
+            if u.label in nets and nets[u.label]["kind"] == "generic" and K * u.n / N >= RARE_SAMPLES:
                 nets[u.label] = dict(tc)
                 registered.append(u.label)
     for net in nets.values():
-        net["staging"] = staging(net, slaw or staging_fit())
+        net["staging"] = staging(net, staging_coef or staging_fit())
     r0 = min((rho.get(u.label, RHO_TABLE) for u in body), default=RHO_TABLE)
     kw = {**kw, "menu": menu}
     unsplit = audit(N, K, units, rho, coef, nets=nets, **kw)
@@ -582,12 +621,12 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
                            "staging": {"shapes": len(stage), "max": max(stage, key=lambda x: x["peak_gib"], default=None),
                                        "total_h": sum(x["wall_s"] for x in stage) / 3600,
                                        "fits_node": all(x["peak_gib"] <= NODE_GIB for x in stage)},
-                           "range_cap": cap(r0, coef, math.inf, nets=every, **ck)}
+                           "range_cap": find_limit(r0, coef, math.inf, nets=every, **ck)}
     for node, gib in (("cpu", NODE_GIB), ("gpu", GPU_GIB)):
-        c = cap(r0, coef, gib, nets=every, **ck)
+        c = find_limit(r0, coef, gib, nets=every, **ck)
         over = [u for u in units if c is not None and u.z > c]
         at = audit(N, K, units, rho, coef, limit=c, nets=nets, **kw) if over else unsplit
-        out[node] = {"gib": gib, "cap": c, "cap_flock": cap(r0, coef, gib, nets=every, **{**ck, "slot": None}),
+        out[node] = {"gib": gib, "cap": c, "cap_flock": find_limit(r0, coef, gib, nets=every, **{**ck, "slot": None}),
                      "fits_unsplit": unsplit["in_range"] and unsplit["max_peak_gib"] <= gib,
                      "split": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
                      "at_cap": at,
@@ -599,8 +638,8 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
 
 
 def hours(a: Mapping[str, Any], k1_ns: Any = None) -> dict[str, Any]:
-    """An audit's prover hours and the slot sumcheck's share of them, mean and public (K1 moves no cap, so the band reruns
-    the audit at the same cap)."""
+    """An audit's prover hours and the slot sumcheck's share of them, mean and public (K1 moves no limit, so the band reruns
+    the audit at the same limit)."""
     r: dict[str, Any] = {"k1_ns": k1_ns}
     for m in ("mean", "public"):
         r[f"prover_h_{m}"] = a[f"prover_h_{m}"]
@@ -608,27 +647,32 @@ def hours(a: Mapping[str, Any], k1_ns: Any = None) -> dict[str, Any]:
     return r
 
 
-def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
+def prover(inv: Mapping[str, Any], fitted: Mapping[str, Any] | None = None,
            slot: Mapping[str, Any] | None = SLOT_SUMCHECK, **kw: Any) -> dict[str, Any]:
-    law = law or fit()
-    coef = law["coef"]
-    slaw = staging_fit()
+    """The prover column of the inventory ``inv`` (``prover.json``): the fit (``fitted``, or :func:`fit`'s) and its
+    :func:`check`, the staging fit, a registered and a generic session at each bound 2^j of :data:`POW2`, and each
+    workload's audit (:func:`workload`) under dp4, under dp4t, and under dp4t with the bulk registered (a what-if).
+    ``slot``: the slot sumcheck's constants, or None for Flock's prove alone."""
+    fitted = fitted or fit()
+    coef = fitted["coef"]
+    staging_coef = staging_fit()
     reg = [kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ] * SLOTS
     kw["slot"] = slot
     names = list(dict.fromkeys(r["workload"] for r in inv["rows"]))
     return {"format": "verity/f6-prover/v3", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
-            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_MAX, "fit": law,
+            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_MAX, "fit": fitted,
             "slot_sumcheck": None if slot is None else {
                 **slot, "entries": "slots x the session's largest template (its type's registered table, at most Z)"},
-            "staging_fit": {"coef": slaw, "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
+            "staging_fit": {"coef": staging_coef,
+                            "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
                             "registered": [dict(zip(("run", "lowering", "K", "ands", "wall_s", "peak_gib"), r))
                                            for r in REGISTERED_STAGING]},
             "check": check(coef),
             "pow2": [{"registered": session(2.0 ** j, RHO_TABLE, coef, nets=reg, **kw),
                       "generic": session(2.0 ** j, RHO_TABLE, coef, **kw)} for j in POW2],
-            "workloads": [workload(inv, w, coef, slaw, **kw) for w in names],
-            "workloads_dp4t": [workload(inv, w, coef, slaw, menu="dp4t", **kw) for w in names],
-            "whatif_registered": [workload(inv, w, coef, slaw, menu="dp4t", register_bulk=True, **kw) for w in names]}
+            "workloads": [workload(inv, w, coef, staging_coef, **kw) for w in names],
+            "workloads_dp4t": [workload(inv, w, coef, staging_coef, menu="dp4t", **kw) for w in names],
+            "whatif_registered": [workload(inv, w, coef, staging_coef, menu="dp4t", register_bulk=True, **kw) for w in names]}
 
 
 # --- rendering ---------------------------------------------------------------------------------------------------------------
@@ -660,40 +704,41 @@ def _k1s(ns: Any) -> str:
                      for i, (m, v) in enumerate(pts))
 
 
-def _slot_law(sl: Mapping[str, Any] | None) -> list[str]:
+def _slot_lines(sl: Mapping[str, Any] | None) -> list[str]:
     if not sl:
         return []
     lo, hi = sl["band"]
-    return [f"- slot sumcheck (candidate 3), K1 {sl['source']}: seconds = K1 x entries x {sl['reps']} reps, K1 = "
-            f"{_k1s(sl['k1_ns'])} (band: {_k1s(lo)} to {_k1s(hi)}); GiB = ({sl['bits_bytes']:.4g} B x the bucket's stacked "
-            f"table, its T templates (T up to a power of two) at the largest's entries, the committed bits, + "
-            f"{sl['work_bytes']:.4g} B x entries, the working set) / 2^30; "
-            "entries = slots x the session's largest template (its type's registered table: a registered type's one unit, "
-            "a tree's distinct members, a generic type's whole subcircuit; at most Z). A session's time is prove + "
-            "sumcheck, its peak RSS + sumcheck memory."]
+    return [(f"- slot sumcheck (candidate 3), K1 {sl['source']}: seconds = K1 x entries x {sl['reps']} reps, K1 = "
+             f"{_k1s(sl['k1_ns'])} (band: {_k1s(lo)} to {_k1s(hi)}); GiB = ({sl['bits_bytes']:.4g} B x the bucket's stacked "
+             f"table, its T templates (T up to a power of two) at the largest's entries, the committed bits, + "
+             f"{sl['work_bytes']:.4g} B x entries, the working set) / 2^30; "
+             "entries = slots x the session's largest template (its type's registered table: a registered type's one unit, "
+             "a tree's distinct members, a generic type's whole subcircuit; at most Z). A session's time is prove + "
+             "sumcheck, its peak RSS + sumcheck memory.")]
 
 
 def _slot_table(pr: Mapping[str, Any]) -> list[str]:
     sl = pr["slot_sumcheck"]
     lo, hi = sl["band"]
     L = ["", f"## Slot sumcheck per workload (K1 {_k1s(sl['k1_ns'])}; {sl['source']})", "",
-         "The heaviest session at the node cap (its Z and its largest template), split into Flock's prove and the slot "
-         "sumcheck; its peak; the caps with the sumcheck and with Flock alone; prover hours per audit at the node cap and "
-         f"the sumcheck's share of them, at K1 and at its band's ends (low: {_k1s(lo)}; high: {_k1s(hi)}).", "",
-         "| workload | cap: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
-         "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
-         "band high: prover h (share) |", "|" + "---|" * 15]
+         ("The heaviest session at the node limit (its Z and its largest template), split into Flock's prove and the slot "
+          "sumcheck; its peak; the limits with the sumcheck and with Flock alone; prover hours per audit at the node limit and "
+          f"the sumcheck's share of them, at K1 and at its band's ends (low: {_k1s(lo)}; high: {_k1s(hi)})."), "",
+         ("| workload | limit: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
+          "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
+          "band high: prover h (share) |"), "|" + "---|" * 15]
     for w in pr["workloads"]:
         n, g, a = w["cpu"], w["gpu"], w["cpu"]["at_cap"]
         s = n["heaviest"]
-        sh = lambda m: a[f"sumcheck_h_{m}"] / a[f"prover_h_{m}"] if a[f"prover_h_{m}"] else 0.0  # noqa: E731
+        h = hours(a)
         bd = [f"{b['prover_h_mean']:.3g} / {b['prover_h_public']:.3g} ({b['share_mean']:.0%})" for b in n["band"]]
         L.append("| " + " | ".join([
             P._short(w["workload"]), f"{_p2(n['cap'])} / {_p2(g['cap'])}", f"{_p2(n['cap_flock'])} / {_p2(g['cap_flock'])}",
             P._si(s["Z"]), P._si(s["template"]), _t(s["prove_s"]), _t(s["sumcheck_s"]), _t(s["total_s"]),
             f"{s['rss_gib']:.3g} GiB",
             f"{s['sumcheck_gib']:.3g} GiB", f"{s['peak_gib']:.3g} GiB",
-            f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}", f"{sh('mean'):.0%} / {sh('public'):.0%}", *bd]) + " |")
+            f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
+            f"{h['share_mean']:.0%} / {h['share_public']:.0%}", *bd]) + " |")
     return L
 
 
@@ -706,12 +751,12 @@ def _names(labels: Sequence[str]) -> str:
 
 def _menu_table(pr: Mapping[str, Any]) -> list[str]:
     L = ["", "## Menus: dp4, dp4t, and dp4t with the bulk unregistered types registered (what-if)", "",
-         "Prover hours per audit at the node cap and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
-         "session at the node cap (Z, its largest template, prove + sumcheck, peak); the caps; the body's padding unsplit "
-         "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
-         f"(generic body types drawn at least {RARE_DRAWS} times per audit, each as one GEMM tc step's template).", "",
-         "| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | cap: node / GPU | "
-         "zpad / pad_mean / public | registered |", "|" + "---|" * 9]
+         ("Prover hours per audit at the node limit and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
+          "session at the node limit (Z, its largest template, prove + sumcheck, peak); the limits; the body's padding unsplit "
+          "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
+          f"(generic body types sampled at least {RARE_SAMPLES} times per audit, each as one GEMM tc step's template)."), "",
+         ("| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | limit: node / GPU | "
+          "zpad / pad_mean / public | registered |"), "|" + "---|" * 9]
     for ws in zip(pr["workloads"], pr["workloads_dp4t"], pr["whatif_registered"]):
         for tag, w in zip(("dp4", "dp4t", "dp4t, registered"), ws):
             n, a, b, p = w["cpu"], w["cpu"]["at_cap"], w["unsplit"]["buckets"], w["unsplit"]["padding"]
@@ -725,8 +770,8 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
                 f"{_p2(n['cap'])} / {_p2(w['gpu']['cap'])}", f"{p['zpad']:.3f} / {p['pad_mean']:.3f} / {p['public']:.3f}",
                 _names(reg) if tag.endswith("registered") else "–",
             ]) + " |")
-    L += ["", "### dp4t buckets, unsplit", "", "| workload | class | Z | slots | types | sessions mean / public | template | "
-          "session: prove + sumcheck | peak | prover h mean |", "|" + "---|" * 10]
+    L += ["", "### dp4t buckets, unsplit", "", ("| workload | class | Z | slots | types | sessions mean / public | template | "
+           "session: prove + sumcheck | peak | prover h mean |"), "|" + "---|" * 10]
     for w in pr["workloads_dp4t"]:
         for x in w["unsplit"]["body"] + w["unsplit"]["rare"]:
             s = x["session"]
@@ -737,30 +782,31 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
 
 
 def render(pr: Mapping[str, Any]) -> str:
+    """``prover.md``: the column ``pr`` (:func:`prover`'s) as text and tables."""
     f = pr["fit"]
     c = f["coef"]
     sc = pr["staging_fit"]["coef"]
-    law = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
+    line = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
-         "Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
-         "the session's bits (slots x 2^k_log); cb: its circuit text, the netlists of its distinct unit types at "
-         f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
-         f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
-         "(Stmt.InRange): flock-circuit refuses a session needing more.", "",
-         f"- peak RSS (GiB) = {law('rss_gib')}; max |residual| {f['max_residual']['rss_gib']:.2f} GiB",
-         f"- prove (s) = {law('prove_s')}; max relative residual {f['max_residual']['prove_s']:.2f}",
-         f"- prover process wall, circuit load included (s) = {law('wall_s')}; max relative residual "
-         f"{f['max_residual']['wall_s']:.2f}",
-         f"- staging, once per template shape (s) = {sc['wall_s'][0]:.4g} + {sc['wall_s'][1]:.4g}·ANDs/10^6; peak (GiB) = "
-         f"{sc['peak_gib'][0]:.4g} + {sc['peak_gib'][1]:.4g}·ANDs/10^6 (circuits' ladder); a registered type at least its "
-         "measured staging",
-         f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU law as "
-         "a bound)", *_slot_law(pr.get("slot_sumcheck")), "",
+         ("Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
+          "the session's bits (slots x 2^k_log); cb: its circuit text, the descriptions of its distinct unit types at "
+          f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
+          f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
+          "(Stmt.InRange): flock-circuit refuses a session needing more."), "",
+         f"- peak RSS (GiB) = {line('rss_gib')}; max |residual| {f['max_residual']['rss_gib']:.2f} GiB",
+         f"- prove (s) = {line('prove_s')}; max relative residual {f['max_residual']['prove_s']:.2f}",
+         (f"- prover process wall, circuit load included (s) = {line('wall_s')}; max relative residual "
+          f"{f['max_residual']['wall_s']:.2f}"),
+         (f"- staging, once per template shape (s) = {sc['wall_s'][0]:.4g} + {sc['wall_s'][1]:.4g}·ANDs/10^6; peak (GiB) = "
+          f"{sc['peak_gib'][0]:.4g} + {sc['peak_gib'][1]:.4g}·ANDs/10^6 (circuits' ladder); a registered type at least its "
+          "measured staging"),
+         (f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU fit as "
+          "a bound)"), *_slot_lines(pr.get("slot_sumcheck")), "",
          "## Check: registered GEMM-coordinate sessions", "",
-         "Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
-         "bound Z: each slot its own netlist of Z nonzeros) and against this model.", "",
-         "| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted law at measured D, cb | this model | "
-         "prove | posted model | posted law | this model |", "|" + "---|" * 14]
+         ("Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
+          "bound Z: each slot its own description of Z nonzeros) and against this model."), "",
+         ("| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted fit at measured D, cb | this model | "
+          "prove | posted model | posted fit | this model |"), "|" + "---|" * 14]
     for r in pr["check"]:
         m, po, la, no = r["measured"], r["posted"], r["law_at_measured"], r["now"]
         L.append(f"| {r['K']} | {r['run']} | {P._si(r['Z'])} | {r['k_log']} | 2^{int(math.log2(r['D']))} | "
@@ -768,14 +814,14 @@ def render(pr: Mapping[str, Any]) -> str:
                  f"{la['rss_gib']:.3g} ({r['rss_gib_vs_law']:+.0%}) | {no['rss_gib']:.3g} | {_t(m['prove_s'])} | "
                  f"{_t(po['prove_s'])} ({r['prove_s_vs_posted']:+.0%}) | {_t(la['prove_s'])} ({r['prove_s_vs_law']:+.0%}) | "
                  f"{_t(no['prove_s'])} |")
-    L += ["", "## Per workload: dp4 at B = 16, unsplit and at the cap", "",
-          "cap: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
-          "sumcheck's) fits; units over it split into ceil(z / cap) pieces. Prover hours: Σ sessions x (prove + slot "
-          "sumcheck) on one prover, body and tail, mean / public session counts. Staging: the dp4 top bucket's largest "
-          "template shape, and the largest of every shape in the workload.", "",
-          "| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | cap: node / GPU | "
-          "units split at node cap (draw share) | sessions at node cap (mean / public) | prover h at node cap | "
-          "prover h at GPU cap | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |",
+    L += ["", "## Per workload: dp4 at B = 16, unsplit and at the limit", "",
+          ("limit: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
+           "sumcheck's) fits; units over it split into ceil(z / limit) pieces. Prover hours: Σ sessions x (prove + slot "
+           "sumcheck) on one prover, body and tail, mean / public session counts. Staging: the dp4 top bucket's largest "
+           "template shape, and the largest of every shape in the workload."), "",
+          ("| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | limit: node / GPU | "
+           "units split at node limit (share of the sample) | sessions at node limit (mean / public) | prover h at node limit | "
+           "prover h at GPU limit | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |"),
           "|" + "---|" * 15]
     for w in pr["workloads"]:
         u, n, g, s, st = w["unsplit"], w["cpu"], w["gpu"], w["top_session"], w["staging"]
@@ -792,9 +838,10 @@ def render(pr: Mapping[str, Any]) -> str:
     if pr.get("workloads_dp4t"):
         L += _menu_table(pr)
     L += ["", f"## Power-of-two bounds (ρ = {RHO_TABLE} nonzeros per row)", "",
-          "Registered: 16 distinct types, each one GEMM tc-step netlist. Generic: each slot its own netlist of Z nonzeros.", "",
-          "| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
-          "peak RSS | prove | slot sumcheck | its memory | fits GPU: registered / generic |", "|" + "---|" * 14]
+          ("Registered: 16 distinct types, each one GEMM tc-step description. Generic: each slot its own description of Z "
+           "nonzeros."), "",
+          ("| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
+           "peak RSS | prove | slot sumcheck | its memory | fits GPU: registered / generic |"), "|" + "---|" * 14]
     for q in pr["pow2"]:
         r, gq = q["registered"], q["generic"]
         L.append(f"| {_p2(r['Z'])} | {P._si(r['rows'])} | {r['k_log']} | {_yn(r['in_range'])} | 2^{int(math.log2(r['D']))} | "
@@ -802,17 +849,17 @@ def render(pr: Mapping[str, Any]) -> str:
                  f"{gq['circuit_bytes'] / 2 ** 30:.3g} GiB | {gq['rss_gib']:.3g} GiB | {_t(gq['prove_s'])} | "
                  f"{_t(r['sumcheck_s'])} | {r['sumcheck_gib']:.3g} GiB | "
                  f"{_yn(r['peak_gib'] <= pr['gpu_gib'])} / {_yn(gq['peak_gib'] <= pr['gpu_gib'])} |")
-    L += ["", "## Staging", "", "| run | G / lowering | ANDs | wall | peak RSS | law: wall | law: peak |", "|" + "---|" * 7]
+    L += ["", "## Staging", "", "| run | G / lowering | ANDs | wall | peak RSS | fit: wall | fit: peak |", "|" + "---|" * 7]
     for r in pr["staging_fit"]["ladder"]:
         L.append(f"| {r['run']} | G = {r['G']} | {P._si(r['ands'])} | {_t(r['wall_s'])} | {r['peak_gib']:.3g} GiB | "
                  f"{_t(_at(sc['wall_s'], [r['ands'] / 1e6]))} | {_at(sc['peak_gib'], [r['ands'] / 1e6]):.3g} GiB |")
     for r in pr["staging_fit"]["registered"]:
         L.append(f"| {r['run']} | {r['lowering']} | {P._si(r['ands'])} | {_t(r['wall_s'])} | {r['peak_gib']:.3g} GiB | "
                  f"{_t(_at(sc['wall_s'], [r['ands'] / 1e6]))} | {_at(sc['peak_gib'], [r['ands'] / 1e6]):.3g} GiB |")
-    L += ["", "## Shapes", "", "| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
-          "session RSS | session prove | slot sumcheck | its memory | prover h mean | largest staging |", "|" + "---|" * 15]
+    L += ["", "## Shapes", "", ("| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
+           "session RSS | session prove | slot sumcheck | its memory | prover h mean | largest staging |"), "|" + "---|" * 15]
     for w in pr["workloads"]:
-        for tag, a in (("unsplit", w["unsplit"]), ("node cap", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
+        for tag, a in (("unsplit", w["unsplit"]), ("node limit", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
             if a is None:
                 continue
             for part in ("body", "tail"):
@@ -823,8 +870,8 @@ def render(pr: Mapping[str, Any]) -> str:
                              f"{s['session']['rss_gib']:.3g} GiB | {_t(s['session']['prove_s'])} | "
                              f"{_t(s['session']['sumcheck_s'])} | {s['session']['sumcheck_gib']:.3g} GiB | "
                              f"{s['prover_s_mean'] / 3600:.3g} | {_st(s.get('staging'))} |")
-    L += ["", "## Source runs", "", "| run | definition | instances | k_log | D | circuit text | prove | fit | process wall | fit | "
-          "peak RSS | fit | threads |", "|" + "---|" * 13]
+    L += ["", "## Source runs", "", ("| run | definition | instances | k_log | D | circuit text | prove | fit | process wall | fit | "
+           "peak RSS | fit | threads |"), "|" + "---|" * 13]
     for p in f["points"]:
         L.append(f"| {p['run']} | {p['definition']} | {p['instances']} | {p['k_log']} | 2^{p['dense_m']} | "
                  f"{p['circuit_bytes'] / 1e6:.0f} MB | {p['prove_s']:.3g} | {p['prove_s_fit']:.3g} | {p['wall_s']:.3g} | "
@@ -833,26 +880,23 @@ def render(pr: Mapping[str, Any]) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """The command (the module docstring): write ``prover.json`` and ``prover.md`` under ``--out``, and return 0."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--inventory", required=True, help="unit_costs' unit-costs.json")
     ap.add_argument("--out", required=True, help="directory for prover.json and prover.md")
     d = SLOT_SUMCHECK
     k1s = lambda t: tuple(sorted(tuple(map(float, x.split(":"))) for x in t)) if ":" in t[0] else float(t[0])  # noqa: E731
     ap.add_argument("--k1-ns", nargs="+", default=None, metavar="[NU:]NS",
-                    help="slot sumcheck ns per entry per rep, one value or NU:NS points (default: proofs' measurement)")
+                    help="slot sumcheck ns per entry per rep, one value or NU:NS points (default: SLOT_SUMCHECK's)")
     ap.add_argument("--k1-lo", nargs="+", default=None, metavar="[NU:]NS", help="K1's band, low end")
     ap.add_argument("--k1-hi", nargs="+", default=None, metavar="[NU:]NS", help="K1's band, high end")
     ap.add_argument("--reps", type=int, default=d["reps"])
     ap.add_argument("--bits-bytes-per-entry", type=float, default=d["bits_bytes"], help="committed bits' bytes per entry")
     ap.add_argument("--work-bytes-per-entry", type=float, default=d["work_bytes"],
                     help="the sumcheck's working set per entry of the slot being proved")
-    ap.add_argument("--k1-source", default=None, help="where K1 comes from (default: proofs' K1 run)")
+    ap.add_argument("--k1-source", default=None, help="where K1 comes from (default: SLOT_SUMCHECK's source)")
     ap.add_argument("--no-slot-sumcheck", action="store_true", help="Flock's prove alone")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
-    from .unit_costs import retree
-
     inv = json.loads(Path(a.inventory).read_text())
     if "token_select" not in inv:
         retree(inv)

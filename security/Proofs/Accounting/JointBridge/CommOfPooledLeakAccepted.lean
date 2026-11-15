@@ -53,7 +53,7 @@ the bound is on the period's coins and no secret enters it. Its `δ` is taken at
 `PooledLeakAccepted` is taken as it is stated, so the proof also supplies what only its count reads, none of which the
 realization holds: each execution phase's number of proof blocks (one past the largest index in its incorrect sets),
 the bits a proof block commits (the most over those), the schedules (the run's, at the phases' coins) and the most
-cells each gives a connection. The network certifier's trust (`trusted-host`) and its record format holding the run's
+cells each gives a connection. The network certifier's trust (`trusted-device`) and its record format holding the run's
 schedules are the realization's `trusted` and `fits`.
 -/
 
@@ -69,7 +69,7 @@ theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι 
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
     {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ} {Dj m Fmax : ℕ}
     (R : RealizesCommOfPooledLeakAccepted r c.K L Kₒ S lay k reg Dj m Fmax) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
-    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hesc : PeriodEscapes Set.univ R.acc R.W q e)
+    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hesc : MonitoringPeriodEscapes Set.univ R.acc R.W q e)
     (hleak : PhaseLeaks lay k reg Dj R.sw R.Pw R.ρ R.op Set.univ R.acc R.W R.record e') :
     r.Sound c p .network (Real.exp (-(q * Fmax)) + ∑ i, e i + ∑ i, e' i) := by
   intro ξ

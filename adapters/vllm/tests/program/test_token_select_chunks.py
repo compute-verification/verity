@@ -7,12 +7,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.registry import b1
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
-from verity.definitions.registry import b1
 
 #: the words an argmax turns on: quiet NaNs of both signs, a signalling NaN, +0, -0, +inf, -inf, 1, -1, 2
 EDGES = np.array([0x7FC0, 0xFFC0, 0x7F81, 0x0000, 0x8000, 0x7F80, 0xFF80, 0x3F80, 0xBF80, 0x4000], dtype=np.uint16)
@@ -63,7 +62,8 @@ def test_the_chunk_step_is_argmax_step() -> None:
     """`TokenSelectChunkStep_v1` is `ArgmaxStep_v1` word for word: every pair of edge words as (x, best), at indices past the
     best's and before it, and random words."""
     rng = np.random.default_rng(3)
-    x, best = (a.ravel() for a in np.meshgrid(EDGES, EDGES))
+    mesh: tuple[np.ndarray, ...] = np.meshgrid(EDGES, EDGES)
+    x, best = (a.ravel() for a in mesh)
     x, best = np.concatenate([x, rng.integers(0, 1 << 16, 512)]), np.concatenate([best, rng.integers(0, 1 << 16, 512)])
     n = len(x)
     carry = np.stack([best, rng.integers(0, 1 << 31, n), rng.integers(0, 1 << 31, n)], 1)

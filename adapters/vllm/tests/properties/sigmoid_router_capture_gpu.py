@@ -2,7 +2,7 @@
 `fused_grouped_topk` launches for `GroupedTopKRouter`) at one group, top-8 of 256 experts, renormalized, x2.5, on f32 logits and an
 f32 correction bias, against `registry.moe.MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL}`.
 
-One GPU process writes `<out>/sigmoid_router_capture.json`, the property record `sigmoid_router_capture` (`properties.record`), and
+One GPU process writes `<out>/sigmoid_router_capture.json`, the property record `sigmoid_router_capture` (`records.property_record`), and
 `<out>/rows.npz`: every captured row's logits, each launch group's bias and both launches' outputs.  `ok` = every check below.  vLLM
 runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before vLLM is imported.
 The device gate runs first and nothing else runs when it fails (exit 3):
@@ -49,8 +49,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.ops import mufu as MU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
+from verity.circuits.ops import mufu as MU
+from verity.definitions.registry import moe
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
 RECORD = "sigmoid_router_capture.json"
@@ -157,7 +160,7 @@ def _bias(kind: str, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray |
     """A group's bias words, and for `cancel` the logits whose sigmoid each expert's bias cancels exactly (score + bias == +0)."""
     c = None
     if kind == "zero":
-        b = np.zeros(E, U32)
+        b: np.ndarray = np.zeros(E, U32)
     elif kind == "small":
         b = _w(rng.standard_normal(E) * 10.0 ** rng.uniform(-4, 0))
     elif kind == "decisive":
@@ -250,7 +253,7 @@ def digest(*arrays: np.ndarray) -> str:
 # ---------------------------------------------------------------------------------------------------------------------- sweep
 def sweep_words() -> np.ndarray:
     """Every logit word the sigmoid reads MUFU on, both signs, padded to a multiple of 8 with `MUFU_LO`."""
-    pos = np.arange(MUFU_LO, MUFU_HI, dtype=U32)
+    pos: np.ndarray = np.arange(MUFU_LO, MUFU_HI, dtype=U32)
     w = np.concatenate([pos, pos | U32(SIGN)])
     return np.concatenate([w, np.full(-len(w) % 8, MUFU_LO, U32)])
 
@@ -259,7 +262,7 @@ def sweep_chunk(vals: np.ndarray, row0: int) -> tuple[np.ndarray, np.ndarray]:
     """Rows of NaN logits holding 8 words each, row r's at experts `8 (row0 + r) mod 256 + (0..7)`: (x (R, E), the experts (R, 8))."""
     R = len(vals)
     pos = ((row0 + np.arange(R, dtype=np.int64))[:, None] * 8) % E + np.arange(8)
-    x = np.full((R, E), QNAN, U32)
+    x: np.ndarray = np.full((R, E), QNAN, U32)
     np.put_along_axis(x, pos, vals, 1)
     return x, pos
 
@@ -392,9 +395,6 @@ _PROGRAMS: dict[str, Any] = {}
 
 
 def _program(launch: str):
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import moe
-
     if launch not in _PROGRAMS:
         _PROGRAMS[launch] = bind(moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=SCALE, KERNEL=launch)
     return _PROGRAMS[launch]
@@ -402,8 +402,6 @@ def _program(launch: str):
 
 def program_row(job: tuple[str, np.ndarray, np.ndarray]) -> list[int]:
     """`MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL=launch}` on one row (the reference evaluator): 8 weights, 8 ids."""
-    from verity.circuits.evaluation import evaluate
-
     launch, x, b = job
     return [int(v) for v in evaluate(_program(launch), [int(v) for v in x] + [int(v) for v in b])]
 
@@ -487,7 +485,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 def run(out: str, seed: int, n: int, min_driver: int, want_cc: str, want_sms: int, workers: int, program_sample: int,
         do_sweep: bool) -> dict[str, Any]:
     from verity_vllm.engine.env import served_defaults
-    from verity_vllm.properties.record import seal as seal_record
+    from verity_vllm.records.property_record import seal as seal_record
 
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
@@ -566,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
-        from verity_vllm.properties.record import PropertyRecord
+        from verity_vllm.records.property_record import PropertyRecord
 
         rec = PropertyRecord(json.loads(Path(a.verify).read_text()))
         problems = rec.problems()

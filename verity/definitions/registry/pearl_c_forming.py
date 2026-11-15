@@ -25,7 +25,7 @@ at R = 1 or 2 each is small enough to lower whole. ``STEP`` is the device's BF16
 accumulator, k = 16: `HopperBF16WgmmaDot16` on every record), which the peel takes over the 2R operands of a row of P_A
 and of P_B sixteen at a time, so there R is a multiple of 8.
 
-These are the functions of PoUW's row units (`verity.protocols.pouw.prover.circuit.pc8`: `Pc8RowA`, `Pc8RowB`), which
+These are the functions of PoUW's row units (`verity.protocols.accounting.pouw.prover.circuit.pc8`: `Pc8RowA`, `Pc8RowB`), which
 compute α and keep it: the same primitives in the same order, so each equals the unit's on every input, a row the unit
 refuses included. Three differences are of form only. The square root is `PearlCSqrt`, a Definition whose body is the
 one Call of `PouwF32SqrtRn_v1`, so that its Boolean version is found here and not in PoUW's package. −bf16(E′) is
@@ -37,7 +37,7 @@ The reference rejects a non-finite accumulator where these compute on (a NaN is 
 admission (`Pc8RowA`'s ``ok``) is not one of these Definitions.
 
 On bits each is σ of its word form (`verity.definitions.boolean.sigma_lift`): the same Calls, each of the Boolean version
-of its Definition. `PearlCSqrt_v2` is `verity.definitions.ops.boolean.sqrt.f32_sqrt_rn` traced, and `PearlCBf16Neg_v2` one
+of its Definition. `PearlCSqrt_v2` is `verity.circuits.ops.boolean.sqrt.f32_sqrt_rn` traced, and `PearlCBf16Neg_v2` one
 NOT.
 """
 from __future__ import annotations
@@ -48,11 +48,11 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind, composite, primitive
-from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
-from verity.definitions.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.definitions.ops.prims import E4m3ToF32, F2fpBf16, F32ToE4m3Sat, const
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
-from verity.definitions.ops.sqrt import PouwF32SqrtRn
+from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn
+from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.prims import E4m3ToF32, F2fpBf16, F32ToE4m3Sat, const
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
+from verity.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.boolean import sigma_lift
@@ -72,7 +72,7 @@ LINE = Array(SLICE, E4M3)
 STRIDE, FLOOR, FOUR, QMAX, LINE_FACTOR = 8, 0x2F800000, 0x40800000, 0x43E00000, 0x3AB504F3
 
 _TESTS = "verity/definitions/tests/test_pearl_c_forming.py"
-_HELD = f"protocol-defined; equal to `verity.protocols.pouw.prover.schemes.pearl_c.{{}}` on its vectors ({_TESTS})"
+_HELD = f"protocol-defined; equal to `verity.protocols.accounting.pouw.prover.schemes.pearl_c.{{}}` on its vectors ({_TESTS})"
 
 
 class _Emit:
@@ -301,7 +301,7 @@ def bindings() -> list:
     the H100's atom, the forming of a row of eight and the chain over a window and a short one (K = 160), as the tile's
     read calls it; and the peel at rank 32. But for the forming of a row, each is within the size circuit-check lowers a
     Definition whole at."""
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
     from verity.definitions.boolean import boolean_version
 
     out = []

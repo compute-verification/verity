@@ -9,16 +9,16 @@ public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 
 /-!
-# v2 credits its one session with the coins' draw
+# v2 credits its one session with the coins' sample
 
 Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed
 (`Spot.OneStageZk.evidenceOf`), the units its one session proves (`Spot.OneStageZk.provedUnits` on the
-session's record) are the units `ξ` draws under the verifier's law as derived, over the registered population
+session's record) are the units `ξ` samples under the verifier's law as derived, over the registered population
 (`Spot.OneStage.drawnFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
-draw, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
+sample, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
 
-* **v1 at the coins** (`provedUnits_of_checkAt`): v1's `checkAt` refuses a draw other than the coins' (`coinsWhy`), and
-  its `check` holds the evidence's `proved_units` to the draw's units and closure (`acceptMeans`); a draw without a
+* **v1 at the coins** (`provedUnits_of_checkAt`): v1's `checkAt` refuses a sample other than the coins' (`coinsWhy`), and
+  its `check` holds the evidence's `proved_units` to the sample's units and closure (`acceptMeans`); a sample without a
   closure proves its units, which are nonnegative integers, ascending;
 * **parsed evidence has no closure** (`closure_of_evidenceOf`): v1's `evidenceOf`, which v2's runs, refuses one;
 * **v2's one session** proves units the run holds to the evidence's `proved_units` (`provedHeld`); `provedUnits` sorts
@@ -64,7 +64,7 @@ theorem qsort_cast (as : Array Nat) :
   funext _ _
   simp
 
-/-! ## A draw's units -/
+/-! ## A sample's units -/
 
 theorem filterMap_int : ∀ {l : List Json} {u : List Int}, l.mapM int? = some u → l.filterMap int? = u
   | [], u, h => by
@@ -138,8 +138,8 @@ theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 
 
 /-! ## v1 at the coins -/
 
-/-- **v1 at the coins `ξ`, on a draw without a closure.** Where `checkAt` accepts, the verifier's law derives (`law`), the
-record names a population `n`, the coins draw `units` under `law` over `n` (`drawnFrom`), and the evidence's
+/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's law derives (`law`), the
+record names a population `n`, the coins sample `units` under `law` over `n` (`drawnFrom`), and the evidence's
 `proved_units` are those units, ascending. -/
 theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
@@ -188,7 +188,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
 
 /-! ## v2 -/
 
-/-- **Parsed evidence has no closure**: v2's `evidenceOf` runs v1's, which refuses a draw that carries one. -/
+/-- **Parsed evidence has no closure**: v2's `evidenceOf` runs v1's, which refuses a sample that carries one. -/
 theorem closure_of_evidenceOf {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceOf b = .ok e) :
     field? e.base.draw "closure" = none := by
   unfold OneStageZk.evidenceOf at h
@@ -233,10 +233,10 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
     exact ⟨xs, (Except.ok.inj h).symm⟩
   · cases h
 
-/-- **v2 credits its one session with the coins' draw.** Where v2 accepts evidence it parsed at the coins `ξ`: the
+/-- **v2 credits its one session with the coins' sample.** Where v2 accepts evidence it parsed at the coins `ξ`: the
 evidence names one session `s`, whose record is on the blobs as UTF-8 (`record`), and the parameters' public file is on
 the blobs (`pubB`); the verifier's law derives (`law`) and the record names a population `n`; and the units the session
-proves (`provedUnits`) are the units `ξ` draws under `law` over `n` (`drawnFrom`), ascending. -/
+proves (`provedUnits`) are the units `ξ` samples under `law` over `n` (`drawnFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
@@ -339,8 +339,8 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
         rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
 
 /-- **v2's credit, as `Units.unitsAt` reads it**: where v2 accepts evidence it parsed at the coins `ξ`, at any load of
-the parameters' public file and the draw the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
-`ξ` draws under the verifier's law as derived over the registered population, ascending. -/
+the parameters' public file and the sample the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
+`ξ` samples under the verifier's law as derived over the registered population, ascending. -/
 theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :

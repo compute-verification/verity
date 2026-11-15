@@ -6,14 +6,21 @@ are refused."""
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Value
-from verity_vllm.observe.fold.fold import FoldError, fold
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, WeightField, WitnessParam
 from verity.definitions.registry import b1
+
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
+from verity_vllm.observe.fold.fold import FoldError, fold
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Profile,
+    Shared,
+    WeightField,
+    WitnessParam,
+)
 
 
 def _embedding(ids, table):

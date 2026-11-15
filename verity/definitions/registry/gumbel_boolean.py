@@ -58,10 +58,10 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Tuple
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
-from verity.definitions.ops.boolean.scalar import gt_u, select
-from verity.definitions.ops.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
+from verity.circuits.ops.boolean.scalar import gt_u, select
+from verity.circuits.ops.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
 from verity.circuits.boolean.trace import definition
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import sampling as SM

@@ -16,13 +16,28 @@ import dataclasses
 
 import pytest
 
-from verity_vllm.observe.fold.profiles import profile_for_case
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
 from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
 from verity_vllm.observe.fold.patterns.target import target_of_header
-from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Shared, StepContext, Unsupported, spec_label
+from verity_vllm.observe.fold.profiles import profile_for_case
+from verity_vllm.observe.fold.resolver import (
+    Collective,
+    Compute,
+    PerRow,
+    Shared,
+    StepContext,
+    Unsupported,
+    spec_label,
+)
 from verity_vllm.observe.fold.tree import build_trees
 
 CUDA, H = "cuda:0", 6144
@@ -181,6 +196,7 @@ def test_a_bmm_whose_weight_is_no_parameter_view_is_refused():
 def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_unchanged():
     """`memory.address_ordered`: W_UK_T's (448, 1, 3584)-strided view as 4,096 address runs, not one per element."""
     from verity.circuits.refs import Affine
+
     from verity_vllm.observe.fold.memory import address_ordered
     from verity_vllm.observe.fold.views import element_runs
 
@@ -199,6 +215,7 @@ def test_a_permuted_weight_root_answers_its_transposed_reads_from_its_own_map():
     """`MemoryModel.write_root`: W_UK_T and W_UV interleave in one allocation; a read of `W_UV^T` (one element run per element) or of
     W_UK_T comes from the root's address -> leaf map, equal leaf for leaf to the interval scan, until a write over it."""
     from verity.circuits.refs import Affine, runs
+
     from verity_vllm.observe.fold.memory import MemoryModel
 
     def slow(m, v):
@@ -252,9 +269,11 @@ def _build_kind(settings, M, N=H, rows=None):
     """The Definition the Build's `AllReduceRule` emits for the same call (`vllm_bindings.collectives._allreduce_kind`), over `rows` of
     the launch's M (one request's)."""
     from types import SimpleNamespace
+
+    from verity.definitions.registry import tp_allreduce as T
+
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-    from verity.definitions.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
     plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": rows or M, "N": N}
@@ -280,7 +299,10 @@ def test_a_covered_tp8_all_reduce_is_the_build_s_one_call_over_the_flattened_par
 def test_the_capture_s_settings_are_its_recorded_engine_switches_else_no_route():
     """A header without `allreduce_settings` reads the rank's `disable_custom_all_reduce` and the manifest's engine flags; with neither,
     or on a route no capture covers, the all-reduce stays one `AllReduce_v2` per row."""
-    from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings
+    from verity_vllm.observe.fold.patterns.collectives import (
+        TpCollective,
+        allreduce_settings,
+    )
 
     facts = {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": True}}}}
     assert allreduce_settings(_ar_ctx(1, facts).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True,
@@ -387,7 +409,11 @@ def _tp4_ctx(M, *, gpu=("12.0", 188), p2p_off=True):
 def test_a_batch_invariant_tp4_all_reduce_on_the_rtx_pro_6000_over_shm_folds_to_nccl_s_tree():
     """The TP4 capture's all-reduce (pynccl, SHM, 4 RTX PRO 6000) is the Build's one `AllReduceNcclTree_v1` call; another GPU, P2P on
     or another world stays one `AllReduce_v2` per row."""
-    from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings, capture_device
+    from verity_vllm.observe.fold.patterns.collectives import (
+        TpCollective,
+        allreduce_settings,
+        capture_device,
+    )
 
     N = 8192
     assert allreduce_settings(_tp4_ctx(1).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True,

@@ -17,13 +17,13 @@ own Commit.
   times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
   and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
   period open``) goes out before the server starts, ahead of window 0's reserve at startup.
-* **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
+* **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor device's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.ChallengerGate`): window 0's
   session is reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and
   window k+1's while window k serves, off the engine loop (`GateSessions.take`), each with its sampling session,
   reserved withheld, beside it (`pouw_h1_challenger.draw_families`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
-  host's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the sampling session opens on the sample root once
+  device's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the sampling session opens on the sample root once
   the prover's commitment is in (`pouw_h1_window.DrawSession`), its coin commitment released only at its close; the
   release waits for both end entries. The gate's open answers a port no session without an end entry holds, so a window
   whose session opens while the window before is still releasing takes a port of its own. A reserve joins its lane's
@@ -58,7 +58,7 @@ own Commit.
   release, once H1 has closed the window and before its sample coin, waits for the window's seal, writes the window's
   registration W and runs CMD, V3c's window-commit, whose record R reuses H1's tables from W; R is the window's Commit
   record in the tap's place (`pouw_h1_commit.bind`), its outcome's ``commit_record``. It never runs with
-  ``--release-after pouw``, whose seal waits for this release's draw.
+  ``--release-after pouw``, whose seal waits for this release's sample.
 
 Each window's outcome (`H1Windows.close`) is its ``windows.jsonl`` line's ``pouw_h1``: ROOTS1's verdict, the requests'
 admission and gaps, the credit gate, the coins, the commitment's calls root, its gate session (the reserve, the open's
@@ -101,7 +101,7 @@ AT = "127.0.0.1:7811"
 #: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
 #: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
-#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is drawn, as it
+#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is sampled, as it
 #: holds no session, credits nothing and seals nothing
 UNSERVED = "none: the window served no step and holds no session"
 #: an s_a's bytes a row (f32)
@@ -130,13 +130,13 @@ class GateOptions:
     """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
     `sessions_of`, `serve_pearl.live`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
-                                         help="with --protocols: the auditor host's challenger gate, its command as one string "
+                                         help="with --protocols: the auditor device's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
                                               "session of its own there and draws its coins from it (serve_h1.GateSessions), "
                                               "each Pearl+ window a salt-only session (serve_pearl.live); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
-                                         help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
+                                         help="with --challenger-gate: this machine's name in the auditor device's peers, where its "
                                               "challenger reaches the server (ssh -R)")
     challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
                                          help="with --challenger-gate under Pearl+'s arm: the lane whose gate key the gate's "
@@ -220,7 +220,7 @@ def refusal(opts: Any) -> str | None:
     gate, peer = opts.gate.challenger_gate, opts.gate.challenger_peer
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
-                "auditor host's peers, where its challenger reaches the server (ssh -R)")
+                "auditor device's peers, where its challenger reaches the server (ssh -R)")
     if opts.gate.challenger_lane:
         from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
 
@@ -269,7 +269,7 @@ class H1Windows:
     ``steps`` a window, ``config`` the pouw settings of ``--protocols-config``, ``engine`` the built ``vllm.LLM`` the
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
-    when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
+    when None); ``sessions`` each window's session on the auditor device's challenger (`GateSessions`; None: in-process
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
     None: kept nowhere, so no sampled proof block or round of it can be proved), the calls' state written by ``writer`` (a
     `pouw_h1_prover.Writer` whose ring holds the window's bytes, `pouw_h1_prover.kept_bytes`), whose files a window's
@@ -349,7 +349,7 @@ class H1Windows:
         ``receipts`` noise.cu loaded too), the Lean verifier built (the in-process coins' entropy and each
         release's verdicts) and window 0's reserve ended (`GateSessions.settled`, made here unless made ahead already);
         ``readied``, with where each part's time went (``seconds``)."""
-        from verity.protocols.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier import verifier
         from verity_vllm.protocols.pouw.h1 import hooks as PHK, receipts as RC
         from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
@@ -572,7 +572,7 @@ class H1Windows:
     def layout(self) -> dict[str, Any]:
         """The window Program's layout as core's credit reads it from its descriptor (`credit.layout_of`), once."""
         if self._layout is None:
-            from verity.protocols.pouw.verifier import credit as CR
+            from verity.protocols.accounting.pouw.verifier import credit as CR
 
             from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -587,7 +587,7 @@ class H1Windows:
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period or the ledger commits it no K."""
-        from verity.protocols.pouw.verifier import credit as CR
+        from verity.protocols.accounting.pouw.verifier import credit as CR
 
         from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

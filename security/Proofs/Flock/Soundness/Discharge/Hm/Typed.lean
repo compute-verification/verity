@@ -1,11 +1,3 @@
-/-
-A row's `b ‖ c` in a satisfying witness of a typed template's statement (`row_bc_typed`, and at the statement
-`Stmt.setupH` accepted, `row_bc_setupH_typed`): the commit string of the row and salt its slots read. `row_bc_of_sat`'s
-four copies (`row_copies_of_sat`) are Δ's one copy at each `cv` and `pad` input bit (`inBit_copy`, with `RowRanges.ofT`'s
-filters); the constant bits read the pin (`pin_bitT`) and the root's first slot's forced-zero row (`zero_bitT`, there
-because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
-refuses a typed statement's bit rows (`ParseFactsT.v1`).
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Delta
@@ -29,6 +21,15 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
+
+/-!
+A row's `b ‖ c` in a satisfying witness of a typed template's statement (`row_bc_typed`, and at the statement
+`Stmt.setupH` accepted, `row_bc_setupH_typed`): the commit string of the row and salt its slots read. `row_bc_of_sat`'s
+four copies (`row_copies_of_sat`) are Δ's one copy at each `cv` and `pad` input bit (`inBit_copy`, with `RowRanges.ofT`'s
+filters); the constant bits read the pin (`pin_bitT`) and the root's first slot's forced-zero row (`zero_bitT`, there
+because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
+refuses a typed statement's bit rows (`ParseFactsT.v1`).
+-/
 
 @[expose] public section
 

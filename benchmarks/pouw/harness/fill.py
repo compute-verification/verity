@@ -1,4 +1,4 @@
-"""The numpy twin of `native/harness.cu`'s `k_fill`: the bytes a fill of each format writes, from its seed. The harness checks
+"""The numpy twin of `verity/protocols/accounting/pouw/prover/kernels/harness/native/harness.cu`'s `k_fill`: the bytes a fill of each format writes, from its seed. The harness checks
 the device's fill against it once per run (the preflight), and the baselines' gates decode the ternary operands with it."""
 
 from __future__ import annotations

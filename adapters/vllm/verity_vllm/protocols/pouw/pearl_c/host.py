@@ -15,14 +15,17 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
 
+import numpy as np
 from verity.commitments import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     Epoch,
     Workload,
@@ -32,10 +35,12 @@ from verity.protocols.pouw.verifier.audit import (
     salt_of,
     weights_root,
 )
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-from verity.protocols.pouw.verifier.protocol import DomainError
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
+
+__all__ = ["joined"]
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
@@ -87,15 +92,15 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 #: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
-SaltCoins = CoinCommitment | LiveCommitment
-SaltOpening = CoinOpening | LiveOpening
+type SaltCoins = CoinCommitment | LiveCommitment
+type SaltOpening = CoinOpening | LiveOpening
 
 
 def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening,
              pass_index: int | None = None) -> Epoch:
     """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
     `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
-    (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
+    (the auditor device's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
     commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
     opening against it after the salt epoch's root (`challenger.live_reason`), `salt.epoch_open_root` of the weights' root
     W and `pass_index`, the epoch's number k over W, an integer in [0, 2^64).  Either is refused with `DomainError`; a
@@ -140,10 +145,10 @@ def _bytes(t: Any) -> bytes:
     return t.cpu().numpy().tobytes()
 
 
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
-    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
+def call_keys(salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
+    """A call's dom_a ‖ unit, as `pearl_c.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
     is `HM96`)."""
-    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
+    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + C.unit_block(salt, root_b, index)
 
 
 class _Keys:
@@ -152,16 +157,16 @@ class _Keys:
     A call's index is unique in its epoch (`pouw_pass.call_index`), so no call's keys are another's and none are kept.
     ``native`` set to None takes `call_keys` itself (the reference path)."""
 
-    def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
-        self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
+    def __init__(self, salt: bytes, hash: str = HM96):
+        self.native, self.salt, self.hash = hashlib.sha512, salt, hash
         self.positions: dict[int, bytes] = {}
         root = bytes(64)
-        if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
+        if self(root, 0, CHECK_ROWS) != call_keys(salt, root, 0, CHECK_ROWS, hash):
             raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
 
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
-            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
+            return call_keys(self.salt, root_b, index, m16, self.hash)
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
@@ -188,12 +193,11 @@ class _Driver:
         "cuMemcpyHtoDAsync_v2": ("u64", "vp", "sz", "vp")}
 
     def __init__(self, cu: Any):
-        import ctypes as C
-        types = {"vp": C.c_void_p, "u": C.c_uint, "u64": C.c_uint64, "sz": C.c_size_t}
+        types = {"vp": ctypes.c_void_p, "u": ctypes.c_uint, "u64": ctypes.c_uint64, "sz": ctypes.c_size_t}
         self.f = {}
         for name, args in self.SIGS.items():
             f = getattr(cu, name)
-            f.argtypes, f.restype = [types[a] for a in args], C.c_int
+            f.argtypes, f.restype = [types[a] for a in args], ctypes.c_int
             self.f[name] = f
 
     def _ck(self, name: str, *args: Any) -> None:
@@ -219,6 +223,7 @@ class _Lane:
     recording device's log.  ``priority`` is the one the device gave it.  Its events hand work over to it: from the lane
     before it (``event``; for A's tree, the main lane's per-row keying) and, on a side lane, from the other side lane
     where that ran the call's A tree, at its end (``tree_event``)."""
+    stream: Any                 # torch's stream on the GPU; None off it
 
     def __init__(self, device: Any, priority: str, standin: int):
         import torch
@@ -244,7 +249,6 @@ class _Uploads:
 
     def _slot(self, data: bytes) -> int:
         """The next slot, once its last copy is done, holding `data`."""
-        import numpy as np
         i = self.i
         self.i = (i + 1) % self.slots
         if self.events[i] is not None:
@@ -296,6 +300,8 @@ class _Ring:
     """Pinned host bytes handed out in order and given back in any order: a region is free again once it and every region
     handed out before it are given back."""
 
+    live: deque[list]
+
     def __init__(self, n: int):
         import torch
         self.buf, self.n, self.head, self.live = torch.empty(n, dtype=torch.uint8, pin_memory=True), n, 0, deque()
@@ -328,6 +334,8 @@ class _Arena:
     made at the first take; a copy past half a ring gets pinned memory of its own.  A take waits for a give where no ring
     has room."""
 
+    rings: list[_Ring]
+
     def __init__(self, ring_bytes: int, rings: int):
         self.ring_bytes, self.count, self.rings, self.cv = ring_bytes, rings, [], threading.Condition()
 
@@ -343,7 +351,7 @@ class _Arena:
                 for ring in self.rings:
                     got = ring.take(size)
                     if got is not None:
-                        return (lambda: self._give(ring, got[0])), got[1]
+                        return partial(self._give, ring, got[0]), got[1]
                 self.cv.wait()
 
     def _give(self, ring: _Ring, region: list) -> None:
@@ -405,8 +413,8 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     digest's ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its
     `also` tensors (uint8 host tensors, copied with it) once they are written.  `fresh` and `here`: `_Copies.start`'s."""
     import torch
-    files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
-    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
+    each = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
+    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in each for s in (t, *also)]
     if srcs and srcs[0].is_cuda:
         hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh, here)
     else:
@@ -415,7 +423,7 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
         _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
     entries, batch, at = [], [], 0
-    for path, _, digest, then, also in files:
+    for path, _, digest, then, also in each:
         k = 1 + len(also)
         entry = _entry(path, hosts[at].numel())
         batch.append((path, hosts[at:at + k], digest, entry, then))

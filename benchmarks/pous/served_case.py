@@ -49,10 +49,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pous.device import memory_challenger as mc
-from verity.protocols.pous.verifier import period
-from verity.protocols.pous.verifier import run as R
-from verity.protocols.pous.verifier import wipe_party, wipe_period
+from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.verifier import run as R
+from verity.protocols.accounting.pous.verifier import wipe_party, wipe_period
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -127,13 +127,15 @@ def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
     try:
         c = wipe_party.commitment_of(commitment)
         signed = None if ev["signed"] is None else wipe_party.signed_of(ev["signed"])
+        egress = ev["egress_mib"]
         server, session = bytes.fromhex(p["server"]), bytes.fromhex(p["session"])
         trusted = [bytes.fromhex(t) for t in p["trusted"]]
     except (KeyError, TypeError, ValueError) as e:
         raise Refused(f"the wipe's case doesn't decode: {type(e).__name__}: {e}") from None
-    _need(wipe_period.case(server, session, trusted, c, signed) == dict(case),
-          "the wipe's case is not the one its decoded commitment, session and params make")
-    return wipe_period.answer(server, session, trusted, c, signed, schemes, protocol)
+    _need(egress is None or type(egress) is int, "the wipe's evidence gives its egress as null or an integer of MiB")
+    _need(wipe_period.case(server, session, trusted, c, signed, egress) == dict(case),
+          "the wipe's case is not the one its decoded commitment, session, egress and params make")
+    return wipe_period.answer(server, session, trusted, c, signed, schemes, protocol, egress_mib=egress)
 
 
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:

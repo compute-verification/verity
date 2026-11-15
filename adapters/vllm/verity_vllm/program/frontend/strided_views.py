@@ -4,12 +4,22 @@ collection of references, kept O(1) in the descriptor where the references are o
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 import torch
-
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, Ref, Refs, Strided, array_of, concat
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    Ref,
+    Refs,
+    Strided,
+    array_of,
+    concat,
+)
 from verity.circuits.types import Array, Type, Value
+
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.value_types import shape_of
 

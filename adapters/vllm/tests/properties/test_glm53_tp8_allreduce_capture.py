@@ -14,17 +14,22 @@ __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
 import copy
 import json
+import subprocess
+import tempfile
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
-
-from tests.properties import glm53_tp8_allreduce_capture_gpu as X
+from verity.circuits.defs import REGISTRY as DEFS
+from verity.circuits.defs import bind, conformance_label
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_allreduce_nodes as TN
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import glm53_tp8_allreduce_capture_gpu as X
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 N = 1536
 N7 = 1792
@@ -34,7 +39,7 @@ CMAP = Path(__file__).parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-e
 
 
 def _random_tree(rng):
-    nodes = list(range(X.WORLD))
+    nodes: list[Any] = list(range(X.WORLD))
     while len(nodes) > 1:
         i, j = sorted(rng.choice(len(nodes), 2, replace=False))
         b, a = nodes.pop(j), nodes.pop(i)
@@ -207,9 +212,10 @@ def test_the_served_setting_follows_the_workload(tmp_path) -> None:
     """``disable_custom_all_reduce`` false or unstated (vLLM's default), or no workload file: vLLM's defaults; true: the custom
     all-reduce off; anything else refused.  The workload in the tree, when there is one, serves vLLM's defaults."""
     p = tmp_path / "w.json"
-    for args, setting, source in [({"disable_custom_all_reduce": False}, "defaults", "w.json"),
-                                  ({"disable_custom_all_reduce": True}, "custom-off", "w.json"),
-                                  ({"max_model_len": 288}, "defaults", "vLLM's default: w.json states none")]:
+    stated: list[tuple[dict[str, Any], str, str]] = [({"disable_custom_all_reduce": False}, "defaults", "w.json"),
+                                                     ({"disable_custom_all_reduce": True}, "custom-off", "w.json"),
+                                                     ({"max_model_len": 288}, "defaults", "vLLM's default: w.json states none")]
+    for args, setting, source in stated:
         p.write_text(json.dumps({"engine": {"args": args}}))
         assert X.workload_setting(p) == {"setting": setting, "disable_custom_all_reduce": args.get("disable_custom_all_reduce"),
                                          "source": source}
@@ -307,8 +313,6 @@ def test_the_capture_seeds_find_every_probe_token() -> None:
     """The run's own probe operands, at GLM-5.3's width and seeds (about 20 s): every token of both probe calls tells the two
     contractions apart. Catches a seed, scale or geometry change that would leave a shot's `fma` undecided on the 8-GPU node,
     where the run can't be redone cheaply; the small-width tests can't, since the screening rate depends on the width."""
-    import tempfile
-
     with tempfile.TemporaryDirectory() as d:
         for c in X.cases(False, {"fused"}):
             if c["case"].startswith("probe"):
@@ -596,8 +600,6 @@ def test_an_nccl_launch_takes_its_probes_runs(nccl_small, tmp_path) -> None:
 
 def test_the_nccl_log_is_read() -> None:
     """NCCL's version, each collective's tuning by its bytes (named, numbered or with its channels), and device 0's init lines."""
-    import tempfile
-
     lines = {0: ["h:1:1 [0] NCCL INFO NCCL version 2.27.5+cuda12.9", "h:1:1 [0] NCCL INFO Channel 00/24 : 0 1 2 3 4 5 6 7",
                  "h:1:1 [0] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}",
                  "h:1:1 [0] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}",
@@ -926,8 +928,6 @@ def test_the_coverage_is_what_a_go_record_shows() -> None:
 # --- what is covered --------------------------------------------------------------------------------------------------------------
 
 def _bind_captured(c: T.Captured, M: int):
-    from verity.circuits.defs import bind
-
     e = X.expect("fused" if c.route == "fused" else "allreduce", M, c.setting, c.N)
     size = M * c.N
     if c.route == "fused":
@@ -1004,9 +1004,6 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     more than not-yet-established, only when `CAPTURED` covers every call GLM-5.3's served engine makes at the workload's setting
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
     `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
-    from verity.circuits.defs import REGISTRY as DEFS
-    from verity.circuits.defs import conformance_label
-
     cmap = json.loads(CMAP.read_text())
     setting = X.workload_setting()["setting"]
     Ms = range(1, X.STEP_TOKENS + 1)
@@ -1052,7 +1049,7 @@ def test_the_node_records_are_the_two_h200_nodes() -> None:
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"], tuple(r["run_records"])) for r in old["routes"]] == [
         ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]), ("defaults", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[2:]),
         ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:])]
-    assert T.UNSTATED_NODE == (TN.node_key(old)[0], *TN.node_key(old)[2:])
+    assert (TN.node_key(old)[0], *TN.node_key(old)[2:]) == T.UNSTATED_NODE
     nvls = T.covered("defaults", 6144, "pynccl_comm", 5462, device=H200, trees=new["multimem"]["trees"], ftz=False)
     assert nvls.statics == {"TREES": TN.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
 
@@ -1072,6 +1069,7 @@ def test_covered_takes_the_stated_node_tree() -> None:
     for M in (5462, 8192):
         assert at("pynccl_comm", M, trees=new_t, ftz=False).definition == "AllReduceMultimem_v1"
     assert at("pynccl_comm", 8193, trees=new_t, ftz=False) is None
+    stated: dict[str, Any]
     for stated in ({"trees": old_t, "ftz": False}, {}):
         assert at("symm_mem_comm", 2048, **stated).statics["TREES"] == TN.multimem_trees(old_t, X.WORLD)
         assert at("symm_mem_comm", 2049, **stated) is None and at("pynccl_comm", 5462, **stated) is None
@@ -1345,8 +1343,6 @@ def test_a_failed_gate_runs_nothing(tmp_path, monkeypatch, capsys) -> None:
 
 def test_the_gate_wants_flashinfer_jit_tools(monkeypatch) -> None:
     """Each rank JIT-builds FlashInfer's TRT-LLM all-reduce, so without ninja or nvcc on PATH the gate fails before a rank spawns."""
-    import subprocess
-
     import torch
 
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True, "checks": {"driver": True}})
@@ -1361,7 +1357,5 @@ def test_the_gate_wants_flashinfer_jit_tools(monkeypatch) -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

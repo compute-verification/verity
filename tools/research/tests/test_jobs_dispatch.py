@@ -1,4 +1,4 @@
-"""Stage 1's dispatcher (`research.jobs.dispatch`) against the Job queue's reference model, on a fake clock, with a fake runner
+"""Step 1's dispatcher (`research.jobs.dispatch`) against the Job queue's reference model, on a fake clock, with a fake runner
 standing in for ssh and `research run --on`; and the launch child against a local git repository."""
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class Clock:
 
 class FakeRunner:
     def __init__(self):
-        self.caps: dict[str, dict] = {}
+        self.capabilities: dict[str, dict] = {}
         self.launches: dict[str, tuple | None] = {}
         self.runs: dict[str, D.Observation] = {}
         self.started, self.stopped, self.killed, self.probes = [], [], [], []
@@ -44,7 +44,7 @@ class FakeRunner:
 
     def probe(self, pod):
         self.probes.append(pod)
-        return dict(self.caps.get(pod, GOOD))
+        return dict(self.capabilities.get(pod, GOOD))
 
     def start(self, job, attempt, pod):
         self.started.append((job["id"], attempt, pod))
@@ -120,7 +120,7 @@ def test_a_merge_check_runs_on_a_free_pod_and_completes_with_its_run_id():
 def test_a_pod_that_fails_checks_preflight_is_benched_and_another_pod_takes_the_job(tail):
     """Only preflight.py says whether a pod is prepared; the dispatcher's probe measures, and it believes the preflight."""
     w = World(pods=("t1", "t2"))
-    w.runner.caps["t1"] = {**GOOD, "tools": [], "disk_gb": 3}           # measured, never judged
+    w.runner.capabilities["t1"] = {**GOOD, "tools": [], "disk_gb": 3}           # measured, never judged
     j = w.add()
     w.at(0)
     assert w.runner.started == [(j, 1, "t1")]
@@ -147,11 +147,11 @@ def test_no_job_starts_on_a_pod_until_its_setup_reports_done():
     """A launch chain that started a check while pod_setup.sh still ran cost train TVC an hour: the dispatcher can't do that."""
     w = World()
     j = w.add()
-    w.runner.caps["t1"] = {**GOOD, "setup_done": False, "setup_at": None}
+    w.runner.capabilities["t1"] = {**GOOD, "setup_done": False, "setup_at": None}
     w.at(0)
     assert w.runner.started == [] and w.job(j).state == "queued"
     assert any("t1: skipped: pod_setup.sh hasn't reported done" in line for line in w.lines)
-    w.runner.caps["t1"] = GOOD
+    w.runner.capabilities["t1"] = GOOD
     w.at(D.PREFLIGHT_S + D.CLAIM_S)
     assert w.runner.started == [(j, 1, "t1")]
 
@@ -168,7 +168,7 @@ def test_a_pod_that_cant_be_measured_asks_for_nothing_and_the_dispatcher_goes_on
 def test_a_job_goes_only_to_a_pod_that_meets_its_requirements():
     """An idle pass stops at the first empty claim, and the pods take turns asking first, so each pod's capabilities are offered."""
     w = World(pods=("t1", "t2"))
-    w.runner.caps["t1"] = {**GOOD, "avx512": False}
+    w.runner.capabilities["t1"] = {**GOOD, "avx512": False}
     j = w.add(requirements={"avx512": True})
     w.at(0)
     assert w.runner.started == []
@@ -319,13 +319,13 @@ def test_the_commands_each_kind_runs(tmp_path):
     job = {"kind": "merge-check", "payload": {"commit": C1, "base": BASE}}
     assert D.command(job, "t1", "py", None) == ["py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", BASE]
     assert D.command(job, "t1", "py", tmp_path / "v.tar.gz")[-2:] == ["--verdicts-in", str(tmp_path / "v.tar.gz")]
-    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["verity/protocols/flock/agreement/soundness"]}}, "t1", "py", None)
+    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["verity/protocols/proofs/flock/prover/agreement/soundness"]}}, "t1", "py", None)
     assert regen[:15] == ["py", "-m", "research", "run", "--on", "t1", "--project", "verity", "--source", ".", "--cwd", "source",
                           "--preflight", "check", "--"]
     assert "--preflight" not in D.command({"kind": "lean-regen", "payload": {"packages": ["p"]}}, "t1", "py", None, preflight=False)
     assert D.command({"kind": "audit-main", "payload": {"commit": C1}}, "t1", "py", None) == [
         "py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
-    assert "check.py --build --update verity/protocols/flock/agreement/soundness" in regen[-1]
+    assert "check.py --build --update verity/protocols/proofs/flock/prover/agreement/soundness" in regen[-1]
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
 
@@ -472,7 +472,7 @@ def test_the_disk_floor_is_research_runs_own(tmp_path):
 
 def test_a_job_is_claimed_only_for_a_pod_whose_lease_covers_it(capsys):
     w = World(pods=("t1", "t2"))
-    w.runner.caps["t1"] = {**GOOD, "lease_s": D.lease_needed(3600) - 1}
+    w.runner.capabilities["t1"] = {**GOOD, "lease_s": D.lease_needed(3600) - 1}
     assert jobs_main(["add", "merge-check", "--commit", C1, "--base", BASE, "--timeout-s", "3600"], client=w.coord) == 0
     assert w.job(1).requirements["min_lease_s"] == 3600 + 900
     w.at(0)
@@ -484,7 +484,7 @@ def test_a_job_is_claimed_only_for_a_pod_whose_lease_covers_it(capsys):
 
 def test_a_job_without_min_lease_s_on_a_short_lease_is_named():
     w = World()
-    w.runner.caps["t1"] = {**GOOD, "lease_s": 600}
+    w.runner.capabilities["t1"] = {**GOOD, "lease_s": 600}
     j = w.add()
     w.at(0)
     assert w.runner.started == [(j, 1, "t1")]
@@ -493,7 +493,7 @@ def test_a_job_without_min_lease_s_on_a_short_lease_is_named():
 
 def test_a_pod_without_a_lease_says_so():
     w = World()
-    w.runner.caps["t1"] = {k: v for k, v in GOOD.items() if k != "lease_s"}
+    w.runner.capabilities["t1"] = {k: v for k, v in GOOD.items() if k != "lease_s"}
     assert jobs_main(["add", "merge-check", "--commit", C1, "--base", BASE], client=w.coord) == 0
     w.at(0)
     assert w.runner.started == []
@@ -516,16 +516,16 @@ def test_the_probe_reads_the_lease_the_tools_and_live_runs(tmp_path):
         return json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(r), str(lease), D.SETUP_MARKER], capture_output=True,
                                          text=True, check=True, env=e).stdout)
 
-    caps = probe(root)
-    assert caps["busy"] == 1 and caps["lease_s"] > 2 * 10 ** 9
-    assert (caps["setup_done"], caps["setup_at"]) == (True, "2026-09-29T22:00:00Z")
-    assert set(caps) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s", "setup_done", "setup_at"}
+    capabilities = probe(root)
+    assert capabilities["busy"] == 1 and capabilities["lease_s"] > 2 * 10 ** 9
+    assert (capabilities["setup_done"], capabilities["setup_at"]) == (True, "2026-09-29T22:00:00Z")
+    assert set(capabilities) == {"avx512", "mem_gb", "cpus", "disk_gb", "busy", "tools", "lease_s", "setup_done", "setup_at"}
     lease.unlink()
     (tmp_path / ".research" / "pod-setup.json").unlink()
-    caps = probe(root / "missing")
-    assert "lease_s" not in caps and caps["busy"] == 0 and caps["setup_done"] is False
-    caps = probe(root, {**env, "RESEARCH_LEASE_EXPIRES": "4102444800"})
-    assert caps["lease_s"] > 2 * 10 ** 9
+    capabilities = probe(root / "missing")
+    assert "lease_s" not in capabilities and capabilities["busy"] == 0 and capabilities["setup_done"] is False
+    capabilities = probe(root, {**env, "RESEARCH_LEASE_EXPIRES": "4102444800"})
+    assert capabilities["lease_s"] > 2 * 10 ** 9
 
 
 def _lean_repo(tmp_path: Path) -> Path:
@@ -614,9 +614,9 @@ def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monke
 
 def _flock_repo(tmp_path: Path, rustflags: str, pattern: str | None = None) -> Path:
     repo = tmp_path / "flock"
-    files = {"verity/protocols/flock/agreement/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
-             "verity/protocols/flock/prover/src.rs": "fn main() {}", "verity/protocols/flock/prover/README.md": "flock", "docs.md": "docs",
-             "tools/verity/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["verity/protocols/flock/prover/", "!README.md"]})\n'}
+    files = {"verity/protocols/proofs/flock/prover/agreement/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
+             "verity/protocols/proofs/flock/prover/src.rs": "fn main() {}", "verity/protocols/proofs/flock/prover/README.md": "flock", "docs.md": "docs",
+             "tools/verity/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["verity/protocols/proofs/flock/prover/", "!README.md"]})\n'}
     if pattern is not None:
         files["tools/verity/check/preflight.py"] = f"import re\nAVX512 = re.compile({pattern!r})\n"
     for f, text in files.items():
@@ -636,12 +636,12 @@ def _change(repo: Path, path: str) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("rustflags,pattern,path,want", [
-    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/flock/prover/src.rs", False),   # today's pin
-    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/flock/prover/src.rs", True),
+    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/proofs/flock/prover/src.rs", False),   # today's pin
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/proofs/flock/prover/src.rs", True),
     ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "docs.md", False),                # no agreement runs
-    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/flock/prover/README.md", False),
-    ("-C target-cpu=x86-64-v4", r"never", "verity/protocols/flock/prover/src.rs", False),                                     # the tree's own rule
-    ("-C target-cpu=native", None, "verity/protocols/flock/prover/src.rs", True),                                            # a tree before preflight.py's AVX512
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/proofs/flock/prover/README.md", False),
+    ("-C target-cpu=x86-64-v4", r"never", "verity/protocols/proofs/flock/prover/src.rs", False),                                     # the tree's own rule
+    ("-C target-cpu=native", None, "verity/protocols/proofs/flock/prover/src.rs", True),                                            # a tree before preflight.py's AVX512
 ])
 def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags, pattern, path, want):
     from research.jobs.cli import needs_avx512
@@ -652,13 +652,13 @@ def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags,
 
 
 def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
-    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/flock/prover/\\303\\251.rs"`), which the agreement's
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/proofs/flock/prover/\\303\\251.rs"`), which the agreement's
     rule never matched, so a change to such a file asked for no AVX-512 machine."""
     from research.jobs.cli import needs_avx512
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "verity" / "protocols" / "flock" / "prover" / "é.rs").write_text("fn f() {}")
+    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.rs").write_text("fn f() {}")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "é")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
@@ -671,7 +671,7 @@ def test_a_check_asks_for_avx512_for_a_file_renamed_out_of_the_agreements_paths(
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "mv", "verity/protocols/flock/prover/src.rs", "src.rs")
+    _git(repo, "mv", "verity/protocols/proofs/flock/prover/src.rs", "src.rs")
     _git(repo, "commit", "-qm", "move")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
 

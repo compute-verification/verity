@@ -7,7 +7,7 @@ Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nby
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
 `ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
-in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies C-Flock proves included); the served window is the
+in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies Flock proves included); the served window is the
 class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
@@ -55,8 +55,8 @@ from pathlib import Path
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-from verity.protocols import reporting
-from verity.protocols.spot.optimize import SHA512_ROWS
+from verity.protocol import MONITORING_PERIODS
+from verity.protocols.proofs.spot.prover.optimize import SHA512_ROWS
 from verity.circuits.defs import bind
 from verity.definitions.registry import io_shell as IO
 from verity.commitments.windows import interface as IF
@@ -85,8 +85,8 @@ RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
 #: the reference datacenter's GPUs: the census deployment whose role is reference (`benchmarks/census/deployments.json`)
 _REF = next(d for d in json.loads((HERE.parent / "census" / "deployments.json").read_text()) if d["role"] == "reference")
 GPUS = _REF["machines"] * _REF["gpus_per_machine"]
-#: core's monitoring periods (`reporting`), seconds by name
-PERIODS = dict(reporting.PERIODS)
+#: core's monitoring periods (`verity.protocol`), seconds by name
+PERIODS = dict(MONITORING_PERIODS)
 
 
 @dataclass(frozen=True)

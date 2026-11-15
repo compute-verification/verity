@@ -10,7 +10,6 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -21,6 +20,7 @@ from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla_split as BX
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case
 
@@ -60,11 +60,11 @@ def test_a_column_end_is_those_columns_of_the_split_end() -> None:
     """`SparseMlaSplitEndCols_v1{DV, G, C}` is columns [C G, (C + 1) G) of `SparseMlaSplitEnd_v1{DV}`'s partial and its lse,
     word for word, on `_inputs`' words with specials; a column block that does not tile DV is refused."""
     end = bind(W.SparseMlaSplitEnd, DV=32, INV=FA3["INV"], SCALE=0.0625)
-    m, l, o = _inputs(end, 400, 11)
-    whole = np.hstack(_flat(E.evaluate_batch(end, m, l, o)))
+    m, l_sum, o = _inputs(end, 400, 11)
+    whole = np.hstack(_flat(E.evaluate_batch(end, m, l_sum, o)))
     assert whole.shape == (400, 32 + 1)
     for G, C in ((8, 0), (8, 3), (16, 1), (32, 0)):
-        got = np.hstack(_flat(E.evaluate_batch(bind(W.SparseMlaSplitEndCols, DV=32, G=G, C=C, INV=FA3["INV"], SCALE=0.0625), m, l, o)))
+        got = np.hstack(_flat(E.evaluate_batch(bind(W.SparseMlaSplitEndCols, DV=32, G=G, C=C, INV=FA3["INV"], SCALE=0.0625), m, l_sum, o)))
         assert np.array_equal(got, np.hstack([whole[:, C * G:(C + 1) * G], whole[:, 32:]]))
     for G, C in ((8, 4), (12, 0), (0, 0)):
         with pytest.raises(ValueError, match="not a block of DV=32"):
@@ -81,6 +81,7 @@ def test_a_split_head_is_its_chains(T: int, NS: int, G: int) -> None:
     assert np.array_equal(got, _head(T, NS, DR, DV, BN, 0.0625, qn, qr, kv))
 
 
+@pytest.mark.slow
 def test_a_token_is_its_split_chains_at_the_served_statics() -> None:
     """GLM-5.3's statics at T = 130 in two splits: split 0 two full blocks, split 1 a block of 2 keys, each ended in eight
     column blocks of 64; the 8 heads' chains are the whole `SparseMlaSplit_v1` Call."""
@@ -104,8 +105,8 @@ def test_the_twin_is_each_block(T: int, NS: int) -> None:
     tw, nf = TW.split_chain_rows(qn[None], qr[None], kv, T=T, NS=NS, DR_=DR, DV=DV, BN=BN, scale=0.0625)
     assert not nf.any() and [len(c) for c in tw] == [len(c) for c in chains]
     for tc, wc in zip(tw, chains):
-        for (m, l, o), (wm, wl, wo) in zip(tc, wc):
-            assert int(m[0]) == wm and np.array_equal(l[0], np.asarray(wl, U32)) and np.array_equal(o[0], np.asarray(wo, U32))
+        for (m, l_sum, o), (wm, wl, wo) in zip(tc, wc):
+            assert int(m[0]) == wm and np.array_equal(l_sum[0], np.asarray(wl, U32)) and np.array_equal(o[0], np.asarray(wo, U32))
     want = TW.head_split_rows(qn[None], qr[None], kv, T=T, NS=NS, DR_=DR, DV=DV, BN=BN, scale=0.0625)[0]
     if NS == 1:
         assert np.array_equal(TW.head_end_rows(tw[0][-1][1], tw[0][-1][2]), want)

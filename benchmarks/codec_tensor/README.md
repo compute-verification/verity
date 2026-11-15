@@ -1,6 +1,6 @@
 # benchmarks/codec_tensor
 
-The bandwidth audit's (PoUB, `verity/protocols/poub/verifier`) work on the GPU, and the tensor-core wide-word
+The bandwidth audit's (PoUB, `verity/protocols/accounting/poub/verifier`) work on the GPU, and the tensor-core wide-word
 codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
 (with `reader.py`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
@@ -28,5 +28,5 @@ and `sketching.py` against the audit's code and `tests/vectors.json`, and the de
 
 **Reads and writes:** the suite reads `benchmarks/word_codec`'s KV codec and the bandwidth audit's code; `bench.py`
 writes `codec-tensor.json` and `bench.log` into its `--out`, and the step and reader scripts their gates and timings as
-JSON. **Backs:** the receipts it computes on the GPU are the ones `Accounting.Guarantees.Remote.SketchBoundSession` and
+JSON. **Backs:** the receipts it computes on the GPU are the ones `Accounting.Guarantees.Remote.SketchBoundRun` and
 `SketchBoundDeployed` bound, the memory line's sketch premise.

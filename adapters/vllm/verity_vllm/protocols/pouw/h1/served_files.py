@@ -4,14 +4,16 @@ lists, held to the prover's earlier records (`register`, `WindowCommitmentEntrie
 imports nothing of `pouw_h1_served`: a run's ``served`` is its `Served`, read once the window is closed."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
-from verity.protocols.spot.verifier.one_stage.served import ServedTree
 from verity.circuits.codec import canonical_json
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree
 
 #: a statement's ``--registered`` file, one a call
 FILE = "pouw-h1-registered-c{call}.json"
@@ -23,7 +25,7 @@ def file_name(call: int) -> str:
 
 def _served(run: Any) -> Any:
     served = getattr(run, "served", None)
-    if getattr(served, "registered", None) is None:
+    if served is None or getattr(served, "registered", None) is None:
         raise ValueError(f"{run.entry}: the window's rows aren't registered values (the run has no `Served`)")
     if not run.closed:
         raise ValueError(f"{run.entry}: the window isn't closed, so its tables aren't all committed")

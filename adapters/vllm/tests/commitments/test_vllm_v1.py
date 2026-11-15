@@ -8,14 +8,14 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-
-from verity_vllm.commitments import vllm_v1 as ref
 from verity.commitments.identity import identity_digest_sha512
-from verity_vllm.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.commitments.scheme import CommitmentScheme
-from verity_vllm.commitments.vllm_v1 import vectors as V
-from verity_vllm.commitments.vllm_v1 import vectors_sha512 as V512
 from verity.errors import InvalidArtifact
+
+from tests.commitments import vectors as V
+from tests.commitments import vectors_sha512 as V512
+from verity_vllm.commitments import vllm_v1 as ref
+from verity_vllm.commitments.leaves import LIFT_TAG, NODE_TAG, H
 
 VECTORS = V.load()
 VECTORS_SHA512 = V512.load()
@@ -30,11 +30,12 @@ def _path(entries: list[str | None]) -> list[bytes | None]:
 
 
 def test_vectors_file_is_what_the_reference_generates() -> None:
-    assert V.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors`"
+    assert V.VECTORS.read_text(encoding="utf-8") == V.render(), (
+        f"{V.VECTORS} is not what tests/commitments/vectors.py renders; from adapters/vllm, `{V.GENERATOR}` writes it again")
 
 
 def test_scheme_implements_the_interface() -> None:
-    scheme = ref.VllmV1({})
+    scheme = ref.Scheme({})
     assert isinstance(scheme, CommitmentScheme)
     assert scheme.name == ref.NAME == VECTORS["scheme"] == "vllm-v1"
     assert scheme.hashes == ("sha256",)
@@ -58,7 +59,7 @@ def test_configured_scheme_proves_digests_and_verifies_bound_roots() -> None:
     values = [V.expand(f"cfg/{i}", 10 + i) for i in range(5)]
     domain = ref.StepDomain(*(V.digest_of(k) for k in "pcgl"), 5)
     stream = ref.StreamDomain(V.digest_of("sl"), 1, 3, 16, 3, 1, 4, 1)
-    scheme = ref.VllmV1({"host": domain, "m1": stream}, value_nbytes={"host": lambda i: 10 + i})
+    scheme = ref.Scheme({"host": domain, "m1": stream}, value_nbytes={"host": lambda i: 10 + i})
     digests = [scheme.leaf_layout("host", i).digest(v) for i, v in enumerate(values)]
     leaves = [scheme.tree_leaf("host", i, d) for i, d in enumerate(digests)]
     assert leaves == [ref.pos_leaf(v) for v in values]
@@ -73,7 +74,7 @@ def test_configured_scheme_proves_digests_and_verifies_bound_roots() -> None:
     with pytest.raises(InvalidArtifact):
         scheme.leaf_layout("host", 5)
     with pytest.raises(InvalidArtifact):
-        ref.VllmV1({"host": domain}).leaf_layout("host", 0)
+        ref.Scheme({"host": domain}).leaf_layout("host", 0)
 
 
 @pytest.mark.parametrize("case", VECTORS["trees"], ids=lambda c: f"n={c['leaf_count']}")
@@ -189,7 +190,9 @@ def test_headers_refuse_fields_that_would_alias() -> None:
 
 
 def test_sha512_vectors_file_is_what_the_reference_generates() -> None:
-    assert V512.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors_sha512`"
+    assert V512.VECTORS.read_text(encoding="utf-8") == V512.render(), (
+        f"{V512.VECTORS} is not what tests/commitments/vectors_sha512.py renders; from adapters/vllm, "
+        f"`{V512.GENERATOR}` writes it again")
 
 
 def test_sha512_leaves_and_tree_hash_vectors() -> None:
@@ -228,13 +231,13 @@ def test_sha512_root_vectors() -> None:
     for case in VECTORS_SHA512["roots"]:
         i = case["inputs"]
         args = {
-            "semantic": lambda: (_b(i["program_digest"]), _b(i["query_id"]), _b(i["template_digest"]), _b(i["ctx_digest"]), i["epoch"], i["n"],
+            "semantic": lambda i=i: (_b(i["program_digest"]), _b(i["query_id"]), _b(i["template_digest"]), _b(i["ctx_digest"]), i["epoch"], i["n"],
                                  _b(i["tree_root"])),
-            "step": lambda: (_b(i["program_digest"]), _b(i["ctx_digest"]), _b(i["geo_digest"]), _b(i["layout_digest"]), i["n"], _b(i["tree_root"])),
-            "run": lambda: (_b(i["program_digest"]), _b(i["geo_digest"]), [_b(s) for s in i["step_roots"]]),
-            "weights": lambda: (_b(i["geo_digest"]), _b(i["names_digest"]), [_b(t) for t in i["tensor_roots"]]),
-            "stream": lambda: (_b(i["layout_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
-            "thread": lambda: (_b(i["geo_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
+            "step": lambda i=i: (_b(i["program_digest"]), _b(i["ctx_digest"]), _b(i["geo_digest"]), _b(i["layout_digest"]), i["n"], _b(i["tree_root"])),
+            "run": lambda i=i: (_b(i["program_digest"]), _b(i["geo_digest"]), [_b(s) for s in i["step_roots"]]),
+            "weights": lambda i=i: (_b(i["geo_digest"]), _b(i["names_digest"]), [_b(t) for t in i["tensor_roots"]]),
+            "stream": lambda i=i: (_b(i["layout_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
+            "thread": lambda i=i: (_b(i["geo_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
         }[case["kind"]]()
         assert fns[case["kind"]](*args, hash="sha512").hex() == case["root"]
         if case["kind"] == "stream":
@@ -251,7 +254,7 @@ def test_sha512_openings_accept_exactly_the_honest_values() -> None:
 def test_sha512_configuration_names_its_hash_and_never_mixes() -> None:
     d = hashlib.sha256(b"cfg").digest()
     s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
-    scheme = ref.VllmV1({"v": s512}, value_nbytes={"v": lambda _i: 8})
+    scheme = ref.Scheme({"v": s512}, value_nbytes={"v": lambda _i: 8})
     assert isinstance(scheme, CommitmentScheme)
     assert (scheme.name, scheme.hashes) == (ref.NAME_SHA512, ("sha512",)) == (VECTORS_SHA512["scheme"], ("sha512",))
     leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).digest(bytes(8))) for i in range(3)]
@@ -260,9 +263,9 @@ def test_sha512_configuration_names_its_hash_and_never_mixes() -> None:
     with pytest.raises(InvalidArtifact):
         scheme.tree_leaf("v", 0, bytes(32))
     with pytest.raises(InvalidArtifact):
-        ref.VllmV1({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
+        ref.Scheme({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
     assert ref.domain_digest(s512) != ref.domain_digest(ref.StepDomain(d, d, d, d, 3))
-    assert ref.VllmV1({}).name == ref.NAME
+    assert ref.Scheme({}).name == ref.NAME
 
 
 def test_sha512_domain_digests_are_sha512() -> None:

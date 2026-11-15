@@ -51,6 +51,16 @@ class DefinitionTable:
 
 REGISTRY = DefinitionTable()
 
+#: the catalog packages, by name: each package whose modules register a catalog's Definitions, once it has named itself
+CATALOG_PACKAGES: set[str] = set()
+
+
+def catalog_package(name: str) -> None:
+    """Name package ``name`` a catalog package. A package of modules that register Definitions calls this with its own
+    ``__name__`` as it loads, so a reader that takes only a catalog's Definitions (a window's templates,
+    `verity.commitments.windows.interface`) knows them by the catalog that registered them, wherever its files are."""
+    CATALOG_PACKAGES.add(name)
+
 
 class FunctionDefinition:
     name: str
@@ -61,7 +71,7 @@ class FunctionDefinition:
         return f"{self.name}_v{self.version}"
 
 
-#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.definitions.circuits.library`) or a
+#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.circuits.library`) or a
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 
@@ -872,4 +882,5 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
 
 
 __all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
-           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]
+           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat",
+           "CATALOG_PACKAGES", "catalog_package"]

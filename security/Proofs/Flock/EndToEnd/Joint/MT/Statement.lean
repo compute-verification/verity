@@ -242,16 +242,16 @@ namespace StratifiedMT
 
 /-- **A period of `T` sampling blocks of `J` tables**, sampling block `t`'s audit after sampling block `t − 1`'s,
 against one prover. -/
-noncomputable def game (W : ℕ → StratifiedBlockMT) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
+noncomputable def game (W : ℕ → StratifiedBlockMT) (T : ℕ) : Game Unit := monitoringPeriodG (fun t => (W t).game) 0 T
 
 /-- The period's run at the prover strategy `s`: each sampling block's record, in order. -/
 noncomputable def run (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (game W T)) : Game (List (BlockRecMT W)) :=
-  periodRun (fun t => (W t).game) (StratifiedBlockMT.record W) 0 T s
+  monitoringPeriodRun (fun t => (W t).game) (StratifiedBlockMT.record W) 0 T s
 
 /-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
 at `s`. -/
 def Plays (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
-  PeriodPlays (fun t => (W t).game) 0 T s t τ
+  MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
 
 /-- **The most harm in the period's confidence set**: the largest total weight over every choice of an incorrect set
 in each of the run's sampling blocks that their samples miss together with probability at least `δ`. -/

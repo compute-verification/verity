@@ -27,8 +27,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -44,12 +44,12 @@ RD = E.read(8, 2)
 SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, 2, bytes(range(32)), "interior-table-test", 2.0 ** -40
 RUN, PROMPT, OUTPUTS, LAYER, CAP = "b0" * 64, 4, 2, 0, 8
 C = BT.class_rows(PROMPT, OUTPUTS, CAP)
-#: each span's length L: spans 0 and 2 are drawn
+#: each span's length L: spans 0 and 2 are sampled
 LENGTHS = (5, 4, 3)
 #: sampled span s's two keys: span 0's key 5 and span 2's key 4 are past their lengths, so each opens a fill row
 TOKS = ((1, 5), (0, 4))
 #: core's history-read vector: a table of 5 rows of 4 words at 8 leaves, and the supplied value its reads take
-VECTOR = Path(__file__).resolve().parents[4] / "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json"
+VECTOR = Path(__file__).resolve().parents[4] / "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json"
 
 
 def _block():
@@ -137,7 +137,7 @@ def _spec() -> S.Spec:
 
 def _first(tables):
     """A window stream over `RD` taking the reads' values a sampled span (`interior_rows.span_values`), and round 1, a stand-in boundary
-    whose record registers each span's table as a port, registered and its first stage drawn (spans 0 and 2)."""
+    whose record registers each span's table as a port, registered and its first stage sampled (spans 0 and 2)."""
     draws = iter([[0, 2]])
     boundary = _boundary()
     stream = S.Stream(_spec(), [RD], span_values=IR.span_values(LINKS), replay=BLOCK, budget=1, delta=DELTA,

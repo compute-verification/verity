@@ -20,7 +20,8 @@ Nothing here depends on the world size but ``tp``: at one rank, vLLM's worker ru
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.pipeline.timeline import Timeline
 

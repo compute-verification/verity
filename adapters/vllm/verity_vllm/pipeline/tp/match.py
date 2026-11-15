@@ -27,38 +27,58 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.collectives import fused_norm as FN
-from verity_vllm.config import option, workload_arg
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
-from verity_vllm import settings
+
+__all__ = ["Options", "main"]
+
+
+def _first_steps(tok: dict) -> dict:
+    """What a capture's `tokens.json` says of each request's timing, by request id (`timing.requests`); empty for a capture written
+    without the block."""
+    timing = tok.get("timing")
+    listed = timing.get("requests") if timing else None
+    return listed if listed else {}
+
+
+def _first_step(listed: dict, request: dict) -> int:
+    """The forward that ran a request's prefill (`first_step` of its entry in `_first_steps`, by its `request_id`); 0 for a request
+    the block does not list, and for a step the engine did not report (null)."""
+    entry = listed.get(str(request["request_id"]))
+    first = entry.get("first_step") if entry else None
+    return int(first) if first else 0
 
 
 def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
     """{engine step: (tokens, sampled rows)} of the schedule a capture's `tokens.json` realized: each request from the forward that ran
-    its prefill (`timing.requests[rid].first_step`, 0 without one) for one forward per generated token, as `launch_context.rows_at`
-    schedules a declared request (a chunked prefill is not modelled: its steps' rows differ and fail)."""
-    timing = (tok.get("timing") or {}).get("requests") or {}
-    reqs = [{"arrive_step": int((timing.get(str(q["request_id"])) or {}).get("first_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
+    its prefill (`_first_step`) for one forward per generated token, as `launch_context.rows_at` schedules a declared request (a
+    chunked prefill is not modelled: its steps' rows differ and fail)."""
+    timing = _first_steps(tok)
+    reqs = [{"arrive_step": _first_step(timing, q), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
     last = max((q["arrive_step"] + max(1, q["max_tokens"]) for q in reqs), default=0)
     return {e: (sum(rows_at(q, e) for q in reqs), sum(1 for q in reqs if rows_at(q, e))) for e in range(last)}
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.engine import engine_profile as prof, env as engine_env
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import env as engine_env
 
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm.engine import served, vllm_adapter as va
+    from verity_vllm.engine import served
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
@@ -85,7 +105,7 @@ def _engine_main(args) -> None:
     topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout) if instrumented else None
     (out / "topology.json").write_text(json.dumps({"arm": args.arm, "tp": args.tp, "build_s": round(build_s, 1),
                                                     "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
-                                                    "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
+                                                    "env": settings.redact({k: v for k, v in settings.environ().items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
@@ -106,16 +126,18 @@ def _engine_main(args) -> None:
     print(f"[tp2match:{args.arm}] run {run_s:.2f}s {timing.get('engine_steps')} steps; recorder={closed}", flush=True)
 
 
-def _check_main(args) -> int:
-    try:
-        import torch
-    except ImportError:            # laptop re-check of the structure criterion only; provenance needs the stored .pt steps + torch
-        torch = None
+def _campaign() -> str:
+    """The campaign label a check's record carries: `VERITY_CAMPAIGN` as the environment holds it, the empty string included, and
+    its declared default where the name is not set."""
+    label = settings.raw("VERITY_CAMPAIGN")
+    return settings.setting("VERITY_CAMPAIGN").default if label is None else label
 
+
+def _check_main(args) -> int:
     run = Path(args.out)
     cap, ctl = run / "capture", run / "control"
     res: dict = {"schema": "tp2-match/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run": str(run),
-                 "campaign": os.environ.get("VERITY_CAMPAIGN", "r15"),
+                 "campaign": _campaign(),
                  "what": "collective-level TP-aware Match (structure + cross-rank provenance + tokens); NOT the instance-sequence Match"}
     # the world is the number of rank Builds given (--build-rank in rank order; --build-rank0/1 are the two-rank spelling)
     builds = _build_dirs(args)
@@ -129,29 +151,40 @@ def _check_main(args) -> int:
             res["fail"] = f"missing {p}"
             _write(run, res)
             return 1
-        recs[r] = [json.loads(l) for l in p.open() if l.strip()]
+        recs[r] = [json.loads(line) for line in p.open() if line.strip()]
     # the recorder files this check read, by digest: the provenance record below is bound to THESE rows (and
     # rank_match refuses a provenance record whose recorder digests are not those of the rows it loads itself)
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
-    tok = json.load(open(cap / "tokens.json"))
-    sched = step_rows(tok)
-    gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
-    # ---- 1. structure vs each rank's Build peer-input signature
-    struct = {"pass": True, "per_rank": {}}
+    tok = json.loads((cap / "tokens.json").read_text())
+    struct = res["structure"] = _structure(builds, recs, steps, step_rows(tok))
+    prov = res["provenance"] = _provenance(cap, ranks, recs, steps, recorder_sha)
+    tk = res["tokens"] = _tokens(ctl, tok)
+    res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
+    res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
+    _write(run, res)
+    print(json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
+    return 0 if res["pass"] else 1
+
+
+def _structure(builds: list[str], recs: dict, steps: list, sched: dict[int, tuple[int, int]]) -> dict[str, Any]:
+    """Part 1 of the check: each rank's recorded collectives against the peer-input signature and the sites of its Build, and their rows
+    against the schedule the capture realized (``sched``, `step_rows`)."""
+    world = len(builds)
+    struct: dict[str, Any] = {"pass": True, "per_rank": {}}
     for r, bdir in enumerate(builds):
         links = read_tp_links(str(Path(bdir) / "tp_links.json"))
-        sig = [(l["kind"], int(l["shape"][-1])) for l in links["links"]]
+        sig = [(ln["kind"], int(ln["shape"][-1])) for ln in links["links"]]
         # site identity per k: the link's module_path ('inner.model.<path> (<Class>)') must equal the record's
         # hooked module ('<path>'), so 96 width-H all-reduces are checked as the Program's SITES in the Program's ORDER, not as a
         # (kind, width) sequence that any interleaving / doubled hook / order swap would also produce.
-        sig_sites = [l.get("module") for l in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
+        sig_sites = [ln.get("module") for ln in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
         sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
         if int(links["rank"]) != r or int(links["world"]) != world:
-            raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
-        if any(len(l["peers"]) != world - 1 for l in links["links"]):
-            raise SystemExit(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
-        per_step = {}
+            raise Refused(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
+        if any(len(ln["peers"]) != world - 1 for ln in links["links"]):
+            raise Refused(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
+        per_step: dict[Any, dict[str, Any]] = {}
         bad = []
         bad_sites = []
         bad_rows = []
@@ -199,9 +232,16 @@ def _check_main(args) -> int:
     struct["step_rows"] = {s: list(sched.get(s, (0, 0))) for s in steps}
     struct["rows_rule"] = ("per step of the realized schedule (tokens.json timing.requests first_step + generated tokens): all-reduce rows == "
                            "the step's tokens; the logits all-gather's rows == its sampled rows (required); mid-module all-gather rows == its tokens; nothing else")
-    res["structure"] = struct
-    # ---- 2. cross-rank provenance on the stored steps
-    prov = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
+    return struct
+
+
+def _provenance(capture: Path, ranks: list[int], recs: dict, steps: list, recorder_sha: dict[str, str]) -> dict[str, Any]:
+    """Part 2 of the check, on the stored steps: every stored tensor digests to its recorder row (``recorder_sha``: the recorder files'
+    own digests, which travel with the record), and every rank received the registered Definition of the ranks' partials."""
+    import torch
+
+    world = len(ranks)
+    prov: dict[str, Any] = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
             "mismatches": [], "received_equal_both_ranks": 0,
             # the stored tensors are BOUND to the recorder rows: sha256 of every .pt part / out (the recorder's own bytes rule:
             # contiguous, bf16 viewed as uint8) must equal the row's part_sha256 / out_sha256 at the same (rank, step, k); every mismatch or
@@ -227,13 +267,11 @@ def _check_main(args) -> int:
                                 f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order); world 8: the routed Definition")
     prov["alt_f32_once_equal"] = 0
     prov["alt_ascending_equal"] = 0
-    settings = _routed_settings(cap, ranks, world, prov)
+    switches = _routed_settings(capture, ranks, world, prov)
     for s in steps:
-        pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
+        pts = [capture / f"coll.rank{r}.step{s}.pt" for r in ranks]
         if not all(p.exists() for p in pts):
             continue
-        if torch is None:
-            raise RuntimeError("stored provenance steps present but torch is not importable")
         vs = [torch.load(p) for p in pts]
         xs_r = [[x for x in recs[r] if x["step"] == s] for r in ranks]
         n = min(len(v["part"]) for v in vs)
@@ -251,14 +289,14 @@ def _check_main(args) -> int:
                 xr, part, out = xs_r[rank][k], parts[rank], outs[rank]
                 for what, t, key in (("part", part, "part_sha256"), ("out", out, "out_sha256")):
                     want = xr.get(key)
-                    got = _sha(t)
+                    sha = _sha(t)
                     prov["tensors_digested"] += 1
-                    if not want or got != want:
-                        _digest_fail(rank, s, k, what, f"stored .pt {what} sha256 {got[:12]} != recorder row {str(want)[:12]} (the arithmetic below runs on bytes the record does not describe)")
+                    if not want or sha != want:
+                        _digest_fail(rank, s, k, what, f"stored .pt {what} sha256 {sha[:12]} != recorder row {str(want)[:12]} (the arithmetic below runs on bytes the record does not describe)")
                 if int(xr.get("k", k)) != k or int(xr.get("step", s)) != s:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
-            route = _route(kind, parts, world, settings)
+            route = _route(kind, parts, world, switches)
             exp = _expected(kind, x0[k].get("path"), parts, outs, order, prov, route)
             if exp is None:
                 if kind != FN.KIND:
@@ -283,23 +321,21 @@ def _check_main(args) -> int:
         prov["steps_checked"] += 1
     prov["n_mismatches"] = len(prov["mismatches"])
     prov["mismatches"] = prov["mismatches"][:20]
-    res["provenance"] = prov
-    # ---- 3. tokens: instrumented == control, per request
-    tk = {"pass": None}
+    return prov
+
+
+def _tokens(ctl: Path, tok: dict) -> dict[str, Any]:
+    """Part 3 of the check: the instrumented run's tokens (``tok``) are the control arm's, per request; not judged without a control arm."""
+    tk: dict[str, Any] = {"pass": None}
     if (ctl / "tokens.json").exists():
-        c = json.load(open(ctl / "tokens.json"))
+        c = json.loads((ctl / "tokens.json").read_text())
         A = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in tok["requests"]]
         B = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in c["requests"]]
-        tk = {"pass": A == B and len(A) > 0, "n_requests": len(A), "generated_lengths": gens,
+        tk = {"pass": A == B and len(A) > 0, "n_requests": len(A), "generated_lengths": [len(q["generated_token_ids"]) for q in tok["requests"]],
               "capture_run_s": tok.get("run_s"), "control_run_s": c.get("run_s")}
     else:
         tk["note"] = "no control arm"
-    res["tokens"] = tk
-    res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
-    res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
-    _write(run, res)
-    print(json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
-    return 0 if res["pass"] else 1
+    return tk
 
 
 def _routed_settings(cap: Path, ranks: list[int], world: int, prov: dict) -> dict | None:
@@ -399,12 +435,12 @@ def _build_dirs(args) -> list[str]:
     """The rank Build dirs in rank order: `--build-rank DIR` repeated (world = count), or the two-rank `--build-rank0/--build-rank1`."""
     if getattr(args, "build_rank", None):
         if args.build_rank0 or args.build_rank1:
-            raise SystemExit("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
+            raise UsageError("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
         if len(args.build_rank) < 2:
-            raise SystemExit(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
+            raise UsageError(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
         return list(args.build_rank)
     if not (args.build_rank0 and args.build_rank1):
-        raise SystemExit("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
+        raise UsageError("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
     return [args.build_rank0, args.build_rank1]
 
 
@@ -429,10 +465,10 @@ def match_record(match_dir: str, request_ids: dict[str, str], world: int) -> tup
     for q in json.loads(mp.read_text())["requests"]:
         lg = request_ids.get(str(q["request_id"]))
         if lg is None:
-            raise SystemExit(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
+            raise Refused(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
         tokens[lg] = [int(t) for t in q["generated_token_ids"]]
     if set(tokens) != set(request_ids.values()):
-        raise SystemExit(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
+        raise Refused(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
     verdict = Path(match_dir) / "tp2_match.json"
     return tokens, {"path": str(mp), "requests": len(tokens), "generated_total": sum(len(v) for v in tokens.values()),
                     "tp2_match_verdict": json.loads(verdict.read_text()).get("pass") if verdict.exists() else None,

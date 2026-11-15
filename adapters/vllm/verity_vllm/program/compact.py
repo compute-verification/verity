@@ -28,7 +28,11 @@ record's runs back wherever its BYTES are needed (canonical sha256 serialisation
 """
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
+
+__all__ = ["expand", "expand_mixed", "expanded_file_args", "file_items_from_refs", "first_runs", "from_runs",
+           "hash_operand", "idx_values", "is_file_prog", "lean_root", "n_crosses_step", "n_max_producer", "n_producers",
+           "p_item_indices", "p_item_weight_span", "rle_mapped", "runs_from_file_items"]
 
 Prog = tuple  # head... , base: tuple[int, ...], delta: tuple[int, ...], count: int
 
@@ -53,6 +57,7 @@ class _Acc:
         self.open: tuple | None = None   # (space, idx, lo, hi)
 
     def _close(self) -> None:
+        assert self.open is not None
         space, idx, lo, hi = self.open
         v = (idx, lo, hi)
         out = self.out
@@ -315,7 +320,6 @@ def hash_operand(items: list[tuple]) -> list | dict:
 # since the GLM-5.3 scattered weight reads: a transposed-weight operand is ~2048 parameter-space progressions over ~1e6 runs, which the
 # first v2 form, node-space progressions only, stored run by run.)  `file_items_from_runs` is lossless:
 # `runs_from_file_items(file_items_from_runs(R)) == R` for every run list R (the greedy rule is a function of the run list and expands back).
-FILE_PROG = "N"
 _FILE_MARKERS = {"n": "N", "p": "P"}   # space -> stored progression marker
 _FILE_SPACES = {"N": "n", "P": "p"}    # stored progression marker -> space
 
@@ -407,7 +411,7 @@ def expanded_file_args(args: Iterable) -> list:
 
 def first_runs(progs: Iterable[tuple], n: int) -> list[tuple]:
     """The first `n` runs of a compact list (bounded work: examples)."""
-    out = []
+    out: list[tuple] = []
     for t in progs:
         head, base, delta, c = t[:-3], t[-3], t[-2], t[-1]
         for k in range(min(c, n - len(out))):
@@ -466,25 +470,6 @@ def rle_mapped(items: list[tuple]) -> list[tuple]:
     return out
 
 
-def rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
-    """Reference for `rle_mapped`: greedy RLE (no contiguity merge) of a mapped run list whose last `n_base` fields are the integers."""
-    out: list[tuple] = []
-    for t in mapped_runs:
-        head, v = t[:-n_base], t[-n_base:]
-        if out:
-            p = out[-1]
-            ph, pb, pd, pc = p[:-3], p[-3], p[-2], p[-1]
-            if ph == head:
-                if pc == 1:
-                    out[-1] = head + (pb, _sub(v, pb), 2)
-                    continue
-                if v == _add(pb, pd, pc):
-                    out[-1] = head + (pb, pd, pc + 1)
-                    continue
-        out.append(head + (v, (0,) * n_base, 1))
-    return out
-
-
 def lean_root(desc: dict, registry) -> dict:
     """The root body of a descriptor as compact instances WITHOUT building its Node / Coll / Refs objects (codec.decode_program builds
     them for every root node, then compare.Prog expanded their runs and dropped the IR).  Every non-root definition is decoded by
@@ -493,7 +478,12 @@ def lean_root(desc: dict, registry) -> dict:
     {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
     v1 `alias` = the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); v0
     descriptors have no aliases."""
-    from verity.circuits.codec import SCHEMA_V0, definition_decoder, descriptor_id, type_from_json
+    from verity.circuits.codec import (
+        SCHEMA_V0,
+        definition_decoder,
+        descriptor_id,
+        type_from_json,
+    )
     get = definition_decoder(desc, registry)
     schema = desc["schema"]
     if schema == SCHEMA_V0:

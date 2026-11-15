@@ -44,9 +44,9 @@ import numpy as np
 from verity.circuits.defs import Coll, PrimitiveDefinition, SpecializedDefinition, bind, composite
 from verity.circuits.intervals import full
 from verity.circuits.liveness import Liveness
-from verity.definitions.ops.fp32 import F32AddFtz
-from verity.definitions.ops.prims import ZERO32, const
-from verity.definitions.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
+from verity.circuits.ops.fp32 import F32AddFtz
+from verity.circuits.ops.prims import ZERO32, const
+from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
 from verity.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW

@@ -10,7 +10,13 @@ from typing import Any
 
 import pytest
 
-from tests.pipeline.test_serve_openai import Committer, Engine, Runner, Tokenizer, records
+from tests.pipeline.test_serve_openai import (
+    Committer,
+    Engine,
+    Runner,
+    Tokenizer,
+    records,
+)
 from verity_vllm import settings
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
@@ -41,7 +47,8 @@ class Bounded(Committer):
     def __init__(self, runner: Runner, budget_mb: float) -> None:
         self.learn_only, self.learn_budget_bytes = False, int(budget_mb * (1 << 20))
         self.plans: dict[Any, int] = {}
-        self.run, self.used, self.steps = 0, False, []
+        self.run, self.used = 0, False
+        self.steps: list[tuple[int, int, str]] = []
         super().__init__(runner)
 
     def reset(self) -> None:
@@ -70,7 +77,7 @@ class Bounded(Committer):
             self.steps.append((self.run, step, outcome))
             return committed(sched)
 
-        self.runner.execute_model = execute_model
+        vars(self.runner)["execute_model"] = execute_model
 
     def finalize(self) -> Any:
         rc = super().finalize()
@@ -105,7 +112,7 @@ def served(tmp_path: Any, engine: Engine, com: Bounded, opts: so.Options, blocks
 def stand_ins(opts: so.Options) -> tuple[Engine, Bounded, Any]:
     runner = Runner()
     engine = Engine(runner)
-    engine.vllm_config = SimpleNamespace(model_config=SimpleNamespace(get_vocab_size=lambda: 32000))
+    vars(engine)["vllm_config"] = SimpleNamespace(model_config=SimpleNamespace(get_vocab_size=lambda: 32000))
     return engine, Bounded(runner, opts.learning.learn_host_budget_mb), SimpleNamespace(vllm=SimpleNamespace(llm_engine=engine))
 
 

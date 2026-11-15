@@ -63,17 +63,17 @@ noncomputable def twoRegRec (H : Msg → Msg) (L : CompiledTwo Coin A) (n : ℕ)
 /-- **The deployment's run over `T` two-stage windows** at the datacenter's strategy `s`, each window recorded by
 `twoRegRec` at the count its strategy fixes (`regCount`). -/
 noncomputable def twoRegRun (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (T : ℕ)
-    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
+    (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
     Verity.Game (List (Served O V Tick Adv)) :=
-  periodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  monitoringPeriodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoRegRec H (Lv t) (regCount H (Lv t) τ.2.1.1 τ.2.1.2)) 0 T s
 
 /-- **The period at the committed traces**: over `T` two-stage windows, at every strategy whose windows' committed-form
 errors (`CompiledTwo.εregTwo` at the statement and prover each sends) are at most `ε_t`, the run leaves `M` incorrect
 replay blocks undetected with probability at most `Σ_t ε_t + (1 − r₁·r₂)^M`. -/
 def PeriodTwoReg (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (r₁ r₂ : ℝ) : Prop :=
-  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
-    (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       (Lv t).εregTwo H τ.2.1.1 τ.2.1.2 ≤ ε t) →
     ∀ M : ℕ, Verity.Game.value (Served.Undetected M) (twoRegRun H Lv T s) ≤
       ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) + ENNReal.ofReal ((1 - r₁ * r₂) ^ M)

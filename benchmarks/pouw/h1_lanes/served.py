@@ -61,12 +61,12 @@ import h1unit as U  # noqa: E402
 import leaf as L  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
 
 RC = L.RC
 EXPECT = {"tampered-zy": "REJECT", "other-call-a": "REJECT"}
@@ -86,8 +86,8 @@ def _window(path: str):
     each K's template held to the descriptor's by its descriptor id (which names every binding, so the 870 MB descriptor
     is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
     the template at K, as a served window's verifier derives it."""
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
@@ -118,7 +118,7 @@ def _data_port(port: str) -> bool:
 def extract(a: argparse.Namespace) -> None:
     import pickle
 
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import prover as PV

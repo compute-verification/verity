@@ -2,8 +2,8 @@ module
 
 public import Properties.Pouw.PearlPlus
 public import Properties.Pouw.PearlPlusDraw
-public import Properties.Challenger
-public import Properties.Verity.Game
+public import Definitions.Core.Interaction
+public import Flock.Hash
 
 /-!
 # Pearl+'s served y at the registration record's entries (`PouwCheck.PearlPlus.tieOf`, `checkTile`, `todo`)
@@ -44,6 +44,16 @@ root and the call's index: `yCell`, the unscale (`Rule.yOf`) of the tile's U at 
   last phase as its end, `N` of them, it is `Pouw.Guarantees.Dither.FleetSound`'s convex pooling at equal weights: the
   sequences of any `K`, `s` of `N` accepted throughout, together hold wrong shares summing to at most
   (s / t) (ln (N / s) + ln (1 / δ)).
+* `UntiedCellsAtW` and `PeriodUntiedCellsAtW`, **the same as a count of cells**: a cell is one y word of one call,
+  (pass, call, row, column). The run's untied cells (`Run.untiedCells`) are its real cells whose y its table does not
+  tie (`CellAtW`); those of the give-up (`givenUpCells`, the real cells the records do not credit) are untied with
+  certainty, and the rest number at most n(ε) (`cellsAt`), except with probability δ + q / 2^256; over a sequence's
+  accepted prefix, at most `Runs.cellsUpTo`, the most cells shares whose ∏ (1 − share) is at least 1 − ε can hold.
+  n(ε) is the most credited cells ε of the run's ticket weight can hold: a record's credited cells each carry the
+  ticket `wref(1, |K|, n) / n` (`cellTicket`), and the fill (`atBy`) takes ε of the run's ticket weight from the
+  records with the most cells a ticket first. At |K| a cell the same fill is the MACs `creditAtAssumption` takes off
+  (`macsAt`). `UntiedCellsAtMost`, with no probability in it, carries the share to the count: every credited untied
+  cell lies in a tile that is not tied.
 
 **The table and the opener.** A run's commitment fixes its values before the coin: `Run.table` holds them, for each of
 W's values and each leaf position at most one opening. It is the prover's, a field of the run, which the verifier never
@@ -52,10 +62,10 @@ opener that sees the coin, as the real prover does. A tile is tied at W's entrie
 An accepted opening is held to the table through `OpeningBinds`, which is the lemma here and no hypothesis: where a row
 the verdict opens at the coin differs from the table's opening of the same position of the same root, two openings of
 one of W's roots are accepted, and SHA-512 collides on the messages checking them hashes (`rowsHashed`). The play's
-finder (`Run.finder`, `Runs.finder`) is the first such collision among those messages
-(`Properties.Challenger.collisionIn`), a `Claims.Finder` over the play's coins whose cost is declared at the budget `q`
-for the play's whole SHA-512 work, the prover's own included, as `Claims.BAt`'s is. Its premise is
-`Claims.ExpectedCR` at the compiled SHA-512 (`Verity.sha512Msg`), what `Verity.Vocab.FinderCR` reads at a subprotocol's
+finder (`Run.finder`, `Runs.finder`) is the first such collision among those messages (`collisionIn`, the
+challenger's finder's), a `Claims.Finder` over the play's coins whose cost is declared at the budget `q` for the play's
+whole SHA-512 work, the prover's own included, as `Claims.BAt`'s is. Its premise is `Claims.ExpectedCR` at the compiled
+SHA-512 (`sha512Msg`, the composite's), what `Verity.Vocab.FinderCR` reads at a subprotocol's
 finder, and the bound reads δ plus its term, the budget over 2^256 (`Verity.Vocab.finderPr_le_crBound`'s form). There
 is no fork and no knowledge form.
 
@@ -327,6 +337,16 @@ def Run.hashed (R : Run) (o : Opener) (drawn : List (ℕ × ℕ)) : List ByteArr
         | _, _ => []
     | _, _ => []
 
+/-- The first string of `xs` whose SHA-512 digest another, different string of `xs` has, with that string: each string
+hashed once, as the challenger's finder finds one. -/
+def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
+  let hs := xs.map fun x => (x, Flock.Sha512.hash x)
+  hs.findSome? fun (x, hx) => (hs.find? fun (y, hy) => hy == hx && !(y == x)).map fun (y, _) => (x, y)
+
+/-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
+(`Claims.ExpectedCR`) read. -/
+def sha512Msg (m : _root_.Claims.Msg) : _root_.Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
+
 /-- A pair of byte strings as a pair of messages, as `Claims.Finder` outputs one. -/
 def msgPair (xy : ByteArray × ByteArray) : _root_.Claims.Msg × _root_.Claims.Msg := (xy.1.data.toList, xy.2.data.toList)
 
@@ -364,14 +384,14 @@ noncomputable def Run.wrongWeight (R : Run) : ℕ :=
 noncomputable def Run.wrongShare (R : Run) : ℝ :=
   (R.wrongWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
 
-/-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`Properties.Challenger.collisionIn`) among
+/-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`collisionIn`) among
 the messages checking the opener's rows on `c` and the table's hashes (`Run.hashed`). Its coins are the play's, `t`
 tickets, and its cost is declared at the budget `q` for the play's whole SHA-512 work, the prover's own included, which
 the reader computes from the prover's time (as `Claims.BAt`). -/
 noncomputable def Run.finder (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) : _root_.Claims.Finder where
   S := TicketDraws (tickets R.passes) t
-  out c := (_root_.Properties.Challenger.collisionIn (R.hashed (O c) (drawnAt (tickets R.passes) c))).map msgPair
+  out c := (collisionIn (R.hashed (O c) (drawnAt (tickets R.passes) c))).map msgPair
   cost _ := q
 
 /-- **PoUW's guarantee at W's entries, over every tile, for an opener that sees the coin.** For every run, number of
@@ -385,7 +405,7 @@ def YAtWIsTheCall : Prop :=
   ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (R.finder t O q) →
+    _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
     _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
         ε < R.wrongShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
@@ -452,7 +472,7 @@ def Runs.hashed {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) : List 
 noncomputable def Runs.finder {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (q : ℕ) :
     _root_.Claims.Finder where
   S := Fin n → Ω
-  out x := (_root_.Properties.Challenger.collisionIn (P.hashed x)).map msgPair
+  out x := (collisionIn (P.hashed x)).map msgPair
   cost _ := q
 
 /-- **PoUW's period bound for the tile sample, one sequence.** For a monitoring period of `n` execution phases, each
@@ -468,7 +488,7 @@ def PeriodYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     P.CommittedBeforeCoin → P.DrawIsTickets t →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (P.finder q) →
+    _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.tiedUpTo x k < 1 - ε) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
@@ -484,9 +504,125 @@ prefixes to them, each end counting in |ends|. -/
 def FleetYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (ends : Finset (Fin n)) (t q : ℕ) (δ : ℝ), 0 < δ →
     P.CommittedBeforeCoin → P.DrawIsTickets t →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (P.finder q) →
+    _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     _root_.Pouw.pr (fun x : Fin n → Ω => ∃ K : Finset (Fin n), K ⊆ ends ∧ K.Nonempty ∧
       (∀ k ∈ K, P.AcceptedUpTo x k) ∧
       (∏ k ∈ K, P.tiedUpTo x k) ^ t < ((K.card : ℝ) * δ / (ends.card : ℝ)) ^ K.card) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
+
+/-! ## The untied cells and n(ε) -/
+
+/-- **A cell**: one y word of one call, (pass, the call's position in its pass, row, column). -/
+abbrev Cell : Type := ℕ × ℕ × ℕ × ℕ
+
+/-- **The run's real cells**: each row below its call's `realRows` at each column below its width `n`, of every call of
+every retained pass. A filler row past `realRows` has no y row and is no cell; a dropped round's call is no pass's. -/
+def realCells (passes : List Pass) : Finset Cell :=
+  (passes.zipIdx.flatMap fun (p, pi) => p.records.zipIdx.flatMap fun (r, pos) =>
+    (List.range r.realRows).flatMap fun i => (List.range r.matmul.n).map fun j => (pi, pos, i, j)).toFinset
+
+/-- **The run's credited cells**: the credited cells (`UnitRecord.credited`) of each tile of each call, the cells its
+tickets weigh. -/
+def creditedCells (passes : List Pass) : Finset Cell :=
+  (passes.zipIdx.flatMap fun (p, pi) => p.records.zipIdx.flatMap fun (r, pos) =>
+    (p.scheme.tiles r.matmul.m r.matmul.n).flatMap fun (rows, cols) =>
+      (r.credited rows cols).1.flatMap fun i => (r.credited rows cols).2.map fun j => (pi, pos, i, j)).toFinset
+
+/-- **The give-up, as cells**: the real cells the records do not credit (excluded A rows, the rows of a band that holds
+a voluntary A row, the columns of a block that holds an excluded or voluntary B row). The records fix it before the
+coin, and no statement here ties it. -/
+def givenUpCells (passes : List Pass) : Finset Cell := realCells passes \ creditedCells passes
+
+open Classical in
+/-- **The run's untied cells**: its real cells whose y its table does not tie at W's entries (`CellAtW`), the pass
+registered as round `roundOf rounds passes.length pass`. -/
+noncomputable def Run.untiedCells (R : Run) : Finset Cell :=
+  (realCells R.passes).filter fun c =>
+    match R.passes[c.1]? with
+    | some p => ¬ CellAtW R.w R.table p.salt (roundOf R.rounds R.passes.length c.1) c.2.1 p.records[c.2.1]!
+        c.2.2.1 c.2.2.2
+    | none => True
+
+/-- **The run's untied credited cells**: its untied cells outside the give-up. -/
+noncomputable def Run.untiedCredited (R : Run) : Finset Cell := R.untiedCells \ givenUpCells R.passes
+
+/-- **A credited cell's ticket weight** in the record `r`: `wref(1, |K|, n) / n`, `ticketWeight`'s over its cells. It
+is positive at every width `n > 0`. -/
+def cellTicket (r : UnitRecord) : ℚ := (wref 1 r.kKept r.matmul.n : ℚ) / r.matmul.n
+
+/-- **The run's units, counting `per r` a credited cell of the record `r`**: each record that credits a cell, as (its
+count a unit of ticket weight, `per r / cellTicket r`, and its ticket weight), the most a unit of weight first. At
+`per r = r.kKept` they are `creditAtAssumption`'s units. -/
+def unitsBy (per : UnitRecord → ℚ) (passes : List Pass) : List (ℚ × ℚ) :=
+  (passes.flatMap fun p => p.records.filterMap fun r =>
+    let cells := ((p.scheme.tiles r.matmul.m r.matmul.n).map fun (rows, cols) =>
+      (r.credited rows cols).1.length * (r.credited rows cols).2.length).sum
+    if cells = 0 then none else some (per r / cellTicket r, (cells : ℚ) * cellTicket r)).mergeSort
+    fun a b => decide (b.1 ≤ a.1)
+
+/-- What a ticket weight `b` holds, spent on the units in their order, each up to its own weight. -/
+noncomputable def fill : List (ℚ × ℚ) → ℝ → ℝ
+  | [], _ => 0
+  | (ρ, w) :: us, b => min b (w : ℝ) * (ρ : ℝ) + fill us (b - min b (w : ℝ))
+
+/-- **The most that ε of the run's ticket weight can hold, counting `per r` a credited cell**: ε of its units' weight
+filled from the units with the most a unit of weight. A tile's cells all have its record's ticket, so this bounds the
+count over every set of tiles of share at most ε. -/
+noncomputable def atBy (per : UnitRecord → ℚ) (passes : List Pass) (ε : ℝ) : ℝ :=
+  fill (unitsBy per passes) (ε * (((unitsBy per passes).map (·.2)).sum : ℝ))
+
+/-- **n(ε)**: the most credited cells that ε of the run's ticket weight can hold (`atBy` at one a cell). -/
+noncomputable def cellsAt (passes : List Pass) (ε : ℝ) : ℝ := atBy (fun _ => 1) passes ε
+
+/-- **The most credited MACs that ε of the run's ticket weight can hold** (`atBy` at |K| a cell): the MACs
+`creditAtAssumption` takes off the run's credit at ε, its `wrong`. -/
+noncomputable def macsAt (passes : List Pass) (ε : ℝ) : ℝ := atBy (fun r => (r.kKept : ℚ)) passes ε
+
+/-- **The wrong share counts the untied cells**: a run whose wrong share is at most ε has at most n(ε) untied credited
+cells. Every untied credited cell is a credited cell of a tile its table does not tie, whose ticket counts in the wrong
+share, and the fill bounds the credited cells of tiles of that share. No probability: it is about the run's passes and
+table alone, and it needs no premise that the run is held to W. The tile a credited cell lies in is tile `x` of its
+record, whose id is the record's offset plus `x` (`Pass.tile?`'s numbering), and every tile has a width `n > 0`, so
+its ticket is its cells at `cellTicket`. Proved: `untiedCellsAtMost` (`Proofs.Properties.Pouw.PearlPlus.Tie`). -/
+def UntiedCellsAtMost : Prop :=
+  ∀ (R : Run) (ε : ℝ), R.wrongShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
+
+/-- **PoUW's guarantee at W's entries, as cells.** On `YAtWIsTheCall`'s premises: over `t` uniform work-weighted
+tickets, the run is accepted on the tiles they name with openings its table holds while more than n(ε)
+(`cellsAt R.passes ε`) of its credited cells are untied, with probability at most δ + q / 2^256. So except with that,
+on accept, the run's untied cells are the give-up (`givenUpCells`) and at most n(ε) credited cells. -/
+def UntiedCellsAtW : Prop :=
+  ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
+    (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
+    0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
+    _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
+    _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
+      R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
+        cellsAt R.passes ε < (R.untiedCredited.card : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
+
+/-- **The untied credited cells of a sequence's prefix**: over phase `k` and the earlier phases of its sequence, each
+its own run's. -/
+noncomputable def Runs.untiedUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) (k : Fin n) : ℕ :=
+  ∑ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then (P.run x w).untiedCredited.card else 0)
+
+/-- **n(ε) over a sequence's prefix, through the product**: the most credited cells phase `k` and the earlier phases
+of its sequence can hold at shares `s` in [0, 1] whose ∏ (1 − s) is at least 1 − ε, each phase's at its own n
+(`cellsAt`) of its share. -/
+noncomputable def Runs.cellsUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) (k : Fin n) (ε : ℝ) : ℝ :=
+  ⨆ s : {s : Fin n → ℝ // (∀ w, 0 ≤ s w ∧ s w ≤ 1) ∧
+      1 - ε ≤ ∏ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then 1 - s w else 1)},
+    ∑ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then cellsAt (P.run x w).passes (s.1 w) else 0)
+
+/-- **PoUW's period bound as cells, one sequence.** On `PeriodYAtWIsTheCall`'s premises: for each sequence `a`, over
+the period's coins, some phase of `a` and every earlier one of `a` are accepted while those phases hold more untied
+credited cells than `Runs.cellsUpTo` at ε, with probability at most δ + q / 2^256, whatever `n` is. Since the shares
+of the prefix sum to at most −ln(1 − ε), that is at most −ln(1 − ε) times the largest, over the prefix's phases, of a
+phase's ticket weight times its most cells a unit of ticket weight. -/
+def PeriodUntiedCellsAtW : Prop :=
+  ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
+    0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
+    P.CommittedBeforeCoin → P.DrawIsTickets t →
+    _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
+    ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
+      P.cellsUpTo x k ε < (P.untiedUpTo x k : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
 end Properties.Pouw.PearlPlus

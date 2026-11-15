@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import boolean_rope as BR
 from verity.definitions.registry import dsa_ds_mla as M
 from verity.definitions.registry.boolean_dsa import E4M3, F32, bit_ops, flat

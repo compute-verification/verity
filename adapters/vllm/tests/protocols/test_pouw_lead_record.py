@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+
 from verity_vllm.protocols.pouw.lead import record as LR
 from verity_vllm.protocols.pouw.lead.feed import Call
 
@@ -77,6 +78,13 @@ def test_the_window_is_fixed_before_its_salt():
     rec.salted(SALT)
     with pytest.raises(LR.RecordError, match="the window's salt comes once"):
         rec.salted(SALT)
+
+
+def test_the_salt_is_the_records_and_salted_returns_nothing():
+    """`salted` keeps the salt as the record's ``salt`` and returns nothing: whoever needs the salt reads the record."""
+    rec = record()
+    assert rec.salted(SALT) is None
+    assert rec.salt == SALT
 
 
 def test_a_call_past_the_windows_count_is_refused():

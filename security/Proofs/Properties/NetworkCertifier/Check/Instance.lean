@@ -58,7 +58,7 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 /-!
 # The completeness theorems' honest cases, instantiated
 
-Each completeness theorem of `Outcomes` (`honestAccepted`, `accepts_of_linkWindowsAccepted`, `undecided_of_somePending`,
+Each completeness theorem of `Outcomes` (`honestAccepted`, `accepts_of_transferBlocksAccepted`, `undecided_of_somePending`,
 `answer_of_decodedAccepted`) has one instance here whose hypotheses hold: a unit of one egress link (`out`) and one
 ingress link (`in`) over one window of a one-bucket grid, a toy LMS key (`N = 8`, `W = 8`, `H = 1`, two leaves), and
 the two records an honest certifier issues for it, each under a 64-byte salt and signed at its own leaf
@@ -122,7 +122,7 @@ theorem toyKey_valid : ValidKey toyKey :=
 /-- A certifier session id of 32 zero bytes. -/
 def session : ByteArray := ⟨Array.replicate 32 0⟩
 
-theorem session_size : session.size = 32 := by decide +kernel
+theorem attachment_size : session.size = 32 := by decide +kernel
 
 def issuer : Issuer := { key := toyKey, session }
 
@@ -204,7 +204,7 @@ theorem signed (d : Direction) (l : String) {pd : ByteArray} (hpd : pd.size = 64
       ∃ m, certificateMessage (params.key.extract 0 16) params.session l d 0 (certificateDigest salt dg) = .ok m ∧
         LmsVerifies params m σ := by
   obtain ⟨h, D, m, hh, hprep⟩ := prepare_of (i := issuer) (r := record l) (d := d) (g := grid) (pd := pd) issuer_I
-    session_size salt_size rfl (by
+    attachment_size salt_size rfl (by
       intro row hrow
       have : row = #[none] := by simpa [record] using hrow
       subst this
@@ -266,12 +266,12 @@ theorem honestAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params 
     subst hl hw
     exact ⟨hi, salt, dgi, σi, hib, hia, hif, hibm, hip, his, hidl, hdgi, hreci, mi, hmi, hσi⟩
 
-/-- **`accepts_of_linkWindowsAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every link-window of
+/-- **`accepts_of_transferBlocksAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every link-window of
 the honest commitment is accepted. -/
-theorem linkWindowsAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params eg ig) :
-    ∃ c, LinkWindowsAccepted params c evidence :=
+theorem transferBlocksAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params eg ig) :
+    ∃ c, TransferBlocksAccepted params c evidence :=
   let ⟨c, h⟩ := honestAccepted_instance hpd
-  ⟨c, acceptsLinkWindows params c evidence h⟩
+  ⟨c, acceptsTransferBlocks params c evidence h⟩
 
 /-- **`undecided_of_somePending`'s hypothesis holds**: for parameters digests `eg` and `ig`, the unit with no records
 has every link-window pending, so it is undecided. -/

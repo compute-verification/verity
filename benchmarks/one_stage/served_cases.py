@@ -58,21 +58,21 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   Both composites name the policy among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`), and
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
-  case is asked for; on a tree that leaves the policy out (the public release) the case is refused saying so.
+  case is asked for; on a tree that leaves the policy out the case is refused saying so.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
-  (`credit.commit_of`, as `Core.Remote.windowRecords` reads it): the case commits to the auditor's ledger, so the tie
+  (`credit.commit_of`, as `Core.Remote.executionPhaseRecords` reads it): the case commits to the auditor's ledger, so the tie
   is its windows'. A period with a window on another record, or on none, is refused here, before any composite runs,
   and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
   another record's work beside this window's. Without a period case none is made, and a composite names it missing.
 * **Pearl+'s run case** (`pearlplus_case`, `PEARL_PLUS`: `verity/pouw/pearl-plus/v1`, the work subprotocol of remote's
   composite of record, `Core.Remote.V1`): from the parts Pearl+'s piece wrote on the served node (``--pearlplus``; with
   ``--serve-dir``, `PEARL_PLUS_PIECE` when it holds them: `served_passes.py case`), its params (the epoch's coin
-  commitment, the draws and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
+  commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
   manifests and R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
-  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, draws and coin record, which the check of this
+  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples and coin record, which the check of this
   case runs on the blobs instead of the files) under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
   passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
@@ -118,18 +118,18 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.verifier import period_check as PC
-from verity.protocols.spot.verifier.one_stage import proofs as PF
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.one_stage import verifier as VF
+from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import period_check as PC
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/recursion/verifier/recursive", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
@@ -137,8 +137,7 @@ ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
-#: (``LEAN``) and the Python that check is held to (``reference``). The public release leaves the policy out, and that
-#: module with it, so `policy` loads it by name
+#: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
 PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"
@@ -243,7 +242,7 @@ def sampled_case(audit: Path) -> dict[str, Any]:
 def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     """PoUW's period case in ``d`` as `pouw_piece.py period` wrote it, its answer line and its verdict, once every window
     of the period names the record of digest ``digest`` as its Commit record (`credit.commit_of`, as
-    `Core.Remote.windowRecords` reads each window's ``commit``): the record tie remote checks (`Core.Remote.windows`)."""
+    `Core.Remote.executionPhaseRecords` reads each window's ``commit``): the record tie remote checks (`Core.Remote.windows`)."""
     case = _json(d / "case.json")
     _need(isinstance(case, dict) and CASE_KEYS <= set(case) <= CASE_KEYS | {"blobs"},
           f"{d}/case.json is not a case: it holds {sorted(CASE_KEYS)} and its blobs")

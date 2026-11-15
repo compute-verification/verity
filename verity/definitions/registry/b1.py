@@ -21,9 +21,9 @@ import numpy as np
 from verity.circuits.defs import Coll, CompositeDefinition, PrimitiveDefinition, bind, composite
 from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple
-from verity.definitions.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
-from verity.definitions.ops.prims import ZERO32, const
-from verity.definitions.ops.scalar import BitNot
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
+from verity.circuits.ops.prims import ZERO32, const
+from verity.circuits.ops.scalar import BitNot
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import A16, BF16, BIT, F32, I32
 

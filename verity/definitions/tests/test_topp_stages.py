@@ -191,6 +191,107 @@ def test_every_served_select_chunk_s_lanes_take_their_own_slice_s_positions():
     assert len(first) == 4840 and inside == {2: 0, 4: 0, 8: 0, 16: 8, 32: 24} and other == {2: 0, 4: 0, 8: 0, 16: 0, 32: 384}
 
 
+def _mask_chunks(V: int, lg, ops: dict, S: int, outs: dict) -> dict:
+    """Every mask chunk of `mask_plan(V)` evaluated in order on the twin's pipeline outputs (``outs``) and the carry the
+    chunk before it returned: each chunk's output fields by key."""
+    got: dict = {}
+    for u in T.mask_plan(V):
+        if u.key[0] != "mask":
+            continue
+        flat = [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, {**outs, **got}))]
+        n = fields(u.defn)[0]
+        got[u.key] = [flat[:n], flat[n:]] if not u.defn.bindings["LAST"] else [flat]
+    return got
+
+
+def _check_mask_chunks(V: int, lg, ops: dict, S: int) -> tuple[np.ndarray, dict, list]:
+    """The mask chunks chained along the row are `TopPMask_v4{V,S}` on its temperature-scaled lanes, and each carries the
+    positions the select chunk of its lanes carries in the twin; returns the masked row, the twin's outputs and the chunks."""
+    from verity.definitions.registry import dead_free as DF, sampling_rows as SR
+
+    _, outs = TW.stage_rows(V, lg, splits=S, **ops)
+    got = _mask_chunks(V, lg, ops, S, outs)
+    masks = [u for u in T.mask_plan(V) if u.key[0] == "mask"]
+    row = np.array([w for u in masks for w in got[u.key][0]], np.uint64)
+    xs = SR.temperature_scale_row(lg, ops["temp"])
+    assert [int(v) for v in row] == list(evaluate(bind(DF.TopPMaskV4, V=V, S=S), [int(v) for v in xs], ops["top_p"], S))
+    bad = [u.key for u in masks[:-1] if got[u.key][1] != [int(v) for v in outs[("select", u.key[1])][0][3:]]]
+    assert bad == [], S
+    return row, outs, masks
+
+
+#: lanes of a V = 64 row tied at the top, in pairs across the boundary of two-lane chunks (`chunk(64)` is 2)
+TIES_64 = [1, 2, 5, 6, 33, 34]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("S", K.SPLIT_COUNTS)
+def test_a_mask_chunk_is_the_select_chunk_up_to_its_mask_and_topp_mask_v4(S):
+    """On a V = 64 row with ties across chunk boundaries (top_p keeps some of them, so each lane's keep bit reads the count
+    of ties carried from the chunks before it) and a row with a lane outside the kept set in every chunk: the mask chunks,
+    each on the twin's row scalars and the carry the one before it returned, are `TopPMask_v4{V,S}`, each carries the
+    select chunk's positions, and every select chunk, evaluated, carries the Gumbel scan of the mask chunks' lanes: the
+    select's own mask is the unit's.  About 25 s a split count, the twin and the Definitions' evaluator."""
+    from verity.definitions.registry import sampling_rows as SR
+
+    V, seed, pos = 64, 0x1234_5678_9ABC_DEF0, 41
+    x = np.full(V, 1.0, np.float32)
+    x[TIES_64] = 8.0
+    ops = {"top_p": f32(0.5), "seed": seed, "pos": pos, "temp": f32(0.7)}
+    row, outs, masks = _check_mask_chunks(V, bf16_row(x), ops, S)
+    kept = int((row[TIES_64] != K.NEG_INF).sum())
+    assert 0 < kept < len(TIES_64) and (row[np.setdiff1d(np.arange(V), TIES_64)] == K.NEG_INF).all(), (S, kept)
+    y = SR._u32(SR.add_ftz(SR._u32(row), SR.noise_row(SA.stream_key(seed, pos), V))).astype(np.uint64)
+    bi = TW._argmax_prefix(y)
+    for u in [u for u in T.plan(V) if u.key[0] == "select"]:
+        hi = u.lanes[1]
+        got = [int(v) for v in evaluate(u.defn, *unit_args(u, bf16_row(x), {**ops, "splits": S}, outs))]
+        assert got[:3] == ([int(bi[-1])] if hi == V else [int(y[bi[hi - 1]]), int(bi[hi - 1]), hi]), (S, u.key)
+
+    lg = bf16_row((np.random.default_rng(S).standard_normal(V) * 3).astype(np.float32))
+    row, _, masks = _check_mask_chunks(V, lg, {"top_p": f32(0.3), "seed": seed, "pos": pos, "temp": f32(1.0)}, S)
+    assert all((row[u.lanes[0]:u.lanes[1]] == K.NEG_INF).any() for u in masks), S
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("S", K.SPLIT_COUNTS)
+def test_a_mask_chunk_of_32_lanes_is_topp_mask_v4_across_chunk_and_slice_ends(S):
+    """A V = 1000 row in mask chunks of `SELECT_N` lanes, tied at the top across the boundary of two chunks (lanes 511 and
+    512) and past a slice's end inside a chunk at split counts 2 to 16 (lane 504), top_p keeping some of the ties: the
+    chunks are `TopPMask_v4{V,S}` and carry the select chunks' positions.  About 20 s a split count."""
+    V, ties = 1000, [3, 470, 504, 511, 512, 700, 900]
+    x = ((np.arange(V) * 5 % 257) / 64 - 2).astype(np.float32)
+    x[ties] = 8.0
+    assert T.chunk(V) == T.SELECT_N and 511 // T.SELECT_N + 1 == 512 // T.SELECT_N
+    row, _, _ = _check_mask_chunks(V, bf16_row(x), {"top_p": f32(0.4), "seed": 7, "pos": 42, "temp": f32(0.7)}, S)
+    assert 0 < int((row[ties] != K.NEG_INF).sum()) < len(ties), S
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("first, last", [(True, False), (False, False), (False, True)])
+def test_the_mask_chunk_s_kernel_is_the_definition_on_chunks_of_real_rows_at_every_split_count(first, last):
+    """The twin's mask chunk, circuit-check's reference for `TopPMaskChunk_v1` (the sidecar registers it), on the chunk of a
+    V = 64 row in each of its places, two rows at each split count: every one compared, none a mismatch; on uniform words
+    it declines only carries that are no lane's (`topp_stage_twins.carry_words`) and claims the all-zero carry.  About 20 s
+    a place, the twin's rows and the Definitions' evaluator."""
+    from verity.circuits.evaluation import sample_uniform, self_check
+    from verity.circuits.evaluation.reference import signature_of
+
+    TW.register_kernels()
+    st = dict(V=64, N=2, FIRST=first, LAST=last)
+    t = bind(T.TopPMaskChunk, **st)
+    params, _ = signature_of(t)
+    rng = np.random.default_rng(int(first) + 2 * int(last))
+    rows = [TW.mask_chunk_inputs(rng, S, **st) for S in K.SPLIT_COUNTS for _ in range(2)]
+    sc = self_check(t, kernel="numpy", inputs=[np.asarray([r[j] for r in rows], np.uint64) for j in range(len(params))])
+    assert (sc.compared, sc.mismatches) == (len(rows), [])
+    uniform = sample_uniform(np.random.default_rng(5), 16, params)
+    if not first:
+        uniform[-1][0] = 0
+    sc = self_check(t, kernel="numpy", inputs=uniform)
+    assert sc.mismatches == [] and sc.compared >= 1 and (sc.declined == 0) == first
+
+
 EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
 
 
@@ -222,9 +323,9 @@ def test_the_twin_s_keep_bits_are_topp_keep_s():
             assert np.array_equal(TW.keep_bits(V, lg, int(p.view(np.uint32)), temp, S), want), (kind, S)
 
 
-@pytest.mark.parametrize("V", [16, 64, 1000, SERVED_V])
-def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V):
-    units = T.plan(V)
+def _wired(units, V: int) -> dict:
+    """Each unit's parameters are its lanes, the Call's operands and wires to an earlier unit's output of its type, each
+    (Definition, parameter) from one output port of its writers (`stage_rows.wire`); returns the units by key."""
     seen: dict[tuple, object] = {}
     outputs: dict[tuple[object, str], set[int]] = {}
     for u in units:
@@ -238,13 +339,36 @@ def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V
             assert fs[j] == params[p], (u.key, p, k, j)
             outputs.setdefault((u.defn, p), set()).add(j)
         seen[u.key] = u.defn
-    # a serving window wires a template's parameter to one output port of its writers (`stage_rows.wire`)
     assert all(len(js) == 1 for js in outputs.values()), {(d.id, p): js for (d, p), js in outputs.items() if len(js) > 1}
     assert len(seen) == len(units)
+    return seen
+
+
+@pytest.mark.parametrize("V", [16, 64, 1000, SERVED_V])
+def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V):
+    units = T.plan(V)
+    _wired(units, V)
     assert sum(n for _d, n in T.cut(bind(SA.GumbelTopPTokenSelect, V=V))) == len(units)
     assert units[-1].defn.signature()[1] == bind(SA.GumbelTopPTokenSelect, V=V).signature()[1]
     sel = [u for u in units if u.key[0] == "select"]
     assert [u.lanes for u in sel] == [(lo, min(lo + T.chunk(V), V)) for lo in range(0, V, T.chunk(V))]
+
+
+@pytest.mark.parametrize("V", [16, 64, 1000, SERVED_V])
+def test_the_mask_plan_is_the_pipeline_then_mask_chunks_each_writing_a_row(V):
+    """`mask_plan` is `plan` with each select chunk a mask chunk of the same lanes, wired to the same row scalars and to the
+    chunk before it, whose output 0 is the chunk's masked lanes; at GLM-5.3's vocabulary 3,319 pipeline units and 4,840 chunks
+    of 32 lanes."""
+    units, sel = T.mask_plan(V), T.plan(V)
+    _wired(units, V)
+    assert [u for u in units if u.key[0] != "mask"] == [u for u in sel if u.key[0] != "select"]
+    masks, sels = [u for u in units if u.key[0] == "mask"], [u for u in sel if u.key[0] == "select"]
+    assert [(u.lanes, u.defn.bindings) for u in masks] == [(u.lanes, u.defn.bindings) for u in sels]
+    assert all(u.defn.defn is T.TopPMaskChunk and fields(u.defn) == [u.lanes[1] - u.lanes[0]] + [T.MASK_CARRY] * (u is not masks[-1])
+               for u in masks)
+    assert [w for u in masks for w in u.wires if w[0] == "cw"] == [("cw", ("mask", k), 1) for k in range(len(masks) - 1)]
+    if V == SERVED_V:
+        assert (len(units) - len(masks), len(masks), {u.lanes[1] - u.lanes[0] for u in masks}) == (3319, 4840, {T.SELECT_N})
 
 
 def test_the_served_cut_s_units():

@@ -31,12 +31,14 @@ refused, as is a piece with two of the op (its planes are named by piece).
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
-from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.definitions.registry import act
 from verity.definitions.registry import moe as M
+
+from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 
 PLANES = ("logits", "router_w", "router_ids", "up", "act", "down")
 #: the compute capabilities whose fused_moe_kernel lowering `expert_definition` models
@@ -61,7 +63,8 @@ def expert_plans(keys: set[str], configs: dict[str, dict[str, dict[str, Any]]]) 
         out = {}
         for key in sorted(keys):
             E, K, N, r = map(int, key.split(","))
-            if (configs.get(str(m)) or {}).get(str(bool(r))) is None:
+            launched = configs.get(str(m))
+            if not launched or launched.get(str(bool(r))) is None:
                 raise Unmodelled(f"no fused_moe_kernel launch at {m} rows (MUL_ROUTED_WEIGHT {bool(r)}) was recorded")
             out[key] = expert_definition(E, K, N, bool(r))
         return out
@@ -75,25 +78,27 @@ def _block(layer: str, f: dict[str, Any] | None, x: dict[str, Any]) -> tuple[int
     off = {k: f.get(k) for k, want in REQUIRED.items() if f.get(k) is not want}
     if off or f.get("renormalize") not in (True, False):
         raise Unmodelled(f"{layer}: {off or {'renormalize': f.get('renormalize')}}; the expansion models {REQUIRED}")
-    (E, H), (E13, I2, H13), (E2, H2, I) = f["gate"]["shape"], f["w13"]["shape"], f["w2"]["shape"]
-    if not (E == E13 == E2 == f["E"] and H == H13 == H2 == x["width"] and I2 == 2 * I) or not all(f[k]["weight"] for k in ("gate", "w13", "w2")):
+    (E, H), (E13, I2, H13), (E2, H2, inter) = f["gate"]["shape"], f["w13"]["shape"], f["w2"]["shape"]
+    if not (E == E13 == E2 == f["E"] and H == H13 == H2 == x["width"] and 2 * inter == I2) or not all(f[k]["weight"] for k in ("gate", "w13", "w2")):
         raise Unmodelled(f"{layer}: gate {f['gate']}, w13 {f['w13']}, w2 {f['w2']} on hidden states of width {x['width']}")
-    return E, int(f["top_k"]), H, I
+    return E, int(f["top_k"]), H, inter
 
 
 def _calls(p: int, x: dict[str, Any], out: str, f: dict[str, Any], dims: tuple[int, int, int, int]) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """The block's Calls in piece p on hidden states x, ending in the op's return `out`, and its planes' widths."""
-    E, TOPK, H, I = dims
+    E, TOPK, H, inter = dims
     lg, rw, ri, up, ac, down = (f"c{p:02d}.moe/{n}" for n in PLANES)
-    widths = {lg: E, rw: TOPK, ri: TOPK, up: TOPK * 2 * I, ac: TOPK * I, down: TOPK * H}
-    v = lambda name: {"value": name, "width": widths[name]}
+    widths = {lg: E, rw: TOPK, ri: TOPK, up: TOPK * 2 * inter, ac: TOPK * inter, down: TOPK * H}
+    def v(name: str) -> dict[str, Any]:
+        return {"value": name, "width": widths[name]}
+
     w = {k: {"weight": f[k]["weight"], "shape": list(f[k]["shape"])} for k in ("gate", "w13", "w2")}
     router = M.MoeRouterTopKNorm if f["renormalize"] else M.MoeRouterTopK
     calls = [{"op": "mm", "gemm": [H, E], "reads": [x, {**w["gate"], "t": True}], "writes": [lg]},
              {"op": "moe_router", **bound(router, E=E, TOPK=TOPK, VPT=int(f["VPT"])), "reads": [v(lg)], "writes": [rw, ri]},
-             {"op": "moe_up", "moe": plan_key(E, H, 2 * I, False), "reads": [x, v(ri), w["w13"]], "writes": [up]},
-             {"op": "moe_act", **bound(act.SiluMul, I=I), "reads": [v(up)], "writes": [ac]},
-             {"op": "moe_down", "moe": plan_key(E, I, H, True), "reads": [v(ac), v(ri), v(rw), w["w2"]], "writes": [down]},
+             {"op": "moe_up", "moe": plan_key(E, H, 2 * inter, False), "reads": [x, v(ri), w["w13"]], "writes": [up]},
+             {"op": "moe_act", **bound(act.SiluMul, I=inter), "reads": [v(up)], "writes": [ac]},
+             {"op": "moe_down", "moe": plan_key(E, inter, H, True), "reads": [v(ac), v(ri), v(rw), w["w2"]], "writes": [down]},
              {"op": "moe_sum", **bound(M.MoeSum, TOPK=TOPK, H=H), "reads": [v(down)], "writes": [out]}]
     return [{**c, "piece": p} for c in calls], widths
 
@@ -136,4 +141,7 @@ def expand(wired: dict[str, Any], moe: dict[str, Any] | None) -> tuple[dict[str,
                 raise Unmodelled(f"{pn}: a value of the piece already has the name of a fused-MoE plane")
             values[pn] = {"width": width, "piece": val["piece"]}
         values[name] = val
-    return {**wired, "calls": calls, "values": values}, expert_plans(keys, moe.get("configs") or {})
+    return {**wired, "calls": calls, "values": values}, expert_plans(keys, configs if (configs := moe.get("configs")) else {})
+
+
+__all__ = ["REQUIRED", "expand"]

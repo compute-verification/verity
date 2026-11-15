@@ -31,9 +31,9 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
 * `head_units` (A″): the same on the model's `partition` card `head-scores-values` (a sparse-attention head's key
-  block proved as its scores unit and its values units on column blocks), labelled with the card's `label`; lines
-  only for a model with that card.  Each unit commits its own row of the block's keys and no unit writes that row, so
-  nothing holds two units' keys equal: its lines are a cost model's, not a bound, and every label says so.
+  block proved as its scores unit and its values units on column blocks, which read the block's key rows from their
+  writers' committed rows, one writer a column block for all the heads), labelled with the card's `label`; lines
+  only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits
   (`audit_exfiltration_delivered`); infiltration is its write form (the K incorrect blocks the plan detects, each the
@@ -63,7 +63,7 @@ a table holds at most `STATEMENT_BITS`, `table_blocks`), so a point with more `s
 sessions it refuses: each point carries the count, and at β = `RATIO_BUDGET` the designs beside it, each modeled
 (`session_designs`): the two with one session a block type, and those with sessions of at most 1, 16, 64 and 200
 tables (`TABLES`; a session of the proof system holds at most `SESSION_TABLES`).  A design that meets a limit of the
-code that runs a second stage today (`limits`: a session's tables, the challenger's release log, the second draw's
+code that runs a second stage today (`limits`: a session's tables, the challenger's release log, the second sample's
 live coins) is printed as out of reach, with the first limit it meets.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
@@ -90,9 +90,9 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
-from verity.protocols.spot import plancheck
-from verity.protocols.spot.device import challenger
-from verity.protocols.spot.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
+from verity.protocols.proofs.spot.prover import plancheck
+from verity.protocols.proofs.spot.device import challenger
+from verity.protocols.proofs.spot.prover.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
                                             two_stage_price, two_stage_statements)
 
 SCHEMA = "spot-figure1/v2"
@@ -233,8 +233,8 @@ CONFIGURATIONS = {
                                          "two-stage, by template", ("exfiltration", "infiltration"),
                                          partition="per-expert", serve="tokens", form="patterns",
                                          registration="machine")),
-    **_spans("head_units", Configuration("(A″) Tokens only, a head's key block as its scores and values units (modeled, "
-                                         "key rows not held equal)", TOKENS, REQUEST, "two-stage, by template",
+    **_spans("head_units", Configuration("(A″) Tokens only, a head's key block as its scores and values units and its "
+                                         "key rows' writers", TOKENS, REQUEST, "two-stage, by template",
                                          ("exfiltration", "infiltration"), partition="head-scores-values",
                                          serve="tokens", form="patterns", registration="machine")),
     "every_block": Configuration("(C) Every proof-block boundary", "every proof block's outputs", "a proof block",
@@ -624,12 +624,12 @@ TABLE_LIMITS = ((1, "the GPU prover's"), (64, "the CPU prover's and the Lean ver
 #: line a round (`verity_flock.rec_live.rep_rounds` at the smallest table)
 LOG_LINES, TABLE_LINES = challenger.MAX_TREE_LINES, 2 * 86
 #: the bytes of live coins one layout of the challenger's holds (`challenger.MAX_COINS` coins of `COIN_BYTES`), which
-#: the second stage's draw reads its streams from
+#: the second stage's sample reads its streams from
 DRAW_BYTES = challenger.MAX_COINS * challenger.COIN_BYTES
 
 
 def draw_width(n: int) -> int:
-    """The bytes of one uniform draw below `n` (`Flock.Draw.width`)."""
+    """The bytes of one uniform sample below `n` (`Flock.Draw.width`)."""
     return (n.bit_length() + 71) // 8
 
 
@@ -638,7 +638,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     runs a second stage, and the first limit it meets (`limit`, None when it meets none): its largest session's
     tables against `TABLE_LIMITS`; the lines of session coins its sessions write, at least 2 a session and
     `TABLE_LINES` a table, against one challenger session's `LOG_LINES` (`lines`); and the bytes of live coins its
-    second draw reads, a stream of 2 k width(n) + 64 bytes for each block type in each sampled replay block
+    second sample reads, a stream of 2 k width(n) + 64 bytes for each block type in each sampled replay block
     (`Flock.Draw.Stratum.need`, one stratum a cell of `Spot.Select.secondLaw`), against one layout's `DRAW_BYTES`
     (`draw_bytes`).  A block type of fewer than one proof block a replay block counts at the chance a replay block
     has it.  A design that meets one is one no deployment runs today, whatever its bound.  The verifier's refusal of

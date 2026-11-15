@@ -6,8 +6,9 @@ linear's weight), as `pouw_h1_served.Served` committed them, and holds them to t
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 

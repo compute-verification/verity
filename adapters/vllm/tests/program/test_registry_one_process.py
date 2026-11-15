@@ -1,4 +1,4 @@
-"""Core's `verity.definitions.ops` Definitions and every integration registry module load into one process, in either order, and
+"""Core's `verity.circuits.ops` Definitions and every integration registry module load into one process, in either order, and
 the integration's names for the core Definitions are core's objects (the registry refuses a second object under an id)."""
 
 from __future__ import annotations
@@ -9,17 +9,16 @@ import subprocess
 import sys
 
 import pytest
-
 import verity.definitions.registry as registry
 
-CORE = ("verity.definitions.ops.prims", "verity.definitions.ops.scalar", "verity.definitions.ops.fp32", "verity.definitions.ops.mufu", "verity.definitions.ops.gemm", "verity.definitions.kernels.tc")
+CORE = ("verity.circuits.ops.prims", "verity.circuits.ops.scalar", "verity.circuits.ops.fp32", "verity.circuits.ops.mufu", "verity.circuits.ops.gemm", "verity.circuits.kernels.tc")
 
 CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.circuits.defs import REGISTRY
-from verity.definitions.ops import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
+from verity.circuits.ops import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
 from verity.definitions.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM
 from verity_vllm.program.frontend import targets as T
 from verity.circuits.defs import PrimitiveDefinition

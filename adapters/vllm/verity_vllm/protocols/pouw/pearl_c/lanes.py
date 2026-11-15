@@ -1,7 +1,7 @@
 """The Pearl-C device path's schedule (`pouw_pearl_c_device.PearlCDeviceRun`'s lanes): the lane each call step runs on, the
 per-call buffers a side lane touches, and a call's eager launches on those lanes.
 
-The schedule (`verity.protocols.pouw.verifier.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2)
+The schedule (`verity.protocols.accounting.pouw.verifier.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2)
 places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
 hashing (`SIDE_IO`: the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
@@ -37,14 +37,23 @@ import functools
 import hashlib
 import struct
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, cast
 
-from verity.protocols.pouw.verifier.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
+from verity.protocols.accounting.pouw.verifier.serving import (
+    SCHEDULES,
+    Schedule,
+    StepIO,
+    hash_format,
+    schedule_refusals,
+)
 
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
-from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream
+from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _Lane, _stream
 
-#: each call step's group (`verity.protocols.pouw.verifier.serving.GROUPS`), which a schedule places on a lane.  The per-row
+__all__ = ["whole_options"]
+
+#: each call step's group (`verity.protocols.accounting.pouw.verifier.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
 #: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``;
@@ -120,7 +129,7 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
 
 
 def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedule:
-    """`name`'s schedule (`verity.protocols.pouw.verifier.serving.SCHEDULES`), refused where the scheme's format, this path or (when
+    """`name`'s schedule (`verity.protocols.accounting.pouw.verifier.serving.SCHEDULES`), refused where the scheme's format, this path or (when
     given) `kernel` can't run it: A's tree leaves the main lane only on a kernel whose pipeline splits A's commitment."""
     s = SCHEDULES[name] if isinstance(name, str) else name
     bad = schedule_refusals(hash_format(scheme), s)
@@ -147,7 +156,7 @@ def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
     return frozenset(ok)
 
 
-class LaneCalls:
+class LaneCalls(_RunState):
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
     ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``,
     ``_side_turn`` and ``_side_cache``, and its
@@ -270,7 +279,8 @@ class LaneCalls:
         cuda = self.device.type == "cuda"
         main = self.main if self.schedule.main_priority == "greatest" else None
         lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
-        j, rot, to, tl = 0, (), None, None
+        j, to, tl = 0, None, None
+        rot: tuple[str, ...] = ()
         if side:
             j, rot = sh.turn % len(sh.sets), rotated(self.schedule)
             sh.turn += 1
@@ -310,7 +320,7 @@ class LaneCalls:
             with torch.cuda.stream(lane) if g is not None else nullcontext():
                 for i, f in enumerate(steps):
                     if i == cut and cuda:
-                        tl.event.record(lane)
+                        cast("_Lane", tl).event.record(lane)    # a cut is of a tree aside, which took its lane above
                     f()
             if tl is not None:
                 self.kernel.dev.stream = tl.raw
@@ -320,12 +330,13 @@ class LaneCalls:
                     for f in side[:side_cut]:
                         f()
                 if g is None:
-                    size, nb, p = pipe.size["tree_a"], self.nb, index - self.cur.base
+                    size, nb, p = pipe.size["tree_a"], self.nb, index - self.cur.first
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
                         self.roots_buf[nb * p:nb * (p + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
-                    to.tree_event.record(tl.stream)
+                    cast("_Lane", to).tree_event.record(tl.stream)   # a tree lane is taken with the call's side lane
             if side:
+                to = cast("_Lane", to)              # the call's side lane, taken above with its side steps
                 self.kernel.dev.stream = to.raw
                 with torch.cuda.stream(to.stream) if g is not None else nullcontext():
                     if cuda:
@@ -360,7 +371,7 @@ class LaneCalls:
         where A's tree is aside, side lane `tl` (`to`, or from `TREE_APART_ROWS` the one after it) replays the tree graph
         after the main graph's own event past the per-row keying; side lane `to` replays the side graph after the main
         graph, then waits for the tree where `tl` is another; the caller waits for the main lane."""
-        D = self.driver
+        D = cast("_Driver", self.driver)    # no driver is unchecked: its first call fails
         lane = main.raw if main is not None else raw
         done = sh.done[j]
         if done is not None:

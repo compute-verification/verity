@@ -16,7 +16,7 @@
 * **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
-  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.LinkWindow.refusals`,
+  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.TransferBlocks.refusals`,
   `audit.certificate_refusals` beside it as the reference, ``client_check``'s ``by``). Each window's two certified
   records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
   audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
@@ -26,8 +26,8 @@
   exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
-  the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
-  `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
+  the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
+  `monitoringPeriodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
   summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
@@ -93,7 +93,7 @@ CLEAR = {
                 "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
                     "certificate's LMS signature under the certifier's key and session, by the Lean "
-                    "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
+                    "(NetworkCheck.TransferBlocks.refusals, audit.certificate_refusals its reference); and the Lean's "
                     "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
                     "under its salted clock openings (witness a rehearsal publishes), each read by the Lean "
                     "(NetworkCheck.Period.signedSyncs, certificate.SignedClocks its reference), whose certificates "
@@ -179,7 +179,7 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
     Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
-    from verity.protocols.spot.verifier.profile import Stratified
+    from verity.protocols.proofs.spot.verifier.profile import Stratified
 
     return Stratified.uniform(n, k).count_bound(delta)
 
@@ -221,7 +221,7 @@ def custody(gates: Path) -> dict:
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
     from verity.commitments.crypto import lms
-    from verity.protocols.certifier.verifier import lean_audit
+    from verity.protocols.accounting.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
@@ -290,10 +290,10 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
     """The client's kept files (`certifier_serve.keep_certificates`: each certificate's public part with its session,
     no head, sync or salt) held again to the deployment's key and session, window by window, by the client's own
     `check_certificates` on the answer they make up, each refusal the Lean's (`lean_audit.certificate_refusals`:
-    `NetworkCheck.LinkWindow.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
+    `NetworkCheck.TransferBlocks.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
     window where the two differ refused whole)."""
     import certifier_serve as cs
-    from verity.protocols.certifier.verifier import lean_audit
+    from verity.protocols.accounting.certifier.verifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -775,9 +775,9 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     else:
         audits = [a | {"steps": steps, "jitter": LB.jitter_bits(steps)} for a in audits]
         k = {f"{d:.3g}": pooled_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
-    return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
+    return {"theorem": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted, KS as hypothesis",
             "K": k,
-            "sum": "NetTiming.periodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
+            "sum": "NetTiming.monitoringPeriodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
             "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
             "sum_eps": f"{len(rows)}·(δ + ε_ks + ε_bind)",
@@ -810,13 +810,13 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     certifying the run's own request rate (`leak_bounds.per_link`), and as many identical links summed
     (`leak_bounds.at_link_rate`) as the census's reference datacenter has machines (`leak_bounds.datacenter_links`)
     and as the world fleet has (`leak_bounds.world_links`), whatever those scopes serve. Each count is in both forms,
-    the per-period form (`PeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in both
+    the per-period form (`MonitoringPeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in both
     readings of the sampling block's free inputs (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its
     share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.protocols.certifier.prover import ingress_scan as IS
-    from verity.protocols.certifier.verifier import warden as W
+    from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+    from verity.protocols.accounting.certifier.verifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
@@ -970,7 +970,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
     from verity.commitments.identity import tagged_sha512
 
     try:

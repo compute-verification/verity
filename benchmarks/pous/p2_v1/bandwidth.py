@@ -1,5 +1,5 @@
 """A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
-`verity.protocols.poub.verifier.p2_party`, whose verifier runs on another host.
+`verity.protocols.accounting.poub.verifier.p2_party`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
@@ -26,7 +26,7 @@ in worker processes). The sketch is a pass of its own over the chunk's rows, not
 byte is read from HBM twice.
 
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_party --stdio` on
-the auditor's host; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
+the auditor's device; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
 `--connect HOST:PORT`, or starts it as a party of the auditor's gate (`--party CMD`, the ssh command to the gate's verb,
 whose stdout says the port, reached at `--party-host`, and then the verifier's own record of the answer, which must be
 the one the session ended with), sends the request and answers each pass,
@@ -74,10 +74,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(STAGE))
 
-from verity.protocols.pous.verifier import verifier as V
-from verity.protocols.pous.verifier.labels import salt_value, tag
-from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.poub.verifier import coins, p2, p2_case, p2_party, receipts
+from verity.protocols.accounting.pous.verifier import verifier as V
+from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
+from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.accounting.poub.verifier import coins, p2, p2_case, p2_party, receipts
 from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS

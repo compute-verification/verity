@@ -24,7 +24,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from verity.circuits.codec import descriptor_id, program_digest
-from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import (
+    FunctionDefinition,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+)
 from verity.circuits.refs import Refs
 
 
@@ -126,11 +130,11 @@ def _refs_equal(a: Refs, b: Refs, leaf_limit: int) -> str:
     return "same-references"
 
 
-def compare_bodies(ba, bb, *, leaf_limit: int = 1 << 22, fid: str = "", names: list[str] | None = None) -> DefinitionCorrespondence:
+def compare_bodies(ba, bb, *, leaf_limit: int = 1 << 22, fid: str = "") -> DefinitionCorrespondence:
     """Same body? `identical` (byte-equal encodings), `same-references` (different encodings, same gates and
     reference sequences leaf by leaf), `mismatch`, or `unverified` (a differing encoding beyond `leaf_limit`).
-    Call names are annotations: differences are collected into `names`, never a mismatch."""
-    return _compare_bodies_(ba, bb, leaf_limit, names if names is not None else [], fid)
+    Call names are annotations: a difference in them is never a mismatch."""
+    return _compare_bodies_(ba, bb, leaf_limit, [], fid)
 
 
 def _compare_bodies(fa: SpecializedDefinition, fb: SpecializedDefinition, leaf_limit: int, names: list[str], fid: str) -> DefinitionCorrespondence:
@@ -182,16 +186,26 @@ def _same_id(fa, fb) -> bool:
     return descriptor_id(fa) == descriptor_id(fb)
 
 
+def _plain(v):
+    """A binding as JSON for the diff: a function reference, nested in a record or a tuple too, is `{"fn": id}`."""
+    if isinstance(v, FunctionDefinition):
+        return {"fn": v.id}
+    if isinstance(v, (list, tuple)):
+        return [_plain(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _plain(x) for k, x in v.items()}
+    return v
+
+
 def _statics_diff(fa, fb) -> dict:
     """The binding records of two paired specialisations, as JSON: keys on one side only and keys whose values differ
     (function references by id, records/tuples expanded)."""
-    from verity.circuits.defs import _plain_static
     a = fa.bindings if isinstance(fa, SpecializedDefinition) else {}
     b = fb.bindings if isinstance(fb, SpecializedDefinition) else {}
     out: dict = {}
-    left_only = {k: _plain_static(a[k]) for k in a if k not in b}
-    right_only = {k: _plain_static(b[k]) for k in b if k not in a}
-    differ = {k: [_plain_static(a[k]), _plain_static(b[k])] for k in a if k in b and _plain_static(a[k]) != _plain_static(b[k])}
+    left_only = {k: _plain(a[k]) for k in a if k not in b}
+    right_only = {k: _plain(b[k]) for k in b if k not in a}
+    differ = {k: [_plain(a[k]), _plain(b[k])] for k in a if k in b and _plain(a[k]) != _plain(b[k])}
     if left_only:
         out["left_only"] = left_only
     if right_only:

@@ -57,7 +57,7 @@ def _xor_bits(word: bool | str):
 
 
 def test_a_word_view_past_its_budget_still_compares_random_vectors():
-    """The word view draws 16 x `Options.vectors` within 16 x `Options.reference_budget`; a word Definition too large for that
+    """The word view samples 16 x `Options.vectors` within 16 x `Options.reference_budget`; a word Definition too large for that
     takes as many as the budget pays for, at least `Options.min_vectors`, half of them random; and at least
     `WORD_RANDOM_FLOOR` of them are random whatever the options."""
     t = _xor_bits(word=True)

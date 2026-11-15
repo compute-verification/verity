@@ -33,7 +33,7 @@ from typing import Any
 from verity.commitments import history as HT
 from verity.commitments import hm96
 
-__all__ = ["Histories", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "release"]
+__all__ = ["Histories", "NAME", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "release"]
 
 #: the registration's engine switch the table-read form is under, off by default
 SWITCH = "dsa_table_reads"

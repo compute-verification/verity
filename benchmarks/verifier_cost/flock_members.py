@@ -41,7 +41,7 @@ import sys
 import time
 from pathlib import Path
 
-from verity.protocols.spot.verifier.one_stage.proofs import VERIFIER_ENV, verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import VERIFIER_ENV, verifier_env
 
 SCHEMA = "verity/flock-members/v1"
 STAGE = re.compile(r"^(.+): (\d+) ms$")

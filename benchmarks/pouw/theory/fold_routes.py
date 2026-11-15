@@ -37,10 +37,13 @@ import itertools
 import random
 import struct
 import sys
+from collections.abc import Sequence
 
 from exact_kit.checks import Checks
 
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
+
+__all__ = ["keyed_round", "main", "u32"]
 
 M32 = 0xFFFFFFFF
 NV = 24          # random 32-bit test vectors a superoptimizer query (one mismatch refutes a candidate)
@@ -153,7 +156,8 @@ def _is_lop3(target, pool, must: str | None = None) -> str | None:
     return None
 
 
-def single(target, pool, only: set[str] | None = None, must: str | None = None) -> str | None:
+def single(target: Sequence[int], pool: dict[str, Sequence[int]], only: set[str] | None = None,
+           must: str | None = None) -> str | None:
     """The first modelled instruction that computes `target` (over the pool's test vectors) from pool operands, or None.
     `only` restricts to those templates (and skips LOP3); `must` to instructions reading that operand."""
     if only is None:
@@ -174,7 +178,7 @@ def single(target, pool, only: set[str] | None = None, must: str | None = None) 
     return None
 
 
-def two(target, pool) -> str | None:
+def two(target: Sequence[int], pool: dict[str, Sequence[int]]) -> str | None:
     """A two-instruction program for `target`: some single instruction v1 over the pool, then one over pool + v1 that
     reads v1. An existence search: the XOR-family LOP3 firsts go first, since a fold step's first instruction is its
     XOR."""
@@ -276,7 +280,7 @@ def main() -> int:
         u, y, r = rng.getrandbits(32), rng.getrandbits(32), rng.randrange(1, 32)
         t = u32(u * (1 << r) + y)
         ok &= u32((u * (1 << r) + (t << 32)) >> 32) == u32(rotl(u, r) + y)
-    ck.check("route IMAD+IMAD.HI writes duo's rotate-add rotl(u, r) + y bit-exactly (20000 draws, every r)", ok,
+    ck.check("route IMAD+IMAD.HI writes duo's rotate-add rotl(u, r) + y bit-exactly (20000 samples, every r)", ok,
              "2 IMAD-pipe instructions against LEA.HI's 1 ALU")
     # 1b. the funnel shift: SHF.L.W(u, u, r) is rotl, then an IADD3; 2 instructions for LEA.HI's 1.
     ck.check("route SHF.L.W + IADD3 writes rotl(u, r) + y bit-exactly",

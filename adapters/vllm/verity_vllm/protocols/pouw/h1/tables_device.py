@@ -1,6 +1,6 @@
 """`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
-`pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels (`protocol_options/pouw_cuda/row_table.cu`,
-`commit.row_tables_device`) as a step of one table.
+`pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels
+(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `commit.row_tables_device`) as a step of one table.
 
 The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
 and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
@@ -35,14 +35,18 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.audit import HM96, rows_domain
-from verity.protocols.pouw.verifier.protocol import tagged
+from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
+from verity_vllm.protocols.pouw.h1.requests import (
+    TABLE_NONCES,
+    TABLE_TAGS,
+    table_leaves,
+)
 
 __all__ = ["FUSE", "MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
            "flush", "host_roots", "layout", "path", "record_rows", "row_words", "settle", "take_z"]
@@ -134,7 +138,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
     dll = RTD._build(tool, RTD.DEVICE_SOURCES, (*RTD.NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
                      "librow_table_cuda.so")
     dll.rt_midstates.argtypes = [_vp, _vp, _vp]
-    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args)] + [_vp] * 5
+    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args), *[_vp] * 5]
     dll.rt_midstates.restype = dll.rt_step.restype = ctypes.c_int
     return dll
 

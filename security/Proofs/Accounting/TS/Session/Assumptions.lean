@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 
 The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
 (`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
-the bridge's premise of that name, as a named `Prop`), the window's sampling design (`WindowDesign`), and in place of the bridge's
+the bridge's premise of that name, as a named `Prop`), the window's sampling design (`ExecutionPhaseDesign`), and in place of the bridge's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose sampled proof blocks are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
@@ -92,7 +92,7 @@ and of how `sess` is built:
    `EndToEndRegisteredRows`' `bound` is small only because they are fresh and uniform given the prover. Under `--zk`
    they are the verifier's keyed coin tree, committed at `Hello` after the prover's nonce and opened round by round.
    So the session's audit coins come from the auditor's verifier, on a machine the prover doesn't control, fresh for
-   each session, under the named assumption `trusted-host`. Neither `CoinTree.checkFresh`, which refuses only a
+   each session, under the named assumption `trusted-device`. Neither `CoinTree.checkFresh`, which refuses only a
    key reused within a run, nor the coin tree's commitment, which protects the prover, gives this.
 
 If 1 fails, `δ` weakens; if 2, 3 or 5 fails, it breaks. 1–3 are the challenger's and the ZK server's code, which a check
@@ -102,7 +102,7 @@ and uniform given the prover (5). served_zk's per-tile sessions are that case (o
 today they flip their coin tree from a `serve --zk --operator loopback` that the job starts beside `prove --zk` on the
 prover's node (`hidden_zk/job.sh`'s `session`), which doesn't meet 5. It stays a premise until a window is modelled as
 Flock games run on one coin tape. -/
-def WindowDesign [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) :
+def ExecutionPhaseDesign [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) :
     Prop :=
   ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
     (fun x => out x w i)

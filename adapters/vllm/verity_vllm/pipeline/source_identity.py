@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import ROOT as INTEGRATION
 from verity_vllm.config import UsageError, option, run_store
 
@@ -111,7 +112,7 @@ def requested_tree(tree: str | os.PathLike[str] | None = None) -> str:
     """The tree this job must run from: the explicit argument, else THIS file's tree.  $VERITY_TREE is checked against it, never used
     as the default -- a differing value is the mixed-tree case and fails by name."""
     root = normalise_tree(tree)
-    env = os.environ.get("VERITY_TREE")
+    env = settings.raw("VERITY_TREE")
     if env and normalise_tree(env) != root:
         g = run_store(GENERIC, "source_identity.requested_tree")
         raise g.SourceIdentityError([{"package": "VERITY_TREE", "resolved_path": os.path.realpath(env), "repo_root": os.path.realpath(env),
@@ -131,7 +132,7 @@ def declared_sha(sha: str | None = None) -> tuple[str | None, str | None]:
     """(sha, where it came from): `--sha` first, then $RESEARCH_SOURCE_SHA (the research runner's declaration of the shipped tree)."""
     if sha:
         return sha, "--sha"
-    env = os.environ.get(ENV_SOURCE_SHA)
+    env = settings.raw(ENV_SOURCE_SHA)
     if env:
         return env, ENV_SOURCE_SHA
     return None, None
@@ -146,7 +147,7 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
         core = tuple(os.path.dirname(d) for d in run_store("research.pythonpath", "source_identity.resolve").package_dirs(root, "verity"))
     except LookupError:
         core = ()                   # not a workspace: no entry to expect (the verdict is check()'s, on repo_root)
-    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.definitions.silicon, verity_sp1.proofs
+    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.circuits.silicon, verity_sp1.proofs
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
     for name in PACKAGES:
@@ -180,9 +181,9 @@ def manifest(tree: str | os.PathLike[str] | None = None, *, sha: str | None = No
     if doc.get("requested") is not None and sha and doc["requested"].get("git_sha") is None:
         doc["requested"]["git_sha"] = sha            # the requested tree's own sha, when the tree cannot say it (git archive)
         doc["requested"]["git_sha_source"] = sha_src
-    doc["VERITY_TREE"] = os.environ.get("VERITY_TREE")
-    doc["PYTHONPATH"] = os.environ.get("PYTHONPATH")
-    doc[ENV_SOURCE_SHA] = os.environ.get(ENV_SOURCE_SHA)
+    doc["VERITY_TREE"] = settings.raw("VERITY_TREE")
+    doc["PYTHONPATH"] = settings.raw("PYTHONPATH")
+    doc[ENV_SOURCE_SHA] = settings.raw(ENV_SOURCE_SHA)
     return doc
 
 

@@ -10,7 +10,10 @@ Both also refuse a row kernel that fails its self-check against its Definition.
 A Boolean Build's descriptor holds its Boolean Definitions, and each of its rows names one (``bits``) beside the word Definition
 the row is graded as (``spec``).  A small Program lifted to bits and written as the Build writes it: both loaders take it, and
 refuse it by name once a Boolean body moved, a row's ``bits`` names another word Definition than its ``spec``, or a row names no
-``bits``.  What a pass leaves unshown of a Boolean Definition is on the replay's record, and the verdict's rule carries it."""
+``bits``.  A Boolean row's kernel is also held to its ``bits`` family's gates, on the kernel self-check's own specialisations and
+inputs: both loaders refuse gates that give another word, and the check refuses a ``bits`` family none of whose Definitions
+names those specialisations as its word and a function the Build binds at another version than the gates were checked with.
+What a pass still leaves unshown is on the replay's record, and the verdict's rule carries it."""
 from __future__ import annotations
 
 import copy
@@ -19,16 +22,23 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
-from tests.program.predict.test_predict import TINY, _phi
 from verity.circuits import Array, Program, Value
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
-from verity.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import (
+    REGISTRY,
+    Builder,
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+)
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType
 from verity.definitions import boolean as BB
+from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry.catalog import load
 from verity.definitions.replay import replayer
+
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import definitions as DF
 from verity_vllm.pipeline import c2_replay as C2
@@ -38,6 +48,7 @@ from verity_vllm.pipeline.tp import rank_replay as RR
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive import DeriveReport
 from verity_vllm.program.predict.build import build_program
+from verity_vllm.query.manifest.format import spec_family
 
 NORM = "RMSNormTriton_v5{"
 SILU, SILU_BITS, PICK, PICK_BITS = "SiluMul_v1{I=4}", "SiluMul_v3{I=4}", "TokenSelect_v1{V=8}", "TokenSelect_v2{V=8}"
@@ -109,6 +120,12 @@ def _boolean_build(d, rep, desc=None, row=None) -> str:
     return dg
 
 
+def _unchecked(monkeypatch) -> None:
+    """Forget what this process already checked of the row kernels, so the next check runs."""
+    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    monkeypatch.setattr(DF, "_GATE_CHECKS", {})
+
+
 def _moved(desc: dict, prefix: str = NORM) -> tuple[dict, str]:
     """``desc`` with one node of its first ``prefix`` specialization reading its two operands the other way round, and that
     specialization's id."""
@@ -156,17 +173,15 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
 def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, program, monkeypatch):
     """The Build is of record, but the row kernel the replay grades its norm rows by is one bit off its Definition: refused by
     name before any row is graded, by the kernel's self-check."""
-    from verity.definitions.numerics import derived_rows as DR
-
     dg = _build(tmp_path / "built", program)
-    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    _unchecked(monkeypatch)
     assert DF.kernel_refusal(DF.evaluated_specs(_instance_rows(program))) is None
     right = DR.rmsnorm_triton_rows
     monkeypatch.setattr(DR, "rmsnorm_triton_rows", lambda x, w, eps: {"out": right(x, w, eps)["out"] ^ 1})
-    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    _unchecked(monkeypatch)
     with pytest.raises(RuntimeError, match=r"^rank 0: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v5: "):
         _rank(tmp_path / "built", dg)
-    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    _unchecked(monkeypatch)
     with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v5: .* mismatches"):
         _c2(tmp_path / "built", dg)
 
@@ -237,10 +252,96 @@ def test_a_boolean_row_is_held_to_the_word_definition_it_is_graded_as(tmp_path, 
         assert f"{SILU}: this tree does not rebuild it" in str(e.value) and f"the Build's descriptor holds no {SILU}" in str(e.value)
 
 
+def test_both_loaders_refuse_a_boolean_row_whose_kernel_is_not_its_gates(tmp_path, boolean, monkeypatch):
+    """The Build is of record and each row kernel is its word Definition, but the gates of the Boolean Definition the Build
+    bound its SiluMul rows under give another word than the kernel: refused by name before any row is graded.  Every family
+    whose rows carry ``bits`` is compared with that ``bits`` family's gates."""
+    from verity.circuits import evaluation as EV
+
+    dg = _boolean_build(tmp_path / "built", boolean)
+    specs = DF.evaluated_specs(_instance_rows(boolean.program))
+    _unchecked(monkeypatch)
+    assert DF.kernel_refusal(specs) is None
+    assert dict(DF._GATE_CHECKS) == {(spec_family(spec), spec_family(bound)): ([], set()) for spec, bound in specs}
+    right = EV.evaluate_words
+    monkeypatch.setattr(EV, "evaluate_words", lambda b, *a: right(b, *a) ^ (descriptor_id(b) == "SiluMul_v3{I=8}"))
+    for loader, what in ((_rank, "rank 0"), (_c2, "replay")):
+        _unchecked(monkeypatch)
+        with pytest.raises(RuntimeError, match=rf"^{what}: REFUSED \(a row kernel is not its Definition\): SiluMul_v1: SiluMul_v1{{I=8}}: "
+                                                 rf"the row kernel's rows are not SiluMul_v3{{I=8}}'s gates on (\d) of the \1 inputs"):
+            loader(tmp_path / "built", dg)
+
+
+def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
+    """The kernel is asked for the same rows twice, at the same specialisation: by its self-check against the word Definition,
+    then against the gates."""
+    from verity.definitions.numerics import derived_rows as DR
+
+    asked, right = [], DR.silu_mul_rows
+
+    def rows(gu):
+        asked.append(gu.tobytes())
+        return right(gu)
+
+    monkeypatch.setattr(DR, "silu_mul_rows", rows)
+    _unchecked(monkeypatch)
+    assert DF.kernel_refusal([(SILU, SILU_BITS)]) is None
+    assert len(asked) == 2 * DF.SAMPLES and asked[:DF.SAMPLES] == asked[DF.SAMPLES:] and len(set(asked)) == DF.SAMPLES
+
+
+def test_a_boolean_row_s_gates_are_its_bits_family_s_with_the_functions_its_build_binds(monkeypatch):
+    """A row whose ``bits`` is of a family that does not name the kernel's check specialisations as its word is refused: no
+    gates of that family were compared.  The gates compared are those of the version the row names, not of the newest that
+    names the word (`MoeSum_v1` has two).  A row whose Build binds a function at another version than the gates were checked
+    with is refused; a function the Build binds nowhere (the check's other dot) is this tree's."""
+    from verity.circuits import evaluation as EV
+
+    _unchecked(monkeypatch)
+    assert DF.kernel_refusal([(SILU, "SiluMul_v4{I=4}")]) == \
+        "SiluMul_v1: no Boolean version of SiluMul_v1: SiluMul_v1{I=8}: no registered SiluMul_v4 names it as its word"
+    right, evaluated = EV.evaluate_words, []
+
+    def recorded(b, *inputs):
+        evaluated.append(descriptor_id(b))
+        return right(b, *inputs)
+
+    monkeypatch.setattr(EV, "evaluate_words", recorded)
+    assert DF.kernel_refusal([("MoeSum_v1{TOPK=4,H=16}", "MoeSum_v2{TOPK=4,H=16}")]) is None
+    assert DF.kernel_refusal([("MoeSum_v1{TOPK=4,H=16}", "MoeSum_v3{TOPK=4,H=16}")]) is None
+    assert evaluated == ["MoeSum_v2{TOPK=2,H=8}", "MoeSum_v3{TOPK=2,H=8}"]
+    gemm = 'Gemm_v2{K=4,N=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
+
+    def bits(dot: str) -> str:
+        return 'Gemm_v3{K=4,N=4,DOT={"fn":"' + dot + '"}}'
+
+    assert DF.kernel_refusal([(gemm, bits("AnotherDot16_v1"))]) is None
+    whys, checked_with = DF._GATE_CHECKS["Gemm_v2", "Gemm_v3"]
+    (hopper,) = (f for f in checked_with if f.startswith("HopperBF16WgmmaDot16_v"))
+    assert whys == [] and DF.kernel_refusal([(gemm, bits(hopper))]) is None
+    refused = f"Gemm_v2: its gates are checked with {hopper}, and the Build binds {hopper}0"
+    assert DF.kernel_refusal([(gemm, bits(f"{hopper}0"))]) == refused
+    assert DF.kernel_refusal([(gemm, bits('Outer_v1{F={\\"fn\\":\\"' + hopper + '0\\"}}'))]) == refused
+
+
+@pytest.mark.parametrize("error", [ValueError, AttributeError])
+def test_a_specialisation_whose_gates_this_tree_does_not_build_is_refused_by_name(monkeypatch, error):
+    """A Boolean Definition whose body is not built at one of the kernel's check specialisations (statics its lowering does
+    not take, whichever way its builder fails on them) is a refusal that names it, not an exception out of the replay."""
+    from verity.circuits import evaluation as EV
+
+    def unbuilt(b, *inputs):
+        raise error("unsupported statics")
+
+    monkeypatch.setattr(EV, "evaluate_words", unbuilt)
+    _unchecked(monkeypatch)
+    assert DF.kernel_refusal([(SILU, SILU_BITS)]) == ("SiluMul_v1: SiluMul_v1{I=8}: this tree does not build SiluMul_v3{I=8}'s gates, so "
+                                                      f"no row is held to them ({error.__name__}: unsupported statics)")
+
+
 def test_a_replay_of_boolean_rows_says_what_its_pass_leaves_unshown(program, boolean):
-    """The line is the one `refusal` documents, the replay's record carries it only for rows of a Boolean Definition, and the
-    verdict's sampled-replay rule passes with it in its notes."""
-    assert " ".join(DF.BOOLEAN_PREMISE.split()) in " ".join(DF.refusal.__doc__.split())
+    """The replay's record carries the line only for rows of a Boolean Definition, and the verdict's sampled-replay rule passes
+    with it in its notes."""
+    assert f"{DF.SAMPLES} inputs" in DF.BOOLEAN_PREMISE and "nothing holds the kernel to the gates at a served binding" in DF.BOOLEAN_PREMISE
     assert DF.premises(_instance_rows(program)) == [] and DF.premises(_instance_rows(boolean.program)) == [DF.BOOLEAN_PREMISE]
 
     def rule(sr):

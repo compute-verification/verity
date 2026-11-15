@@ -24,13 +24,16 @@ every θ node in it (nci-check's `theta-width`).
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
-
-from verity.protocols.spot.verifier.one_stage import registration as REG
 from verity.circuits.types import Array, RecordType, Tuple, Type
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+
 from verity_vllm.commit import registered_rows as RR
+
+__all__ = ["lower", "record", "word_bits"]
 
 
 def lower(t: Type) -> list[tuple[int, int]]:

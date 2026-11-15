@@ -60,7 +60,7 @@ BUILT = re.compile(rb"\bBuilt ([^\s:]+) \((?:\d+m ?)?[\d.]+m?s\)")
 BUILD_LOG = re.compile(r"^lean-audit/(?:.+/)?build(?:-[a-z]+)?\.log$")
 NONE = "-"
 #: the package column's width: the longest Lake package path's
-W = 44
+W = 57
 ALL = "(all)"
 
 

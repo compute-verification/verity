@@ -42,9 +42,9 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
-  (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) || exit 7
-  (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) || exit 7
-  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh || exit 6
+  (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) || exit 7
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) || exit 7
+  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
 

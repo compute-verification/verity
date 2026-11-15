@@ -22,9 +22,13 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402
-from verity_vllm.commit.challenge import challenge_positions  # noqa: E402
 from verity_vllm.commit import step_rows  # noqa: E402
-from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta, value_family  # noqa: E402
+from verity_vllm.commit.challenge import challenge_positions  # noqa: E402
+from verity_vllm.commit.committer.native_host import (  # noqa: E402
+    NativeHostCommitter,
+    TensorMeta,
+    value_family,
+)
 
 C = step_rows.ROW_BYTES
 
@@ -118,7 +122,7 @@ def test_a_replay_that_differs_in_one_byte_fails_exactly_that_opening():
 
 def test_replay_with_a_different_layout_is_refused():
     orig = _committer("none")
-    rc = _run(orig)
+    _run(orig)
     other = _committer("host")
     _run(other, seed=1)
     other._layouts[0][0].nbytes += 4                  # layout digest differs -> not the same committed step
@@ -128,10 +132,7 @@ def test_replay_with_a_different_layout_is_refused():
 
 def test_device_release_then_frozen_view_survives_reset():
     """What the harness does: freeze the finished run's state, release the raw copies, reset the live committer for the replay."""
-    if not torch.cuda.is_available():
-        com = _committer("host")
-    else:
-        com = _committer("device")
+    com = _committer("device" if torch.cuda.is_available() else "host")
     rc = _run(com)
     frozen = copy.copy(com)
     frozen.installed = True
@@ -169,7 +170,10 @@ def test_verdict_fails_closed_on_openings_after_release():
 def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
     """Turn the CPU fixture's contiguous host blocks into `_HostRanges` that omit the excluded families' interiors (what the bounded
     windowed worker builds); returns the excluded bytes per step."""
-    from verity_vllm.commit.committer.native_collect import _HostRanges, _excluded_chunk_ranges
+    from verity_vllm.commit.committer.native_collect import (
+        _excluded_chunk_ranges,
+        _HostRanges,
+    )
 
     out = {}
     for step, (blk, used) in list(com._gpu_blocks.items()):
@@ -181,8 +185,8 @@ def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
             pos = hi
         if pos < n:
             ranges.append((pos, n, blk[pos:n].clone()))
-        com._gpu_blocks[step] = (_HostRanges(ranges, used, {f: sum(h - l for l, h, ff in ex if ff == f) for f in exclude}, com.chunk), used)
-        out[step] = sum(h - l for l, h, _f in ex)
+        com._gpu_blocks[step] = (_HostRanges(ranges, used, {f: sum(b - a for a, b, ff in ex if ff == f) for f in exclude}, com.chunk), used)
+        out[step] = sum(b - a for a, b, _f in ex)
     return out
 
 
@@ -305,7 +309,10 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     RSS peak measured on cp-h100 for the B1 1024/128 bounded arms (rss_timeline 2 s samples) -- including the three runs
     that beat the earlier formulas -- while the per-component factors are the ones measured on the same workload (hidden exact -> 1.05;
     other x1.59 -> 2.0).  The B8 workload (declared schedule: one 3,537-token prefill) must be admitted under the 239,372 MiB cgroup with margin."""
-    from verity_vllm.commit.committer.native_host import bounded_host_bound, schedule_stream_bound
+    from verity_vllm.commit.committer.native_host import (
+        bounded_host_bound,
+        schedule_stream_bound,
+    )
     asz = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,
            "model": {"hidden": 2560, "heads": 32, "kv_heads": 8, "head_dim": 128, "layers": 36, "hidden_m1": True, "attn_backend": "fa3"},
            "prefill_step_bytes": 20203618816, "prefill_hidden_bytes": 17232297984, "decode_step_bytes": 22531588, "decode_hidden_bytes": 18929664,
@@ -429,7 +436,8 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["openings_after_release"]["deferred_received_positions"] = []
     ok, why = commit_verdict(rec, True)
     assert not ok and "positions are not on the record" in why, why
-    del rec["openings"]["deferred_positions"]; del rec["binding"]["openings_population"]["deferred_positions"]
+    del rec["openings"]["deferred_positions"]
+    del rec["binding"]["openings_population"]["deferred_positions"]
     del rec["openings_after_release"]["deferred_received_positions"]
     assert commit_verdict(rec, True)[0], commit_verdict(rec, True)                      # received 29 >= max(24, 5): the older-record rule
     rec["openings_after_release"]["deferred_received_n"] = 23

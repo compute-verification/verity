@@ -48,7 +48,7 @@ VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_
                      "ready_verdict", "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
-                 "circuits")
+                 "circuits", "goals_dump")
 APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites", "uncites")
 
 
@@ -453,7 +453,7 @@ def test_refresh_fixtures_missing_conflict_and_no_map(env, tmp_path, capsys):
     assert len(bad) == 1 and bad[0]["new_id"] == a and "already registered" in bad[0]["errors"][0] and not rep["written"]
     # without a map there is nothing to refresh
     assert main(["refresh-fixtures", "--repo", str(tmp_path / "elsewhere")]) == 1
-    assert "no fixtures/artifacts.json found" in capsys.readouterr().err
+    assert "no artifacts.json found" in capsys.readouterr().err
 
 
 # ---- doctor -----------------------------------------------------------------------------------------------------------------------------

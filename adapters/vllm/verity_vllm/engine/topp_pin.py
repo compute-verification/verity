@@ -32,8 +32,9 @@ def _at_registered_splits(original: Any) -> Any:
     def _apply_topp_split(logits: Any, k: Any, p: Any, mask_value: float, num_sm: int) -> Any:
         return original(logits, k, p, mask_value, registered_splits(num_sm) * int(logits.shape[0]))
 
-    _apply_topp_split.verity_topp_pin = True
-    return _apply_topp_split
+    pin: Any = _apply_topp_split
+    pin.verity_topp_pin = True
+    return pin
 
 
 def install(module: Any = None) -> hooks.Patch:

@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 /-!
 # `Q_s` by the commit strings a sample reads, the shared ones counted once
 
-`Q_s = Σ_c |Ω_c|/|Ω|` is the factor of the link term (`linkBoundZC`): the expected number of commit strings the sampled
+`Q_s = Σ_c |Ω_c|/|Ω|` is the factor of the binding error (`linkBoundZC`): the expected number of commit strings the sampled
 proof blocks read. `qs_le_io` bounds it by the committed wires the sampled proof blocks read or write. A wire is not a
 commit string: the bits of one row share a commit string, and a commit string every proof block reads (the constant's,
 the zero's) is one string however many proof blocks a sample holds.

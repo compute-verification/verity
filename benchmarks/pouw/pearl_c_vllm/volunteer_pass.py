@@ -5,7 +5,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
                                                          [--device DEBIT_CUBIN [--cross-check N]]
 
-- **When it runs.** Exactly while the verdict rejects a run on a drawn tile whose credited debit, or a credited row's, is
+- **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited debit, or a credited row's, is
   over its cap, its over-cap rule ``reject`` (`served_passes.over_cap_rule`): the pipelines ask ``served_passes.py
   volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
   credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
@@ -13,14 +13,14 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
 - **Why after the pass.** A row's debit is its words' (`pearl_c_debit`): it reads the tile's A′ and B̃ codes, which the
   salt's noise forms, so the screen's per-row rules on the activations can't decide it.  The prover knows the salt when it
   forms and commits, and replays every tile as the verifier will, before the challenger opens the sampling coin.
-- **What changes** is the records alone: each call's ``voluntary_a`` and each weight's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
+- **What changes** is the records alone: each call's ``voluntary_a`` and each fixed operand's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
   ⌈n/64⌉, `clear_work.check_records`) and the ``records_root`` over them.  The transcript (the tile leaves and tree, A's
   roots, every committed byte) is the pass's.  A pass already given up is left as it is.
 - **The replay** runs on `fast_tile`'s batch forms over J processes: each tile opened from the pass's files
   (`verify_run.Opened`), encoded under the epoch's salt as `clear_work.check_drawn` encodes it, and its words' counts taken
   (`fast_tile.word_debits`).
 - **On the device** (``--device``, an H100 or H200 and pearl_c_sm90's debit_sm90.cubin): each call's A′ (its real rows) and
-  each weight's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
+  each fixed operand's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
   B̃ kept across the passes of one salt), every word's counts taken by `debit.Debit` and cut into the tiles in
   `scheme.tiles`' order, filler rows zero.  A tile with a word the device marks non-finite is replayed (the reference
   decides it), and so is every Nth tile (``--cross-check``, default `CROSS_CHECK`): any difference from the device's
@@ -45,22 +45,22 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "pouw" / "clear"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 import fast_tile as FT  # noqa: E402
 import verify_run as VR  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity.protocols.pouw.verifier.audit import opened_value  # noqa: E402
-from verity.protocols.pouw.verifier.coins import CoinCommitment  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Context  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import opened_value  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Context  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 
 #: the device's counts are held to the CPU replay's on every Nth tile id
 CROSS_CHECK = 1024
 #: the rows a forming job takes
 FORM_ROWS = 64
 _JOB: dict = {}
-#: B̃ by (salt, the weight's root): a weight's codes are the same in every pass of one salt
+#: B̃ by (salt, the fixed operand's root): a fixed operand's codes are the same in every pass of one salt
 _B_CODES: dict[tuple[bytes, bytes], np.ndarray] = {}
 _DEBIT: dict[str, object] = {}
 
@@ -122,7 +122,7 @@ def _ctx(p: VR.Pass, pos: int) -> Context:
 
 
 def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np.ndarray]:
-    """Rows lo..hi of A′ (side "a", record position `at`) or of B̃ (side "b", the weight of record position `at`) of the pass
+    """Rows lo..hi of A′ (side "a", record position `at`) or of B̃ (side "b", the fixed operand of record position `at`) of the pass
     in `_JOB`, formed as `encode` forms a tile's: (job, codes)."""
     side, at, lo, hi = job
     p = _JOB["pass"]

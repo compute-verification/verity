@@ -1,4 +1,4 @@
-"""The dependent chain's derive, f: the next call's A from this call's y, and its numpy twin (`native/harness.cu`'s `k_derive`
+"""The dependent chain's derive, f: the next call's A from this call's y, and its numpy twin (`verity/protocols/accounting/pouw/prover/kernels/harness/native/harness.cu`'s `k_derive`
 must give the same bytes: the preflight checks every kind on the device once per run, and each chain's gate checks the A it
 derived).
 

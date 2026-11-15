@@ -4,20 +4,52 @@ known from the design and the previous adapter; `test_resolve_m1.py` checks the 
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepStart,
-                                   TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
-                                     schema_param_names, split_heads)
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns import (
+    ComputeGroup,
+    GeometryError,
+    TransparentGroup,
+    as_slot_rows,
+    as_weight_view,
+    members,
+    schema_param_names,
+    split_heads,
+)
+from verity_vllm.observe.fold.patterns.sampling import (
+    TokenSelectGumbelTopP,
+    TokenSelectGumbelTwoStage,
+)
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
-from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
-from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
-                                     Transparent, Unsupported, resolve_step)
-from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    PerRow,
+    ResolutionError,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+    resolve_step,
+)
+from verity_vllm.observe.fold.tree import build_trees, step_events
 
 C = PROF.C
-H, NH, KVH, D, I, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
+H, NH, KVH, D, INTER, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
 EPS = C["EPS"]
 BS = 16
 NUM_BLOCKS = 64
@@ -94,7 +126,7 @@ def weights_roots() -> list[Root]:
         Root(bf(A_O_W, (H, NH * D)), "weight", "model.layers.0.self_attn.o_proj.weight"),
         Root(bf(A_LN2, (H,)), "weight", "model.layers.0.post_attention_layernorm.weight"),
         Root(bf(A_GU_W, (GU, H)), "weight", "model.layers.0.mlp.gate_up_proj.weight"),
-        Root(bf(A_DOWN_W, (H, I)), "weight", "model.layers.0.mlp.down_proj.weight"),
+        Root(bf(A_DOWN_W, (H, INTER)), "weight", "model.layers.0.mlp.down_proj.weight"),
         Root(bf(A_NORM, (H,)), "weight", "model.norm.weight"),
         Root(bf(A_COS_SIN, (C["MAX_POS"], D)), "buffer", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"),
     ]
@@ -104,7 +136,7 @@ GREEDY = {"greedy": True, "temperature": 0.0, "top_p": 1.0, "top_k": 0, "logprob
 
 
 def header(sampling: dict | None = GREEDY) -> RunHeader:
-    workload = {"requests": [{"request_id": "r0", "prompt_token_ids": list(range(32)), "max_tokens": 16}]}
+    workload: dict = {"requests": [{"request_id": "r0", "prompt_token_ids": list(range(32)), "max_tokens": 16}]}
     if sampling is not None:
         workload["sampling"] = sampling
     return RunHeader("verity-capture/log/v1", "2026-09-16T00:00:00Z", "88e1b098d719", {"vllm": "d9105ea80"},
@@ -258,11 +290,11 @@ def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False,
     b.leaf("_C.fused_add_rms_norm.default", "_C::fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()",
            [o, h, bf(A_LN2, (H,)), EPS], module="model.layers.0.post_attention_layernorm")
     gu = gemm_launch(b, o, bf(A_GU_W, (GU, H)), 306, H, GU, M, num_sms=num_sms)
-    act = bf(307, (M, I))
+    act = bf(307, (M, INTER))
     b.leaf("aten.empty.memory_format", "aten::empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor",
-           [[M, I]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=act)
+           [[M, INTER]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=act)
     b.leaf("_C.silu_and_mul.default", "_C::silu_and_mul(Tensor! result, Tensor input) -> ()", [act, gu], module="model.layers.0.mlp.act_fn")
-    d = gemm_launch(b, act, bf(A_DOWN_W, (H, I)), 308, I, H, M, num_sms=num_sms)
+    d = gemm_launch(b, act, bf(A_DOWN_W, (H, INTER)), 308, INTER, H, M, num_sms=num_sms)
     b.leaf("_C.fused_add_rms_norm.default", "_C::fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()",
            [d, h, bf(A_NORM, (H,)), EPS], module="model.norm")
     if with_unknown:
@@ -431,8 +463,8 @@ def test_gemm_target_profile_is_the_same_object_the_builder_pins():
     """[X-01 portability] One TargetProfile fact: the eager resolver's pin for a record captured on a 142-SM device equals
     `TargetProfile.from_gpu_document(header.gpu).num_sms`, which is what `TargetProfile.from_device()` yields on that host and what
     Bet A's `gemm_pins_for` pins (`NUM_SMS == active TargetProfile.num_sms`, see tests/program/test_vllm_bindings_pins.py)."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.observe.fold.patterns import target_of
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     events, start = decode_step(num_sms=142)
     se = step_events(events)
     ctx = _context_on_host(start, se.sample, 142)
@@ -469,8 +501,8 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
 def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
     """The same pair on a `Gemm_v2` target (cc 12.0, cc 9.0): one `GemmBias_v2{K,N,DOT}` at the add, the record target's one-Call
     Definition (`frontend.targets.gemm_bias_spec`), the frontend's choice."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     events, start = decode_step(qkv_bias="add", num_sms=sms)
     se = step_events(events)
     specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))
@@ -515,10 +547,10 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import dataclasses
 
     import numpy as np
-
-    from verity_vllm.observe.fold.resolver import Supplied
     from verity.definitions.registry import b1
     from verity.definitions.registry import prims as P
+
+    from verity_vllm.observe.fold.resolver import Supplied
 
     events, start = decode_step()
     se = step_events(events)
@@ -540,8 +572,9 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     choice there (`targets.attention_spec(..., scale_input=True)`), with the scale its last `Supplied` operand; the norms as above."""
     import dataclasses
 
-    from verity_vllm.observe.fold.resolver import Supplied
     from verity.definitions.registry import b1
+
+    from verity_vllm.observe.fold.resolver import Supplied
 
     events, start = decode_step(num_sms=188)
     se = step_events(events)
@@ -656,13 +689,56 @@ def test_attention_flags_must_match_the_registered_body():
     assert set(uns[0].consumed) == next(r for r in se.roots if r.op == uns[0].op).ids()
 
 
+def test_fa2_arguments_under_a_schema_that_names_none_are_unsupported_with_the_schema():
+    events, start = decode_step()
+    for i, e in enumerate(events):
+        if isinstance(e, DispatchEnter) and e.op == "_vllm_fa2_C.varlen_fwd.default":
+            events[i] = dataclasses.replace(e, schema="_vllm_fa2_C::varlen_fwd(...)")
+    se = step_events(events)
+    (u,) = [r for r in resolve_step(se, context(start, se.sample)) if isinstance(r, Unsupported)]
+    assert u.op == "vllm.unified_attention_with_output.default" and u.reason.startswith("FA2 op arguments q/k/v/out not bound by name")
+    assert u.detail["schema"] == "_vllm_fa2_C::varlen_fwd(...)" and u.detail["names"][:4] == ["arg0", "arg1", "arg2", "arg3"]
+    assert len(u.detail["views"]) == 7 and set(u.consumed) == next(r for r in se.roots if r.op == u.op).ids()
+
+
+FA3_UNBOUND = "target has no registered attention binding: flash_attn_version 3"
+
+
+@pytest.mark.parametrize("extra, reason, detail", [
+    (None, FA3_UNBOUND, None),
+    (("k_new", 0), FA3_UNBOUND, None),
+    (("k_new", bf(777, (1, 3, 64))), "FA3 op argument 'k_new' is bound: not the registered chain", repr(bf(777, (1, 3, 64)))),
+    (("q_descale", i64(778, (1,), dtype="int8")), "FA3 op argument 'q_descale' is not a float32 scale view", repr(i64(778, (1,), dtype="int8"))),
+    (("cp_world_size", 2), "FA3 context parallelism is not modelled", 2),
+])
+def test_an_fa3_call_is_held_to_the_arguments_the_registered_chain_models(extra, reason, detail):
+    """Under an FA3 target the scope reads the FA3 call's own arguments before its chain: an appended key, a scale that is not float32 and
+    context parallelism are refused with the argument; a call with none of them (or one at 0) goes on to the target's binding."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    events, start = decode_step()
+    for i, e in enumerate(events):
+        if isinstance(e, DispatchEnter) and e.op == "_vllm_fa2_C.varlen_fwd.default":
+            schema, args = e.schema.replace("_vllm_fa2_C::varlen_fwd", "_vllm_fa3_C::fwd"), list(e.args)
+            if extra is not None:
+                schema, args = schema.replace(") -> ", f", Tensor? {extra[0]}=None) -> "), [*args, extra[1]]
+            events[i] = dataclasses.replace(e, op="_vllm_fa3_C.fwd.default", schema=schema, args=args)
+    se = step_events(events)
+    ctx = context(start, se.sample)
+    doc = {**ctx.header.profile, "target": TargetProfile(flash_attn_version=3).to_json()}
+    res = resolve_step(se, dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc)))
+    u = next(r for root, r in zip(se.roots, res) if root.op == "vllm.unified_attention_with_output.default")
+    assert isinstance(u, Unsupported) and u.reason.startswith(reason), u
+    assert extra is None or detail is None or u.detail[extra[0]] == detail
+
+
 def test_silu_embedding_tokenselect_gather():
     events, start = decode_step()
     se = step_events(events)
     res = resolve_step(se, context(start, se.sample))
     specs = by_spec(res)
     s = specs["SiluMul_v2{I=1536}"][0]
-    assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, I))),)
+    assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, INTER))),)
     e = specs["Embedding_v1{V=49152,H=576}"][0]
     # the token operand is the step's input_ids view (int32), not the int64 copy vLLM made of it
     assert e.operands == (PerRow(ViewDesc(A_INPUT_IDS, 0, (1,), (1,), "int32", CUDA)), Shared(bf(A_EMBED, (V, H))))
@@ -689,7 +765,7 @@ def test_silu_is_the_builders_silu_mul_kind_under_the_record_targets_numerics_pr
     doc = {**ctx.header.profile, "target": TargetProfile(numerics_profile=numerics).to_json()}
     ctx = dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc))
     (s,) = [c for k, v in by_spec(resolve_step(se, ctx)).items() if k.startswith("SiluMul") for c in v]
-    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=I)
+    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=INTER)
     assert s.spec.base_id == {"b1-eager-v3": "SiluMul_v2", "b1-eager": "SiluMul_v1"}[numerics]
 
 
@@ -720,6 +796,19 @@ def test_gemm_under_aten_mm_wrapper():
     assert isinstance(g, Compute) and g.spec.id == "Gemm_v1{K=576,N=960}" and set(g.consumed) == node.ids() and len(node.ids()) == 2
     assert g.operands[1] == Shared(bf(A_QKV_W, (QKV, H))) and g.outputs == (PerRow(bf(303, (1, QKV))),)
     assert not isinstance(g, ComputeGroup) or g.before == ()
+
+
+def test_a_wrapper_around_two_gemm_launches_is_unsupported_and_names_both():
+    """`GemmLaunch.match`: a wrapper call resolves only around exactly one batch-invariant launch."""
+    events, start = decode_step(mm_wrapper=True)
+    mm = next(e for e in events if isinstance(e, DispatchEnter) and e.op == "aten.mm.default")
+    at = next(i for i, e in enumerate(events) if isinstance(e, TritonLaunch) and e.parent == mm.id)
+    events.insert(at + 1, dataclasses.replace(events[at], id=events[at].id + 500))
+    se = step_events(events)
+    (u,) = [r for r in resolve_step(se, context(start, se.sample)) if isinstance(r, Unsupported)]
+    node = next(r for r in se.roots if r.op == "aten.mm.default")
+    assert u.reason == "aten.mm without exactly one batch-invariant matmul_kernel_persistent launch"
+    assert u.detail["launches"] == [events[at].fn] * 2 and set(u.consumed) == node.ids() and len(node.ids()) == 3
 
 
 def test_f32_logits_upcast_is_repointed_to_bf16_source():
@@ -762,6 +851,142 @@ def test_gumbel_two_stage_sampler_is_one_token_select():
     kernel = next(n for n in se2.roots if n.op.endswith("_gumbel_sample_kernel"))
     alone = TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, context(start, None, sampling=stochastic))
     assert isinstance(alone, Unsupported) and "outside greedy sampling" in alone.reason
+
+
+def test_a_stochastic_sampler_on_widened_logits_is_held_to_the_vocabulary_and_then_to_the_split_pipeline():
+    """Under a stochastic header the kernel on the float32 widening of the logits is the stochastic pattern's: at the profile's vocabulary
+    it goes on and refuses the launch for the split pipeline no event of this step records; at another vocabulary it refuses the width."""
+    events, start = decode_step(sampler="gumbel", f32_logits=True)
+    se = step_events(events)
+    ctx = context(start, se.sample, sampling={"greedy": False, "temperature": 0.7})
+    kernel = next(n for n in se.roots if n.op.endswith("_gumbel_sample_kernel"))
+    u = next(r for root, r in zip(se.roots, resolve_step(se, ctx)) if root is kernel)
+    assert isinstance(u, Unsupported) and u.reason.startswith("_gumbel_sample_kernel without the complete split pipeline")
+    off = TokenSelectGumbelTopP(vocab=V + 1, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, ctx)
+    assert isinstance(off, Unsupported) and off.reason == "logits width is not the vocabulary"
+    assert (off.detail["V"], off.detail["vocab"]) == (V, V + 1)
+
+
+SAMPLE_PINS: dict[str, dict[str, float]] = {
+    "_temperature_kernel": {"BLOCK_SIZE": 8192},
+    "_topp_sb_stats_kernel": {"BLOCK": 8192},
+    "_topp_sb_step_kernel": {"BLOCK": 2048, "F": 8, "NUM_ROUNDS": 5},
+    "_topp_sb_mask_kernel": {"BLOCK": 8192, "F": 8, "NUM_ROUNDS": 5, "MASK_VALUE": float("-inf")},
+}
+
+
+def _stochastic_step():
+    """A decode step's sample phase under a stochastic header, folded once so its float32 widening of the logits is on record: the
+    pattern, the context, the widened logits, the select's kernel and the gathered top_p state the split kernels read."""
+    events, start = decode_step(sampler="gumbel", f32_logits=True)
+    se = step_events(events)
+    ctx = context(start, se.sample, sampling={"greedy": False, "temperature": 0.7, "top_p": 0.9})
+    resolve_step(se, ctx)
+    kernel = next(n for n in se.roots if n.op.endswith("_gumbel_sample_kernel"))
+    return (TokenSelectGumbelTopP(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE), ctx, kernel.triton.args["logits_ptr"], kernel,
+            ViewDesc(321, 0, (1,), (1,), "float32", CUDA))
+
+
+def _sample_launch(event_id, kernel, args, consts=None):
+    """A sample-phase launch of one of the sampler's kernels at its pinned constexprs, `consts` replacing some."""
+    consts = {**SAMPLE_PINS[kernel], **(consts or {})}
+    launch = TritonLaunch(event_id, None, 0, "sample", f"vllm.v1.worker.gpu.sample.{kernel}", "sha", {**args, **consts}, consts, [1], 4, 3, 7)
+    return build_trees([launch])[0][0]
+
+
+def _refused(resolution, reason, **detail):
+    assert isinstance(resolution, Unsupported) and resolution.reason == reason, resolution
+    assert {k: resolution.detail[k] for k in detail} == detail
+
+
+def test_a_temperature_kernel_is_held_to_the_widened_logits_its_pinned_block_and_the_head_of_the_chain():
+    pat, ctx, l32, _kernel, _p = _stochastic_step()
+
+    def temperature(logits=l32, vocab_size=V, **consts):
+        return pat.match(_sample_launch(2001, "_temperature_kernel", {"logits_ptr": logits, "vocab_size": vocab_size}, consts), ctx)
+
+    narrow = ViewDesc(310, 0, (1, V), (V, 1), "bfloat16", CUDA)
+    _refused(temperature(logits=narrow), "sampler logits are not a row-contiguous float32 [R,V] view", logits=repr(narrow))
+    unseen = ViewDesc(399, 0, (1, V), (V, 1), "float32", CUDA)
+    assert temperature(logits=unseen).reason.startswith("the float32 logits are not the exact widening of a bf16 [R,V] view seen this step")
+    part = ViewDesc(l32.alloc, 0, (1, V - 1), (V, 1), "float32", CUDA)
+    _refused(temperature(logits=part), "a sampler kernel on a different view of the logits allocation", logits=repr(part), chain=repr(l32))
+    _refused(temperature(BLOCK_SIZE=1024), "_temperature_kernel BLOCK_SIZE differs from the pinned block", BLOCK_SIZE=1024, pinned=8192)
+    _refused(temperature(vocab_size=V + 1), "vocab_size argument differs from the logits width", vocab_size=V + 1, V=V)
+    scaled = temperature()
+    assert isinstance(scaled, Transparent) and (scaled.effect, scaled.consumed, scaled.kernels) == ("noop", (2001,), ("_temperature_kernel",))
+    assert scaled.pattern == "sample.gumbel_topp_select" and "TemperatureScale_v1" in scaled.hint
+    _refused(temperature(), "_temperature_kernel after another sampler kernel on the same logits (chain order)", chain=["_temperature_kernel"])
+
+
+def test_the_split_kernels_are_held_to_their_pins_the_top_p_gather_and_stats_then_five_steps_then_the_mask():
+    """The three split kernels on the widened logits: each is refused off its pins, with a top-k buffer, on another `P` than the step's
+    gather of the per-request top_p state, or out of the order stats, five steps by round, mask; in that order each is a no-op, and the
+    select's kernel after them is refused for the temperature kernel this chain lacks, no longer for a missing pipeline."""
+    pat, ctx, l32, kernel, p = _stochastic_step()
+
+    def split(event_id, k, consts=None, **args):
+        return pat.match(_sample_launch(event_id, k, {"LOGITS": l32, "K": l32, "P": p, **args}, {"HAS_K": False, "VOCAB_SIZE": V, "S": 4, **(consts or {})}), ctx)
+
+    stats, step, mask = "_topp_sb_stats_kernel", "_topp_sb_step_kernel", "_topp_sb_mask_kernel"
+    _refused(split(2003, stats), f"{stats} P is not the step's float32 [R] gather of the per-request top_p state", p=repr(p), R=1)
+    gather = build_trees([
+        DispatchEnter(2002, None, 0, "sample", "aten.index.Tensor", "aten::index.Tensor(Tensor self, Tensor?[] indices) -> Tensor",
+                      [ViewDesc(320, 0, (8,), (1,), "float32", CUDA), [i64(322, (1,), "int32")]], {}, 7, None),
+        DispatchExit(2002, p)])[0][0]
+    state = pat.match(gather, ctx)
+    assert isinstance(state, Transparent) and (state.effect, state.consumed) == ("noop", (2002,))
+    _refused(split(2003, stats, {"HAS_K": True}), f"{stats} with HAS_K: the top-k + top-p split path has no registered Definition")
+    _refused(split(2003, stats, {"VOCAB_SIZE": V + 1}), "VOCAB_SIZE constexpr differs from the logits width", VOCAB_SIZE=V + 1, V=V)
+    _refused(split(2003, stats, {"S": 6}), "S (splits) is not a power of two <= 32", S=6)
+    _refused(split(2003, stats, {"BLOCK": 1024}), f"{stats} BLOCK differs from the pinned split pipeline", BLOCK=1024, pinned=8192)
+    top_k = i64(330, (1,), "int32")
+    _refused(split(2003, stats, K=top_k), f"{stats} with a top-k buffer bound (HAS_K path)", k=repr(top_k))
+    _refused(split(2003, step, ROUND=0), f"{step} outside stats -> steps -> mask", chain=[])
+    _refused(split(2003, mask), f"{mask} without exactly one stats + 5 step launches before it", chain=[])
+    first_split = split(2003, stats)
+    assert isinstance(first_split, Transparent) and (first_split.effect, first_split.consumed, first_split.kernels) == ("noop", (2003,), (stats,))
+    assert first_split.hint.endswith(f"top-p split pipeline S=4: {stats} (TopPMask_v1{{V}}, splits operand)")
+    _refused(split(2004, stats), f"{stats} after another split kernel", chain=[stats])
+    _refused(split(2004, step, {"S": 8}, ROUND=0), "S differs between the split kernels of one step", S=8, chain_S=4)
+    _refused(split(2004, step, ROUND=1), f"{step} round out of order", ROUND=1, expected=0)
+    for round_i in range(5):
+        assert isinstance(split(2004 + round_i, step, ROUND=round_i), Transparent)
+    _refused(split(2009, mask, {"MASK_VALUE": 0.0}), f"{mask} MASK_VALUE is not -inf", MASK_VALUE=0.0)
+    assert isinstance(split(2009, mask), Transparent)
+    assert pat._state(ctx)["rows"][l32.alloc]["kernels"] == [stats, *[step] * 5, mask] and pat._state(ctx)["rows"][l32.alloc]["S"] == 4
+    _refused(pat.match(kernel, ctx), "header temperature != 1 but no _temperature_kernel launch on the logits", request="r0", temperature=0.7)
+
+
+def _as_index_select(events, dim=0):
+    """The step's logits gather as `aten.index_select(hidden, dim, logits_indices)`."""
+    for i, e in enumerate(events):
+        if isinstance(e, DispatchEnter) and e.op == "aten.index.Tensor":
+            src, (index,) = e.args
+            events[i] = dataclasses.replace(e, op="aten.index_select.default", args=[src, dim, index],
+                                            schema="aten::index_select(Tensor self, int dim, Tensor index) -> Tensor")
+    return events
+
+
+def _logits_gather(events, start):
+    se = step_events(events)
+    return [r for r in resolve_step(se, context(start, se.sample))
+            if isinstance(r, Unsupported) or isinstance(r, Transparent) and r.pattern == "sample.logits_gather"]
+
+
+def test_the_logits_gather_as_an_index_select_along_the_rows_is_the_same_move():
+    events, start = decode_step()
+    (want,) = _logits_gather(list(events), start)
+    (got,) = _logits_gather(_as_index_select(events), start)
+    assert isinstance(got, Transparent) and got.effect == "move" and isinstance(got.src, Gather) and got.src.indices == (0,)
+    assert (got.src, got.dst, got.rows, got.consumed, got.kernels) == (want.src, want.dst, want.rows, want.consumed, want.kernels)
+
+
+def test_an_index_select_along_another_axis_is_unsupported():
+    events, start = decode_step()
+    (u,) = _logits_gather(_as_index_select(events, dim=1), start)
+    assert isinstance(u, Unsupported) and u.op == "aten.index_select.default"
+    assert u.reason == "index_select not along the leading axis" and u.detail["dim"] == 1
 
 
 def test_integer_metadata_triton_kernel_is_noop():

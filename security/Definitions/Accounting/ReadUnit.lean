@@ -230,16 +230,16 @@ def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.T
       Hash.RowLeaf.innerHashed H ((R.port i).verifier key (R.domain i)) (R.table i (R.index i X)))
 
 open Classical in
-/-- **What the drawn reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is drawn, in its unit's
+/-- **What the sampled reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is sampled, in its unit's
 local evaluation of the transcript `X ω` under the partition `P`. -/
 noncomputable def drawnHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ω : Ω) : List Hash.Msg :=
   (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
 
 open Classical in
-/-- **The table reads' collision finder**: on the outcome `ω`, two messages the drawn reads hashed that `H` maps to one
+/-- **The table reads' collision finder**: on the outcome `ω`, two messages the sampled reads hashed that `H` maps to one
 digest, if there are two, at the cost `cost ω`: the SHA-512 calls of reaching `ω`'s transcript and hashing what its
-drawn reads hashed. -/
+sampled reads hashed. -/
 noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Verity.Partition C n)
     (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace)
     (cost : Ω → ℕ) : Claims.Finder where

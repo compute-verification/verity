@@ -30,6 +30,7 @@ same rows of the whole prompt of its s tokens, not of the whole prompt the reque
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -38,6 +39,8 @@ import torch.nn.functional as F
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.program.frontend.kernel_readback import is_attention_impl
+
+__all__ = ["window_of"]
 
 ARM = E.ARM
 TOP = E.TOP
@@ -156,7 +159,8 @@ def step_refusal(qsl: list[int], lens: list[int]) -> str | None:
 def token_rows(qsl: list[int], lens: list[int], device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
     """(request, position) of each of a step's query rows, int64 [T] on `device`: request r's rows qsl[r] .. qsl[r+1] - 1 are
     positions s - m .. s - 1 of its s-token window."""
-    req, pos = [], []
+    req: list[int] = []
+    pos: list[int] = []
     for r in range(len(qsl) - 1):
         m, s = qsl[r + 1] - qsl[r], lens[r]
         req += [r] * m
@@ -184,7 +188,8 @@ def paged_windows(key_cache: torch.Tensor, value_cache: torch.Tensor, block_tabl
     blk = torch.where(live, block_table[:b].long().gather(1, col), 0)
     off = (pos % bs).expand(b, -1)
     zero = torch.zeros((), dtype=key_cache.dtype, device=dev)
-    return tuple(torch.where(live[..., None, None], c[blk, off], zero) for c in (key_cache, value_cache))
+    k, v = (torch.where(live[..., None, None], c[blk, off], zero) for c in (key_cache, value_cache))
+    return k, v
 
 
 def packed_windows(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -195,7 +200,8 @@ def packed_windows(keys: torch.Tensor, values: torch.Tensor, starts: list[int], 
     live = pos[None, :] < torch.tensor(lens, dtype=torch.int64).to(dev, non_blocking=True)[:, None]
     row = torch.where(live, torch.tensor(starts, dtype=torch.int64).to(dev, non_blocking=True)[:, None] + pos[None, :], 0)
     zero = torch.zeros((), dtype=keys.dtype, device=dev)
-    return tuple(torch.where(live[..., None, None], t[row], zero) for t in (keys, values))
+    k, v = (torch.where(live[..., None, None], t[row], zero) for t in (keys, values))
+    return k, v
 
 
 def kv_quant_batch(k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -247,7 +253,8 @@ def batch_rows(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torc
     return (((y.float() * r[..., None]) + (z[..., None] * v0r)) * svr).to(torch.bfloat16)
 
 
-def reference_requests(query: torch.Tensor, qsl: list[int], lens: list[int], window, k_scales: torch.Tensor, scale: float,
+def reference_requests(query: torch.Tensor, qsl: list[int], lens: list[int],
+                       window: Callable[[int, int], tuple[torch.Tensor, torch.Tensor]], k_scales: torch.Tensor, scale: float,
                        output: torch.Tensor) -> None:
     """The per-request form the batched ops are held to: request r's rows `window_rows` over `kv_quant` of `window(r, s)`, its k
     and v [s, G, d], one request and one KV head at a time."""

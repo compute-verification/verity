@@ -8,7 +8,6 @@ __models__ = ("unsloth/Llama-3.2-1B", "Qwen/Qwen3-8B")
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -23,6 +22,7 @@ from verity.definitions.registry import fa2_split as F
 from verity.definitions.registry import hopper
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.fa2_check_inf import AttentionHeadV5
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 U16, U32 = np.uint16, np.uint32
@@ -79,12 +79,12 @@ def _end(D: int):
 
 def test_the_split_end_twin_is_the_word() -> None:
     word = _end(16)
-    m, l, o = _inputs(word, 400, 17)
+    m, l_sum, o = _inputs(word, 400, 17)
     rng = np.random.default_rng(18)
     m[:100] = _f32(rng, 100, 40.0)                                 # the running max: any sign
-    l[:50] = 0                                                     # an empty sum: inv 1, lse -inf
-    part, lse = SMT.split_end_rows(m, l, o, scale=16 ** -0.5, inv=DR.fa2_inv_sum, scale_bits=F.scale_bits(16 ** -0.5))
-    want = _flat(E.evaluate_batch(word, m, l, o))[0]
+    l_sum[:50] = 0                                                     # an empty sum: inv 1, lse -inf
+    part, lse = SMT.split_end_rows(m, l_sum, o, scale=16 ** -0.5, inv=DR.fa2_inv_sum, scale_bits=F.scale_bits(16 ** -0.5))
+    want = _flat(E.evaluate_batch(word, m, l_sum, o))[0]
     assert np.array_equal(np.concatenate([part, lse[:, None]], axis=1).astype(np.uint64), want)
     assert (lse[:50] == NEG_INF).all()
 
@@ -148,7 +148,9 @@ def test_the_decode_split_is_attention(NH: int, KVH: int, D: int) -> None:
     rng = np.random.default_rng(D)
     T = 1000
     q, kc, vc = _bf16(rng, (NH, D)), _bf16(rng, (T, KVH, D)), _bf16(rng, (T, KVH, D))
-    val = lambda a: (a.astype(U32) << 16).view(np.float32).astype(np.float64)
+    def val(a):
+        return (a.astype(U32) << 16).view(np.float32).astype(np.float64)
+
     kf, vf = (np.transpose(val(a), (1, 0, 2))[np.arange(NH) // (NH // KVH)] for a in (kc, vc))
     s = np.einsum("hd,htd->ht", val(q), kf) * D ** -0.5
     p = np.exp(s - s.max(axis=1, keepdims=True))

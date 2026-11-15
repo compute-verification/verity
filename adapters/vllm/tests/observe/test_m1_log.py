@@ -13,10 +13,23 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, StorageFree, TritonLaunch, ViewDesc, views_in)
-from verity_vllm.observe.log import read_log, split_steps
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    StorageFree,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
 from verity_vllm.observe.fold.tree import op_histogram, step_events
+from verity_vllm.observe.log import read_log, split_steps
 
 ROOT = Path(__file__).resolve().parents[2]
 LOG = ROOT / "data" / "logs" / "m1.jsonl.gz"
@@ -194,7 +207,6 @@ def test_every_view_alloc_has_a_preceding_storage_alloc(log_events):
     known: set[int] = set()
     for ev in log_events:
         if isinstance(ev, StorageAlloc):
-            assert ev.alloc not in known or True     # re-allocation after a free gets a NEW id; ids never repeat
             known.add(ev.alloc)
             continue
         refs: list[ViewDesc] = []
