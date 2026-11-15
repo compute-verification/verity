@@ -1738,7 +1738,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     opens a start that is the empty state's (``empty``); its outcome carries the record's changed forms' codes
     (``registration_negatives``) and the root the verdicts of record opened the start unit's ``sin`` against
     (``carried_start``, `audit.session_registered`)."""
-    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_leg.frame_ports
+    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_subprotocol.frame_ports
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:

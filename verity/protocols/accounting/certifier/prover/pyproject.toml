@@ -7,7 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_scan_zk_challenger.py", "tests/test_scan_zk_lean_one.py"]
 # scan_zk's draws take the challenger's coins through one_stage's a5_coins; its honest round lowers and stages through
-# one_stage's a0, a7, a8 (with the population a0 and a7 read) and prove_leg (`warden_zk._one_stage`), and its stream's
+# one_stage's a0, a7, a8 (with the population a0 and a7 read) and prove_subprotocol (`warden_zk._one_stage`), and its stream's
 # verifier is the Lean package `core_spot`'s verifier executable, whose lakefile is the package it builds; the period
 # check's Python mirror it reads takes verity_difftest's decoders. test_window_chain hands window_chain the vLLM
 # integration's window advice. block_certifier's block_leg is the block record's certifier entry, which
@@ -17,7 +17,7 @@ untraced = ["tests/test_scan_zk_challenger.py", "tests/test_scan_zk_lean_one.py"
 # test_out_request_values.
 inputs = ["verity",
           "benchmarks/one_stage/a0.py", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a7.py",
-          "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_leg.py", "benchmarks/one_stage/r2_population.py",
+          "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_subprotocol.py", "benchmarks/one_stage/r2_population.py",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "tools/difftest/python/verity_difftest",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
           "adapters/vllm/verity_vllm/pipeline/window_advice.py", "adapters/vllm/verity_vllm/pipeline/advice.py",

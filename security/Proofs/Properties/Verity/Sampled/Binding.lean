@@ -769,7 +769,7 @@ noncomputable def forger (V : Vocab d α) (dev : Exchange → History) (θ : Byt
     let o := Verity.Game.Tape.out _ σ t
     V.cost θ F c σ + breakCalls (dev o) o.sent
 
-/-- **The leg's constructions with this read finder and forger**, at the pinned tables' registered files `T` and the
+/-- **The subprotocol's constructions with this read finder and forger**, at the pinned tables' registered files `T` and the
 device's history at each play `dev`: `K`'s projection and two-continuation finders, and `readFinder` and `forger`. -/
 noncomputable def withBinding {V : Vocab d α} (K : Constructions V) (T : PinnedTables) (dev : Exchange → History) :
     Constructions V :=
@@ -1079,7 +1079,7 @@ theorem verdict_le_of_tables (V : Vocab d α) (T : PinnedTables) (k : Verity.Reg
         Verity.Game.prCoin_mono fun t hv => finder_of_tables V T dev θ F c σ t (h t hv)
     _ = _ := Verity.Game.prCoin_eq_ofReal_pr _
 
-/-- **(a) at the leg's constructions with this read finder and forger** (`withBinding`). -/
+/-- **(a) at the subprotocol's constructions with this read finder and forger** (`withBinding`). -/
 theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (T : PinnedTables)
     (k : Verity.Registration.Composite) (reads : Sent → Option (List Read)) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))

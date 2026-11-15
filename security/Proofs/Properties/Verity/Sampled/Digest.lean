@@ -389,7 +389,7 @@ theorem bindFinder_calls : ∀ (A : Live) (θ : ByteArray) (F : Array ByteArray)
   show ((2 * V.cost θ F c σ + 2 * A.h : ℕ) : ℝ) ≤ A.qM (V.cost θ F c σ)
   simp [Live.qM]
 
-/-- **The leg's constructions with the bound digests' finder at `k`** (`bindFinder`): `K`'s otherwise. -/
+/-- **The subprotocol's constructions with the bound digests' finder at `k`** (`bindFinder`): `K`'s otherwise. -/
 noncomputable def Constructions.withBind {V : Vocab d α} (K : Constructions V) (k : Verity.Registration.Composite) :
     Constructions V :=
   { K with bindFinder := Verity.Sampled.bindFinder V k, bind_calls := Verity.Sampled.bindFinder_calls V k }

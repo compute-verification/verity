@@ -11,9 +11,9 @@ public import Proofs.Properties.Verity.Sampled.Deployed
 public import Proofs.Properties.Verity.Sampled.Leaves
 
 /-!
-# SPOT's leg of `Verity.Soundness`: the session v2 sets up
+# SPOT's subprotocol of `Verity.Soundness`: the session v2 sets up
 
-The leg is `Verity.Vocab.SpotSound` at the one-stage form of a composite's sampled component
+The subprotocol is `Verity.Vocab.SpotSound` at the one-stage form of a composite's sampled component
 (`VStar.Recursive.Sampled.protocol`), v2's audit (`Spot.OneStageZk`), from Flock's knowledge soundness of the
 live session at public inputs on the event that the verifiers accept the files (`SampledKSLiveV5` with its file and
 population-order hypotheses read off acceptance), applied at the session v2 sets up on the parameters and the committed
@@ -46,14 +46,14 @@ files and at the strategy a strategy of the period's game projects to. This modu
 * **The projection** (`Constructions`): a strategy of the period's game is read as a strategy of the live audit. A
   Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Widening`:
   other families' coins, other trees' samples) widen the sample's sample (`Live.extend`), which the sample doesn't read: the
-  sample's sampling design, A3 and the leg's δ are the session's (`uniform_fst`, `Live.delta_extend`).
+  sample's sampling design, A3 and the subprotocol's δ are the session's (`uniform_fst`, `Live.delta_extend`).
 * **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
   game as verity-verify-proof `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the coin trees' hiding term at every leaf, the read finder's collision and the forger's forgery.
 * **The component** (`ReadsV2`): the composite's `.sampled` component is `VStar.Recursive.Sampled.protocol`, whose
   one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Every composite that lists SPOT
-  names it (`readsV2_of_component`). The parameters fix the form before any coin; this leg covers the one-stage
-  form, and the recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
+  names it (`readsV2_of_component`). The parameters fix the form before any coin; this subprotocol covers the one-stage
+  form, and the recursive form (`VStar.Recursive`) is not this subprotocol's (`Covers`).
 * **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's,
   the first under the sampled component's id, as v2's case finds them (`ParamsAt`, at most one), the session's inputs
   as v2 hands them to verity-verify-proof (the statement, one table, the verifier's partition object and program, no
@@ -76,7 +76,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters.
   Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
   no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
-  deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
+  deployed commitment opens under its roots (`Live.OpensUnder`), the subprotocol's per-finder premises in `error`'s condition,
   and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
   the sampled verdict accepts with probability at most the published `δ`.
 * **The deployed digests and reading** (`programDigestOf`, `publicDigestOf`, `readOf`): the digests v2's parameters
@@ -88,7 +88,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
-* **The leg's δ at the session** (`Live.delta`), each finder's term its own summand:
+* **The subprotocol's δ at the session** (`Live.delta`), each finder's term its own summand:
   * the sample's term (`sampleMiss`): the sampling design's own miss at the claim's share `ε`, the largest probability that the sample
     holds no proof block of a set of more than an `ε` share of them, the acceptance probability of the sampling design's one-stage
     design over the population's strata (`Claims.Sampling.OneStage.Pa`). The sampling design and the strata define it, and at the
@@ -448,7 +448,7 @@ noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ :=
 the most likely revealed message misses with probability at most the root of the finder's success. -/
 noncomputable def twoRun (q : ℝ) : ℝ≥0∞ := ENNReal.ofReal (Real.sqrt (q ^ 2 / 2 ^ (513 : ℝ)))
 
-/-- **The leg's δ at the session, `t` SHA-512 calls and the read finder's bound `cr`**: the session's error, a
+/-- **The subprotocol's δ at the session, `t` SHA-512 calls and the read finder's bound `cr`**: the session's error, a
 two-continuation term per round opened after a digest, one for the record and one for the digests the composition's
 commitment binds, the coin trees' hiding term (`Live.hidingTerm`), the two file finders' `2²/2^513`, and `cr`. -/
 noncomputable def delta (t : ℕ) (cr : ℝ) : ℝ≥0∞ :=
@@ -502,7 +502,7 @@ theorem sessionDelta_extend (S : Widening) (t : ℕ) : (A.extend S).sessionDelta
   rw [hks, hsum]
   rfl
 
-/-- **The leg's δ at the widened sample is the session's**: the sample, the tables' and binding errors, the rounds and the
+/-- **The subprotocol's δ at the widened sample is the session's**: the sample, the tables' and binding errors, the rounds and the
 finders' budgets read only the session's bytes and parameters. -/
 theorem delta_extend (S : Widening) (t : ℕ) (cr : ℝ) : (A.extend S).delta t cr = A.delta t cr := by
   unfold Live.delta
@@ -560,7 +560,7 @@ end Live
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The constructions the leg reads, applied to a strategy of the period's game**: the projection, the device's other
+/-- **The constructions the subprotocol reads, applied to a strategy of the period's game**: the projection, the device's other
 releases the strategy may ask for (`coins`) and the Flock live strategy it is read as at the session widened by them
 (`project`); the read finder (`Vocab.finder`'s: a collision among the strings v2 hashes in reading the device's log and
 trees and those the device hashes) and the forger of the device's signature (`Vocab.forger`'s); and the
@@ -594,7 +594,7 @@ noncomputable abbrev Constructions.live {V : Vocab d α} (K : Constructions V) (
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Live :=
   A.extend (K.coins A θ F c σ)
 
-/-- **The leg's per-finder SHA-512 premises at a strategy and the session `A`**: the session's at the projected
+/-- **The subprotocol's per-finder SHA-512 premises at a strategy and the session `A`**: the session's at the projected
 strategy and the strategy's calls (`Live.FinderCR`), and `cr/sha-512` as the strict birthday bound at each
 two-continuation finder and at the circuit file's and the public file's finders. -/
 structure FinderCR (V : Vocab d α) (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array ByteArray)
@@ -614,7 +614,7 @@ record, and one for the digests the composition's commitment binds), the coin tr
 at every leaf the device's trees hold), the read finder's collision and the forger's forgery of the device's
 signature. Its pieces are the sample (the device's coins the sample reads, `Properties.Challenger.CoinsFromLog`, are the
 live audit's sample), the rounds (each round's coins, from the coin trees' log, are the live session's) and the messages
-(each message the evidence reveals is the projected strategy's). The leg reads it at each session v2 sets up on the
+(each message the evidence reveals is the projected strategy's). The subprotocol reads it at each session v2 sets up on the
 parameters and the committed files. -/
 def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) : Prop :=
