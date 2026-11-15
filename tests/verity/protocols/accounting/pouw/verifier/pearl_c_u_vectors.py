@@ -1,5 +1,5 @@
 """U's pinned vectors (`verity.protocols.accounting.pouw.prover.schemes.pearl_c_u`): ``uv run python tests/verity/protocols/accounting/pouw/verifier/pearl_c_u_vectors.py
-[GATE_CHECK_DIR]`` rewrites ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/pearl_c_u.json``.
+[GATE_CHECK_DIR]`` rewrites ``tests/vectors/pearl_c_u.json``.
 
 The cells come from the H100 kernel's gate problem, the one archive/pouw-blake3/pearl_c/fixture.py builds: 256 x 384 x 1,024,
 case "gpu-check", unit index 5, weight 1, both formings.  Its rows `ROWS` and columns `COLS` straddle the GEMM's 128 x 128

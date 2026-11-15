@@ -122,7 +122,7 @@ s_w), open the execution phase on another request table's root or session or ano
 of a K the layout lacks or under another prefix, give its entry other rows, words, domain (another circuit's, an
 execution phase's, other rows') or keys, and break the forms.
 
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_difftest.py` samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_credit.py` holds each
+`tests/test_difftest.py` samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_credit.py` holds each
 mutation to the refusal it aims at.
 """
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """NCP's checked values as Lean itself evaluates them, over explicit A, B, E₁, F₁ and a signed permutation R, at every
 16-deep checkpoint: route U's `Pouw.NCP.mmWU 128` (the checked values) and the unbiased `Pouw.mmW` over `stackX` /
-`stackY` (retired, kept for comparison).  The pinned result is ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/ncp_lean.json``.
+`stackY` (retired, kept for comparison).  The pinned result is ``tests/vectors/ncp_lean.json``.
 
     python tests/verity/protocols/accounting/pouw/verifier/ncp_lean.py write DIR        # DIR: a copy of Security (Mathlib built)
     (cd DIR && lake build Definitions.Pouw.NCP.RouteU && lake env lean NcpCheck.lean > ncp_lean.out)

@@ -1,6 +1,6 @@
 """Pinned vectors for the tile checks' public input regions (`anchors.TileAnchors.regions`), the `--public-inputs` content a
 verifier derives for one unit, against which Flock's file is mapped: ``uv run python
-tests/verity/protocols/accounting/pouw/verifier/pouw_regions_vectors.py`` rewrites ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/pouw_regions.json``.  A change to that file is a
+tests/verity/protocols/accounting/pouw/verifier/pouw_regions_vectors.py`` rewrites ``tests/vectors/pouw_regions.json``.  A change to that file is a
 change to a region's layout or derivation and needs a reason in the PR.
 
 Inputs are derived, not stored: a case's salt, root_A and root_B are SHA-256("verity/pouw/regions-vectors/v1", case, part),

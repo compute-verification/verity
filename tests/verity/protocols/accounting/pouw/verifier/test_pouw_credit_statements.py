@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
-PKG = (Path(__file__).resolve().parents[6] / "verity" / "protocols" / "accounting" / "pouw" / "verifier") / "../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check"
+PKG = Path(__file__).resolve().parent / "lean" / "check"
 for _name in ("pouw_rounds_cases", "pouw_credit_cases"):
     if _name not in sys.modules:
         _spec = importlib.util.spec_from_file_location(_name, PKG / f"{_name}.py")

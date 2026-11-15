@@ -1,5 +1,5 @@
 """Pinned vectors for the proof's identifier v1 (`verity.protocols.accounting.pouw.verifier.identifier`): ``uv run python
-tests/verity/protocols/accounting/pouw/verifier/identifier_vectors.py`` rewrites ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/identifier_v1.json``.  A change to that file is a change
+tests/verity/protocols/accounting/pouw/verifier/identifier_vectors.py`` rewrites ``tests/vectors/identifier_v1.json``.  A change to that file is a change
 to the identifier, which Flock's verifier compares byte for byte, and needs a reason in the PR.
 
 Inputs are derived, then pinned with each case: weight w's root in case c is SHA-256("verity/pouw/identifier-vectors/v1", c,

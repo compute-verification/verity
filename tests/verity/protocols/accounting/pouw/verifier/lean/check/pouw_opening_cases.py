@@ -14,7 +14,7 @@ A rows per tile row and C B rows per tile column, the opening lists the unit's R
 their b ‖ c and then its public row's, `core_check.public_bc` of the execution phase's context, its salt, the unit and the entry's
 roots.  The execution phases come from a few
 fixed contexts, so the side trees' pad nodes, which only the generator computes, are computed once per side domain.
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_difftest.py` samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_core_check.py`
+`tests/test_difftest.py` samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations

@@ -64,7 +64,7 @@ its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 sn
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd adapters/vllm && \\
-      PYTHONPATH=$PWD/../../../../adapters:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
+      PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --main $RESEARCH_RUN_DIR/inputs/main.txt \\
       --tree $RESEARCH_RUN_DIR/inputs/gate-tree.tgz --commit COMMIT --checkpoint SNAPSHOT_DIR'
 
@@ -77,7 +77,7 @@ rehearsal's ``out/program/``), its circuit files' directory (``--circuits``), an
 
     research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd adapters/vllm && \\
-      PYTHONPATH=$PWD/../../../../adapters:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
+      PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
       --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
       --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes GATE_LOGIN" \\

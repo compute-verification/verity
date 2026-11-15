@@ -18,7 +18,7 @@ v2 live Program (``not-live``, a v1 Program among them), and leave a live table 
 (``no-table``). Its mutations of the answers (`RUN_NAMES`) make one statement's verifier fail to run (``error``) or
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
 
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_live_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier
+`tests/test_live_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier
 (`pouw_verified_cases.replay`).
 """
 from __future__ import annotations

@@ -14,7 +14,7 @@ Pearl-C pass's manifest and its verifier's inputs, then one mutation (`LIVE_SALT
 `live_salt`.  A sample case is an honest sample (the sampling coin of seeded coins, or of a live execution phase's as a certified
 execution phase's, opened after a registration's digest, the units `stream_subset` of its key's stream), then one mutation
 (`DRAW_NAMES`).
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_difftest.py` samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_core_check.py`
+`tests/test_difftest.py` samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations

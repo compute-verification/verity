@@ -120,7 +120,7 @@ def test_a_challenger_opens_each_coin_once_and_only_its_own_labels():
 
 def test_a_challenger_has_no_entropy_of_its_own():
     """A challenger samples only from the entropy it is handed (a served one's is the Lean verifier's,
-    `verifier.coins`; `../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_difftest.py` holds it to the Lean): there is no default, so none reads
+    `verifier.coins`; `lean/check/tests/test_difftest.py` holds it to the Lean): there is no default, so none reads
     Python's generator, and an entropy that answers short is refused."""
     with pytest.raises(TypeError, match="entropy"):
         EC.Challenger(7)

@@ -2,7 +2,7 @@
 root, which is the root of `C*` PoUS's setup published, and onsite holds it to PoUS's run case. A P2 case on the `C*`
 PoUS audited meets PoUS's run; a P2 case and a PoUS run on different stores, a generic PoUB case (whose payload root is
 its own salted tree's, never PoUS's `C*`), a case that names no store and one whose `store_root` its commitment doesn't
-register are refused, each by name. The case's evidence is not read here: `../../../../../tests/verity/protocols/accounting/poub/verifier/lean/test_p2_case.py` replays it."""
+register are refused, each by name. The case's evidence is not read here: `lean/tests/test_p2_case.py` replays it."""
 
 from __future__ import annotations
 

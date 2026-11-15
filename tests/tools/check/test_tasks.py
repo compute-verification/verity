@@ -115,7 +115,7 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
     """Only an audit of `security` or of a package requiring it (Mathlib, ArkLib) asks 32 cores and 128 GB: the first graph's 26
     others queued for the two large slots while 21 small ones sat idle."""
     spec = "security"
-    for name, deps in ((spec, []), ("lean/Q", [f"../../../tools/{spec}"])):
+    for name, deps in ((spec, []), ("lean/Q", [f"../../{spec}"])):
         (tree / name).mkdir(parents=True)
         (tree / name / "lakefile.toml").write_text(f'name = "{name.rsplit("/", 1)[-1]}"\n')
         (tree / name / "lean-audit.json").write_text("{}\n")

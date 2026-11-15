@@ -1,5 +1,5 @@
 """Pinned vectors for ``pearl-c-h100-v0``: ``uv run python tests/verity/protocols/accounting/pouw/verifier/pearl_c_vectors.py`` rewrites
-``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/pearl_c.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
+``tests/vectors/pearl_c.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is an FP10 row whose k codes are the signed bytes
 of SHAKE256("verity/pouw/pearl-c-vectors/v1", c, name, "codes", i) clamped to ±127 and whose k/8 BF16 scales are

@@ -1,5 +1,5 @@
 """The Python side of PoUB's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
-(`Poub`, the verifier's definition: `../../../../../../../verity/protocols/accounting/poub/verifier/README.md`): the Python behind the Lean's JSON formats
+(`Poub`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
 (`Poub.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `Poub.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as

@@ -528,7 +528,7 @@ ALLOWED = [
     "read -r first < README.md",
     "python3 -c 'print(1+1)'",
     "python3 script.py --key key.pem",
-    "python3 -m pytest ../../tests/tools/agent-guard/test_secret_files.py -q",
+    "python3 -m pytest tests/test_secret_files.py -q",
     "perl -pi -e 's/^FOO=.*/FOO=2/' x.env",
     "perl -i -pe 's/^FOO=.*/FOO=2/' x.env",
     "perl -i.bak -ne 'print unless /^OLD=/' /etc/vy/env/root.env",

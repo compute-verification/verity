@@ -404,7 +404,7 @@ REFERENCES = {
 
 def test_every_entry_of_the_library_has_a_reference():
     assert sorted(REFERENCES) == [p.stem for p in library.entries()], (
-        "an entry of attacks/ needs a reference in ../../tests/benchmarks/training_slowdown/test_entries.py's REFERENCES, and a reference an entry")
+        "an entry of attacks/ needs a reference in tests/test_entries.py's REFERENCES, and a reference an entry")
 
 
 @pytest.mark.parametrize("name", sorted(REFERENCES))

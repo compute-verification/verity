@@ -1,6 +1,6 @@
 """Pinned vectors for PoUW's execution-phase coins (`verity.protocols.accounting.pouw.verifier.coins`) and the salt and sample keys derived
 from them: ``uv run python tests/verity/protocols/accounting/pouw/verifier/epoch_coins_vectors.py`` rewrites
-``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/epoch_coins_v1.json``.  A change to that file is a change to the coin commitment or a derivation, and needs a
+``tests/vectors/epoch_coins_v1.json``.  A change to that file is a change to the coin commitment or a derivation, and needs a
 reason in the PR.
 
 A case's challenger samples from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are

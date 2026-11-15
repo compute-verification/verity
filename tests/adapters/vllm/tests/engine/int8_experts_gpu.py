@@ -22,7 +22,7 @@ One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the
               layer     the whole layer (`int8_experts.forward`) on the CPU, and again on the GPU, from the served x, ids, weights
             and the served weight against the oracle's `quant_rows(w.float(), 127)` of the base weight.
 
-    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../../../../../adapters/vllm:../../tools/research/src
+    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     $PY tests/engine/int8_experts_gpu.py --out DIR --at ISO_TIME --by LANE
 """
 from __future__ import annotations

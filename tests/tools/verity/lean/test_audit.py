@@ -5750,7 +5750,7 @@ def test_discovery_skips_the_controls(tmp_path):
     (tmp_path / "a").mkdir()
     (tmp_path / "a" / "lean-audit.json").write_text("{}")
     assert A.packages(tmp_path) == [tmp_path / "a"]
-    assert A.FIXTURES not in A.packages(A.HERE.parents[3] / "tools" / "verity" / "lean")
+    assert A.FIXTURES not in A.packages(A.HERE.parent)
 
 
 def test_a_file_changed_during_the_run_is_reported(tmp_path):

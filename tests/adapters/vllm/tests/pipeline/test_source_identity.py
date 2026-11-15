@@ -10,7 +10,7 @@ Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from t
 `.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
 of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
 
-    cd adapters/vllm && PYTHONPATH=.:../../../../../adapters/vllm:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
+    cd adapters/vllm && PYTHONPATH=.:../..:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
 """
 from __future__ import annotations
 

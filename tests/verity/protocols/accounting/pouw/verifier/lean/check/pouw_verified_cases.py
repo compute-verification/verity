@@ -29,7 +29,7 @@ the sample malformed, the evidence's or the circuit files' lanes form broken; th
 opened at another opening or reported without openings (``P-shared``), its ports at another root, rejected, proving
 other units, a run that fails or refuses, and every leaf run reporting no session (``P-opened``).
 
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier (`replay`).
+`tests/test_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier (`replay`).
 """
 from __future__ import annotations
 

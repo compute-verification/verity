@@ -27,7 +27,7 @@ def _load(name, path):
 V = _load("enc_cache_vectors", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "cache_vectors.py")
 D = V.D
 FIXTURES = HERE / "fixtures"
-VECTORS = REPO / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "cache_step_vectors.json"
+VECTORS = REPO.parent / "tests" / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "fixtures" / "cache_step_vectors.json"
 
 
 def _trace(name):

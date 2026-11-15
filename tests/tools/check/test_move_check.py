@@ -435,7 +435,7 @@ def test_lean_package_move_with_relative_require(tmp_path):
     repo, base = _repo(tmp_path, files)
     _move(repo, "packages/verity/lean", "verity/lean")
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
-    _write(repo, {"security_proofs/pous/lakefile.toml": LAKEFILE.replace("../../../packages/verity/lean", "../../../tools/verity/lean")})
+    _write(repo, {"security_proofs/pous/lakefile.toml": LAKEFILE.replace("../../../packages/verity/lean", "../../verity/lean")})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
     assert r["edits"] == [{"path": "security_proofs/pous/lakefile.toml", "old": "protocols/pous/lean/lakefile.toml", "kind": "path"}]
@@ -1239,7 +1239,7 @@ def _in_place(tmp_path: Path, **over: str) -> dict:
         "x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n]\n'})
     _move(repo, "Sec/Props/Proofs/A.lean", "Sec/Proofs/Props/A.lean")
     _write(repo, {
-        "Sec/Proofs/Props/lakefile.toml": ('name = "pp"\nsrcDir = "../../../tools"\n\n[[require]]\nname = "props"\npath = "../../Props"\n'
+        "Sec/Proofs/Props/lakefile.toml": ('name = "pp"\nsrcDir = "../.."\n\n[[require]]\nname = "props"\npath = "../../Props"\n'
                                            '\n[[lean_lib]]\nname = "PP"\nroots = ["Proofs.Props.A"]\n'),
         "Sec/Proofs/Props/lean-toolchain": "leanprover/lean4:v4.99.0\n",
         "Sec/Proofs/Props/lake-manifest.json": _manifest("pp", {**PROPS_PATH, "dir": "../../Props"}),
@@ -1707,7 +1707,7 @@ def test_relative_path_with_any_other_change_or_resolving_elsewhere_is_refused(t
     moved = VECTORS.replace("/certifier/", "/network_certifier/")
     for i, (text, line) in enumerate([
             (moved.replace("the schema", "its schema"), "+# reads ../../../proto/network_certifier/ for its schema"),
-            (moved.replace("../../../", "../../../tools/"), "+    vectors.py --out ../../proto/network_certifier/tests/v.json")]):
+            (moved.replace("../../../", "../../"), "+    vectors.py --out ../../proto/network_certifier/tests/v.json")]):
         [f] = _certifier(tmp_path / str(i), {"bench/e2e/enc/vectors.py": text})["refusals"]
         assert f["path"] == "bench/e2e/enc/vectors.py" and line in f["hunk"]
 
@@ -2189,7 +2189,7 @@ REBASE = {
     "verity/ml/circuits/tests/fixtures/unit.json": "{}\n",
     "verity/ml/circuits/tests/lean/Unit.lean": "/-- Built by `pod/90-unit.sh` on `tests/fixtures/unit.json`.\n" + REST + "-/\ntheorem t : 1 = 1 := rfl\n",
     "tests/benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw"\n',
-    "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$POUW/../..:$POUW/../config:$POUW" python -m served\n' + REST.replace("line", "# line"),
+    "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$POUW/../..:$POUW/../../tools/config:$POUW" python -m served\n' + REST.replace("line", "# line"),
     "tools/config/settings.py": "Y = 1\n",
     "tools/other.py": "Z = 1\n",
 }

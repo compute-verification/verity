@@ -1036,7 +1036,7 @@ def test_nothing_of_record_turns_the_wired_key_on():
     off."""
     root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
     spot = root / "verity/protocols/proofs/spot/verifier"
-    difftest = spot / "../../../../../tests/verity/protocols/proofs/spot/verifier/lean/test_wired_key_difftest.py"
+    difftest = spot / "lean/tests/test_wired_key_difftest.py"
     allowed_set = {spot / "second_stage.py", spot / "lean/Spot/SecondStage.lean",
                    spot / "lean/Spot/SecondStageExamples.lean", spot / "lean/Spot/WiredKeyDevMain.lean", difftest,
                    Path(__file__).resolve()}

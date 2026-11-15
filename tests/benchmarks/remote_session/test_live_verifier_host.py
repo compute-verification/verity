@@ -48,7 +48,7 @@ def test_auditor_line_reads_the_out_a_host_run_leaves(tmp_path):
     cheaper tests of `auditor_line` can't show is that the out/ a host run leaves, from a real paced session, is one it
     reads, its registration and its session's verdict as the run's record says."""
     o = tmp_path / "out"
-    p = subprocess.run([sys.executable, str(LIVE.parent / "tests" / "stub_verifier.py"), "--out", str(o),
+    p = subprocess.run([sys.executable, str(LIVE.parents[6] / "tests" / "verity" / "protocols" / "accounting" / "poub" / "device" / "live_verifier" / "stub_verifier.py"), "--out", str(o),
                         "--transcript", str(tmp_path / "transcript.jsonl"), "--registry", str(tmp_path / "registry.json"),
                         "--port", "0"], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr[-2000:]

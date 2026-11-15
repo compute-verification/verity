@@ -1,4 +1,4 @@
-"""``pearl-fp8-v4`` against Pearl's own Rust at 284b147b (``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/pearl_kw.json``, B200), and the scheme through
+"""``pearl-fp8-v4`` against Pearl's own Rust at 284b147b (``tests/vectors/pearl_kw.json``, B200), and the scheme through
 the protocol on the RTX 4090's ``ada`` device."""
 
 from __future__ import annotations

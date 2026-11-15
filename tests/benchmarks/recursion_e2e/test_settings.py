@@ -73,4 +73,4 @@ def test_direct_environment_uses_only_shrink() -> None:
     grown = {f: n for f, n in found.items() if n > BASELINE.get(f, 0)}
     assert not grown, f"read the environment through benchmarks/recursion_e2e/settings.py (declare it there): {grown}"
     shrunk = {f: found.get(f, 0) for f, n in BASELINE.items() if found.get(f, 0) < n}
-    assert not shrunk, f"fewer direct uses than BASELINE allows: lower it in ../../tests/benchmarks/recursion_e2e/test_settings.py to {shrunk}"
+    assert not shrunk, f"fewer direct uses than BASELINE allows: lower it in tests/test_settings.py to {shrunk}"

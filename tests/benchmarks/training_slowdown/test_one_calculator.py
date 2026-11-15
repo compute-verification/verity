@@ -25,7 +25,7 @@ from training_slowdown import formalism as F
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "training_slowdown")
 #: the one module that reaches the calculator, and this file, whose toy sources name it
-DOOR, THIS = "training_slowdown/calculator.py", "../../tests/benchmarks/training_slowdown/test_one_calculator.py"
+DOOR, THIS = "training_slowdown/calculator.py", "tests/test_one_calculator.py"
 #: the calculator's package, which has its directory's name
 PACKAGE = calculator.CALCULATOR.name
 #: the calculator's modules as its directory on the import path names them, and its directory's name: a part of every

@@ -102,7 +102,6 @@ Tests that take over about 5 s carry `@pytest.mark.slow` in their own module. Th
 cases stay in the default run, and circuit-check's `word_view` checks each Boolean Definition against its word Definition off the
 merge gate (`off_gate` in `tools/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
-from __future__ import annotations
 
 import importlib
 import os

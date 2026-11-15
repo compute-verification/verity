@@ -16,7 +16,7 @@ each rep), for at least `--sustain` seconds an arm; the per-launch inputs are co
 Reported: median microseconds a launch (a forward), per-item spread, SM clocks around each item, bytes moved a launch and
 TB/s, and the saving per forward.
 
-    cd adapters/vllm; PY=...venv/bin/python                      # PYTHONPATH=.:../../../../../adapters/vllm
+    cd adapters/vllm; PY=...venv/bin/python                      # PYTHONPATH=.:../..
     $PY tests/engine/rope_cache_gpu.py --out DIR [--ts 8192,16384,32768] [--sustain 2.0]
 """
 from __future__ import annotations

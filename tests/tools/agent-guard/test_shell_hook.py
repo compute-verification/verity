@@ -1551,7 +1551,7 @@ UNFOLLOWED_CDS = [
     "cd {T} | true; git push origin main", "case x in x) cd {T};; esac; git push origin main", "C=cd; $C {T}; git push origin main",
     "git push origin main; cd {T}", "popd; git push origin main", ". ./env.sh; git push origin main",
     "cd {T} && git push origin main", "cd {T}; git push --repo=origin", "(cd {T} && git push origin main)",
-    "cd {T} && git push origin HEAD:main", "cd {T} && git -C . push origin main", "cd {T}/.. && git -C ../../../tools push origin main",
+    "cd {T} && git push origin HEAD:main", "cd {T} && git -C . push origin main", "cd {T}/.. && git -C ../.. push origin main",
     "cd {T} && git -C ~ push origin main", "source ./env.sh && git -C {T} push origin main", ". ./env.sh; git -C {T} push origin main",
     "C=cd; $C /tmp; git -C {T} push origin main", "cd /tmp && GIT_DIR={T}/.git git -C {T} push origin main",
     "cd /tmp && git --git-dir={T}/.git -C {T} push origin main",

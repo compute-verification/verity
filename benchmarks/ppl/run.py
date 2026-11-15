@@ -358,7 +358,7 @@ def cmd_tables(a: argparse.Namespace) -> int:
 
 def cmd_selftest(_a: argparse.Namespace) -> int:
     import pytest
-    return pytest.main(["-q", str(HERE / "tests")])
+    return pytest.main(["-q", str(HERE.parents[1] / "tests" / "benchmarks" / "ppl")])
 
 
 def main(argv: list[str]) -> int:

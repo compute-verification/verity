@@ -1,5 +1,5 @@
 """Pinned vectors for the audit execution phase's layout for gates (`verity.protocols.accounting.pouw.verifier.window`): ``uv run python
-tests/verity/protocols/accounting/pouw/verifier/window_vectors.py`` rewrites ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/window.json``.  A change to that file
+tests/verity/protocols/accounting/pouw/verifier/window_vectors.py`` rewrites ``tests/vectors/window.json``.  A change to that file
 is a change to what the execution phase's tile and entry circuits read (an entry row's bits, a side tree, the execution phase root or the
 public inputs file Flock's verifier writes), and needs a reason in the PR.
 

@@ -193,7 +193,7 @@ def test_a_lock_reads_every_package_its_records_read(tmp_path):
 
 
 def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
-    ts = listed(tmp_path, **{"Sec/lean-audit.json": "[]", "Sec/Proofs/lean-audit.json": json.dumps({"proved_in": ["../../../../tools"]})})
+    ts = listed(tmp_path, **{"Sec/lean-audit.json": "[]", "Sec/Proofs/lean-audit.json": json.dumps({"proved_in": ["../../.."]})})
     assert ts["lean-lock:Sec"]["reads"] == built("Sec/Definitions.lean", "Sec/Definitions/A.lean"), \
         "a lock that isn't an object names no proved_in, as lean_audit.provers reads it"
     assert len({r["task"] for r in ts["lean-lock:Sec/Proofs"]["reads"]}) == 7, "a proved_in outside the tree adds no package"

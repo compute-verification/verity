@@ -1,6 +1,6 @@
 """Pinned vectors for the tile checks' committed rows (`verity.protocols.accounting.pouw.prover.circuit.leaves`), against which Flock's ports are
 mapped: ``uv run python
-tests/verity/protocols/accounting/pouw/verifier/pouw_rows_vectors.py`` rewrites ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/pouw_rows.json``.  A change to that file is a change to
+tests/verity/protocols/accounting/pouw/verifier/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.json``.  A change to that file is a change to
 a row schema and needs a reason in the PR.
 
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),

@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 HERE = (Path(__file__).resolve().parent)
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a5  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 

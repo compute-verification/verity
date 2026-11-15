@@ -163,10 +163,22 @@ exclude = [
     "**/*.h",
     "**/*.c",
     "benchmarks/pouw/pearl_c_sm90/**",
+    "benchmarks/numerical/bench-instances/v1/manifest.json",
+    "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
+    "tests/adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
+    "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
+    "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",
+    "tests/verity/circuits/ops/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
+    "tests/verity/circuits/ops/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
+    "verity/circuits/silicon/discrepancy_log.json",
+    "verity/circuits/silicon/hawkeye/PIN.json",
 ]
 include = [
     "**/fixtures/README.md",
     "**/fixtures/**/README.md",
+    "tools/move/pyproject.toml",
 ]
 
 [pyproject."tests/adapters/vllm/verity_vllm/definitions/pyproject.toml"]

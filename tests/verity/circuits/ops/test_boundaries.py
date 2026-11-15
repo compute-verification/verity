@@ -18,7 +18,7 @@ CIRCUITS = ((ROOT / "verity/circuits/__init__.py").parent, (ROOT / "verity/circu
             ROOT / "verity/circuits/evaluation", ROOT / "verity/circuits/ops", SILICON,
             ROOT / "verity/circuits/targets", ROOT / "tests/verity/circuits")
 FROM_VERITY = ("verity.errors", "verity.circuits.boolean.forms")
-#: the checker, which the catalog's modules import no more than core's do (`../../../tests/verity/circuits/ops/test_boundaries.py`); its
+#: the checker, which the catalog's modules import no more than core's do (`tests/test_boundaries.py`); its
 #: ``*.circuit-check.py`` sidecars, circuit-check's bindings of its Definitions, may (`circuit_check.sidecars`)
 CHECKER = "circuit_check"
 

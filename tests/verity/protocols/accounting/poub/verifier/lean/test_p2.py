@@ -618,7 +618,7 @@ def test_p2_session(server) -> None:
 
 @pytest.fixture(scope="module")
 def committed() -> p2_prover.Store:
-    """The committed C* (PoUS's setup's prover bytes, `../../../../../../tests/verity/protocols/accounting/poub/verifier/lean/test_p2.py`'s), registered under its vk root."""
+    """The committed C* (PoUS's setup's prover bytes, `tests/test_p2.py`'s), registered under its vk root."""
     meta = json.loads((FIXTURES / "p2-store.json").read_text())
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
     assert hashlib.sha512(data).hexdigest() == meta["c_star_sha512"]

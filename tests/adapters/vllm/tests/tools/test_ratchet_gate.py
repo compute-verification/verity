@@ -826,7 +826,7 @@ def test_a_base_lint_run_that_ends_without_its_document_decides_no_verdict_and_n
     assert isinstance(e.value.__cause__ or e.value.__context__, error)
 
 
-REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
+REAL_LINT = SCRIPT.parents[3] / "tests" / "adapters" / "vllm" / "tests" / "lint"
 RUFF_LINT = "tests/adapters/vllm/tests/lint/test_ruff.py"
 RUFF_JSON = "tests/adapters/vllm/tests/lint/allowlists/ruff.json"
 RUFF_TOML = '[lint]\nselect = ["F"]\n'
@@ -958,7 +958,7 @@ def both_ruffed(ruffed) -> Repo:
     it: tools/a.py's unused import is the root lint's one finding, which repo_ruff.json allows."""
     ruffed.git("checkout", "-q", "main")
     ruffed.commit("repo ruff", {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text(),
-                                G.REPO_RUFF_CONFIG: RUFF_TOML, G.RUFF_CONFIG: 'extend = "../../../../../adapters/vllm/ruff.toml"\n',
+                                G.REPO_RUFF_CONFIG: RUFF_TOML, G.RUFF_CONFIG: 'extend = "../../ruff.toml"\n',
                                 REPO_RUFF_JSON: _allowlist(TOOLS_F401), "tools/a.py": "import os\nA = 1\n"})
     ruffed.git("checkout", "-q", "-B", "pr")
     return ruffed

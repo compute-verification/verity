@@ -53,7 +53,7 @@ def _put(d: Path, rel_dir: str, data: bytes) -> str:
 def _entry(d: Path, target: list, value: str, version: str = "v1") -> dict[str, str]:
     """An entry of ``target``'s key in circuit-check's cache ``d``, with its read set and the sited value it needs; each name."""
     v = _put(d, f"{version}/reads/values", _bytes({"value": value}))
-    s = _put(d, f"{version}/reads/set", _bytes({"needs": [f"../../../tools/{v.split('/', 1)[1]}"], "runs": {"units": [0]}}))
+    s = _put(d, f"{version}/reads/set", _bytes({"needs": [f"../../{v.split('/', 1)[1]}"], "runs": {"units": [0]}}))
     key = {"request": {"target": target}, "version": version}
     k32 = hashlib.sha512(_bytes(key)).hexdigest()[:32]
     e = _put(d, f"{version}/{k32}", _bytes({"key": key, "needs": [f"../{s.split('/', 1)[1]}"], "own": {}, "report": {},

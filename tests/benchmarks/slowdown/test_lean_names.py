@@ -81,7 +81,7 @@ def test_every_lean_name_the_calculator_cites_is_in_a_lock():
     names = listed()
     missing = {n: w for n, w in calculator_cites().items() if n not in names and n not in ALLOWED}
     assert not missing, ("the calculator cites Lean names no lock lists: name the statement a lock lists, or "
-                         "add the name to ALLOWED in ../../tests/benchmarks/slowdown/test_lean_names.py with why (it only shrinks):\n"
+                         "add the name to ALLOWED in tests/test_lean_names.py with why (it only shrinks):\n"
                          + "\n".join(f"{w}: {n}" for n, w in sorted(missing.items())))
 
 

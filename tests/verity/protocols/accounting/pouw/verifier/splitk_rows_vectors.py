@@ -1,6 +1,6 @@
 """Pinned vectors for an H1 table's leaves past K = 4096 (`h1zy.chunk_leaves`, `h1zy.chunk_words`), against which the GPU
 trees that commit ``a/<K>@<s>`` and ``b/<K>`` are gated leaf by leaf: ``uv run python
-tests/verity/protocols/accounting/pouw/verifier/splitk_rows_vectors.py`` rewrites ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/splitk_rows.json``, and with
+tests/verity/protocols/accounting/pouw/verifier/splitk_rows_vectors.py`` rewrites ``tests/vectors/splitk_rows.json``, and with
 ``--words DIR`` also writes each case's words to ``DIR/<case>.u16`` (its leaves in order, each its words, u16
 little-endian), which the 256 KiB limit on a tracked file keeps out of the tree. A change to the JSON is a change to the
 chunk-row layout and needs a reason in the PR.

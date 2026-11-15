@@ -1,6 +1,6 @@
 """The Python held to PoUW's commitments in Lean (`PouwCommit`), PoUW's verifier (`pouw.verifier`).
 
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/commit/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
+`tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
 `weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the execution phase salts, the sample
 keys and the work-weighted samples), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
 case whose Python outcome is not the Lean's, naming the Lean's. `test_the_python_is_the_lean` runs it here on the cases
@@ -27,7 +27,7 @@ import verity_difftest as D
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 PACKAGE = (Path(__file__).resolve().parents[8] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "commit")
-SCRIPT = PACKAGE / "tests" / "difftest_vectors.py"
+SCRIPT = PACKAGE.parents[6] / "tests" / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "commit" / "difftest_vectors.py"
 _spec = importlib.util.spec_from_file_location("difftest_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)

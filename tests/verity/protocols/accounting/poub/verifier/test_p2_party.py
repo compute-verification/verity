@@ -4,8 +4,8 @@ auditor's, and a request carrying other values is refused by name; its answer in
 `core_check` reads, and the prover reads a challenge in either form. The parties' lines are named by their key, the
 verifier's side reading any other as `Malformed` and the channel's end as the runtime's `Closed`; the verifier claims
 the session id before it flips its coins, and a line before it asked for one ends the session out of phase. Its
-sessions, decided by the Lean verifier with these books beside it, are `../../../../../tests/verity/protocols/accounting/poub/verifier/lean/test_p2_party.py`'s and
-`../../../../../tests/verity/protocols/accounting/poub/verifier/lean/test_p2_parties.py`'s, which run where Lake is."""
+sessions, decided by the Lean verifier with these books beside it, are `lean/tests/test_p2_party.py`'s and
+`lean/tests/test_p2_parties.py`'s, which run where Lake is."""
 
 from __future__ import annotations
 

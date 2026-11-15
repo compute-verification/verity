@@ -359,4 +359,4 @@ def test_each_closing_entry_is_still_a_gap():
     """A CLOSING entry whose instruction now has its own class priced at every statement's π* is closed: delete it."""
     sts = statements()
     done = stale(sts, gaps(sts, programs()), CLOSING)
-    assert not done, f"closed, delete from CLOSING in ../../tests/benchmarks/pouw/test_census_cover.py: {done}"
+    assert not done, f"closed, delete from CLOSING in tests/test_census_cover.py: {done}"

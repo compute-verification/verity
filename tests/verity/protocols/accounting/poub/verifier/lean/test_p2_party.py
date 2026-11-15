@@ -1,6 +1,6 @@
 """The P2 session's verifier as a party of its own (`p2_parties.py`), the Lean of record (`poub-verifier`,
 `Poub.P2Session`) with the Python's books beside it, over a channel to a prover serving the 9-block P2 store of
-`../../../../../../tests/verity/protocols/accounting/poub/verifier/lean/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
+`tests/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
 plan, one whose receipts skip a unit's reads, one whose openings are out of form and one that reads every unit when the
 plan is fewer rejected, and a request for another node, or off the auditor's session parameters in any of them, refused
 by the Lean before any coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others; and

@@ -1,4 +1,4 @@
-"""int_mm.py on the CPU: `linear` against the twin (`fixture.epilogue` over `fixture.sums`, which ../../../tests/benchmarks/kernels/s8_linear/test_twin.py holds
+"""int_mm.py on the CPU: `linear` against the twin (`fixture.epilogue` over `fixture.sums`, which tests/test_twin.py holds
 to the Definition's evaluator) on the gate's structured codes and special scales, what it refuses, and the fused
 epilogue's PTX audit."""
 from __future__ import annotations

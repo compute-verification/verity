@@ -1,6 +1,6 @@
 """The network certifier's link and key read from the registered hardware (`registered.py`): the accepting case, each
 refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkCheck.Registered`) on the same
-vectors: the cases below and seeded sites around them, each answered by `../../../../../tests/verity/protocols/accounting/certifier/verifier/lean/RegisteredVectors.lean` in the
+vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in the
 certifier check's Lake package and by the Python, which agree on the registered link, on each refusal's message and on
 which sites are malformed."""
 

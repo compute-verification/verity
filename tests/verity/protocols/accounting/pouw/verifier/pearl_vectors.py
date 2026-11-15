@@ -1,6 +1,6 @@
 """Conformance vectors for ``pearl-fp8-v4``, computed by Pearl's own Rust at pearl-research-labs/pearl ``284b147b``.
 
-The inputs are derived here (SHAKE256 of fixed labels), so the pinned file ``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/pearl_kw.json`` holds only
+The inputs are derived here (SHAKE256 of fixed labels), so the pinned file ``tests/vectors/pearl_kw.json`` holds only
 Pearl's outputs (large arrays as SHA-256 of their bytes).  To regenerate, with a checkout of that commit:
 
     python tests/verity/protocols/accounting/pouw/verifier/pearl_vectors.py inputs /tmp/in.json
@@ -102,6 +102,6 @@ if __name__ == "__main__":
     elif cmd == "pin":
         rust = json.loads(path.read_text())
         PINNED.write_text(json.dumps({"schema": "verity-pouw/pearl-kw-vectors/v1", "pearl_commit": PEARL_COMMIT,
-                                      "generator": "zk-pow/src/api/fp8/verity_vectors.rs (its copy: ../../../../../tests/verity/protocols/accounting/pouw/verifier/pearl_vectors.rs)",
+                                      "generator": "zk-pow/src/api/fp8/verity_vectors.rs (its copy: tests/pearl_vectors.rs)",
                                       "devices": ["b200", "h100"], "outputs": summarize(rust)}, indent=1) + "\n")
         print(f"wrote {PINNED}")

@@ -25,7 +25,7 @@ session's (its pin's included, as `PIN_NAMES`), a session opened without a reser
 another execution phase's weights or requests, H1's salt opened after the weights' root, a log showing another root, or the coin
 rule's.
 
-`../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_difftest.py` samples them for the harness, and
+`tests/test_difftest.py` samples them for the harness, and
 `tests/verity/protocols/accounting/pouw/verifier/test_pouw_core_check.py` holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations

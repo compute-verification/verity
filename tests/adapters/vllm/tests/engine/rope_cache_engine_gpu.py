@@ -12,7 +12,7 @@ One process writes `<out>/rope_cache_engine_gpu.json`:
   timed     at each of `--ts`, a prefill of T tokens as one step (max_tokens 1), the arms interleaved, `--reps` each: ms a
             request between CUDA events on either side of `generate`.
 
-    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../../../../../adapters/vllm:../../tools/research/src
+    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     $PY tests/engine/rope_cache_engine_gpu.py --out DIR --at ISO_TIME --by LANE [--role R --base-role B --repo REPO] [--ts 8192,32768]
 """
 from __future__ import annotations

@@ -16,7 +16,7 @@ Each arm is captured in a CUDA graph and replayed in items of about ITEM_MS, the
 each rep), for at least `--sustain` seconds an arm; inputs are copied enough times to pass 3x the L2.  Reported: median
 microseconds a launch (a forward), per-item spread, SM clocks around each item, and the saving per forward.
 
-    cd adapters/vllm; PY=...venv/bin/python                      # PYTHONPATH=.:../../../../../adapters/vllm
+    cd adapters/vllm; PY=...venv/bin/python                      # PYTHONPATH=.:../..
     $PY tests/engine/int8_producers_gpu.py --out DIR [--ms 8192,16384,32768] [--sustain 2.0] [--shape 4096,14336,32]
 
 `--shape H,I,LAYERS` times another model's widths (Llama-3.1-8B: 4096,14336,32).

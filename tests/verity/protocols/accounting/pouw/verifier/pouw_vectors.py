@@ -1,5 +1,5 @@
 """Regenerate the pinned NCP vectors: ``uv run python tests/verity/protocols/accounting/pouw/verifier/pouw_vectors.py`` rewrites
-``../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/ncp.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
+``tests/vectors/ncp.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is SHAKE256("verity/pouw/test-rows/v1", c, name, i)
 read as int7 (each byte mod 128, minus 64)."""

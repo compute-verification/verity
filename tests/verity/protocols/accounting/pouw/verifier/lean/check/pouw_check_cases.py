@@ -4,7 +4,7 @@ A case is an honest execution phase (random grid bits, pinned tile template (`co
 length; the registration one-stage's record of it, the service's answer an acceptance of that registration with its
 profile and sample), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
-writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/check/test_difftest.py`
+writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
 samples them for the harness, and `tests/verity/protocols/accounting/pouw/verifier/test_pouw_core_check.py` holds each mutation to
 the refusal it aims at.
 """

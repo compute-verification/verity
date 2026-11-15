@@ -147,7 +147,7 @@ def test_a_family_key_its_kind_lacks_is_refused():
         families._checked(Adapter, "family.x", {"rank": 1, "workers": 4})
 
 
-#: the fields the classes and attacks read beyond `thread_c`, at the values ../../tests/benchmarks/slowdown/test_classes.py and test_attacks.py
+#: the fields the classes and attacks read beyond `thread_c`, at the values tests/test_classes.py and test_attacks.py
 #: give Kimi K2 full pretraining, and how near the derivation from the matrices comes
 KIMI = {"kappa_forward": (0.294, 0.005), "kappa_wgrad": (0.294, 0.005), "layers": (61, 0), "layer_weights": (4e8, 0.01),
         "layer_bits": (1.04e12 * 2.5 / 61, 0), "thread_k": (2e7, 0), "c_w": (2.5, 0),

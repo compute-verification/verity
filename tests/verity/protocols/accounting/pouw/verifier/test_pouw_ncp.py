@@ -23,8 +23,8 @@ def test_vectors_are_pinned():
 
 @pytest.mark.parametrize("kind", NL.CASES)
 def test_reference_equals_leans_own_evaluation(kind):
-    """`../../../../../tests/verity/protocols/accounting/pouw/verifier/vectors/ncp_lean.json` is Lean's `#eval` of `mmWU 128 k A B E₁ F₁ R (blockEnd 16 (3k) t)` (route U, the checked
-    values) and of the unbiased `mmW` at every checkpoint (`../../../../../tests/verity/protocols/accounting/pouw/verifier/ncp_lean.py`); the reference assembles and accumulates
+    """`tests/vectors/ncp_lean.json` is Lean's `#eval` of `mmWU 128 k A B E₁ F₁ R (blockEnd 16 (3k) t)` (route U, the checked
+    values) and of the unbiased `mmW` at every checkpoint (`tests/ncp_lean.py`); the reference assembles and accumulates
     the same inputs, bit for bit."""
     pinned = json.loads(NL.PINNED.read_text())
     assert pinned["toolchain"] == "leanprover/lean4:v4.34.0" and pinned["shape"] == [NL.M, NL.K, NL.N]
@@ -38,7 +38,7 @@ def test_reference_equals_leans_own_evaluation(kind):
 
 def test_leans_evaluation_is_of_the_package_in_the_tree():
     """`ncp_lean.json` records the SHA-256 of the Lean sources it was evaluated from; they are the files of `security/` now, so an
-    edit to them fails here until `../../../../../tests/verity/protocols/accounting/pouw/verifier/ncp_lean.py` evaluates them again."""
+    edit to them fails here until `tests/ncp_lean.py` evaluates them again."""
     pinned = json.loads(NL.PINNED.read_text())["sources_sha256"]
     lean = Path(__file__).resolve().parents[6] / "security"
     assert {f: hashlib.sha256((lean / f).read_bytes()).hexdigest() for f in pinned} == pinned

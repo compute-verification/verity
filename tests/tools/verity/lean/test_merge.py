@@ -1206,7 +1206,7 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     import tomllib
     tmp = Path(tempfile.mkdtemp())
     def req(n):
-        return f'\n[[require]]\nname = "{n}"\npath = "../../../../tools/verity/{n}"\n'
+        return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
     tail = '"Proofs.Properties.InferenceOnly"]'
     ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')

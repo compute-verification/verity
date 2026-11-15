@@ -24,7 +24,7 @@ The slow-path subroutines are taken by name, not by the harness's pinned signatu
 13.1 (sm_120), which `sass_pins.json` doesn't pin, so their exactness on subnormals rests on ptxas's IEEE div.rn, not on a
 numeric pin here.
 
-    cd adapters/vllm; PYTHONPATH=.:../../../../../adapters/vllm python -m tests.engine.int8_attention_sass --out DIR [--launch]
+    cd adapters/vllm; PYTHONPATH=.:../.. python -m tests.engine.int8_attention_sass --out DIR [--launch]
 
 writes ``<out>/int8_attention_sass.json``: each kernel variant per architecture, the negatives (lut_rows compiled with
 contraction allowed, its PTX with the rounding modes stripped through ptxas, kv_rows dividing with Triton's `/`) refused, and

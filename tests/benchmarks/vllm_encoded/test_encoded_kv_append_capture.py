@@ -1,6 +1,6 @@
 """The encoded-stack KV-append capture without a GPU: its CPU references against the word codec's and the Definition's.
 
-The GPU run is ``../../tests/benchmarks/vllm_encoded/properties/encoded_kv_append_capture_gpu.py`` on one cc 12.0 GPU (`stack.sh` MODE=capture).
+The GPU run is ``tests/properties/encoded_kv_append_capture_gpu.py`` on one cc 12.0 GPU (`stack.sh` MODE=capture).
 Here: the payload and word-order mapping equal `kv.py`'s byte layout and the append kernel's source indexing, the
 encoded reference round-trips through ``kv.decode_word`` at the appended store indices, and the Definition comparison
 (`KvCacheAppendE4m3_v1`'s CPU reference on the same inputs) flags exactly the elements the 8-bit quantization would

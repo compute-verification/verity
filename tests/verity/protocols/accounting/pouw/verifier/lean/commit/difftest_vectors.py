@@ -1,12 +1,12 @@
 """The difftest's data: generated cases and the Python's outcome on each, for `PouwCommit/Difftest.lean`.
 
-    python ../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/commit/difftest_vectors.py <verity checkout> --out DIR
+    python tests/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}`. The outcome is the checkout's
 `verity.protocols.accounting.pouw.verifier` (the samples: its clear audit's, ``verity/protocols/accounting/pouw/prover/clear``): `{"ok": v}`, `{"reason": text}` for
 a coin `coin_reason` refuses, `{"error": type}` when it raises. The Lean is PoUW's verifier (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
 file (`runs` in `lean-audit.json`, which pins its SHA-256), which fails on any case whose Python outcome is not the
-Lean's, and `../../../../../../../tests/verity/protocols/accounting/pouw/verifier/lean/commit/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
+Lean's, and `tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
 refusal, and runs the Lean on it.
 
 The cases: `tagged` over bytes, strings (non-ASCII among them) and integers past 64 bits; the bindings and `weights_root`
