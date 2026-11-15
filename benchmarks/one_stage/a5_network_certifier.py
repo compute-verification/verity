@@ -183,8 +183,9 @@ def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
 
 def provenance(at: dict[str, SimpleNamespace]) -> dict:
     """What the window's docket names of the network certifier's cells: per link, its value, root, certificate digest, the
-    docket's SHA-512, and the units' reads (q, k) and the rows they open."""
-    return {"stand-in": "benchmarks/one_stage/a5_network_certifier.py", "connection": at[RC.INGRESS].connection,
+    docket's SHA-512, and the units' reads (q, k) and the rows they open. ``stand-in`` keeps the name a docket recorded
+    before this file's move holds, since `check` compares a docket's ``of`` with this."""
+    return {"stand-in": "benchmarks/one_stage/a5_warden.py", "connection": at[RC.INGRESS].connection,
             "links": {name: {"value": x.head.value, "root": x.head.root.hex(), "certificate": x.registration["certificate"]["digest"],
                              "registration_sha512": hashlib.sha512(json.dumps(x.registration, sort_keys=True).encode()).hexdigest(),
                              "units": x.units.digest().hex(), "reads": [list(r) for r in x.reads], "rows": list(x.positions)}
@@ -255,7 +256,7 @@ def commit(out: Path, mine: CS.Binding, at: dict[str, SimpleNamespace], altered:
         registered[m.key] = {port: st.entry}
         entries.append([[m.base, m.base + m.n, f"connection-{x.connection}", 0, 0, x.units.value(x.head), m.key, 0, 0]])
     c = CS.commit(mine, data, salts_of=salts_of)
-    CS.write(c, out, {"of": provenance(at), "committer": {"module": "a5_network_certifier.py"}}, IX.index_doc(mine.members, entries, mine.run),
+    CS.write(c, out, {"of": provenance(at), "committer": {"module": "a5_warden.py"}}, IX.index_doc(mine.members, entries, mine.run),
              kind="stand-in", registered=registered, registrar=R)
     return c
 
