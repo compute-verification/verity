@@ -28,7 +28,7 @@ import json
 from pathlib import Path
 
 import pytest
-from verity.circuits.codec import encode_program
+from verity.circuits.codec import descriptor_id, encode_program
 
 from tests.observe import test_fold_glm53_dsa_launches as B
 from verity_vllm.check.match import program_compare as PC
@@ -92,7 +92,8 @@ def _predicted_decode() -> list[str]:
 def test_the_decode_step_s_fold_is_the_predicted_step_call_for_call():
     """About 30 s (the fold, then the rank's step prediction over 78 layers): the only test that holds the served FP8-cache step to
     the Program the predictor writes ahead of it."""
-    served = [PC._norm_T(i["spec"]) for i in _fold().instances if int(i["step"]) == 1]
+    r = _fold()
+    served = [PC._norm_T(descriptor_id(r.body.nodes[i["node"]].fn)) for i in r.instances if int(i["step"]) == 1]
     predicted = _predicted_decode()
     sm = difflib.SequenceMatcher(None, predicted, served, autojunk=False)
     matched = sum(b.size for b in sm.get_matching_blocks())
