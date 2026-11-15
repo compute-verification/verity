@@ -215,16 +215,16 @@ def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeyp
     port's index its nonce."""
     win, _ins, _outs = window()
     ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
-    drawn = []
+    sampled = []
 
     def urandom(n: int) -> bytes:
-        drawn.append(hashlib.shake_256(b"os %d" % len(drawn)).digest(n))
-        return drawn[-1]
+        sampled.append(hashlib.shake_256(b"os %d" % len(sampled)).digest(n))
+        return sampled[-1]
 
     with monkeypatch.context() as mp:
         mp.setattr(CS.os, "urandom", urandom)
         c = win.close()
-    assert [c.salts[p] for p in ports] == drawn[:len(ports)]
+    assert [c.salts[p] for p in ports] == sampled[:len(ports)]
     assert all(len(c.salts[p]) == CS.SALT_BYTES * len(c.rows[p]) > 0 for p in ports)
     one, two = win.close(), win.close()
     assert all(one.salts[p] != two.salts[p] and one.roots[p] != two.roots[p] for p in ports)
@@ -2097,14 +2097,14 @@ class _Counted(list):
         return super().__getitem__(i)
 
 
-def test_a_periods_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
+def test_a_periods_registered_rows_are_each_sampled_once(monkeypatch, tmp_path):
     """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the period
     reads each row's salt once, however many members read it, and asks for no statement. Core's ``Registered.statement``
-    samples a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
+    samples a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit sampled
     them a third time: 10,565,136 samples at the 4,32,4 class, whose members read 37,788 distinct rows."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     w.salts = _Counted(w.salts)
-    monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads drew their salts again"))
+    monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads sampled their salts again"))
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
@@ -2117,7 +2117,7 @@ def test_a_periods_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
     assert w.salts.reads == LAYERS
 
 
-def test_a_periods_value_rows_and_paths_are_written_once_and_a_drawn_members_body_is_made_from_them(tmp_path):
+def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_body_is_made_from_them(tmp_path):
     """`fed_chain` recorded by reference: each chain member's ``m<k>-private.bin`` leaves out its ``w`` rows and salts and
     its wired ``x``'s, ``v0-private.bin`` holds each row of ``w`` the period reads once, then its salt, and ``window.json``
     each row's path once; each member's prover body as the files make it (`rows.read_private`: a wired row and its salt off
@@ -2485,7 +2485,7 @@ def _like(value: Bound, **fields) -> Bound:
 
 def _value_rows(value=None, positions=None, salts=None):
     """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
-    `Window.close` drew)``, each as given when None (the salts sampled again by `rows.commit` when the positions change)."""
+    `Window.close` sampled)``, each as given when None (the salts sampled again by `rows.commit` when the positions change)."""
     def edit(window: CS.Binding, data: list[dict]) -> CS.Binding:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]

@@ -778,10 +778,10 @@ def cap_of(v: Any) -> int:
         raise Refused(str(e)) from None
 
 
-def draw_k_of(s: str) -> int:
+def sample_k_of(s: str) -> int:
     """A period-open's sample K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
     if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > MAX_DRAW_K:
-        raise Refused(f"--draw-k {s!r}: the draw K the proof system selects each window's units with, 1 to 2^24")
+        raise Refused(f"--draw-k {s!r}: the sample K the proof system selects each window's units with, 1 to 2^24")
     return int(s)
 
 
@@ -909,7 +909,7 @@ def registration_of(s: str) -> str:
 
 #: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
 #: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
-PERIOD_FIELDS = {"draw_k": draw_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
+PERIOD_FIELDS = {"draw_k": sample_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
                  "model": model_of, "length": length_of, "policy": policy_of, "alpha": alpha_of, "gamma": gamma_of,
                  "policy_name": policy_name_of, "registration": registration_of}
 #: what an inference-only period's open signs, all of it or none, each with its flag: the policy its check holds the
