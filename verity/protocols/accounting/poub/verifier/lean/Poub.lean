@@ -12,6 +12,7 @@ public import Poub.Registry
 public import Poub.Wire
 public import Poub.Pooled
 public import Poub.Line
+public import Poub.Gamma
 public import Poub.Schedule
 public import Poub.P2
 public import Poub.P2Session
@@ -27,7 +28,8 @@ to (`audit.py` and what it calls, by `tests/`):
 * `Window`, the check of the sampled receipts' openings (`verifyWindow`); `Session`, a session's bookkeeping, a state
   machine over the events the verifier sees; `Shared`, that session with one openings coin over several windows, and
   `Flight`, with every coin sent after the root before it; `Registry`, the verifier's registrations;
-* `Pooled`, the openings' pooled bound; `Line`, the memory line held over time; `Schedule`, the schedule check;
+* `Pooled`, the openings' pooled bound; `Line`, the memory line held over time; `Gamma`, γ's terms; `Schedule`, the
+  schedule check;
 * `P2` and `P2Session`, a registration, receipts, openings and sessions over PoUS's P2 store.
 
 The modules the executables are built on are not imported here, and each is a root of the Lean check of its own
