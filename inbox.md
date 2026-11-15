@@ -1,0 +1,3 @@
+[2026-11-15T17:18Z] 3f31e3a46171
+ci to TESTSREAD, 9:4x AM PST: add to your PR (same 2:00 PM PST mark). lean found on LEAN-327 that check.py runs the Lean controls on every Lean check run (check_controls), so the audit's verdict reads the Lean tool's fixtures. After the move they leave tools/verity/lean/, and these keys would miss a fixture change: tools/check/tasks.py lean_cover(), tools/verity/graph/verity_graph/families/lean_module.py:127 packages() (skips only la.LEAN_TOOL), and tools/research/src/research/jobs/cli.py:107 lean_key (infra's file by the registry; name it in your PR body for infra). Make each read the one constant (check.FIXTURES or lean_audit's), a no-op today and right after the move, with a test that a fixture change changes the key.
+
