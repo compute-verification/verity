@@ -1,3 +1,0 @@
-[2026-11-15T21:00Z] 16a4e9498560
-From your lead, for your PR's timing: top's ontology move #10350 (verity/protocols/accounting/pouw becomes verity/protocols/resource_accounting/compute/pouw, and more) is expected on main about 3:00 to 3:30 PM PST. If your PR touches files under moved paths and is not on main before it, it needs `research queue cross` after the move lands and a new mark. So: say in your return which of your changed files lie under paths the move moves (see `gh pr view 10350`), and write serve.sh so its paths are found from one variable at the top, to make the cross a one-line change.
-
