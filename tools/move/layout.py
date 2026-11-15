@@ -55,7 +55,8 @@ the check's `pins.py` that held the digest of a manifest the move rewrites gets 
 which no pinned output reads. A Lake package's path to another package that named one before the move names one after
 it, or the move stops (exit 1). An old path that names something outside the tree ([rewrite] keep: the frozen evidence
 artifact's layout) is never rewritten, and neither is a dotted name that only looks like a module ([rewrite]
-keep_dotted: a torch op's qualified name).
+keep_dotted: a torch op's qualified name). A file's relative paths stay as written where the map says so ([rewrite]
+keep_relative, by old path: a test's, which name a toy's files).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
@@ -324,6 +325,8 @@ class Layout:
         rw = data.get("rewrite", {})
         self.exclude, self.include = rw.get("exclude", []), rw.get("include", [])
         self.keep = rw.get("keep", [])
+        #: files, by their old path, whose relative paths stay as written ([rewrite] keep_relative): a test's are a toy's
+        self.keep_relative = rw.get("keep_relative", [])
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
@@ -414,10 +417,11 @@ class Layout:
         """Whether `word`, a moved directory's name alone between quotes, is the directory in file `where`."""
         return word in self.words or any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.words_in.items())
 
+    def keeps_relative(self, old: str) -> bool:
+        return _hit(self.keep_relative, old)
+
     def excluded(self, *paths: str) -> bool:
-        def hit(pats, p):
-            return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
-                       for pat in pats)
+        hit = _hit
         if MOVES in paths:              # each move's old paths, kept as they were: rewritten, a rerun would record it again
             return True
         if any(hit(self.include, p) for p in paths if p):
@@ -1160,6 +1164,8 @@ class Run:
 
         def relative(m: re.Match) -> str:
             var, token = (m.group("v"), m.group("p")) if m.group("p") is not None else (m.group("v2"), m.group("p2"))
+            if self.L.keeps_relative(old):
+                return m.group(0)
             new = self._map_relative(token, path, old, from_member=bool(var))
             if new is None or new == token:
                 return m.group(0)
@@ -1187,7 +1193,7 @@ class Run:
             return out + ("/" if token.endswith("/") else "")
 
         text = self._short_re.sub(short, text)
-        if path != old and posixpath.splitext(path)[1] in RELATIVE_TYPES:
+        if path != old and posixpath.splitext(path)[1] in RELATIVE_TYPES and not self.L.keeps_relative(old):
             def plain(m: re.Match) -> str:
                 token = m.group("p")
                 stripped = token.rstrip("/.,")
@@ -1394,7 +1400,7 @@ class Run:
 
     # Python anchors and joins -----------------------------------------------------------------------------------------
 
-    _ANCHOR = re.compile(r"(?P<head>Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
+    _ANCHOR = re.compile(r"(?P<head>(?:pathlib\.)?Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
                          r"(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent)+))(?P<chain>(?:\s*/\s*(?P<q>[\"'])[\w.\-]+(?P=q))*)")
 
     def _module_file(self, name: str) -> str | None:
@@ -1824,6 +1830,10 @@ class Run:
             out = _add_inputs(out, add)
         for old, new in conf.get("testpaths_replace", {}).items():
             out = _replace_list_item(out, "testpaths", old, new)
+        if prefix := conf.get("strip_suite_relative"):
+            out = _strip_suite_relative(out, prefix)
+        if was := conf.get("pythonpath_from"):
+            out = _pythonpath_from(out, was, posixpath.dirname(path))
         for n in merged:
             dep = re.compile(r'"' + re.escape(n) + r'(\[[^\]]*\])?"')
             if dep.search(out):
@@ -2136,10 +2146,50 @@ def _add_inputs(text: str, add: list[str], first: bool = False) -> str:
         return text
     ins = ", ".join(json.dumps(a) for a in missing)
     items = m.group("items")
+    tail = items.rstrip().rsplit("\n", 1)[-1]
+    first = first or "#" in tail or items.rstrip().endswith(",")   # appended there, the item would land in a comment or after ",,"
     new_items = (ins + (", " + items.lstrip() if items.strip() else "")) if first else \
         (items.rstrip() + (", " if items.strip() else "") + ins)
     new_body = body[: m.start("items")] + new_items + body[m.end("items"):]
     return text.replace(body, new_body, 1)
+
+
+#: the lists of a suite's `[tool.verity.tests]` whose paths are written from the suite's directory: {table: keys}
+SUITE_RELATIVE = {"tool.verity.tests": ("untraced",), "tool.verity.tests.reads": ("tests",)}
+
+
+def _hit(pats: list[str], p: str) -> bool:
+    """Whether path `p` matches one of the globs `pats` (`**/x` matches `x` too)."""
+    return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:])) for pat in pats)
+
+
+def _strip_suite_relative(text: str, prefix: str) -> str:
+    """Each path of the suite-relative lists (`SUITE_RELATIVE`) that starts with `prefix`, without it: what a suite lists once
+    its test path `prefix` is its directory (`[pyproject] strip_suite_relative`, beside `testpaths_replace`)."""
+    out, table, key = [], None, None
+    for line in text.splitlines(keepends=True):
+        code = line.split("#", 1)[0]
+        if key is None and (m := re.match(r"^\s*\[\[?\s*([^\[\]]+?)\s*\]\]?\s*$", code)):
+            table = m.group(1)
+        elif key is None and (m := re.match(r"^\s*(\w+)\s*=\s*\[", code)) and m.group(1) in SUITE_RELATIVE.get(table, ()):
+            key = m.group(1)
+            code = code[m.end():]
+        if key is not None:
+            line = re.sub(r'(["\'])' + re.escape(prefix), r"\1", line)
+            if "]" in code:
+                key = None
+        out.append(line)
+    return "".join(out)
+
+
+def _pythonpath_from(text: str, was: str, now: str) -> str:
+    """pytest's `pythonpath`, each entry written from directory `was`, written from `now`, the pyproject's new directory, so
+    it names the same directory (`[pyproject] pythonpath_from`)."""
+    def fix(m: re.Match) -> str:
+        items = json.loads("[" + m.group("items") + "]")
+        moved = [posixpath.relpath(posixpath.normpath(posixpath.join(was, i)), now) for i in items]
+        return m.group("head") + ", ".join(json.dumps(i) for i in moved) + "]"
+    return re.sub(r"^(?P<head>pythonpath\s*=\s*\[)(?P<items>[^\]]*)\]", fix, text, flags=re.M)
 
 
 def _replace_list_item(text: str, key: str, old: str, new: list[str]) -> str:
