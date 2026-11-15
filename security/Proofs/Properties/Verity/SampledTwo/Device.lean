@@ -36,7 +36,8 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
 
 **Keys.** The history takes two setups whose keys may differ, so `printsTwo_dev₂` holds where each stage's command
 makes its own key. `SignsPlay` asks every signature of the play to be signed under the one key `keyOf θ`, so the
-deployment runs both sessions under it.
+deployment runs both sessions under it. The two-stage form is refused under the auditor's pins
+(`Core.Composites.sampledTwoStage`), so these theorems are at the parameters' own key, not a pinned one.
 
 **The step that forces one play.** A history holds earlier runs and ledger lines only on other windows: `PrintsOn`
 asks every run its ledger opens on a play's window to print that play's log, and `SignsPlay` reads every signature
