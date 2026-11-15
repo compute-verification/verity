@@ -51,7 +51,7 @@ MAX_AGE_DAYS = 7
 #: the account agents log in with on the CPU machines, and the control pod, which the root finding names with them
 AGENTS_LOGIN = "research"
 CONTROL_POD = "vy-control-verity"
-#: the names an agent VM must not hold: Daniel's Linear key and notes token, and the Google Cloud, RunPod and Nebius keys
+#: the names an agent VM must not hold: a personal Linear key and notes token, and the Google Cloud, RunPod and Nebius keys
 AGENT_KEYS = ("LINEAR_API_KEY", "RESEARCH_NOTES_TOKEN", "GCP_SA_KEY_B64", "RUNPOD_API_KEY", "NEBIUS_SA_PRIVATE_KEY_B64")
 AGENT_ENV_COMMAND = "compgen -e | grep -xE '" + "|".join(AGENT_KEYS) + "'"
 #: one line each: the login, its uid, what `sudo -n id -u` gives it, whether it runs with no new privileges (where sudo refuses
