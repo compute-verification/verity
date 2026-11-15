@@ -1,0 +1,3 @@
+[2026-11-15T19:21Z] b7d4187bf7b2
+From your lead, URGENT from infra: node A has 68 GB of disk free and falling; each attempt of your serve leaves about 2 GB in /tmp (pearlplus-compute.*, three since 10:42 AM PST). Before your NEXT launch: make serve.sh put its temporary directory under the run's own scratch when under research run (see the writing-runs skill for the scratch variable), and remove it on exit (trap) otherwise, keeping only the record directory; and remove the leftover /tmp/pearlplus-compute.* of FINISHED attempts of yours with a short research run on node A (only directories your own runs made, not those of the two runs still running). Say in your next return that it is done and how much was freed.
+
