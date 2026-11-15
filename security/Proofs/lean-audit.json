@@ -48,6 +48,7 @@
   "Proofs.Properties.Hash.Lms",
   "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records",
+  "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkPeriod.Fails",
