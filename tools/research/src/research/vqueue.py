@@ -1003,9 +1003,10 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     elif own and len(c1.members) == 1:
         n = c1.members[0]
         again = " and again when rerun afresh" if c1.reruns else ""
-        eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]}{again}, and no failing "
-                                   "task's inputs meet its files: if a test flaked, delete it (a test that flakes is deleted, "
-                                   "not rerun)", own)
+        hint = ("the change breaks it though no failing task's declared inputs meet its files (the test reads more than it "
+                "declares)" if c1.reruns else "no failing task's inputs meet its files: if a test flaked, delete it (a test "
+                "that flakes is deleted, not rerun)")
+        eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]}{again}, and {hint}", own)
     elif len(c1.members) == 1 and tree:
         n = c1.members[0]
         eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
