@@ -28,9 +28,10 @@ query_ast.evaluate(program, "//GemmCoordinate")   # its 8 output coordinates, ea
 
 | Path | What it holds |
 | --- | --- |
-| [`circuits/`](circuits/README.md) | The circuit language: Definitions, Programs, the descriptor codec, queries and partitions. Its format is [`circuits/PROTOCOL.md`](circuits/PROTOCOL.md). Beside it, the circuits written in it: `ops/` (the primitive operations), `silicon/` (the GPUs' exact arithmetic), `kernels/` (fast code, each checked against its Definition) and `private_circuits/` (the universal circuit). |
-| `commitments/` | Hiding commitments ([frame-v3](commitments/frame_v3/PROTOCOL.md), [hm96](commitments/hm96/PROTOCOL.md)), shared hash code, hash-based signatures and transport (`crypto/`, with `lms.py`; its Lean in `lms/`), the one challenge derivation (`randomness/`), an attester's signed period roots (`attest/`), what an adapter hands Verity (`periods/`), the security claims' ids (`claim_ids.py`), and the same commitments on a GPU (`cuda/`). |
+| [`circuits/`](circuits/README.md) | The circuit language: Definitions, Programs, the descriptor codec, queries and partitions. Its format is [`circuits/PROTOCOL.md`](circuits/PROTOCOL.md). Beside it, the circuits written in it: `ops/` (the primitive operations), `silicon/` (the GPUs' exact arithmetic), `kernels/` (fast code, each checked against its Definition) and `private_circuits/` (the universal circuit); the evaluator (`evaluate/`) and a circuit's requirement in Lean (`requirement/`). The served workloads' circuits are the vLLM adapter's (`adapters/vllm/verity_vllm/definitions/`). |
+| `commitments/` | Hiding commitments ([frame-v3](commitments/frame_v3/PROTOCOL.md), [hm96](commitments/hm96/PROTOCOL.md)), shared hash code, hash-based signatures and transport (`crypto/`, with `lms.py`; its Lean in `lms/`), the one challenge derivation (`randomness/`), an attester's signed period roots (`attest/`), what an adapter hands Verity (`periods/`), the security claims' ids (`claim_ids.py`), content identities, the tagged SHA-512 of a canonical manifest (`identity.py`, its Lean in `identity/`), and the same commitments on a GPU (`cuda/`). |
 | `protocols/` | The protocols, each in up to three parts: `verifier/` (the auditor's check), `prover/` (the developer's side) and `device/` (an attester, the auditor's own hardware at the site, or the challenger, the verifier's online half). The layers are below. |
+| `circuits/base/`, `circuits/lean/`, `commitments/lean/` | The three base Lean packages: bytes, hashes and parsing; the circuit format; frame-v3 and the sampling of units. Flock's verifier and every package that requires it load them, and they require nothing above them. |
 | [`runtime/`](runtime/README.md) | Runs a protocol's parties over channels and keeps each party's log of the run. It knows no protocol. |
 | `party.py`, `channel.py`, `protocol.py` | What a party is (a next-message machine), what its messages declare, and what a protocol declares with the placement check. |
 | `device.py` | The registered hardware (the Site), the check each registration entry passes, and the readers of the data sheets in [`hardware/`](../hardware/README.md). |
@@ -38,27 +39,26 @@ query_ast.evaluate(program, "//GemmCoordinate")   # its 8 output coordinates, ea
 
 The protocols, by layer, with registration beside them. After the landing, `accounting/` moves to
 `resource_accounting/` by resource (`compute/pouw`, `memory/pous`, `memory/poub`, `network/certifier`), `policy/` to
-`workload_classification/` and `accounting/registration/` to `protocols/registration/`; an attester's `device/` becomes
-`attester/`, and the challenger's code moves under `verifier/`.
+`workload_classification/` and `accounting/registration/` to a `registration/` of its own beside them; an attester's
+`device/` becomes `attester/`, and the challenger's code moves under `verifier/`.
 
 | Layer | Directory | Protocols |
 | --- | --- | --- |
-| Proofs | `protocols/proofs/` | [`flock/`](protocols/proofs/flock/verifier/README.md) (the proof system), [`spot/`](protocols/proofs/spot/verifier/README.md) (sampling), `recursion/`, `spot_flock/`, `spot_flock_recursion/` |
+| Proofs | `protocols/proofs/` | [`flock/`](protocols/proofs/flock/verifier/README.md) (the proof system: its Lean verifier and the ZK server in `verifier/`, its prover in `prover/`, the agreement with upstream's verifier in `prover/agreement/`), [`spot/`](protocols/proofs/spot/verifier/README.md) (sampling, with the integrity profile), `recursion/` (the recursion layer), `spot_flock/` (SPOT[Flock]), `spot_flock_recursion/` (SPOT[Flock] with the recursion) |
 | Registration | `protocols/accounting/registration/` | [The registration log and its check](protocols/accounting/registration/README.md), run once, before any challenge |
 | Resource accounting | `protocols/accounting/` | [`pouw/`](protocols/accounting/pouw/verifier/README.md) (compute), [`pous/`](protocols/accounting/pous/verifier/README.md) and [`poub/`](protocols/accounting/poub/verifier/README.md) (memory), [`certifier/`](protocols/accounting/certifier/verifier/README.md) (network) |
-| Workload classification | `protocols/policy/` | [`inference_only/`](protocols/policy/inference_only/verifier/README.md) |
-| Configurations | `protocols/compose/` | [`remote`](protocols/compose/verifier/remote/README.md) and `onsite`, each a list of protocols on one registration |
+| Workload classification | `protocols/policy/` | [`inference_only/`](protocols/policy/inference_only/verifier/README.md), whose check is Lean only (`verifier/lean/`) |
+| Deployment patterns | `protocols/compose/` | [`remote`](protocols/compose/verifier/remote/README.md) and `onsite`, each a list of protocols on one registration, with their Lean in `verifier/lean/`; `device/live_challenger/` is the auditor host's challenger service |
 | Being tried | `protocols/experimental/` | `dither/`, [`pearl_c4/`](protocols/experimental/pearl_c4/README.md) |
 | Shared | [`protocols/interface/`](protocols/interface/README.md) | The Lean interface each protocol's check implements |
 
-## Rules that hold here
+Nine directories here are distributions of their own, each with its own import root (`tests/import_order.toml`'s
+`[[distribution]]`): `proofs/flock/`, `accounting/pous/verifier/check/`, `accounting/pous/prover/p2/`,
+`accounting/poub/prover/`, `accounting/poub/device/live_verifier/`, `accounting/pouw/prover/clear/`,
+`accounting/pouw/prover/lowering/`, `accounting/pouw/verifier/receipts/` and `compose/device/live_challenger/`, all
+under `protocols/`.
 
-`tests/test_boundaries.py` holds the tree to the import order of [`tests/import_order.toml`](../tests/import_order.toml):
-a file loads only its own row or an earlier one, no verifier loads prover code, a place of `verity` imports only the
-places its `loads` lists, what the verifiers' side loads and reaches (the lists of its trusted places) only shrinks, and
-`verity` imports no other distribution. To allow an import between two places, write it and run
-`uv run tools/check/import_order.py`, which writes the line. The plain-integer references (`STDLIB_ONLY`:
-`verity/circuits`, `verity/commitments/randomness`, `verity/commitments/claim_ids.py` among them) stay free of numpy.
+## Read next
 
-Read next: [`ARCHITECTURE.md`](../ARCHITECTURE.md) section 4 for each part's interface, and each module's docstring
-for what it holds.
+- `verity/AGENTS.md`: which file here may import which, and how to allow an import.
+- [`ARCHITECTURE.md`](../ARCHITECTURE.md) section 4: each part's interface. Each module's docstring says what it holds.
