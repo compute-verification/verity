@@ -79,23 +79,23 @@ def register(stream: Any, record: Mapping[str, Any], ports: Mapping[str, Mapping
 class Claim:
     """What the setup's check reads in place of C*: `params`, the codec's manifest, and `commitment`, the server's
     `w_commitment ‖ salt`, as today's check reads them; `store`, the store's registered root; `unit`, the setup unit's
-    Program digest, which the auditor pins; `law`, the sampling design (`sampling_design`); `outcome`, SPOT's outcome
+    Program digest, which the auditor pins; `design`, the sampling design (`sampling_design`); `outcome`, SPOT's outcome
     record of the sampled audit."""
 
     params: dict[str, Any]
     commitment: bytes
     store: bytes
     unit: str
-    law: str | None
+    design: str | None
     outcome: bytes
 
     def to_json(self) -> dict[str, Any]:
         return {"params": dict(self.params), "commitment": self.commitment.hex(), "store": self.store.hex(),
-                "unit": self.unit, "law": self.law, "outcome": self.outcome.hex()}
+                "unit": self.unit, "design": self.design, "outcome": self.outcome.hex()}
 
     @classmethod
     def from_json(cls, j: dict[str, Any]) -> Claim:
-        return cls(dict(j["params"]), bytes.fromhex(j["commitment"]), bytes.fromhex(j["store"]), j["unit"], j["law"],
+        return cls(dict(j["params"]), bytes.fromhex(j["commitment"]), bytes.fromhex(j["store"]), j["unit"], j["design"],
                    bytes.fromhex(j["outcome"]))
 
     def encode(self) -> bytes:

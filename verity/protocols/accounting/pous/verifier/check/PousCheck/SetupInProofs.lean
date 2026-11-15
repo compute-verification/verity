@@ -14,7 +14,7 @@ and the commitment as `SetupProtocol` does, and in place of `C*` the claim (`Cla
 last four fields):
 
 ~~~text
-evidence  {"law":"rate:8828/B"|null,"outcome":hex,"store":hex,"unit":hex}   canonical JSON
+evidence  {"design":"rate:8828/B"|null,"outcome":hex,"store":hex,"unit":hex}   canonical JSON
 ~~~
 
 It decides the parameters' validity, the salt's size and that the claim's sampling design is `samplingDesign q`. Reading SPOT's
@@ -54,10 +54,10 @@ structure Claim where
 def claim (b : ByteArray) : V Claim := do
   let j ← Core.canonicalJson b
   let ctx := "the setup's claim"
-  let samplingDesign ← match j.getObjVal? "law" with
+  let samplingDesign ← match j.getObjVal? "design" with
     | .ok .null => pure none
     | .ok (.str s) => pure (some s)
-    | _ => throw s!"{ctx}: law is a string or null"
+    | _ => throw s!"{ctx}: design is a string or null"
   return ⟨← Flock.unhex (← Flock.J.str j "store" ctx), ← Flock.unhex (← Flock.J.str j "unit" ctx), samplingDesign,
     ← Flock.unhex (← Flock.J.str j "outcome" ctx)⟩
 
