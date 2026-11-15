@@ -36,9 +36,8 @@ from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
                                   interior_rows as IR, long_row as LR, serving_rows as SRW)
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
+REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
@@ -978,9 +977,9 @@ def test_the_command_finds_the_long_rows_check_by_its_id_in_a_process_that_never
     row's (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module registers) is found in a process of its own,
     since this one has imported `long_row`."""
     t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1)))
-    code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport two_stage\nfrom verity.circuits.codec import descriptor_id\n"
+    code = ("import sys\nfrom verity.protocols.proofs.spot.prover.audit import two_stage\nfrom verity.circuits.codec import descriptor_id\n"
             "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(two_stage.template_fn(sys.argv[1])))")
-    got = subprocess.run([sys.executable, "-c", code, t, str(HERE.parent)], capture_output=True, text=True, check=False)
+    got = subprocess.run([sys.executable, "-c", code, t], capture_output=True, text=True, check=False)
     assert got.returncode == 0, got.stderr[-2000:]
     assert got.stdout.strip() == t
 

@@ -34,7 +34,7 @@ finish and free theirs, and freed pages are reused.
 OUT/serve.json holds the store (`Binder.stats`), the requests, the prover's session result and, with --local, the
 verifier's (its record and ledgers, the memory line among them: on the pass clock a window's span is ticks, which
 the rebuild charge reads as nanoseconds, so it credits nothing there and only the held and read bytes mean anything).
-It needs vLLM on a GPU (`tests/test_vllm_serve.py`); what it imports to serve (`provers`) needs neither.
+It needs vLLM on a GPU (`tests/test_vllm_serve.py`); the prover it serves by (`provers`) needs neither, nor the adapter.
 """
 from __future__ import annotations
 
@@ -261,12 +261,11 @@ def engine(work: Path):
 
 
 def provers():
-    """What serving imports, none of it vLLM's or a GPU's: PoUB's prover's serving loop, the adapter's `Binder` and
-    the store."""
+    """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
+    GPU's (the adapter's `Binder` is imported where the engine is built)."""
     from verity.protocols.accounting.poub.prover.node_store import serving
     from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
-    from verity_vllm.protocols.poub.binder import Binder
-    return serving, Binder, NodeMemory
+    return serving, NodeMemory
 
 
 def backend_class(serving):
@@ -392,7 +391,9 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("one session a process: a NodeMemory serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    serving, Binder, NodeMemory = provers()
+    from verity_vllm.protocols.poub.binder import Binder
+
+    serving, NodeMemory = provers()
     store = NodeMemory()
     binder = Binder(store, passes=False).install()
     with tempfile.TemporaryDirectory() as work:
