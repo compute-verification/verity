@@ -418,12 +418,7 @@ def test_the_keeper_holds_a_timing_jobs_lease_until_nothing_else_is_left_in_its_
             subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--max-min", "5", "--mem-gb", "0", "--", "bash", "-c", wrap[0],
                             "fill-rc", str(rc), str(job), *wrap[1:]], env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         assert rc.read_text() == "0\n"
-        with open(gl / "0.lock") as f:
-            try:
-                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                return False
-            except BlockingIOError:
-                return True
+        return fr.held(gl / "0.lock")
 
     assert lease(fr.RC_WRAP) is False                                   # the lease ended with the job, its workload still there
     try:
@@ -637,7 +632,7 @@ def test_node_ops_quiet_spares_a_gpu_leases_jobs_and_their_own_groups(tmp_path, 
             try:
                 os.killpg(pg, signal.SIGTERM)
             except ProcessLookupError:
-                pass
+                assert pg == grandchild, "a Popen's group is there until it is reaped"
         lease.wait()
         other.wait()
 

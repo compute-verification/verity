@@ -38,7 +38,8 @@ every redirect to /dev/null fails there for a user who isn't root.
 Exit 0 when every entry is ok, nothing strays, no distrusted root is trusted and the null device is whole, else 1. A node marked `admin = true` is reached only by an admin login (vy-admin, whose key only
 Daniel and infra's lead hold, never the research key the relays use), so drift reads it only when `--on` names it.
 `install` and `attic` write as root, so on a node whose lock-out took root from `research` (pods/nebius/lockout) they take
-`--login vy-admin`: the same node, reached as that user instead of the one its registry entry names.
+`--login vy-admin`: the same node, reached as that user instead of the one its registry entry names. A root step that sudo refuses
+to the login stops the command (exit 3) naming that flag.
 
 `install` takes files only from a commit that an origin branch holds (a branch, a PR's head, `main`; never the working tree), so
 every installed byte is in a pushed commit, and refuses a commit whose deploy.toml copies as it is a file this code makes from
@@ -632,6 +633,22 @@ Runner = Callable[[str, list[str], "bytes | None"], subprocess.CompletedProcess]
 
 class Refused(RuntimeError):
     """Nothing changed: the request breaks a rule (an unpushed commit, a held entry, a path deploy.toml lacks)."""
+
+
+#: sudo's own refusal under -n, as opposed to the refused command's exit: no grant for this login, or none without a password
+SUDO_REFUSED = re.compile(r"^sudo: (a password is required|a terminal is required)|^Sorry, user \S+ is not allowed to", re.M)
+
+
+def root_told(run: Runner, login: str | None) -> Runner:
+    """`run`, raising Refused where the node's sudo refuses a root step (`sudo -n ...`) to the login: after a lock-out
+    (pods/nebius/lockout) research keeps only its allowlist, and deploy's root steps are vy-admin's."""
+    def told(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        r = run(node, argv, stdin)
+        if argv[:2] == ["sudo", "-n"] and r.returncode == 1 and SUDO_REFUSED.search(os.fsdecode(r.stderr or b"")):
+            raise Refused(f"{node}: sudo refused `{' '.join(argv[2:4])}` to {login or 'its registry login'}, as on a node whose "
+                          f"lock-out is in (pods/nebius/lockout/README.md); run it again with `--login vy-admin`")
+        return r
+    return told
 
 
 # Why a file made from the register names no `src` (deploy.toml is read at REF by whatever deploy code runs, older code included)
@@ -1592,7 +1609,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         return 3
     if not ns.no_fetch and any(e.register for nd in nodes.values() for e in nd.entries) and (why := stale_register()):
         print(f"research deploy: {why}", file=sys.stderr)
-    run = run or ssh_runner(login=getattr(ns, "login", None))
+    run = root_told(run or ssh_runner(login=getattr(ns, "login", None)), getattr(ns, "login", None))
     if ns.cmd == "drift":
         reps, rc = {}, 0
         for name in ns.node or sorted(n for n, nd in nodes.items() if not nd.admin):

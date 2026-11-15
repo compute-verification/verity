@@ -16,4 +16,16 @@ REGISTRY = Registry(
       "the node run's one session with one coin a window, in place of PACED's paced one, as one word of three "
       "numbers: the windows, a window's milliseconds and the openings a window (the verifier host's `--windows`, "
       "`--window-ms` and `--samples`)"),
+    S("PLAN", str, None, VALUE,
+      "the session's plan under --loopback or --local: unset, the honest one (`honest`, `serve`); another plan, "
+      "such as --loopback's `skip:0.0625`, is a cheat the verifier refuses, so the command prints no number"),
+    S("LOCAL_WORK", str, "~/.cache/verity/bench-memory", VALUE,
+      "--local's working directory: the vLLM environment and the checkpoint the tree's bootstrap makes there, the "
+      "lease's lock files where no `gpu-lease` is installed, and each run's records under runs/"),
+    S("LOCAL_ROW", str, None, VALUE,
+      "--local's served row, in place of the Llama 3.2 1B row for this machine's card (`LOCAL_ROWS`)"),
+    S("VLLM_PY", str, None, VALUE,
+      "--local's vLLM interpreter, a Python with vLLM and the `verity-vllm` launcher beside it; set, the bootstrap "
+      "does not run, and the checkpoint is the one under HF_HOME"),
+    S("GPU", str, None, VALUE, "--local's card, an index nvidia-smi gives; unset, the first"),
 )
