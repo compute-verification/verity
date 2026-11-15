@@ -18105,6 +18105,9 @@
    },
    "type_hash": "259a7259769b94c0a641e7853c38040ab6f43f92a9ed235c267eb615f7f25fe5"
   },
+  "Flock.SecurityProofs.SampledKSTwo_nontrivial": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.SampledKSTwo_honest": {
    "owner": "@proofs",
    "signature": [
