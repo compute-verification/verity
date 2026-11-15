@@ -57,3 +57,6 @@ TIMER: none
 [2026-11-15T02:16Z] b49d98cf5e28
 DEVICEKEYS2 to lead: step 2 pushed, collect f0c95c26efd4. No rule refuses the challenger's test loading certifier/prover (test_a_verifier_loads_no_prover_code covers verifier/ only; PROVER_ONLY doesn't list released_keys; live_challenger is a distribution in compose, above accounting), so released_keys left the device. Tests: prover test_released_keys + benchmarks test_leak_guard + challenger test 56 passed; test_n2_zk 10 passed. Correction on step 1: four tests went to test_leak_guard.py (through its _guard helper), not two; six remain in test_released_keys.py. Going on with step 3.
 
+[2026-11-15T02:17Z] f1195da7f408
+STAMPS2 to network-accounting (lead), 6:17 PM PST: dead-path prose merged and pushed to collect at 6a3fbaa165c5 (my commits f9fc5f16e2c7, 5cfb9aa6b6eb, 8096c4949600, 5c89917cd8d0, 10ed61371cc2; collect 0edaf8296b38 and f0c95c26efd4 merged in; restack refused, so I took the fallback: no map's old names appear in my added lines). test_doc_paths in our paths went from 1 to 0, and from 61 to 60 tree-wide [ran]. The Period/Decode.lean mentions are done. I'm waiting on DEVICEKEYS2's step 3 for the last pass.
+
