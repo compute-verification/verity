@@ -191,7 +191,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
   verdict, `verify_ahead` sessions later. It also gives the device's busy share (nvidia-smi's utilization over that window) and memory
   peak, each prover's and verifier's peak RSS, the provers' CPU seconds a statement, the median phase times (the front is
-  `e2e_s − prove_total_s`), and the cgroup's throttling and load. A row also says what prices it: `gpus` (the devices its
+  `e2e_s − prove_total_s`), the load, and the throttling of the cgroup whose `cpu.max` is gpu-lease's CPU quota
+  (`throttled`: its counts, null where it has no `cpu.stat` that counts them, the cgroup and its `cpu.max`). A row also says what prices it: `gpus` (the devices its
   provers held, so a statement costs `gpus / statements_per_s` GPU-seconds), `stage.blocks` and `stage.full` (the proved
   statement's proof blocks, and the most a statement of its circuit holds), `verify_s` (the verifier's mean seconds a
   statement over the window), `flat`: whether each prover's statement cache had stopped filling, its hit rate over the

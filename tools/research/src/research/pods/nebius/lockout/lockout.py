@@ -350,27 +350,24 @@ def untrusted(paths: tuple[str, ...] | list[str], lstat: Callable = os.lstat, wa
     or writable by group or others (a sticky root-owned directory above is fine). Symlinks are judged as links and by target."""
     bad: list[str] = []
 
-    def check(p: str, above: bool = False) -> None:
+    def check(p: str, above: bool = False) -> os.stat_result | None:
         try:
             st = lstat(p)
         except FileNotFoundError:
             bad.append(f"{p}: missing")
-            return
+            return None
         if st.st_uid != 0:
             bad.append(f"{p}: owner uid {st.st_uid}")
         elif st.st_mode & 0o022 and not stat.S_ISLNK(st.st_mode) and not (above and st.st_mode & stat.S_ISVTX):
             bad.append(f"{p}: mode {stat.S_IMODE(st.st_mode):o}")
+        return st
 
     for p in paths:
         parts = Path(p).parts
         for i in range(1, len(parts)):
             check(str(Path(*parts[:i])), above=True)
-        check(p)
-        try:
-            is_dir = stat.S_ISDIR(lstat(p).st_mode)
-        except OSError:
-            continue
-        if is_dir:
+        st = check(p)
+        if st is not None and stat.S_ISDIR(st.st_mode):
             for base, dirs, files in walk(p):
                 for n in sorted(dirs + files):
                     check(os.path.join(base, n))

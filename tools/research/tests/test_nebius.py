@@ -266,7 +266,7 @@ def stop_group(p: subprocess.Popen) -> None:
     try:
         os.killpg(p.pid, signal.SIGTERM)
     except ProcessLookupError:
-        pass
+        assert p.poll() is not None, "a group is gone only once its leader is reaped"
     p.wait()
 
 
@@ -1254,11 +1254,11 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
     gate, soak, other = tmp_path / "gate.sh", tmp_path / "soak-a.sh", tmp_path / "broken.sh"
     for p in (gate, soak, other):
         p.write_text("# fill: owner=t gpus=1 max_min=900 project=pous\n")
-    at = datetime.datetime(2026, 10, 2, 6, 30, tzinfo=datetime.timezone.utc).timestamp()
+    at = datetime.datetime(2026, 10, 2, 6, 30, tzinfo=datetime.UTC).timestamp()
     assert fr.header(gate, at)["max_min"] == 60
     assert fr.header(soak, at)["max_min"] == 495                        # never past the line's until: 06:30 + 495 min = 14:45
     assert fr.header(other, at)["max_min"] == 30                        # a malformed line grants nothing
-    late = datetime.datetime(2026, 10, 2, 14, 44, 30, tzinfo=datetime.timezone.utc).timestamp()
+    late = datetime.datetime(2026, 10, 2, 14, 44, 30, tzinfo=datetime.UTC).timestamp()
     assert fr.header(soak, late)["max_min"] == 30                       # under a minute left: the exception is over
     assert fr.header(soak, late + 3600)["max_min"] == 30
     calls = []
@@ -1382,7 +1382,7 @@ def test_pool_n1_covers_node_2s_timed_window_pause_in_the_merged_file_for_at_mos
 
 def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiting_workloads(monkeypatch):
     m = _pool_n1(monkeypatch)
-    t = datetime.datetime(2026, 9, 30, 22, 0, tzinfo=datetime.timezone.utc).timestamp()
+    t = datetime.datetime(2026, 9, 30, 22, 0, tzinfo=datetime.UTC).timestamp()
 
     def wl(owner, queue, admitted, gpus=1, kind="Job"):
         conds = [{"type": "QuotaReserved", "status": "True" if admitted else "False"}]
@@ -1390,7 +1390,8 @@ def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiti
                 "spec": {"queueName": queue, "podSets": [{"count": 1, "template": {"spec": {"containers": [
                     {"resources": {"requests": {"nvidia.com/gpu": str(gpus)} if gpus else {}}}]}}}]}}
 
-    pod = lambda name, job, start: {"metadata": {"name": name, "labels": {"job-name": job}}, "status": {"startTime": start}}
+    def pod(name, job, start):
+        return {"metadata": {"name": name, "labels": {"job-name": job}}, "status": {"startTime": start}}
     obs = {"t": t, "sampled_at": t - 10, "samples_5m": 20, "samples_1h": 240,
            "busy_5m": {0: 0.1, 1: 1.0, 2: 0.0, 3: 0.5, 4: 0.4}, "busy_1h": {0: 0.2, 1: 1.0, 2: 0.0, 3: 0.5, 4: 0.3},
            "util_5m": {0: 2.0, 1: 80.0, 2: 0.0, 3: 30.0, 4: 0.0}, "fb_mib": {0: 9000, 1: 20000, 2: 0, 3: 5000, 4: 50000},
@@ -1428,7 +1429,7 @@ def test_pool_n1_splits_leased_gpu_seconds_by_hour_and_counts_them_delivered_onl
             ("r4", "filler-ab1cd", "done", 0, "passed", "2026-09-30T21:20:00Z")])
         c.execute("insert into attempt_outputs values ('r3', 'result', 'art:x')")
     m = _pool_n1(monkeypatch, POOL_N1_STORE_DB=db)
-    t = datetime.datetime(2026, 9, 30, 22, 30, tzinfo=datetime.timezone.utc).timestamp()
+    t = datetime.datetime(2026, 9, 30, 22, 30, tzinfo=datetime.UTC).timestamp()
 
     def wl(job, admitted, finished=None, gpus=1):
         conds = [{"type": "QuotaReserved", "status": "True", "lastTransitionTime": admitted}]
@@ -1454,7 +1455,8 @@ def test_pool_n1_splits_leased_gpu_seconds_by_hour_and_counts_them_delivered_onl
 
 def test_pool_n1_reports_template_drift_against_the_pushed_infra_nebius_ref(tmp_path, monkeypatch):
     src, bare, sky = tmp_path / "src", tmp_path / "bare.git", tmp_path / "sky"
-    run = lambda *a, cwd=None: subprocess.run(a, cwd=cwd, check=True, capture_output=True)
+    def run(*a, cwd=None):
+        return subprocess.run(a, cwd=cwd, check=True, capture_output=True)
     (src / "tools/research/src/research/pods/nebius/sky/jobs").mkdir(parents=True)
     (src / "tools/research/src/research/pods/nebius/sky/kueue.yaml").write_text("a: 1\n")
     (src / "tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml").write_text("run: new\n")
@@ -1488,7 +1490,7 @@ def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quie
     (fill / "queue" / "q1.sh").write_text("# fill: owner=bc-a gpus=1 max_min=30\n")
     (fill / "queue" / "q2.sh").write_text("# fill: owner=bc-a gpus=0 max_min=30\n")
     lease = "pid=1 run=- who=fill:{} since=x cmd=nice -n 19 taskset -c 96-127 bash /workspace/pouw/fill/running/{}"
-    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.UTC)
     with open(util / "2026-09-30.jsonl", "w") as f:
         for s in range(0, 3600, 12):
             t = now - datetime.timedelta(seconds=3600 - s)
@@ -1528,7 +1530,7 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
         (proc / str(pid)).mkdir(parents=True)
         (proc / str(pid) / "cgroup").write_text(cg)
         (proc / str(pid) / "stat").write_text(f"{pid} (python3) S {ppid} 0 0\n")
-    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.UTC)
     idle = "pid=10 run=- who=fill:bc-a since=2026-09-30T20:50:00Z scope=gpu-lease-10 cmd=bash /workspace/pouw/fill/running/kt-e70b-fold-pc"
     with open(util / "2026-09-30.jsonl", "w") as f:
         for s in range(0, 300, 12):
@@ -1987,7 +1989,8 @@ def test_n2_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
     the hold, or unless its rsync (20 min) and a Job of 5 min end before 12:30Z, and its Job's deadline ends it before 12:30Z."""
     n2 = _n2_custody(tmp_path)
     a, b, c = (n2.run(f"r20261003-10000{i}-000{i}", {"state": "done"}) for i in (1, 2, 3))
-    at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
+    def at(hhmm):  # N2_NOW is 03:00Z
+        return N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60
     for hhmm in ("1210", "1229", "1230", "1329", "1206"):
         held = n2.round_(clock=at(hhmm))
         assert held.returncode == 0 and "skipped: node 1's daily hold (1210-1330 UTC; no Job of it runs past 1230Z" in held.stdout, hhmm
@@ -2342,7 +2345,7 @@ def test_n1_custody_forces_a_status_that_never_ended_only_once_its_runner_is_see
     assert dry.returncode == 0 and node.created() == [], dry.stdout + dry.stderr
     assert f"would leave {J['alive']} (r21-fixture, running): its pod pod-{R['alive']} still runs" in dry.stdout
     assert f"would publish {J['gone']} (r21-fixture, running, 8 files, 5.9 KiB) with --force --runner-gone (its pod" in dry.stdout
-    assert f"with --force --runner-gone (its runner's pid is gone)" in dry.stdout and "1 its runner not seen gone" in dry.stdout
+    assert "with --force --runner-gone (its runner's pid is gone)" in dry.stdout and "1 its runner not seen gone" in dry.stdout
     assert not [k for k in ("retimed", "sampling", "long") if R[k] in dry.stdout], dry.stdout
 
     unreached = node.round_(POD_ERR="1", **live)
@@ -2389,7 +2392,8 @@ def test_n1_custody_starts_no_job_that_could_run_into_node_1s_quiet_hour(tmp_pat
     12:39 (activeDeadlineSeconds 1800) and the pending push (7200; the research store's first one uploads 22.3 GiB) to 14:09, through
     node 1's quiet hour (12:30-13:30Z), which measurements own. Every Job's deadline and its grace (10 s) end it a minute before
     12:30Z, none starts with under 5 min left, and a round in the daily hold starts nothing."""
-    at = lambda hhmm: N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60          # N2_NOW is 03:00Z
+    def at(hhmm):  # N2_NOW is 03:00Z
+        return N2_NOW + (int(hhmm[:2]) - 3) * 3600 + int(hhmm[2:]) * 60
     rid = "r20261003-200000-0e01"
     deadlines = {}
     for hhmm in ("1209", "1150", "1331"):
@@ -2436,7 +2440,8 @@ def test_n1_custody_no_job_outlives_its_deadline_into_the_quiet_hour(tmp_path):
     handler, uses up: to 12:30:15. Each Job of n1_custody.sh and n2_custody.sh gets a deadline to the
     second that, with its grace (10 s), ends it a minute before 12:30Z, and its bash, the container's init, traps SIGTERM and exits
     while research runs."""
-    at = lambda h, m, s: N2_NOW + (h - 3) * 3600 + m * 60 + s                         # N2_NOW is 03:00Z
+    def at(h, m, s):  # N2_NOW is 03:00Z
+        return N2_NOW + (h - 3) * 3600 + m * 60 + s
     node = _n1_custody(tmp_path / "n1")
     node.run(node.jobs, "r20261003-200000-2301", "done")
     out = node.round_(clock=at(12, 7, 45), VY_CUSTODY_QUIET="1210-1330")
@@ -2676,7 +2681,8 @@ def test_n2_commit_fetches_only_missing_manifests_that_hash_to_their_id(tmp_path
                                 f'cp "{n1}/manifests/${{src##*/}}" "$a"\n')
     (bin_ / "rsync").chmod(0o755)
     good, other = b'{"kind":"vllm-build/v1"}', b'{"kind":"other"}'
-    art = lambda b: "art:" + hashlib.sha256(b).hexdigest()
+    def art(b):
+        return "art:" + hashlib.sha256(b).hexdigest()
     (n1 / "manifests" / f"{art(good)[4:]}.json").write_bytes(good)
     forged = "art:" + "0" * 64
     (n1 / "manifests" / f"{forged[4:]}.json").write_bytes(other)
@@ -2865,7 +2871,8 @@ def test_a_commit_that_goes_back_to_node_1_keeps_its_lease_and_pinned_template(t
     prep. Both ways back (dispatch_n1 after a stop or failure, reclaim after a long wait) take their `dispatch.py submit` flags from
     submit_args, which keeps every item field that submit takes."""
     text = (NEBIUS / "n2_commit.sh").read_text()
-    body = lambda name: re.search(rf"^{name}\(\) \{{.*?^\}}\n", text, re.M | re.S).group(0)
+    def body(name):
+        return re.search(rf"^{name}\(\) \{{.*?^\}}\n", text, re.M | re.S).group(0)
     item = tmp_path / "item.json"
     item.write_text(json.dumps({"tree": "/t", "lease": "self", "template_sha": "87e09228d7e0", "priority": "circuits-gpu",
                                 "resources": {"gpu": {"gpus": 1}}, "env": {"ROW": "gemma2-9b__bf16", "REPLAY_DEFERRED": "1"},
@@ -2885,8 +2892,9 @@ def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pp)
-    now = datetime.datetime(2026, 9, 30, 22, 0, 0, tzinfo=datetime.timezone.utc)
-    doc = lambda: {"nodes": {"n2": {"gpu_busy_5m": 0.9}}}
+    now = datetime.datetime(2026, 9, 30, 22, 0, 0, tzinfo=datetime.UTC)
+    def doc():
+        return {"nodes": {"n2": {"gpu_busy_5m": 0.9}}}
     n1 = {"generated_at": "2026-09-30T21:50:00Z", "nodes": {"n1": {"gpu_busy_5m": 0.05}, "n2": {"gpu_busy_5m": 0.0}}}
     merged = pp.merge(doc(), n1, now)
     assert merged["nodes"]["n2"] == {"gpu_busy_5m": 0.9}
@@ -3296,7 +3304,7 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     import fcntl
     t = 1_800_000_000.0
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3, VY_POOL_BORROW=1,
-                                VY_POOL_BORROW_UNTIL=datetime.datetime.fromtimestamp(t + 60, datetime.timezone.utc)
+                                VY_POOL_BORROW_UNTIL=datetime.datetime.fromtimestamp(t + 60, datetime.UTC)
                                 .strftime("%Y-%m-%dT%H:%M:%SZ"))
     locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
@@ -3307,7 +3315,8 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     w = tmp_path / "gl" / "wait.1.4242"
     fd = os.open(w, os.O_RDONLY | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_SH)
-    grown = lambda: len([a for a, _ in calls if a[0] == "create"])
+    def grown():
+        return len([a for a, _ in calls if a[0] == "create"])
     for line, at, want in [("pid=4242 n=3 who=adhoc:me since=x\n", t, 1),             # not preemptible: 3 nominal less 2
                            ("pid=4242 n=3 who=adhoc:me preempt=1 since=x\n", t, 2),   # preemptible: and 1 borrowed
                            ("pid=4242 n=3 who=adhoc:me preempt=1 since=x\n", t + 61, 1)]:  # past the deadline

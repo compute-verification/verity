@@ -34,7 +34,7 @@ import shlex
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable
 
@@ -288,7 +288,7 @@ def render(reports: list[dict[str, Any]]) -> str:
         if "error" in rep:
             out += [f"{rep['node']}: could not read: {rep['error']}", ""]
             continue
-        when = datetime.fromtimestamp(rep["t"], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        when = datetime.fromtimestamp(rep["t"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         out.append(f"{rep['node']} at {when}" + (f", owner {rep['owner']}" if rep["owner"] else ""))
         out.append(f"  disk: {rep['disk']['path']} {rep['disk']['use_pct']}% used (df)")
         if "bundles" in rep:

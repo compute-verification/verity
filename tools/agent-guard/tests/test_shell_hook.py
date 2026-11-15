@@ -37,7 +37,8 @@ def answer(command: str, **env: str) -> dict:
 
 def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
-    assert entry["command"].startswith("sh -c 'h=tools/agent-guard/hook.sh;") and entry["command"].endswith(" guard shell_hook.py")
+    assert entry["command"].startswith("/bin/sh -c 'PATH=/usr/local/bin:/usr/bin:/bin; export PATH;")
+    assert entry["command"].endswith(" guard shell_hook.py")
     assert entry["failClosed"] is True and "matcher" not in entry
 
 
@@ -147,24 +148,6 @@ def test_no_hook_a_test_starts_records_in_the_machines_log_whatever_environment_
     assert events(event_log) == ["the test's own"]
     elsewhere = ["a module's fixture", "a module's copy", "from nothing", "stripped"]
     assert [e for e in events(scratch_event_log) if e in elsewhere] == elsewhere
-
-
-def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_cant_lock_the_agent_out(tmp_path):
-    """Cursor keeps the hooks it read at the session's start. A branch without tools/agent-guard (checked out later) would make
-    every command, the checkout back included, fail the fail-closed hook; the command falls back to the cached origin/main copy."""
-    (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
-    ws, cache = tmp_path / "ws", tmp_path / "cache"
-    ws.mkdir()
-    shutil.copytree(ROOT / "tools/agent-guard", cache / "0123abcd")
-
-    def ask(command):
-        event = json.dumps({"hook_event_name": "beforeShellExecution", "command": command, "cwd": str(ws)})
-        out = subprocess.run(["sh", "-c", entry["command"]], input=event, cwd=ws, capture_output=True, text=True, check=True,
-                             env={**os.environ, "AGENT_GUARD_CACHE": str(cache), "AGENT_GUARD_MIN_AVAIL": "0"}).stdout
-        return json.loads(out)["permission"]
-
-    assert ask("git checkout main") == "allow"
-    assert ask("env | cut -d= -f1") == "deny"
 
 
 @pytest.mark.parametrize("command", [
@@ -621,7 +604,7 @@ def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deli
     assert delivered["permission"] == "deny" and f"inbox self-check {token}" in delivered["agent_message"]
 
     hooks = vm / ".cursor/hooks.json"
-    hooks.write_text(hooks.read_text().replace("/[0-9a-f]*/", "/*/"))
+    hooks.write_text(hooks.read_text().replace("g=/opt/agent-guard;", "g=/opt/*/agent-guard;"))
     other = "bc-66666666-6666-4666-8666-666666666666"
     bad = selftest(other)
     assert bad.returncode == 1 and f"pushed to origin's inbox/{other}" in bad.stdout
@@ -651,7 +634,7 @@ def test_guard_is_one_line_saying_what_is_off_why_and_the_fix_only_where_no_shel
     hooks = vm / ".cursor/hooks.json"
     hooks.parent.mkdir()
     loads = (ROOT / ".cursor/hooks.json").read_text()
-    misread = loads.replace("/[0-9a-f]*/", "/*/")
+    misread = loads.replace("g=/opt/agent-guard;", "g=/opt/*/agent-guard;")
     assert misread != loads
     hooks.write_text(loads)
     git("add", ".cursor")
@@ -1417,7 +1400,8 @@ def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is
 TOKEN = "gh" "s_" "dummyDUMMYdummy0123456789abcdefABCDEF"
 QUEUE_URLS = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",
               "git@github.com:compute-verification/verity.git", "ssh://git@github.com/compute-verification/verity",
-              f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity", "https://github.com/compute-verification/infra.git"]
+              f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity", "https://github.com/compute-verification/infra.git",
+              "https://github.com/compute-verification/platform.git", "git@github.com:compute-verification/platform"]
 OTHER_URLS = ["https://github.com/compute-verification/research-notes.git", "https://github.com/someone/verity-fork",
               "https://github.com/compute-verification/verity-notes", "https://github.com/someone/compute-verification/verity"]
 
@@ -2152,12 +2136,18 @@ def test_the_refusal_for_a_code_variable_names_the_fix_and_the_form_it_gives_pas
 
 def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):
     """A cloud worker's VM never runs boot.sh, so its trial `git merge-tree` of a PR onto `next` merged each lean-audit.json
-    line by line and showed 359 conflicts the queue never saw."""
+    line by line and showed 359 conflicts the queue never saw. Without origin/main it sets none: the hook runs no file of the
+    checkout's own, so a branch's clone.py never runs (here it would leave a marker)."""
     ws = tmp_path / "ws"
     clone_py = ws / "tools/research/src/research/clone.py"
     clone_py.parent.mkdir(parents=True)
     clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.name": "n", "merge.lean-audit.driver": "python3 m.py %O %A %B %P"}\n')
-    subprocess.run(["git", "init", "-q", str(ws)], check=True, env={**os.environ, **GIT_ENV})
+    git_env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", str(ws)], check=True, env=git_env)
+    for args in (["add", "-A"], ["commit", "-q", "-m", "main"], ["update-ref", "refs/remotes/origin/main", "HEAD"]):
+        subprocess.run(["git", "-C", str(ws), *args], check=True, capture_output=True, env=git_env)
+    marker = tmp_path / "ran-the-checkouts-clone.py"
+    clone_py.write_text(f"open({str(marker)!r}, 'w').close()\nRECORD_DRIVER = {{'merge.lean-audit.driver': 'mine'}}\n")
 
     def ask(command: str) -> str:
         out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
@@ -2172,9 +2162,11 @@ def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_driv
 
     assert ask("git status") == "allow" and driver() == "", "only a merge sets them"
     assert ask("git merge-tree --write-tree --name-only origin/next FETCH_HEAD") == "allow"
-    assert driver() == "python3 m.py %O %A %B %P"
-    subprocess.run(["git", "-C", str(ws), "config", "merge.lean-audit.driver", "mine"], check=True, env={**os.environ, **GIT_ENV})
-    assert ask("git merge origin/main") == "allow" and driver() == "mine", "without origin/main, one already set stays"
+    assert driver() == "python3 m.py %O %A %B %P" and not marker.exists()
+    subprocess.run(["git", "-C", str(ws), "update-ref", "-d", "refs/remotes/origin/main"], check=True, env=git_env)
+    subprocess.run(["git", "-C", str(ws), "config", "--unset", "merge.lean-audit.driver"], check=True, env=git_env)
+    assert ask("git merge origin/main") == "allow" and driver() == "", "without origin/main it sets none"
+    assert not marker.exists(), "the hook ran the checkout's own clone.py"
 
 
 def test_a_merge_sets_origin_main_s_merge_drivers_over_an_older_command(tmp_path):
