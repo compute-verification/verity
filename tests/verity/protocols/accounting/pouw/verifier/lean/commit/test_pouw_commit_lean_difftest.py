@@ -27,7 +27,7 @@ import verity_difftest as D
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 PACKAGE = (Path(__file__).resolve().parents[8] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "commit")
-SCRIPT = PACKAGE / "tests" / "difftest_vectors.py"
+SCRIPT = Path(__file__).resolve().parent / "difftest_vectors.py"
 _spec = importlib.util.spec_from_file_location("difftest_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)

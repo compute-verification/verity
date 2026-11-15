@@ -43,7 +43,7 @@ from verity_difftest import protocol as P
 
 PROTOCOLS = (Path(__file__).resolve().parents[7] / "verity" / "protocols")
 LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "lean"
-FIXTURES = PROTOCOLS / "proofs" / "flock" / "prover" / "tests" / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[4] / "proofs" / "flock" / "prover" / "fixtures"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 ID = "verity/inference-only/rows/v1"

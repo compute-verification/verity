@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
-SUITE = TESTS.parent
+SUITE = TESTS
 ROOT = Path(__file__).resolve().parents[6]
 SECURITY = ROOT / "security"
 #: the package `lake build` runs in (test_lean_verifier.py's `PROOFS`)

@@ -78,7 +78,7 @@ def test_every_evidence_path_is_an_input_of_this_suite() -> None:
     inputs could be deleted without moving its key, and the check would pass from the cache. List it under
     [tool.verity.tests] inputs in tests/verity/circuits/ops/pyproject.toml."""
     pkg = (Path(__file__).resolve().parents[4] / "verity" / "circuits" / "ops")
-    declared = tomllib.loads((pkg / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    declared = tomllib.loads((Path(__file__).resolve().parent / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
     covered = [pkg.relative_to(ROOT).as_posix(), *declared]
     uncovered = [f"{e['id']}: {ref}" for e in load()["entries"] for ref in e["evidence_refs"]
                  if not ref.startswith(("r2026", "r2027", "http"))

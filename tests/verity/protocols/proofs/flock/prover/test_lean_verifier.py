@@ -362,7 +362,7 @@ def test_a_sample_over_several_tables_has_a_count_they_split():
 def _ir_tests() -> Path:
     """The circuits' `tests`, inside the `verity.circuits` the import system finds (whichever member ships it): the vectors the
     Lean verifier agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
-    return Path(importlib.util.find_spec("verity.circuits").origin).resolve().parent / "tests"
+    return Path(__file__).resolve().parents[4] / "circuits"
 
 
 def _template_vectors():

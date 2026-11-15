@@ -44,8 +44,8 @@ from verity.protocols.proofs.spot.device import challenger as C, remote as R
 
 from verity_flock import challengers as CH, rec_live as RL
 
-SP = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean"
-sys.path.insert(0, str(SP / "tests"))
+SP = Path(__file__).resolve().parents[2] / "spot" / "verifier" / "lean"
+sys.path.insert(0, str(SP))
 from test_challenger_difftest import (DROP, PACKAGE, PIECES, SESSIONS, TABLES, Session, _body, _cases,  # noqa: E402
                                       _edit, _flip, _interleave, _log, _refusing, _request, _seeded)
 
