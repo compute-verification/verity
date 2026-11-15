@@ -610,7 +610,7 @@ def test_a_pass_deletes_at_most_max_paths_and_the_next_takes_the_rest(tmp_path, 
     assert [p.exists() for p in paths] == [False, False, True] and (plan["capped"], plan["max_paths"]) == (1, 2)
     assert by_path(plan)["pouw/3"]["reason"] == "left for the next pass: this one has its 2 path(s) (--max-paths)"
     dry = run_gc(tmp_path, disk, force=True, low_pct=0, max_paths=0)
-    assert dry["capped"] == 1 and paths[2].exists(), "a cap of none deletes none"
+    assert dry["capped"] == 1 and paths[2].exists(), "a limit of none deletes none"
     assert run_gc(tmp_path, disk, apply=True, force=True, low_pct=0, max_paths=2)["capped"] == 0 and not paths[2].exists()
 
     monkeypatch.setattr(R, "utc_now", clock)
@@ -619,12 +619,12 @@ def test_a_pass_deletes_at_most_max_paths_and_the_next_takes_the_rest(tmp_path, 
     for i in (1, 2):
         kept(tmp_path, f"pouw/{i}", expires=f"2026-09-0{i}T00:00:00Z", node=socket.gethostname())
     argv = ["retention", "gc", "--root", str(tmp_path), "--force", "--low-pct", "0", "--json"]
-    assert research_main([*argv, "--max-paths", "-1"]) == 2 and "give a count, or 0 for no cap" in capsys.readouterr().err
+    assert research_main([*argv, "--max-paths", "-1"]) == 2 and "give a count, or 0 for no limit" in capsys.readouterr().err
     assert research_main(argv) == 0
-    assert json.loads(capsys.readouterr().out)["capped"] == 1, "the command's default cap is MAX_PATHS"
+    assert json.loads(capsys.readouterr().out)["capped"] == 1, "the command's default limit is MAX_PATHS"
     assert research_main([*argv, "--max-paths", "0"]) == 0
     plan = json.loads(capsys.readouterr().out)
-    assert (plan["capped"], plan["max_paths"]) == (0, None), "0 lifts the cap"
+    assert (plan["capped"], plan["max_paths"]) == (0, None), "0 lifts the limit"
 
 
 def test_the_default_check_needs_the_artifact_to_hold_the_paths_files_and_be_preserved(tmp_path, vault_store):
@@ -669,7 +669,7 @@ def test_without_a_remote_the_check_trusts_the_catalogs_verified_replica(tmp_pat
 
 
 def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault_store, monkeypatch):
-    """Custody marks a run dir preserved while its run record only lists an undeclared file over the cap (custody.select); those
+    """Custody marks a run dir preserved while its run record only lists an undeclared file over the limit (custody.select); those
     bytes are on no remote, so gc keeps the dir."""
     root = tmp_path / "ws"
     d = run_dir(root, "research/runs/r1", extra={"work/big.bin": b"t" * UNIT})

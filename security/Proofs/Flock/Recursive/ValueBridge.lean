@@ -28,7 +28,8 @@ import Proofs.Flock.Soundness.Game
 
 `zk_sessions_recursive_fork_on` and `zk_sessions_recursive_fork_innerL` on V*'s bridge off
 `RegColl ∨ ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` (`Flock.Assumptions.VBridgeCOff` at
-`ValueColl zs vsrc ∨ LeafColl zs ∨ SaltColl lv cap salt zs ∨ TopColl wr st reg bcs'`), which
+`ValueColl zs vsrc ∨ LeafColl zs ∨ SaltColl lv cap salt zs ∨ TopColl wr st reg bcs'`, `LeafColl` at the sessions'
+outcomes, which the bridge's bad event reads: `VBridgeOffOut`), which
 `FlockC3.RegLevels.value_tie`'s collision case, a read's leaf off the table's, a read of R's level-0 top off its node's
 row under the held salts and a held top other than the registered one let the discharge use (`value_tie_coll`,
 `FlockC3.RegLevels.leaf_of_accepts`, `FlockC3.RegLevels.salt_tie`, `topOf_held`): `valueFinder`, `leafFinder`,
@@ -64,8 +65,8 @@ theorem zk_sessions_recursive_fork_onV
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (hbr : VBridgeOff (fun R ω t R₂ => RegColl zs R ω t R₂ ∨ ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
-      SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) zs dg N k Rw x wmsg)
+    (hbr : VBridgeOffOut (fun R ω t R₂ o => RegColl zs R ω t R₂ ∨ ValueColl zs vsrc R ω t R₂ ∨
+      LeafColl zs R ω t R₂ o ∨ SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) zs dg N k Rw x wmsg)
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
     (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
@@ -77,7 +78,7 @@ theorem zk_sessions_recursive_fork_onV
     (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
     {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     (valueFinder zs vsrc dg N σ).Finds H512 ∨ (leafFinder zs dg N σ).Finds H512 ∨
-      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds H512 ∨
+      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' zs σ).Finds H512 ∨
       (regFinder zs dg N σ).Finds H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
@@ -95,7 +96,7 @@ theorem zk_sessions_recursive_fork_onV
   by_cases hsa : (saltFinder lv cap salt zs σ).Finds H512
   · exact Or.inl hsa
   refine Or.inr ?_
-  by_cases hto : (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds H512
+  by_cases hto : (topFinder wr st reg bcs' zs σ).Finds H512
   · exact Or.inl hto
   refine Or.inr ?_
   by_cases h0 : (regFinder zs dg N σ).Finds H512
@@ -123,8 +124,8 @@ theorem zk_sessions_recursive_fork_onV
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
   have hX : prob (fun o => RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨ ValueColl zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
-        LeafColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨ SaltColl lv cap salt zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
-        TopColl wr st reg bcs' o.2.2.1)
+        LeafColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 (fun j => (o.2.2.2.2 j).2) ∨
+        SaltColl lv cap salt zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨ TopColl wr st reg bcs' o.2.2.1)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       ENNReal.ofReal ((0 : ℝ) ^ 2 / 2 ^ (513 : ℝ)) +
         (ENNReal.ofReal ((0 : ℝ) ^ 2 / 2 ^ (513 : ℝ)) + (ENNReal.ofReal ((0 : ℝ) ^ 2 / 2 ^ (513 : ℝ)) +
@@ -135,7 +136,7 @@ theorem zk_sessions_recursive_fork_onV
           ((prob_or_le _ _ _ _).trans (add_le_add (prob_saltColl_le lv cap salt zs σ (Finder.cr_of_not_finds hsa 0))
             (prob_topCollAt_le wr st reg bcs' lv cap salt hstk zs σ (Finder.cr_of_not_finds hto 0)))))))))
   refine (zk_sessions_recursive_full_on zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg
-    (fun R ω t R₂ => RegColl zs R ω t R₂ ∨ ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
+    (fun R ω t R₂ o => RegColl zs R ω t R₂ ∨ ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ o ∨
       SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) hbr hX same rd hrd Sk cmt msg hcmt hdec hfull
     (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0) hin).trans
     (add_le_add (add_le_add ?_ ?_) le_rfl)
@@ -163,7 +164,7 @@ theorem zk_sessions_recursive_fork_innerLV
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
-    (hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
+    (hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ o => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ o ∨
       SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) zs dg N k Rw x wmsg Sk cmt msg)
     {D : Type} (H : List UInt8 → D) (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair)
     {εin : ℝ≥0∞} (hr0 : 0 < I.r)
@@ -171,7 +172,7 @@ theorem zk_sessions_recursive_fork_innerLV
       ∀ ref, InnerAtLeavesL σ (fun R ω t o => AcceptsV (zs R ω t) o) x (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt)
         (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) ref εin) :
     (valueFinder zs vsrc dg N σ).Finds H512 ∨ (leafFinder zs dg N σ).Finds H512 ∨
-      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds H512 ∨
+      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' zs σ).Finds H512 ∨
       (regFinder zs dg N σ).Finds H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨ InnerForkRec zs dg N k Rw σ x wmsg H pick ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))

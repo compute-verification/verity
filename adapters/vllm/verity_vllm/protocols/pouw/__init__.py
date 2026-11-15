@@ -156,7 +156,7 @@ class Settings:
     #: bit flipped
     tamper: str | None = None
     device: str | None = None
-    #: Pearl-C on sm_120: the kernel directory (the run tree's ``benchmarks/pouw/pearl_c_sm120``) and build.sh's cubin
+    #: Pearl-C on sm_120: the kernel directory (the run tree's ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``) and build.sh's cubin
     kernel: str | None = None
     cubin: str | None = None
     #: Pearl-C on sm_120: the schedule each pass runs under (`verity.protocols.accounting.pouw.verifier.serving.SCHEDULES`), serial by default

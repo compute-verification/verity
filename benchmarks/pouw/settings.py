@@ -21,7 +21,9 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 
 #: the files that run outside the tree, relative to this one; `tools/move/layout.py` follows a `./` path to a file it
 #: moves, and a bare one only in a file it moves too
-STANDALONE = ("pearl_c_sm120/run.py", "pearl_c_sm90/run.py", "pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
+STANDALONE = ("../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/run.py",
+              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/run.py",
+              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
               "../../verity/protocols/accounting/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
 
 

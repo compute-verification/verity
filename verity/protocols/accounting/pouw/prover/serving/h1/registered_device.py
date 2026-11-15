@@ -33,6 +33,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import hm96
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.commitments.rowleaf import (
     ROW_SEG_BYTES,
     sha512_row_seg_prefix,
@@ -40,7 +41,6 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_segments,
     sha512_row_v2_prefix,
 )
-from verity.commitments.cuda import ROW_COMMIT, SHA512
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity.protocols.accounting.pouw.prover.serving.h1.nodes import Nodes

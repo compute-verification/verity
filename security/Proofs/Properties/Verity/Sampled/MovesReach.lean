@@ -680,15 +680,16 @@ theorem verdict_read {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   subst hθ
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
-  obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hv.2.1 hcase hacc)
-  obtain ⟨record', _, _, _, _, hcs, hrec', -, hver⟩ := sent_verified hv.2.1 hcase hacc
+  have hm : p.members = none := single_of_case hv.2.1 hcase hacc hA.single
+  obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hv.2.1 hcase hacc hm)
+  obtain ⟨record', _, _, _, _, hcs, hrec', -, hver⟩ := sent_verified hv.2.1 hcase hacc hm
   have hrr : record' = text := Option.some.inj (hrec'.symm.trans hrec)
   rw [hrr] at hver
   obtain ⟨J, hJ, hrs⟩ := sent_records hver
   obtain ⟨rs, _, _, _, _, he, -, -, -, -, hsr, -⟩ := hver
   obtain ⟨-, -, -, hξ, hdr, _, _, hck⟩ := hacc
   obtain ⟨key, hch, -⟩ := source_of hdr
-  obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hck
+  obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hm hck
   obtain ⟨_, _, htt⟩ := treesOf_ok htr
   obtain ⟨ls, lines, hls0, hls, hct⟩ := trustedTreesOf_ok htt
   have hread : readLog dr.label c.digest [J] ξ lines = some lr := by

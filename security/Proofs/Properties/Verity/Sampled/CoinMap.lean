@@ -1087,30 +1087,50 @@ def srcEquiv {L : Fin 1 → ℕ} {n : ℕ} (h : L 0 = n) :
   Equiv.piCongrRight fun i =>
     (finCongr (by rw [Subsingleton.elim i 0]; exact h)).arrowCongr (Equiv.refl (Fin 256))
 
-/-- **The sample's bytes as fresh frames' coins**: the device's `m * 64` bytes the sample reads, as `m` fresh frames'
+/-- **A byte stream as fresh frames' coins**: the `m * 64` bytes of the one stream `src` reads, as `m` fresh frames'
 512 bits each (`coinBytesEquiv`). -/
-noncomputable def srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) : Fin m → Fin 512 → Bool :=
-  coinBytesEquiv m 64 (srcEquiv hL (A.src ω))
+noncomputable def byteCoins {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {m : ℕ}
+    (hL : Lb 0 = m * 64) (ω : Ω) : Fin m → Fin 512 → Bool :=
+  coinBytesEquiv m 64 (srcEquiv hL (src ω))
 
-/-- **The sample's coins are uniform**, by A3 at the device's bytes (`Live.hA3`). -/
-theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
-    avg (fun ω : A.Ω => H (srcCoins A hL ω)) = avg H :=
-  avg_comp_of_prCoin (fun E => (A.hA3 fun s => E (coinBytesEquiv m 64 (srcEquiv hL s))).trans
+/-- **A uniform byte stream's coins are uniform** (A3 at `src`). -/
+theorem avg_byteCoins {Ω : Type} [Fintype Ω] {Lb : Fin 1 → ℕ} {src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256}
+    (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) {m : ℕ} (hL : Lb 0 = m * 64)
+    (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
+    avg (fun ω : Ω => H (byteCoins src hL ω)) = avg H :=
+  avg_comp_of_prCoin (fun E => (hA3 fun s => E (coinBytesEquiv m 64 (srcEquiv hL s))).trans
     (FlockSoundness.ZK.prCoin_congr_equiv ((srcEquiv hL).trans (coinBytesEquiv m 64)) E)) H
 
-/-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
-`srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
-theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
-    _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) := by
-  have h : coinBytes m 64 (srcCoins A hL ω) = srcEquiv hL (A.src ω) := (coinBytesEquiv m 64).symm_apply_apply _
+/-- **A byte stream is the bytes of its coins**: the bytes of `src` are those `coinBytes` reads off `byteCoins`. -/
+theorem bytesOf_byteCoins {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {m : ℕ}
+    (hL : Lb 0 = m * 64) (ω : Ω) :
+    _root_.Properties.Spot.bytesOf (src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (byteCoins src hL ω) 0) := by
+  have h : coinBytes m 64 (byteCoins src hL ω) = srcEquiv hL (src ω) := (coinBytesEquiv m 64).symm_apply_apply _
   have key : ∀ {L L' : ℕ} (h : L = L') (f : Fin L → Fin 256), _root_.Properties.Spot.bytesOf f =
       _root_.Properties.Spot.bytesOf fun j : Fin L' => f (Fin.cast h.symm j) := by
     intro L L' h f
     subst h
     rfl
   rw [h]
-  exact key hL (A.src ω 0)
+  exact key hL (src ω 0)
+
+/-- **The sample's bytes as fresh frames' coins**: the device's `m * 64` bytes the sample reads, as `m` fresh frames'
+512 bits each (`byteCoins`). -/
+noncomputable def srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) : Fin m → Fin 512 → Bool :=
+  byteCoins A.src hL ω
+
+/-- **The sample's coins are uniform**, by A3 at the device's bytes (`Live.hA3`). -/
+theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
+    avg (fun ω : A.Ω => H (srcCoins A hL ω)) = avg H :=
+  avg_byteCoins A.hA3 hL H
+
+/-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
+`srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
+theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
+    _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) :=
+  bytesOf_byteCoins A.src hL ω
 
 /-- **The fresh frames of the family `label` answering `after` in `σ`'s play**: those whose log ends in the close
 after `σ`'s request (`freshSel`). -/

@@ -2,8 +2,8 @@
 (the torch loop's wired circuit, `--cap 1`) and on a fan-out (every reader unit reading writer unit 0), each negative is
 stated and the verifier's wiring check refuses it. In the last two, rotating a wire's writers is the honest wire. Where no
 other unit writes a row of the reader's words, the unit is rewired to a row of other words, and that is refused too. In a
-shared-row member whose wired port is not its first, the flipped string is the one unit 0 reads at that port; with each
-wired port held in its writer's tree, it is the row of the writer's table its reader's reference names."""
+shared-row member whose wired port is not its first, the flipped string is the one unit 0 reads at that port. And the
+verifier's reads of a member whose wired port has no tree of its own (`a5.bound_reads`)."""
 from __future__ import annotations
 
 import hashlib
@@ -22,6 +22,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as I
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -178,3 +179,37 @@ def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_w
     second = bytearray(publics[reader.key])
     second[WI.BC_BYTES] ^= 1
     assert WI.check(ms, {**publics, reader.key: bytes(second)}) == {}
+
+
+def test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_never_bound():
+    """A reader whose wired port has no tree of its own (`rows.Member.wired_trees`): the verifier's window names it under
+    its reader at its writer's tree (`rows.wired_ports`), and the registration holds its writer's root under that name.
+    The verifier's file (`rows.own_reads`) names it a read of its writer's tree, each unit at its writer unit's leaf, and
+    `a5.bound_reads` leaves that file as it is: the root under the reader's name is no tree of the port's own, and it
+    binds the port to none. A file that leaves the wired port out is refused, and a port with a tree of its own that a
+    file leaves out is bound at the registration's root and the window's domain for it."""
+    circuit = I.Circuit("chain", ((GEMM, 2 * UNITS),), external=(f"{GID}/x",),
+                        wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(1,)),),
+                        order=((GID, 0, UNITS), (GID, UNITS, UNITS)))
+    win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, 2)
+    ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
+    mine = replace(win.window, members=ms)
+    want = CS.expected_ports(mine)
+    writer, reader = ms[0], ms[2]
+    wired = CS.wired_ports(mine)
+    assert wired[reader.port("x")] == writer.port("o0") == want[reader.port("x")]["wired"]
+    roots = {q: {"port": q, "root": hashlib.sha512(wired.get(q, q).encode()).hexdigest(),
+                 **{k: v for k, v in e.items() if k != "wired"}} for q, e in want.items()}
+    ports = [p for p, _w in reader.all_rows]
+    assert reader.wired == (("x", "o0", (0, 1)),) and ports == ["x", "w", "o0"]
+    assert roots[reader.port("x")]["root"] == roots[writer.port("o0")]["root"]
+    file = CS.own_reads({reader.key: {"format": REG.READS_V1, "ports": {}}}, mine, roots, registered=REG)[reader.key]
+    assert sorted(file["ports"]) == sorted(ports)
+    assert (file["ports"]["x"]["root"], file["ports"]["x"]["reads"]) == (roots[writer.port("o0")]["root"], [0, 1])
+    assert a5.bound_reads(file, reader, ports, roots, want) == file
+    less = {**file, "ports": {p: e for p, e in file["ports"].items() if p != "x"}}
+    with pytest.raises(ValueError, match=r"ports \['x'\] are neither registered ports of the file nor"):
+        a5.bound_reads(less, reader, ports, roots, want)
+    less = {**file, "ports": {p: e for p, e in file["ports"].items() if p != "w"}}
+    assert a5.bound_reads(less, reader, ports, roots, want) == {
+        **less, REG.BOUND: {"w": {"root": roots[reader.port("w")]["root"], "domain": want[reader.port("w")]["domain"]}}}

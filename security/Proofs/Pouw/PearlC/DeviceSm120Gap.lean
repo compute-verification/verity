@@ -24,9 +24,11 @@ and sm_120's measured prices. This file adds no definitions.
 * **The flags** (`devSm120v1_flags`, `devSm120v2_flags`): v1's are `SkipP.unitFlagsP sm120E4m3 4`, debit (A)'s joint
   flags per group of 4, and v2's are the pure chain's lone skips `SkipP.pureFlagsP sm120E4m3`, both by `rfl` from
   `devAt`'s `SkipP.unitFlagsAt`.
-* **The floor is unobservable** (`devAt_sm120_floor`, `devSm120v1_floor`, `devSm120v2_floor`): at every floor
-  `z ≤ −126`, `devAt (sm120E4m3K32 z) G pr = devAt sm120E4m3 G pr`, so the pinned −133 is no choice. Each map reads the
-  step only through `p.step` (`devAt_step`), and `FreezeP.sm120_floor` gives one step for every such floor.
+* **The floor is unobservable in the record's six maps** (`devAt_sm120_floor`, `devSm120v1_floor`,
+  `devSm120v2_floor`): at every floor `z ≤ −126`, `devAt (sm120E4m3K32 z) G pr` with its `pipe` set to `sm120E4m3` is
+  `devAt sm120E4m3 G pr`, so the pinned −133 is no choice for `G`, the prices, the ticket, U, the flags or the salt-dead
+  elements. Each of those reads the step only through `p.step` (`devAt_step`), and `FreezeP.sm120_floor` gives one step
+  for every such floor. The mend's debit reads the pipeline (`pipe`), so the record as a whole tells floors apart.
 * **The domains are not empty** (`devSm120v1_domain`, `devSm120v2_domain`): a one-unit layout of either headline shape
   is in `pearlCDomainDevAt` at both records.
 * **The gap at the records**, from the instances at any record with `hG` and `hp`, each hypothesis by `rfl`:
@@ -61,8 +63,10 @@ the unpromoted chain's output unchanged (`FreezePPure.pureFlags_iff`). -/
 theorem devSm120v2_flags (pr : Prices) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code)
     (i : Fin m) (j : Fin n) : (devSm120v2 pr).flags A B i j = SkipP.pureFlagsP sm120E4m3 k (A i) (B j) := rfl
 
-/-- The record of a captured step reads the step only through `p.step`. -/
-theorem devAt_step {p p' : Pipeline} (h : p.step = p'.step) (G : ℕ) (pr : Prices) : devAt p G pr = devAt p' G pr := by
+/-- The record of a captured step reads the step only through `p.step`, outside its `pipe`: two pipelines of one step
+give records that differ in `pipe` alone. -/
+theorem devAt_step {p p' : Pipeline} (h : p.step = p'.step) (G : ℕ) (pr : Prices) :
+    { devAt p G pr with pipe := p' } = devAt p' G pr := by
   unfold devAt Accum.chainAt Accum.ctChainP Accum.chainP Accum.totalP PeelExactP.peelExactValP
     PeelExactP.peelExactP PeelExactP.chainWordP? PeelExactP.windowWordP? SkipP.unitFlagsAt SkipP.flagsAt
     SkipP.pureFlagsP SkipP.pureSkipP Accum.pureChain SkipP.wordFlagsP SkipP.jointFlagsP SkipP.jointAtP SkipP.keepsP
@@ -70,15 +74,18 @@ theorem devAt_step {p p' : Pipeline} (h : p.step = p'.step) (G : ℕ) (pr : Pric
     FormingP.saltDeadP FormingP.atomMixP
   rw [h]
 
-/-- **The floor is unobservable in the record**: at every floor at most −126 the sm_120 record is the one at −133. -/
+/-- **The floor is unobservable in the record's six maps**: at every floor at most −126 the sm_120 record is, outside
+its `pipe`, the one at −133. -/
 theorem devAt_sm120_floor {z : ℤ} (hz : z ≤ -126) (G : ℕ) (pr : Prices) :
-    devAt (sm120E4m3K32 z) G pr = devAt sm120E4m3 G pr :=
+    { devAt (sm120E4m3K32 z) G pr with pipe := sm120E4m3 } = devAt sm120E4m3 G pr :=
   devAt_step (FreezeP.sm120_floor hz (by norm_num)) G pr
 
-theorem devSm120v1_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) : devAt (sm120E4m3K32 z) 4 pr = devSm120v1 pr :=
+theorem devSm120v1_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) :
+    { devAt (sm120E4m3K32 z) 4 pr with pipe := sm120E4m3 } = devSm120v1 pr :=
   devAt_sm120_floor hz 4 pr
 
-theorem devSm120v2_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) : devAt (sm120E4m3K32 z) 0 pr = devSm120v2 pr :=
+theorem devSm120v2_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) :
+    { devAt (sm120E4m3K32 z) 0 pr with pipe := sm120E4m3 } = devSm120v2 pr :=
   devAt_sm120_floor hz 0 pr
 
 /-- v1's domain at one headline shape admits a one-unit layout of that shape. -/

@@ -2,7 +2,8 @@
 
 Shared by the boundary / query-API / partition test suites (import as `tests.program.fixtures_query`).  Every
 constructor returns a `Program` small enough for the explicit oracle (`query_ast.oracle_in` / `oracle_out` on the expanded
-circuit); `FIXTURES` maps a short name to a memoised constructor so suites can parametrise over every family.
+circuit); `fixture(name)` is the memoised Program of a short name, and `FIXTURE_NAMES` lists the names so suites can
+parametrise over every family.
 
 Families (the query design's §5 table + the counterexample shapes of the query-interface freeze):
 
@@ -39,8 +40,8 @@ modules are tested against.
 """
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
+from functools import cache
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits import query_ast as QA
@@ -70,8 +71,8 @@ def rmsnorm_fused_program(N: int = 32, EPS: float = 1e-5) -> Program:
     return Program(bind(b1.RMSNormFusedCuda, N=N, EPS=EPS))
 
 
-def silu_mul_program(I: int = 8) -> Program:
-    return Program(bind(b1.SiluMul, I=I))
+def silu_mul_program(inter: int = 8) -> Program:
+    return Program(bind(b1.SiluMul, I=inter))
 
 
 def bias_add_program(N: int = 8) -> Program:
@@ -308,24 +309,16 @@ _CONSTRUCTORS: dict[str, Callable[[], Program]] = {
 FIXTURE_NAMES: tuple[str, ...] = tuple(_CONSTRUCTORS)
 #: fixtures whose Program contains a primitive gate wider than 32 bits (design doc §7)
 WIDE_GATE_FIXTURES: frozenset[str] = frozenset({"gumbel"})
-#: fixtures with a `scan` node (carry crosses iteration boundaries)
-SCAN_FIXTURES: frozenset[str] = frozenset({"moe_router", "gumbel", "token_select", "scan_carry", "scan_carry_only"})
 #: the registry programs of the supported vLLM families the canonical VU query must partition
 VLLM_FAMILY_FIXTURES: tuple[str, ...] = ("gemm", "gemm_v2", "rmsnorm_triton", "rmsnorm_fused", "layer_norm_aten", "silu_mul", "bias_add",
                                          "rope_head", "attention_head", "attention_head_t72", "attention_head_v1", "attention_head_v2",
                                          "attention", "moe_router", "moe_expert_gemm", "moe_sum", "token_select", "embedding")
-#: the attention-head fixtures whose canonical VU kinds must coincide (same D / chain version, different T)
-ATTENTION_T_PAIRS: tuple[tuple[str, str], ...] = (("attention_head", "attention_head_t72"),)
 
 
-@lru_cache(maxsize=None)
+@cache
 def fixture(name: str) -> Program:
     """The memoised fixture Program `name` (see the module docstring)."""
     return _CONSTRUCTORS[name]()
-
-
-#: alias table for callers that want the mapping itself
-FIXTURES: dict[str, Callable[[], Program]] = {n: (lambda n=n: fixture(n)) for n in FIXTURE_NAMES}
 
 
 def _wrap_sig(S):
@@ -348,7 +341,7 @@ def wrap(spec) -> Program:
     return Program(bind(Wrap, FN=spec))
 
 
-@lru_cache(maxsize=None)
+@cache
 def wrapped_fixture(name: str) -> Program:
     """`fixture(name)`'s specialization behind a one-call root (see `Wrap`)."""
     return wrap(fixture(name).fn)
@@ -440,10 +433,6 @@ def gates_of(x) -> list[int]:
     return [int(g) for g in x]
 
 
-def part_gates(part: Part) -> list[int]:
-    return gates_of(part)
-
-
 def gate_width(program: Program, g: int) -> int:
     """w(g): the producing primitive's return width."""
     return program.circuit.gate(g).prim.ret.w
@@ -471,10 +460,6 @@ def oracle_in(program: Program, gates) -> frozenset[int]:
 
 def oracle_w_out(program: Program, gates) -> int:
     return sum(gate_width(program, g) for g in oracle_out(program, gates))
-
-
-def oracle_w_in(program: Program, gates) -> int:
-    return sum(gate_width(program, g) for g in oracle_in(program, gates))
 
 
 def interface_w_out_bound(part: Part) -> int:
@@ -585,7 +570,7 @@ def spec_base_id(spec) -> str:
 
 
 __all__ = [
-    "FIXTURES", "FIXTURE_NAMES", "WIDE_GATE_FIXTURES", "SCAN_FIXTURES", "VLLM_FAMILY_FIXTURES", "fixture", "Wrap", "wrap", "wrapped_fixture",
+    "FIXTURE_NAMES", "WIDE_GATE_FIXTURES", "VLLM_FAMILY_FIXTURES", "fixture", "Wrap", "wrap", "wrapped_fixture",
     "gemm_program", "rmsnorm_triton_program", "rmsnorm_fused_program", "silu_mul_program", "bias_add_program", "rope_head_program",
     "attention_head_program", "attention_program", "attn_block_program", "moe_router_program", "moe_expert_gemm_program",
     "moe_sum_program", "gumbel_program", "token_select_program", "embedding_program",
@@ -593,6 +578,6 @@ __all__ = [
     "scan_carry_only_program", "TinyIO", "FanOut", "Pair", "DeadReturn", "Reexport", "IgnoreB", "DeadParam", "ScanStep", "ScanCarry",
     "ScanCarryOnly", "SCAN_N",
     "root_scope", "is_input_node", "is_const_node", "item_part", "node_part", "items_part", "body_parts", "find_nodes", "child_scope",
-    "first_composite_child", "gates_of", "part_gates", "gate_width", "root_outputs", "oracle_out", "oracle_in", "oracle_w_out",
-    "oracle_w_in", "interface_w_out_bound", "wide_gates", "gateset_kind", "spec_base_id", "ListFamily",
+    "first_composite_child", "gates_of", "gate_width", "root_outputs", "oracle_out", "oracle_in", "oracle_w_out",
+    "interface_w_out_bound", "wide_gates", "gateset_kind", "spec_base_id", "ListFamily",
 ]
