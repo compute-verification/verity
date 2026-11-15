@@ -4936,10 +4936,6 @@
     "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial",
     "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion"
    ]
-  },
-  "Verity.SecurityProofs.RegistrationSound": {
-   "honest": ["Verity.SecurityProofs.RegistrationSound_honest"],
-   "nontrivial": "Verity.SecurityProofs.RegistrationSound_nontrivial"
   }
  },
  "unwitnessed": {
