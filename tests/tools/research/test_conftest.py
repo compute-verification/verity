@@ -46,5 +46,5 @@ def test_a_research_first_on_pythonpath_is_not_what_the_tests_check(tmp_path, mo
     assert Path(seen.stdout.strip()) == decoy / "research" / "__init__.py", "the decoy is what a Python on this PYTHONPATH imports"
     probe = f"{Path(__file__).name}::test_the_tests_and_the_pythons_they_start_import_this_trees_research"
     run = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'probe'}",
-                          f"tests/{probe}"], capture_output=True, text=True, cwd=TREE)
+                          probe], capture_output=True, text=True, cwd=Path(__file__).resolve().parent)
     assert run.returncode == 0, run.stdout[-3000:] + run.stderr[-2000:]
