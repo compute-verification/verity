@@ -98,11 +98,11 @@ if [ "$DRY" = 0 ]; then
   want=$(awk -v n="$ROW.json" '$2==n{print $1}' "$TREE/adapters/vllm/workloads/SHA256SUMS")
   [ "$(sha256sum < "$WL" | cut -c1-64)" = "$want" ] || fail workload "$WL is not the sha256 SHA256SUMS lists ($want)"
 fi
-step predict "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$W/predicted"
-step build "$PY" -m verity_vllm.pipeline.cli row run "$ROW" LLAMA32_1B_INT8 "$MODEL" "$REV" --sweep-dir "$W/llama" \
+step predict "$VENV/bin/verity-vllm" predict row --row "$ROW" --out "$W/predicted"
+step build "$VENV/bin/verity-vllm" row run "$ROW" LLAMA32_1B_INT8 "$MODEL" "$REV" --sweep-dir "$W/llama" \
   --research-run-dir "$W/llama-kept" --stages build --config-run 1 --replay-k 460 --hidden-so "$HSO" --norm-tap-so "$NSO"
 
-SERVE=("$PY" -m verity_vllm.pipeline.cli serve-openai --model "$MODEL" --revision "$REV" --out "$W/serve" --port "$PORT"
+SERVE=("$VENV/bin/verity-vllm" serve-openai --model "$MODEL" --revision "$REV" --out "$W/serve" --port "$PORT"
   --precision verity_int8 --run-id "fresh-$(date -u +%Y%m%dT%H%M%SZ)" --scheme rows-sha512 --seal --max-num-batched-tokens 512
   --window-steps 256 --required-manifest "$W/predicted/manifest.json" --hidden-so "$HSO" --norm-tap-so "$NSO" --tap-cap-mb 2048
   --admit release-order --window-requests 1 --max-model-len 512 --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8
@@ -111,7 +111,7 @@ LOAD=("$PY" adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model 
   --prompt-range 16:24 --seed 1 --out "$W/load.jsonl")
 if [ "$DRY" = 1 ]; then
   echo "step serve: ${SERVE[*]}"; echo "step request: ${LOAD[*]} --release UUID"
-  echo "step stop: SIGINT to the server's pid, which seals window 0 before it exits; then the seal read from $W/records/seals.jsonl"
+  echo "step stop: SIGINT to the server's pid, which seals window 0 before it exits; then the seal read from $W/serve/seals.jsonl"
   exit 0
 fi
 echo "serve_fresh: serve on port $PORT ..."
@@ -123,17 +123,14 @@ for _ in $(seq 1 300); do
   sleep 5
 done
 curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1 || { kill -INT "$SERVER"; fail serve "not listening after 25 min (log $LOGS/serve.log)"; }
-(cd "$TREE" && "${LOAD[@]}" --release "$("$PY" -c 'import uuid; print(uuid.uuid4())')") > "$LOGS/request.log" 2>&1
+(cd "$TREE" && "${LOAD[@]}" --release "$(cat /proc/sys/kernel/random/uuid)") > "$LOGS/request.log" 2>&1
 lrc=$?
 kill -INT "$SERVER"
 wait "$SERVER"; src=$?
 [ "$lrc" = 0 ] || fail request "exit $lrc (log $LOGS/request.log)"
 [ "$src" = 0 ] || fail stop "the server exited $src (log $LOGS/serve.log)"
-"$PY" - "$W/records/seals.jsonl" <<'EOF' || fail seal "window 0 is not sealed ($W/records/seals.jsonl, $LOGS/serve.log)"
-import json, sys
-s = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
-w = next((x for x in s if x.get("window") == 0), None)
-if not w or w.get("error") or not w.get("run_root"):
-    sys.exit(1)
-print(f"SERVE-FRESH SERVED AND SEALED window 0 ({len(w.get('requests') or [])} request), root {w['run_root']}")
-EOF
+seal=$(grep -m1 '"window": 0[,}]' "$W/serve/seals.jsonl" 2>/dev/null)
+root=$(printf '%s' "$seal" | sed -n 's/.*"run_root": "\([0-9a-f]*\)".*/\1/p')
+case $seal in *'"error"'*) root="" ;; esac
+[ -n "$root" ] || fail seal "window 0 is not sealed ($W/serve/seals.jsonl, $LOGS/serve.log)"
+echo "SERVE-FRESH SERVED AND SEALED window 0, root $root"
