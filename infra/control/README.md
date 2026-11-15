@@ -70,7 +70,8 @@ is absent, so a reset brings drive back in whichever state ci left it. Two drive
 stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
 `notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`.
 `drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token is verity-drive's (App
-5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only.
+5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository and
+the platform repository only, named in the request by id so a rename doesn't break it.
 
 Reading GitHub. Every watch on the pod reads GitHub's API with one read-only token, which the pod mints itself:
 `gh_read_token.sh --cached` (`/data/infra/gh_read_token.sh`), the same App's installation token asked for with Contents and

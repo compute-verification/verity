@@ -340,6 +340,11 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
   run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
+- **A slip made twice becomes a tool.** When you make the same kind of mistake a second time, or see that two agents
+  have each made it, a note to be more careful is no fix. That day, change the tool so that kind of mistake can't happen,
+  or fails with the fix in its message (a refusal in the shell hook, a default, a check), in a PR that names the slips it
+  ends. Watch for the signs in your own work and in what you read of others': a rule kept by hand, a slip listed for a
+  later review. Another owner's tool gets the PR all the same, and its owner is told.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
