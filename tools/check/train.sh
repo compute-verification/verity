@@ -107,8 +107,10 @@ if [[ $shard == auto:* ]]; then [ -n "$plan" ]; else [ -z "$plan" ]; fi \
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "$shard" ] || pass+=(--shard "$shard")
 [ -z "$plan" ] || pass+=(--shard-plan-file "$plan")
-# the tree's settings.py first: drive runs a copy of this script from outside the tree (`drive.detach`)
-settings=tools/check/settings.py; [ -f "$settings" ] || settings="$(dirname "$0")/settings.py"
+# the settings.py beside this script first: the tree's, or the one of the same commit that the queue's loop puts beside its copy of
+# this script, run from outside the tree (`research.landing.detach`, `TRAIN_COMPANIONS`); then the tree it runs in
+settings="$(dirname "$0")/settings.py"; [ -f "$settings" ] || settings=tools/check/settings.py
+[ -f "$settings" ] || { echo "train: no settings.py beside $0 nor at $PWD/$settings: run train.sh from a tree, or with its own commit's settings.py beside it (research.landing.TRAIN_COMPANIONS)" >&2; exit 1; }
 python3 "$settings" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
