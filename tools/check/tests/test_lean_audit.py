@@ -237,7 +237,7 @@ def test_a_package_its_sources_stopped_before_its_build_fails_the_run_and_leaves
     cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
     put: list[list[str]] = []
     monkeypatch.setattr(LA.LakeArtifacts, "put",
-                        lambda self, reports, since=None, log=print: put.append(sorted(p.name for p in reports)) or 0)
+                        lambda self, reports, since=None, log=print, staged=None: put.append(sorted(p.name for p in reports)) or 0)
 
     def go(n: int) -> tuple[int, list[str], dict, list[str]]:
         out, said = tmp_path / f"run{n}" / "lean-audit", []
@@ -817,7 +817,7 @@ def test_without_the_sandbox_nothing_is_restored_and_nothing_kept(tmp_path, monk
     monkeypatch.setattr(LA, "sandboxed", lambda: False)
     calls = []
     monkeypatch.setattr(LA.LakeArtifacts, "take", lambda self, urls, log=print: calls.append("take") or 0)
-    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: calls.append("put") or 0)
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: calls.append("put") or 0)
     logged = []
     out = tmp_path / "out2"
     rc = LA.run(out, tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps", log=logged.append,
@@ -853,7 +853,7 @@ def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_o
     its report, or, where it left none, what it wrote in the package's work directory as the build began."""
     root = _tree(tmp_path, monkeypatch)
     put_with = []
-    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: put_with.append(
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: put_with.append(
         {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
     assert _run(tmp_path, 1)[0] == 1, "b fails: it reads a file outside its inputs"
     assert put_with == [{"a": {"sandbox": True, "failures": []},
@@ -874,7 +874,7 @@ def test_a_build_whose_sampled_recompile_differs_stores_nothing_though_check_py_
     whose `put` refuses it."""
     root = _tree(tmp_path, monkeypatch)
     real, handed = LA.LakeArtifacts.put, []
-    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: handed.append(
         {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
     sampled = {"sandbox": True, "failures": ["sampled: P: the build's olean differs from its recompile"]}
     (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
@@ -1087,6 +1087,35 @@ def test_a_build_whose_sources_run_code_while_they_compile_indexes_nothing(tmp_p
     (dep / "D" / "X.lean").write_text("def x := 1\n")
     (dep / "lakefile.lean").write_text("import Lake\n")
     assert LA.runs_code(pkg) == "dep/lakefile.lean runs code whenever Lake loads the package"
+
+
+def test_a_staged_package_takes_its_path_dependency_outside_its_parent_and_refuses_one_outside_the_staged_tree(tmp_path):
+    """`lean_audit` builds in a scratch tree it made and `lean_changed` in its slot, both outside the checkout, so
+    `check.home` took a staged package's parent directory for its tree: the certifier's in-tree path dependency
+    (`../../../../../commitments/identity`) lay outside it, and `put` raised `OutsideTree` and ended the audit. Given the
+    tree its caller staged, `put` takes that dependency, and still stores nothing of a build whose path dependency
+    resolves out of that tree."""
+    staged = tmp_path / "scratch"
+    pkg = _package(staged / "protocols" / "certifier")
+    (dep := staged / "commitments" / "identity" / "D").mkdir(parents=True)
+    (dep / "X.lean").write_text("def x := 1\n")
+    (dep.parent / "lakefile.toml").write_text('name = "core_identity"\n\n[[lean_lib]]\nname = "D"\n')
+
+    def requires(where: str) -> None:
+        (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": [
+            {"type": "path", "name": "core_identity", "dir": where}]}))
+
+    requires("../../../commitments/identity")
+    assert f"outside {pkg.resolve().parent}" in (LA.runs_code(pkg) or ""), "unstaged, its home is its parent directory"
+    assert LA.runs_code(pkg, staged) is None
+    said = []
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, log=said.append, staged=staged) == 3, said
+    shutil.copytree(dep.parent, tmp_path / "outside")
+    requires("../../../../outside")
+    why = LA.runs_code(pkg, staged)
+    assert why and "'core_identity'" in why and f"outside {staged.resolve()}" in why, why
+    assert LA.LakeArtifacts(tmp_path / "store-2").put({pkg: SANDBOXED}, log=said.append, staged=staged) == 0
+    assert why in said[-1], said
 
 
 def test_a_build_that_compiled_nothing_hashes_nothing(tmp_path, monkeypatch):
@@ -1720,7 +1749,7 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
 
     put_with = []
 
-    def put(self, reports, since=None, log=print):
+    def put(self, reports, since=None, log=print, staged=None):
         put_with.append({p.name: rep for p, rep in reports.items()})
         self.added = [(f"keys/{'1' * 64}.json", ["e" * 16 + ".olean"])]
         return 1

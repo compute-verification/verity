@@ -56,11 +56,12 @@ SUITES_DISK_GB = 60
 #: directory
 TREE_PATH = "lean-build/lake-build.tar.gz"
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
-#: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
-#: (`tests/test_build.py` holds this list to what an audit hook sees it open)
+#: starts (suites.py's suite layout rule among them) and the job declaration and policy they read, with the Slack registry the
+#: declaration checks its handles against (`tests/test_build.py` holds this list to what an audit hook sees it open)
 CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
                                                      "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
                                                      "spans.py", "suites.py", "verdicts.py")),
+               "tools/research/src/research/suite_layout.py",
                ".agents/skills/using-slack/registry.json")
 
 
