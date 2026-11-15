@@ -222,11 +222,13 @@ theorem paramsPinned_compiled {P : AuditorPins} {θ : ByteArray} :
     | error _ => simp
     | ok ps =>
       simp only [Bool.and_eq_true, and_assoc, List.all_eq_true, spotPinned_compiled, pouwPinned_compiled,
-        pousPinned_compiled, wipePinned_compiled, networkPinned_compiled]
+        pousPinned_compiled, wipePinned_compiled, networkPinned_compiled, Bool.not_eq_true', List.any_eq_false,
+        List.filterMap_some, Bool.not_eq_true]
 
 /-- **The agreement of the model's acceptance with the compiled check under the pins**: `Accepts pins k`, the
 acceptance of `product IDS --pins` (`pinnedVerifier`), is the compiled verifier's acceptance with every subprotocol's
-pin check passing: each sampled component's challenger key and window, each PoUW period's challenger key and its
+pin check passing: no sampled component in the two-stage form, each sampled component's challenger key and
+window, each PoUW period's challenger key and its
 sessions, each a PoUW session designated for the challenger (a session not in the pins, a SPOT's window root,
 or a period run alone, which lists none, is refused), every key PoUS and the wipe trust with their sessions, and each network period's entries, its link's pinned
 entries one for one (key, session and start), as their own decoders read them. -/

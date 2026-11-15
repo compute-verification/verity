@@ -576,7 +576,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
               cases hw : p.base.verifier.windowRoot with
               | none => rw [hw] at hd; cases hd
               | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl, rfl, rfl⟩
-            obtain ⟨hpk, hpw⟩ := (ha.1 : SpotPinned pins s.params) p (mem_sampledParams (caseOf_params hcase))
+            obtain ⟨hpk, hpw⟩ := (ha.1 : SpotPinned pins s.params).2 p (mem_sampledParams (caseOf_params hcase))
             obtain ⟨q, hq, -, hqk, -⟩ := hpk (kk, label) (Option.mem_def.2 hch)
             have hspot : d.key.pub.data.toList = pins.spotKey := by
               rw [hdk]

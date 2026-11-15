@@ -147,6 +147,15 @@ def sampledAt (n : Named) : Option Spot.OneStageZk.Params :=
     | _ => none
   else none
 
+/-- A sampled-proofs component, `n`, whose parameters read as the two-stage form. The pin check covers none of its
+keys or windows, so under the pins it is refused (`paramsPinned`). -/
+def sampledTwoStage (n : Named) : Bool :=
+  if n.id = VStar.Recursive.Sampled.PROTOCOL then
+    match canonicalJson n.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson with
+    | .ok (.inr _) => true
+    | _ => false
+  else false
+
 /-- The parameters of a component `n` of `B`'s id, as `B`'s own decoder reads them; none for any other component or
 parameters that don't read (which its own check refuses). -/
 def paramsAt (B : Protocol) (n : Named) : Option B.Params :=
@@ -220,11 +229,13 @@ def networkPinned (P : Pins) (p : NetworkCheck.Period.Params) : Bool :=
   entriesHeld p.lms (P.certifiers.filter (·.link == p.link)) p.entries.toList
 
 /-- The composite's parameters `j` name only what `P` pins, in every component that reads a device's key or session:
-SPOT's, PoUW's, PoUS's, the wipe's and the network certifier's. Parameters that don't read as a composite's
-pass, since the composite refuses them itself. -/
+SPOT's, PoUW's, PoUS's, the wipe's and the network certifier's. A sampled component whose parameters read as the
+two-stage form fails it, since the pins cover none of its keys or windows (`sampledTwoStage`). Parameters that don't
+read as a composite's pass, since the composite refuses them itself. -/
 def paramsPinned (P : Pins) (j : Json) : Bool :=
   match decodeParams j with
-  | .ok ps => (ps.filterMap sampledAt).all (spotPinned P) && (ps.filterMap pouwAt).all (pouwPinned P) &&
+  | .ok ps => (!ps.any sampledTwoStage && (ps.filterMap sampledAt).all (spotPinned P)) &&
+      (ps.filterMap pouwAt).all (pouwPinned P) &&
       (ps.filterMap pousAt).all (pousPinned P) && (ps.filterMap wipeAt).all (wipePinned P) &&
       (ps.filterMap networkAt).all (networkPinned P)
   | .error _ => true
@@ -236,6 +247,14 @@ def UNPINNED : String :=
 def holdPins {α β : Type} (P : Pins) (j : Json) : Outcome α β → Outcome α β
   | .accept pub prof => if paramsPinned P j then .accept pub prof else .reject UNPINNED
   | o => o
+
+/-- **An accepting two-stage sampled component is refused under the pins**: wherever the composite's parameters hold
+a sampled component whose parameters read as the two-stage form, an acceptance becomes `UNPINNED`'s refusal. -/
+theorem holdPins_sampledTwoStage {α β : Type} (P : Pins) {j : Json} {ps : List Named} (hj : decodeParams j = .ok ps)
+    {n : Named} (hn : n ∈ ps) (h : sampledTwoStage n = true) (pub : α) (prof : β) :
+    holdPins P j (.accept pub prof) = .reject UNPINNED := by
+  have hany : ps.any sampledTwoStage = true := List.any_eq_true.2 ⟨n, hn, h⟩
+  simp [holdPins, paramsPinned, hj, hany]
 
 /-- **`B` under the auditor's pins**: `B`'s check, whose acceptance stands only when the parameters name only what
 `P` pins (`holdPins`); every other outcome, and every refusal before the check, is `B`'s. -/

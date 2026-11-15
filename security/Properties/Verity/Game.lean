@@ -365,11 +365,14 @@ sessions the pins hold. -/
 def pinnedVerifier (P : AuditorPins) (k : Verity.Registration.Composite) : BlobProtocol :=
   Core.Composites.atPins P.compiled (verifier k)
 
-/-- **SPOT's parameters name only what the pins hold**: each sampled component's challenger key is SPOT's
-pinned key under its pinned LMS parameters, and its window is a session the auditor designated for the challenger. -/
+/-- **SPOT's parameters name only what the pins hold**: no sampled component's parameters read as the two-stage
+form (`Core.Composites.sampledTwoStage`), whose keys and windows the pins don't cover, so under the pins it is refused;
+and each sampled component's challenger key is SPOT's pinned key under its pinned LMS parameters, and its window is a
+session the auditor designated for the challenger. -/
 def SpotPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
-  ∀ p ∈ sampledParams θ,
-    (∀ kl ∈ p.base.challenger, P.HoldsChallenger kl.1) ∧ ∀ w ∈ p.base.verifier.windowRoot, P.Designated .challenger w
+  (∀ n ∈ componentsAt some θ, Core.Composites.sampledTwoStage n = false) ∧
+    ∀ p ∈ sampledParams θ,
+      (∀ kl ∈ p.base.challenger, P.HoldsChallenger kl.1) ∧ ∀ w ∈ p.base.verifier.windowRoot, P.Designated .challenger w
 
 /-- **PoUW's parameters name only the pinned challenger and designated sessions**: each PoUW period's challenger key,
 where it reads as one, is SPOT's pinned key, and its parameters list the sessions its windows are held to
