@@ -60,9 +60,9 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   that don't record it, each with its share of the proving time. Then come the rows priced from the single-session
   card, whose table records no CPUs. This is in the table's notes and in the inputs of both proving totals. A row
   records its card's node itself (`card_numa_node`, against its `cores.numa_nodes`). For a row that doesn't, the
-  harness's `verity_bench/data/off_node.json` holds a scan of the runs' own host records: the range of runs it read
-  (`covered`, less the runs it lists `unread`) and the runs among them that were off-node. A run the scan read and
-  doesn't list was on its node, and one it didn't read isn't recorded. The shares are of the whole proving time, so
+  harness's `verity_bench/data/off_node.json` holds a scan of the runs' own host records: the record whose runs it
+  read, the runs it read by id (`read`), and those among them that were off-node (`off`). A run the scan read and
+  doesn't list off-node was on its node, and a run it didn't read isn't recorded, whatever its id. The shares are of the whole proving time, so
   they need not add to 100%. Off-node rows still price their types: the line moves no value and no mark.
 - **The Lean verifier's seconds and the proof's bytes per served token, modeled.** Both are "not measured" until a
   Lean verifier run of record exists (below). With one, the block type it ran on takes its figures, and every other
