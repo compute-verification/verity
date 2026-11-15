@@ -126,8 +126,8 @@ group = 6
 # the Lean and the most of the Flock suite beside seven of pytest's suites (three parallel ones and four of its longest
 # one-process ones); the Rust build and the circuits beside the rest of lean-suites. Whole beside the audit, pytest ran its
 # parallel suites one at a time and its one-process suites nine at a time, the first shard's longest test step. The second
-# shard's pytest takes no cores from a build (`check.groups`), and its ask (`check.SHARD_ASKS_GIB`'s pytest beside lean-suites)
-# gives the Flock suite's workers memory they lack beside lean-build alone. verity/definitions goes there: beside the audit
+# shard's pytest takes no cores from a build (`check.groups`), and its ask (`check.SHARD_ASKS_GIB`'s Flock parts beside
+# lean-build) gives the Flock suite's workers memory they lack beside lean-build alone. verity/definitions goes there: beside the audit
 # and vLLM's first part it would match the 5-pod plan's first shard's smaller ask.
 [[plan]]
 shards = [

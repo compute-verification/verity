@@ -124,8 +124,8 @@ def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_buil
     """Whole beside the security analysis's audit, pytest was the 3-pod plan's first shard's longest test step: its parallel
     suites one at a time beside verity/commitments, its one-process suites nine at a time.  The plan names seven of its
     suites beside lean-build, whose shard holds no build to share cores with (`check.groups`), and the rest (`pytest:*`)
-    beside the audit; the two cover every suite of pytest's once, and the second shard books pytest beside lean-suites' ask
-    (`check.SHARD_ASKS_GIB`), not lean-build's."""
+    beside the audit; the two cover every suite of pytest's once, and the second shard books lean-suites' ask beside
+    lean-build (`check.SHARD_ASKS_GIB`), not lean-build's alone."""
     names = [s.name for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN]
     shards = [CHECK.shard(f"{k}/3")["parts"] for k in range(1, 4)]
     held = [[p.partition(":")[2] for p in s if p.partition(":")[0] == "pytest"] for s in shards]
@@ -135,8 +135,8 @@ def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_buil
     for k, jobs in ((1, "16"), (2, "16")):
         [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
         assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[argv.index("--jobs") + 1] == jobs, argv
-    assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 280
-    assert CHECK.shard_ask_gib(shards[1], []) == 240 and CHECK.shard_ask_gib(shards[1], ["lean-agreement"]) == 460
+    assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 290
+    assert CHECK.shard_ask_gib(shards[1], []) == 270 and CHECK.shard_ask_gib(shards[1], ["lean-agreement"]) == 460
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -882,11 +882,11 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
 
     steps = "flock-circuit-build,lean-build,lean-audit,lean-suites,pytest,circuit-check,flock-rust-tests"
     reused = steps.replace("lean-audit,", "")
-    for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 280),
-                      (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 280),
-                      (["--deferred", steps, "--shard", "2/5"], 260), (["--deferred", reused, "--shard", "2/5"], 260),
+    for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 290),
+                      (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 290),
+                      (["--deferred", steps, "--shard", "2/5"], 250), (["--deferred", reused, "--shard", "2/5"], 250),
                       (["--deferred", steps, "--shard", "4/5"], 160),
-                      (["--deferred", steps, "--shard", "3/5"], 190), (["--deferred", steps, "--shard", "2/3"], 240),
+                      (["--deferred", steps, "--shard", "3/5"], 270), (["--deferred", steps, "--shard", "2/3"], 270),
                       (["--deferred", steps, "--shard", "3/3"], 340), (["--deferred", "lean-audit"], 330)):
         sent = env("--priority", *args)
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
