@@ -175,8 +175,10 @@ def test_ready_gives_the_committer_the_private_engines_fields_from_llms_public_n
     arm = _ready(monkeypatch, llm)
     com = arm.committer
     assert (com.engine.llm, com.engine.runner, com.engine.model) == (vllm, runner, runner.model)
+    assert com.engine.vllm_config is vllm.llm_engine.vllm_config
     assert arm.source.noted is runner.model and arm.source.attached is com
-    private = SimpleNamespace(llm=vllm, cp={"repo": repo, "revision": revision, "local_path": "/hf/snapshots/4e20de3624"})
+    private = SimpleNamespace(llm=vllm, vllm_config=vllm.llm_engine.vllm_config,
+                              cp={"repo": repo, "revision": revision, "local_path": "/hf/snapshots/4e20de3624"})
     assert _geo_digest(com.engine) == _geo_digest(private)
     assert com.envelope == {"batch": 8, "max_prompt": 2048, "max_new": 1, "max_num_batched_tokens": 2048, "max_model_len": 4096}
     assert arm.windows == {"windows": {"envelope": com.envelope}} and com.kw["commit_scheme"] == "rows-sha512"

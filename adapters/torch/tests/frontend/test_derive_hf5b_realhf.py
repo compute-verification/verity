@@ -22,12 +22,12 @@ row ALSO carries `exact_words` (bit-exact count) and `max_abs`; greedy tokens â€
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import pytest
 import torch
 
+from tests.frontend import settings
 from tests.frontend import test_derive_hf5_heldout as HO
 from tests.frontend import test_derive_realhf as RH
 from verity_torch.frontend.derive import DERIVE_VERSION, derive_report
@@ -36,7 +36,7 @@ transformers = pytest.importorskip("transformers")
 
 H, NL, NH, KVH, V, INTER, MAXPOS, EPS = RH.H, RH.NL, RH.NH, RH.KVH, RH.V, RH.I, RH.MAXPOS, RH.EPS
 HEAD_DIM = H // NH
-GROUP = os.environ.get("REALHF_GROUP", "")
+GROUP = settings.get("REALHF_GROUP")
 
 CLASS = {**RH.MODEL_CLASS, **HO.HELDOUT_CLASS, "phi3": "Phi3ForCausalLM", "gpt_neox": "GPTNeoXForCausalLM", "stablelm": "StableLmForCausalLM",
          # `heldout4`: LayerNorm + bias + gelu_pytorch_tanh; residual / logit multipliers; parallel attn+MLP

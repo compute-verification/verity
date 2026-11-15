@@ -40,6 +40,7 @@ from verity.circuits.evaluation import MissingValue, evaluate_region
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
 
+from tests.frontend import settings
 from tests.frontend.test_derive_negative import (
     IMPORTER_NAME,
     Outcome,
@@ -413,10 +414,10 @@ def kinds_emitted(out: Outcome) -> list[str]:
 # the run: every case, reported as-is
 # ---------------------------------------------------------------------------------------------------------
 
-OUT_PATH = os.environ.get("XFER_OUT") or "/tmp/xfer/transfer-derive.jsonl"
+OUT_PATH = settings.get("XFER_OUT")
 def _git_head() -> str:
-    if os.environ.get("XFER_HEAD"):
-        return os.environ["XFER_HEAD"]
+    if settings.get("XFER_HEAD"):
+        return settings.get("XFER_HEAD")
     try:
         import subprocess
         return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),

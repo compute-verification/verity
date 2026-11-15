@@ -3,7 +3,7 @@
 The rules are `verity_vllm.pipeline.advice_code.derived` (`Config`, `Prefixes`, the walk `walk_steps`, the no-eviction and
 pool bounds, the tie; its docstring states them and the residual), re-exported here for the modules and tests that load
 this one by path. This module builds advice v0's residual with them: `residual` (the encoder) and `reconstruct` and
-`rebuild` (the compile unit), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
+`rebuild` (the compile slice's proof block), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
 verdict, derivation, checker and cost.
 
 `bits_table` measures v0 (I1's own `bits_by_window`) and the residual per certifier window, the residual at its own least
@@ -287,7 +287,7 @@ def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int
 
 
 def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
-    """I1's steps from the residual, the config and the tokens: the compile unit's derivation, which the compiler then
+    """I1's steps from the residual, the config and the tokens: the compile slice's proof block's derivation, which the compiler then
     reads."""
     values = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
     resumes = iter(res.resumes or ())
