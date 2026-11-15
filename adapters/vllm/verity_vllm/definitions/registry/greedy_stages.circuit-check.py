@@ -12,7 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     lowering is compared whole.  The select at GLM-5.3's statics is held to the block by its units (`greedy_stages.CUTS`) and
     its descriptor's digest is pinned (``digests``), which keeps it in ``--all``.  A class's two selects at a class of 4
     served ids over that small combine with two stop ids, and at GLM-5.3's (its three EOS ids, a model of 131,072 ids) at
-    O = 128, their digests pinned."""
+    O = 128, each under `MAX_GATES`, so kept in ``--all`` with no pin."""
     from verity.circuits.defs import bind
     from verity_vllm.definitions.registry import greedy_stages as G
 

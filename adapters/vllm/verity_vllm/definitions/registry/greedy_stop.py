@@ -19,8 +19,9 @@ word, so it is injective: the id's high half (`U32Hi16_v1`) and the token's high
 (`I32Eq_v1`), and the id's low half and the token's low word are iff the id doubled 16 times (`I32Add_v1` of a word and
 itself, its low half moved up) equals the low word's widening.
 
-**A class's check.**  `GreedyStopCheckClass_v1{V,N,P,T,STOP,MAX_MODEL_LEN}` is the length check of a class's Program (P prompt
-ids, T = O served ids), whose selects carry a bit and a count step to step (`greedy_stages.GreedyCombineLive_v1`):
+**A class's check.**  `GreedyStopCheckClass_v1{V,N,P,T,STOP,MAX_MODEL_LEN}` is the length check of a class's Program (P
+prompt ids, the prompt's exact length, a power of two or not; T = O served ids), whose selects carry a bit and a count step
+to step (`greedy_stages.GreedyCombineLive_v1`):
 
     (logits: bf16[N], r0, .., r{K-2}, ids: Array<T, i32>, request: Array<4, i32>, count: Array<16, bit>,
      live: Array<16, bit>) -> bit
@@ -100,11 +101,12 @@ def GreedyStopCheck(B, S, logits, *rest):
 
 
 def refuse_class(S: dict) -> str | None:
-    """A class's check with no rule: T as `greedy_stages.refuse_class` refuses O, P no class size (a power of two in
-    [2, 2^30]), and STOP and MAX_MODEL_LEN as `stop_check.refuse` refuses them.  Only the statics bound so far."""
-    p = S.get("P", 2)
-    if not (type(p) is int and 2 <= p <= 1 << 30 and p & (p - 1) == 0):
-        return f"P is a class's prompt ids, a power of two in [2, 2^30] (got P={p!r})"
+    """A class's check with no rule: T as `greedy_stages.refuse_class` refuses O, P no prompt length (an int in
+    [1, 2^30]: a class is keyed by its prompt's exact length, a power of two or not), and STOP and MAX_MODEL_LEN as
+    `stop_check.refuse` refuses them.  Only the statics bound so far."""
+    p = S.get("P", 1)
+    if not (type(p) is int and 1 <= p <= 1 << 30):
+        return f"P is a class's prompt length, an int in [1, 2^30] (got P={p!r})"
     return G.refuse_class({("O" if k == "T" else k): v for k, v in S.items() if k in ("T", "STOP", "MAX_MODEL_LEN")})
 
 
