@@ -4839,6 +4839,14 @@
         "verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_window_charge_slots.py": "verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_charge_slots.py",
         "verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_window_lean_difftest.py": "verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_lean_difftest.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/network_attester_chain.py": "verity/protocols/resource_accounting/network/prover/network_attester_chain.py",
+        "benchmarks/network_traces/wipe_egress.py": "verity/protocols/resource_accounting/network/prover/wipe_egress.py",
+        "benchmarks/network_traces/tests/test_network_attester_chain.py": "verity/protocols/resource_accounting/network/prover/tests/test_network_attester_chain.py",
+        "benchmarks/network_traces/tests/test_wipe_egress.py": "verity/protocols/resource_accounting/network/prover/tests/test_wipe_egress.py"
+      }
     }
   ]
 }

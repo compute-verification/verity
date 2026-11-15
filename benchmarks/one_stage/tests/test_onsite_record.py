@@ -69,7 +69,7 @@ import onsite_record as OR  # noqa: E402
 import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
 from verity.protocols.registration.verifier import registration as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402

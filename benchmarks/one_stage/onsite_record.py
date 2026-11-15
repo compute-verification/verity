@@ -1517,7 +1517,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     `Core.Registration` by difftest), whose auditor holds the record's key for a network attester the log places.
     ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
     import composite as CO
-    from benchmarks.network_traces import network_attester_chain as WC
+    from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC
     from verity.protocols.registration.verifier import registration as REG
 
     out: dict[str, Any] = {"is": CHECKED[AUDITOR_RECORD], "holds": False, "from": {}}

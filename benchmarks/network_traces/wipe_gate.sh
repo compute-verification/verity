@@ -32,7 +32,7 @@
 # takes 400 requests at most, 259 execution phases: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1)
 # lies within [origin + 1 s, origin + 3403.8 s) is covered; then
 #
-#   python benchmarks/network_traces/wipe_egress.py $OUT/bundle.tgz --t0-ns T0 --t1-ns T1 --out egress.json
+#   python verity/protocols/resource_accounting/network/prover/wipe_egress.py $OUT/bundle.tgz --t0-ns T0 --t1-ns T1 --out egress.json
 #
 # writes its `wipe-egress/v1` record.
 set -euo pipefail
