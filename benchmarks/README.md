@@ -131,6 +131,7 @@ headings and its call of `kit.report` with `ran_with` and `accepted`:
 
 | command | directory | owner |
 |---|---|---|
+| `verity bench memory` | `benchmarks/memory` | memory-accounting |
 
 ## Metrics
 

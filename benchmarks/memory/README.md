@@ -19,27 +19,31 @@ a data sheet for; another needs both, named with `LOCAL_ROW` and `LOCAL_NODE`), 
 `~/.elan/bin`) and about 20 GB of disk. vLLM serves Llama 3.2 1B (in int8) on the GPU while a memory audit runs
 against it, and the audit's verifier and the random challenges it sends (its coins) run as processes beside it. The
 command prints the share of the GPU's memory read rate that the session leaves uncertified, with its error, as text
-and as one line of JSON, and exits 0; a session the verifier refuses prints no number and exits 1. Until PoUB's Lean
-verifier gives its answer for the share's terms (`gamma_answer` in `verifier/session/verifier.py`), an accepted
-session's share is undecided: this command and `--loopback` print the Python ledger's share and error, which the
-verifier records beside it, and say in their first lines and in the JSON's `gamma_decided_by` (`python-ledger`) that
-the Lean verifier has not decided them; a recorded run's (`--from`, `PERIOD`) prints no number. **Because the
-verifier and its coins run on the machine being measured, this is a measurement to improve on, not an audit:** the
-second line of the text and the JSON's `local` say so. Lower is better: 0 would mean the whole of the GPU's memory
-read rate over the session was certified as spent reading the audited store. The target is 0.14 at an error of at most
-2^-100. The error is priced against one prover: one that makes at most 2^80 SHA-512 compressions over the session on
-any hardware it reaches (`audit.QUERIES_LOG2`), never the node's own hash rate, and the parameters line names it. A
-session registers the receipt kind's default 16 sketch rows, at which the sketch term alone keeps the error far above
-2^-100 against that prover; the registration's 64 rows (`node.py --rows 64`), which `run.sh` doesn't yet pass, bring
-the term below it.
+and as one line of JSON, and exits 0; a session the verifier refuses prints `memory: no number: WHY` and exits 1.
+Lower is better: 0 would mean the whole of the GPU's memory read rate over the session was certified as spent reading
+the audited store. The target is 0.14 at an error of at most 2^-100.
+
+The text's first line is the number; the next, `ran with: coins local challenger; parameters development (…)`, says
+what the session ran with, from the verifier's record (the JSON's `ran_with`): its coins, drawn on this machine, and
+its parameters, which are development ones, since the session registers 16 sketch rows and the deployed registration
+64; its detail names the rows, the openings and δ a window, the windows, the lateness allowed, the prover the error is
+priced against and the sheet the share is of. **Because the verifier and its coins run on the machine being measured,
+this is a measurement to improve on, not an audit:** the line under it says so, and the JSON's `audit` is false. Until
+PoUB's Lean verifier gives its answer for the share's terms (`gamma_answer` in `verifier/session/verifier.py`), an
+accepted session's share is undecided: this command and `--loopback` print the Python ledger's share and error, which
+the verifier records beside it, and say so in a line of their own and in the JSON's `gamma_decided_by`
+(`python-ledger`); a recorded run's (`--from`, `PERIOD`) prints no number.
+
+The error is priced against one prover: one that makes at most 2^80 SHA-512 compressions over the session on any
+hardware it reaches (`audit.QUERIES_LOG2`), never the node's own hash rate. At the 16 sketch rows a session registers
+by default, the sketch term alone keeps the error far above 2^-100 against that prover; the registration's 64 rows
+(`node.py --rows 64`), which `run.sh` doesn't yet pass, bring the term below it.
 
 The share is of the one card's read rate and its host's, at the figures of the tree's data sheets: the verifier's node
-is one card of the card's node sheet (`hardware/nodes/`), handed to it as `--node`. The text's next lines name the
-card and the sheet with the SHA-256 of the tree's data sheets (`hardware/`) and of the verifier
+is one card of the card's node sheet (`hardware/nodes/`), handed to it as `--node`. A line names the card and the sheet
+with the SHA-256 of the tree's data sheets (`hardware/`) and of the verifier
 (`verity/protocols/accounting/poub/verifier/`), the JSON's `machine`; a result whose digests are not `main`'s was
-measured against another verifier or other figures, and is not comparable. One line says what the session ran with,
-from the verifier's record, the JSON's `parameters`: where its coins came from, the store's rows, the openings a window,
-δ a window, the windows and their length, and the lateness allowed.
+measured against another verifier or other figures, and is not comparable.
 
 - **What it needs from you:** nothing of ours. The first run makes a Python environment with the pinned vLLM and the
   checkpoint in `LOCAL_WORK` (default `~/.cache/verity/bench-memory`), by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`:
@@ -51,40 +55,50 @@ from the verifier's record, the JSON's `parameters`: where its coins came from, 
   the card. With no `gpu-lease` installed, the tree's own lease program keeps its locks in `LOCAL_WORK`. The session
   runs on this process's cores, half to the verifier and half to the prover (`taskset` narrows them; `VERIFIER_CPUS`
   and `PROVER_CPUS` name others).
-- **Where the result goes:** the text and the JSON on stdout, and with `OUT=DIR` the JSON in `DIR/memory.json`; the
-  session's records (the verifier's `verifier.json`, every process's log) in a new directory under `LOCAL_WORK/runs/`,
-  which stderr names. The two reference numbers
-  printed beside a node's number are runs in our evidence store, so `--local` prints them as not read, with that reason.
-- **What you may change, to do better:** the prover's side, which is all of what the audit treats as untrusted: how
-  the store is read in each pass and when (`verity/protocols/accounting/poub/prover/node_store/serving.py`, the store's
-  backend, its passes and their pacing against the verifier's windows), how the KV cache and the store are encoded
-  on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and what of the engine's memory is
-  registered as the store and how it is laid out (`adapters/vllm/verity_vllm/protocols/poub/binder.py`, and `run.sh`'s
-  `KV_PAGES`, `WEIGHT_BLOCKS` and filler), the store's size among them: the audit certifies reads of the registered
-  store whatever it holds, and no PoUS runs behind the session to say the store is the served model's state. The
-  baseline to beat is your own run of this command at `main`'s commit on your machine, not a number from another.
-- **What is fixed:** the verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`), the ledger
-  that turns a session into the share and its error (`verifier/session/verifier.py`), the error rule (an error of 1 or
-  more prints no number), the session's form (one session of 7 windows of 1000 ms at 2773 openings a window, which
-  `--local` refuses any other `SESSIONS`, `WINDOWS`, `WINDOW_MS` or `SAMPLES` than), and this command. A number from a changed verifier is
-  not a result.
-- **How a cheat is refused:** every pass answers challenges the verifier draws only after the pass's data is fixed,
-  and the verifier checks each answer against the store's committed contents and against time. A prover that skips
-  reading part of the store, or answers late, is refused: the session isn't accepted, and the command prints no number
-  and exits 1. `PLAN=skip:0.0625 uv run verity bench memory --loopback` shows it on the CPU: the prover skips a
-  sixteenth of the store, and the verifier refuses the session. A served row runs the honest plan alone (`run.sh`
-  refuses any `PLAN` but `serve` before a session starts), so a cheat there is a change to the prover's side above,
-  which the same checks refuse.
+- **Where the result goes:** the text and the JSON on stdout; with `OUT=DIR`, the JSON in `DIR/memory.json` and the
+  result in `DIR/result.json`, its row `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`) beside
+  the bytes and the error; the session's records (the verifier's `verifier.json`, every process's log) in a new
+  directory under `LOCAL_WORK/runs/`, which stderr names. `verity bench memory --from DIR` reads such a record again
+  with nothing of ours. The two reference numbers printed beside a node's number are runs in our evidence store, so
+  `--local` prints them as not read, with that reason.
+
+## What you may change
+
+The prover's side, which is all of what the audit treats as untrusted: how the store is read in each pass and when
+(`verity/protocols/accounting/poub/prover/node_store/serving.py`, the store's backend, its passes and their pacing
+against the verifier's windows), how the KV cache and the store are encoded on the GPU
+(`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and what of the engine's memory is registered as the
+store and how it is laid out (`adapters/vllm/verity_vllm/protocols/poub/binder.py`, and `run.sh`'s `KV_PAGES`,
+`WEIGHT_BLOCKS` and filler), the store's size among them: the audit certifies reads of the registered store whatever it
+holds, and no PoUS runs behind the session to say the store is the served model's state. The baseline to beat is your
+own run of this command at `main`'s commit on your machine, not a number from another.
+
+## What is fixed
+
+The verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`), the ledger that turns a session
+into the share and its error (`verifier/session/verifier.py`), the error rule (an error of 1 or more prints no number),
+the session's form (one session of 7 windows of 1000 ms at 2773 openings a window; `--local` refuses any other
+`SESSIONS`, `WINDOWS`, `WINDOW_MS` or `SAMPLES`), the data sheets the share is of, and this command. A number from a
+changed verifier or sheet is not a result, and the digests in its `machine` line say which.
+
+## How a cheating change is refused
+
+Every pass answers challenges the verifier draws only after the pass's data is fixed, and the verifier checks each
+answer against the store's committed contents and against time. A prover that skips reading part of the store, or
+answers late, is refused: the session isn't accepted, and the command prints `memory: no number: WHY` and exits 1.
+`PLAN=skip:0.0625 uv run verity bench memory --loopback` shows it on the CPU: the prover skips a sixteenth of the store,
+and the verifier refuses the session. A served row runs the honest plan alone (`run.sh` refuses any `PLAN` but `serve`
+before a session starts), so a cheat there is a change to the prover's side above, which the same checks refuse.
 
 **Status: active.** The lane's number for a node serving under the audit comes from here.
 
 **Run:**
 
 ~~~text
-verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor devices
-verity bench memory --from RUN [--session K]  the number of a recorded run
-verity bench memory --loopback                both processes on this machine, on the CPU: a test of the command
-verity bench memory --local                   vLLM serving Llama 3.2 1B on this machine's GPU, audited beside it
+verity bench memory PERIOD [--dry-run]            the node run: one session on the whole GPU node, through both auditor devices
+verity bench memory --from DIR|RUN [--session K]  the number of a recorded run: its record's directory, or a run id
+verity bench memory --loopback                    both processes on this machine, on the CPU: a test of the command
+verity bench memory --local                       vLLM serving Llama 3.2 1B on this machine's GPU, audited beside it
 ~~~
 
 - **The node run** is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`

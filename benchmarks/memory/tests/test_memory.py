@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 from benchmarks.memory import run as M  # noqa: E402
 from benchmarks.remote_session import summary  # noqa: E402
 from verity import protocol  # noqa: E402
+from verity_bench import kit  # noqa: E402
 
 RUN, FIRE, PROVER = "r20000101-000000-aaaa", "r20000101-000001-bbbb", "r20000101-000002-cccc"
 POUS, WIPE = "r20000101-000003-dddd", "r20000101-000004-eeee"
@@ -89,10 +90,37 @@ def with_amounts(s: dict, *, span_ns: int = 4 * 10 ** 9, error: float = 2.0 ** -
     return s
 
 
+def undecided(s: dict) -> dict:
+    """Session `s` as its verifier records it where the Lean leaves γ's terms undecided: each reading and the
+    declaration undecided, the reading they would have been beside them (`python_ledger`)."""
+    ledger = s["ledger"]
+    for r in ("spec", "measured", "declared"):
+        ledger[r] = {**({"capacity_bytes_per_s": ledger[r]["capacity_bytes_per_s"]} if r != "declared" else {}),
+                     "undecided": UNDECIDED, "python_ledger": ledger[r]}
+    return s
+
+
 def a_record(*sessions: dict, blocks: int = GIB // 4096, binding: dict | None = None) -> dict:
     """A verifier's record of `sessions` over a store of `blocks` blocks."""
     return {"registration": {"blocks": blocks}, "sessions": list(sessions), "calibration": {}, "rtt": {},
             "allowance_ns": 1, "process_cpu_ns": 1, "wire": {}, **({"binding": binding} if binding else {})}
+
+
+def as_local(record: dict) -> dict:
+    """`record` as a `--local` session's verifier records it: its own challenger's coins, the registration's 16 sketch
+    rows, the one session form (`M.FORM`) and the prover its error is priced against."""
+    record["registration"]["rows"] = 16
+    for s in record["sessions"]:
+        s.update(challenger={"challenger": "local"}, samples=2773, delta=2.0 ** -101, windows=7, window_ns=10 ** 9,
+                 allowance_ns=2 * 10 ** 6)
+        s["ledger"]["sketch_failure"] = {"queries_log2": 80}
+    return record
+
+
+#: the `ran with` detail of such a record, under `--local` on an H200
+LOCAL_DETAIL = ("16 sketch rows, not the deployed registration's 64; 2773 openings a window; δ = 2^-101.0 a window; 7 "
+                "windows of 1,000 ms; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 compressions on "
+                "any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one card")
 
 
 class FakeStore:
@@ -155,10 +183,19 @@ def bench(store: FakeStore, *argv: str, **kw) -> int:
 
 
 def printed(capsys) -> tuple[list[str], dict | None, str]:
-    """What the command printed: its text lines, its JSON document (None with nothing printed) and its stderr."""
+    """What the command printed: its text lines, its JSON document (None with nothing printed) and its stderr. The
+    kit's `ran with` line after the first, and `a measurement, not an audit` below it where the document's `audit` is
+    false (`kit.report`), are held to the document's `ran_with` here and left out of the lines returned."""
     out, err = capsys.readouterr()
     lines = out.splitlines()
-    return lines[:-1], json.loads(lines[-1]) if lines else None, err
+    if not lines:
+        return [], None, err
+    text, doc = lines[:-1], json.loads(lines[-1])
+    said = doc["ran_with"]
+    kits = [kit.NOT_STATED if said is None else kit.ran_with(said["coins"], said["parameters"], said["detail"])[0],
+            *([] if doc["audit"] else ["a measurement, not an audit"])]
+    assert text[1:1 + len(kits)] == kits, text[:4]
+    return text[:1] + text[1 + len(kits):], doc, err
 
 
 def test_an_accepted_session_prints_its_gamma_at_the_data_sheets_rate_as_text_and_as_json(store, capsys):
@@ -311,9 +348,8 @@ def test_a_recorded_loopback_is_printed_as_one(store, capsys):
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[1] == f"  {M.LOOPBACK}" and doc["loopback"] is True
-    assert text[2].startswith("  parameters: ")
-    assert text[3] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
-    assert text[4] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
+    assert text[2] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
 
 
 @pytest.mark.parametrize("body", ["{", "[1]", "7"])
@@ -388,7 +424,7 @@ def test_a_store_that_cannot_be_opened_for_the_references_leaves_the_loopbacks_n
     assert M.main(["--loopback"], store_of=no_store, run=launch) == 0
     text, doc, _ = printed(capsys)
     assert doc["value"] == 4.5 and all(r["value"] is None for r in doc["beside"])
-    assert text[5] == "  beside it, PoUS state bound: not read (the evidence store's client isn't installed here)"
+    assert text[4] == "  beside it, PoUS state bound: not read (the evidence store's client isn't installed here)"
 
 
 def test_every_reference_of_the_tree_has_a_reader():
@@ -419,9 +455,8 @@ def test_the_loopback_runs_both_processes_through_run_sh_and_says_it_certifies_n
     text, doc, _ = printed(capsys)
     assert text[0].startswith("memory: 7.500 of the node's memory read rate")
     assert text[1] == f"  {M.LOOPBACK}" and "certifies nothing" in text[1]
-    assert text[2] == "  " + M.parameters_line(doc["parameters"])
-    assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
-    assert text[4] == "  store: 262,144 bytes, a test store, bound to no checkpoint", "no node's memory beside a test store"
+    assert text[2] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint", "no node's memory beside a test store"
     assert (doc["loopback"], doc["value"], doc["commit"], doc["run"]) == (True, 7.5, COMMIT, None)
 
 
@@ -488,8 +523,10 @@ def test_a_loopback_whose_session_failed_prints_no_number_and_exits_1(store, cap
 
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
     assert bench(store, "--loopback", run=launch) == 1
-    out, err = capsys.readouterr()
-    assert out == "" and f"memory: no number: {why}" in err
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith(f"memory: no number: {why}") and len(text) == 1
+    assert (doc["value"], doc["no_number"], doc["loopback"], doc["commit"]) == (None, text[0][19:], True, COMMIT)
+    assert doc["ran_with"] == {"coins": "local challenger", "parameters": "development", "detail": None}
 
 
 @pytest.mark.parametrize("porcelain, commit", [("", "a" * 40), (" M file\n", "a" * 40 + "-dirty")])
@@ -696,7 +733,7 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
     assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "machine", "gamma_decided_by",
                          "host_run", "no_bound", "session", "verdict", "error", "rate_bytes_per_s", "store_bytes",
-                         "node_gpu_bytes", "model", "bound", "parameters", "beside"]
+                         "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
     got = written(held)
     assert list(got) == WRITTEN
     assert {n: m["value"] for n, m in got.items()} == {
@@ -945,7 +982,7 @@ class Machine:
     def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, boot_rc: int = 0, rc: int = 0,
                  record: dict | None = None) -> None:
         self.card, self.smi_rc, self.boot_rc, self.rc = card, smi_rc, boot_rc, rc
-        self.record = a_record(a_session(gamma=0.199)) if record is None else record
+        self.record = as_local(a_record(a_session(gamma=0.199))) if record is None else record
         self.started: list[tuple[list[str], dict]] = []
 
     def __call__(self, argv, **kw):
@@ -994,11 +1031,12 @@ def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_i
     assert (Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json").is_file()
     text, doc, err = printed(capsys)
     assert text[0].startswith("memory: 0.199 of the node's memory read rate is left uncertified by this session")
-    assert text[1] == f"  {M.LOCAL}" and "not an audit" in text[1] and doc["local"] == M.LOCAL
+    assert doc["ran_with"] == {"coins": "local challenger", "parameters": "development", "detail": LOCAL_DETAIL}
+    assert doc["audit"] is False
+    assert text[1] == f"  {M.LOCAL}" and doc["local"] == M.LOCAL
     assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of hardware/nodes/h200-sxm-141gb-x1.toml; "
                        f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
-    assert text[3].startswith("  parameters: ")
-    assert text[4] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
     assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "sheet_sha256": M.digest(M.SHEETS),
                               "verifier_sha256": M.digest(M.VERIFIER)}
     node = json.loads((Path(env["RESEARCH_RUN_DIR"]) / "node.json").read_text())
@@ -1009,32 +1047,39 @@ def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_i
     assert M.LOCAL_ROWS["9.0"] in err
 
 
-def test_a_local_session_under_a_research_run_writes_no_result(store, capsys, work, tmp_path, monkeypatch):
-    """It is a measurement, not an audit: its document is the run's `out/memory.json`, and no result reaches the
-    Metrics tab."""
+def test_a_local_session_under_a_research_run_writes_its_own_metrics_row(store, capsys, work, tmp_path, monkeypatch):
+    """Its document is the run's `out/memory.json`, and its number reaches the Metrics tab under its own row, not the
+    node's: a measurement, not an audit, of a share the Python ledger computed, which its entry says."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
-    monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
+    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
-    machine = Machine(record=a_record(with_amounts(a_session(gamma=0.199))))
+    machine = Machine(record=as_local(a_record(undecided(with_amounts(a_session(gamma=0.199))))))
     assert bench(store, "--local", run=machine) == 0
     ((_, env),) = machine.runs()
     assert env["RESEARCH_RUN_DIR"] == str(tmp_path / "rundir")
     _, doc, _ = printed(capsys)
-    assert doc["run"] == RUN and doc["local"] == M.LOCAL
+    assert doc["run"] == BENCH and doc["local"] == M.LOCAL and doc["gamma_decided_by"] == M.PYTHON_LEDGER
     assert json.loads((tmp_path / "rundir" / "out" / "memory.json").read_text()) == doc
-    assert not (tmp_path / "rundir" / "result.json").exists()
+    got = written(tmp_path / "rundir")
+    assert M.METRIC not in got and list(got)[:2] == ["metric", M.LOCAL_METRIC]
+    assert list(got) == ["metric", M.LOCAL_METRIC, *SHARED[1:]], "the bytes and the error, from the Python ledger"
+    assert got["error"]["value"] == 2.0 ** -30 and got["verified"]["inputs"] == ["measured", BENCH,
+                                                                            "ledger.spec.python_ledger.certified_bytes"]
+    row = got[M.LOCAL_METRIC]
+    assert (row["value"], row["target"]) == (0.199, M.TARGET) and row["value"] == doc["value"]
+    assert row["verdict"] == f"past target; {M.HELD_NONE}; {M.ABOVE_BOUND}; {M.PYTHON_LEDGER_PREMISE}"
+    assert row["inputs"] == ["measured", BENCH, "ledger.spec.python_ledger.gamma"]
+    assert (row["bound"], row["audit"], row["gamma_decided_by"]) == (False, False, M.PYTHON_LEDGER)
 
 
-def test_a_local_session_with_out_writes_its_document_there_and_no_measurement(store, capsys, work, tmp_path,
-                                                                               monkeypatch):
-    """Outside a research run, OUT names where the document is written, the file the README names; a --local
-    session is no audit, so its result holds no measurement."""
+def test_a_local_session_with_out_writes_its_document_and_result_there(store, capsys, work, tmp_path, monkeypatch):
+    """Outside a research run, OUT names where the document and the result are written, the files the README names."""
     monkeypatch.setenv("OUT", str(tmp_path / "mine"))
     assert bench(store, "--local", run=Machine()) == 0
     _, doc, _ = printed(capsys)
     assert json.loads((tmp_path / "mine" / "memory.json").read_text()) == doc and doc["local"] == M.LOCAL
-    result = tmp_path / "mine" / "result.json"
-    assert not result.exists() or json.loads(result.read_text()).get("measurements", []) == []
+    names = [m["name"] for m in json.loads((tmp_path / "mine" / "result.json").read_text())["measurements"]]
+    assert names[:2] == ["metric", M.LOCAL_METRIC]
 
 
 @pytest.mark.parametrize("card, row", [("NVIDIA H200, 9.0", M.LOCAL_ROWS["9.0"]),
@@ -1064,18 +1109,25 @@ def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, m
     assert machine.started[0][0][-2:] == ["-i", "3"]
 
 
-def test_the_parameters_line_names_the_coins_the_form_and_the_prover_the_error_is_priced_against():
+def test_the_ran_with_line_names_the_coins_the_form_and_the_prover_the_error_is_priced_against():
+    """The kit's `ran with` line, from the record: a local challenger's coins at the development registration's 16
+    rows, with the session's form and the prover its error is priced against in the detail; `deployed` only for the
+    auditor device's coins over the deployed 64 rows; not stated for a record that names no challenger."""
     v = {"registration": {"rows": 16}}
     vs = {"challenger": {"challenger": "local"}, "samples": 2773, "delta": 2 ** -101, "windows": 7,
           "window_ns": 10 ** 9, "allowance_ns": 2 * 10 ** 6, "ledger": {"sketch_failure": {"queries_log2": 80}}}
     p = M.parameters(v, vs)
     assert p == {"coins": "local", "rows": 16, "samples": 2773, "delta": 2 ** -101, "windows": 7, "window_ms": 1000.0,
                  "allowance_ms": 2.0, "budget_log2": 80}
-    line = M.parameters_line(p)
-    assert line.startswith(f"parameters: coins from {M.COINS['local']}; 16 rows; 2773 openings a window; δ = 2^-101.0")
-    assert line.endswith("7 windows of 1,000 ms; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 "
-                         "compressions on any hardware")
-    assert M.parameters_line(M.parameters({}, {})).endswith("a prover of SHA-512 compressions not stated")
+    machine = {"sheet": "h200-sxm-141gb-x1"}
+    line, said = M.ran({"parameters": p, "machine": machine})
+    assert line == f"ran with: coins local challenger; parameters development ({LOCAL_DETAIL})"
+    assert said == {"coins": "local challenger", "parameters": "development", "detail": LOCAL_DETAIL}
+    assert M.ran({"parameters": p | {"coins": "gate"}})[1]["parameters"] == "development"
+    _, said = M.ran({"parameters": p | {"coins": "gate", "rows": 64}})
+    assert (said["coins"], said["parameters"]) == ("deployed challenger", "deployed") and "not the deployed" not in said["detail"]
+    assert M.ran({"parameters": M.parameters({}, {})}) is None
+    assert M.detail(M.parameters({}, {})).endswith("a prover of SHA-512 compressions not stated")
 
 
 def test_local_runs_the_one_session_form_on_this_process_cores(store, capsys, work, monkeypatch):
@@ -1120,8 +1172,8 @@ def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, gi
 def test_a_local_session_that_cannot_run_or_is_not_accepted_prints_no_number_and_exits_1(store, capsys, work, machine,
                                                                                        why):
     assert bench(store, "--local", run=machine) == 1
-    out, err = capsys.readouterr()
-    assert out == "" and f"memory: no number: {why}" in err
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None and doc["local"] == M.LOCAL
 
 
 def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, capsys, work, monkeypatch):
@@ -1134,13 +1186,24 @@ def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, 
     assert bench(store, "--loopback", run=loop) == 1
     ((_, env),) = loop.runs()
     assert env["PLAN"] == "skip:0.0625"
+    assert printed(capsys)[0][0] == "memory: no number: session 0 was not accepted (window 0: 4 of 16 openings missing)"
     monkeypatch.setenv("PLAN", "servedrop:1")
     served = Machine(record=rejected)
     assert bench(store, "--local", run=served) == 1
     ((_, env),) = served.runs()
     assert env["PLAN"] == "servedrop:1"
-    out, err = capsys.readouterr()
-    assert out == "" and err.count("memory: no number: session 0 was not accepted") == 2
+    assert printed(capsys)[0][0] == "memory: no number: session 0 was not accepted (window 0: 4 of 16 openings missing)"
+
+
+def test_a_refused_local_session_writes_its_row_with_no_value_and_why(store, capsys, work, tmp_path, monkeypatch):
+    """The Metrics tab's row of a `--local` session that isn't accepted holds no value and the refusal; a loopback
+    writes none."""
+    monkeypatch.setenv("OUT", str(tmp_path / "mine"))
+    rejected = a_record(a_session(accepted=False, failure="late"))
+    assert bench(store, "--local", run=Machine(record=rejected)) == 1
+    (m,) = json.loads((tmp_path / "mine" / "result.json").read_text())["measurements"]
+    assert (m["name"], m["value"], m["why"], m["target"]) == (M.LOCAL_METRIC, None, "session 0 was not accepted (late)",
+                                                              M.TARGET)
 
 
 @pytest.mark.parametrize("way", ["--loopback", "--local"])
@@ -1178,6 +1241,40 @@ def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
     assert bench(store, "--from", FIRE) == 0
     _, doc, _ = printed(capsys)
     assert doc["gamma_decided_by"] == "lean"
+
+
+def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, tmp_path, work):
+    """`--from DIR` reads a run's record as `research run` leaves it (`job.json` and `out/`), opening no store: the run
+    and commit `job.json` names, and what this command's own document there says (a `--local` session's machine).
+    Without `job.json`, the document's run and commit. A share the Python ledger computed prints no number there, as
+    under every recorded run's reading."""
+    def no_store():
+        raise AssertionError("--from DIR opens no store")
+
+    tree = tmp_path / "rec"
+    (tree / "out").mkdir(parents=True)
+    (tree / "out" / "verifier.json").write_text(json.dumps(as_local(a_record(a_session(gamma=0.125)))))
+    (tree / "job.json").write_text(json.dumps({"run": {"id": BENCH}, "computation": {"tree_sha": COMMIT}}))
+    machine = {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "sheet_sha256": "a", "verifier_sha256": "b"}
+    (tree / "out" / "memory.json").write_text(json.dumps({"run": BENCH, "loopback": False, "local": M.LOCAL,
+                                                          "machine": machine}))
+    assert M.main(["--from", str(tree)], store_of=no_store) == 0
+    text, doc, _ = printed(capsys)
+    assert (doc["value"], doc["run"], doc["commit"], doc["local"], doc["machine"]) == (0.125, BENCH, COMMIT, M.LOCAL,
+                                                                                      machine)
+    assert doc["ran_with"]["coins"] == "local challenger" and text[1] == f"  {M.LOCAL}"
+    (tree / "job.json").unlink()
+    (tree / "out" / "memory.json").write_text(json.dumps({"run": None, "commit": "e" * 40, "loopback": True}))
+    assert M.main(["--from", str(tree)], store_of=no_store) == 0
+    _, doc, _ = printed(capsys)
+    assert (doc["run"], doc["commit"], doc["loopback"]) == (None, "e" * 40, True)
+    (tree / "out" / "verifier.json").write_text(json.dumps(as_local(a_record(a_python_ledger_session()))))
+    assert M.main(["--from", str(tree)], store_of=no_store) == 1
+    out, err = capsys.readouterr()
+    assert out == "" and "its γ at the specification's rate is undecided" in err
+    (tree / "out" / "verifier.json").unlink()
+    assert M.main(["--from", str(tree)], store_of=no_store) == 1
+    assert f"{tree} holds no verifier's record" in capsys.readouterr().err
 
 
 def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():

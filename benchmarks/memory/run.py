@@ -88,7 +88,7 @@ from pathlib import Path
 from verity.device import load_card, load_node
 from verity.protocol import no_bound
 from verity.protocols.accounting.poub.verifier import ledger as poub_ledger
-from verity.protocols.accounting.poub.verifier import timing
+from verity.protocols.accounting.poub.verifier import receipts, timing
 from verity_bench import kit
 from verity_config.settings import of
 
@@ -104,6 +104,8 @@ UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
 #: the number's row on the console's Metrics tab (this directory's `metrics.toml`), and the goal's target for it
 METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
+#: a `--local` session's row: a share of one card's read rate against its own sheet, another quantity from a node's
+LOCAL_METRIC = "memory-accounting/one-machine-read-rate-uncertified"
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
 ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
@@ -115,8 +117,7 @@ BLOCK_BYTES = 4096
 RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json"]
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
-LOCAL = ("local: the verifier and its coins ran on the machine being measured, so this is a measurement to improve on, "
-         "not an audit")
+LOCAL = "local: the verifier and its coins ran on the machine being measured"
 #: the served row `--local` runs for a card's compute capability (nvidia-smi's `compute_cap`): Llama 3.2 1B in int8 on
 #: one GPU, one request at a time; a card of another capability needs a row of its own (LOCAL_ROW)
 LOCAL_ROWS = {"9.0": "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
@@ -130,9 +131,9 @@ SHEETS = ROOT / "hardware"
 #: the one session form `--local` runs, as `run.sh`'s variables: one session of seven windows of a second at 2773
 #: openings a window, the form the board's numbers are compared at
 FORM = {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "1000", "SAMPLES": "2773"}
-#: where a session's coins came from, by its verifier's `--challenger`
-COINS = {"local": "the verifier's own challenger, in its process", "serve": "a challenger process (serve.py) on the "
-         "verifier's machine", "gate": "the auditor device's challenger, through its gate"}
+#: who drew a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
+#: or serve.py's on the verifier's machine, or the auditor device's through its gate
+COINS = {"local": "local challenger", "serve": "local challenger", "gate": "deployed challenger"}
 #: the checkpoint those rows serve, which the bootstrap makes from its ungated BF16 pin (`unsloth/Llama-3.2-1B`)
 LOCAL_CASE = "LLAMA32_1B_INT8"
 BOOTSTRAP = ROOT / "adapters" / "vllm" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
@@ -143,6 +144,8 @@ NO_STORE = "a --local run reads no evidence store, and the references are other 
 PYTHON_LEDGER = "python-ledger"
 PYTHON_LEDGER_WORDS = ("python ledger: the share and its error are the Python ledger's reading of the accepted session; "
                        "the Lean verifier has not decided them, so no audit reads them")
+#: and the premise a Metrics row of such a share names in its verdict
+PYTHON_LEDGER_PREMISE = "the share is the Python ledger's: the Lean verifier has not decided it"
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: what an unbound session's number rests on, in its Metrics row's verdict
 HELD_NONE = "the verifier held no checkpoint"
@@ -363,7 +366,31 @@ def from_run(store, run: str, k: int | None) -> dict:
         verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if verifier is None or not verifier.is_file():
         raise NoNumber(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree, run), host_run=host)
+    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree, run), host_run=host,
+                    local=bool(left(tree).get("local")), machine=left(tree).get("machine"))
+
+
+def from_dir(tree: Path, k: int | None) -> dict:
+    """The printed document of the run whose record is the directory `tree` (`kit.record_dir`), read with nothing of
+    ours: its `out/verifier.json` (or its verifier host's, under `out/host/`), the run and commit `job.json` names, or
+    else the document this command left there (`out/memory.json`)."""
+    try:
+        job = json.loads((tree / "job.json").read_text()) if (tree / "job.json").is_file() else {}
+    except (OSError, ValueError) as e:
+        raise Unreadable(f"{tree}/job.json doesn't read as a run's record ({type(e).__name__}: {e})") from e
+    mine = left(tree)
+    run = (job.get("run") or {}).get("id") or mine.get("run")
+    commit = (job.get("computation") or {}).get("tree_sha") or mine.get("commit")
+    verifier, host = tree / "out" / "verifier.json", None
+    if not verifier.is_file() and (named := tree / "out" / "host-run.txt").is_file():
+        host = named.read_text().strip()
+        verifier = tree / "out" / "host" / host / "out" / "verifier.json"
+    if not verifier.is_file():
+        raise NoNumber(f"{tree} holds no verifier's record (out/verifier.json)")
+    if mine and run and mine.get("run") not in (None, run):
+        raise Unreadable(f"{tree}'s out/memory.json is the document of {mine.get('run')}, not of {run}")
+    return document(session(verifier, k), commit, run, loopback=mine.get("loopback") is True, host_run=host,
+                    local=bool(mine.get("local")), machine=mine.get("machine"))
 
 
 def cores() -> tuple[str, str]:
@@ -625,14 +652,16 @@ def beside(store_of: Callable[[], object]) -> list[dict]:
     return out
 
 
-def amounts(doc: dict, ledger: dict) -> list[dict]:
+def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
     """The result a printed document `doc` and its session's `ledger` give in the fields every resource's benchmark
     reports, as the kit writer's measurements, each from the verifier's record alone; its `inputs` are the recorded
     run and the keys of the session's entry in that record it was read from.
 
-    - `metric`: the printed number in its unit.
-    - `METRIC`: the same number, the Metrics tab's row (this directory's `metrics.toml`), with `TARGET` and where the number
-      stands against it. A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
+    - `"metric"`: the printed number in its unit.
+    - `metric`: the same number, the Metrics tab's row (this directory's `metrics.toml`; `METRIC`, or `LOCAL_METRIC`
+      for a `--local` session), with `TARGET` and where the number stands against it. A share the Python ledger
+      computed names that in its verdict (`PYTHON_LEDGER_PREMISE`) and its `extra`, with `audit` false where the
+      session's coins or parameters aren't deployed (`ran`). A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
       its verdict naming that premise (`HELD_NONE`); a bound session's row holds neither. Where the number's error is
       above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first
       reading where it holds one, else the ledger's own, and above it where the record holds neither.
@@ -655,35 +684,45 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     run = [doc["run"]] if doc["run"] else []
     none = {"value": None, "why": doc["no_bound"]} if doc.get("no_bound") else {}
     first = next(iter(READINGS))
+    python = doc.get("gamma_decided_by") == PYTHON_LEDGER
+    # a share the Python ledger computed is read where the verifier records it, beside each undecided reading
+    under = {r: (f"{r}.python_ledger" if python else r) for r in (*READINGS, "declared")}
+    if python:
+        ledger = {**ledger, **{r: (ledger.get(r) or {}).get("python_ledger") or {} for r in under}}
     error = _at(ledger, "declared", "gamma", first, "error", "windows")
     error = _at(ledger, first, "error", "windows") if error is None else error
     premises = [*([] if doc.get("bound") is True else [HELD_NONE]),
-                *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else [])]
-    row = {"name": METRIC, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
+                *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else []),
+                *([PYTHON_LEDGER_PREMISE] if python else [])]
+    row = {"name": metric, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{under[first]}.gamma"],
            "target": TARGET,
            "verdict": "; ".join([doc["no_bound"] if none else "within target" if doc["value"] <= TARGET
                                   else "past target", *premises])} | none
-    if doc.get("bound") is not True:
-        row["extra"] = {"bound": False}
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}
-           | none, row]
+    said = ran(doc)
+    audit = None if said is None else (said[1]["coins"], said[1]["parameters"]) == ("deployed challenger", "deployed")
+    extra = {**({} if doc.get("bound") is True else {"bound": False}),
+             **({"audit": False} if audit is False else {}), **({"gamma_decided_by": PYTHON_LEDGER} if python else {})}
+    if extra:
+        row["extra"] = extra
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"],
+            "inputs": [*run, f"ledger.{under[first]}.gamma"]} | none, row]
     if (verified := _at(ledger, first, "certified_bytes")) is not None:
         out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
-                    "inputs": [*run, f"ledger.{first}.certified_bytes"]} | none)
+                    "inputs": [*run, f"ledger.{under[first]}.certified_bytes"]} | none)
     span = _at(ledger, "inputs", "span_ns")
     for reading, rate_is in READINGS.items():
         rate, gamma = _at(ledger, reading, "capacity_bytes_per_s"), _at(ledger, reading, "gamma")
         if span is None or rate is None or gamma is None:
             continue
         capacity = rate * span / 1e9
-        keys = [f"ledger.{reading}.capacity_bytes_per_s", "ledger.inputs.span_ns"]
+        keys = [f"ledger.{under[reading]}.capacity_bytes_per_s", "ledger.inputs.span_ns"]
         out += [{"name": f"capacity at {reading}", "value": capacity, "unit": f"{BYTES}, at {rate_is}: {OWN_RATE}",
                  "inputs": [*run, *keys]},
                 {"name": f"free at {reading}", "value": min(gamma, 1.0) * capacity, "unit": BYTES,
-                 "inputs": [*run, f"ledger.{reading}.gamma", *keys]} | none]
+                 "inputs": [*run, f"ledger.{under[reading]}.gamma", *keys]} | none]
     if (error := error_of(ledger)) is not None:
         out.append({"name": "error", "value": error, "unit": ERROR,
-                    "inputs": [*run, f"ledger.declared.gamma.{first}.error.windows"]})
+                    "inputs": [*run, f"ledger.{under['declared']}.gamma.{first}.error.windows"]})
     return out
 
 
@@ -709,8 +748,6 @@ def text(doc: dict) -> str:
     if m := doc.get("machine"):
         lines.append(f"  card: {m['card']}, the verifier's node one card of hardware/nodes/{m['sheet']}.toml; "
                      f"data sheets sha256 {m['sheet_sha256'][:16]}, verifier sha256 {m['verifier_sha256'][:16]}")
-    if (doc["loopback"] or doc.get("local")) and doc.get("parameters"):
-        lines.append("  " + parameters_line(doc["parameters"]))
     if not doc["loopback"] and doc["value"] is not None and doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
     where = ("" if doc["loopback"] or doc.get("local") else f", on the auditor's verifier host (its run {doc['host_run']})"
@@ -733,18 +770,44 @@ def text(doc: dict) -> str:
     return "\n".join(lines)
 
 
-def parameters_line(p: dict) -> str:
-    """The one line of what the session ran with (`parameters`)."""
+def ran(doc: dict) -> tuple[str, dict] | None:
+    """The session's `ran with` line and object (`kit.ran_with`), from its record: its coins (`COINS`), and its
+    parameters, `deployed` only for the auditor device's coins over the deployed registration's
+    `receipts.WIDE_ROWS` sketch rows (`SketchBoundDeployed`'s), else `development`; None for a record that states no
+    challenger."""
+    p = doc.get("parameters") or {}
+    if (coins := COINS.get(p.get("coins"))) is None:
+        return None
+    deployed = coins == "deployed challenger" and p.get("rows") == receipts.WIDE_ROWS
+    return kit.ran_with(coins, "deployed" if deployed else "development", detail(p, doc.get("machine")))
+
+
+def detail(p: dict, machine: dict | None = None) -> str:
+    """The `ran with` line's detail (`parameters`): the rows, the openings and δ a window, the windows, the lateness,
+    the prover the error is priced against, and under `--local` the sheet the share is of."""
     def ms(x):
         return "not stated" if x is None else f"{x:,.0f} ms"
-    delta = p.get("delta")
-    return (f"parameters: coins from {COINS.get(p.get('coins'), p.get('coins') or 'a challenger not stated')}; "
-            f"{p.get('rows') or 'no'} rows; {p.get('samples') or 'no'} openings a window; δ = "
+    delta, rows = p.get("delta"), p.get("rows")
+    return (f"{rows or 'no'} sketch rows" + ("" if rows in (None, receipts.WIDE_ROWS) else
+                                             f", not the deployed registration's {receipts.WIDE_ROWS}")
+            + f"; {p.get('samples') or 'no'} openings a window; δ = "
             + (f"2^{math.log2(delta):.1f}" if isinstance(delta, (int, float)) and delta > 0 else "not stated")
             + f" a window; {p.get('windows') or 'no'} windows of {ms(p.get('window_ms'))}; lateness allowed "
             f"{ms(p.get('allowance_ms'))}; the error against a prover of "
             + ("SHA-512 compressions not stated" if p.get("budget_log2") is None
-               else f"2^{p['budget_log2']} SHA-512 compressions on any hardware"))
+               else f"2^{p['budget_log2']} SHA-512 compressions on any hardware")
+            + (f"; the share against hardware/nodes/{machine['sheet']}.toml at one card" if machine else ""))
+
+
+def refused(why: str, *, local: bool, run: Callable = subprocess.run) -> int:
+    """A `--local` or `--loopback` session with no number, through the kit (`kit.report`'s `accepted` false): `memory: no
+    number: WHY` first, its coins the verifier's own and its parameters development, as `run.sh` runs them, and under
+    `--local` its row written with no value and that reason."""
+    doc = {"value": None, "unit": UNIT, "commit": source_commit(run), "run": SETTINGS.RESEARCH_RUN_ID or None,
+           "loopback": not local, "local": LOCAL if local else None}
+    measured = [{"name": LOCAL_METRIC, "unit": UNIT, "target": TARGET, "inputs": [doc["run"]] if doc["run"] else []}]
+    return kit.report("memory", "", doc, measured if local else [], ran_with=kit.ran_with("local challenger", "development"),
+                      accepted=False, why=why)
 
 
 def _no_store():
@@ -759,7 +822,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     ap = argparse.ArgumentParser(prog="verity bench memory", description=__doc__.split("\n\n")[0])
     ap.add_argument("period", nargs="?", help="the node run: the challenger's period, a name its ledger hasn't used")
     ap.add_argument("--dry-run", action="store_true", help="the node run with nothing sent to either gate; no number")
-    ap.add_argument("--from", dest="run", metavar="RUN", help="print from a recorded run")
+    ap.add_argument("--from", dest="run", metavar="DIR|RUN", help="print from a recorded run: the directory of its record "
+                    "(its job.json and out/), read with nothing of ours, or a run id, read through the evidence store")
     ap.add_argument("--session", type=int, metavar="K", help="the session, in a run that holds several")
     ap.add_argument("--loopback", action="store_true", help="both processes on this machine; certifies nothing")
     ap.add_argument("--local", action="store_true",
@@ -774,6 +838,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         elif a.local:
             doc = local(run)
             store_of = _no_store
+        elif a.run and Path(a.run).is_dir():
+            doc = from_dir(kit.record_dir(a.run), a.session)
+            store_of = _no_store
         elif a.run:
             doc = from_run(store_of(), a.run, a.session)
         else:
@@ -785,17 +852,20 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         kept = bool(held) and not doc["loopback"] and left(Path(held)).get("loopback") is True
         ledger = doc.pop("ledger")
     except NoNumber as e:
+        if a.local or a.loopback:
+            return refused(str(e), local=a.local, run=run)
         print(f"memory: no number: {e}", file=sys.stderr)
         return 1
     except Unreadable as e:
         print(f"memory: {e}", file=sys.stderr)
         return 2
     doc["beside"] = beside(store_of)
-    # a loopback certifies nothing and a --local session is no audit, so neither writes a result; a result holds one
-    # measurement a name, so a run that prints a second session keeps its first one's result
-    printed, measured = text(doc), [] if doc["loopback"] or doc["local"] else amounts(doc, ledger)
+    # a loopback certifies nothing, so it writes no result, and a --local session writes its own row; a result holds
+    # one measurement a name, so a run that prints a second session keeps its first one's result
+    printed = text(doc)
+    measured = [] if doc["loopback"] else amounts(doc, ledger, LOCAL_METRIC if doc["local"] else METRIC)
     try:
-        kit.report("memory", printed, doc, measured, document=not kept)
+        kit.report("memory", printed, doc, measured, document=not kept, ran_with=ran(doc), accepted=True)
     except ValueError as e:
         print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
     if kept:
