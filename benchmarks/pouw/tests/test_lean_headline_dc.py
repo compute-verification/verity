@@ -215,7 +215,7 @@ def test_each_statement_has_its_eps_and_b_flat_as_one_pair(tmp_path):
     statement's name, its ε (the exact bound rounded up at 10^-5, the literal `1 - N / 100000` the Models file states
     for it), the B_♭ of the same export, exact, its facet, and the credit (1 − ε)·B_♭. `--json` writes each pair whole
     beside its reading, and a reading for the record names no statement."""
-    models = (LH.ROOT / "security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text()
+    models = (LH.ROOT / "security" / "Definitions" / "Pouw" / "Guarantees" / "HeadlineDc.lean").read_text()
     seen = []
     for fam in R.FAMILIES:
         for v, q in ((fam.sheet, Q), (fam.measured, Q), *(((fam.measured, fam.twin),) if fam.twin else ())):
