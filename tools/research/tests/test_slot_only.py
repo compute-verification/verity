@@ -140,6 +140,32 @@ def test_a_command_that_names_a_pool_and_the_trees_slot_py_names_the_machines_ow
     assert run_records.pool(own) == "research" and run_records.pool(["python3", S.NODE_SLOT, "--", "true"]) == run_records.OWN_POOL
 
 
+LOOK_ALIKES = ("x/tools/check/slot.py.bak", "tools/checks/slot.py", "tools/check/slot.pyc", "xtools/check/slot.py")
+
+
+def test_a_tree_with_the_check_at_tools_check_takes_its_slot_as_one_at_tools_verity_check_does():
+    """A tree whose check is at tools/check/ names tools/check/slot.py: the machine's rule takes it through a slot and a pool's
+    waiter by the machine's copy, and takes no look-alike path."""
+    pool = ["env", f"CHECK_SLOTS={S.POOLS['research']}"]
+    for slot in ("tools/check/slot.py", "tools/verity/check/slot.py"):
+        assert S.through_slot(["python3", slot, "--priority", "--by", "x", "--", "uv", "run", "python", "tools/check/check.py"]), slot
+        assert S.through_slot([*pool, "python3", slot, "--by", "x", "--", "true"]), slot
+        assert S.node_copy([*pool, "python3", slot, "--by", "x", "--", "true"]) == [*pool, "python3", S.NODE_SLOT, "--by", "x", "--", "true"]
+    for slot in LOOK_ALIKES:
+        assert not S.through_slot(["python3", slot, "--", "true"]), slot
+        assert S.node_copy([*pool, "python3", slot, "--by", "x", "--", "true"]) is None, slot
+    named = S.check_file("slot.py")
+    assert all(named.search(f"python3 {p} -- true") for p in ("tools/check/slot.py", "tools/verity/check/slot.py", S.NODE_SLOT))
+    assert not any(named.search(f"python3 {p} -- true") for p in LOOK_ALIKES)
+
+
+def test_the_copies_of_the_checks_directories_in_files_installed_alone_are_slot_onlys():
+    """node_ops.py is installed alone and run_records.py is sent alone, so each spells the check's directories itself."""
+    ops = ast.parse((NEBIUS / "node_ops.py").read_text())
+    dirs = [ast.literal_eval(n.value) for n in ops.body if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "CHECK_DIRS"]
+    assert dirs == [S.CHECK_DIRS] and run_records.CHECK_DIRS == S.CHECK_DIRS
+
+
 @pytest.fixture
 def node(tmp_path, monkeypatch):
     """A machine under tmp_path: where its own slot.py, its rule for a run's command (slot_only.py) and its marker would be.
@@ -310,7 +336,7 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     rows = [e for e in manifest["file"] if e.get("src") == S.SLOT_PATHS[0]]
     assert [e["path"] for e in rows] == [S.NODE_SLOT], "one copy a machine"
-    beside = S.NODE_SLOT.rsplit("/", 4)[0] + "/"               # .../check-slot/, which holds the copy below its repository path
+    beside = S.NODE_SLOT.rsplit("/", S.SLOT_PATHS[0].count("/") + 1)[0] + "/"   # .../check-slot/, which holds the copy below its repository path
     assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + S.SLOT_PATHS[0]
     assert [e["path"] for e in [*manifest["file"], *manifest.get("tree", [])]
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"

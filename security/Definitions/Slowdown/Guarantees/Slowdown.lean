@@ -77,7 +77,7 @@ def SlowdownExecutionPhases : Prop :=
 /-- **The slowdown over the inference-only policy's thread bound.** As `SlowdownExecutionPhases`, with the declared
 computation's bound proved: the declared circuit `d` contains the reference training circuit `r` (`Mc`), threaded by `T`
 and with incompressible weights, and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
-reference circuit's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most
+reference training algorithm's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most
 `size(d)/ρ_T` (`Slowdown.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(α Γ))`, and `size(d) ≤ C`. The windows' bound is
 stated with `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ`
 with `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
@@ -97,7 +97,7 @@ def SlowdownThreaded : Prop :=
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
 /-- **The slowdown over the inference-only policy's thread bound, per parameter slot**: `SlowdownThreaded` with
-the reference circuit's weights incompressible per parameter slot of a slot map `σ`
+the reference training algorithm's weights incompressible per parameter slot of a slot map `σ`
 (`Assumptions.WeightsIncompressibleSlots`), its declared computation's bound from
 `Slowdown.Guarantees.ThreadedThrottledSlots`. -/
 def SlowdownThreadedSlots : Prop :=

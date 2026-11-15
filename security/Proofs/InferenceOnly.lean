@@ -15,7 +15,7 @@ public import Proofs.InferenceOnly.Lemmas
 /-!
 # Proofs of the inference-only policy's guarantees
 
-The read bound intersects each inference block of the containing declaration with the reference circuit's gates
+The read bound intersects each inference block of the containing declaration with the reference training algorithm's gates
 (`pull`, `Proofs.InferenceOnly.Pull`), each piece reading no more fresh input bits than its block.
 -/
 

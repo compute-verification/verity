@@ -312,7 +312,8 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts (ts.map (leavesOf P (passedOn P))) S.wires = none) {r : Row} {wt : String} {wu : ℤ}
+    (hwh : unwhole ts
+      (ts.map (InferenceOnlyCheck.Record.leavesOf P (passedOn P))) S.wires = none) {r : Row} {wt : String} {wu : ℤ}
     {out : String} (hw : S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out)) :
     ∃ sc sc' i f, UnitAt P rs r.tid r.unit sc ∧ 0 ≤ wu ∧ UnitAt P rs wt wu.toNat sc' ∧
       i < (P.defs[sc.d]!).params.size ∧ (P.defs[sc.d]!).params[i]!.1 = r.port ∧
@@ -376,7 +377,8 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = tr
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts (ts.map (leavesOf P (passedOn P))) S.wires = none) : Aligned P rs W S := by
+    (hwh : unwhole ts
+      (ts.map (InferenceOnlyCheck.Record.leavesOf P (passedOn P))) S.wires = none) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
   obtain ⟨wt, wu, out, sc₁, hw, -, hu₁, hout₁⟩ := hwl
   obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, rfl, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw
@@ -421,7 +423,8 @@ theorem filled (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts (ts.map (leavesOf P (passedOn P))) S.wires = none) : Filled P rs W S := by
+    (hwh : unwhole ts
+      (ts.map (InferenceOnlyCheck.Record.leavesOf P (passedOn P))) S.wires = none) : Filled P rs W S := by
   intro r l g lo up hsome hrl b _ hb2
   obtain ⟨⟨wt, wu, out⟩, hw⟩ := Option.isSome_iff_exists.1 hsome
   obtain ⟨sc, sc', i, f, hsc, h0, hsc', hi, hp, hf, rfl, hrow, hbits, -⟩ := wired_row hP hrs hT hS hts hwh hw

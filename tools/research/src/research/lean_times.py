@@ -39,6 +39,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
+from .pods.nebius.slot_only import check_file
 from .queue import FAST_KIND, LEAN_AUDIT_STEP
 from .queue_stats import pct, ts
 from .run_times import slot_wait
@@ -48,7 +49,7 @@ HOURS, OVER_MIN = 24.0, 15.0
 LOOKBACK_H = 12.0
 #: run records read at once
 READ_JOBS = 32
-CHECK = "tools/check/check.py"
+CHECK = check_file("check.py")
 RECORDS = re.compile(r"lean_changed\.py --records (\S+)")
 SUITES_STEP = "lean-suites"
 STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build")
@@ -246,7 +247,7 @@ def _tasks_of(store, rid: str, doc: dict) -> list[dict]:
     if RECORDS.search(argv):
         files = _record_files(store, out.get("run_record")) if (meta or {}).get("kind") == FAST_KIND else {}
         return [records_task(rid, doc, meta, list(files), lambda p: _bytes(store, files[p]))]
-    if CHECK in argv and meta:
+    if CHECK.search(argv) and meta:
         return check_tasks(rid, doc, meta)
     return []
 
@@ -264,7 +265,7 @@ def collect(store, start: datetime, end: datetime, log: Callable[[str], None] = 
     rows = [(rid, json.loads(doc)) for rid, doc in store.index.sql("SELECT id, manifest_json FROM attempts WHERE id > ? AND id <= ? "
                                                                     "ORDER BY id", (since, f"r{end:%Y%m%d-%H%M%S}~"))
             if doc]
-    rows = [(rid, d) for rid, d in rows if RECORDS.search(a := " ".join(d.get("argv") or [])) or CHECK in a]
+    rows = [(rid, d) for rid, d in rows if RECORDS.search(a := " ".join(d.get("argv") or [])) or CHECK.search(a)]
     log(f"research lean-times: {len(rows)} records run(s) and check(s) started from {since[1:]} on {store.remote.describe()}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=READ_JOBS) as ex:
         each = list(ex.map(lambda r: _tasks_of(store, *r), rows))

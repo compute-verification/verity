@@ -419,7 +419,7 @@ def main() -> int:
                     help="with --reads slots: at most N ANDs a net, the caps whose statement takes the smallest block, then "
                          "whose nets take the fewest cells (auto), or no cap (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
-    ap.add_argument("--lean", default=None, help="the Lean verifier of record (verity-verify-proof)")
+    ap.add_argument("--lean", default=None, help="the Lean verifier (verity-verify-proof)")
     ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
     ap.add_argument("--n", type=int, default=1)
     ap.add_argument("--port", type=int, default=7611)

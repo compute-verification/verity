@@ -123,7 +123,7 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     Path(steps.n2).write_text(json.dumps(n2))
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["members"]["honest"]["accepted_windows"] == 1
-    assert got["why"].startswith("honest: the control (the prover's own prover-instances.bin) holds 57 of 337")
+    assert got["why"].startswith("honest: the control (the prover's own prover-instances.bin) doesn't hold all 337")
 
 
 def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_path):
@@ -139,8 +139,10 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_pa
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         return str(tmp_path / f"{name}.json")
 
-    structured = {"leaked": [], "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"},
-                  "control": {"holds_all": True}}
+    structured = {"leaked": [], "control": {"holds_all": True}}
+    (tmp_path / "witness.json").write_text(json.dumps({"members": {"honest": {"received": {
+        "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"}}}}}))
+    steps.n2_witness = [str(tmp_path / "witness.json")]
     steps.n2 = [run("honest", {"windows": [window] * 2, "network": {"accepted": True}, "received": structured}, [1, 2]),
                 run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [1, 2])]
     got = cr.report(steps)

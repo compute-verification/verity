@@ -959,12 +959,14 @@ BROKER_EXPIRES = "2026-11-03T05:00:00Z"
 @pytest.fixture
 def broker(monkeypatch):
     """The agents' GitHub broker on localhost: each POST's (identity, body) is recorded and answered with a fresh token that
-    expires at BROKER_EXPIRES; `status` other than 200 refuses. This agent's identity is a fixed OIDC token."""
+    expires at BROKER_EXPIRES; `status` other than 200 refuses. This agent's identity is a fixed OIDC token. `waits` are the
+    waits notes_sync asked for, none taken."""
     import http.server
     import json as _json
 
     from research import slack
-    state = {"seen": [], "status": 200, "n": 0}
+    state = {"seen": [], "status": 200, "n": 0, "waits": []}
+    monkeypatch.setattr(NS, "sleep", state["waits"].append)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
@@ -1139,14 +1141,142 @@ def test_a_refused_given_token_with_no_broker_to_go_on_with_fails_as_before_and_
     assert TOKEN not in err + str(rep) and NS.os.environ[NS.TOKEN_ENV] == TOKEN
 
 
-def test_a_refusal_of_the_brokers_own_token_is_not_laid_on_the_variable_nor_asked_again(cloud_vm, broker, monkeypatch, capsys):
+def test_a_refusal_of_the_brokers_own_token_is_asked_again_once_with_a_fresh_one_and_names_the_helper(cloud_vm, broker, monkeypatch,
+                                                                                                    capsys):
+    """A token the broker minted that GitHub refuses (one it does not accept yet, or one revoked) is not laid on the variable:
+    the request is made once more with a token minted afresh after the wait, and a second refusal says the helper's token was."""
     _, a, _ = cloud_vm
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     refused = _github_refuses(monkeypatch, "fetch", 403, token=None)
     (a / "kb" / "new.md").write_text("new\n")
     rep = NS.sync(a, secrets=[])
-    assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and len(refused) == 1 and len(broker["seen"]) == 1
-    assert capsys.readouterr().err == "" and "broker-token" not in str(rep)
+    assert rep["rc"] == 1 and rep["error"].startswith("git fetch origin failed: remote: Permission to") and rep["attempts"] == 1
+    assert (len(refused), len(broker["seen"]), broker["waits"]) == (2, 2, [NS.MINT_WAIT_S]), "once more, with a fresh mint, a wait apart"
+    assert rep["error"].endswith(" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper passed it, "
+                                 f"and a fresh one minted {NS.MINT_WAIT_S:g} s later too: the agents' GitHub App may have lost "
+                                 "research-notes from its repository access (`research doctor`)")
+    assert capsys.readouterr().err == "" and "broker-token" not in str(rep) and TOKEN not in str(rep)
+
+
+def test_a_brokers_token_github_refuses_once_is_minted_afresh_and_the_sync_gets_through(cloud_vm, broker, monkeypatch):
+    origin, a, _ = cloud_vm
+    assert NS.notes_token() == "broker-token-1"
+    refused = _github_refuses(monkeypatch, "fetch", 401, token="broker-token-1")
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (0, True, 1) and _git(origin, "show", "main:kb/new.md") == "new\n", rep
+    assert len(refused) == 1 and broker["waits"] == [NS.MINT_WAIT_S] and NS.os.environ[NS.TOKEN_ENV] == "broker-token-2"
+
+
+def test_a_refused_brokers_token_is_not_sent_again_when_the_fresh_mint_gives_none(cloud_vm, broker, monkeypatch):
+    """A fresh mint that fails leaves `notes_token` with the token GitHub just refused: the request is not made again with it,
+    and the failure does not say a fresh one was minted."""
+    _, a, _ = cloud_vm
+    assert NS.notes_token() == "broker-token-1"
+    broker["status"] = 503
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=None)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and rep["error"].startswith("git fetch origin failed: remote: Invalid username"), rep
+    assert (len(refused), len(broker["seen"]), broker["waits"]) == (1, 2, [NS.MINT_WAIT_S]), "the refused token is sent once"
+    assert rep["error"].endswith(" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper "
+                                 "passed it: the agents' GitHub App may have lost research-notes from its repository access "
+                                 "(`research doctor`)") and "broker-token" not in str(rep)
+
+
+@pytest.fixture
+def identity(tmp_path, monkeypatch):
+    """This machine has a Cursor agent's identity socket (a cloud VM), unlike conftest's laptop."""
+    sock = tmp_path / "api.sock"
+    sock.write_text("")
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(sock))
+
+
+def _identity_refuses(monkeypatch, times: int) -> list[str]:
+    """Cursor's identity service answering HTTP 429 to the first `times` token requests, as it does to a burst; the audiences asked."""
+    from research import slack
+    asked: list[str] = []
+
+    def oidc(aud):
+        asked.append(aud)
+        if len(asked) <= times:
+            raise slack.SlackError("the Cursor identity service is unavailable (HTTP 429)")
+        return "oidc-for-token"
+
+    monkeypatch.setattr(slack, "oidc_token", oidc)
+    return asked
+
+
+def test_an_identity_429_is_asked_again_once_after_the_wait(identity, broker, monkeypatch):
+    """Cursor's identity service refuses a burst of token requests for a few seconds: one more ask after the wait gets the token."""
+    asked = _identity_refuses(monkeypatch, 1)
+    assert NS.notes_token() == "broker-token-1" and len(asked) == 2 and broker["waits"] == [NS.MINT_WAIT_S]
+    assert NS.broker_why() is None and len(broker["seen"]) == 1
+
+
+def test_a_broker_that_gives_no_answer_is_named_with_the_reason(identity, broker, monkeypatch):
+    import urllib.error
+
+    def unanswered():
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(NS, "_mint", unanswered)
+    assert NS.notes_token() is None and NS.broker_why() == "the broker gave no usable answer (URLError: timed out)"
+    assert broker["waits"] == [], "not a 429: not asked again at once"
+
+
+def test_a_cursor_agent_whose_mint_fails_sends_nothing_and_says_the_mint_failed(cloud_vm, identity, broker, tmp_path, monkeypatch):
+    """With no token, a Cursor agent's git would go to the plain URL, which the VM's global rules rewrite to cursor[bot]'s oldest
+    token (`Invalid username or token`) or its newest (`Repository not found`): the sync sends nothing, and says why the mint
+    failed and which rule git would have used, never a credential."""
+    _, a, _ = cloud_vm
+    cfg = str(tmp_path / "gitconfig")
+    for n in (1, 2):
+        _git(tmp_path, "config", "--file", cfg, "--add", f"url.https://x-access-token:dummy-old-{n}@github.com/.insteadOf",
+             "https://github.com/")
+    asked = _identity_refuses(monkeypatch, 2)
+    seen = _argv_log(monkeypatch)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    why = "the Cursor identity service is unavailable (HTTP 429): this VM asked Cursor for too many identity tokens at once, which clears in seconds"
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (1, False, 1) and rep["commit"], rep
+    assert rep["error"] == (f"git fetch origin failed: {NS.MINT_FAILED} ({why}), so nothing was sent: this agent's own git credentials "
+                            f"are cursor[bot]'s (url.{tmp_path / 'bot'}/.insteadOf rewrites https://github.com/; 3 rules rewrite it "
+                            "alike, and git takes the first, the oldest), which the notes repository refuses; sync again in a minute, "
+                            "and `research doctor` checks the mint")
+    assert not [c for c in seen if {"fetch", "push"} & set(c)], "no git went to the network"
+    assert len(asked) == 2 and broker["waits"] == [NS.MINT_WAIT_S] and broker["seen"] == [] and "dummy-old" not in str(rep)
+
+
+def test_the_rewrite_git_uses_is_the_first_of_equally_long_rules_and_its_credential_is_masked(tmp_path, monkeypatch):
+    """What `rewrite` says is what git does: of rules with one prefix, the first, the oldest on a VM that adds one a refresh."""
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for n in (1, 2, 3):
+        _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "--add",
+             f"url.https://x-access-token:dummy-{n}@github.com/.insteadOf", "https://github.com/")
+    real = subprocess.run(["git", "-C", str(repo), "ls-remote", "--get-url", NS.NOTES_URL], capture_output=True, text=True,
+                          env={**NS.os.environ, "VERITY_GIT_GUARD": "off"}, check=True).stdout.strip()
+    assert real == "https://x-access-token:dummy-1@github.com/compute-verification/research-notes.git", "git takes the first"
+    assert NS.rewrite(repo, NS.NOTES_URL) == ("url.https://<credential>@github.com/.insteadOf rewrites https://github.com/; 3 rules "
+                                             "rewrite it alike, and git takes the first, the oldest")
+    assert NS.rewrite(repo, EXPLICIT) == "", "the explicit-user URL is never rewritten"
+
+
+def test_the_rewrite_masks_a_user_and_token_in_the_prefix_it_rewrites_too(tmp_path, monkeypatch):
+    """A clone whose remote carries a user and a token matches a rule whose insteadOf value carries them too: neither the base
+    nor the value is said with them."""
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "url.https://other:dummy-base@github.com/.insteadOf",
+         "https://user:dummy-tok@github.com/")
+    said = NS.rewrite(repo, "https://user:dummy-tok@github.com/compute-verification/research-notes.git")
+    assert said == "url.https://<credential>@github.com/.insteadOf rewrites https://<credential>@github.com/"
+    assert not any(s in said for s in ("dummy", "user", "other"))
 
 
 def test_a_pull_and_a_clone_whose_given_token_github_refuses_go_on_with_the_brokers_too(cloud_vm, broker, tmp_path, monkeypatch, capsys):

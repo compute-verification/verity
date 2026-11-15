@@ -39,9 +39,13 @@ LOG = Path("/workspace/monitoring/slot-only.jsonl")
 #: in the repository, which is how every reader of a run's command knows slot.py. A run that names a pool takes its slot by
 #: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
 #: tree each run ships
-NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/check/slot.py"
+#: the check's directory in a shipped tree, either spelling, while trees of both are run: node_ops.py and run_records.py, which
+#: are installed or sent alone, hold copies (`check_file` is the match they spell out)
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 #: slot.py as a run's command names it: a shipped tree's, or the machine's own
-SLOT_PATHS = ("tools/check/slot.py", NODE_SLOT)
+TREE_SLOTS = tuple(d + "slot.py" for d in CHECK_DIRS)
+SLOT_PATHS = (*TREE_SLOTS, NODE_SLOT)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
 #: `proofs` pool), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
@@ -102,9 +106,16 @@ def node_copy(command: list[str]) -> list[str] | None:
     """A command that names a pool and then the shipped tree's slot.py (`in_pool`'s words, however it was built), with the
     machine's own copy (NODE_SLOT) in the tree's place; None for any other command. A recorded check (`check.py --record
     --on`) names its pool in the run's environment and no pool in its command, so it keeps its tree's slot.py."""
-    if command[:1] == ["env"] and through_slot(command) and command[3] == SLOT_PATHS[0]:
+    if command[:1] == ["env"] and through_slot(command) and command[3] in TREE_SLOTS:
         return [*command[:3], NODE_SLOT, *command[4:]]
     return None
+
+
+def check_file(*names: str) -> re.Pattern[str]:
+    """A command's text naming one of the check's files ``names`` (`check.py`, `slot.py`) under either of CHECK_DIRS, as a whole
+    path, which a longer name (`slot.py.bak`, `tools/checks/slot.py`) is not."""
+    dirs, files = "|".join(map(re.escape, CHECK_DIRS)), "|".join(map(re.escape, names))
+    return re.compile(rf"(?<![\w.-])(?:{dirs})(?:{files})(?![\w.-])")
 
 
 def through_slot(command: object) -> bool:

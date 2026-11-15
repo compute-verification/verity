@@ -1134,7 +1134,7 @@ POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"
 def policy_toml(argv, text: str | None = POLICY_TOML, reads: list | None = None) -> subprocess.CompletedProcess | None:
     """GitHub's answer to `monitors._off_gate`'s read of policy.toml at a commit (``text``; None: GitHub answers nothing at any
     ref), each ref read appended to ``reads``; None for another command."""
-    if argv[:2] != ["gh", "api"] or "/contents/tools/verity/check/policy.toml?ref=" not in argv[-1]:
+    if argv[:2] != ["gh", "api"] or "/contents/tools/check/policy.toml?ref=" not in argv[-1]:
         return None
     if reads is not None:
         reads.append(argv[-1].rpartition("?ref=")[2])

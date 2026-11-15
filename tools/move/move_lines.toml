@@ -59,3 +59,51 @@ reason = "The move ran with --no-lock, as its trailer doesn't say, and also rena
 line = "Layout-move: tools/move/properties_map.toml --no-lock"
 hand = ["tools/move/properties_map.toml"]
 reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."
+
+["ce0e54799c28d14ac5e2850b85d711c25753e861"]
+line = "Layout-move: tools/move/pouw_tile_boolean_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["4f6e3df45fbcfa8938d17e9c3d897a30ebea4a92"]
+line = "Layout-move: tools/move/pouw_tile_boolean_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["473d8eefa2704f1aa8f8f395be0e6da85ba9f13e"]
+line = "Layout-move: tools/move/pouw_tile_boolean_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["2d3aee68646c89344a407daaf4aa586bd265bde1"]
+line = "Layout-move: tools/move/memory_gpu_weights_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its trailer doesn't say; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["441c946b99c24038de1790ae78a628bb8fe49549"]
+line = "Layout-move: tools/move/memory_gpu_bandwidth_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its trailer doesn't say; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["530accf39648959517d53d33889d5217d116efef"]
+line = "Layout-move: tools/move/memory_gpu_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its trailer doesn't say; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["3e79545193c65e72d684a29bc50b16e563ec5346"]
+hand = ["benchmarks/one_stage/advice_charge.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_advice_charge.py", "benchmarks/one_stage/tests/test_onsite_record.py", "benchmarks/slowdown/README.md", "benchmarks/slowdown/slowdown/envelopes.py", "verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py", "verity/protocols/proofs/spot/verifier/README.md", "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py", "verity/protocols/proofs/spot/verifier/one_stage/caller.py"]
+reason = "The rerun was kept to the three files its message names, and left as its parent had them the other files rename.py rewrites."
+
+["80a19b19117aafd24f46ed17b96137db33b2dc20"]
+hand = ["benchmarks/one_stage/advice_charge.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_advice_charge.py", "benchmarks/one_stage/tests/test_onsite_record.py", "verity/protocols/proofs/spot/prover/audit/prove_path.py", "verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py", "verity/protocols/proofs/spot/verifier/README.md", "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py", "verity/protocols/proofs/spot/verifier/one_stage/caller.py"]
+reason = "The rerun was kept to the two files its message names, and left as its parent had them the other files rename.py rewrites."
+
+["0f6f8e90edf60b9a6e6242a8c3a9a032f480832d"]
+line = "Move: tools/move/pouw_sample_h1_map.toml"
+reason = "The move ran rename.py by the map it adds, as its message says and no move line does."
+
+["3b93447e9e3f799af4570834a65eb5d306c30f92"]
+line = "Move: tools/move/pouw_sample_map.toml"
+reason = "The move ran rename.py by the map it adds, as its message says and no move line does."
+
+["7ef1e26c04e673c767867557994a5d355003fa1c"]
+line = "Move: tools/move/pouw_sample_ts_map.toml"
+reason = "The move ran rename.py by the map it adds, as its message says and no move line does."
+
+["35d39c1bdd330674510beb8b3a780fb788b03e88"]
+line = "Layout-move: tools/move/pouw_serving_torch_map.toml --no-lock"
+reason = "The move ran layout.py with --no-lock by the map it adds, as its message says and no move line does."
