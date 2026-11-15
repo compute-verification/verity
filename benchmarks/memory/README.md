@@ -72,7 +72,9 @@ from the verifier's record, the JSON's `parameters`: where its coins came from, 
   and the verifier checks each answer against the store's committed contents and against time. A prover that skips
   reading part of the store, or answers late, is refused: the session isn't accepted, and the command prints no number
   and exits 1. `PLAN=skip:0.0625 uv run verity bench memory --loopback` shows it on the CPU: the prover skips a
-  sixteenth of the store, and the verifier refuses the session.
+  sixteenth of the store, and the verifier refuses the session. A served row runs the honest plan alone (`run.sh`
+  refuses any `PLAN` but `serve` before a session starts), so a cheat there is a change to the prover's side above,
+  which the same checks refuse.
 
 **Status: active.** The lane's number for a node serving under the audit comes from here.
 

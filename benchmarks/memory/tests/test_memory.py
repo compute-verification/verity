@@ -1125,8 +1125,9 @@ def test_a_local_session_that_cannot_run_or_is_not_accepted_prints_no_number_and
 
 
 def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, capsys, work, monkeypatch):
-    """PLAN is the session's plan under both one-machine ways in: a cheat's is run, and the verifier's refusal is the
-    command's, with no number and exit 1."""
+    """PLAN reaches `run.sh` under both one-machine ways in, and whatever session it makes, the verifier's refusal is
+    the command's, with no number and exit 1. (A served row's `run.sh` runs `serve` alone and refuses another plan
+    before any session, `test_run_serve.py`; a served cheat is a changed prover.)"""
     monkeypatch.setenv("PLAN", "skip:0.0625")
     rejected = a_record(a_session(accepted=False, failure="window 0: 4 of 16 openings missing"))
     loop = Machine(record=rejected)
