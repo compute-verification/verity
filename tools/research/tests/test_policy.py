@@ -1,6 +1,6 @@
 """The policy (`research.policy`, policy.toml): the runners report real verdicts, and what gates and what may stay red is its
 config.  A policy of any other form is refused; an allowance covers a suite whole or test by test, a circuit-check failure by
-its check code and family, and only until it expires; `research merge` requires every job but those off the gate, and the
+its check code and family, and only until it expires; `research.merge` requires every job but those off the gate, and the
 quick tier passes a run whose every failure `main`'s policy allows."""
 from __future__ import annotations
 

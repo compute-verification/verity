@@ -150,7 +150,7 @@ KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: own, which this file doesn't read
 KEEP = False
 #: the clone's worktree lock, in its git directory, under the name `research.gates.WORKTREES_LOCK` gives it: a scratch
-#: worktree is added and forgotten holding it alone, and every fetch the queue and `research merge` run holds it shared.
+#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared.
 #: Nothing here takes train.lock, which `research.queue.worktrees_locked` takes before this lock, never after
 WORKTREES_LOCK = "research-worktrees.lock"
 #: the options the command that confirms a skip takes from its run, where given (`confirming`): every one that names no move

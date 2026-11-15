@@ -224,7 +224,7 @@ LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
-#: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (`research merge`).
+#: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (the old path's landings).
 LANDED = "landed"
 #: On `task:<key>`, by the executor from its run (`verity tasks run`): its verdict, or error with none (`research.executor`).
 TASK_VERDICT = "verdict"
@@ -438,8 +438,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),
-    _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
-       "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
+    _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by the verified queue after a landing (`merge.label_landed`): main's commit "
+       "that landed what it checked, or whose Check: or Checked: trailer names it", pattern=r"[0-9a-f]{40}"),
     _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor from its run of `verity tasks run`: pass (passed) "
        "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; a fail "
        "stands until an error after it, else the newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),

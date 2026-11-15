@@ -1,4 +1,4 @@
-"""Verdict carry (drive.toml's `verdict_carry`, `drive.Driver._carry_verdicts`): whether a PR's new head changes nothing a
+"""Verdict carry (drive.toml's `verdict_carry`, `Landing._carried_from`): whether a PR's new head changes nothing a
 reviewer saw at an older head with a land verdict, beyond merges of commits the queue trusts, so that verdict holds at the new
 head with no reviewer.
 

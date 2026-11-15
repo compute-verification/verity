@@ -1068,7 +1068,7 @@ def test_a_refused_notice_is_told_again_and_one_told_is_not(world, monkeypatch):
     assert state["told"] == [] and "could not post" in logged[-1]
     ok[0] = True
     h.d.tell(state, ["k"], "#1 conflicts", "circuits", "lean")
-    assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @circuits @lean")
+    assert state["told"] == ["k"] and logged[-1].startswith("research queue: told @circuits @lean")
     assert sent[-1] == ("@circuits @lean queue: #1 conflicts", ("@circuits", "@lean"))
     h.d.tell(state, ["k"], "#1 conflicts", "circuits")
     assert len(sent) == 2

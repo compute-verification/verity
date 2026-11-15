@@ -407,8 +407,8 @@ RESTACK_JOB = f'd=$1; shift; exec timeout -s INT -k 60 {RESTACK_WAIT_S} "$@" > "
 #: passes its command's on, which an operator, drive's stop or the pod's shutdown sends.  Not `timeout`'s own 124 at
 #: `RESTACK_WAIT_S`, nor SIGKILL's 137, which the OOM killer and `timeout -k` send too
 RESTACK_INTERRUPTED = ("130", "143")
-#: why a PR waits off `next` while it is restacked in the background (`Restacking`): it refuses nothing, so nothing caches it and
-#: drive tells no one (`drive.Driver.tell_out`)
+#: why a PR waits out of `Queue.sync`'s build while it is restacked in the background (`Restacking`): it refuses nothing, so
+#: nothing caches it and no one is told
 RESTACKING = "restacking across the move"
 #: how many first-parent commits of the landing branch a sync reads for the queue's landings (`queue_log`): the heads it
 #: landed, and the moves a PR based before them is restacked through
@@ -626,8 +626,8 @@ class GitHub:
         return r.stdout.strip() or None if r.returncode == 0 else None
 
     def close(self, number: int, comment: str) -> None:
-        """Close PR ``number`` with ``comment`` (drive's stale and unlandable rules: `research.stale`, `drive.Driver._unlandable`),
-        as `gh` is authenticated here: drive's App."""
+        """Close PR ``number`` with ``comment`` (the stale rule: `research.stale`), as `gh` is authenticated here: the queue's
+        App."""
         try:
             r = subprocess.run(["gh", "pr", "close", str(number), "--repo", self.repo, "--comment", comment], capture_output=True,
                                text=True, timeout=GH_TIMEOUT_S)
@@ -785,38 +785,35 @@ def signed_mode(value: object) -> str | None:
 @dataclass(frozen=True)
 class DriveFlags:
     """The queue's flags: the defaults, then `DRIVE_FLAGS` at `main`, which the verified queue's loop reads each tick
-    (`flags_at`: their one source, so a change to them is a reviewed commit and the next tick takes it)."""
+    (`flags_at`: their one source, so a change to them is a reviewed commit and the next tick takes it).  A field marked
+    "old path" was read only by the lander before the verified queue, and stays so a `DRIVE_FLAGS` that sets it still parses."""
     on: str | None = None
     marked_after: str | None = None
     regenerate_locks: bool = False
-    #: how `next` lands: "review", each member on a reviewer's verdict, onto `land_into`, whose tip the full check checks (`Driver`)
+    #: old path: how its `next` landed ("review", each member on a reviewer's verdict)
     land: str = "review"
-    #: the branch a review landing fast-forwards and `next` is built on (`Queue.into`): `checked`, which `main` follows only to
-    #: a commit whose after-landing run passed every step on the merge gate (`Driver._promote`), or `main` itself; None (unset):
-    #: `main` (`into_at`)
+    #: the branch the preflight merges a head onto (`Queue.into`, `into_at`): `main`, or the old path's frozen `checked`; None
+    #: (unset): `main`
     land_into: str | None = None
     #: the after-landing run reuses no pass but circuit-check's per-target ones (`check.py --no-cache --circuit-cache`)
     after_landing_no_cache: bool = False
-    #: scripts a PR passes to be admitted (`gate_refusal`: its head at the ready mark's preflight, its merge onto `next` at the
-    #: sync), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
+    #: scripts a PR passes at its ready mark's preflight (`gate_refusal`), each by its path from the repository's root, run as
+    #: it is at `main`
     landing_gates: tuple[str, ...] = ()
-    #: scripts run where and as the landing gates are, whose refusal keeps no PR out: the ready mark prints it as a warning, and
-    #: the sync admits the PR and keeps it for drive to tell its owner once a head (`Driver.tell_warned`)
+    #: scripts run where and as the landing gates are, whose refusal keeps no PR out: the ready mark prints it as a warning
     warn_gates: tuple[str, ...] = ()
-    #: the check's steps whose red drive never reverts: it names the culprit and rings its lane and the owner of what failed
-    #: once, to fix it forward in its next PR (`drive.Driver._warns`)
+    #: the check's steps whose red the queue never reverts: it names the culprit and rings its lane and the owner of what failed
+    #: once, to fix it forward in its next PR
     warn_steps: tuple[str, ...] = ()
-    #: every sync, members with a land verdict go below those waiting for one (`Driver._lift`), so a member waiting for its
-    #: review holds only itself
+    #: old path: members of its `next` with a land verdict went below those waiting for one (`Queue.sync`'s lift)
     verdict_first: bool = True
-    #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
-    #: owner once a day), and before drive closes it; 0 is off
+    #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so), and, on the old
+    #: path, before it was closed; 0 is off
     stale_days: int = 0
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
-    #: close each open PR nothing will land, its head carried by a landed PR of the same owner or its change already on
-    #: `land_into` (`drive.Driver._unlandable`): "on"; "log", only log each it would close; "off"
+    #: old path: close each open PR nothing will land ("on"; "log", only log each it would close; "off")
     close_unlandable: str = "off"
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`vqueue_slim.start`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
@@ -824,8 +821,8 @@ class DriveFlags:
     after_landing_shards: int | str = 1
     #: the keys a command line may override, of `COMMAND_LINE`
     command_line: tuple[str, ...] = ("on",)
-    #: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next` whose change is `lowrisk` on their
-    #: ready mark alone (`drive.Driver.land_lowrisk`); off: drive lands only on review
+    #: the low-risk lane: the verified queue takes a PR whose change is `lowrisk` on its ready mark alone; off, only on review
+    #: (`lowrisk_per_tick` is the old path's)
     lowrisk_lane: bool = True
     lowrisk_per_tick: int = 20
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
@@ -843,11 +840,10 @@ class DriveFlags:
     #: puts `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
     #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
-    #: (`research.carry`, `drive.Driver._carry_verdicts`): "off"; "shadow", drive logs what it would carry and writes nothing;
-    #: "on", it writes the land verdict at the head as `CI`
+    #: (`research.carry`): "off"; "shadow", the loop logs what it would carry and writes nothing; "on", it writes the land
+    #: verdict at the head as `CI`
     verdict_carry: str = "off"
-    #: who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it
-    #: (`drive.Driver._bottom`), and the minutes it waits before each ring
+    #: old path: who it rang while its `next`'s lowest member waited for a land verdict, and the minutes before each ring
     bottom_ring: tuple[str, ...] = ("@ci", "@top")
     bottom_wait_min: int = 30
     #: whether a ready mark or land verdict counts only when its `label_auth` companion authenticates it as its author's, or as
@@ -857,7 +853,7 @@ class DriveFlags:
     #: `judge` and `review` refuse to write one they can't sign.  "on" only while the low-risk lane can't change who holds a
     #: handle or how a label is judged (`SIGNED_GUARDS`)
     signed_verdicts: str = "off"
-    #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
+    #: the restacks across a move `Queue.sync` runs at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
 
     @property
@@ -1331,7 +1327,7 @@ LEAN_SPEC = ("security/Definitions/", "security/Definitions.lean", "security/lak
 
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     """Whether ``commit``'s own change (against its first parent, or ``base``) is a Lean change, whatever its PR's title, which
-    drive's lock run follows on `checked` (`Driver._start_locks`: lean-audit alone, regenerating the records it leaves stale)
+    a candidate's records run follows (`vqueue_records`: lean-audit alone, regenerating the records it leaves stale)
     and whose Lean cache `merge.lean_publish` publishes: it touches a lock or the spec (`LEAN_SPEC`), so neither a
     guarantee's statement nor a definition it reads reaches `main` without its record (the after-landing lean-audit,
     `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
@@ -1761,15 +1757,15 @@ class Queue:
         self.into_fetched = False
         self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
-        #: whether drive's lift puts members with a land verdict below those without (`Driver._lift`); None: drive.toml's
-        #: `verdict_first` at `main`
+        #: whether `sync`'s lift puts members with a land verdict below those without; None: drive.toml's `verdict_first` at
+        #: `main`
         self.verdict_first = verdict_first
-        #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: those
-        #: with a land verdict, above the priority list's); what `order` moved of them
+        #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (those with a land
+        #: verdict, above the priority list's); what `order` moved of them
         self.lift: list[int] = []
         self._lifted: list[int] = []
-        #: members `next` keeps that this sync moves to its top, each with the PRs that contain it (`Driver._park`: those held
-        #: by a verdict at the head `next` holds), so the members above them form the prefix that lands; what `order` moved
+        #: members `next` keeps that this sync moves to its top, each with the PRs that contain it (those held by a verdict at
+        #: the head `next` holds), so the members above them form the prefix that lands; what `order` moved
         self.park: list[int] = []
         self._parked: list[int] = []
         self.now: Callable[[], float] = time.time
@@ -1985,9 +1981,8 @@ class Queue:
 
     @property
     def into(self) -> str:
-        """The branch drive's review landing fast-forwards and `next` is built on: `land_into`, else drive.toml's at `main` as
-        last fetched.  `checked`: `main` follows it only to each commit
-        whose after-landing run passed every step on the merge gate (`Driver._promote`)."""
+        """The branch the preflight merges a head onto: `land_into`, else drive.toml's at `main` as last fetched (`main`, or
+        the old path's frozen `checked`)."""
         if self.land_into is not None:
             return self.land_into
         if self._into is None:
@@ -2438,7 +2433,7 @@ class Queue:
         from the merged tree, unless both sides changed what a JSON pin holds besides its digests (`repinned`), and the
         merged tree's Lean takes the Lean module system once the tree has it
         (`ported`), which refuses the merge when it can't.  A git without `--attr-source` (before 2.40) raises: merging
-        without it would leave out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).
+        without it would leave out every PR whose only conflict is a pin.
         ``head``: the commit merged in its place, its head restacked through a move (`_merge_through`), under the same
         message.  What the merge comes to is recorded under what it reads (`_merge_key`, the state's `merges`): the same
         ``head`` merged again onto ``tip``'s tree takes the record, told as the merge was, and only `git commit-tree` runs."""
@@ -2472,8 +2467,8 @@ class Queue:
     def _recorded(self, tip: str, head: str) -> dict:
         """``head`` merged onto ``tip`` as `_merged` tells it, from the record of that merge onto ``tip``'s tree (`_merge_key`)
         when there is one and the clone still holds its tree (a fresh clone or a prune drops it), else made and recorded;
-        stamped with this sync's count (`_merge_serial`).  The sync's merges (`_merge`) and the low-risk lane's
-        (`drive.Driver._clean_merge`) are one merge, and share the records."""
+        stamped with this sync's count (`_merge_serial`).  Every caller's merges (`_merge`) are one merge, and
+        share the records."""
         key = self._merge_key(tip, head)
         rec = self._merge_records.get(key)
         if rec is not None and "tree" in rec and not self._has_tree(rec["tree"]):
@@ -2846,8 +2841,8 @@ class Queue:
 
     def _read_registry(self) -> tuple[set, dict[str, str], set[str]] | None:
         """(the handles, {agent id: handle}, the Linear team keys its handles own) of `main`'s registry, read once per `fetch`: a
-        review tick asks `handle` of each member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on
-        the control pod's network volume, times over a hundred members.  None when it can't be parsed."""
+        tick asks `handle` of each member of a candidate, and each `git show` is ~70 ms in the queue's clone on a network volume,
+        times over a hundred members.  None when it can't be parsed."""
         if self._registry is None:
             r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
             try:
@@ -2868,7 +2863,7 @@ class Queue:
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """The old path's rebuild of its `next` branch, which no command runs: the queue's tests drive admission, ordering and
         merges through it (`entries`, `order`, `_merge`).  Off drive it refuses before anything (`_drive_only`)."""
-        self._drive_only(self.branch, "queue sync", dry_run)
+        self._drive_only(self.branch, "sync", dry_run)
         self._clone()
         state = self.load_state()
         if self.priority_file is not None:
@@ -3024,10 +3019,9 @@ class Queue:
         return members, entries
 
     def _drive_only(self, ref: str, verb: str, dry_run: bool) -> None:
-        """Refuse a push of `main`, `checked` or `next` (`merge.DRIVE_ONLY`) here unless this is drive (`merge.on_drive`), whatever the caller:
-        GitHub's rulesets don't stop verity-agents[bot].  `--shadow` gets no pass: its push of
-        `queue-shadow` passes here, but `research queue sync`, `land` and `drive` refuse off drive with it as without, though
-        it never pushes `main` or `next`."""
+        """Refuse a push of `main`, `checked` or `next` (`merge.DRIVE_ONLY`) here unless this is the live queue
+        (`merge.on_drive`), whatever the caller: GitHub's rulesets don't stop verity-agents[bot].  `--shadow` gets no pass: its
+        push of `queue-shadow` passes here, but `sync` refuses off the live queue with it as without."""
         from .merge import DRIVE_ONLY, off_drive, on_drive
 
         if not dry_run and ref in DRIVE_ONLY and not on_drive():
@@ -3059,8 +3053,8 @@ class Queue:
 
     def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
         """A hand ejection's notice, posted as ``by`` in the merge thread to `CI` and the lane that owns ``p`` (only a handle's
-        holder may post as it).  Drive's
-        own ejections are told by `Driver.refuse`.  1, with the text to send, when the post failed."""
+        holder may post as it).  The loop's
+        own ejections are told by the loop.  1, with the text to send, when the post failed."""
         from .landing import CI, _merge_thread, merge_thread_post
 
         owner = self.handle(p)
@@ -3235,9 +3229,8 @@ def contained_first(entries: dict[int, Entry]) -> list[int]:
 
 
 def forces_cold(files: Iterable[str]) -> bool:
-    """Whether a change to ``files`` makes the next check's circuit-check run cold (hours, not seconds), so a sync merges it
-    above the warm PRs (`Queue.order`), and what drive takes as circuit-check's inputs: the culprit of a red one
-    (`Driver._input_rule`), and what doesn't land while it is red on `checked` (`Driver._circuit_held`)."""
+    """Whether a change to ``files`` makes the next check's circuit-check run cold (hours, not seconds), so `Queue.order` merges it
+    above the warm PRs."""
     for f in files:
         if f.endswith(".md") or "/tests/" in f:
             continue

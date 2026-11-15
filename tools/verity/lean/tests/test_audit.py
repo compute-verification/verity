@@ -9134,7 +9134,7 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
 
 def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
     """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
-    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research.merge` refuse:
     the gate's from-source build is the cache's root of trust and must never read it."""
     monkeypatch.setattr(A, "ARTIFACTS", None)
     monkeypatch.setattr(A, "DEV_CACHE", False)

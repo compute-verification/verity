@@ -1,4 +1,4 @@
-"""A part's pass is reused on any node for the same inputs (`check.py --plan`, `research merge --verdicts`), so no key names the node:
+"""A part's pass is reused on any node for the same inputs (`check.py --plan`, the verified queue), so no key names the node:
 a suite's (`suites.key`, and its test modules' `module_key` and `traced_key`), check's whole steps' (`STEP_KEYS`) and a Lean package's
 (`lean_audit.key`), each computed for one tree on two simulated nodes, are equal, and a change to what the key declares moves it. The
 two nodes differ in everything that names a node: the tree's absolute path, the host, the home, the PATH, the temporary and runtime

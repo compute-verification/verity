@@ -441,7 +441,7 @@ def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.envi
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
-#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
+#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research.merge` refuse
 DEV_KIND = "lean-fast/v1"
 
 

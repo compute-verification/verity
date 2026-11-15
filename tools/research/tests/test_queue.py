@@ -326,7 +326,7 @@ def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_b
 
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     """GitHub can list an open PR before it makes refs/pull/N/head, and one missing ref would fail the whole fetch, and every
-    drive tick with it: that PR waits, and the rest of the queue syncs."""
+    tick with it: that PR waits, and the rest of the queue syncs."""
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, two := world.change({"b.txt": "two\n"}))
     _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
@@ -603,7 +603,7 @@ def test_a_sync_on_a_git_without_attr_source_raises_rather_than_merging_without_
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
     """A sync writes no conflict handoff into the notes clone of the VM it runs on, where it would wait for that VM's next notes
-    push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    push; the loop tells each conflict in the merge thread."""
     monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
@@ -1975,7 +1975,7 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
-    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
+    """One listing of the store's remote per open PR, in turn, would take seconds of every tick; and one GET at a time
     took a fresh VM's listing four minutes for `next`'s ~1,000 labels, so the listings and the GETs each run
     `PREFETCH_JOBS` at once."""
     from research.queue import PREFETCH_JOBS, StoreLabels
@@ -5208,7 +5208,7 @@ def test_one_pr_is_read_open_or_not_and_a_failed_read_names_it(monkeypatch):
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
-    """A review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry is a
+    """A review tick asks `handle` of every member of a candidate, and each read of main's registry is a
     `git show` of ~70 ms in drive's clone on the network volume, times over a hundred members a tick.  A fetch reads it afresh."""
     from research import queue as Q
 

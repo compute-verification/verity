@@ -373,7 +373,7 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
 
 
 def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatch):
-    """`research run --tool`, `research merge`'s reads of the target's declaration, `after_land` and a run's preflight read
+    """`research run --tool`, `research.merge`'s reads of the target's declaration, `after_land` and a run's preflight read
     a tool's declaration from the tree they're given: one from before a layout move holds it under its old path."""
     from research import merge, remote
 
