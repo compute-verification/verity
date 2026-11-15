@@ -310,7 +310,7 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     rows = [e for e in manifest["file"] if e.get("src") == S.SLOT_PATHS[0]]
     assert [e["path"] for e in rows] == [S.NODE_SLOT], "one copy a machine"
-    beside = S.NODE_SLOT.rsplit("/", 4)[0] + "/"               # .../check-slot/, which holds the copy below its repository path
+    beside = S.NODE_SLOT.rsplit("/", S.SLOT_PATHS[0].count("/") + 1)[0] + "/"   # .../check-slot/, which holds the copy below its repository path
     assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + S.SLOT_PATHS[0]
     assert [e["path"] for e in [*manifest["file"], *manifest.get("tree", [])]
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"

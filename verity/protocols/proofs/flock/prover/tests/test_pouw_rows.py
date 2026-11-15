@@ -329,7 +329,7 @@ def leafOf (v2 : Bool) (words : Nat) (row salt : String) : String := Id.run do
   for k in [0:(p.bytes + 17 + 127) / 128] do
     let mut blk := ByteArray.mk (Array.replicate 128 0)
     for t in [0:1024] do
-      let (o, b) := blockBit t
+      let (o, b) := chunkBit t
       let v := match constBit p tl k t with
         | some c => c
         | none => ((row.get! (128 * k + o)).toNat >>> b) % 2 == 1

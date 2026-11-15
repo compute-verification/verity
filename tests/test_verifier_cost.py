@@ -112,7 +112,7 @@ ALLOWED: dict[str, str] = {
         "for SpotFlock.code; replaced as security/Proofs/Flock/SpotFlock/Code.lean's entry says",
 }
 
-FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
+FIX = ("a verifier does work proportional to the description, never to the unrolled circuit (AGENTS.md "
        "\"Design rules\"): summarize once per specialized Definition and multiply through batch members and scan "
        "iterations, as InferenceOnlyCheck.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in ALLOWED "
        "with its reason")
@@ -202,7 +202,7 @@ def _scanned() -> list[str]:
     return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/protocols/proofs/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))
 
 
-def test_no_verifier_of_record_walks_the_unrolled_circuit():
+def test_no_verifier_walks_the_unrolled_circuit():
     found = {p: offenses((ROOT / p).read_text(), test="/Test/" in p) for p in _scanned()}
     bad = [f"{p}:{line}: {what}" for p, hits in found.items() if p not in ALLOWED for line, what in hits]
     assert not bad, f"{FIX}:\n" + "\n".join(bad)

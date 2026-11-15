@@ -3,6 +3,8 @@
 # a_in) becomes `Model.fanin`, beside `fanout`, and `derived_legs` `derived_fanin`, with the data files' key and the
 # dictionaries circuit properties sets beside a_in. Only the files below: "legs" elsewhere (a Dot16 step's terms, the
 # all-protocols runner's subprotocols) is another sense and another map's.
+# `Model.legs` itself, bare `legs`, has no row: `leg_words_map.toml`'s `Legs` and `LEGS` fold onto it in the test of
+# two maps, and the files below no longer hold it.
 
 [words]
 
@@ -17,4 +19,4 @@ files = [
     "benchmarks/circuit_properties/README.md",
     "benchmarks/circuit_properties/tests/test_references.py",
 ]
-words = { "derived_legs" = "derived_fanin", "legs" = "fanin" }
+words = { "derived_legs" = "derived_fanin" }
