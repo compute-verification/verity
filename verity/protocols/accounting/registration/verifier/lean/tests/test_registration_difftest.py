@@ -1,5 +1,5 @@
 """The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`,
-`verity/registration/log/v1`, in the core interface's package) against its Python
+`verity/registration/log/v1`, in registration's own package) against its Python
 (`verity.protocols.accounting.registration.verifier.registration`). Hypothesis generates a log for
 either composite, from the honest example site, its information and its declaration of day 0 (`EXAMPLE`, the Lean's
 `Core.Registration.Example`) with a few changes (among them a declaration added or changed, so a day is sometimes declared
@@ -26,7 +26,7 @@ from verity import device as S
 from verity.protocols.accounting.registration.verifier import registration as G
 from verity_difftest import protocol as P
 
-REGISTRATION = Path(__file__).resolve().parents[6] / "verity/protocols/accounting/registration/verifier/lean"
+REGISTRATION = Path(__file__).resolve().parents[7] / "verity/protocols/accounting/registration/verifier/lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 SHEET = S.Sheet(S.DeviceFigures("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 2 * 10**15, 15 * 10**14, 4 * 10**15)),

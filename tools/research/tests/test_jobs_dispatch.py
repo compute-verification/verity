@@ -537,6 +537,10 @@ def test_the_probe_reads_the_lease_the_tools_and_live_runs(tmp_path):
     assert capabilities["lease_s"] > 2 * 10 ** 9
 
 
+#: the Lean check's lines that place its fixtures, as check.py writes them
+CHECK = 'HERE = Path(__file__).resolve().parent\nROOT = HERE.parents[2]\nFIXTURES = HERE / "tests" / "fixtures"\n'
+
+
 def _lean_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     files = {
@@ -544,7 +548,7 @@ def _lean_repo(tmp_path: Path) -> Path:
         "a/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../b"}, {"type": "git", "name": "mathlib"}]}),
         "a/nested/lakefile.toml": "", "a/nested/N.lean": "n",
         "b/lakefile.toml": "", "b/B.lean": "b", "c/lean-audit.json": "{}", "c/C.lean": "c",
-        "tools/verity/lean/check.py": "audit", "tools/check/check.py": "check", "README.md": "readme",
+        "tools/verity/lean/check.py": CHECK, "tools/check/check.py": "check", "README.md": "readme",
     }
     for f, text in files.items():
         (repo / f).parent.mkdir(parents=True, exist_ok=True)
@@ -564,7 +568,8 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
                                                     "b/B.lean", "b/lakefile.toml", "tools/verity/lean/check.py"]
     keys = {}
     for name, path, text in (("readme", "README.md", "x"), ("nested", "a/nested/N.lean", "x"), ("check", "tools/check/check.py", "x"),
-                             ("dep", "b/B.lean", "x"), ("tool", "tools/verity/lean/check.py", "x"), ("other", "c/C.lean", "x")):
+                             ("dep", "b/B.lean", "x"), ("tool", "tools/verity/lean/check.py", CHECK + "x = 1\n"),
+                             ("other", "c/C.lean", "x")):
         (repo / path).write_text(text)
         _git(repo, "commit", "-qam", name)
         keys[name] = lean_key(_git(repo, "rev-parse", "HEAD"), ["a"], repo)
@@ -574,6 +579,39 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
     assert lean_key(one, ["a/"], repo) == base != lean_key(one, ["a", "c"], repo)
     with pytest.raises(SystemExit, match="b has no lean-audit.json"):
         lean_key(one, ["b"], repo)
+
+
+@pytest.mark.parametrize("fixtures, line", [
+    ("tools/verity/lean/tests/fixtures", 'FIXTURES = HERE / "tests" / "fixtures"'),
+    ("tests/tools/verity/lean/fixtures", 'FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"'),
+    ("tests/tools/verity/lean/fixtures", 'FIXTURES = ROOT / "tests/tools/verity/lean/fixtures"')])
+def test_a_lean_regen_is_keyed_on_the_controls_fixtures_wherever_check_puts_them(tmp_path, fixtures, line):
+    """Every Lean check run builds the controls' packages (`check.FIXTURES`), so a change to one changes the key, also once
+    they sit under the root's tests/, outside `LEAN_TOOL`."""
+    from research.jobs.cli import lean_fixtures, lean_inputs, lean_key
+
+    repo = _lean_repo(tmp_path)
+    (repo / "tools/verity/lean/check.py").write_text(CHECK.replace('FIXTURES = HERE / "tests" / "fixtures"', line))
+    (repo / fixtures / "control").mkdir(parents=True)
+    (repo / fixtures / "control" / "Control.lean").write_text("theorem c : True := trivial\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "fixtures")
+    one = _git(repo, "rev-parse", "HEAD")
+    assert lean_fixtures(one, repo) == fixtures
+    assert f"{fixtures}/control/Control.lean" in lean_inputs(one, ["a"], repo)
+    (repo / fixtures / "control" / "Control.lean").write_text("theorem c : 1 = 1 := rfl\n")
+    _git(repo, "commit", "-qam", "control")
+    assert lean_key(_git(repo, "rev-parse", "HEAD"), ["a"], repo) != lean_key(one, ["a"], repo)
+
+
+def test_a_lean_regen_refuses_a_check_whose_fixtures_it_cannot_place(tmp_path):
+    from research.jobs.cli import lean_key
+
+    repo = _lean_repo(tmp_path)
+    (repo / "tools/verity/lean/check.py").write_text("FIXTURES = fixtures()\n")
+    _git(repo, "commit", "-qam", "unplaced")
+    with pytest.raises(SystemExit, match="sets no `FIXTURES`"):
+        lean_key(_git(repo, "rev-parse", "HEAD"), ["a"], repo)
 
 
 def test_a_lean_regen_is_keyed_on_its_provers_and_everything_they_require(tmp_path):

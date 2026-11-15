@@ -25,7 +25,8 @@ touches what `merge_requires` sends the Lean agreement for, and `upstream.json`'
 The dedupe key makes adding idempotent, and a deliberate re-run names a new one (--dedupe-key).  A merge check's is
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package, the packages its `proved_in` names, and every package these require by path, less the
-Lake packages nested in them, and `tools/verity/lean/`; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So trains
+Lake packages nested in them, `tools/verity/lean/`, and the controls' packages every Lean check run builds, wherever
+`check.FIXTURES` puts them; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So trains
 whose Lean inputs are the same share one regeneration, and the second add answers with the first job and its run.  The site
 is `$JOBS_URL`.  Exit 1 when the Job queue refuses, 4 when it can't be reached.
 """
@@ -40,7 +41,7 @@ import posixpath
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .client import WORKER_TOKEN_ENV, HTTPClient, Unreachable, load_token, worker_token_file
 from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
@@ -49,6 +50,8 @@ from .dispatch import POD_KINDS, RUN_KIND, RUN_SLOTS
 
 REPO = "compute-verification/verity"
 LEAN_TOOL = "tools/verity/lean/"
+#: the Lean check, whose `FIXTURES` (the controls' packages, which every run of it builds) the key reads wherever they are
+LEAN_CHECK = f"{LEAN_TOOL}check.py"
 LEAN_KEY_SCHEMA = "lean-regen-inputs/v1"
 
 
@@ -106,7 +109,42 @@ def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> di
                   and f.rsplit("/", 1)[0] != pkg}
         return [f for f in files if f.startswith(pkg + "/") and not any(f.startswith(n) for n in nested)]
 
-    return {f: files[f] for f in sorted({*(f for p in pkgs for f in own(p)), *(f for f in files if f.startswith(LEAN_TOOL))})}
+    tool = (LEAN_TOOL, lean_fixtures(commit, cwd) + "/")
+    return {f: files[f] for f in sorted({*(f for p in pkgs for f in own(p)), *(f for f in files if f.startswith(tool))})}
+
+
+def lean_fixtures(commit: str, cwd: Path | None = None) -> str:
+    """`check.FIXTURES` at ``commit``, as a path in the tree, read without running check.py: its module-level assignments are
+    evaluated in order where they are a path built from `Path(__file__)`, `.resolve()`, `.parent`, `.parents[i]`, `/` and
+    string literals."""
+    def ev(n: ast.expr, names: dict[str, PurePosixPath]) -> PurePosixPath | str | None:
+        match n:
+            case ast.Constant(value=str(s)):
+                return s
+            case ast.Name(id=name) if name in names:
+                return names[name]
+            case ast.Call(func=ast.Name(id="Path"), args=[ast.Name(id="__file__")]):
+                return PurePosixPath(LEAN_CHECK)
+            case ast.Call(func=ast.Attribute(value=v, attr="resolve"), args=[]):
+                return ev(v, names)
+            case ast.Attribute(value=v, attr="parent"):
+                return p.parent if isinstance(p := ev(v, names), PurePosixPath) else None
+            case ast.Subscript(value=ast.Attribute(value=v, attr="parents"), slice=ast.Constant(value=int(i))):
+                return p.parents[i] if isinstance(p := ev(v, names), PurePosixPath) and 0 <= i < len(p.parents) else None
+            case ast.BinOp(left=a, op=ast.Div(), right=b):
+                l, r = ev(a, names), ev(b, names)
+                return l / r if isinstance(l, PurePosixPath) and r is not None else None
+        return None
+
+    names: dict[str, PurePosixPath] = {}
+    for node in ast.parse(_show(commit, LEAN_CHECK, cwd) or "").body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) \
+                and isinstance(value := ev(node.value, names), PurePosixPath):
+            names[node.targets[0].id] = value
+    if "FIXTURES" not in names:
+        raise SystemExit(f"research jobs: {LEAN_CHECK} at {commit[:12]} sets no `FIXTURES` this reads as a path "
+                         f"(`lean_fixtures`): build it from `Path(__file__)` or `HERE` and string literals")
+    return str(names["FIXTURES"])
 
 
 def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
