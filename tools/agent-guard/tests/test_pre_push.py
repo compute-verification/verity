@@ -539,6 +539,7 @@ PERSON = {"GIT_AUTHOR_NAME": "Ada Lovelace", "GIT_AUTHOR_EMAIL": "ada@lovelace.e
           "GIT_COMMITTER_NAME": "Ada Lovelace", "GIT_COMMITTER_EMAIL": "ada@lovelace.example"}
 STRANGER = {"GIT_AUTHOR_NAME": "Grace Hopper", "GIT_AUTHOR_EMAIL": "grace@hopper.example",
             "GIT_COMMITTER_NAME": "Grace Hopper", "GIT_COMMITTER_EMAIL": "grace@hopper.example"}
+PERSON_AS = "Ada Lovelace <ada@lovelace.example>"
 CARRY = "another author's commits are carried by a merge, not by a rebase or a cherry-pick"
 
 
@@ -602,7 +603,7 @@ def test_an_author_under_invalid_is_refused_though_main_has_it(vm):
     sha = picked(vm, their_line(vm, BY_HAND))
     p = vm.push("origin", "HEAD:refs/heads/work")
     assert p.returncode != 0 and f"{sha[:12]} author restack carry <noreply@invalid>." in p.stderr
-    assert "whose author's address is under `invalid`" in p.stderr and CARRY not in p.stderr
+    assert "an author whose address is made up" in p.stderr and CARRY not in p.stderr
     vm.git("reset", "-q", "--hard", "main")
     picked(vm, vm.git("rev-parse", "main").strip())
     assert vm.push("origin", "HEAD:refs/heads/work").returncode == 0, "the same door lets a real author of main's through"
@@ -634,3 +635,67 @@ def test_the_filter_branch_a_refusal_prints_writes_again_the_made_up_names_alone
     assert done.returncode == 0, done.stderr
     assert vm.git("log", "--format=%s: %an <%ae> | %cn <%ce>", "again", "--not", "main", cwd=vm.origin).splitlines() == [
         f"made: {OWN} | {OWN}", f"their change: Ada Lovelace <ada@lovelace.example> | {OWN}"]
+
+
+def remedy(stderr: str) -> list[str]:
+    """The refusal's `unset`, `git switch` and `filter-branch` commands, as it prints them."""
+    said = re.findall(r"`([^`]+)`", stderr)
+    return [next(c for c in said if c.startswith(w)) for w in ("unset ", "git switch ", "FILTER_BRANCH_")]
+
+
+def test_the_filter_branch_leaves_a_real_persons_own_unpushed_commit_on_the_same_branch_byte_for_byte(vm):
+    """Ada's own commits (her name as author and committer, as her git writes them) before and after one a shell's exported
+    names wrote: the printed filter writes again only that one, named by sha. The commit before it is the same object; the
+    one after it differs only in its parent, its author, committer and dates as they were."""
+    on_main(vm, PERSON)
+    vm.git("switch", "-q", "-c", "work")
+    first = vm.commit("ada's first", **PERSON)
+    made = vm.shell(f"{EXPORTS}\ngit commit -q --allow-empty -m made\n", agent=None)
+    assert made.returncode == 0, made.stderr
+    second = vm.commit("ada's second", **PERSON)
+    p = vm.shell(f"{EXPORTS}\ngit push origin work")
+    assert p.returncode != 0 and "this push adds 3 commits that" in p.stderr
+    done = vm.shell("\n".join([EXPORTS, *remedy(p.stderr)]).replace("<new-branch>", "again"))
+    assert done.returncode == 0, done.stderr
+    assert vm.git("log", "--format=%s: %an <%ae> | %cn <%ce>", "again", "--not", "main").splitlines() == [
+        f"ada's second: {PERSON_AS} | {PERSON_AS}", f"made: {OWN} | {OWN}", f"ada's first: {PERSON_AS} | {PERSON_AS}"]
+    assert vm.git("rev-parse", "again~2").strip() == first
+    def headers(rev: str) -> list[str]:
+        return [line for line in vm.git("cat-file", "commit", rev).splitlines() if not line.startswith("parent ")]
+    assert headers("again") == headers(second)
+    p = vm.push("origin", "again")
+    assert p.returncode != 0 and "this push adds 2 commits that" in p.stderr, "Ada's own commits are hers to push"
+    assert "is that author's own" in p.stderr and "filter-branch" not in p.stderr
+
+
+
+@pytest.mark.parametrize("who", ["ci <ci@x>", "coordinator <coordinator@verity>", "hp2-host <hp2-host@lane>",
+                                 "lane pipe-race <pipe-race@verity.local>"])
+def test_an_author_with_a_dotless_or_local_domain_is_made_up_and_refused_though_main_has_it(vm, who):
+    name, _, address = who.removesuffix(">").partition(" <")
+    names = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": address, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": address}
+    on_main(vm, names)
+    sha = picked(vm, their_line(vm, names))
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and f"{sha[:12]} author {who}." in p.stderr
+    assert "an author whose address is made up" in p.stderr and CARRY not in p.stderr
+    assert f'case "$GIT_COMMIT" in {sha}) unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL;; esac' in p.stderr
+    assert "GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL;;" not in p.stderr, "its committer is the checkout's"
+
+
+def test_past_fifty_made_up_commits_the_filter_names_fifty_and_the_next_refusal_names_the_rest(vm):
+    vm.git("switch", "-q", "-c", "work")
+    made = vm.shell(f"{EXPORTS}\nfor i in $(seq 52); do git commit -q --allow-empty -m $i; done\n", agent=None)
+    assert made.returncode == 0, made.stderr
+    p = vm.shell(f"{EXPORTS}\ngit push origin work")
+    assert p.returncode != 0 and "It names the first 50 of the 52 by sha" in p.stderr
+    unset, switch, again = remedy(p.stderr)
+    assert len(re.findall(r"\b[0-9a-f]{40}\b", again)) == 2 * 50
+    done = vm.shell("\n".join([EXPORTS, unset, switch, again]).replace("<new-branch>", "again"))
+    assert done.returncode == 0, done.stderr
+    p = vm.push("origin", "again")
+    assert p.returncode != 0 and "this push adds 2 commits that" in p.stderr and "It names the first" not in p.stderr
+    done = vm.shell("\n".join([*remedy(p.stderr), "git push origin later"]).replace("<new-branch>", "later"))
+    assert done.returncode == 0, done.stderr
+    assert vm.who("later", vm.origin) == {f"{OWN} | {OWN}"}
+    assert vm.git("rev-list", "--count", "later", cwd=vm.origin).strip() == "53", "the 52 and the checkout's first"

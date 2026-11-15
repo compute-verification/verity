@@ -34,10 +34,10 @@ alone, a new branch is held to what it adds to the remote's other branches, and 
 its repository by URL has no such refs, and a commit fetched some other way (by URL, by sha, a pull request's ref) is held
 as new until `git fetch REMOTE` brings a ref that holds it. The committer must be the checkout's identity; the author must
 be too, or an identity that already authors a commit on the remote's `main` as the checkout last fetched it
-(`refs/remotes/REMOTE/main`, read only once a commit's author differs), with an address not under `invalid`: so a commit
-carried from a real author the remote has (a cherry-pick, a rebase) passes, and a name nobody has seen on `main` is
-refused. The refusal says to carry another author's commits by a merge, and gives the `filter-branch` that writes again
-only what took a made-up name from git's environment or a tool. A push that adds commits
+(`refs/remotes/REMOTE/main`, read only once a commit's author differs), with an address that is not made up (`made_up`):
+so a commit carried from a real author the remote has (a cherry-pick, a rebase) passes, and a name nobody has seen on
+`main` is refused. The refusal says to carry another author's commits by a merge, and gives the `filter-branch` that
+writes again only the names it found made up, in only the commits it names by sha. A push that adds commits
 is refused as well where the checkout has no configured identity, or where git can't list them (it fails, or takes more
 than `GIT_S`): a push that can't be judged is the one this rule is for. `OTHERS` holds the identities let through beside
 the checkout's own, each with its reason: one, the queue's own, under which `research queue cross` makes a crossing's
@@ -64,12 +64,9 @@ GIT_S = 30
 NAMES = "GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL"
 #: how many of the commits a refusal names
 SHOWN = 5
-#: what the refusal's `filter-branch` runs on each commit the remote lacks: a made-up name, an author's address under
-#: `invalid` or a committer that is not the checkout's (with the author too where it is the same), gives way to the
-#: checkout's identity; every other name, a real author's that a carried commit keeps, stays as it was
-REMADE = ('me=$(git config user.email); case "$GIT_AUTHOR_EMAIL" in *@invalid|*.invalid) unset GIT_AUTHOR_NAME '
-          'GIT_AUTHOR_EMAIL;; esac; if [ "$GIT_COMMITTER_EMAIL" != "$me" ]; then [ "$GIT_AUTHOR_EMAIL" != '
-          '"$GIT_COMMITTER_EMAIL" ] || unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL; unset GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL; fi')
+#: how many commits the refusal's `filter-branch` names by sha, so that it stays a command one can copy; the push after it
+#: is refused again and names the rest
+MENDED = 50
 
 
 def branches(lines: list[str]) -> list[str]:
@@ -103,9 +100,10 @@ def identity(env: dict[str, str]) -> str | None:
 
 
 def made_up(who: str) -> bool:
-    """Whether `NAME <ADDRESS>`'s address is under the domain RFC 2606 reserves as never real (`@invalid`, `.invalid`)."""
+    """Whether `NAME <ADDRESS>`'s address is one no mail reaches: a domain with no dot in it (`ci@x`, `coordinator@verity`),
+    or one under `invalid` (RFC 2606's, never real) or `local` (RFC 6762's, a machine's own network)."""
     domain = who.rpartition("<")[2].removesuffix(">").rpartition("@")[2].lower()
-    return domain == "invalid" or domain.endswith(".invalid")
+    return "." not in domain or domain.rpartition(".")[2] in ("invalid", "local")
 
 
 def main_authors(remote: str, env: dict[str, str]) -> set[str] | None:
@@ -137,9 +135,8 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
         ours = {me, *OTHERS}
         # A commit carried from another author (a cherry-pick, a rebase) keeps its author and has the pusher as committer.
         # It passes where that author already authors a commit on the remote's `main`: a real name the remote has, which
-        # this push does not bring in. An address under `invalid` is a made-up name, never let through as an author,
-        # however many commits under it `main` holds; the committer is always the checkout's, so names a shell exported
-        # are refused on it.
+        # this push does not bring in. A made-up address (`made_up`) is never let through as an author, however many
+        # commits under it `main` holds; the committer is always the checkout's, so names a shell exported are refused on it.
         real = {name for pair in added.values() for name in pair[:2] if me and name not in ours and not made_up(name)}
         known = (main_authors(remote, env) if named and real else None) or set()
         absent = bool(named and real) and not known
@@ -160,10 +157,11 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
              if committer not in ours or not admitted(author)]
     if not wrong:
         return None
-    # another author's work: carried under this checkout's identity as committer, or that author's own commit as a real
-    # identity `main` has wrote it; every other refused commit took a made-up name, and only those `filter-branch` mends
+    # another author's work: carried under this checkout's identity as committer, that author's own commit (one real name
+    # as author and committer), or committed by a real identity `main` has; every other refused commit took a made-up
+    # name, and only those `filter-branch` mends
     theirs = [sha for sha, author, committer, _ in wrong
-              if author in real and (committer in ours or (committer in known and (author == committer or admitted(author))))]
+              if author in real and (committer in ours or author == committer or (committer in known and admitted(author)))]
 
     def written(author: str, committer: str) -> str:
         said = [f"{role} {''.join(c if c.isprintable() else '?' for c in name)}" for role, name, held in
@@ -183,20 +181,32 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
                     f"{remote} main` first, and a commit whose author already authors one there passes under this "
                     "checkout's identity as committer.")
     if theirs:
-        said.append("A commit whose committer is this checkout's identity and whose author is another was carried from "
-                    "that author by a rebase or a cherry-pick: another author's commits are carried by a merge, not by a "
+        said.append("A commit whose author is another real name is that author's own, or was carried from that author by a "
+                    "rebase or a cherry-pick under this checkout's identity as committer: another author's commits are "
+                    "carried by a merge, not by a "
                     "rebase or a cherry-pick, so on a new branch, never by a forced push, run `git merge "
                     "<their-branch-or-commit>` on the branch or commit the remote holds them on; where the remote holds "
                     "none of an author's commits yet, the first push of that author's own commits is the author's to make.")
-    made = [new for sha, _, _, new in wrong if sha not in theirs]
+    made = [row for row in wrong if row[0] not in theirs]
     if made:
-        said.append(f"The commits whose committer is not this checkout's identity, or whose author's address is under "
-                    f"`invalid`, took made-up names from git's environment or from a tool. Clear the shell's, `unset "
-                    f"{NAMES}`, and make them again on a new branch, never by a forced push: `git switch -c <new-branch> "
-                    f"{made[0][:12]}`, then `FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --env-filter '{REMADE}' -- "
-                    f"<new-branch> --not --remotes={there}`, which writes each commit the remote lacks again, under this "
-                    "checkout's identity where its names are made-up and with every other name as it was, its tree, "
-                    "message, dates and parents as they were; then push <new-branch>.")
+        # only the names this rule found made up, in only the commits it found them in, named by sha: a real person's
+        # commit on the same branch, or a real author a pick kept, comes out as it was
+        mended = made[:MENDED]
+        reset = [(role, [sha for sha, author, committer, _ in mended if wrong_name(author, committer)])
+                 for role, wrong_name in (("AUTHOR", lambda author, _: author not in ours and made_up(author)),
+                                          ("COMMITTER", lambda _, committer: committer not in ours))]
+        cases = "; ".join(f'case "$GIT_COMMIT" in {"|".join(shas)}) unset GIT_{role}_NAME GIT_{role}_EMAIL;; esac'
+                          for role, shas in reset if shas)
+        more = (f" It names the first {MENDED} of the {len(made)} by sha, so that it stays a command one can copy: push "
+                "<new-branch> after it, and the refusal names the rest by their new shas." if len(made) > MENDED else "")
+        said.append(f"The {'other ' * bool(theirs)}commits, each with a committer that is not this checkout's identity or an author whose "
+                    f"address is made up (under `invalid` or `local`, or a domain with no dot), took made-up names from "
+                    f"git's environment or from a tool. Clear the shell's, `unset {NAMES}`, and make them again on a new branch, never by a "
+                    f"forced push: `git switch -c <new-branch> {made[0][3][:12]}`, then `FILTER_BRANCH_SQUELCH_WARNING=1 "
+                    f"git filter-branch -f --env-filter '{cases}' -- <new-branch> --not --remotes={there}`, which writes "
+                    "again, in the commits it names by sha, each such committer and author under this checkout's identity, "
+                    "and leaves every other name, and each commit's tree, message and dates, as they were; then push "
+                    f"<new-branch>.{more}")
     return " ".join(said)
 
 
