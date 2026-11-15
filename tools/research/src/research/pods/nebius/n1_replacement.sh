@@ -64,7 +64,7 @@ plan() {
   names=$(printf '%s\n' "$NODES" | cut -d' ' -f1 | tr '\n' ' ')
   read -r first _ <<< "$NODES"
   quota_note=""
-  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session caps too (cpu-1\'s 700G and 600G are for 755 GB).'
+  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session limits too (cpu-1\'s 700G and 600G are for 755 GB).'
   cat <<EOF
 # n1's replacement, path "$path": ${names}from $REF
 # Each step: who runs it, about how long, then the commands. Steps marked (coordinator) spend or create.
@@ -101,7 +101,7 @@ EOF
   echo "    research deploy roll /etc/vy/peers --by infra --ref $REF           # a dry run: the machines each node's list names now and after"
   echo "    research deploy roll /etc/vy/peers --by infra --ref $REF --apply   # every node takes the key from the new one, then each node's list, one at a time"
   for n in $names; do
-    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
+    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/check/pod_setup.sh"
   done
   echo
   echo "L4  (infra, 2 min a node) the slot files, one train slot a node, Lean slots on $first (cpu-1's form):"

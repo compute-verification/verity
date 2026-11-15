@@ -403,6 +403,9 @@ def test_only_the_soft_rules_are_bookkeeping() -> None:
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+    # The check that reads the tree's list is a bookkeeping test, whose failed assertion only warns: a list that
+    # doesn't parse would switch the scan off with nothing red, so the tree's list is parsed here, where it fails.
+    allowed()
     assert parse({"entries": [{"file": "A.lean", "rule": "long-file", "count": 1}]}) == Counter({("A.lean", "long-file"): 1})
     for bad in ({"file": "A.lean", "rule": "long-file"}, {"file": "A.lean", "rule": "long-file", "count": 0},
                 {"file": "A.lean", "rule": "long-file", "count": True}, {"file": "A.lean", "rule": "naming", "count": 1},

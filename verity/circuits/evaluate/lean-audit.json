@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["Evaluate"],
  "exempt": {
   "Evaluate.Main": "the verity-evaluate executable's entry point, one line: Evaluate.evaluateFn behind Difftest.serve, each audited in its own package"

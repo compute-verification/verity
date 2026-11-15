@@ -14,12 +14,12 @@ its own main, since nothing here fetches main) and its LMS key at ``--params``
 (default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py flips its coins from
 (``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
 the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
-``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor host (`reserve`,
+``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor device (`reserve`,
 `admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
 serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
 while it runs, which is the gate's ``active``. The model registry is infra's (`models.py` of the tree): ``admin
 model-register`` reads the checkpoint role's manifest and core's pin from the tree, so the archive carries both
-checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from the auditor host: one account
+checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from the auditor device: one account
 runs everything (no ``auditor`` user, ``runuser``, sudoers or systemd unit, so ``own`` does nothing and the registry isn't
 made append-only); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
 listens on the node itself (no ``--peer``, so no ``ssh -R`` tunnel), on ``--ports`` (default 27811-27899, off the live
@@ -133,10 +133,10 @@ def init(d: Path, argv: list[str]) -> int:
            "ports": [int(x) for x in a.ports.split("-")], "coins": a.coins, "name": a.name}
     if a.coins == "lean":
         pkg = tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean"
-        b = subprocess.run(["lake", "build", "sampled-proofs-verifier"], cwd=pkg, capture_output=True, text=True)
+        b = subprocess.run(["lake", "build", "spot-verifier"], cwd=pkg, capture_output=True, text=True)
         cfg["lean_build"] = {"rc": b.returncode, "tail": (b.stdout + b.stderr)[-3000:]}
         if b.returncode:
-            cfg["coins"], cfg["coins_why"] = "stub", f"lake build sampled-proofs-verifier exited {b.returncode}"
+            cfg["coins"], cfg["coins_why"] = "stub", f"lake build spot-verifier exited {b.returncode}"
     (d / CONFIG).write_text(json.dumps(cfg, indent=1) + "\n")
     A = _auditor(d, cfg)
     from verity.commitments.crypto import lms

@@ -992,7 +992,7 @@ class FakeS3:
 
 @pytest.fixture
 def fake_s3(env, monkeypatch):
-    """A `FakeS3` wired in as the store's remote through store.toml (credentials from env vars, as in production)."""
+    """A `FakeS3` wired in as the store's remote through store.toml (credentials from env vars, as when deployed)."""
     made: list[FakeS3] = []
 
     def make(**kw) -> FakeS3:
@@ -1263,9 +1263,9 @@ def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, caps
     s.reject_conditional = 501
     art2 = st.put_artifact("run-files/v1", {}, tree=_many_files(tmp_path / "t2", 3, seed=5))
     assert main(["push", art2, art]) == 0
-    cap = capsys.readouterr()
-    assert cap.out.count("PRESERVED") == 2 and "2/2 preserved" in cap.out
-    assert cap.err.count("note: NotImplemented (501)") == 1, "the fallback is said once per batch"
+    said = capsys.readouterr()
+    assert said.out.count("PRESERVED") == 2 and "2/2 preserved" in said.out
+    assert said.err.count("note: NotImplemented (501)") == 1, "the fallback is said once per batch"
 
 
 def test_s3remote_session_token_is_sent_and_signed(monkeypatch, tmp_path, env):

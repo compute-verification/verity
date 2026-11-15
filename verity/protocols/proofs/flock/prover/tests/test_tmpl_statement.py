@@ -7,7 +7,7 @@ the mode, and no ``CIRCUIT unit`` section, which the Lean verifier reads with ``
 toy's templated statement unrolls to its flat unit and differs from the flat statement's META in the templated keys alone.
 The Lean verifier derives from it the class `circuit.class_digest` computes and the regions, Δ and partition check it
 derives from the flat statement. It is outside the verifier's ``Tags.all``, in its own list (``Tags.templated``), and
-the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its flock-verify)."""
+the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its verity-verify-proof)."""
 from __future__ import annotations
 
 import dataclasses
@@ -30,7 +30,7 @@ from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 MODE = "iv/hybrid/4"
 
 #: ``Flock.Test.Tmpl``'s unit: two copies of a pair (each two copies of a two-input AND and their sum) at 128, bound to input
@@ -129,7 +129,7 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     assert moved["unit_log"] == FC._slot_log(size) + 1
     assert [r["slot_log"] for r in moved["ranges"] if r["net"] == "unit"] == [FC._slot_log(size) + 1]
     monkeypatch.setattr(T, "layout", layout)
-    with pytest.raises(ValueError, match="a unit class \\(META definition\\) has no templated statement"):
+    with pytest.raises(ValueError, match="a proof-block class \\(META definition\\) has no templated statement"):
         FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
 
 
@@ -219,7 +219,7 @@ def test_a_structural_stager_lays_a_table_read_out_as_the_flat_stager_does(tmp_p
 #: combine (ex2 and rcp), the fused RMSNorm (rsq) and the multimem all-reduce (none); each has a row of at least 2,048 bits,
 #: since a statement needs a row whose SHA-512 compresses a block before its last
 def _served(name: str):
-    from verity.definitions.registry import cuda_rmsnorm, deepgemm, hopper, sparse_mla_split, tp_allreduce
+    from verity_vllm.definitions.registry import cuda_rmsnorm, deepgemm, hopper, sparse_mla_split, tp_allreduce
 
     return {"FlashInferFp8Linear": lambda: bind(deepgemm.FlashInferFp8Linear, K=128, N=1),
             "SparseMlaCombine": lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=2, DV=32, INV=hopper.Fa3InvSum),
@@ -250,7 +250,7 @@ def test_a_served_type_reading_tables_is_staged_structurally_as_its_flat_stateme
     _structural_is_flat((fn, f"unit/struct-{name}", in_rows, outs), rows, tmp_path)
 
 
-#: the auditor's host runs the lowering on numpy and Flock's Python alone
+#: the auditor's device runs the lowering on numpy and Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
 class _Block(importlib.abc.MetaPathFinder):
@@ -305,7 +305,7 @@ def _verifier() -> Path:
         return Path(b)
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return BIN
 
 
@@ -315,7 +315,7 @@ def verifier() -> Path:
     p = subprocess.run([str(b), "statement", "--statement", FC.TMPL_STATEMENT, "--circuit", os.devnull, "--public", os.devnull],
                        capture_output=True, text=True)
     if "unknown statement" in p.stderr:
-        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (not in its Tags.templated; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
+        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (not in its Tags.templated; FLOCK_VERIFY_TMPL: TMPL1's verity-verify-proof)")
     return b
 
 

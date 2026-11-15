@@ -1,0 +1,29 @@
+# PoUS's P2 library's build beside the Makefile it runs: what `tools/move/layout.py --map
+# tools/move/memory_gpu_build_map.toml` moves and rewrites.
+#
+# `build.sh` builds `libp2v1.so`, the library PoUS's prover's `p2_store` loads (`p2_store.gpu.Kernels`), by
+# `p2_store`'s own `Makefile`, and nothing else; the adapter's GPU test, the served pieces and the bandwidth sessions run
+# it. It goes beside that `Makefile`. It still sources kernels' `benchmarks/kernels/ship.sh` from its own directory,
+# which the move re-anchors. No file is split, edited beyond its paths or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/torch_gpu/p2_stage/build.sh" = "verity/protocols/accounting/pous/prover/p2/p2_store/build.sh"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, lock files and Lean sources; and the network certifier's files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "tests/tree.toml", "verity/protocols/accounting/certifier/**"]
+
+[modules]

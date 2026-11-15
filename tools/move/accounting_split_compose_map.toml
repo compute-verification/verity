@@ -1,0 +1,123 @@
+# The accounting area's split by protocol, into `Compose`, by `tools/move/rename.py --map tools/move/accounting_split_compose_map.toml`.
+#
+# `security/`'s `Accounting` area holds the Lean of seven protocols. Each family of it (the first name under an
+# `Accounting/` of a tree, or under its `Guarantees/` and `Assumptions/`) goes to the area of the protocol it states, in
+# each tree (`Definitions/`, `Properties/`, `Proofs/` and `Proofs/Properties/`):
+# - `Pouw`: `TS` (the receipt rounds), `Headline`, `HeadlineDc`, `PerRun*`, `HMu`, `BoundReceipt`, `BoundSketch`,
+#   `CoinFlow`, `Filler`, `FillerLuck`, `CostModel`, `ChainWork`, `Confidence`, `Bridges`, `CreditedWords`, `Pouw*`;
+# - `Poub`: `RateAudit*`, `Bandwidth*`;
+# - `Compose`: `Compose`, `ComposeMonitoringPeriod`, `Joint*` (three audits on one device), `Remote*` (the remote audit's
+#   Held, Draw, Fork, Sketch), `Additive`, `Stacking`, `Stages`, `Parties`, `PeriodBinding`;
+# - `Certifier`: `JointBridge`, `Bridge`, `NetWitness`, `Assumptions/RemoteOutside`;
+# - `Pous`: `Responder`, `Memory`, `Wipe`, `Tag`;
+# - `Registration`: `Sheets`, `Assumptions/Sheet`, `Capacity`, `Carrier`, `Device`, `Physical`;
+# - `Slowdown` (the slowdown bound's area, `slowdown_area_map.toml`'s): `Slowdown`, `Coverage*`, `ServingBlocks`,
+#   `Guarantees/Actual`. `Definitions/Accounting/Slowdown.lean` becomes `Definitions/Slowdown/Tasks.lean`, after its
+#   heading, since `Slowdown/Slowdown.lean` is taken.
+# What stays in `Accounting` is the shared accounting vocabulary: `Actual`, `Gates`, `ReadUnit`, `RegisteredCircuit`, `Requirement`,
+# `Served`, `Window`, `Schedule`, `Lemmas`, `Prob`, `Defs`, `Sanity`, the `Guarantees` and `Assumptions` not named above,
+# and each tree's `Accounting.lean`, whose imports follow the modules. A file goes where its family goes, also where its
+# own text names another protocol more.
+#
+# Each moved unit is two words: its path below `security/` and its module, which the path names (`Proofs` and its
+# `Properties/` sit below `security/` by `srcDir = ".."`), so the files move and every import and path follows. A word
+# matches after a `/` or a `.`, so `Properties/Accounting/X` also moves `Proofs/Properties/Accounting/X`. Declarations
+# keep their namespaces (`Accounting.TS.*`), but for the properties tree's, which spell their module
+# (`Properties.Accounting.JointBridge.*` becomes `Properties.Certifier.JointBridge.*`); the locks' records keep the old
+# names for `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints. It is a word map and
+# not a layout map because `layout.py` names a module from the nearest lakefile, which `srcDir = ".."` defeats.
+# The split is seven maps, one for each destination, since `rename.py` records a directory's move only when it has
+# one destination. A word matches as the first part of a longer name (`Joint` in `JointBridge`), so the certifier's
+# map runs before compose's; they run in this order: `accounting_split_pouw_map.toml`, `accounting_split_poub_map.toml`, `accounting_split_certifier_map.toml`, `accounting_split_compose_map.toml`, `accounting_split_pous_map.toml`, `accounting_split_registration_map.toml`, `accounting_split_slowdown_map.toml`.
+
+[words]
+"Definitions.Accounting.Guarantees.ComposeMonitoringPeriod" = "Definitions.Compose.Guarantees.ComposeMonitoringPeriod"
+"Definitions/Accounting/Guarantees/ComposeMonitoringPeriod" = "Definitions/Compose/Guarantees/ComposeMonitoringPeriod"
+"Definitions.Accounting.Guarantees.RemoteSketchLine" = "Definitions.Compose.Guarantees.RemoteSketchLine"
+"Definitions/Accounting/Guarantees/RemoteSketchLine" = "Definitions/Compose/Guarantees/RemoteSketchLine"
+"Definitions.Accounting.Guarantees.RemoteSketchP2" = "Definitions.Compose.Guarantees.RemoteSketchP2"
+"Definitions/Accounting/Guarantees/RemoteSketchP2" = "Definitions/Compose/Guarantees/RemoteSketchP2"
+"Definitions.Accounting.Assumptions.RemoteSketch" = "Definitions.Compose.Assumptions.RemoteSketch"
+"Definitions.Accounting.Guarantees.PeriodBinding" = "Definitions.Compose.Guarantees.PeriodBinding"
+"Definitions.Accounting.Guarantees.RemoteBinding" = "Definitions.Compose.Guarantees.RemoteBinding"
+"Definitions/Accounting/Assumptions/RemoteSketch" = "Definitions/Compose/Assumptions/RemoteSketch"
+"Definitions/Accounting/Guarantees/PeriodBinding" = "Definitions/Compose/Guarantees/PeriodBinding"
+"Definitions/Accounting/Guarantees/RemoteBinding" = "Definitions/Compose/Guarantees/RemoteBinding"
+"Definitions.Accounting.ComposeMonitoringPeriod" = "Definitions.Compose.ComposeMonitoringPeriod"
+"Definitions.Accounting.Guarantees.RemoteSketch" = "Definitions.Compose.Guarantees.RemoteSketch"
+"Definitions/Accounting/ComposeMonitoringPeriod" = "Definitions/Compose/ComposeMonitoringPeriod"
+"Definitions/Accounting/Guarantees/RemoteSketch" = "Definitions/Compose/Guarantees/RemoteSketch"
+"Definitions.Accounting.Assumptions.RemoteDraw" = "Definitions.Compose.Assumptions.RemoteDraw"
+"Definitions.Accounting.Assumptions.RemoteHeld" = "Definitions.Compose.Assumptions.RemoteHeld"
+"Definitions/Accounting/Assumptions/RemoteDraw" = "Definitions/Compose/Assumptions/RemoteDraw"
+"Definitions/Accounting/Assumptions/RemoteHeld" = "Definitions/Compose/Assumptions/RemoteHeld"
+"Definitions.Accounting.Guarantees.RemoteDraw" = "Definitions.Compose.Guarantees.RemoteDraw"
+"Definitions.Accounting.Guarantees.RemoteHeld" = "Definitions.Compose.Guarantees.RemoteHeld"
+"Definitions.Accounting.Guarantees.RemotePass" = "Definitions.Compose.Guarantees.RemotePass"
+"Definitions/Accounting/Guarantees/RemoteDraw" = "Definitions/Compose/Guarantees/RemoteDraw"
+"Definitions/Accounting/Guarantees/RemoteHeld" = "Definitions/Compose/Guarantees/RemoteHeld"
+"Definitions/Accounting/Guarantees/RemotePass" = "Definitions/Compose/Guarantees/RemotePass"
+"Definitions.Accounting.Assumptions.RemoteP2" = "Definitions.Compose.Assumptions.RemoteP2"
+"Definitions.Accounting.Assumptions.Stacking" = "Definitions.Compose.Assumptions.Stacking"
+"Definitions.Accounting.Guarantees.JointLive" = "Definitions.Compose.Guarantees.JointLive"
+"Definitions/Accounting/Assumptions/RemoteP2" = "Definitions/Compose/Assumptions/RemoteP2"
+"Definitions/Accounting/Assumptions/Stacking" = "Definitions/Compose/Assumptions/Stacking"
+"Definitions/Accounting/Guarantees/JointLive" = "Definitions/Compose/Guarantees/JointLive"
+"Definitions.Accounting.Assumptions.Compose" = "Definitions.Compose.Assumptions.Compose"
+"Definitions.Accounting.Assumptions.Parties" = "Definitions.Compose.Assumptions.Parties"
+"Definitions.Accounting.Guarantees.Additive" = "Definitions.Compose.Guarantees.Additive"
+"Definitions.Accounting.Guarantees.Stacking" = "Definitions.Compose.Guarantees.Stacking"
+"Definitions/Accounting/Assumptions/Compose" = "Definitions/Compose/Assumptions/Compose"
+"Definitions/Accounting/Assumptions/Parties" = "Definitions/Compose/Assumptions/Parties"
+"Definitions/Accounting/Guarantees/Additive" = "Definitions/Compose/Guarantees/Additive"
+"Definitions/Accounting/Guarantees/Stacking" = "Definitions/Compose/Guarantees/Stacking"
+"Definitions.Accounting.Assumptions.Remote" = "Definitions.Compose.Assumptions.Remote"
+"Definitions.Accounting.Assumptions.Stages" = "Definitions.Compose.Assumptions.Stages"
+"Definitions.Accounting.Guarantees.Compose" = "Definitions.Compose.Guarantees.Compose"
+"Definitions/Accounting/Assumptions/Remote" = "Definitions/Compose/Assumptions/Remote"
+"Definitions/Accounting/Assumptions/Stages" = "Definitions/Compose/Assumptions/Stages"
+"Definitions/Accounting/Guarantees/Compose" = "Definitions/Compose/Guarantees/Compose"
+"Proofs.Accounting.ComposeMonitoringPeriod" = "Proofs.Compose.ComposeMonitoringPeriod"
+"Proofs/Accounting/ComposeMonitoringPeriod" = "Proofs/Compose/ComposeMonitoringPeriod"
+"Definitions.Accounting.Guarantees.Joint" = "Definitions.Compose.Guarantees.Joint"
+"Definitions/Accounting/Guarantees/Joint" = "Definitions/Compose/Guarantees/Joint"
+"Definitions.Accounting.PeriodBinding" = "Definitions.Compose.PeriodBinding"
+"Definitions/Accounting/PeriodBinding" = "Definitions/Compose/PeriodBinding"
+"Definitions.Accounting.JointPeriod" = "Definitions.Compose.JointPeriod"
+"Definitions/Accounting/JointPeriod" = "Definitions/Compose/JointPeriod"
+"Definitions.Accounting.JointLive" = "Definitions.Compose.JointLive"
+"Definitions/Accounting/JointLive" = "Definitions/Compose/JointLive"
+"Definitions.Accounting.Additive" = "Definitions.Compose.Additive"
+"Definitions/Accounting/Additive" = "Definitions/Compose/Additive"
+"Definitions.Accounting.Compose" = "Definitions.Compose.Compose"
+"Definitions/Accounting/Compose" = "Definitions/Compose/Compose"
+"Definitions.Accounting.Remote" = "Definitions.Compose.Remote"
+"Definitions/Accounting/Remote" = "Definitions/Compose/Remote"
+"Properties.Accounting.Compose" = "Properties.Compose.Compose"
+"Properties/Accounting/Compose" = "Properties/Compose/Compose"
+"Definitions.Accounting.Joint" = "Definitions.Compose.Joint"
+"Definitions/Accounting/Joint" = "Definitions/Compose/Joint"
+"Proofs.Accounting.RemoteHeld" = "Proofs.Compose.RemoteHeld"
+"Proofs/Accounting/RemoteHeld" = "Proofs/Compose/RemoteHeld"
+"Properties.Accounting.Remote" = "Properties.Compose.Remote"
+"Properties/Accounting/Remote" = "Properties/Compose/Remote"
+"Proofs.Accounting.JointLive" = "Proofs.Compose.JointLive"
+"Proofs/Accounting/JointLive" = "Proofs/Compose/JointLive"
+"Proofs.Accounting.Additive" = "Proofs.Compose.Additive"
+"Proofs.Accounting.Stacking" = "Proofs.Compose.Stacking"
+"Proofs/Accounting/Additive" = "Proofs/Compose/Additive"
+"Proofs/Accounting/Stacking" = "Proofs/Compose/Stacking"
+"Proofs.Accounting.Compose" = "Proofs.Compose.Compose"
+"Proofs/Accounting/Compose" = "Proofs/Compose/Compose"
+"Proofs.Accounting.Remote" = "Proofs.Compose.Remote"
+"Proofs/Accounting/Remote" = "Proofs/Compose/Remote"
+"Proofs.Accounting.Joint" = "Proofs.Compose.Joint"
+"Proofs/Accounting/Joint" = "Proofs/Compose/Joint"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "tools/research/src/research/store/moves.json", "tools/research/tests/test_queue.py"]
+
+[keep]
+# the statement's file as a block record holds it: its check holds a record made before the move to that value
+patterns = ['Security/Definitions/Accounting/Guarantees/JointLive\.lean', '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']

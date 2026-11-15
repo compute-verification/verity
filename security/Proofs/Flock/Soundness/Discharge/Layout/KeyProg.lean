@@ -491,8 +491,8 @@ set_option linter.unusedVariables false in
 below `2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the sample's decoding
 (`proved_lt_population`), and the other conditions are `BcSite`'s. -/
 theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (h : u ∈ S)
-    {pop : Public} {d : Lean.Json} {D : Draw.UnitDraw} (hd : (si.acc S R u h).draw = some d)
-    (hD : Draw.UnitDraw.ofJson d = .ok D)
+    {pop : Public} {d : Lean.Json} {D : Draw.UnitSample} (hd : (si.acc S R u h).draw = some d)
+    (hD : Draw.UnitSample.ofJson d = .ok D)
     (hregs : ∀ r ∈ (si.acc S R u h).st.regions.toList,
       Refine.regionOf (si.acc S R u h).st.c.kLog ((si.acc S R u h).st.m - (si.acc S R u h).st.c.kLog) r ∈
         (si.acc S R u h).regs)

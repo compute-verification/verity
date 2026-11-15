@@ -57,7 +57,12 @@ Files:
   statement it proves (`out/kept/`: the public files, every session's records and the prover's exit status, not the
   circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
-  default.
+  default. `route` splits a units file by the GPU prover's nonzero bound (`GPU_NNZ_MAX`), read off each staged statement's
+  nets: a statement past it is the CPU prover's.
+- `stage_prove.sh`: `window.py stage` and `prove` for a few statements on named cards, in one job or two. Proving, it
+  routes a statement past the GPU prover's bound to the CPU prover with no card, and has the Lean verifier check each
+  proved statement's last kept session in the same job, before the statement is removed (`lean_check.sh`, which
+  `lean_shard.sh` runs on another node too): a proof it doesn't accept fails the job, and nothing is retried.
 - `prove_rows.py OUT --record RUN`: a `window.py prove` run's timed statements as rows by block type, in the format
   the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
   largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
@@ -110,7 +115,7 @@ uv run -q python benchmarks/served_units/cover_count.py art:ID --card benchmarks
 
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
-- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
-  `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
+- **Loads:** `verity_vllm.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
+  `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.device`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

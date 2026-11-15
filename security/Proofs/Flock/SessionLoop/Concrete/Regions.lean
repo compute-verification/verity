@@ -9,7 +9,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -345,7 +345,7 @@ theorem zIn_bc (ht : tags.typed = false) (hset : Stmt.setupH tags cf pf coins ta
     (h22 : Discharge.Hm.bcCol st.c 0 0 (q / 8) (q % 8) < 2 ^ 22) :
     zIn (Discharge.Hm.bcCol st.c 0 0 (q / 8) (q % 8)) = Discharge.Hm.bitL BC.data.toList q := by
   have o : Fin (2 ^ ((setupH_layout ht hset).model []).nbl) := ⟨0, Nat.two_pow_pos _⟩
-  exact zIn_bcCol F (fun y hy => blockBit_zC (S := (setupH_layout ht hset).model []) F.kLog o hy)
+  exact zIn_bcCol F (fun y hy => chunkBit_zC (S := (setupH_layout ht hset).model []) F.kLog o hy)
     (Discharge.Hm.row_bc_setupH ht hset F.outNet (ports_v1 F) hz o (by rw [F.g]; omega) (by rw [F.nports]; omega))
     hq h22
 

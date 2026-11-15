@@ -312,7 +312,7 @@ def readHello : P Hello := fun s => do
   let s ← lit (10 :: (sp 1 ++ [125])) s
   pure ({ digests, flavor, m, points, profile, reps, rounds, tables }, s)
 
-/-- **The challenger's live-coin part's record up to its link points** (`rec_live.CoinServer.record`): its rounds, kind, tops'
+/-- **The challenger's live-coin part's record up to its link points** (`rec_live.LiveCoinPart.record`): its rounds, kind, tops'
 format, the prover's Hello, and the link's level-0 tops (each table's nodes, `b ‖ c` each) and points. -/
 structure Record where
   rounds : List Round

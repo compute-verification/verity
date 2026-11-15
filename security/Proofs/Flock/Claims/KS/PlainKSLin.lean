@@ -19,7 +19,7 @@ The plain record's KS chain with the cap terms linear: each cap slot's term is c
 * `plain_tableBoundAbortLin`: `TableBoundAbortLin` at the untrimmed deployed plain instance over full-width tables, at
   `CpDep`. At a statement some run accepts it is `plain_accPr_le_rdAll` at the refuser's runs, with the read sets
   `rdAt` (what each run reads at a cap position) and the tables `capPlurRd` (the plurality single reading after the
-  slot's fork round), averaged over the refuser's last coin (`Pr_refDraw`). The term on each tape is the one-run
+  slot's fork round), averaged over the refuser's last coin (`Pr_refSample`). The term on each tape is the one-run
   event's chance at the abort distribution and each cap position's read-set chance, whose average is at most
   `k·Pr[BAbort] + W·(Pr[FC] + 1/(M+1))` (`Pr_one_le_PrBAbort`, `Pr_rdAt_le_capHit`, `Ex_capHits`): the schedule's top
   slot reads nothing (`plainRawLevelCols_top`), and the others are `CpDep`'s positions.
@@ -64,7 +64,7 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
 open Claims.Bridge.Live
 open Lean (Json)
 
@@ -95,7 +95,7 @@ full-width tables: where no run accepts, the term `0`; elsewhere, on each tape, 
 ties a collision among its own calls and, at each cap position, that it reads there anything but the plurality single
 reading after the slot's fork round. The first averages to at most `Pr[BAbort]` (`Pr_one_le_PrBAbort`), and each
 position's to at most its `FC` hits and `1/(M+1)` (`Pr_rdAt_le_capHit`). The bound itself is `plain_accPr_le_rdAll`
-at the refuser's runs with those read sets and tables, averaged over the refuser's last coin (`Pr_refDraw`). -/
+at the refuser's runs with those read sets and tables, averaged over the refuser's last coin (`Pr_refSample`). -/
 theorem plain_tableBoundAbortLin :
     Claims.Recursion.TableBoundAbortLin sha512 (deployPlain Readable.relation) (wordLen false) (wide false) CpDep := by
   classical
@@ -208,7 +208,7 @@ theorem plain_tableBoundAbortLin :
         ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
           ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
             Claims.Pr (fun c : Fin ((V false).k x) → Coin =>
-              E ω r.val ℓ.val q.val (Claims.Recursion.refDraw g c)) +
+              E ω r.val ℓ.val q.val (Claims.Recursion.refSample g c)) +
         Claims.Pr fun r : Fin ((V false).k x) → Coin =>
           (Claims.run sha512 (Claims.Recursion.refuser P x ((V false).k x) decCoin keep m₀) (V false) x (ω, g)
             r).out = .acc ∧
@@ -220,17 +220,17 @@ theorem plain_tableBoundAbortLin :
     subst hE
     refine hall (Claims.Recursion.refuser P x ((V false).k x) decCoin keep m₀) (ω, g) C hC hg
       (fun r ℓ c q => rdAt P x keep r.val ℓ.val q.val (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes ω
-        (Claims.Recursion.refDraw g c))
+        (Claims.Recursion.refSample g c))
       (fun r ℓ c q => Claims.Recursion.capPlurRd (V false) x (forkRound spec st k0 r.val ℓ.val)
         (rdAt P x keep r.val ℓ.val q.val (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes ω)
-        (Claims.Recursion.refDraw g c)) ?_ ?_
+        (Claims.Recursion.refSample g c)) ?_ ?_
     · intro r ℓ c c' hcc
       funext q
       refine Claims.Recursion.capPlurRd_prefix _ _ _ _ fun i hi => ?_
       have hf : forkRound spec st k0 r.val ℓ.val < (V false).k x :=
         forkRound_lt (tables_head_one ht) hsch r.isLt ℓ.isLt
       have hi' : i.val + 1 < (V false).k x := by omega
-      simp only [Claims.Recursion.refDraw, Claims.Recursion.drawOf, Claims.Recursion.setLast, hi', ↓reduceIte]
+      simp only [Claims.Recursion.refSample, Claims.Recursion.drawOf, Claims.Recursion.setLast, hi', ↓reduceIte]
       exact hcc i hi
     · intro r ℓ c hacc q a ha
       have hab := ((hrun ω g c).1).1 hacc
@@ -242,7 +242,7 @@ theorem plain_tableBoundAbortLin :
       Claims.accPr sha512 (V false) (Claims.Recursion.refuser P x ((V false).k x) decCoin keep m₀) x (ω, g)) =
         Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (V false) x keep ω) := by
     unfold Claims.accPr Claims.Recursion.accPrD
-    rw [← Claims.Recursion.Pr_refDraw hVk]
+    rw [← Claims.Recursion.Pr_refSample hVk]
     exact congrArg Claims.Ex (funext fun g => Claims.Pr_congr fun r => (hrun ω g r).1)
   have hE1 : (Claims.Ex fun g : (Fin ((V false).k x) → Coin) → Coin × A =>
       Claims.Pr fun s : Fin ((V false).k x) → Coin =>
@@ -250,7 +250,7 @@ theorem plain_tableBoundAbortLin :
       Claims.Pr fun d : (Fin ((V false).k x) → Coin) × A =>
         Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (V false) x keep ω d).vLog := by
     refine (Claims.Ex_mono fun g => Claims.Pr_mono fun s hs => ?_).trans
-      (le_of_eq (Claims.Recursion.Pr_refDraw hVk fun d =>
+      (le_of_eq (Claims.Recursion.Pr_refSample hVk fun d =>
         Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (V false) x keep ω d).vLog))
     have h2 := hs.2
     rw [(hrun ω g s).2 hs.1] at h2
@@ -258,7 +258,7 @@ theorem plain_tableBoundAbortLin :
   have hS : (Claims.Ex fun g : (Fin ((V false).k x) → Coin) → Coin × A =>
       ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
         ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
-          Claims.Pr (fun c : Fin ((V false).k x) → Coin => E ω r.val ℓ.val q.val (Claims.Recursion.refDraw g c))) =
+          Claims.Pr (fun c : Fin ((V false).k x) → Coin => E ω r.val ℓ.val q.val (Claims.Recursion.refSample g c))) =
       ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
         ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val) := by
     rw [Claims.Bridge.Ex_sum_univ]
@@ -266,7 +266,7 @@ theorem plain_tableBoundAbortLin :
     rw [Claims.Bridge.Ex_sum_univ]
     refine Finset.sum_congr rfl fun ℓ _ => ?_
     rw [Claims.Bridge.Ex_sum_univ]
-    exact Finset.sum_congr rfl fun q _ => Claims.Recursion.Pr_refDraw hVk (E ω r.val ℓ.val q.val)
+    exact Finset.sum_congr rfl fun q _ => Claims.Recursion.Pr_refSample hVk (E ω r.val ℓ.val q.val)
   have hO : (Claims.Ex fun g : (Fin ((V false).k x) → Coin) → Coin × A =>
       Claims.Pr fun r : Fin ((V false).k x) → Coin =>
         (Claims.run sha512 (Claims.Recursion.refuser P x ((V false).k x) decCoin keep m₀) (V false) x (ω, g)
@@ -280,7 +280,7 @@ theorem plain_tableBoundAbortLin :
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
           Claims.Flock.lookCol (cols false (Claims.Recursion.abortRun sha512 P (V false) x keep ω d).seen 0) p.val =
             some u ∧ u ≠ C p := by
-    rw [← Claims.Recursion.Pr_refDraw hVk]
+    rw [← Claims.Recursion.Pr_refSample hVk]
     refine congrArg Claims.Ex (funext fun g => Claims.Pr_congr fun r => ?_)
     constructor
     · rintro ⟨ha, rest⟩
@@ -438,7 +438,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
         ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
           ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
             Claims.Pr (fun c : Fin ((VK keepV).k x) → Coin =>
-              E ω r.val ℓ.val q.val (Claims.Recursion.refDraw g c)) +
+              E ω r.val ℓ.val q.val (Claims.Recursion.refSample g c)) +
         Claims.Pr fun r : Fin ((VK keepV).k x) → Coin =>
           (Claims.run sha512 (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (VK keepV) x (ω, g)
             r).out = .acc ∧
@@ -450,17 +450,17 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
     subst hE
     refine hall (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (ω, g) C hC hg
       (fun r ℓ c q => rdAtK keepV P x keep r.val ℓ.val q.val (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes ω
-        (Claims.Recursion.refDraw g c))
+        (Claims.Recursion.refSample g c))
       (fun r ℓ c q => Claims.Recursion.capPlurRd (VK keepV) x (forkRound spec st k0 r.val ℓ.val)
         (rdAtK keepV P x keep r.val ℓ.val q.val (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes ω)
-        (Claims.Recursion.refDraw g c)) ?_ ?_
+        (Claims.Recursion.refSample g c)) ?_ ?_
     · intro r ℓ c c' hcc
       funext q
       refine Claims.Recursion.capPlurRd_prefix _ _ _ _ fun i hi => ?_
       have hf : forkRound spec st k0 r.val ℓ.val < (VK keepV).k x :=
         forkRound_lt (tables_head_one ht) hsch r.isLt ℓ.isLt
       have hi' : i.val + 1 < (VK keepV).k x := by omega
-      simp only [Claims.Recursion.refDraw, Claims.Recursion.drawOf, Claims.Recursion.setLast, hi', ↓reduceIte]
+      simp only [Claims.Recursion.refSample, Claims.Recursion.drawOf, Claims.Recursion.setLast, hi', ↓reduceIte]
       exact hcc i hi
     · intro r ℓ c hacc q a ha
       have hab := ((hrun ω g c).1).1 hacc
@@ -472,7 +472,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
       Claims.accPr sha512 (VK keepV) (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) x (ω, g)) =
         Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω) := by
     unfold Claims.accPr Claims.Recursion.accPrD
-    rw [← Claims.Recursion.Pr_refDraw hVk]
+    rw [← Claims.Recursion.Pr_refSample hVk]
     exact congrArg Claims.Ex (funext fun g => Claims.Pr_congr fun r => (hrun ω g r).1)
   have hE1 : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
       Claims.Pr fun s : Fin ((VK keepV).k x) → Coin =>
@@ -480,7 +480,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
       Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
         Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog := by
     refine (Claims.Ex_mono fun g => Claims.Pr_mono fun s hs => ?_).trans
-      (le_of_eq (Claims.Recursion.Pr_refDraw hVk fun d =>
+      (le_of_eq (Claims.Recursion.Pr_refSample hVk fun d =>
         Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog))
     have h2 := hs.2
     rw [(hrun ω g s).2 hs.1] at h2
@@ -488,7 +488,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
   have hS : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
       ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
         ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
-          Claims.Pr (fun c : Fin ((VK keepV).k x) → Coin => E ω r.val ℓ.val q.val (Claims.Recursion.refDraw g c))) =
+          Claims.Pr (fun c : Fin ((VK keepV).k x) → Coin => E ω r.val ℓ.val q.val (Claims.Recursion.refSample g c))) =
       ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
         ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val) := by
     rw [Claims.Bridge.Ex_sum_univ]
@@ -496,7 +496,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
     rw [Claims.Bridge.Ex_sum_univ]
     refine Finset.sum_congr rfl fun ℓ _ => ?_
     rw [Claims.Bridge.Ex_sum_univ]
-    exact Finset.sum_congr rfl fun q _ => Claims.Recursion.Pr_refDraw hVk (E ω r.val ℓ.val q.val)
+    exact Finset.sum_congr rfl fun q _ => Claims.Recursion.Pr_refSample hVk (E ω r.val ℓ.val q.val)
   have hO : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
       Claims.Pr fun r : Fin ((VK keepV).k x) → Coin =>
         (Claims.run sha512 (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (VK keepV) x (ω, g)
@@ -510,7 +510,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
           Claims.Flock.lookCol (cols false (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).seen 0) p.val =
             some u ∧ u ≠ C p := by
-    rw [← Claims.Recursion.Pr_refDraw hVk]
+    rw [← Claims.Recursion.Pr_refSample hVk]
     refine congrArg Claims.Ex (funext fun g => Claims.Pr_congr fun r => ?_)
     constructor
     · rintro ⟨ha, rest⟩

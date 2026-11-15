@@ -178,3 +178,35 @@ def test_read_seconds(w, tmp_path):
     assert w.read_seconds(str(tmp_path / "s5.tsv")) == {"a": (60.5, True), "b": (7.0, False), "c": (9.0, False)}
     assert w.read_seconds(str(tmp_path / "s4.tsv")) == {"a": (60.5, True), "b": (7.0, False)}
     assert w.read_seconds("") == {}
+
+
+def test_route_sends_a_statement_past_the_gpu_provers_bound_to_the_cpu_prover(w, monkeypatch, tmp_path):
+    """A statement one of whose nets has more than GPU_NNZ_MAX nonzeros in A or in B goes to the CPU file, one line a
+    statement with its unit's estimates; every other staged one to the GPU file; one not staged to neither; a stage.json
+    with no nets is refused, its nonzeros unknown."""
+    fw, out = tmp_path / "fw", tmp_path / "run/out"
+    lim = w.GPU_NNZ_MAX
+    nets = {"census:A_v1{X=1}@full/4": [[lim, lim]], "census:A_v1{X=1}@full": [[1, 1], [lim + 1, 1]],
+            "census:B_v1{}@full": [[1, lim + 1]]}
+    for un, ns in nets.items():
+        u, _, n = un.rpartition("@")
+        d = fw / "data" / f"{w.name(u, n)}-k0"
+        d.mkdir(parents=True)
+        (d / "stage.json").write_text(json.dumps({"nets": [{"net": "unit", "nnz_a": a, "nnz_b": b} for a, b in ns]}))
+        (d / ".done").write_text("")
+    (tmp_path / "units.tsv").write_text("census:A_v1{X=1}@full/4,full\t2.5\t1\t30\t4\ncensus:B_v1{}@full\t1\t1\t1\t1\n"
+                                        "census:C_v1{}@full\t1\t1\t1\t1\n")
+    out.mkdir(parents=True)
+    monkeypatch.setattr(w, "OUT", out)
+    monkeypatch.setattr(w, "key", lambda: "k0")
+    monkeypatch.setenv("FLOCK_WORK", str(fw))
+    gpu, cpu = tmp_path / "gpu.units", tmp_path / "cpu.units"
+    assert w.route(w.read_units(tmp_path / "units.tsv"), gpu, cpu) == 0
+    assert gpu.read_text() == "census:A_v1{X=1}@full/4\t2.5\t1\t30\t4\n"
+    assert cpu.read_text() == "census:A_v1{X=1}@full\t2.5\t1\t30\t4\ncensus:B_v1{}@full\t1\t1\t1\t1\n"
+    log = (out / "window.log").read_text()
+    assert "route: not staged: census:C_v1{}@full" in log and "route: 1 statements to the GPU prover, 2 to the CPU prover" in log
+    assert [u.unit for u in w.read_units(cpu)] == ["census:A_v1{X=1}", "census:B_v1{}"]
+    (fw / "data" / f"{w.name('census:B_v1{}', 'full')}-k0" / "stage.json").write_text("{}")
+    with pytest.raises(SystemExit, match="lists no nets, so its nonzeros are unknown"):
+        w.route(w.read_units(tmp_path / "units.tsv"), gpu, cpu)

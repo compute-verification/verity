@@ -30,7 +30,7 @@ local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
 /-- `verdict`'s reasons before the rounds. -/
-private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
+private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment) :
     Array String := Id.run do
   let mut reasons : Array String := #[]
   match schemes.lookup s.scheme with
@@ -49,8 +49,8 @@ private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSessio
   return reasons
 
 /-- `verdict` from the rounds on, after the reasons `r0`. -/
-private def tail (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
+private def tail (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
   let mut reasons := r0
   let byJ := fun (j : Nat) => openings.findRev? (·.j == j)
   let mut late := 0
@@ -68,7 +68,7 @@ private def tail (expected : Nat → Option ByteArray) (s : SignedSession)
   return (Findings.mk reasons late wrong, acceptIf reasons.isEmpty)
 
 private theorem verdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
-    (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :
+    (s : SignedChallengePhase) (c : ChallengePhaseCommitment) (openings : Array CoinOpening) :
     verdict schemes trusted expected s c openings = tail expected s c openings (pre schemes trusted s c) := by
   unfold verdict tail pre
   cases schemes.lookup s.scheme with
@@ -112,7 +112,7 @@ theorem forIn'_measure_eq {α σ : Type} {l : List α} {f : (a : α) → a ∈ l
     μ init ≤ μ L.run ∧ (μ L.run = μ init → ∀ a ∈ l, Good a) := hL ▸ forIn'_measure l f μ Good hf init
 
 /-- Round `j` passes: its index is its committed coin, its digest the expected one, and it is on time. -/
-private def Good (expected : Nat → Option ByteArray) (s : SignedSession) (c : SessionCommitment)
+private def Good (expected : Nat → Option ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (j : Nat) : Prop :=
   ∀ hj : j < s.rounds.size,
     (∃ o, openings.findRev? (·.j == j) = some o ∧ (s.rounds[j].j == j && o.index == s.rounds[j].index &&
@@ -124,7 +124,7 @@ private theorem accepted_acceptIf (f : Findings) (b : Bool) :
     Verdict.accepted (pure (f, acceptIf b) : Id Verdict) = b := by
   cases b <;> rfl
 
-private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedSession) (c : SessionCommitment)
+private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (r0 : Array String) (h : (tail expected s c openings r0).accepted = true) :
     r0 = #[] ∧ ∀ j < s.rounds.size, Good expected s c openings j := by
   unfold tail at h
@@ -157,7 +157,7 @@ private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedS
   simp at m1
   exact Array.eq_empty_of_size_eq_zero (by omega)
 
-private theorem pre_empty (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment)
+private theorem pre_empty (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (h : pre schemes trusted s c = #[]) :
     (∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
       ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) ∧
@@ -183,10 +183,10 @@ private theorem pre_empty (schemes : Schemes) (trusted : List ByteArray) (s : Si
       | error e => simp [hs, bind, Except.bind] at hm
       | ok m => exact ⟨m, rfl, by simpa [hs, bind, Except.bind] using hm⟩
 
-private theorem commitment_eq {a b : SessionCommitment} (h : (a == b) = true) : a = b := by
+private theorem commitment_eq {a b : ChallengePhaseCommitment} (h : (a == b) = true) : a = b := by
   cases a; cases b
   simp only [BEq.beq] at h
-  simp only [instBEqSessionCommitment.beq, Bool.and_eq_true, beq_iff_eq] at h
+  simp only [instBEqChallengePhaseCommitment.beq, Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ := h
   subst h1 h2 h3 h4 h5 h6 h7 h8
   rfl
@@ -208,6 +208,11 @@ theorem verdictAccepts : VerdictAccepts := by
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hd ht
   exact ⟨hco.1.1, ⟨o, hmem, hoj, hco.1.2, hco.2⟩, hd.1, hd.2, ht.1, ht.2⟩
 
+theorem commitment_beq_self (a : ChallengePhaseCommitment) : (a == a) = true := by
+  cases a
+  simp only [BEq.beq]
+  simp [instBEqChallengePhaseCommitment.beq]
+
 theorem judgeAccepts : JudgeAccepts := by
   intro r hj
   unfold Judge.judge at hj
@@ -227,5 +232,62 @@ theorem judgeSigned : JudgeSigned := by
   intro r dev hj
   obtain ⟨schemes, hs, ⟨p, hp, ht, m, hm, hv⟩, -, he, -⟩ := judgeAccepts r hj
   exact ⟨schemes, hs, Device.signedByDevice_of dev hp ht hm hv he⟩
+
+/-! ## The converse: a session that meets every check is accepted -/
+
+private theorem forIn'_fix {α σ : Type} (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ)) (b : σ)
+    (hf : ∀ a h, f a h b = pure (.yield b)) : forIn' l b f = pure b := by
+  induction l with
+  | nil => rfl
+  | cons a as ih =>
+    rw [List.forIn'_cons, hf a List.mem_cons_self]
+    exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m => hf a' _)
+
+private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedChallengePhase}
+    {c : ChallengePhaseCommitment} {p : Lms.Params} {m : ByteArray} (hp : schemes.lookup s.scheme = some p)
+    (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
+    (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
+    (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k) : pre schemes trusted s c = #[] := by
+  have ht' : s.publicKey ∈ trusted := by simpa using ht
+  unfold pre
+  simp [hp, ht', hm, hv, hc, he, hn, bind, Except.bind, Id.run]
+  rfl
+
+private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : SignedChallengePhase} {c : ChallengePhaseCommitment}
+    {openings : Array CoinOpening}
+    (h : ∀ j (hj : j < s.rounds.size),
+      (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
+        verifyCoin c o = true) ∧
+      s.rounds[j].index < c.blocks ∧ expected s.rounds[j].index = some s.rounds[j].digest ∧
+      0 ≤ s.rounds[j].elapsedNs ∧ s.rounds[j].elapsedNs ≤ c.limitNs) :
+    (tail expected s c openings #[]).accepted = true := by
+  unfold tail
+  simp only [Id.run]
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range']
+  rw [forIn'_fix _ _ _ ?_]
+  · rfl
+  · intro a ha
+    have hj : a < s.rounds.size := by simp at ha; omega
+    obtain ⟨⟨o, ho, hrj, hoi, hv⟩, hb, hd, h0, hl⟩ := h a hj
+    have ho' : openings.reverse.find? (fun x => x.j == a) = some o := by simpa using ho
+    simp [ho', hrj, hoi, hv, hb, hd, h0, hl]
+
+/-- **A session that meets every check `verdict` makes is accepted**, the converse of `verdictAccepts`: a scheme it
+names, a trusted key whose signature over the session's message verifies, the commitment, a complete session of `k`
+rounds, and each round's index its committed coin (the last opening for its `j`), its digest the expected one, on
+time. -/
+theorem verdict_accepted_of {schemes : Schemes} {trusted : List ByteArray} {expected : Nat → Option ByteArray}
+    {s : SignedChallengePhase} {c : ChallengePhaseCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
+    (hp : schemes.lookup s.scheme = some p) (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
+    (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
+    (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k)
+    (h : ∀ j (hj : j < s.rounds.size),
+      (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
+        verifyCoin c o = true) ∧
+      s.rounds[j].index < c.blocks ∧ expected s.rounds[j].index = some s.rounds[j].digest ∧
+      0 ≤ s.rounds[j].elapsedNs ∧ s.rounds[j].elapsedNs ≤ c.limitNs) :
+    (verdict schemes trusted expected s c openings).accepted = true := by
+  rw [verdict_eq, pre_empty_of hp ht hm hv hc he hn]
+  exact tail_accepted_of h
 
 end MemoryChallenger.Properties.SecurityProofs

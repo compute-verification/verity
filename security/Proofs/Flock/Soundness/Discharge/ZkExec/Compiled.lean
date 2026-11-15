@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 public import Proofs.Flock.Soundness.Discharge.ZkLink.One
@@ -23,10 +23,10 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
 
 /-!
-# flock-verify `--zk`'s headline at the compiled `--zk` table
+# verity-verify-proof `--zk`'s headline at the compiled `--zk` table
 
 `Refines.lean`'s one-table refinement and headline at `Discharge/ZkLink`'s compiled `--zk` table. At each sample `S` and
 registration `R` the table is `T S R : TabZK 𝔽 mPts`, its reps `ZkLink.repZCAt A Hs (T S R)` (`repZ`), the level-0 cap
@@ -37,13 +37,13 @@ That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`se
 applies:
 
 * `zk_headline_exec_zc`: against any live prover, at any sampling design,
-  `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`;
-* `zk_headline_exec_zc_execOS`: the same at the live sample (`Law.execOS`, `drawWith`'s stratified sampling design) under A3
-  (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
+  `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`;
+* `zk_headline_exec_zc_execOS`: the same at the live sample (`SamplingDesign.execOS`, `drawWith`'s stratified sampling design) under A3
+  (`UniformRandomBytes`), with `SamplingDesign.stratified`'s count curve for `miss(K)`.
 
 The incorrect proof blocks are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
 named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, the decoder premise at `--zk`), `hj : JointZC …`
-(`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `δ_link` is `⊤` at a
+(`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `ε_bind` is `⊤` at a
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit flips each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 -/
@@ -93,7 +93,7 @@ variable (I : Inputs) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Tra
   (opn : Finset (Fin n) → Reg → Array ByteArray → ZkLink.OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
+  (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → Cap D) (N : ℕ) {L : SamplingDesign n}
 
 /-- **The simulated prover as a strategy of the compiled `--zk` audit**: `simAuditZK … τ` at the compiled table, read
 as a strategy of `audit L Reg (batchedSessionZC A Hs (planOne T))` through `sessionZC_repZ`. -/
@@ -108,9 +108,9 @@ variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fi
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the compiled `--zk` table**: against any live prover `τ`,
-flock-verify `--zk` accepts the live audit's transcript while the simulated prover's committed values have at least `K`
-incorrect proof blocks with probability at most `miss(K) + ε_ks + δ_link` of the compiled count curve at that prover. -/
+/-- **The `--zk` headline at verity-verify-proof's acceptance, at the compiled `--zk` table**: against any live prover `τ`,
+verity-verify-proof `--zk` accepts the live audit's transcript while the simulated prover's committed values have at least `K`
+incorrect proof blocks with probability at most `miss(K) + ε_ks + ε_bind` of the compiled count curve at that prover. -/
 theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) {k Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, ZkLink.rateZ (planOne T S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (ZkLink.sessionZC A Hs (planOne T S R)) →
@@ -120,25 +120,25 @@ theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) 
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     let σ := simAuditZC A Hs T I wr opn dg dec one fin capOf N hdec τ
     prob (fun o => LiveAcceptsZK I o ∧
-        K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOf dg mPts N wr)) τ ≤
       L.miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
         ZkLink.linkBoundZC A Hs P (planOne T) tab vb k Rw M ρ t' (reg σ) (cont σ) := by
   intro σ
   have hB := ZkLink.zk_flock_countC A Hs P (planOne T) tab vb hlow hRw hM hρ hr hj ht K σ
   have hc := prob_cast (congrArg (audit L Reg) (sessionZC_repZ A Hs T))
-    (fun o => o.1 = true ∧ K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+    (fun o => o.1 = true ∧ K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
     (simAuditZK (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N
       (fun S R pts r => ZkLink.allInh_repZCAt A Hs (T S R) pts r) hdec τ)
   exact zk_headline_exec_one (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N L _ hdec τ _ _
     (hc.symm.trans_le hB)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the live sample under A3**: `zk_headline_exec_zc` with the
+/-- **The `--zk` headline at verity-verify-proof's acceptance, at the live sample under A3**: `zk_headline_exec_zc` with the
 units sampled by `Flock.Draw.drawWith`'s stratified sampling design on a byte source A3 makes uniform (the challenger's coins),
-`miss(K)` `Law.stratified`'s count curve. -/
+`miss(K)` `SamplingDesign.stratified`'s count curve. -/
 theorem zk_headline_exec_zc_execOS (hlow : LoweringSoundZK A P (planOne T) tab decode)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, ZkLink.rateZ (planOne T S R) j k ≤ ρ)
@@ -146,15 +146,15 @@ theorem zk_headline_exec_zc_execOS (hlow : LoweringSoundZK A P (planOne T) tab d
       Fin (planOne T S R).length → ℝ}
     (hj : ZkLink.JointZC A Hs (planOne T) k a) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
     (hdec : DecodesZK (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dec one fin capOf)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (liveOf dg mPts N wr))) :
     let σ := simAuditZC A Hs T I wr opn dg dec one fin capOf N hdec τ
     prob (fun o => LiveAcceptsZK I o ∧
-        K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
+        K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
         ZkLink.linkBoundZC A Hs P (planOne T) tab vb k Rw M ρ t' (reg σ) (cont σ) :=
   (zk_headline_exec_zc A Hs T I wr opn dg dec one fin capOf N P tab vb hlow hRw hM hρ hr hj ht K hdec τ).trans
-    (add_le_add (add_le_add (Law.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl)
+    (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl)
 
 end FlockSoundness.Discharge.ZkExec

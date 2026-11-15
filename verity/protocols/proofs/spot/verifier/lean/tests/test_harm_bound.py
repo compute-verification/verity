@@ -1,7 +1,7 @@
 """`certify`'s harm bounds held to `Flock.Guarantees.JointStratified`'s exact supremum, `StratifiedBlock.maxHarm`: the
 most ANDs, or output bits, a wrong set whose exact stratified escape is at least δ holds, at the same δ and the same
 weights.  The supremum is bracketed in Lean (`Spot.Bound.maxHarmCheck`, the `max_harm` piece of
-`sampled-proofs-difftest`) from a certificate `optimize.max_harm` finds: `lower` the harm of one set of the confidence
+`spot-difftest`) from a certificate `optimize.max_harm` finds: `lower` the harm of one set of the confidence
 set, `upper` a dual bound.  Also the closed form (`Bound.densityBound`, the `harm_bound` piece) that
 `stratified_isHarmBound_fill` proves a harm bound.
 
@@ -188,17 +188,17 @@ def test_certify_is_held_to_the_supremum_on_the_plan_of_record(server, delta):
     """The objective's harm, the credited work and the output bits of the plan of record. The leak's location term
     (`location_bits`, core's exact `count_bound` over 1.6e16 units) is no harm bound and is left out."""
     d, (w, b) = float(delta), (PLAN["weights"]["work"], PLAN["weights"]["bits"])
-    law = Stratified(tuple(Stratum(t, n, k) for t, n, k, _, _ in PLAN["rows"]))
+    sampling_design = Stratified(tuple(Stratum(t, n, k) for t, n, k, _, _ in PLAN["rows"]))
     for name, harm in (("objective", lambda a, o: w * a + b * o), ("ands", lambda a, o: a), ("bits", lambda a, o: o)):
         rows = [(n, k, harm(a, o)) for _, n, k, a, o in PLAN["rows"]]
-        assert at_supremum(law.harm_bound({t: float(harm(a, o)) for t, _, _, a, o in PLAN["rows"]}, d),
+        assert at_supremum(sampling_design.harm_bound({t: float(harm(a, o)) for t, _, _, a, o in PLAN["rows"]}, d),
                            supremum(server, rows, d)), name
         assert held(density_bound([(n, k, float(h)) for n, k, h in rows], d), lean(server, rows, d)), name
-    assert law.harm_bound({t: float(a) for t, _, _, a, _ in PLAN["rows"]}, d) == PLAN["certified"][delta]["free_compute"]
+    assert sampling_design.harm_bound({t: float(a) for t, _, _, a, _ in PLAN["rows"]}, d) == PLAN["certified"][delta]["free_compute"]
 
 
 @pytest.mark.parametrize("seed", range(16))
-def test_certify_is_held_to_the_supremum_on_random_draws(server, seed):
+def test_certify_is_held_to_the_supremum_on_random_samples(server, seed):
     r = random.Random(seed)
     cands = [Candidate(f"t{i}", f"t{i}", r.choice([1, 2, 10, 1000, 10 ** 6, 10 ** 12]) * r.randint(1, 9),
                        r.randint(0, 10 ** 7), r.randint(0, 16)) for i in range(r.randint(1, 6))]
@@ -215,7 +215,7 @@ def test_certify_is_held_to_the_supremum_on_random_draws(server, seed):
     assert held(cert.density, lean(server, harm, objective.delta)) and inexact.harm == inexact.density == cert.density
     assert held(inexact.free_compute, lean(server, work, objective.delta))
     if cert.leak is not None:
-        law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in cands))
-        loc = location_bits(IntegrityProfile(("unit",), (law.population,), {"unit": law}, objective.delta))
+        sampling_design = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in cands))
+        loc = location_bits(IntegrityProfile(("unit",), (sampling_design.population,), {"unit": sampling_design}, objective.delta))
         lower, upper = supremum(server, rows(lambda c: c.out_bits), objective.delta)
         assert lower <= Fraction(cert.leak) <= (upper * (1 + SLACK) + Fraction(loc)) * (1 + Fraction(1, 2 ** 52))

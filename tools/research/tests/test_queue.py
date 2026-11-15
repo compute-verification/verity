@@ -505,7 +505,7 @@ def test_a_seeded_clone_gets_the_record_drivers_it_lacks_once_and_plain_git_then
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
     wd = world.tmp / "q" / "verity"
     _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
-    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
+    _git(wd, "config", "--local", "merge.lean-limits.driver", "true")
 
     def said() -> list[str]:
         return [x for x in world.logs if "set the record merge drivers" in x]
@@ -644,8 +644,8 @@ def _pin_main(world: World) -> dict[str, str]:
     """`main` with the real pins tool and both pins over a few inputs; returns those inputs."""
     tree = {f"{POUS}/lakefile.toml": "l0\n", f"{POUS}/lean-toolchain": "t0\n", f"{POUS}/Old.lean": "o0\n",
             "security/Proofs/lakefile.toml": "s0\n", "x.lean": "x0\n"}
-    pins = (Path(__file__).resolve().parents[2] / "verity" / "check" / "pins.py").read_text()
-    base = _pinned(world, {**tree, "tools/verity/check/pins.py": pins}, MAIN_TRUSTED, MAIN_EXFIL)
+    pins = (Path(__file__).resolve().parents[2] / "check" / "pins.py").read_text()
+    base = _pinned(world, {**tree, "tools/check/pins.py": pins}, MAIN_TRUSTED, MAIN_EXFIL)
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
     return tree
 
@@ -889,7 +889,7 @@ def _regeneration(world: World, ran: Path) -> tuple[Queue, str, PR]:
     main = _move_main(world, {
         "tools/move/rename.py": f"import os, sys\nfrom pathlib import Path\nPath({str(ran)!r}).write_text(os.getcwd())\n"
                                 "Path(sys.argv[sys.argv.index('--root') + 1], 'moved.txt').write_text('m\\n')\n",
-        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('{\"certified\": true}')\n"})
+        "tools/move/x_map.toml": "", "tools/check/move_check.py": "print('{\"certified\": true}')\n"})
     q = world.queue()
     q._clone()
     q.fetch()
@@ -1200,7 +1200,7 @@ def test_a_merge_record_whose_tree_the_clone_lacks_is_merged_again_and_the_state
 
 
 #: the Markdown size limits' warn gate and the limits it reads at `main`, committed into the origin as they are in this checkout
-SIZE_GATE = "tools/verity/check/gates/markdown_caps.py"
+SIZE_GATE = "tools/check/gates/markdown_caps.py"
 SIZE_FILES = {DRIVE_FLAGS: f'warn_gates = ["{SIZE_GATE}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text()
                                                                 for f in (SIZE_GATE, "tests/test_repository.py")}}
 #: `doc.md` as `main` holds it (70 bytes), and with line ``at`` replaced by ``text``
@@ -1226,7 +1226,7 @@ def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_limit_joins_ne
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["conflicts"] == {}
     (said,) = [w["why"] for n, w in q.load_state()["warned"].items() if (n, w["head"]) == ("2", h2)]
     assert said == (f"the warn gate {SIZE_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes at "
-                    f"{members[1].commit[:12]}, over its 49152-byte cap (tests/test_repository.py), and was 30064 bytes at "
+                    f"{members[1].commit[:12]}, over its 49152-byte limit (tests/test_repository.py), and was 30064 bytes at "
                     f"{members[0].commit[:12]} below; trim doc.md to 49152 bytes or fewer (10906 over): move detail to the notes "
                     f"store (cite it by note:<id>) (`python3 {SIZE_GATE} origin/main HEAD` on the branch merged with `origin/next` "
                     "runs it)"), said
@@ -1263,7 +1263,7 @@ def test_a_file_already_over_its_limit_below_warns_only_of_a_pr_whose_merge_grow
     doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / SIZE_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
                                     capture_output=True, text=True).stdout)
     assert doc["below"] == members[2].commit and doc["failures"] == [] and doc["notes"] == [
-        f"doc.md is 60063 bytes, over its 49152-byte cap, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
+        f"doc.md is 60063 bytes, over its 49152-byte limit, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
@@ -2516,7 +2516,7 @@ def test_rules_name_the_author_of_the_queues_commits_with_a_name_and_an_address_
 
 
 def test_until_the_move_the_rules_are_read_from_tools_check(world):
-    world.change({"tools/verity/check/queue.toml": 'hold_label = "parked"\n'})
+    world.change({"tools/check/queue.toml": 'hold_label = "parked"\n'})
     _git(world.dev, "rm", "-q", "ci/queue.toml")
     _git(world.dev, "commit", "-q", "-m", "rules where they are before the move")
     _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
@@ -2971,9 +2971,9 @@ PREFLIGHT_FILES = {
     "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
     "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
     "adapters/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
-    "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
-    "tools/verity/check/settings.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "settings.py").read_text(),
-    "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
+    "tools/check/suites.py": (Path(__file__).resolve().parents[2] / "check" / "suites.py").read_text(),
+    "tools/check/settings.py": (Path(__file__).resolve().parents[2] / "check" / "settings.py").read_text(),
+    "tools/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
                                    "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
                                    "    sys.exit(1)\n"),
 }
@@ -3055,8 +3055,9 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
 
 
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
-#: tests/explore/test_authentication.py reads fixtures/typed-obligation-v0's K=1536 vector (`auth.read_openings()`), so the
-#: suite's collection fails without it; `other` registers one too, in a suite no change below touches
+#: tests/explore/test_authentication.py reads benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0's K=1536 vector
+#: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
+#: below touches
 BIG = b'{"openings": [1, 2, 3]}\n'
 BIG_PATH = "pkg/data/big.json"
 
@@ -3099,7 +3100,7 @@ ROWS_TEST = {"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
 
 def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_those(world, capsys):
     """A suite whose test reads a fetched fixture at import (as `benchmarks/numerical` reads a vector of
-    fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
+    benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
     fetches each collected suite's fetched fixtures into the worktree first, and none of a suite it doesn't collect; a suite
     collected again at `next` has them fetched again there, since the worktree is cleaned in between."""
     from research.queue import MarkOnly, StoreLabels, ready
@@ -3328,7 +3329,7 @@ def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pi
 
 def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_checkout_it_runs_in(world, capsys):
     """A branch from before `merge.py --caps`, marked from its own checkout, merged onto `next` with that checkout's `merge.py`
-    as the `lean-caps` driver: it errored on `--caps`, and git reported a conflict in `tests/test_lean_packages.py` that the
+    as the `lean-limits` driver: it errored on `--caps`, and git reported a conflict in `tests/test_lean_packages.py` that the
     sync, with `next`'s driver, merges as counters.  The preflight runs `next`'s drivers, so the head merges cleanly."""
     from research.queue import MarkOnly, StoreLabels, base_drivers, merged_tree, ready
 
@@ -3342,11 +3343,11 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
     old = _move_main(world, {**PREFLIGHT_FILES, packages: counts(354, 184), "tools/verity/lean/merge.py":
                              "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
     _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
-                       ".gitattributes": f"{packages} merge=lean-caps\n"})
+                       ".gitattributes": f"{packages} merge=lean-limits\n"})
     world.gh.put(1, world.change({packages: counts(355, 184)}))
     assert [m.pr for m in world.queue().sync()[0]] == [1]
     world.gh.put(2, h2 := world.change({packages: counts(354, 185)}, base=old), ready=False)    # the checkout stays at #2's head
-    _git(world.dev, "config", "merge.lean-caps.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
+    _git(world.dev, "config", "merge.lean-limits.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
     next_ = _git(world.origin, "rev-parse", "refs/heads/next")
     raw = subprocess.run(["git", f"--attr-source={next_}", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h2],
                          cwd=world.dev, capture_output=True, text=True)
@@ -3370,7 +3371,7 @@ def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_c
         return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
-    _move_main(world, {packages: counts(354, 184), ".gitattributes": f"{packages} merge=lean-caps\n",
+    _move_main(world, {packages: counts(354, 184), ".gitattributes": f"{packages} merge=lean-limits\n",
                        "tools/verity/lean/merge.py": "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
     world.gh.put(1, world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}))
     world.gh.put(2, world.change({packages: counts(355, 184)}))
@@ -3732,7 +3733,7 @@ def test_the_preflight_never_holds_a_head_behind_a_contained_head_on_the_landing
     from research.queue import MarkOnly, ready
 
     world.with_store_remote()
-    _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    _move_main(world, {"tools/check/drive.toml": 'land_into = "checked"\n'})
     world.gh.put(5, five := world.change({"x.txt": "x\n"}), labels=("hold",), ready=False)
     _git(world.dev, "push", "-q", "origin", f"{five}:refs/heads/checked")
     world.gh.put(4, world.change({"y.txt": "y\n"}, base=five), ready=False)
@@ -4220,12 +4221,12 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -4253,7 +4254,7 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     world.gh.put(1, h2, ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and _git(wt, "rev-parse", "HEAD") == h2
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is True
-    h3 = world.change({"tools/verity/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
+    h3 = world.change({"tools/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
     world.gh.put(1, h3, ready=False)
     assert tier(world.gh.prs[1]) is None
     assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
@@ -4264,7 +4265,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/protocols/proofs/flock/verifier/lakefile.toml": "name = \"flock\"\n"})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "verity/protocols/proofs/flock/verifier/lakefile.toml": "name = \"flock\"\n"})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -4274,7 +4275,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
                                'mkdir -p .lake && echo built > .lake/built\n')
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{settings.need('PATH')}")
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -4299,12 +4300,12 @@ def test_the_quick_tier_runs_on_the_heads_merge_onto_mains_tip_and_a_head_that_d
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
     moved = _move_main(world, {"m.txt": "main moved\n"})
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
@@ -4348,13 +4349,13 @@ def test_a_change_that_touches_lean_is_marked_only_after_the_lean_audit_passes_o
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "audit.py": FAKE_AUDIT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "audit.py": FAKE_AUDIT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, h1 := world.change({"Pkg/A.lean": "theorem a : True := trivial\n"}), ready=False)
     world.gh.put(2, world.change({"a.txt": "a1\n"}), ready=False)
     moved = _move_main(world, {"m.txt": "main moved\n"})
     seen, suites = world.tmp / "audits.jsonl", world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(suites))
     monkeypatch.setenv("FAKE_AUDIT_SEEN", str(seen))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -4538,12 +4539,12 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
 
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -4596,11 +4597,11 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
 
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
 
@@ -4741,13 +4742,13 @@ def test_a_remote_tier_on_a_merge_onto_main_reports_the_head_it_merged_and_judge
     died, marks the head its facts say it merged (`merged`); a checkout that isn't that merge refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     machine = Machine(world.tmp)
     tier, _ = _remote_tier(world, monkeypatch, machine)
     world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
     moved = _move_main(world, {"m.txt": "main moved\n"})
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
 
@@ -4777,14 +4778,14 @@ def test_a_remote_tier_runs_the_lean_audit_on_the_merge_it_ships(world, monkeypa
     """`LEAN_AUDIT` reaches the machine's quick_tier.py as `--lean-audit`, shell-quoted, and runs in the shipped merge."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "audit.py": FAKE_AUDIT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT, "audit.py": FAKE_AUDIT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     machine = Machine(world.tmp)
     tier, _ = _remote_tier(world, monkeypatch, machine)
     world.gh.put(1, h1 := world.change({"Pkg/A.lean": "theorem a : True := trivial\n"}), ready=False)
     moved = _move_main(world, {"m.txt": "main moved\n"})
     seen = world.tmp / "audits.jsonl"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setattr(Q, "LEAN_AUDIT", [sys.executable, "audit.py"])
     monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
     monkeypatch.setenv("FAKE_AUDIT_SEEN", str(seen))
@@ -4905,7 +4906,7 @@ def test_a_remote_quick_tier_placed_in_a_research_pool_runs_through_that_pools_s
     argv = machine.launched[-1]
     assert argv[argv.index("--on") + 1] == "vy-test"
     cmd = argv[argv.index("--", argv.index("--declared-output")) + 1:]
-    assert cmd[:4] == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py"]
+    assert cmd[:4] == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py"]
     assert "in a slot of its research pool" in capsys.readouterr().out
 
 
@@ -4913,8 +4914,8 @@ def test_place_on_auto_spills_to_a_research_pool_only_when_no_auto_machine_can_b
     from research import queue as Q
 
     repo = tmp_path / "repo"
-    (repo / "tools/verity/check").mkdir(parents=True)
-    (repo / "tools/verity/check/check.py").write_text(
+    (repo / "tools/check").mkdir(parents=True)
+    (repo / "tools/check/check.py").write_text(
         'AUTO = ("vy-nebius-2",)\n'
         "def read_slots(names):\n    return {}\n"
         "def choose(names, docs, priority=False):\n"
@@ -4983,9 +4984,9 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
     clock[0] = 0.0
-    tier.max_wait_s = Q.waitcap.WAIT_CAP_S
+    tier.max_wait_s = Q.waitcap.WAIT_LIMIT_S
     _, why = tier._wait(d, "vy-test")
-    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_CAP_S <= clock[0] <= Q.waitcap.WAIT_CAP_S + 900
+    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_LIMIT_S <= clock[0] <= Q.waitcap.WAIT_LIMIT_S + 900
 
 
 def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):
@@ -5021,10 +5022,10 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     fail every tier that runs tools/research on that machine."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
     monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
@@ -5050,10 +5051,10 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
     built the verifier only with `lake` on the PATH would skip its Lean-dependent tests and label the PR ready.  It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "verity/protocols/proofs/flock/verifier/lakefile.toml": 'name = "flock"\n'})
+    main = world.change({"tools/check/suites.py": FAKE_SUITES, "tools/check/slot.py": FAKE_SLOT, "verity/protocols/proofs/flock/verifier/lakefile.toml": 'name = "flock"\n'})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))

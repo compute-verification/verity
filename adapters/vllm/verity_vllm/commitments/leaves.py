@@ -41,6 +41,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from verity.commitments import domains
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.scheme import sha as _sha
 from verity.errors import InvalidArtifact
@@ -71,11 +72,11 @@ __all__ = [
     "verify_opening",
 ]
 
-LEAF_TAG = "verity-vllm/leaf/v1"
-NODE_TAG = "verity-vllm/node/v1"
-LIFT_TAG = "verity-vllm/lift/v1"
-IDS_TAG = "verity-vllm/ids/v1"
-EMPTY_TAG = "verity-vllm/empty/v1"
+LEAF_TAG = domains.VLLM_LEAF
+NODE_TAG = domains.VLLM_NODE
+LIFT_TAG = domains.VLLM_LIFT
+IDS_TAG = domains.VLLM_IDS
+EMPTY_TAG = domains.VLLM_EMPTY
 
 DIGEST_BYTES = 32
 
@@ -115,7 +116,7 @@ def parse_shape_text(text: str) -> tuple[int, ...]:
         return ()
     dims = []
     for piece in inner.split(","):
-        if not piece.isdigit() or (len(piece) > 1 and piece[0] == "0"):
+        if not piece.isdecimal() or (len(piece) > 1 and piece[0] == "0"):
             raise InvalidArtifact(f"malformed shape text {text!r}")
         dims.append(int(piece))
     return tuple(dims)

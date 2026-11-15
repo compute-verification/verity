@@ -1,8 +1,9 @@
 """Network certificates (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
 and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
 audit's on every scenario of the audit and commitment tests. The mark certificate: what it signs, each refusal of
-its opening by name, and the issuer signing none when its signer refuses or its coins repeat. A certificate's
-bytes: the layout, its inverse, the same bytes inside both record encoders, and each refusal by name."""
+its opening by name, the issuer signing none when its signer refuses or its coins repeat, and no second one of a mark
+it has certified. A certificate's bytes: the layout, its inverse, the same bytes inside both record encoders, and each
+refusal by name."""
 
 import hashlib
 import itertools
@@ -18,8 +19,8 @@ from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import lean_audit, service
 from verity.protocols.accounting.certifier.verifier.audit import Audit
 from verity.protocols.accounting.certifier.verifier.certificate import (
-    MARK_TAG, SALT_BYTES, STATUS_CODES, Certificate, CertifiedMark, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead,
-    certificate_digest, certificate_message, depth, empty, frames_root, mark_digest, marks_link, open_frame,
+    MARK_TAG, SALT_BYTES, STATUS_CODES, Certificate, CertifiedMark, CertifiedRecord, Direction, Issuer, LmsSigner,
+    MarkRefused, RecordHead, certificate_digest, certificate_message, depth, empty, frames_root, mark_digest, marks_link, open_frame,
     parameters_digest, real_frames, record_head, verify_frame)
 from verity.protocols.accounting.certifier.verifier.commitment import commit
 from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier, fill
@@ -239,7 +240,7 @@ def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_p
     assert issuer.refused == []
 
 
-def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
+def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
     """Moving a certificate to another window, link or direction, editing its head, signing with another key or
     forging the signature is a `signature` violation, and only in that window."""
     signer = signers.signer(tmp_path)
@@ -461,7 +462,7 @@ def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_pa
     """A mark certificate signs SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark) under 64 bytes of the
     certifier's own coins, as an egress certificate on `<link>-marks` at the execution phase its caller gave, over the
     message every certificate signs, with one leaf. Its opening holds, and its execution phase is the certificate's.
-    One mark certified twice is signed under two salts and two digests, and both openings hold."""
+    The issuer keeps the mark, and asked for it again it raises `MarkRefused` and signs no second certificate."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     issuer = Issuer(signer, SESSION, coins=fresh_coins())
@@ -477,9 +478,70 @@ def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_pa
     assert c.verify(key, SESSION) and m.refusal(key, SESSION, "responses") is None
     assert m.verify(key, SESSION, "responses")
     assert signers.used(signer) == [0] and issuer.refused == [] and issuer.mark_salts == {m.salt}
-    again = issuer.mark("responses", 9, MARK)
-    assert again.salt != m.salt and again.certificate.digest != c.digest and again.window == 9
-    assert again.verify(key, SESSION, "responses") and signers.used(signer) == [0, 1]
+    assert issuer.marked == {MARK}
+    with pytest.raises(MarkRefused, match="it certifies a mark once"):
+        issuer.mark("responses", 9, MARK)
+    assert signers.used(signer) == [0] and issuer.marked == {MARK}
+
+
+def test_the_issuer_signs_no_second_mark_of_a_message(tmp_path):
+    """The issuer marks a message at most once: a mark it has certified is refused when asked for again, at the same
+    execution phase, at a later one and for another link, by `MarkRefused`, and nothing is handed back. A refused call
+    takes no coins, uses no leaf and lists nothing in `refused`, so the next mark, another message, is certified under
+    the next salt at the next leaf, and is then refused too. A restarted signer on the key's state signs no mark in
+    the session the state has started, the certified one or another: the session's marks are the first signer's."""
+    signer = signers.signer(tmp_path)
+    key = signer.public_key()
+    taken = []
+
+    def coins(n):
+        taken.append(n)
+        return bytes([len(taken)]) * n
+
+    issuer = Issuer(signer, SESSION, coins=coins)
+    m = issuer.mark("responses", 5, MARK)
+    assert m.verify(key, SESSION, "responses") and (taken, signers.used(signer)) == ([64], [0])
+    for link, w in (("responses", 5), ("responses", 9), ("requests", 5)):
+        with pytest.raises(MarkRefused, match="no second certificate is signed over the same 64 bytes"):
+            issuer.mark(link, w, MARK)
+    assert (taken, signers.used(signer), issuer.refused) == ([64], [0], [])
+    assert (issuer.marked, issuer.mark_salts) == ({MARK}, {m.salt})
+    other = issuer.mark("responses", 9, OTHER_MARK)
+    assert (other.mark, other.salt, other.window) == (OTHER_MARK, b"\x02" * 64, 9)
+    assert other.verify(key, SESSION, "responses") and (taken, signers.used(signer)) == ([64, 64], [0, 1])
+    assert issuer.marked == {MARK, OTHER_MARK}
+    with pytest.raises(MarkRefused):
+        issuer.mark("responses", 9, OTHER_MARK)
+    assert signers.used(signer) == [0, 1]
+    signer.close()
+    restarted = Issuer(LmsSigner(signer.key, signer.state), SESSION, coins=fresh_coins())
+    third = hashlib.sha512(b"a third mark").digest()
+    assert restarted.mark("responses", 9, MARK) is None and restarted.mark("responses", 9, third) is None
+    assert restarted.refused == [("responses-marks", EGRESS, 9)] * 2 and restarted.marked == set()
+    assert signers.used(signer) == [0, 1]
+
+
+def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
+    """A mark of 64 bytes that are not `bytes` (a `bytearray`, a `memoryview`) is refused with `ValueError` before the
+    issuer takes a coin or asks its signer anything, before and after the same bytes are certified: no coin is taken,
+    no leaf is used, nothing is listed in `refused`, and neither a salt nor the mark is kept."""
+    signer = signers.signer(tmp_path)
+    taken = []
+
+    def coins(n):
+        taken.append(n)
+        return bytes([len(taken)]) * n
+
+    issuer = Issuer(signer, SESSION, coins=coins)
+    for mark in (bytearray(MARK), memoryview(MARK)):
+        with pytest.raises(ValueError, match="a mark is 64 bytes"):
+            issuer.mark("responses", 5, mark)
+    assert (len(taken), signers.used(signer), issuer.refused, issuer.marked, issuer.mark_salts) == (0, [], [], set(), set())
+    m = issuer.mark("responses", 5, MARK)
+    assert (m.salt, signers.used(signer), issuer.marked) == (b"\x01" * 64, [0], {MARK})
+    with pytest.raises(ValueError, match="a mark is 64 bytes"):
+        issuer.mark("responses", 9, bytearray(MARK))
+    assert (len(taken), signers.used(signer), issuer.refused, issuer.mark_salts) == (1, [0], [], {m.salt})
 
 
 def test_a_mark_certificate_is_refused_by_name(tmp_path):
@@ -538,7 +600,7 @@ def test_the_issuer_signs_no_mark_when_its_signer_refuses_or_its_coins_repeat(tm
     shutil.copy(signer.state, current)
     shutil.copy(old, signer.state)
     assert issuer.mark("responses", 5, MARK) is None
-    assert issuer.refused == [("responses-marks", EGRESS, 5)] and issuer.mark_salts == set()
+    assert issuer.refused == [("responses-marks", EGRESS, 5)] and issuer.mark_salts == set() == issuer.marked
     assert signers.used(signer) == [0]
     shutil.copy(current, signer.state)
     m = issuer.mark("responses", 5, MARK)
@@ -550,7 +612,7 @@ def test_the_issuer_signs_no_mark_when_its_signer_refuses_or_its_coins_repeat(tm
     with pytest.raises(ValueError, match="gave 63 bytes for a 64-byte salt"):
         Issuer(signer, SESSION, coins=lambda n: bytes(n - 1)).mark("responses", 6, MARK)
     assert signers.used(signer) == [0, 1] and issuer.refused == [("responses-marks", EGRESS, 5)]
-    assert issuer.mark_salts == {m.salt}
+    assert issuer.mark_salts == {m.salt} and issuer.marked == {MARK}
 
 
 def layout(c: Certificate) -> bytes:
@@ -563,25 +625,24 @@ def layout(c: Certificate) -> bytes:
 
 
 def one_of_each(tmp_path):
-    """The signer's key, a certified record, and a certificate of each kind the issuer signs: a record's at each end,
-    a clock's and a mark's."""
+    """The signer's key, a certified record, and a certificate of each kind the issuer signs: a record's at each end
+    and a mark's."""
     signer = signers.signer(tmp_path)
     issuer = Issuer(signer, SESSION, coins=fresh_coins())
     record = certify_all(issuer, run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))[:1])[0]
     ingress = certify_all(issuer, ingress_run([[2, 0, 0, 0]]), INGRESS)[0]
-    clock = issuer.salted_clock("responses", 0, SYNCS[0])
     mark = issuer.mark("responses", 3, MARK)
     return signer.public_key(), record, {"record": record.certificate, "ingress": ingress.certificate,
-                                         "clock": clock.certificate, "mark": mark.certificate}
+                                         "mark": mark.certificate}
 
 
 def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path):
-    """`Certificate.encode` is the layout field by field for a record's certificate at each end, a clock's and a
-    mark's, and `Certificate.decode` gives the certificate back, which still verifies and encodes to the same bytes.
-    Two certificates that differ in one field have different bytes."""
+    """`Certificate.encode` is the layout field by field for a record's certificate at each end and a mark's, and
+    `Certificate.decode` gives the certificate back, which still verifies and encodes to the same bytes. Two
+    certificates that differ in one field have different bytes."""
     key, _, kinds = one_of_each(tmp_path)
     assert {c.direction for c in kinds.values()} == {EGRESS, INGRESS}
-    assert kinds["mark"].link == "responses-marks" and len({c.encode() for c in kinds.values()}) == 4
+    assert kinds["mark"].link == "responses-marks" and len({c.encode() for c in kinds.values()}) == 3
     for c in kinds.values():
         data = c.encode()
         assert data == layout(c) and len(data) == 2 + 16 + 2 + len(c.link) + 1 + 8 + 64 + 4 + len(c.signature)
@@ -601,7 +662,7 @@ def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
     """The commitment's leaf of a certified record (`service.encode`) is its head, its 64-byte salt and then the
     certificate, which is where the Lean reads it; the Lean audit's encoding of the record (`lean_audit.encode`) is
     a kind byte, the leaf's length and that leaf. The certificate's part of both is `Certificate.encode`, for a
-    record's certificate at each end, a clock's and a mark's, and `Certificate.decode` reads it back from there."""
+    record's certificate at each end and a mark's, and `Certificate.decode` reads it back from there."""
     _, record, kinds = one_of_each(tmp_path)
     head = record.head.encode()
     for c in kinds.values():

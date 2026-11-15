@@ -7,7 +7,7 @@ With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-run
 run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
-With `--auditor` (an auditor host's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
+With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
 vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/device/live_challenger/auditor.py).
 
@@ -31,18 +31,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
-#: an auditor host's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
+#: an auditor device's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
 AUDITOR = Path("/etc/vy/auditor")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
-#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below the path slot.py has
-#: in the repository, which is how every reader of a run's command knows slot.py. A run that names a pool takes its slot by
-#: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
-#: tree each run ships
+#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below one of CHECK_DIRS'
+#: slot.py paths, which is how every reader of a run's command knows slot.py. It stays where every machine has it, below
+#: tools/verity/check/, whatever the tree's own path: a launch names it, so a move of it would name a file no machine has
+#: until each is installed. A run that names a pool takes its slot by this copy where the machine has one (`node_copy`), so
+#: the waiters of a pool's line are held to one copy's rules, whatever tree each run ships
 NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
 #: the check's directory in a shipped tree, either spelling, while trees of both are run: node_ops.py and run_records.py, which
 #: are installed or sent alone, hold copies (`check_file` is the match they spell out)
-CHECK_DIRS = ("tools/verity/check/", "tools/check/")
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 #: slot.py as a run's command names it: a shipped tree's, or the machine's own
 TREE_SLOTS = tuple(d + "slot.py" for d in CHECK_DIRS)
 SLOT_PATHS = (*TREE_SLOTS, NODE_SLOT)
@@ -63,7 +64,7 @@ POOL_WAIT_S = 14400
 
 def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
             twin: str | None = None) -> list[str]:
-    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
+    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/check/slot.py --by
     LANE [--wait-max POOL_WAIT_S --run-max S] [--twin PAIR] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own
     shipped tree (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one
     (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
@@ -136,12 +137,12 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
     without `--pool` learns the flag that sends it, rather than wrapping slot.py by hand."""
     have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
     send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
-            if have else "send it as `python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+            if have else "send it as `python3 tools/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
     return f"this machine takes a `research run` only through its check slots ({machine_marker}): {send}"
 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
-    """The commands an auditor host runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    """The commands an auditor device runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
     if not marker.exists():
         return []
     try:
@@ -153,13 +154,13 @@ def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
 
 
 def auditor_allows(command: object, marker: Path = AUDITOR) -> bool:
-    """Whether a workload command is exactly one of the auditor host's commands: no wrapper, pool or extra argument."""
+    """Whether a workload command is exactly one of the auditor device's commands: no wrapper, pool or extra argument."""
     return isinstance(command, list) and command in auditor_commands(marker)
 
 
 def auditor_refusal(marker: Path = AUDITOR) -> str:
     allowed = " or ".join(f"`{shlex.join(c)}`" for c in auditor_commands(marker)) or "nothing (its list is empty or unreadable)"
-    return (f"this machine is an auditor host ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
+    return (f"this machine is an auditor device ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
             f"take other work to another machine")
 
 
@@ -266,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.renice is not None:
             rec = renice(o, a.renice, dry_run=a.dry_run)
         elif a.auditor:
-            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor host's {a.marker}")
+            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor device's {a.marker}")
         else:
             rec = stop(o, dry_run=a.dry_run)
         if not rec.get("sigterm" if a.renice is None else "reniced"):

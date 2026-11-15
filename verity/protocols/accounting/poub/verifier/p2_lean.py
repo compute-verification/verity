@@ -1,5 +1,5 @@
-"""The Lean verifier of a P2 session, the process `remote-audit-verifier` (`RemoteAudit.Verifier`'s `p2_*`
-requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_party.py` runs it beside `audit.AuditRun` over the P2 codec:
+"""The Lean verifier of a P2 session, the process `poub-verifier` (`Poub.Verifier`'s `p2_*`
+requests, `Poub.P2Session`, in `lean/`), as `p2_parties.py` runs it beside `audit.AuditRun` over the P2 codec:
 one request a JSON line on its stdin, a line's or a file's bytes right after it, each answered by one line on its
 stdout, `{"answer": JSON}` or `{"error": why}`. The standard library only, so the party runs as the auditor's gate
 starts it (`python3 -S -E`)."""
@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any
 
 PACKAGE = Path(__file__).resolve().parent / "lean"
-EXE = "remote-audit-verifier"
+EXE = "poub-verifier"
 BUILD_LOCK = Path(__file__).resolve().parents[5] / "verity/circuits/difftest/.lake/harness-build.lock"
 """`verity_difftest.BUILD_LOCK`: Lake builds the package's path requires in place, so a build here and the difftest's
-build of `remote-audit-difftest` take turns."""
+build of `poub-difftest` take turns."""
 
 
 class LeanError(RuntimeError):
@@ -27,7 +27,7 @@ class LeanError(RuntimeError):
 
 @functools.cache
 def build(package: Path = PACKAGE) -> Path:
-    """`lake build remote-audit-verifier` in the remote audit's Lake package, once a process, and the executable's
+    """`lake build poub-verifier` in PoUB's Lake package, once a process, and the executable's
     path."""
     if shutil.which("lake") is None:
         raise LeanError(f"lake is not on the PATH, so {EXE} cannot be built: put elan's bin on the PATH "
@@ -42,7 +42,7 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 def exe(given: Path | None = None) -> Path:
-    """The executable: `given` (the caller's, `p2_party --lean-exe`), else built here (`build`), or, where `lake` isn't
+    """The executable: `given` (the caller's, `p2_parties --lean-exe`), else built here (`build`), or, where `lake` isn't
     on the PATH, the one already built here: an auditor gate's party, whose pinned tree, never changed after,
     `vy-verifier-pin` built it in."""
     if given is not None:
@@ -52,7 +52,7 @@ def exe(given: Path | None = None) -> Path:
 
 
 class Lean:
-    """One `remote-audit-verifier` process, its requests answered in the order they are made: `send` writes one (with
+    """One `poub-verifier` process, its requests answered in the order they are made: `send` writes one (with
     `body` after its line), `read` returns the next answer (`LeanError` for an error or the process gone), and `call`
     is the two. A request's body is written whole before `send` returns, so a caller may compute while the process
     checks it and `read` after."""

@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.With.Hashes
+public import Flock.HmRow
+public import Flock.ByteLines
+public import Flock.TmplLines
+
+/-!
 `Flock.HmRow`, `HmOut`'s setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
 digest of what the session brings taken from the oracle, in a verdict monad `M`. Run in `V` with `Hashes.ofSha512 Sha512.hash`
 it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' text; what hashes nothing is the compiled
@@ -19,12 +26,6 @@ table pins (`Pinned.tableSha`), `row_key_sha512` (`Pinned.rowKey`), the zero row
 a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of these depends on the session: the flock lock's
 `verifier.stop` names each.
 -/
-module
-
-public import Flock.With.Hashes
-public import Flock.HmRow
-public import Flock.ByteLines
-public import Flock.TmplLines
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -593,7 +594,7 @@ def deriveTemplateUnitsWith (hs : Hashes M) (c : Circuit) (obj : Json) (program 
     match TemplateQuery.locate rs i with
     | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the unit class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
+  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
 
 /-- `deriveQwordUnits` through the oracle. -/
@@ -730,8 +731,8 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
   return { header, n, digests := bcs, outputs, sha := ← publicDigestWith hs header body, tables }
 
 /-- `drawn` through the oracle. -/
-def drawnWith (hs : Hashes M) (c : Circuit) (pub : Public) (draw : Json) : M Public := do
-  let d ← Draw.UnitDraw.ofJson draw
+def sampledWith (hs : Hashes M) (c : Circuit) (pub : Public) (draw : Json) : M Public := do
+  let d ← Draw.UnitSample.ofJson draw
   let proved := d.proved
   if d.population != pub.n || pub.population.isSome then throw "U: the draw's population is not this registered population"
   let np := c.ports.size
@@ -752,13 +753,13 @@ def drawnWith (hs : Hashes M) (c : Circuit) (pub : Public) (draw : Json) : M Pub
            sha := ← publicDigestWith hs header pubs, population := some (pub.n, pub.digests, pub.outputs),
            tables := pub.tables.map fun t => { t with refs := proved.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
-/-- `stratifiedLaw`'s and `workLaw`'s strata through the oracle. -/
-def templateStrataWith (hs : Hashes M) (law : String) (obj : Json) (program : ByteArray) :
+/-- `stratifiedSamplingDesign`'s and `workSamplingDesign`'s strata through the oracle. -/
+def templateStrataWith (hs : Hashes M) (samplingDesign : String) (obj : Json) (program : ByteArray) :
     M (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"{law}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+    | throw s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
   let ts ← ts
   let d ← TemplateQuery.Desc.parseWith hs.sha512 program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
@@ -768,19 +769,19 @@ def templateStrataWith (hs : Hashes M) (law : String) (obj : Json) (program : By
     | .error e => throw s!"partition: {e}"
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
 
-/-- `stratifiedLaw` through the oracle. -/
-def stratifiedLawWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) : M (Draw.Law × Nat) := do
+/-- `stratifiedSamplingDesign` through the oracle. -/
+def stratifiedSamplingDesignWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) : M (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrataWith hs "stratified" obj program
   match Draw.derive k strata with
-  | .ok law => return (law, population)
+  | .ok samplingDesign => return (samplingDesign, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `workLaw` through the oracle. -/
-def workLawWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    M (Draw.Law × Nat) := do
+/-- `workSamplingDesign` through the oracle. -/
+def workSamplingDesignWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    M (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrataWith hs "work" obj program
   match Draw.deriveWork k strata table with
-  | .ok law => return (law, population)
+  | .ok samplingDesign => return (samplingDesign, population)
   | .error e => throw s!"work: {e}"
 
 /-- `checkPublic` through the oracle. -/
@@ -793,7 +794,7 @@ def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
   let np := c.ports.size
   let (n, bcs, outputs) := pub.population.getD (pub.n, pub.digests, pub.outputs)
   if let .ok d := pub.header.getObjVal? "unit_draw" then
-    let u ← Draw.UnitDraw.ofJson d
+    let u ← Draw.UnitSample.ofJson d
     if (← J.nat pub.header "instances" "public file") != u.proved.size || pub.n != u.proved.size then
       throw "U3: the statement's instances are not the drawn units and their closure"
   for p in [0:np] do
@@ -834,14 +835,14 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
   let pop ← HmRow.loadPublicWith hs tags c publicFile
   let pub ← match draw with
-    | some d => HmRow.drawnWith hs c pop d
+    | some d => HmRow.sampledWith hs c pop d
     | none => pure pop
   -- a stratified sample's strata are the verifier's own, from its program and query, when it holds both
   if let some d := draw then
-    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
-      let (law, _) ← HmRow.stratifiedLawWith hs obj prog k
-      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+    if let (Except.ok (Draw.SamplingDesign.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitSample.ofJson d).map (·.samplingDesign), partition, program) then
+      let (samplingDesign, _) ← HmRow.stratifiedSamplingDesignWith hs obj prog k
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmRow.checkPublicWith hs c pub
   -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
   let finding ← match finding0, partition, program with
@@ -902,7 +903,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
 def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
     M Circuit := do
   let mj ← metaOf bytes
-  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
+  if J.has mj "definition" then throw "META definition: a proof-block class has no templated statement"
   let ctx := "templated statement META"
   let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
@@ -928,7 +929,7 @@ numbers through the view (`HmOut.tmplCountView`, `ByteLines.View.parseAt_tmpl`),
 @[noinline] def parseTmplWithVT (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (v : ByteLines.View) (cls : Task (V ByteArray)) : V Circuit := do
   let mj ← metaOf bytes
-  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
+  if J.has mj "definition" then throw "META definition: a proof-block class has no templated statement"
   let ctx := "templated statement META"
   let k ← tmplCountView v
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
@@ -980,7 +981,7 @@ def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
   let np := c.ports.size
   let (n, bcs, _) := pub.population.getD (pub.n, pub.digests, pub.outputs)
   if let .ok d := pub.header.getObjVal? "unit_draw" then
-    let u ← Draw.UnitDraw.ofJson d
+    let u ← Draw.UnitSample.ofJson d
     if (← J.nat pub.header "instances" "public file") != u.proved.size || pub.n != u.proved.size then
       throw "U3: the statement's instances are not the drawn units and their closure"
   for p in [0:np] do
@@ -1021,8 +1022,8 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (pi : Ports) (fil
   return pub
 
 /-- `HmIn.drawn` through the oracle. -/
-def drawnWith (hs : Hashes M) (c : Circuit) (pi : Ports) (pub : Public) (draw : Json) : M Public :=
-  HmRow.drawnWith hs { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } pub draw
+def sampledWith (hs : Hashes M) (c : Circuit) (pi : Ports) (pub : Public) (draw : Json) : M Public :=
+  HmRow.sampledWith hs { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } pub draw
 
 end HmIn
 
@@ -1051,13 +1052,13 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let pop ← HmIn.loadPublicWith hs tags c pi publicFile
   HmIn.checkOwn pi pop publicInputs
   let pub ← match draw with
-    | some d => HmIn.drawnWith hs c pi pop d
+    | some d => HmIn.sampledWith hs c pi pop d
     | none => pure pop
   if let some d := draw then
-    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
-      let (law, _) ← HmRow.stratifiedLawWith hs obj prog k
-      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+    if let (Except.ok (Draw.SamplingDesign.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitSample.ofJson d).map (·.samplingDesign), partition, program) then
+      let (samplingDesign, _) ← HmRow.stratifiedSamplingDesignWith hs obj prog k
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublicWith hs c pub
   let linked := J.has c.metaJ "links"
   let finding ← match finding0, partition, program with
@@ -1111,8 +1112,8 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     (publicInputs : Option ByteArray := none) : M (SessionSpec × Array Stmt) := do
   -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
-    if let .ok u := Draw.UnitDraw.ofJson d then
-      if let .work .. := u.law then
+    if let .ok u := Draw.UnitSample.ofJson d then
+      if let .work .. := u.samplingDesign then
         match closure with
         | some cm =>
           if u.closure != Draw.closureOf cm u.units then
@@ -1121,21 +1122,21 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
   -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.SamplingDesign.stratified k strata) := (Draw.UnitSample.ofJson d).map (·.samplingDesign) then
       let (some obj, some prog, some K) := (partition, program, stratified)
         | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← HmRow.stratifiedLawWith hs obj prog K
-      if law != Draw.Law.stratified k strata then
+      let (samplingDesign, _) ← HmRow.stratifiedSamplingDesignWith hs obj prog K
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.SamplingDesign.work k strata) := (Draw.UnitSample.ofJson d).map (·.samplingDesign) then
       let (some obj, some prog, some (K, table)) := (partition, program, work)
         | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← HmRow.workLawWith hs obj prog K table
-      if law != Draw.Law.work k strata then
+      let (samplingDesign, _) ← HmRow.workSamplingDesignWith hs obj prog K table
+      if samplingDesign != Draw.SamplingDesign.work k strata then
         throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
@@ -1156,12 +1157,12 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
-  let u? ← (draw.mapM Draw.UnitDraw.ofJson : V _)
+  -- the sample's sampling design and count are refused before the circuit is read
+  let u? ← (draw.mapM Draw.UnitSample.ofJson : V _)
   if let some u := u? then
-    match u.law with
+    match u.samplingDesign with
     | .subset _ | .stratified .. => splits u.units.size
-    | _ => throw Draw.TABLES_LAW
+    | _ => throw Draw.TABLES_SAMPLING_DESIGN
   -- without a sample, the population's units (`setupH` checks a sample's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
@@ -1183,6 +1184,6 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
+            unitSample := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 end Flock

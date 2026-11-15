@@ -20,8 +20,8 @@ from tests.program.predict.test_node_window import glm_request
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.commitments.windows import interface as IF
-from verity.definitions.registry import b1_tp2 as B1T
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.registry import b1_tp2 as B1T
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NM.FAMILIES}
 LP, WORLD, WIDTH, COLS = 43, 8, 6144, 192
@@ -69,7 +69,7 @@ def test_units_are_grain_lowers(window):
     combines: dict[str, int] = {}
     for j, node in sites:
         size = int(node.fn.bindings["SIZE"])
-        low = GR.lower(node.fn, [NM._own(w, j, node, size)] * WORLD, NM.reads(w, j), "test")
+        low = GR.lower(node.fn, [NM._own(w, j, node, size, NM.mine(w, j, node, size, WORLD))] * WORLD, NM.reads(w, j), "test")
         assert low.grain == GR.COORD and (low.row, low.chunk) == (WIDTH, 96)
         (fn, n), = low.combines
         assert n == size // low.chunk and descriptor_id(low.output) in ids and descriptor_id(low.gather) in ids

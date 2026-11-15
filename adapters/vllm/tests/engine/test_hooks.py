@@ -2,6 +2,7 @@
 Triton targets the integration patches."""
 from __future__ import annotations
 
+import contextlib
 import importlib
 import sys
 import types
@@ -287,7 +288,7 @@ def test_export_shims_restore_torch_and_vllm() -> None:
         moe_ops_traced,
     )
     cls = type(current_platform)
-    cap = vars(cls).get("get_device_capability", hooks.ABSENT)
+    capability = vars(cls).get("get_device_capability", hooks.ABSENT)
     mods = []
     for name in _NUM_CU_MODULES:
         try:
@@ -298,7 +299,7 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     with apply_target_profile(SimpleNamespace(compute_capability=(8, 9), num_sms=142)):
         assert tuple(cls.get_device_capability()) == (8, 9)
         assert all(m.num_compute_units() == 142 for m in mods if hasattr(m, "num_compute_units"))
-    assert vars(cls).get("get_device_capability", hooks.ABSENT) is cap
+    assert vars(cls).get("get_device_capability", hooks.ABSENT) is capability
     assert [vars(m).get("num_compute_units", hooks.ABSENT) for m in mods] == cus
     flashinfer_fp8 = importlib.import_module("vllm.model_executor.kernels.linear.scaled_mm.flashinfer")
     flashinfer_supported = flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported
@@ -308,10 +309,8 @@ def test_export_shims_restore_torch_and_vllm() -> None:
 
     fm = pytest.importorskip("vllm.model_executor.layers.fused_moe.fused_moe")   # registers torch.ops.vllm.fused_experts
     ns = torch.ops.vllm
-    try:
-        getattr(ns, "fused_experts")                         # resolving caches the packet on the namespace
-    except (AttributeError, RuntimeError):
-        pass
+    with contextlib.suppress(AttributeError, RuntimeError):
+        _ = ns.fused_experts                                 # resolving caches the packet on the namespace
     fe = vars(ns).get("fused_experts", hooks.ABSENT)
     try:
         from vllm.v1.worker import workspace as ws
