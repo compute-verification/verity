@@ -28837,8 +28837,8 @@
     "Real.instLT.lt 0 H.fH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.exp (-1)) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (instHSub.hSub δ (instHMul.hMul S.cast (instHAdd.hAdd δbind (instHMul.hMul nπ.cast δzk))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : V), Real.instLE.le (w u) (instHMul.hMul r (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : V), Real.instLE.le (w u) (instHMul.hMul r (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TS.DIdeal": {
     "Real.instLT.lt 0 H.CH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28919,8 +28919,8 @@
     "Real.instLT.lt 0 H.fH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.exp (-1)) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (instHSub.hSub δ (instHMul.hMul S.cast (instHAdd.hAdd δbind (instHMul.hMul nπ.cast δzk))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : V), Real.instLE.le (w u) (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : V), Real.instLE.le (w u) (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TS.TensorSlotCount": {
     "Function.Injective slot": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29180,8 +29180,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29639,13 +29639,13 @@
     "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.Compose": {
-    "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ComposeCone": {
+    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem T t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ContainsImplements": {
     "∀ (g : Fin t.D.N), Eq (t.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem t.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -58531,7 +58531,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "ef18c33f8615fda7bfe210d9da9df820b002aa67d5683a530cbeca00658063d8",
+   "digest": "d19043983a88966283751a4ef2ae7a332795da682c628067d3cccbce9c79d34e",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -58649,7 +58649,6 @@
     "Verity.Vocab.coinsRead": "4685228eafa3be069cda8671b29cbb04b681563fc26521a450a0d4f8ca8a93d4",
     "Verity.Vocab.computed": "91e4b87bf85dd8a40d137a5a2e178e673c173221ddc0b130329dc13a741f40b3",
     "Verity.Vocab.cost": "2b3a9189ceef4cbfba41bd1d075d240edc8535646e1695ef0db59ac2183a89a0",
-    "Verity.Vocab.cut": "50c076c8db64b5bf89aa7af106570399d3a6adcbf05ea02f221e4d58b84a8660",
     "Verity.Vocab.delta": "60a7d05da3301582bb5c27a172de0cd31ee454e5d0ba1b872cdee1fdbd2489a1",
     "Verity.Vocab.epsForge": "ea2fdbb7545955caecdd26a8548d5c74da2fb153490b0918fb750e6a907c5796",
     "Verity.Vocab.error": "d44a0ce4caaf29cf0abe69cfa9e83c7b82741db2c902ecefc78327566b4374ca",
@@ -58755,15 +58754,6 @@
    "digest": "7d16db3d723f55257481c743ac5662bb56dfe5d47d661533802ebab9ce8e5b45",
    "definitions": {
     "Verity.sha512": "aac9eb889860f01a7e5881dc563b6d8c9f6a60eaffcd2c1696324596e2003275"
-   }
-  },
-  "Properties.Verity.Tied": {
-   "digest": "177f8afac7804365f5f6e78a5545a445721f99ad98903602fb6fa020c898812c",
-   "definitions": {
-    "Verity.ValueTie.Cell": "f8f3ca63b9a4fc2572609c70251589fc36753d1361a41a3b026a1eee88211806",
-    "Verity.ValueTie.Cut": "818b6ce685044028430e0bb1c4f29179c8f2eaf2e528cc11c6d44f5e771cd87c",
-    "Verity.ValueTie.Cut.empty": "88b72bcb4467e352ed29c3bbe96015de86bc93f3113f7187d22f1bf2f47fdc50",
-    "Verity.ValueTie.Cut.y": "f2ba72f3b8c0117988d28a09c330adabc1881dabb73856e536048f51036d2d50"
    }
   },
   "Randomness": {
