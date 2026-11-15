@@ -212,8 +212,6 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.Ordered",
   "Proofs.Properties.Verity.SampledTwo.Refused",
   "Proofs.Properties.Verity.SampledTwo.Shown",
-  "Proofs.Properties.Spot.KnowledgeSound",
-  "Proofs.Properties.Verity.Sampled.LedgerPinned",
   "Proofs.Properties.Verity.SampledTwo.RuleTwo", "Proofs.Properties.Verity.SampledTwo.Device",
   "Proofs.Properties.Verity.SampledTwo.DeviceRead", "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
   "Proofs.Properties.Verity.SampledTwo.Apart", "Proofs.Properties.Verity.SampledTwo.FirstCoins",
