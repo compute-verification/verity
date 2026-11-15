@@ -103,13 +103,17 @@ for CASE in "${CASE_LIST[@]}"; do
 import hashlib, json, os, sys, time
 from pathlib import Path
 case, manifest, staged = sys.argv[1], sys.argv[2], Path(sys.argv[3])
-from verity_vllm.config import checkpoint_entries   # the manifest and its sibling manifests (checkpoints-int8.json)
+from verity_vllm.config import checkpoint_entries, checkpoints_hf_home   # the manifest and its sibling manifests (checkpoints-int8.json)
 entries = checkpoint_entries(manifest)
+pins_home, hf_home = checkpoints_hf_home(), os.environ["HF_HOME"]
+def here(e):   # a pin's snapshot in this HF_HOME: the pins name their own cache (`hf_home`)
+    p = Path(e["local_path"])
+    return Path(hf_home) / p.relative_to(pins_home) if pins_home and p.is_relative_to(pins_home) else p
 cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B", "B7": "Qwen/Qwen2.5-7B"}   # every other case is a `role` in checkpoints.json
 ent = next((c for c in entries if c.get("role") == case or (case in cases and c["repo"] == cases[case] and c.get("local_path"))), None)
 if ent is None:
     sys.exit(f"no checkpoints.json entry for case {case}")
-local = Path(ent["local_path"]); shas = ent.get("safetensors_sha256", {})
+local = here(ent); shas = ent.get("safetensors_sha256", {})
 fetched = not all((local / f).exists() for f in shas) or not (local / "config.json").exists()
 if fetched:
     from huggingface_hub import snapshot_download
@@ -119,9 +123,9 @@ if fetched:
         from verity_vllm.engine import fp8_checkpoint as F, int8_checkpoint as I8
         recipe = {r.id: r for r in (F.FP8, *I8.RECIPES.values())}[ent["recipe"]["id"]]
         base = F.base_entry(ent, entries, recipe)
-        if not all((Path(base["local_path"]) / f).exists() for f in base["safetensors_sha256"]):
+        if not all((here(base) / f).exists() for f in base["safetensors_sha256"]):
             print("downloaded", fetch(base), flush=True)
-        made, bad = F.remake(ent, entries, recipe=recipe)
+        made, bad = F.remake(ent, entries, hf_home=hf_home, recipe=recipe)
         print("made", made["local_path"], "mismatch", bad, flush=True)
     else:
         print("downloaded", fetch(ent), flush=True)

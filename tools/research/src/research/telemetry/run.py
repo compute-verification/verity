@@ -334,7 +334,7 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
             if stall is not None:
                 try:
                     stall.poll()
-                except Exception as e:      # the watch is never the reason the workload stops
+                except Exception as e:  # noqa: BLE001 (the watch is never the reason the workload stops)
                     em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
                     stall = None
             if poll is not None:
