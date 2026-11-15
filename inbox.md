@@ -8,3 +8,49 @@ SCANLEAN2 18:47 PST, tests of build r20261115-015403-4566 (renamed tip f94a37001
 - inference_only_rows_protocol: 14 failed, 1 passed. All 14 fail on one missing replicated fixture: verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree/stage/circuit.txt, which the node's clone lacks ("uv run research data fetch-fixtures" fetches it). That's the environment, not a code break and not the rename's.
 The 9:00 PM build fetches that fixture first.
 
+[2026-11-15T02:49Z] 67f987bfa7f9
+MODEL: Claude Opus 5.5
+
+GATERELAY2: the renamed-name completeness check is done. One miss, mended in compose's file. Collect head `e3c2c758300` (merged with `8ff244b4b49`), pushed to collect and to the scratch branch.
+
+How [ran]: a script paired every renamed token in a91a76a96e6, a67010c8a85 and e74d7d0cafa by kind (73620667ea5 is map edits only). Then tree-wide `git grep` (excluding tools/move) for:
+- keyword calls, on the same line or on their own line;
+- `**{...}` splats;
+- attribute reads of an old name off every handle on each changed module (import, from-import, file load, also two hops away);
+- `getattr`/`setattr` strings;
+- the old test names (in `-k` selections, TOML, JSON).
+For clashes: a `symtable` check that no rename shadows a global or free name, and ruff F821/F811 on the 28 touched files (0 findings).
+
+| kind | old → new | hits outside the definition | verdict |
+|---|---|---|---|
+| parameter | `draw` → `sample`: TransferBlocks `session`, `_registered`, `_decided`, `python_verdict`, `lean_case`, `lean_verdict`, `verify`, `clear`, `statement`, `outcome`, `unproved_outcome` | 0 by keyword (all calls positional) | keep the rename |
+| parameter | `draw` → `sample`: IngressTie `clear`, `verify`, `statement`, `outcome`; standin `prove`, `_deliver`, `prove_tie`, `decide` | 0 by keyword | keep the rename |
+| parameter | `draw` → `sample`: `scan_zk.host` | 2 by keyword: test_scan_zk.py:707, test_scan_zk_challenger.py:55; both say `sample=` | consistent |
+| parameter | `draw` → `sample`: `scan_zk.coins_outcome`, `certifier_piece.run_chain` | positional callers only (scan_zk.py:1874; `a.draw`, the kept flag) | consistent |
+| parameter | `drawn` → `sampled`: `n2_zk.other_subset` | 0 by keyword | keep the rename |
+| namespace field | `host()`'s `SimpleNamespace(draw=)` → `sample=` | 0 readers (scan_zk reads only `h.rounds`, `h.whole`) | consistent |
+| dataclass field | `period_case.Facts.drawn` → `sampled` | readers: period_case.py:1512, 1575, test_network_period_protocol.py:1047, all `.sampled`. No construction by keyword, no `asdict`, no `replace` by this name. The record key `"drawn"` is kept | consistent |
+| class | `test_network_check_protocol.Drawn` → `Sampled` | `V2.Sampled` (test_network_records_protocol.py:159); test_lean_audit's handles read none. Other `Drawn` in the tree are other objects: spot's challenger difftest, flock's ZK-server test, Lean's `Drawn` | consistent |
+| function | `test_inference_only_protocol.drawn` → `sampled` | **1: compose test_composition_difftest.py:242 `R.INFERENCE.drawn(...)`**, a file load through reference.py:94. Also that file's docstring line 5 | **miss, mended** (another lane's file; lines listed below) |
+| test-class method or instance attribute | tie test `draw()` → `sample()`; transfer-blocks test `self.draw` → `self.sample`; period test's nested `draw` → `sample` (`monkeypatch.setattr(SVC, "lean_draw", sample)`: the target name is unchanged) | 0 old reads | file-local |
+| test names (5) | `..._draw_...` → `..._sample_...` | 0 by string | fine |
+| locals | `drawn_salts`, `undrawn`, `draws`, `drew`, `gap_draw_j` | local | fine |
+
+Mended in compose's file (verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py):
+- line 242: `R.INFERENCE.drawn(` → `R.INFERENCE.sampled(`;
+- line 5, docstring: "the inference-only policy's `drawn`" → `sampled`.
+No rename undone.
+
+Commits:
+- `234cbe0afa9`: the line-242 call.
+- `a452f9f77ef`: the docstring.
+- `e3c2c758300`: merge with collect `8ff244b4b49`. The incoming changes name no old name.
+
+Tests [ran], replicated fixtures fetched first:
+- **The mended strategy without Lean:** a scratch script drove `component_case(INFERENCE_ONLY, accept|reject)` from test_composition_difftest. It drew 30 cases of each after the mend; on `21b77db6d25` it raised `AttributeError: ... has no attribute 'drawn'`.
+- **13 test files with `-m 'not slow'`:** 285 passed, 11 deselected, 0 skipped, 0 failed. The files: test_inference_only_protocol, test_network_check_protocol, test_network_records_protocol, test_network_period_protocol, test_network_certifier_service, test_network_certifier_tie_service, test_network_certifier_transfer_blocks_lean, test_network_certifier_period, test_scan_zk, and benchmarks' test_scan_zk_challenger, test_chain_record, test_certifier_piece, test_served_session.
+- **Not run:** the compose difftest itself, which builds Lean.
+- `py_compile` on both changed files.
+
+TIMER: none
+
