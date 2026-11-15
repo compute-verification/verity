@@ -528,9 +528,10 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
     monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(argv)))
     with pytest.raises(Exec):
-        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW)
-    assert "slot: the run's timeout is now" in capsys.readouterr().err
-    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] >= 10800
+        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW,
+                  mono=lambda: 60.0)
+    assert "slot: the run's timeout is now 10860 s from its start" in capsys.readouterr().err
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10860.0
     for bad in (["--wait-max", "0"], ["--run-max", "soon"], ["--wait-max"]):
         with pytest.raises(SystemExit):
             SLOT.main([*bad, "--", "true"])
