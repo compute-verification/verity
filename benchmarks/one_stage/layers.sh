@@ -14,9 +14,10 @@
 # A session takes its card under `gpu-lease 1` where that is installed (GPU_LEASE_WHO names the holder; LAYERS_CARD pins it
 # to one card, gpu-lease's --on).
 # env: LAYERS_K (sampled's k, default 32)  LAYERS_MEMBERS (a6.py's --members)  LAYERS_MEM_GB (default 192)
-#      LAYERS_FLOCK_WORK (the CUDA build's directory, kept across runs; default one in the scratch)  SM (default 90)
-#      LAYERS_LEASE_MIN (a session's lease, default 60)  LAYERS_CACHE (hidden_zk's build cache, a6.sh's A6_CACHE)
-#      LAYERS_SCRATCH (default /dev/shm where it exists, else /tmp)
+#      LAYERS_FLOCK_WORK (the CUDA build's directory, kept across runs; default one removed at exit)  SM (default 90)
+#      LAYERS_LEASE_MIN (a session's lease, default 60)  LAYERS_CACHE (hidden_zk's build cache, a6.sh's A6_CACHE; default
+#      one removed at exit)
+#      LAYERS_SCRATCH (the staged values' scratch, default /dev/shm where it exists, else $TMPDIR or /tmp)
 set -euo pipefail
 ROW=${1:?"a row: flock, zk, sampled or all"}
 export RESEARCH_RUN_DIR=${RESEARCH_RUN_DIR:-$PWD/layers-run}
@@ -32,14 +33,16 @@ case $ROW in
   *) echo "layers.sh: no row $ROW (flock, zk, sampled, all; the two-stage audit has no row on this workload)" >&2; exit 2 ;;
 esac
 [ -n "${LAYERS_MEMBERS:-}" ] && [ "$ROW" = zk ] && K=$(echo "$LAYERS_MEMBERS" | tr , '\n' | awk -F: '{s+=$2} END {print s}')
-[ -n "${LAYERS_CACHE:-}" ] && export A6_CACHE=$LAYERS_CACHE
 OUT=$RESEARCH_RUN_DIR/out
 mkdir -p "$OUT"
-S=${LAYERS_SCRATCH:-$([ -d /dev/shm ] && echo /dev/shm || echo /tmp)}
+# executables never go in /dev/shm, which is mounted noexec: the builds and the lease's wrapper take a directory of their own
+X=$(mktemp -d "${TMPDIR:-/tmp}/layers-bin.XXXXXX")
+S=${LAYERS_SCRATCH:-$([ -d /dev/shm ] && echo /dev/shm || echo "${TMPDIR:-/tmp}")}
 export TMPDIR
 TMPDIR=$(mktemp -d "$S/layers.XXXXXX")
-trap 'rm -rf "$TMPDIR"' EXIT
-FW=${LAYERS_FLOCK_WORK:-$TMPDIR/flock-work}
+trap 'rm -rf "$TMPDIR" "$X"' EXIT
+FW=${LAYERS_FLOCK_WORK:-$X/flock-work}
+export A6_CACHE=${LAYERS_CACHE:-$X/cache}
 
 { echo "ran with: coins local challenger; parameters development (a development challenger, local to each session and" \
     "not an auditor's device: each session's coin tree from its own challenger process, the Lean verifier's" \
@@ -63,10 +66,10 @@ sha256sum "$BIN"
   > "$OUT/build-challenger.log" 2>&1 || { tail -40 "$OUT/build-challenger.log"; exit 7; }
 if [ -n "${LAYERS_CARD:-}" ]; then
   real=$(command -v gpu-lease) || { echo "layers.sh: LAYERS_CARD=$LAYERS_CARD and no gpu-lease" >&2; exit 2; }
-  mkdir -p "$TMPDIR/bin"
+  mkdir -p "$X/bin"
   printf '#!/usr/bin/env bash\n[ "$1" = status ] && exec %q status\nn=$1; shift\nexec %q "$n" --on %q "$@"\n' \
-    "$real" "$real" "$LAYERS_CARD" > "$TMPDIR/bin/gpu-lease" && chmod +x "$TMPDIR/bin/gpu-lease"
-  export PATH=$TMPDIR/bin:$PATH
+    "$real" "$real" "$LAYERS_CARD" > "$X/bin/gpu-lease" && chmod +x "$X/bin/gpu-lease"
+  export PATH=$X/bin:$PATH
 fi
 
 FLOCK_CHALLENGER=1 FLOCK_PROVE=$BIN FLOCK_SELFTEST=$BIN A6_MEM_GB=${LAYERS_MEM_GB:-192} A6_K=$K \
