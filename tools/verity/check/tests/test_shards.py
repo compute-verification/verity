@@ -31,21 +31,20 @@ PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
 #: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
 NAMED = SECURITY[1:]
-#: lean-suites' parts: its suites, the composition and PoUW benchmark suites and vLLM's each in the three parts by test id its
-#: pyproject declares, the one-stage benchmark's in seven
+#: lean-suites' parts: its suites, the composition and PoUW benchmark suites, the certifier verifier's and vLLM's each in the
+#: three parts by test id its pyproject declares, the one-stage benchmark's in seven
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
 POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
+CERTIFIER = tuple(f"lean-suites:verity/protocols/accounting/certifier/verifier:{k}/3" for k in (1, 2, 3))
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
 ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
 BESIDE_AUDIT = (VLLM[0], *(f"lean-suites:{s}" for s in ("verity/protocols/proofs/recursion/verifier/vstar_cli",
-                                                        "verity-core-evaluate", "pous-check",
-                                                        "verity/protocols/accounting/certifier/verifier",
-                                                        "verity-pouw-check-difftest")),
-                COMPOSITION[2], POUW[2], ONE_STAGE[1])
-BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
-WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], "lean-suites:*")
+                                                        "verity-core-evaluate", "pous-check")),
+                CERTIFIER[2], "lean-suites:verity-pouw-check-difftest", COMPOSITION[2], POUW[2], ONE_STAGE[1])
+BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1], CERTIFIER[0])
+WITH_RUST = (COMPOSITION[1], POUW[0], CERTIFIER[1], *VLLM[1:], "lean-suites:*")
 #: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
 PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
     "research", "verity/definitions", "verity/circuits/ops", "verity-graph",
@@ -137,11 +136,13 @@ def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_buil
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
-    """verity-core-composition, verity-pouw-benchmarks and verity-vllm declare three parts by test id: lean-suites' parts are
-    its suites with each of those as its three, and every plan's shards, gated and after landing, hold each part once and no
-    shard all three of a suite, so no shard runs one whole: the composition and PoUW suites one part on each of three shards,
-    vLLM's one beside the security analysis's audit and two beside the Rust build."""
-    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM,
+    """verity-core-composition, verity-pouw-benchmarks, the certifier verifier's suite and verity-vllm declare three parts by
+    test id, and benchmarks/one_stage seven: lean-suites' parts are its suites with each of those as its parts, and every
+    plan's shards, gated and after landing, hold each part once and no shard all of a suite, so no shard runs one whole: the
+    composition, PoUW and certifier suites one part on each of three shards (two parts of one suite on a shard run in one
+    process), vLLM's one beside the security analysis's audit and two beside the Rust build."""
+    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW,
+             "verity/protocols/accounting/certifier/verifier": CERTIFIER, "verity-vllm": VLLM,
              "benchmarks/one_stage": ONE_STAGE}
     assert CHECK.suite_parts() == {s: len(parts) for s, parts in split.items()}
     assert SUITES == [x for s in CHECK.AFTER_LEAN
