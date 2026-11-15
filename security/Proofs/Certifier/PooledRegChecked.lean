@@ -508,7 +508,7 @@ theorem encard_pooledRegChecked_le {Lk K S m : ℕ} (lay : AuditStatement → Bo
     refine (Set.encard_le_encard fun o ho => ?_).trans ((encard_carried_le lay k reg chk valid (fun _ => [])
       (fun _ => []) Dj sw Pw ρ op hchk (fun i => fun _ _ _ _ _ _ _ _ _ => rfl) (fun _ => false) (fun _ => []) F).trans_eq
       (by simp only [List.toFinset_nil, Finset.union_empty]))
-    exact ⟨fun _ => [], fun _ => [], fun i => by simp [PoolChained, poolOpen],
+    exact ⟨fun _ => [], fun _ => [], fun i => by simp [poolOpen],
       fun i => leakAtCarried_of_leakAtChecked (ho i)⟩
   calc _ ≤ _ := Set.encard_le_encard hsub
     _ ≤ _ := encard_pooledJoint_view_le Good (fun i => (Pw i).blocks.length)
