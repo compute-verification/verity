@@ -946,6 +946,17 @@ def test_an_anchor_inside_a_string_literal_stays_as_written(tmp_path):
                                                  'ROOT = Path(__file__).resolve().parents[2]\n' + toy)
 
 
+def test_a_pathlib_qualified_anchor_joined_back_keeps_its_module_inside_the_parentheses(tmp_path):
+    """A file that leaves the directory its anchor named joins its way back in parentheses; `pathlib.Path(...)` goes
+    inside them whole (outside, `pathlib.(Path(...) / ...)` doesn't parse)."""
+    r, p = _run(tmp_path, {"tools/a/b/t.py": "import pathlib\n\nHERE = pathlib.Path(__file__).resolve().parents[0]\n",
+                           "tools/a/b/data.json": "{}\n"},
+                LEVELS_MAP.replace('"benchmarks/live/" = "verity/composite/device/live/"', '"tools/a/b/t.py" = "tools/c/t.py"')
+                .replace('"benchmarks.live" = "verity.composite.device.live"', '"tools.a.b.t" = "tools.c.t"'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "tools/c/t.py").read_text() == 'import pathlib\n\nHERE = (pathlib.Path(__file__).resolve().parents[1] / "a" / "b")\n'
+
+
 @pytest.mark.parametrize("text, comments", [
     ("", True), ("\n\n", True), ("# the data sheets\n", True), ("  # indented\r\n\t\n\f\n", True),
     ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),

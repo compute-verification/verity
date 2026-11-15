@@ -1394,7 +1394,7 @@ class Run:
 
     # Python anchors and joins -----------------------------------------------------------------------------------------
 
-    _ANCHOR = re.compile(r"(?P<head>Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
+    _ANCHOR = re.compile(r"(?P<head>(?:pathlib\.)?Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
                          r"(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent)+))(?P<chain>(?:\s*/\s*(?P<q>[\"'])[\w.\-]+(?P=q))*)")
 
     def _module_file(self, name: str) -> str | None:
