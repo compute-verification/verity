@@ -200,9 +200,40 @@ def test_gpu_readiness_reads_the_taps_under_fa2_and_the_disk_of_work(tmp_path: P
     assert rec["measurements"]["disk"]["path"] == str(tmp_path)
 
 
-def test_bootstrap_removes_no_cache_at_a_fixed_home() -> None:
-    """The install's caches are removed where uv and pip resolve them ($UV_CACHE_DIR, $HOME), never at a fixed /root/.cache, which on a
-    shared host is another user's."""
-    code = [ln for ln in SCRIPT.read_text().splitlines() if not ln.lstrip().startswith("#")]
-    assert not [ln for ln in code if "rm " in ln and "/root/" in ln], "a fixed /root path removed"
-    assert any('rm -rf "$(uv cache dir' in ln for ln in code)
+FAKE_PY = "#!/bin/sh\n[ \"$1\" = - ] && exit 1\nexit 0\n"            # steps 1-2's checks pass; step 3's heredoc stops the run
+FAKE_UV = "#!/bin/sh\n[ \"$1 $2\" = \"pip show\" ] && echo \"Version: 0.16.0+cu129\"\nexit 0\n"
+
+
+def _through_step2(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess, dict[str, Path]]:
+    """Run the script through step 2 (venv, install, cache cleanup) with a fake venv python and `uv`, a HOME and a WORK of
+    its own, every cache populated beforehand; step 3 then fails, which ends the run."""
+    home, work, fake = tmp_path / "home", tmp_path / "work", tmp_path / "fake"
+    for d, text in ((work / "venv312" / "bin" / "python", FAKE_PY), (fake / "uv", FAKE_UV)):
+        d.parent.mkdir(parents=True, exist_ok=True)
+        d.write_text(text)
+        d.chmod(0o755)
+    caches = {"home_uv": home / ".cache" / "uv", "home_pip": home / ".cache" / "pip", "work_uv": work / ".cache" / "uv",
+              "work_pip": work / ".cache" / "pip", **{k: Path(v) for k, v in env.items()}}
+    for d in caches.values():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "entry").write_text("cached")
+    r = subprocess.run([BASH, str(SCRIPT), "--cpu", "--out", str(tmp_path / "out")], capture_output=True, text=True,
+                       env={"PATH": f"{fake}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(home), "WORK": str(work), **env})
+    assert "BOOTSTRAP_FAIL_CHECKPOINT" in r.stderr, f"the run did not reach step 3\nstdout: {r.stdout}\nstderr: {r.stderr}"
+    return r, caches
+
+
+def test_bootstrap_removes_only_the_caches_it_made_under_work(tmp_path: Path) -> None:
+    """With no cache named by the caller, the install's caches are $WORK/.cache/{uv,pip} and step 2 removes exactly those:
+    the caches under HOME, which on a shared node every other user's `uv sync` reads, are left as they were."""
+    _, c = _through_step2(tmp_path)
+    assert (c["home_uv"] / "entry").exists() and (c["home_pip"] / "entry").exists()
+    assert not c["work_uv"].exists() and not c["work_pip"].exists()
+
+
+def test_bootstrap_leaves_a_cache_the_caller_named(tmp_path: Path) -> None:
+    """A UV_CACHE_DIR the caller set is the caller's: step 2 leaves it, and removes only the pip cache it made under $WORK."""
+    _, c = _through_step2(tmp_path, UV_CACHE_DIR=str(tmp_path / "callers-uv"))
+    assert (c["UV_CACHE_DIR"] / "entry").exists() and (c["home_uv"] / "entry").exists() and (c["home_pip"] / "entry").exists()
+    assert (c["work_uv"] / "entry").exists(), "the script made no uv cache under $WORK, so it has none to remove"
+    assert not c["work_pip"].exists()

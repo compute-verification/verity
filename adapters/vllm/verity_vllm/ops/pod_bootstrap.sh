@@ -8,7 +8,7 @@
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's adapters/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
 # Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2 ($WORK/cp/fa2), NT ($WORK/cp/norm_tap), RT ($WORK/cp/router_tap),
-# FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
+# UV_CACHE_DIR ($WORK/.cache/uv), PIP_CACHE_DIR ($WORK/.cache/pip), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
 # ROW_TAPS (1: build the taps a workload runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips
 # them, and a workload on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
 #
@@ -36,6 +36,10 @@ RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo 
 [ -d "$CORE/verity/protocols/proofs/spot" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/protocols/proofs/spot beside $ROOT" >&2; exit 3; }
 export WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export FA2=${FA2:-$WORK/cp/fa2} NT=${NT:-$WORK/cp/norm_tap} RT=${RT:-$WORK/cp/router_tap}   # the taps' builds, which step 5 checks
+# The install's caches: under $WORK unless the caller names its own, and step 2 removes only those made here.
+OWN_CACHES=()
+[ -n "${UV_CACHE_DIR:-}" ] || { export UV_CACHE_DIR=$WORK/.cache/uv; OWN_CACHES+=("$UV_CACHE_DIR"); }
+[ -n "${PIP_CACHE_DIR:-}" ] || { export PIP_CACHE_DIR=$WORK/.cache/pip; OWN_CACHES+=("$PIP_CACHE_DIR"); }
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
 export VERITY_TREE=$ROOT
@@ -93,8 +97,7 @@ uv pip show --python "$PY" torchcodec 2>/dev/null | grep -qx "Version: ${TORCHCO
 # the `verity-vllm` launcher ([project.scripts] entry point); verity_vllm resolves from PYTHONPATH like every process on the pod
 printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
   && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
-# the install's own caches, wherever they resolve: on a shared host a fixed /root/.cache would be another user's
-rm -rf "$(uv cache dir 2>/dev/null)" "${PIP_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/pip}" 2>/dev/null
+[ "${#OWN_CACHES[@]}" -eq 0 ] || rm -rf "${OWN_CACHES[@]}"
 
 # ---- 3. pinned checkpoints (manifests/checkpoints.json; sha256 of every safetensors) --------------------------------------------
 # A checkpoint this run downloads and checks is staged: its staging event goes to the store (`verity-vllm records staged`) through
