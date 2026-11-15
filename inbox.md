@@ -101,3 +101,42 @@ Checks:
 Not run: none.
 TIMER: none
 
+[2026-11-15T02:29Z] 50fcf477932c
+POLICYROWS2 to lead, on DeclaredIn (security/Properties/Ties.lean:74-79, namespace Registration). The new shape forces a choice, so I have not mended it and wait for your word. Nothing is committed or pushed.
+
+Why it's a choice: since proofs' e548a81a3ed, V.read θ F : ExecutionPhaseFiles = {first : FileRead, rest : List FileRead} (security/Properties/Verity/ExecutionPhaseFiles.lean:156). The three fields are each member's: FileRead.tags, .circuitFile and .tables (same file, lines 46-50). The old statement read one triple; a window of several members has one triple per member.
+
+Proofs' pattern: their one statement over the same fields, DigestsAt.tables (Proofs/Properties/Verity/Sampled.lean:768), reads `(V.read θ F).first.tables`. Their v2 reading is `read _ _ := .one fileRead` (Idle.lean), a window of one member.
+
+Before (line 76-79):
+  ∃ j : Fin n, w.Within (cut.part j) ∧
+    ∃ p, boundProgram (V.read θ F).tags (V.read θ F).circuitFile (V.read θ F).tables = some p ∧
+      NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
+
+Option A, the first member (proofs' pattern):
+  ∃ j : Fin n, w.Within (cut.part j) ∧
+    ∃ p, boundProgram (V.read θ F).first.tags (V.read θ F).first.circuitFile (V.read θ F).first.tables = some p ∧
+      NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
+Says: the first member's circuit file binds a Program declared for the window's day. At a window of one member (every v2 read today) this is exactly the old statement. At several members the later members' circuits are tied to nothing. The proof declaredIn_take_mono is unchanged.
+
+Option B, every member:
+  ∃ j : Fin n, w.Within (cut.part j) ∧
+    ∀ r ∈ (V.read θ F).members,
+      ∃ p, boundProgram r.tags r.circuitFile r.tables = some p ∧
+        NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
+Says: each member's circuit file binds a Program declared for the window's one day (a window lies in one day, so all its members share j). At one member this is the old statement. It is stronger at several. declaredIn_take_mono changes by about two lines: intro r hr, then apply hd's member case.
+
+Option C, some member (∃ r ∈ members): weaker than A, tying an unnamed member. I don't recommend it.
+
+Docstring for A or B: "the circuit file the verifier reads" becomes "the first member's circuit file" or "each member's circuit file". Its line "programDigest θ is the circuit file's SHA-512" stays true of the one file the parameters name: V.circuitFile θ F (Game.lean:817) is namedFile (V.programDigest θ) F, a single file.
+
+Who reads it [read]:
+- Properties: DeclaredIsParams (Ties.lean:84, AtHead of DeclaredIn), and the module docstring (line 25).
+- Proofs: declaredIn_take_mono (Proofs/Properties/Ties.lean:91-99), the one proof. It is a monotonicity lemma over log prefixes and passes the boundProgram fact through opaquely.
+- Locks: none. No lean-audit.json names DeclaredIn or DeclaredIsParams, and its docstring says no theorem reads it as a guarantee.
+So nothing leaves the proved list either way; only declaredIn_take_mono has to build.
+
+Other sites [read]: line 78 is our only read of .tags, .circuitFile or .tables off V.read; boundProgram's only use is there. Proofs' own .first reads (Sampled.lean:768, and MemberForm/* and Window/Instance using first/rest) are already across. Nothing else to mend mechanically.
+
+On your word (A or B) I will commit to cursor/na-policyrows2-wip-b51f and to collect, and tell SCANLEAN2 the modules: Properties.Ties, plus Proofs.Properties.Ties under B. All of this fits well before 10:00 PM PST. TIMER: none.
+
