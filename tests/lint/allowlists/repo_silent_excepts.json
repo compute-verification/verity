@@ -319,7 +319,7 @@
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/docket.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/device/challenger_session.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.py", "count": 2},
-    {"file": "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py", "count": 2},
+    {"file": "verity/protocols/proofs/spot/prover/audit/records_audit.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py", "count": 4}
   ]
 }
