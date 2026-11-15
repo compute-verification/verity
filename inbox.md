@@ -1,0 +1,3 @@
+[2026-11-15T23:16Z] b955f2833306
+ci: queue AFTER #10372's mark (top's order, CI-485 3:13 PM PST): NEXT HEAD, marked Mon 16 Nov 6 PM PST: (1) nothing is stacked above a member with no land verdict: a candidate holding one is only ever the chain's top, and nothing is built on it until each member has its verdict or lands; (2) #10269's eject text: vqueue.py _failed 951-956 must not say 'delete it' when a fresh rerun failed again (LOSTROUNDS note:20261115T2305Z-report-lostrounds has five lines). TUESDAY 17 Nov 6 PM PST: drop on a judged fail by the base's word on each failing test (vqueue_slim.based), lending, keeping place, quick-tier twins (queue.py place/quick_run). #10109's commits move to Tuesday too.
+
