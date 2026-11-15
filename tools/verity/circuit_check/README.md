@@ -28,7 +28,9 @@ uv run circuit-check --ambient TARGET...                             # each lowe
 ~~~
 
 It exits 1 when a check fails, and names each failure (`FAIL NAME`). Redundant and dead gates are warnings with counts
-(`--fail-on-warnings` makes them fail). Each realization is compared on at least 2 random vectors while the reference's work
+(`--fail-on-warnings` makes them fail), as is a Definition over the partition's cost target of 5,000,000 gates
+(`partition/over-cost-target`, `Options.partition_max_gates`), a served Call or not: the cost target bounds no proof, and
+`block` holds what is proved to Flock's range of 2^27 bits. Each realization is compared on at least 2 random vectors while the reference's work
 on those the floor adds stays within 10M gate evaluations: a lowering on random vectors added after the all-edge ones, a
 kernel on vectors its own sampler samples in its domain. The report counts and names the targets compared on a random vector
 (`random`), on all-edge vectors only (`edge-only`) or on none (`none`), and the last two are warnings; a constant, with no
