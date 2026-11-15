@@ -219,10 +219,10 @@
    "digest": "7270358c5439afec3d5b21211974f44289df1d0443655604426a506b86bfce7c",
    "why": "The adaptive audit's lemmas take each round's sampled-block bound, the layer below's guarantee."
   },
-  "FlockSoundness.Audit.Adaptive.Play.Laws": {
+  "FlockSoundness.Audit.Adaptive.Play.SamplingDesigns": {
    "owner": "@proofs",
-   "digest": "77be0f839596bb5ec2ecb2674f23abc0e4f90f50766e4249490e31a6052d97dd",
-   "why": "Each round's law meets the design `S`."
+   "digest": "d442a98000fa03cede434ca998ac30723ee7f4d8c5e2e475199fec2c651db86e",
+   "why": "Each round's sampling design meets the design `S`."
   },
   "FlockSoundness.Audit.Analysis.BindSound": {
    "owner": "@proofs",
@@ -239,11 +239,6 @@
    "digest": "52f3cf78e453da3db400f98daa47175bca529e8c6ffc62bbf790d77b11e65386",
    "why": "`harm_bound`'s specification, which the lemma is about."
   },
-  "FlockSoundness.Audit.Law.Design": {
-   "owner": "@proofs",
-   "digest": "ff14b569b9642ff6b408612f00d6d9a4f3fa8f723be790b01f276e52f06fc39d",
-   "why": "A law's design condition, which the lemma is about."
-  },
   "FlockSoundness.Audit.Partition.AnchorsSound": {
    "owner": "@proofs",
    "digest": "f3adeccf2469129d0fb0daa4458202b4a313c694ab92754a498a171fc3aeb5ac",
@@ -253,6 +248,11 @@
    "owner": "@proofs",
    "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
    "why": "A separator, the subject of the influence lemma."
+  },
+  "FlockSoundness.Audit.SamplingDesign.Design": {
+   "owner": "@proofs",
+   "digest": "bfd5ed4389cc2ed89d432ed544fc77fa31bb4e35fc51ed32eea0ad1dce687584",
+   "why": "A sampling design's design condition, which the lemma is about."
   },
   "Hash.EmbeddingRead.ok": {
    "owner": "@proofs",
@@ -2030,6 +2030,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Flock.SoundAtBridge.ExecutionPhaseSamplingDesign": {
+   "owner": "@proofs",
+   "digest": "0a256a08a50c6a7dd662117ec9ad8032aaf97e344e67762ced887b7b92c34948",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
    "digest": "2fc76cbc535d4b15f7323a5a51cdb93d4bfd36f24f7c1ca61da6354bc00bb5d6",
@@ -2051,12 +2057,6 @@
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
    "digest": "590e92faef4f5ca329cd2f3e714a04c4a454302b3065ea0b72a57e999eeccd0f",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Flock.SoundAtBridge.WindowLaw": {
-   "owner": "@proofs",
-   "digest": "0c7bd84fd8fb41ce532b09f79a46d96763ba1945927a580d09d5137da1cfbead",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },

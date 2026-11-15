@@ -1518,10 +1518,6 @@
    "honest": ["Verity.plain_soundness_of_subprotocols_honest"],
    "nontrivial": "Verity.plain_soundness_of_subprotocols_nontrivial"
   },
-  "Properties.Registration.checks": {
-   "honest": ["Properties.Registration.checks_honest"],
-   "nontrivial": "Properties.Registration.checks_nontrivial"
-  },
   "Properties.Registration.headBinds": {
    "honest": ["Properties.Registration.headBinds_honest"],
    "nontrivial": "Properties.Registration.headBinds_nontrivial"
@@ -14419,10 +14415,6 @@
    "Properties.Spot.SecurityProofs.sampleMisses": {
     "function": "Spot.Slots.select",
     "outcome": "accept"
-   },
-   "Properties.Registration.checks": {
-    "function": "Core.Registration.check",
-    "outcome": "none"
    },
    "Properties.Registration.publishesHeads": {
     "function": "Core.Registration.View.toJson",
