@@ -795,7 +795,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     what it said if not, and the record's SHA-512), the prover's give-up (`give_up`), its shares at the tensor clock, the
     unretained serve's wall and declared share there, and the prover's replay's CPU seconds, cores, the cores it takes to
     keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none), the
-    execution phase as the challenger saw it (its start, end and seconds on the auditor host's clock, `execution_phase`,
+    execution phase as the challenger saw it (its start, end and seconds on the auditor device's clock, `execution_phase`,
     with the serve's own wall beside it under ``prover``, the served node's clock), what Pearl+'s Python check and Lean
     check each cost where they ran (`pearlplus_checks`) and the class with its requests and rounds (`pearlplus_class`)."""
     if doc.get("piece") == "pearlplus":

@@ -1,4 +1,4 @@
-"""The memory challenger's key as a deployment starts it on the auditor's host, for PoUS's rounds
+"""The memory challenger's key as a deployment starts it on the auditor's device, for PoUS's rounds
 (`challenger_party.start`) and for the wipe (`wipe_challenger.start`): loaded from the party's state directory
 (`device_key`), and refused unless the configuration pins it for the protocol it signs for. A start makes no key: one
 made there could never be the pinned one, so a state directory without a key is refused (``key``). The pin is checked
