@@ -2728,7 +2728,7 @@
     {"file": "benchmarks/verifier_cost/qcall.sh", "count": 5},
     {"file": "benchmarks/verifier_cost/registration.sh", "count": 1},
     {"file": "benchmarks/verifier_cost/run.py", "count": 14},
-    {"file": "benchmarks/vllm_encoded/paged.cu", "count": 12},
+    {"file": "verity/protocols/accounting/poub/prover/word_codec/paged.cu", "count": 12},
     {"file": "benchmarks/vllm_encoded/paged_gate.py", "count": 4},
     {"file": "benchmarks/vllm_encoded/pyproject.toml", "count": 3},
     {"file": "benchmarks/vllm_encoded/rekey_gate.py", "count": 5},
