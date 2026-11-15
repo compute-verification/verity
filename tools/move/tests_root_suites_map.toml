@@ -1,0 +1,217 @@
+# Each suite's pyproject beside its tests, after `tests_root_map.toml`: `verity/A/B/pyproject.toml` becomes
+# `tests/verity/A/B/pyproject.toml`, and its `testpaths` the suite's own directory. A sizing move on a scratch branch: it
+# lands nowhere. `verity/protocols/proofs/flock/prover/pyproject.toml` stays: it builds `verity_flock`, so its suite's
+# tables move by hand. The roots and the excludes are `tests_root_map.toml`'s. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+
+[paths]
+"verity/circuits/evaluate/pyproject.toml" = "tests/verity/circuits/evaluate/pyproject.toml"
+"verity/circuits/ops/pyproject.toml" = "tests/verity/circuits/ops/pyproject.toml"
+"verity/circuits/private_circuits/pyproject.toml" = "tests/verity/circuits/private_circuits/pyproject.toml"
+"verity/circuits/requirement/pyproject.toml" = "tests/verity/circuits/requirement/pyproject.toml"
+"verity/circuits/pyproject.toml" = "tests/verity/circuits/pyproject.toml"
+"verity/commitments/attest/pyproject.toml" = "tests/verity/commitments/attest/pyproject.toml"
+"verity/commitments/cuda/commit_slots/pyproject.toml" = "tests/verity/commitments/cuda/commit_slots/pyproject.toml"
+"verity/commitments/cuda/sha512_rows/pyproject.toml" = "tests/verity/commitments/cuda/sha512_rows/pyproject.toml"
+"verity/commitments/cuda/pyproject.toml" = "tests/verity/commitments/cuda/pyproject.toml"
+"verity/commitments/identity/pyproject.toml" = "tests/verity/commitments/identity/pyproject.toml"
+"verity/commitments/periods/pyproject.toml" = "tests/verity/commitments/periods/pyproject.toml"
+"verity/commitments/randomness/pyproject.toml" = "tests/verity/commitments/randomness/pyproject.toml"
+"verity/commitments/pyproject.toml" = "tests/verity/commitments/pyproject.toml"
+"verity/protocols/accounting/certifier/device/pyproject.toml" = "tests/verity/protocols/accounting/certifier/device/pyproject.toml"
+"verity/protocols/accounting/certifier/prover/pyproject.toml" = "tests/verity/protocols/accounting/certifier/prover/pyproject.toml"
+"verity/protocols/accounting/certifier/verifier/network/pyproject.toml" = "tests/verity/protocols/accounting/certifier/verifier/network/pyproject.toml"
+"verity/protocols/accounting/certifier/verifier/pyproject.toml" = "tests/verity/protocols/accounting/certifier/verifier/pyproject.toml"
+"verity/protocols/accounting/poub/device/live_verifier/pyproject.toml" = "tests/verity/protocols/accounting/poub/device/live_verifier/pyproject.toml"
+"verity/protocols/accounting/poub/pyproject.toml" = "tests/verity/protocols/accounting/poub/pyproject.toml"
+"verity/protocols/accounting/poub/verifier/lean/pyproject.toml" = "tests/verity/protocols/accounting/poub/verifier/lean/pyproject.toml"
+"verity/protocols/accounting/poub/verifier/pyproject.toml" = "tests/verity/protocols/accounting/poub/verifier/pyproject.toml"
+"verity/protocols/accounting/pous/device/lean/pyproject.toml" = "tests/verity/protocols/accounting/pous/device/lean/pyproject.toml"
+"verity/protocols/accounting/pous/pyproject.toml" = "tests/verity/protocols/accounting/pous/pyproject.toml"
+"verity/protocols/accounting/pous/verifier/check/pyproject.toml" = "tests/verity/protocols/accounting/pous/verifier/check/pyproject.toml"
+"verity/protocols/accounting/pous/verifier/pyproject.toml" = "tests/verity/protocols/accounting/pous/verifier/pyproject.toml"
+"verity/protocols/accounting/pouw/prover/kernels/edited_gemm/pyproject.toml" = "tests/verity/protocols/accounting/pouw/prover/kernels/edited_gemm/pyproject.toml"
+"verity/protocols/accounting/pouw/prover/pyproject.toml" = "tests/verity/protocols/accounting/pouw/prover/pyproject.toml"
+"verity/protocols/accounting/pouw/verifier/lean/check/pyproject.toml" = "tests/verity/protocols/accounting/pouw/verifier/lean/check/pyproject.toml"
+"verity/protocols/accounting/pouw/verifier/lean/commit/pyproject.toml" = "tests/verity/protocols/accounting/pouw/verifier/lean/commit/pyproject.toml"
+"verity/protocols/accounting/pouw/verifier/lean/window/pyproject.toml" = "tests/verity/protocols/accounting/pouw/verifier/lean/window/pyproject.toml"
+"verity/protocols/accounting/pouw/verifier/receipts/pyproject.toml" = "tests/verity/protocols/accounting/pouw/verifier/receipts/pyproject.toml"
+"verity/protocols/accounting/pouw/verifier/pyproject.toml" = "tests/verity/protocols/accounting/pouw/verifier/pyproject.toml"
+"verity/protocols/accounting/registration/verifier/lean/pyproject.toml" = "tests/verity/protocols/accounting/registration/verifier/lean/pyproject.toml"
+"verity/protocols/compose/device/live_challenger/pyproject.toml" = "tests/verity/protocols/compose/device/live_challenger/pyproject.toml"
+"verity/protocols/compose/verifier/lean/pyproject.toml" = "tests/verity/protocols/compose/verifier/lean/pyproject.toml"
+"verity/protocols/experimental/dither/pyproject.toml" = "tests/verity/protocols/experimental/dither/pyproject.toml"
+"verity/protocols/experimental/pearl_c4/pyproject.toml" = "tests/verity/protocols/experimental/pearl_c4/pyproject.toml"
+"verity/protocols/policy/inference_only/verifier/pyproject.toml" = "tests/verity/protocols/policy/inference_only/verifier/pyproject.toml"
+"verity/protocols/proofs/flock/verifier/sigma/pyproject.toml" = "tests/verity/protocols/proofs/flock/verifier/sigma/pyproject.toml"
+"verity/protocols/proofs/recursion/verifier/vstar_cli/pyproject.toml" = "tests/verity/protocols/proofs/recursion/verifier/vstar_cli/pyproject.toml"
+"verity/protocols/proofs/recursion/verifier/zk_server/pyproject.toml" = "tests/verity/protocols/proofs/recursion/verifier/zk_server/pyproject.toml"
+"verity/protocols/proofs/spot/device/pyproject.toml" = "tests/verity/protocols/proofs/spot/device/pyproject.toml"
+"verity/protocols/proofs/spot/prover/pyproject.toml" = "tests/verity/protocols/proofs/spot/prover/pyproject.toml"
+"verity/protocols/proofs/spot/verifier/lean/pyproject.toml" = "tests/verity/protocols/proofs/spot/verifier/lean/pyproject.toml"
+"verity/protocols/proofs/spot/verifier/pyproject.toml" = "tests/verity/protocols/proofs/spot/verifier/pyproject.toml"
+"verity/runtime/pyproject.toml" = "tests/verity/runtime/pyproject.toml"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[pyproject."tests/verity/circuits/evaluate/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/circuits/ops/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/circuits/private_circuits/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/circuits/requirement/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/circuits/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/attest/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/cuda/commit_slots/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/cuda/sha512_rows/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/cuda/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/identity/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/periods/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/randomness/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/commitments/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/certifier/device/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/certifier/prover/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/certifier/verifier/network/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/certifier/verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/poub/device/live_verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/poub/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/poub/verifier/lean/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/poub/verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pous/device/lean/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pous/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pous/verifier/check/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pous/verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/prover/kernels/edited_gemm/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/prover/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/verifier/lean/check/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/verifier/lean/commit/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/verifier/lean/window/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/verifier/receipts/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/pouw/verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/accounting/registration/verifier/lean/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/compose/device/live_challenger/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/compose/verifier/lean/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/experimental/dither/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/experimental/pearl_c4/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/policy/inference_only/verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/flock/verifier/sigma/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/recursion/verifier/vstar_cli/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/recursion/verifier/zk_server/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/spot/device/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/spot/prover/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/spot/verifier/lean/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/protocols/proofs/spot/verifier/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[pyproject."tests/verity/runtime/pyproject.toml"]
+testpaths_replace = { "tests" = "." }
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input; as the earlier maps'.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
+           "tests/tree.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
+           "benchmarks/pouw/pearl_c_sm90/**"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+
