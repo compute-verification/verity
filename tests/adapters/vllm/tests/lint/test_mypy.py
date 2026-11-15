@@ -38,7 +38,7 @@ from . import test_ruff
 LIST = "mypy"
 RULE = "mypy with vLLM's settings (adapters/vllm/pyproject.toml's [tool.mypy])"
 #: (the paths of a group, from adapters/vllm; its ``follow_imports``, None: the configured one)
-GROUPS = ((("verity_vllm",), None), (("tests",), "skip"))
+GROUPS = ((("verity_vllm",), None), ((R.TESTS_ARG,), "skip"))
 CLEAN = (
     "tests/ops",
     "tests/protocols/linear",
@@ -92,8 +92,8 @@ def errors() -> list[dict]:
 
 
 def violation(r: dict) -> R.Violation:
-    return R.Violation(r["file"], r["code"] or "misc", test_ruff.enclosing(R.parse(R.ROOT / r["file"]), r["line"]), "",
-                       r["line"])
+    path = (R.ROOT / r["file"]).resolve()
+    return R.Violation(R.rel(path), r["code"] or "misc", test_ruff.enclosing(R.parse(path), r["line"]), "", r["line"])
 
 
 @cache
@@ -137,14 +137,14 @@ def test_the_list_matches_or_warns(check) -> None:
 
 @pytest.mark.slow
 def test_clean_directories_have_no_error() -> None:
-    missing = [d for d in CLEAN if not (R.ROOT / d).is_dir()]
+    missing = [d for d in CLEAN if not R.path_of(d).is_dir()]
     assert not missing, f"CLEAN names directories that aren't there: {missing}"
     dirty = sorted(f"{v.file}:{v.line}: {m}" for v, m in scan() if v.file.startswith(tuple(f"{d}/" for d in CLEAN)))
     assert not dirty, "mypy errors in a directory CLEAN holds to none:\n" + "\n".join(dirty)
 
 
 def test_the_groups_cover_the_package_and_its_tests() -> None:
-    assert sorted(p for paths, _ in GROUPS for p in paths) == ["tests", "verity_vllm"]
+    assert sorted(p for paths, _ in GROUPS for p in paths) == sorted([R.TESTS_ARG, "verity_vllm"])
     assert all(d.startswith(("tests/", "verity_vllm/")) for d in CLEAN) and list(CLEAN) == sorted(set(CLEAN))
 
 
