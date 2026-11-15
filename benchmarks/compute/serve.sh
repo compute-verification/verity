@@ -68,6 +68,15 @@ print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchma
   || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
 CLASS=$SLOTS,$PROMPT,$OUTPUTS
 export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
+# what the serve and the Lean steps need from the machine, checked before any step
+"$PY" -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("verity_torch") is None)' || {
+  echo "verity_torch isn't importable by $PY, and the served model's PoUW hooks import it: put this tree's adapters/torch" \
+       "on PYTHONPATH (export PYTHONPATH=$TREE/adapters/torch:\$PYTHONPATH), or run under research run, which does" >&2
+  exit 3; }
+command -v lake > /dev/null || {
+  echo "lake isn't on PATH (nor in $HOME/.elan/bin), and the Lean verifiers build with it: install elan" \
+       "(https://github.com/leanprover/elan) or put its bin directory on PATH" >&2
+  exit 3; }
 # the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
 # TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
 here=$(dirname "$TREE")
