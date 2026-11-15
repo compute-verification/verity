@@ -344,8 +344,10 @@ end Pouw.PearlC
 def test_a_store_row_takes_the_repository_s_name_of_its_key_and_keeps_every_other_field(tmp_path):
     """A row's pin is the declaration the repository's Lean has under its key (`renamed`), whatever its source, in `build`
     and `refresh` alike: the store's `pearlCGamma…` comes out under the repository's `pearlCGap…InertShare1000_…`, with
-    its source, type hash, status and gap the store's. A key the repository declares twice (a theorem and its lift)
-    keeps the store's spelling, and so do two rows that would take one name. The checked-in table is a fixed point."""
+    its source, type hash, status and gap the store's. Of a key the repository declares twice (a theorem and its lift)
+    a row takes the declaration in its pin's namespace, the theorem for a `Pouw.PearlC.` pin and the lift for a
+    `Pouw.SecurityProofs.PearlC.` one; a pin in neither namespace keeps its spelling, and so do two rows that would take
+    one name. The checked-in table is a fixed point."""
     audit, lean = lifted_audit(tmp_path)
     (lean / "lean-audit.json").write_text(json.dumps(audit))
     (lean / "Proofs" / "Pouw" / "PearlC").mkdir(parents=True)
@@ -363,10 +365,15 @@ def test_a_store_row_takes_the_repository_s_name_of_its_key_and_keeps_every_othe
 
     lift = REPO_NEW.replace("Pouw.PearlC.pearlCGap", "Pouw.SecurityProofs.PearlC.Gap")
     (lean / "Proofs" / "Pouw" / "Lift.lean").write_text(f"theorem {lift} : True := trivial\n")
-    assert P.repository_names(audit, lean)[P._short(STORE_OLD)] is None
-    assert [t["pin"] for t in P.build(store, lean / "lean-audit.json")["twins"] if t["source"] == P.LEAN_STORE] == [STORE_OLD]
+    names = P.repository_names(audit, lean)
+    assert names[P._short(STORE_OLD)] == (REPO_NEW, lift)
+    assert [t for t in P.build(store, lean / "lean-audit.json")["twins"] if t["source"] == P.LEAN_STORE] == [want]
+    lifted = STORE_OLD.replace("Pouw.PearlC.pearlCGamma", "Pouw.SecurityProofs.PearlC.Gamma")
+    assert P.renamed([{"pin": lifted, "gamma": "g"}], names) == [{"pin": lift, "gamma": "g"}]
+    elsewhere = [{"pin": STORE_OLD.replace("Pouw.PearlC.", "Pouw.PearlC.Old.")}]
+    assert P.renamed(elsewhere, names) == elsewhere
     twins = [{"pin": STORE_OLD}, {"pin": STORE_OLD.replace("Gamma", "Gap")}]
-    assert P.renamed(twins, {P._short(STORE_OLD): REPO_NEW}) == twins
+    assert P.renamed(twins, {P._short(STORE_OLD): (REPO_NEW,)}) == twins
 
     doc = json.loads(P.TABLE.read_text())
     assert P.renamed(doc["twins"], P.repository_names(json.loads(P.REPO_AUDIT.read_text()), P.REPO_AUDIT.parent)) == doc["twins"]
