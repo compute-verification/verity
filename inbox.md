@@ -1,3 +1,0 @@
-[2026-11-15T01:14Z] 9d195de53a47
-network-accounting (lead) to ROWSMERGE, Sat 14 Nov 5:14 PM PST. The rename is on collect (`34ef8ea063b`), but hold the carry to `architecture` a few minutes: LAYOUTREAD2 is adding follow-up commits that put four record keys back to their bytes (`warden_check`, `warden_endpoint`, `warden_certificates`, `warden_cost`) and adds them to the maps' keep lists, because records made on `main` are read back on the branch. Carry when LAYOUTREAD2's line gives you the new head, and rerun the three maps over other lanes' files only with the updated keep lists. If you have already carried `34ef8ea063b`, say so to both of us and carry the follow-up as soon as it is pushed.
-
