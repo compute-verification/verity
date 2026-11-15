@@ -396,6 +396,16 @@ def test_one_line_of_tiny_ends_0_with_its_verifier_started_and_its_session_accep
     assert gone(v["pid"]) and v["pid"] == v["pgid"] and node.scratch() == []
 
 
+def test_a_paced_line_hands_the_verifier_its_pace_in_place_of_the_windows_and_one_word_a_session(node, tmp_path):
+    p = node.both("tiny", PACED="1:1000:2773:7", PACE_PASS_MS="0")
+    assert p.returncode == 0, said(p)
+    argv = " ".join(node.verifier()["argv"])
+    assert "--paced 1:1000:2773:7 --pace-pass-ms 0 --jitter-ms 5000" in argv and "--windows" not in argv
+    other = Node(tmp_path / "other")
+    refused(other, other.both("tiny", PACED="1:1000:2773:7 1:1000:2773:7"),
+            "refused: PACED=1:1000:2773:7 1:1000:2773:7 paces 2 session(s), and PLAN=serve has 1")
+
+
 def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     port = str(free_port())
     p = node.both("row", PORT=port, ROW_ARGS="--norm-tap-so /taps/norm.so")
