@@ -54,13 +54,17 @@ theorem opensReady_of_accepted {V : Vocab d α} {T : PinnedTables} {k : Verity.R
   have hp₀ : ParamsAt o.sent.params p' := by
     rw [show o.sent.params = θ from hθ]
     exact hp'
+  have hone : OneStatement o.params := by
+    have h := hA.single
+    rw [← show o.params = θ from hθ] at h
+    exact h
   have hF : FilesOn A o.sent := filesOn_of hA hD hreg hθ (B := o.blobs)
-    (by show o.files ++ _ = _; rw [hFo]) hp₀ (tables_registered hp₀ hv) ht
+    (by show o.files ++ _ = _; rw [hFo]) hp₀ (tables_registered hp₀ hone hv) ht
   obtain ⟨a, b, e, p, cm, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp₀ (verdict_case hv)
   have hpp : p' = p := paramsAt_case hv.2.1 hcase hacc hp₀
   subst hpp
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
-  obtain ⟨tags0, circuitB, pubB, _, _, _, ht0, hc, hpb, -, -, -, hAc⟩ := checkBlobsAt_event hck
+  obtain ⟨tags0, circuitB, pubB, _, _, _, ht0, hc, hpb, -, -, -, hAc⟩ := checkBlobsAt_event (hone _ hp₀) hck
   have hcf : circuitB = A.I.circuitFile := hF.circuit p' hp₀ circuitB hc
   have hpf : pubB = A.I.publicFile := hF.publicFile p' hp₀ pubB hpb
   have htg : tags0 = A.I.tags := Option.some.inj (ht0.symm.trans hA.tags)

@@ -78,7 +78,7 @@ ID_BYTES = DIGEST_BYTES["sha512"]
 STEP_ROOT_TAG = domains.FA2C_ROOT.encode()
 RUN_ROOT_TAG = domains.CMT_INTEG_RUN_ROOT.encode()
 WEIGHTS_ROOT_TAG = domains.CMT_INTEG_WEIGHTS_ROOT.encode()
-NODE_TAG, LIFT_TAG, EMPTY_TAG = b"verity-vllm/node/v1", b"verity-vllm/lift/v1", b"verity-vllm/empty/v1"
+NODE_TAG, LIFT_TAG, EMPTY_TAG = domains.VLLM_NODE.encode(), domains.VLLM_LIFT.encode(), domains.VLLM_EMPTY.encode()
 
 
 def binding(program: bytes, ctx: bytes, geo: bytes, row_bits: int = 8 * ROW_BYTES) -> bytes:
