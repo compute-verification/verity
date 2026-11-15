@@ -605,7 +605,7 @@ class TransferBlocks:
 
     def session(self, opening: Hidden, draw: S.Draw) -> str:
         """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
-        return _sha512({"format": SESSION, "registration": draw.registration.digest, "draw": _sha512(dict(draw.draw)),
+        return _sha512({"format": SESSION, "registration": draw.docket.digest, "draw": _sha512(dict(draw.draw)),
                         "leaves": [x.hex() for x in self.leaves(opening)]})
 
     # the challenger
@@ -727,7 +727,7 @@ class TransferBlocks:
         return int(verdict) | int(all(r.head.deadline for r in opening.records)) << 1
 
     def _registered(self, opening: Hidden, draw: S.Draw) -> str:
-        reg = draw.registration.record
+        reg = draw.docket.record
         if opening.window != reg["window"]["window"] or len(opening.records) != 2:
             raise ValueError("the opening is not the registered execution phase's")
         return reg["roots"][0]["root"]
@@ -763,7 +763,7 @@ class TransferBlocks:
     @staticmethod
     def _decided(draw: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
         """A verdict's accept bit and public outputs, with the digest binding them to the registration and sessions."""
-        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": list(sessions),
+        digest = _sha512({"format": VERDICT, "registration": draw.docket.digest, "sessions": list(sessions),
                           "accepted": accepted, "public": public})
         return {"accepted": accepted, "digest": digest, "public": public}
 
@@ -772,7 +772,7 @@ class TransferBlocks:
                        sessions: Sequence[str]) -> dict[str, Any]:
         """This module's verdict on the execution phase (`verify`'s conditions), on the findings of the verifier's own run
         of Flock's Lean verifier (None where `proofs.verify` refused): its accept bit, digest and public outputs."""
-        reg = draw.registration.record
+        reg = draw.docket.record
         w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
         proved = findings is not None and self.proved(findings) \
             and all(list(f.units) == list(draw.units) for f in findings)
@@ -794,7 +794,7 @@ class TransferBlocks:
         profile, and the warden's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
-        reg, p = draw.registration.record, self.key.params
+        reg, p = draw.docket.record, self.key.params
         w = reg["window"]["window"]
 
         def cert(c: Any) -> dict[str, Any] | None:
@@ -819,7 +819,7 @@ class TransferBlocks:
         word = delivered.output
         case: dict[str, Any] = {
             "kind": "warden", "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
-            "registration": draw.registration.digest, "units": list(draw.units), "program": self._partition["program"],
+            "registration": draw.docket.digest, "units": list(draw.units), "program": self._partition["program"],
             "partition": P.digest(self._partition), "gates": [g.id for g in self.gates()],
             "findings": None if findings is None else [
                 {"accepted": f.accepted, "program": f.program, "units": list(f.units)} for f in findings],
@@ -901,7 +901,7 @@ class TransferBlocks:
         return {"of_record": False, "accepted": holds and public["deadline"] == 1, "public": public}
 
     def statement(self, draw: S.Draw) -> dict[str, Any]:
-        reg = draw.registration.record
+        reg = draw.docket.record
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
@@ -911,7 +911,7 @@ class TransferBlocks:
         the root the proof's public row names, which it opens only to the verifier's own copy."""
         verdict = self.verify(draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
-                              session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
+                              session_roots={VALUE: draw.docket.record["roots"][0]["root"]})
 
     def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Hidden,
                          syncs: Sequence[ClockSync]) -> S.Outcome:
@@ -921,7 +921,7 @@ class TransferBlocks:
         one the opening reproduces, which one-stage's audit holds to the registered root."""
         v = self.clear(opening, draw, syncs)
         sessions = [self.session(opening, draw)]
-        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
+        digest = _sha512({"format": VERDICT, "registration": draw.docket.digest, "sessions": sessions,
                           "accepted": v["accepted"], "public": v["public"], "decided_by": "clear"})
         verdict = {**v, "of_record": True, "decided_by": "clear", "digest": digest, "sessions": sessions}
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),

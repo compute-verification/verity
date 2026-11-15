@@ -1642,7 +1642,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
     as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
     the Lean's run refuses at its select (``stream_on``: the round's stream on given coins and what it holds, `stream_of`). -> (the audit
     record, None where the stream refused or holds the outcome; the negatives; the coins' record)."""
-    AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
+    AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.docket.digest)
     published = coins.turns.evidence()
     ev = AC.evidence(published, segment) if segment is not None else None
 
@@ -1832,7 +1832,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 os.link(f, vdir / f.name)
             return {**res, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {"draw": refused},
                     "opened": {}, "draw": {"law": rule, "coins": coins.challenger, "refused": refused}}
-        lean_draw, receipt = dict(draw.draw), dict(draw.registration.receipt)
+        lean_draw, receipt = dict(draw.draw), dict(draw.docket.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     proved, served, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
