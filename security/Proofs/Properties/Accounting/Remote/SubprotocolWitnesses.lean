@@ -24,7 +24,7 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
   (`acceptIsVerified_nontrivial`).
 * **PublishedEps** (`PublishedEpsFor`), whose antecedent is the same acceptance, so its honest witnesses are
   `AcceptIsVerified`'s. Nontrivial: a check that accepts every log, certifying a byte read at eps 0, accepts the
-  deployed period's log, and 0 is below the sample term at every node of positive δ (`drawTerm_pos`,
+  deployed period's log, and 0 is below the sample term at every node of positive δ (`sampleTerm_pos`,
   `publishedEps_nontrivial`).
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
@@ -429,10 +429,10 @@ def steady : Trace Unit where
   disk _ _ := 0
   link _ _ := 0
 
-theorem draws_zero : node.samples = 0 := by decide
+theorem samples_zero : node.samples = 0 := by decide
 
 instance instIsEmptyFinDrawsNode : IsEmpty (Fin node.samples) := by
-  rw [draws_zero]
+  rw [samples_zero]
   infer_instance
 
 def receipts : Receipts node.samples 0 Unit :=
@@ -791,7 +791,7 @@ theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registr
 /-! ## `PublishedEps` at a check that publishes reads at eps 0 -/
 
 /-- A node's sample term is positive at a positive δ. -/
-theorem drawTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
+theorem sampleTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
     0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
   add_pos_of_pos_of_nonneg hδ (by positivity)
 
@@ -809,7 +809,7 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
         (node.delta : ℚ) = Poub.Protocol.DELTA :=
       ⟨{ Toy.node with params := params, groupsPerCoin := g, delta := ⟨Poub.Protocol.DELTA, hpos.le⟩ },
         rfl, rfl, rfl⟩
-    have h0 := lt_of_lt_of_eq (drawTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
+    have h0 := lt_of_lt_of_eq (sampleTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
 
 end Properties.Poub.Subprotocol
