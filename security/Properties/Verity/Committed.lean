@@ -40,7 +40,8 @@ at most a `2ε` share of the units not held. The target is the claim at twice SP
 `Vocab.MemberWiresSound` is the same claim in the per-member form, at that form's own wiring: the parameter its
 compiled check holds the sampled proof blocks' wired rows to (`Spot.OneStageZk.wiresHeld`). It reads the wiring off SPOT's
 case (`SpotCase`, `Spot.OneStageZk.Params.wiring`), a template's unit at its range of the partition (`popUnit`) and a
-row's root under its member's name (`memberRow`). That the policy's record names the same wiring is not in it.
+row's root under its member's name (`memberRow`). That the policy's record names the same wiring is not in it:
+`Vocab.WiresAtMembers` is that tie, under which the per-member target gives `Vocab.WiresSound`, then SPOT's share alone.
 -/
 
 @[expose] public section
@@ -255,6 +256,30 @@ def MemberWiresSound (k : Verity.Registration.Composite) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.MemberWiresHold k θ F c σ o) (V.game θ F c) σ ≤
       2 * V.error .sampled θ F c σ
+
+/-- **The policy's wiring is read at the per-member form, at composite `k`**: in every play SPOT's verdict at `k`
+accepts, for every case of the policy (`PolicyCase`) and every wiring `W` its record names (`RecordWiring`), the
+play's messages hold a case of SPOT (`SpotCase`) whose one-stage v2 parameters name members and `W` itself as their
+wiring, with a program and a query the verifier's partition evaluates; and the policy's record names no root under
+`W`'s plain row names (`rowName`), its rows being its members' (`memberRow`). Under it `MemberWiresSound` gives
+`WiresSound`.
+
+What it does not say:
+
+* **Anything of the wires under `WiresHold`.** Where the record names no root by a plain row name, `SameRow`
+  compares nothing, so the units `unheld` gives are the unbound ones alone, and `WiresSound` read through it is
+  SPOT's share: the wires' claim at the members' rows is `MemberWiresHold`'s.
+* **That a composite meets it.** The one statement's parameters name no wiring (`Spot.OneStageZk.paramsOfJson_wiring`),
+  so at a composite whose SPOT case is the one statement and whose policy record names a wiring it fails; no theorem
+  proves it of any composite. -/
+def WiresAtMembers (k : Verity.Registration.Composite) : Prop :=
+  ∀ o : Exchange, V.Verdict k .sampled o → ∀ p r e, PolicyCase k o.sent p r e → ∀ W, RecordWiring r.record W →
+    (∃ (sp : Spot.OneStageZk.Params) (sc : Spot.OneStage.Commitment) (ms : Array Spot.OneStageZk.Member)
+        (S : Spot.Wires.Summary) (prog : Spot.Program) (rs : Array Flock.TemplateQuery.TRange),
+      SpotCase k o.sent sp sc ∧ sp.members = some ms ∧ sp.wiring = some (W, S) ∧
+      Spot.Program.parse sp.own.program = .ok prog ∧
+      Spot.Partition.evaluate prog (Spot.getD sp.own.partition "query") = .ok rs) ∧
+    ∀ (t port : String) (row : ℕ) (R : Hash.Digest), ¬ RecordRoot r.record (rowName W t port row) R
 
 end Vocab
 
