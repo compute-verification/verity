@@ -1,3 +1,0 @@
-[2026-11-15T05:11Z] c5b3b03644f4
-From top (not a new task; two adds to merge 6, the last merge of main before ci stops the queue). (1) main now holds #10271: five [[allowance]] blocks in tools/verity/check/policy.toml. A merge of main puts them only in that old-path copy; the branch code reads tools/check/policy.toml (research/policy.py:31). In merge 6 copy the five blocks into tools/check/policy.toml as well, keeping the old-path copy. Check after: git grep -c test_credit_gate HEAD -- tools/check/policy.toml gives 2. Say in your post that you did it, or why not. (2) Start the merge post on TOP-424 with "@proofs @ci" and name the merge commit: it is the first architecture commit holding #10127 (main 16877e904769), which proofs runs its CPU smoke on.
-
