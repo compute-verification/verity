@@ -102,18 +102,21 @@ def printed(capsys) -> tuple[list[str], dict, str]:
 @pytest.mark.parametrize("name", COMMANDS)
 def test_each_command_prints_one_line_of_json_and_writes_it_and_its_result_only_where_it_has_a_place(
         name, place, tmp_path, monkeypatch, capsys):
+    """A document that says its record is made up (``made_up``, as compute's fixture does) writes no result: the
+    writer marks every measurement as had from a run, which a made-up record's number isn't."""
     run = COMMANDS[name]
     assert run(tmp_path / "alone", monkeypatch) == 0
     text, doc, _ = printed(capsys)
     assert list(doc)[:4] == ["value", "unit", "commit", "run"] and isinstance(doc["value"], (int, float))
     assert held(place) == [] and held(tmp_path / "cwd") == []
+    assert bool(doc.get("made_up")) == (name == "compute")
+    result_held = [] if doc.get("made_up") else ["result.json"]
 
     monkeypatch.setenv("OUT", str(place / "out"))
     assert run(tmp_path / "out", monkeypatch) == 0
     assert printed(capsys)[:2] == (text, doc)
-    assert held(place) == sorted(["out/result.json", f"out/{name}.json"])
+    assert held(place) == sorted([*(f"out/{f}" for f in result_held), f"out/{name}.json"])
     assert json.loads((place / "out" / f"{name}.json").read_text()) == doc
-    outside = json.loads((place / "out" / "result.json").read_text())
 
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(place / "run"))
     monkeypatch.setenv("OUT", str(place / "run" / "out"))
@@ -121,15 +124,18 @@ def test_each_command_prints_one_line_of_json_and_writes_it_and_its_result_only_
     assert run(tmp_path / "run", monkeypatch) == 0
     got, under, line = printed(capsys)
     assert (got, under) == (text, doc | ({"run": BENCH} if name in OWN_RUN else {}))
-    assert held(place / "run") == [f"out/{name}.json", "result.json"]
+    assert held(place / "run") == [f"out/{name}.json", *result_held]
     assert (place / "run" / "out" / f"{name}.json").read_text() == line + "\n"
+    assert held(tmp_path / "cwd") == []
+    if not result_held:
+        return
+    outside = json.loads((place / "out" / "result.json").read_text())
     result = json.loads((place / "run" / "result.json").read_text())
     assert result["run_id"] == BENCH
     measured = result["measurements"]
     assert [m["name"] for m in measured] == [m["name"] for m in outside["measurements"]] and measured
     assert all((m["run"], m["mark"]) == (BENCH, MARK[name]) for m in measured)
     assert all(m["host"] == STAMP for m in measured) or name == "inference_only"
-    assert held(tmp_path / "cwd") == []
 
 
 def test_an_empty_out_names_no_place_for_inference_only_either(place, tmp_path, monkeypatch, capsys):
