@@ -232,18 +232,18 @@ def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.T
 open Classical in
 /-- **What the sampled reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is sampled, in its unit's
 local evaluation of the transcript `X ω` under the partition `P`. -/
-noncomputable def drawnHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
-    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ω : Ω) : List Hash.Msg :=
-  (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
+noncomputable def sampledHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
+    (sampled : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ω : Ω) : List Hash.Msg :=
+  (R.reads.filter (R.unit · ∈ sampled ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
 
 /-- **The table reads' collision finder**: on the outcome `ω`, two messages the sampled reads hashed that `H` maps to one
 digest, if there are two, found by `Claims.findColl` over what they hashed, each message hashed once, at the cost
 `cost ω`: the SHA-512 calls of reaching `ω`'s transcript and hashing what its sampled reads hashed. -/
 noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Verity.Partition C n)
-    (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace)
+    (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (sampled : Ω → Finset (Fin n)) (X : Ω → C.Trace)
     (cost : Ω → ℕ) : Claims.Finder where
   S := Ω
-  out ω := Claims.findColl ((R.drawnHashed P H key drawn X ω).map fun m => (m, (H m).bytes))
+  out ω := Claims.findColl ((R.sampledHashed P H key sampled X ω).map fun m => (m, (H m).bytes))
   cost := cost
 
 end Reads

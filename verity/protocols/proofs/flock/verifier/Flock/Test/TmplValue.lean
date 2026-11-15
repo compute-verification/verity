@@ -1,15 +1,16 @@
-/-
-`Tmpl.evalDef` against the unrolled rows (`Flock.TmplValue.rows_eval` on one unit): `Flock.Test.Tmpl`'s unit, its column
-values computed in order from the rows `Tmpl.rows` unrolls, its three input bits each way and the constant 1, satisfies
-every row, and at each copy of a pair (at 128 and 131) and of an AND inside it, those values are the copy's Definition's
-`evalDef` on its bound inputs. And `evalDef` on its own: the AND, a pair, and an XOR of two inputs.
--/
 module
 
 public import Flock.Test.Tmpl
 public import Flock.TmplValue
 meta import Flock.Test.Tmpl
 meta import Flock.TmplValue
+
+/-!
+`Tmpl.evalDef` against the unrolled rows (`Flock.TmplValue.rows_eval` on one unit): `Flock.Test.Tmpl`'s unit, its column
+values computed in order from the rows `Tmpl.rows` unrolls, its three input bits each way and the constant 1, satisfies
+every row, and at each copy of a pair (at 128 and 131) and of an AND inside it, those values are the copy's Definition's
+`evalDef` on its bound inputs. And `evalDef` on its own: the AND, a pair, and an XOR of two inputs.
+-/
 
 @[expose] public section
 

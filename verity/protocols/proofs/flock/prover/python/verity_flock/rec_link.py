@@ -81,7 +81,7 @@ ROW_WORDS = RL.ROW_BYTES // 2
 X_WORDS = INSTANCE.digest_bytes // 2
 Y_WORDS = INSTANCE.salt_bytes // 2
 OUT_WORDS = 64
-ROW_BLOCK = 64
+ROW_CHUNK = 64
 FIELD_BITS = 32
 UB_MAX, PB_MAX, D_MAX = 30, 16, 32
 EMPTY = hashlib.sha512(b"").digest()
@@ -111,7 +111,7 @@ def bits_for(n: int) -> int:
 
 
 def aux_words(D: int) -> int:
-    return max(1, -(-NODE_WORDS * D // ROW_BLOCK)) * ROW_BLOCK
+    return max(1, -(-NODE_WORDS * D // ROW_CHUNK)) * ROW_CHUNK
 
 
 def port_words(UB: int, PB: int) -> tuple[int, ...]:

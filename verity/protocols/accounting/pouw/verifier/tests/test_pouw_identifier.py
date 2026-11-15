@@ -11,7 +11,7 @@ import json
 import pytest
 
 import identifier_vectors as V
-from verity.protocols.accounting.pouw.prover.schemes import SCHEMES, get
+from verity.protocols.accounting.pouw.prover.schemes import EXPERIMENTAL, SCHEMES, get
 from verity.protocols.accounting.pouw.verifier import identifier as I
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
@@ -82,7 +82,7 @@ def test_the_vectors_cover_every_named_scheme():
 
 
 def test_the_identifier_names_exactly_the_registered_schemes():
-    assert I.SCHEMES == tuple(SCHEMES)
+    assert tuple(SCHEMES) == I.SCHEMES
 
 
 def test_the_64_bit_fields_are_exact_decimal_strings():
@@ -153,8 +153,9 @@ def test_the_bytes_are_canonical_written_out():
 
 
 def test_a_scheme_is_named_by_its_registered_name():
+    """Each scheme PoUW brings; an experimental package's (`schemes.EXPERIMENTAL`) is its own tests'."""
     epoch = build()
-    for name in SCHEMES:
+    for name in (n for n in SCHEMES if n not in EXPERIMENTAL):
         assert I.identifier_bytes(get(name), epoch) == I.identifier_bytes(name, epoch)
 
 

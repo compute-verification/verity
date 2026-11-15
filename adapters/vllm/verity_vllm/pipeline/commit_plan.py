@@ -4,7 +4,7 @@ the GPU is held (`verity-vllm commit-plan`, the row's `plan` stage).
     verity-vllm commit-plan --workload W --required-manifest M --program-digest D (--program-dir P | --programs-root R) --out PLAN
 
 The plan is the form (B) producer facts of a query-path manifest (`oracle_producers_of_record`: the Programs of record read by
-dataflow; 588 s of a Qwen3-4B B32 Commit's 949 s).  The Commit (`--plan PLAN`) takes them from the plan only when the plan's key
+dataflow).  The Commit (`--plan PLAN`) takes them from the plan only when the plan's key
 equals its own (`key`: the Program digest, the sha256 of the required manifest and of the workload, the Programs it reads, the code
 identity over the integration and core, the vLLM version); a plan it cannot read or whose key differs, and it derives the facts
 itself and records `plan_recomputed` with the reason (`use`).  The facts are the same either way: the plan stores them in the
@@ -27,12 +27,13 @@ from verity_vllm.config import option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import source_identity as SI
 from verity_vllm.query.manifest import format as MF
+from verity_vllm.records.schema_ids import COMMIT_PLAN_SCHEMA
 
 __all__ = ["Options", "key", "keyed", "main", "write"]
 
 logger = init_logger(__name__)
 
-SCHEMA = "verity-vllm/commit-plan/v1"
+SCHEMA = COMMIT_PLAN_SCHEMA
 
 
 def digests_of_record(args: Any, required_manifest: dict[str, Any] | None) -> set[str]:

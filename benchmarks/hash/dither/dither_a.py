@@ -7,9 +7,9 @@ z/y records under round s's root before coin s (the receipts need no z of their 
 -so's -ab/-abn and -ov arms; form=beside, receipts beside the served GEMM, for the row z tables or no z, and for every
 arm outside the statement's order (-so), which this module's arms all are.
 
-Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
+Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): a row quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the execution phase's A slot
-(`exactlin_quant_rows_dithera`); then exactlin's GEMM at exactlin's config for the call (`exactlin.pick`), whose
+(`exactlin_quant_rows_dithera`); then int8_fused's GEMM at its config for the call (`int8_fused.pick`), whose
 epilogue stores z = X W^T into the execution phase's z slot (rows < m; rows m to T zero, from extra row tiles past M) beside
 y = dequant(z), exact-fused's y bit for bit (`dithera_mm`, `dithera_mm_tma`).
 
@@ -72,14 +72,13 @@ cpu and the served h1u build's kh_lanes) to each other and to the receipts, and 
 from __future__ import annotations
 
 import ctypes as C
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 import triton
 import triton.language as tl
+from verity_vllm.engine import int8_fused as EL
 
 import dither_fused as DF
 import dither_one as DO
@@ -88,8 +87,6 @@ import h1c as H1CM
 from dither_fused import CM, CR, H1R, Call, unwords
 from h1c import Dom, Tab
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
-import exactlin as EL
 from verity_config.settings import of
 
 if TYPE_CHECKING:
@@ -142,7 +139,7 @@ YCMP_ENV = "DITHER_YCMP"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
-# "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
+# "N,K,MMAX=CFG+..." (int8_fused's Cfg text): call (N, K)'s GEMM config in place of int8_fused.pick's at the M its CONFIGS
 # entry (MMAX, ..) takes, a CFG's ":gG" its tile group (`mm_group`).  A split K's int32 partial sums add up to the same z,
 # so z and y are the same bits
 MM_CFG_ENV = "DITHER_MM_CFG"
@@ -156,7 +153,8 @@ M32 = DO.M32
 @triton.jit
 def exactlin_quant_rows_dithera(x_ptr, q_ptr, s_ptr, slot_ptr, scale_ptr, S_ptr, K, stride_x, stride_q,
                                 BLOCK_K: tl.constexpr):
-    # exactlin_quant_rows' body, unchanged
+    # `int8_exact.quantize_rows` a row, each quotient one div.rn; int8_fused's `_quant_tile` takes the same quotient by a
+    # reciprocal and two corrections
     row = tl.program_id(0).to(tl.int64)
     offs = tl.arange(0, BLOCK_K)
     mask = offs < K
@@ -168,7 +166,7 @@ def exactlin_quant_rows_dithera(x_ptr, q_ptr, s_ptr, slot_ptr, scale_ptr, S_ptr,
     p = ((254 - (sb >> 23)) << 23).to(tl.float32, bitcast=True)
     xs = x * p
     small = tl.abs(xs) < 0.25
-    q = EL._rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1, (BLOCK_K,))))
+    q = EL.rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1, (BLOCK_K,))))
     q = tl.where(small, 0, q)
     q = tl.minimum(tl.maximum(q, -127), 127).to(tl.int8)
     tl.store(q_ptr + row * stride_q + offs, q, mask=mask)
@@ -186,9 +184,9 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
                       ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
     mask_m = offs_m < M
     mask_n = offs_n < N
-    EL._epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
+    EL.epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
     if (flags & 1) != 0:    # F_DUMP: the served y into the execution phase's dump too
-        EL._epilogue(acc, sa_ptr, sb_ptr, d_ptr, offs_m, offs_n, mask_m, mask_n, N)
+        EL.epilogue(acc, sa_ptr, sb_ptr, d_ptr, offs_m, offs_n, mask_m, mask_n, N)
     if ZL != 0:
         if (flags & 2) == 0:    # F_NW_TILES: no z (nor y leaf)
             live = (offs_m < m)[:, None]
@@ -276,11 +274,11 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
             mask = mask_m[:, None] & mask_n[None, :]
             ws_ptrs = ws_ptr + offs_m[:, None] * N + offs_n[None, :]
             tl.atomic_add(ws_ptrs, acc, mask=mask, sem="relaxed")
-            EL._membar_gl(pid)
+            EL.membar_gl(pid)
             tl.debug_barrier()
             done = tl.atomic_add(cnt_ptr + pid, 1, sem="acq_rel")
             if done == SPLIT_K - 1:
-                EL._membar_gl(pid)
+                EL.membar_gl(pid)
                 tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
                 tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
                 _dithera_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
@@ -365,7 +363,7 @@ def dithera_fault(dst_ptr, S_ptr, at_ptr, L, bit, BLOCK: tl.constexpr):
 
 
 def mm_group(text: str) -> int:
-    """A $DITHER_MM_CFG config's tile group, its ":gG" (`_tile`; exactlin's Cfg.parse ignores it), else 1."""
+    """A $DITHER_MM_CFG config's tile group, its ":gG" (`_tile`; int8_fused's Cfg.parse ignores it), else 1."""
     return next((int(r[1:]) for r in text.split(":")[1:] if r[:1] == "g"), 1)
 
 

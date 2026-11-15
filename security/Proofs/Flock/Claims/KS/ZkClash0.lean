@@ -108,7 +108,7 @@ theorem rawRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
     (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
     zkRawRowsJ seen j =
       Claims.Flock.zkRepRowsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
           (lv.streams.getD (2 * j) #[]) (f.proofs.getD (2 * j) ByteArray.empty) ++
@@ -123,16 +123,18 @@ theorem rawRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
   rw [hj', hpts] at hex
   have hx : extras.size = 2 * sts[j].regions.size := by
     rw [extraClaims_size (st := sts[j]) hex, ← hpts, hpn, hp2, Nat.mul_comm]
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
+  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
     simp only [Claims.Flock.zkSched]
-    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl, hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
+    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl,
+      show (Setup.ofCircuit sts[j]).wideLeaf = sts[j].wideLeaf from rfl, hsch]
+  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
       (Setup.ofCircuit sts[j]).merkle.digestLen (saltLenOf true (Setup.ofCircuit sts[j])) =
       ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) := by
     simp only [Claims.Flock.zkProofShape, hzs, ZkExec.shapeZKn, saltLenOf, hx, ite_true]
   have hrun : runOf true seen j = some
       { m := (Setup.ofCircuit sts[j]).m, kLog := (Setup.ofCircuit sts[j]).kLog, claims := 2 + extras.size,
         hashLen := (Setup.ofCircuit sts[j]).merkle.digestLen, saltLen := saltLenOf true (Setup.ofCircuit sts[j]),
+        wideLeaf := (Setup.ofCircuit sts[j]).wideLeaf,
         reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
     unfold runOf
@@ -151,7 +153,7 @@ theorem rawRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
     (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
     zkRawRowsJ seen j =
       Claims.Flock.zkRepRowsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
           (lv.streams.getD (2 * j) #[]) (f.proofs.getD (2 * j) ByteArray.empty) ++
@@ -179,7 +181,7 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
       (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
       Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
         (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
@@ -230,7 +232,7 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
   subst hys
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
   have hrowsEq : Claims.Flock.zkRepRowsOf
-      (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+      (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
         (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
       (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) =
       Claims.Flock.zkRepCols (sch.levels.getD 0 default)
@@ -240,10 +242,10 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
       rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]
     have e2 : f.proofs.getD (2 * j + k) ByteArray.empty = f.proofs[2 * j + k]! := by
       rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]
-    have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).m = (sch, tPad) := by
+    have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = (sch, tPad) := by
       simp only [Claims.Flock.zkSched]
       rw [hsch]
-    have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+    have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
         (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)) =
         FlockSoundness.Discharge.ZkExec.shapeZK (Setup.ofCircuit st) sch extras := by
       simp only [Claims.Flock.zkProofShape, hzs, FlockSoundness.Discharge.ZkExec.shapeZK, saltLenOf, ite_true]
@@ -288,7 +290,7 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
       (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
       Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
         (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
@@ -399,7 +401,7 @@ def ZkViewClashQ (x : Claims.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽
   ∀ (s : Claims.Flock.Stmt) (_ : parse true Readable.relation x = some s) (_ : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (_ : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
@@ -432,7 +434,7 @@ def ZkViewClashQ (x : Claims.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽
   ∀ (s : Claims.Flock.Stmt) (_ : parse true Readable.relation x = some s) (_ : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (_ : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
@@ -484,7 +486,7 @@ theorem zkViewRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
@@ -572,7 +574,7 @@ theorem zkViewRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}

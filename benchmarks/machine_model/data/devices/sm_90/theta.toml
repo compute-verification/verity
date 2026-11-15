@@ -2,7 +2,8 @@
 # vendor document first (`sheet`, `grade`, `source`), then the census or a measured run (`measured`, `runs`), or the run
 # that would measure it (`gap`). A ceiling the card file holds (hardware/cards/, the SKU model.toml names) is
 # read from it: `card = "EXPR"`, card entries and numbers joined by ` * ` and ` / `, in place of its value, grade and
-# source; `host:PATH` is an entry of the host's card (model.toml's `host`). A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
+# source; `host:PATH` is an entry of the host's card (model.toml's `host`), and a `[[public]]` figure's `sms` and `mhz`
+# are `{ card = "EXPR" }` where they are the card's. A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
 # per-second figure is at, and `figure` is the number the document prints there (dense), which 2 · sheet · SMs · clock
 # reproduces (`machine-model theta --check`). `machine-model theta` derives d, the exchange rate, B_RF and r_H against
 # r_min from it; `machine-model render theta` tabulates it.
@@ -963,8 +964,8 @@ impl = "hashcat 6.2.6-850 sha512crypt (mode 1800, 5,000 rounds, each one compres
 form = "generic"
 gps = 4.2685
 card = "H100 SXM 80GB HBM3 (GH100, 132 SMs, the H200's SMs and fmax)"
-sms = 132
-mhz = 1980
+sms = { card = "sm.count" }
+mhz = { card = "clock.sm" }
 source = "pastebin.com/T4SKGacf: 'Hash-Mode 1800 (sha512crypt $6$, SHA512 (Unix)) [Iterations: 5000] Speed.#1: 853.7 kH/s'; 853.7e3 · 5,000 rounds, each one block (the 64-B digest, the salt and the password, at most 111 B together at hashcat's benchmark lengths)"
 
 [[public]]
@@ -972,6 +973,6 @@ impl = "hashcat 6.2.6-850 SHA2-512 (mode 1700, -O: one-block short messages, ear
 form = "structured"
 gps = 5.4145
 card = "H100 SXM 80GB HBM3 (GH100, 132 SMs, the H200's SMs and fmax)"
-sms = 132
-mhz = 1980
+sms = { card = "sm.count" }
+mhz = { card = "clock.sm" }
 source = "pastebin.com/T4SKGacf: 'Hash-Mode 1700 (SHA2-512) Speed.#1: 5414.5 MH/s'"

@@ -65,6 +65,7 @@ from typing import Any
 
 from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
 __all__ = ["COMMANDS", "STAGED", "checkpoint", "data", "main"]
@@ -79,7 +80,8 @@ CONSTRUCTION = "construction_manifest.json"
 
 
 def index() -> dict[str, dict[str, Any]]:
-    """Row id -> its index entry: `record`, its record's art: id (None for a row pinned before it has one), and its circuit's pins."""
+    """Row id -> its index entry: `record`, its record's art: id (None for a row whose pins no record of it holds: one pinned before
+    it has a record, or re-pinned since), and its circuit's pins."""
     return CR.load_index(INDEX)["rows"]
 
 
@@ -161,7 +163,8 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
-    from verity.definitions.boolean import load_program
+    from verity.circuits.ops.boolean.versions import load_program
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     rec = record(row, bundle)
     want = selected(rec, ranks, part)
     paths = [descriptor(rec, r, p) for r, ps in want.items() for p in ps]
@@ -199,7 +202,7 @@ def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
     """Preserve the property records run `run` wrote (each property's shallowest `out/**/<property>.json` in its run record; only
     `properties`, when given) as `property-record/v1` artifacts referring to the run's record, each refused unless its schema is
     the registered property's, its digest recomputes and it holds.  Returns {property: art: id}."""
-    from verity_vllm.properties.record import REGISTRY, PropertyRecord
+    from verity_vllm.records.property_record import REGISTRY, PropertyRecord
     att = json.loads(data("show", run, "--json"))
     outputs, source = att.get("outputs"), att.get("source")   # an attempt may have kept no output, and may name no checkout
     rr = outputs.get("run_record") if outputs else None
@@ -238,7 +241,7 @@ def _meta(manifest: dict[str, Any]) -> dict[str, Any]:
 
 def check_capture(prop: str, art: str) -> None:
     """Refuse `art` as `prop`'s capture of record unless it is a holding `property-record/v1` of `prop` at its registered schema."""
-    from verity_vllm.properties.record import REGISTRY
+    from verity_vllm.records.property_record import REGISTRY
     m = json.loads(data("show", art, "--json"))["manifest"]
     meta, want = _meta(m), REGISTRY.get(prop)
     if m.get("kind") != PROPERTY_KIND or meta.get("property") != prop or meta.get("ok") is not True or want is None \
@@ -252,7 +255,7 @@ def newest_capture(prop: str) -> str | None:
     """`prop`'s newest holding capture of record at its registered schema in the store (the latest capture run's), None when none.
     A store with nothing to select from (no index and an empty catalog: a `research run` job's) raises: `research data select`
     exits 1 there rather than answer none."""
-    from verity_vllm.properties.record import REGISTRY
+    from verity_vllm.records.property_record import REGISTRY
     if (want := REGISTRY.get(prop)) is None:
         return None
     held = [(meta.get("run_id") or "", r["id"])
@@ -600,35 +603,35 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
 def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions
          | SwitchOptions) -> int:
     if isinstance(a, SwitchOptions):
-        print(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
+        write(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
         return 0
     if isinstance(a, PublishOptions):
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
                          gaps=_pairs("--gap", a.gap, "PROPERTY=REASON"))
         summary = json.loads(Path(a.summary).read_text()) if a.summary else None
-        print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier, newest=a.newest_captures))
+        write(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier, newest=a.newest_captures))
         return 0
     if isinstance(a, PullOptions):
         for art in a.art:
-            print(f"{pull(art, a.tier)} {art}")
+            write(f"{pull(art, a.tier)} {art}")
         return 0
     if isinstance(a, CaptureOptions):
         for prop, art in capture(a.run, a.property or None).items():
-            print(f"{prop}={art}")
+            write(f"{prop}={art}")
         return 0
     if isinstance(a, ShowOptions):
-        print(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
+        write(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
         return 0
     if isinstance(a, FetchOptions):
-        print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))
+        write(str(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None)))
         return 0
     if isinstance(a, StagedOptions):
-        print(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
+        write(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
         return 0
     src = Path(a.bundle) if a.bundle else None
     named = parts(record(a.row, src))
     for r in a.rank or sorted(named):
         for part, p in programs(a.row, [r], part=a.part or None, bundle=src)[r].items():
-            print(f"rank {r}  {part:28s} {named[r][part][:16]}  gates {p.gates}  definitions {len(p.defs)}", flush=True)
+            write(f"rank {r}  {part:28s} {named[r][part][:16]}  gates {p.gates}  definitions {len(p.defs)}")
     return 0

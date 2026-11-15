@@ -1,0 +1,109 @@
+# The retired word family DRAW in PoUB's and PoUS's Python names (MEM-152's retired words), by
+# `python3 tools/move/rename.py --map tools/move/draw_poub_pous_names_map.toml`: compound identifiers, each renamed to the
+# Glossary's sample, sampled or sampling (coins are flipped; a registration is issued), in the files that hold it. PoUS's
+# `draw_salt` is renamed wherever it stands, the vLLM adapter's and the P2 stage benchmark's calls of it included. The bare
+# words `draw`, `draws` and `drawn` are not here: they are the records' keys and the attributes that write them. No path
+# moves and no Lean declaration is renamed. The certifier's paths are excluded while its quiet window lasts.
+
+[words]
+"draw_salt" = "sample_salt"
+
+[rewrite]
+exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "GLOSSARY.md", "tests/lint/**",
+           "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/session_parties.py"]
+words = { "MAX_DRAWS" = "MAX_SAMPLES" }
+
+[[words_in]]
+files = ["benchmarks/pous/streamed_wipe/bench.py", "verity/protocols/accounting/pous/device/wipe_challenger.py", "verity/protocols/accounting/pous/verifier/PROTOCOL.md", "verity/protocols/accounting/pous/verifier/streamed_wipe.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_streamed_wipe.py"]
+words = { "draw_indices" = "sample_indices" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/audit.py", "verity/protocols/accounting/poub/verifier/lean/tests/ra_cases.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/tests/test_shared_coin.py"]
+words = { "draw_of" = "sample_of" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_p2.py"]
+words = { "drawn_store" = "sampled_store" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_units.py"]
+words = { "draws_inputs" = "samples_inputs", "test_draws" = "test_samples" }
+
+[[words_in]]
+files = ["benchmarks/remote_session/tests/test_challengers.py", "benchmarks/remote_session/tests/test_session.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_line.py", "verity/protocols/accounting/poub/verifier/line.py", "verity/protocols/accounting/poub/verifier/session/verifier.py"]
+words = { "draws_of" = "samples_of" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/ra_cases.py"]
+words = { "honest_paced_drawn_at_k" = "honest_paced_sampled_at_k" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_shared_coin.py"]
+words = { "test_a_coin_a_window_is_the_default_and_draws_each_window_alone" = "test_a_coin_a_window_is_the_default_and_samples_each_window_alone", "test_a_prover_that_skips_one_window_of_a_draw_is_refused_there" = "test_a_prover_that_skips_one_window_of_a_sample_is_refused_there", "test_a_session_drawn_two_windows_a_coin_through_a_challenger_service_holds_to_what_it_signed" = "test_a_session_sampled_two_windows_a_coin_through_a_challenger_service_holds_to_what_it_signed", "test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin" = "test_a_session_refuses_coins_flipped_for_another_number_of_windows_a_coin", "test_a_window_of_too_few_passes_fails_in_its_draw" = "test_a_window_of_too_few_passes_fails_in_its_sample", "test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify" = "test_a_window_the_sample_misses_is_accepted_at_its_close_and_refused_a_verify", "test_an_honest_session_drawn_four_windows_a_coin_is_accepted" = "test_an_honest_session_sampled_four_windows_a_coin_is_accepted", "test_the_last_draw_may_hold_fewer_windows" = "test_the_last_sample_may_hold_fewer_windows" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_line.py"]
+words = { "test_a_draw_of_two_to_the_64_receipts_is_refused" = "test_a_sample_of_two_to_the_64_receipts_is_refused", "test_a_record_drawn_four_windows_a_coin_reads_its_draws" = "test_a_record_sampled_four_windows_a_coin_reads_its_samples" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_appends.py"]
+words = { "test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error" = "test_a_link_credits_what_its_units_sample_proved_and_adds_its_delta_to_the_error", "test_a_window_with_no_draws_is_malformed_whatever_its_openings" = "test_a_window_with_no_samples_is_malformed_whatever_its_openings" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_span.py"]
+words = { "test_a_missing_unit_or_statement_is_malformed_at_no_draw" = "test_a_missing_unit_or_statement_is_malformed_at_no_sample", "test_a_span_of_other_draws_is_malformed" = "test_a_span_of_other_samples_is_malformed", "test_a_verdict_word_or_a_salt_changed_is_malformed_at_its_draw" = "test_a_verdict_word_or_a_salt_changed_is_malformed_at_its_sample", "test_a_window_with_no_draws_awaiting_has_no_rows" = "test_a_window_with_no_samples_awaiting_has_no_rows" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_registrations.py"]
+words = { "test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing" = "test_a_second_registration_of_a_live_node_is_refused_and_gets_nothing", "test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_registry" = "test_a_session_runs_only_over_its_node_s_live_registration_issued_by_the_registry" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_replay.py"]
+words = { "test_a_transcript_whose_windows_could_draw_nothing_is_refused_by_both" = "test_a_transcript_whose_windows_could_sample_nothing_is_refused_by_both", "test_a_verifier_json_drawn_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed" = "test_a_verifier_json_sampled_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed", "test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_recorded_verdict" = "test_a_verifier_json_sampled_more_than_one_window_a_coin_replays_to_its_recorded_verdict" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_append_coins.py"]
+words = { "test_an_append_after_the_last_window_s_roots_are_final_draws_no_coin" = "test_an_append_after_the_last_window_s_roots_are_final_flips_no_coin", "test_an_append_sent_again_draws_no_coin_and_rejects_the_session" = "test_an_append_sent_again_flips_no_coin_and_rejects_the_session" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_ledger.py"]
+words = { "test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_receipts" = "test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts", "test_the_draws_terms_are_charged_by_name" = "test_the_samples_terms_are_charged_by_name" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_protocol.py"]
+words = { "test_drawn_edits_agree" = "test_sampled_edits_agree" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py"]
+words = { "test_drawn_edits_of_drawn_sessions_agree" = "test_sampled_edits_of_sampled_sessions_agree", "test_drawn_edits_of_recorded_sessions_agree" = "test_sampled_edits_of_recorded_sessions_agree", "test_drawn_honest_sessions_drawn_several_windows_a_coin_agree" = "test_sampled_honest_sessions_sampled_several_windows_a_coin_agree" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_protocol.py"]
+words = { "test_drawn_honest_sessions_agree" = "test_sampled_honest_sessions_agree" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/pous/verifier/tests/test_pous_streamed_wipe.py"]
+words = { "test_draws_are_uniform_indices_from_the_coin_secret" = "test_samples_are_uniform_indices_from_the_coin_secret" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_poub.py"]
+words = { "test_draws_wait_for_the_windows_roots" = "test_samples_wait_for_the_windows_roots", "test_openings_are_drawn_from_the_windows_live_coin" = "test_openings_are_sampled_from_the_windows_live_coin", "test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root" = "test_the_codec_seed_is_sampled_after_and_bound_to_the_payload_root" }
+
+[[words_in]]
+files = ["benchmarks/pous/tests/test_pous_served_piece.py"]
+words = { "test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id" = "test_the_challenger_samples_the_salt_and_the_verdict_derives_the_session_id" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_pooled.py"]
+words = { "test_the_greedy_takes_the_windows_by_receipts_a_draw_and_a_window_opened_whole_has_none" = "test_the_greedy_takes_the_windows_by_receipts_a_sample_and_a_window_opened_whole_has_none", "test_w_is_the_fractional_knapsacks_optimum_and_at_least_every_share_the_draw_allows" = "test_w_is_the_fractional_knapsacks_optimum_and_at_least_every_share_the_sample_allows" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py"]
+words = { "test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones" = "test_the_provers_passes_and_the_sessions_samples_reproduce_the_pinned_ones" }
+
+[[words_in]]
+files = ["verity/protocols/accounting/poub/verifier/tests/test_p2_party.py"]
+words = { "test_the_verifier_claims_its_session_id_before_it_draws_its_coins" = "test_the_verifier_claims_its_session_id_before_it_flips_its_coins" }

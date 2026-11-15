@@ -18,7 +18,7 @@ import pytest
 
 from research import notes, steward
 
-NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.UTC)
 FRONT = "---\nlane: {lane}\nkind: report\ncreated: 2026-09-23T17:00Z\nstatus: open\n---\n\n"
 
 
@@ -83,7 +83,7 @@ def test_e1_a_fresh_clone_gives_the_laptops_rows(notes_pair, monkeypatch):
     items = notes.inbox(clone, "dead")
     assert [x["path"].name for x in items] == ["20260923T2030Z-handoff-coordinator.md"]
     assert items[0]["mtime"] == pytest.approx((NOW - dt.timedelta(minutes=30)).timestamp())
-    assert notes.final_deadline(clone, "dead", "22:00Z") == dt.datetime(2026, 9, 23, 22, 0, tzinfo=dt.timezone.utc)
+    assert notes.final_deadline(clone, "dead", "22:00Z") == dt.datetime(2026, 9, 23, 22, 0, tzinfo=dt.UTC)
 
 
 def test_an_uncommitted_write_keeps_its_mtime(notes_pair, monkeypatch):

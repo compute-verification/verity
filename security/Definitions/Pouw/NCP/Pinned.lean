@@ -4,7 +4,7 @@ public import Definitions.Pouw.NCP.Defs
 import Mathlib.Tactic.Bound.Init
 
 /-!
-# Noise that cancels inside one checked product: pinned statements (trusted)
+# Noise that cancels inside one checked product: guarantees (trusted)
 
 Algebra of the lead only; no game instance (the lead is not reviewed).
 -/

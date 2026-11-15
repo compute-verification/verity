@@ -10,7 +10,7 @@ public import Mathlib.Data.Fintype.Card
 # Circuits
 
 A circuit has gates `0, …, N - 1` in topological order: a gate reads only earlier gates. Some gates are input gates
-and some are output gates. Gate `g` holds one value of `w g` bits (`verity.ml.circuits`' `Value<w>`). An input gate's
+and some are output gates. Gate `g` holds one value of `w g` bits (`verity.circuits`' `Value<w>`). An input gate's
 value is given; every other gate computes its value from the gates it reads, the wires into it. The Boolean profile,
 which Flock proves, is `w = 1` (`Boolean.lean`).
 

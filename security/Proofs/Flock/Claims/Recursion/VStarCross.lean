@@ -74,7 +74,7 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
 * **`Decomp` refuses out-of-scope inner statements** (`innerAcc_public`, `decomp_public`): the inner checks run the
   inner statement's scope check and refuse it without a sample. `readX` runs the scope check and refuses an inner
   statement without a sample (`innerOk`), so at a statement the reader parses the inner statement holds one
-  (`innerDrawn_checked`, in `DeployChecked`).
+  (`innerSampled_checked`, in `DeployChecked`).
 * **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
   `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (`Tags.withPlainLeaves`), and
   `ProvedScope.check` passes them at hidden outputs without `--zk` (`InnerLeaf.check_of_innerOf`). The reader requires
@@ -467,7 +467,7 @@ theorem decomp_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shap
   fun x st hst hf c ms hc => run_replay_acc H _ c ms (h x st hst hf c ms hc)
 
 /-- **`InnerAcc` reads the inner statement's public checks**: the checks after the verdict run its scope check
-(`scope_of_checks`) and refuse it without a sample (`ProvedScope.drawLaw`), on what the verifier read of it. -/
+(`scope_of_checks`) and refuse it without a sample (`ProvedScope.sampleDesign`), on what the verifier read of it. -/
 theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : List Msg} (h : InnerAcc H x c ms) :
     ∃ s spec sts, FlockDeploy.setupOf false x = some (s, spec, sts) ∧ s.read.check = .ok () ∧
       ∃ d, s.read.draw = some d := by
@@ -481,7 +481,7 @@ theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : Lis
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, hc, -⟩ := FlockSoundness.Refine.ebind_ok hc
   cases hd : s.read.draw with
-  | none => simp [hd, Flock.ProvedScope.drawLaw] at hc
+  | none => simp [hd, Flock.ProvedScope.sampleDesign] at hc
   | some d => exact ⟨d, rfl⟩
 
 /-! ## The replayed run's steps -/

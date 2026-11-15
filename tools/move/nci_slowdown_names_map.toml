@@ -1,0 +1,27 @@
+# The slowdown in `benchmarks/nci`'s names: what `tools/move/rename.py --map tools/move/nci_slowdown_names_map.toml`
+# renames, the older name "dampener", and D where an output key spells the slowdown (GLOSSARY.md, Older names:
+# "dampener", "compute dampener" D, now the slowdown).
+# - The functions: `fit.dampener` and `statement.dampener` become `slowdown`, `fit.attack_dampener`
+#   `attack_slowdown` and `statement.fit_dampener` `fit_slowdown`, with the tests whose names spell the word.
+# - The output keys that begin `D_` in `fit.py` and `statement.py`, and `statement.py`'s `s_sets_D`, begin or end
+#   `slowdown` instead. `statement.py`'s key `D` is a hand edit in the same commit: a one-letter word matches the
+#   loss law's `D_max` and loop variable `D` and `kappa.py`'s `c.D`, token counts that stay.
+# - One reader outside the directory: the doc comment of `security/Definitions/InferenceOnly/Guarantees/Remote.lean`,
+#   which names `fit.dampener`.
+# What stays: the title of the cited Notion page ([keep]), and every other `dampener` of the tree, which
+# `dampener_prose_map.toml` and `slowdown_map.toml` hold.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/**", "security/Definitions/InferenceOnly/Guarantees/Remote.lean"]
+words = { "fit_dampener" = "fit_slowdown", "attack_dampener" = "attack_slowdown", "compute dampener" = "slowdown", "dampener" = "slowdown", "D_closed" = "slowdown_closed", "D_fit_low" = "slowdown_fit_low", "D_fit_high" = "slowdown_fit_high", "D_fit_train" = "slowdown_fit_train", "D_fit_T5" = "slowdown_fit_T5", "D_fit" = "slowdown_fit", "D_none" = "slowdown_none", "D_replica" = "slowdown_replica", "D_path" = "slowdown_path", "s_sets_D" = "s_sets_slowdown" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]
+
+[keep]
+# the cited page's title
+patterns = []
+strings = ["The compute dampener: claims, model and tiers"]

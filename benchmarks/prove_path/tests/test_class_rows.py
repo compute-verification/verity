@@ -16,9 +16,9 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
 import class_rows as CR  # noqa: E402
 
 #: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit

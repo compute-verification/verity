@@ -17,7 +17,7 @@ from verity_flock import derive as D
 from verity_flock import layouts as LY
 from verity_flock import typed_statement as TS
 
-pytest.importorskip("verity.definitions.registry.prims")
+pytest.importorskip("verity_vllm.definitions.registry.prims")
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 
@@ -51,7 +51,7 @@ def test_a_flat_class_carries_types_not_rows(template, params):
     layouts = [LY.from_json(r) for r in m1["layouts"]]
     assert LY.validate(types, layouts, m1["unit_layout"], {}.get)
     dv = D.Derivation(types, layouts, m1["unit_layout"], {})
-    rows = D.netlist(dv.unit, low.name)
+    rows = D.circuit_description(dv.unit, low.name)
     assert rows == dict(s0)["unit"] == typed.unit_rows
     # unit_sha256 is unchanged: the lowering's unit text, the derived rows followed by its LEAVES (and CUT) lines
     extra = "LEAVES " + json.dumps(low.leaves, sort_keys=True, separators=(",", ":")) + "\n"

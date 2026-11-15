@@ -9,14 +9,14 @@ import all Init.Data.Array.Basic
 # Proofs of `Properties.Challenger`
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
-the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
-`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
+the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `SampledByDevice`.
+`sampledByDevice_nontrivial`: a reader that accepts every record fails `SampledByDevice`'s statement.
 `FamilyOneCommitment.drawn`: `FamilyOneCommitment` says more of the same run. `familyOneCommitment_nontrivial`,
 `familyOneCommitmentRead_nontrivial`: each one's conclusion fails at the device that ran nothing and the record `null`,
 which a reader that accepts every record reads.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
-challenger and a window its parameters name, so `oneStageZk_drawn`, `coinsFromLog` for v2, is never vacuous.
+challenger and a window its parameters name, so `oneStageZk_sampled`, `coinsFromLog` for v2, is never vacuous.
 -/
 
 @[expose] public section
@@ -65,7 +65,7 @@ theorem liveAnswer : LiveAnswer := by
           have hev' : (L.at ξ).evidence e = .ok ev := hev
           exact (answer_accept_iff (L.at ξ) hp' hc' hev').2 ⟨pub, prof, ho⟩
 
-theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
+theorem coinsFromLog (hd : SampledByDevice) : CoinsFromLog := by
   intro P L R dev a b e h
   obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer P L a b e h
   refine ⟨p, c, ev, ξ, hp, hc, hev, hacc, fun d hd' => ?_⟩
@@ -74,9 +74,9 @@ theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
   · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hdec⟩
   · exact .inr hb
 
-/-- `DrawnByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
+/-- `SampledByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
 device released nothing and the finder finds no break in an empty run. -/
-theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok ByteArray.empty) := by
+theorem sampledByDevice_nontrivial : ¬ SampledByDeviceAt (fun _ _ _ _ _ => .ok ByteArray.empty) := by
   intro h
   have hnone : findBreak ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" Lean.Json.null = none := rfl
   rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" "" ByteArray.empty Lean.Json.null
@@ -85,8 +85,8 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
   · rw [hnone] at hw
     cases hw
 
-/-- `FamilyOneCommitment` gives `DrawnByDevice`: the family's roots are a further conclusion about the same run. -/
-theorem FamilyOneCommitment.drawn (h : FamilyOneCommitment) : DrawnByDevice :=
+/-- `FamilyOneCommitment` gives `SampledByDevice`: the family's roots are a further conclusion about the same run. -/
+theorem FamilyOneCommitment.drawn (h : FamilyOneCommitment) : SampledByDevice :=
   fun dev key w label after coins ξ hr =>
     (h dev key w label after coins ξ hr).imp (fun ⟨s, hs, ho, e, _⟩ => ⟨s, hs, ho, e⟩) id
 
@@ -103,20 +103,21 @@ theorem familyOneCommitment_nontrivial :
   · rw [hnone] at hw
     cases hw
 
-/-- **`FamilyOneCommitmentRead`'s nontrivial lemma**: its conclusion fails at the record `null` for every key, since
-that record names none. A reader that gives no reason for any record gives none there. -/
+/-- **`FamilyOneCommitmentRead`'s nontrivial lemma**: its conclusion fails at the device that ran nothing (`idle`) and
+the record `null`: no run of it released anything, and the finder finds no break in a record that holds nothing. A
+reader that gives no reason for any record gives none there. -/
 theorem familyOneCommitmentRead_nontrivial :
-    ∀ key, ¬ (Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null "key") = .ok key ∧
-      ((∃ s ∈ idle.runs key.pub, OpensOn idle key.pub "" s.id ∧
+    ¬ ((∃ s ∈ idle.runs noKey.pub, OpensOn idle noKey.pub "" s.id ∧
           (s.released "" ByteArray.empty).extract 0 ByteArray.empty.size = ByteArray.empty ∧
           (ByteArray.empty.size + Spot.Challenger.COIN_BYTES - 1) / Spot.Challenger.COIN_BYTES =
             (s.released "" ByteArray.empty).size / Spot.Challenger.COIN_BYTES ∧
           ∀ r ∈ s.roots "", r = ByteArray.empty) ∨
-        Break idle key "" Lean.Json.null)) := by
-  obtain ⟨e, he⟩ : ∃ e, Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null "key") = .error e := ⟨_, rfl⟩
-  rintro key ⟨hk, -⟩
-  rw [he] at hk
-  cases hk
+        Break idle noKey "" Lean.Json.null) := by
+  have hnone : findBreak idle noKey "" Lean.Json.null = none := rfl
+  rintro (⟨s, hs, -⟩ | ⟨w, hw, -⟩)
+  · simp [idle] at hs
+  · rw [hnone] at hw
+    cases hw
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
@@ -173,11 +174,11 @@ theorem oneStageZk_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commit
 read under the challenger and window its parameters name (`d`); `ξ` is what a run of the device under that key released
 of the family after the registration's digest, a run the device's own ledger opens on the window, or the fixed finder
 outputs a break from the record and the device. -/
-theorem oneStageZk_drawn (hd : DrawnByDevice) (bs : Array ByteArray) (dev : History) (a b e : ByteArray)
+theorem oneStageZk_sampled (hd : SampledByDevice) (bs : Array ByteArray) (dev : History) (a b e : ByteArray)
     (h : ((Spot.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
     ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment)
       (ev : Spot.OneStageZk.Evidence) (ξ : ByteArray) (d : Draws),
-      (Core.canonicalJson a >>= Spot.OneStageZk.paramsOfJson) = .ok p ∧
+      (Core.canonicalJson a >>= Spot.OneStageZk.paramsEitherOfJson) = .ok p ∧
       Spot.OneStageZk.protocol.commitment b = .ok c ∧ Spot.OneStageZk.protocol.evidence e = .ok ev ∧
       ((Spot.OneStageZk.protocol.on bs).answerAt (Spot.OneStageZk.live bs) a b ξ e).verdict =
         .accept ∧

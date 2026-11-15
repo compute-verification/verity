@@ -32,9 +32,10 @@ def test_git_env_drops_a_hooks_repository_and_the_callers_slots_and_import_path(
               "GIT_CONFIG_KEY_7": "merge.fixture-map.name", "GIT_CONFIG_KEY_8": "merge.fixture-map.driver",
               "GIT_CONFIG_KEY_9": "merge.markdown-rows.name", "GIT_CONFIG_KEY_10": "merge.markdown-rows.driver",
               "GIT_CONFIG_KEY_11": "merge.vllm-allowlist.name", "GIT_CONFIG_KEY_12": "merge.vllm-allowlist.driver",
-              "GIT_CONFIG_KEY_13": "merge.lean-caps.name", "GIT_CONFIG_KEY_14": "merge.lean-caps.driver",
-              "GIT_CONFIG_KEY_15": "merge.pyproject-test-lists.name", "GIT_CONFIG_KEY_16": "merge.pyproject-test-lists.driver"}
-    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "17", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
+              "GIT_CONFIG_KEY_13": "merge.lean-limits.name", "GIT_CONFIG_KEY_14": "merge.lean-limits.driver",
+              "GIT_CONFIG_KEY_15": "merge.pyproject-test-lists.name", "GIT_CONFIG_KEY_16": "merge.pyproject-test-lists.driver",
+              "GIT_CONFIG_KEY_17": "merge.lean-caps.name", "GIT_CONFIG_KEY_18": "merge.lean-caps.driver"}
+    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "19", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
 
 
 def test_a_gates_merge_runs_the_record_driver_in_a_clone_without_it(tmp_path):

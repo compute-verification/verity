@@ -1,4 +1,4 @@
-"""Exact-int8 attention: compute accounting's integer LUT softmax (``benchmarks/pouw/edited_gemm/fattn_ref.py``, and the output of
+"""Exact-int8 attention: compute accounting's integer LUT softmax (``verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py``, and the output of
 ``apv_ref.py``'s served f with no dither), on a request's window, in plain torch (``engine.int8_attention_vllm`` serves it inside
 vLLM; ``TargetProfile.int8_exact`` declares it).
 

@@ -2,10 +2,16 @@
 what it lowers; today's GEMM cells resolve to the relation names their pod scripts take."""
 from __future__ import annotations
 
+import json
+
+import numpy as np
 import pytest
 
+from verity_flock import input_sets as IS
+from verity_flock import lowering as FL
 from verity_flock import lowerings as L
 from verity_flock import subcircuit_templates as TM
+from verity_numerical.bench import generate as G
 
 FAMILIES = sorted(L.DIRECTORIES)
 EXAMPLES = [TM.subcircuit(t.id, **t.example) for t in TM.TEMPLATES.values()]
@@ -54,8 +60,6 @@ def test_todays_gemm_cells(family, sid, scheme, relation):
 
 
 def test_relation_names_are_the_backends_own():
-    from verity_flock import lowering as FL
-
     reg = L.registry("C-Flock")
     assert set(reg.module("gemm-coordinate").RELATIONS.values()) <= set(FL.PIPES)
 
@@ -92,13 +96,6 @@ def test_support_matrix():
 
 
 def test_flock_stage_writes_an_input_set_range(tmp_path):
-    import json
-
-    import numpy as np
-
-    from verity_numerical.bench import generate as G
-    from verity_flock import input_sets as IS
-
     sub = TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16")
     stage = L.registry("C-Flock").stage(sub)
     d = tmp_path / "set"

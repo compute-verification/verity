@@ -1,10 +1,10 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
-(`service.LinkWindows`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
+(`service.TransferBlocks`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
 certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkTransferBlocks` v5, one per end),
 which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
 names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
-verifier reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs
+verifier reads its output from the proof block's proof, and the in-the-clear check (`TransferBlocks.clear`) runs
 its `reference`, which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
@@ -15,11 +15,11 @@ its `reference`, which the tests hold to the circuit.
         Salt = Array<24, Array<64, Value<1>>>, Byte = Array<8, Value<1>>, HL = 157 + L + 4T
 
 **Statics: the size class.** L is the UTF-8 length of the link's name, T the end's buckets a window, and COUNTS 1 when
-the end has an occupancy profile (`LinkWindows.occupancy`), so `profile` is a parameter. All three are public: the
+the end has an occupancy profile, so `profile` is a parameter. All three are public: the
 link's name and its grids are, and so is whether an end has a profile.
 
 **Public inputs.** `record` is the root of N2's commitment to the execution phase, `record_domain` its domain id
-(`LinkWindows.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
+(`TransferBlocks.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
 u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least
 significant bit first, and `signed` the digest the end's certificate signs (`certificate_digest`), which hides the
@@ -326,7 +326,7 @@ def _body_check(B, S, *args):
 
 NetworkHeadCheck = CompositeDefinition(
     "NetworkHeadCheck", 2, ("L", "T", "COUNTS"), _sig_check, _body_check, conformance="exact-model-tested",
-    doc="1 iff the head opens at leaf 2 + direction of N2's commitment, its fields are the link-window's, complete and "
+    doc="1 iff the head opens at leaf 2 + direction of N2's commitment, its fields are the execution phase's, complete and "
         "the declared grid's, (COUNTS) its counts are the profile's row, and its record digest salted by salt_c is the "
         "signed digest; its deadline byte and frames root are free")
 
@@ -382,7 +382,7 @@ def gate_of(d, digest: str | None, what: str) -> PrimitiveDefinition:
 
 @lru_cache(maxsize=None)
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
-    """`unit(L, T, counts)` as one gate of N2's proof block (`service.LinkWindows.unit`), whose id names the Definition and
+    """`unit(L, T, counts)` as one gate of N2's proof block (`service.TransferBlocks.unit`), whose id names the Definition and
     its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
     proof block's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and
     a proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest

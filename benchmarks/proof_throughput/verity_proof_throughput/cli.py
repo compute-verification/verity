@@ -53,14 +53,14 @@ def _jsonl(path: Path) -> list[dict]:
 
 
 def cmd_population(a) -> int:
-    """The point's population and sampling design: ``law.json`` (the verifier's stratified sampling design for B, ``serve --draw-law``) in
+    """The point's population and sampling design: ``law.json`` (the verifier's stratified sampling design for B, ``serve --sample-design``) in
     ``--out``; prints the VU Definition and n_max, the class sweep's PT_VU and PT_N."""
     w = workload(a.workload)
     if not 1 <= a.B <= w.n_max:
         print(f"{w.name}: B = {a.B} outside [1, {w.n_max}]", file=sys.stderr)
         return 1
     Path(a.out).mkdir(parents=True, exist_ok=True)
-    (Path(a.out) / "law.json").write_text(json.dumps(I.law(w, a.B), sort_keys=True) + "\n")
+    (Path(a.out) / "law.json").write_text(json.dumps(I.sampling_design(w, a.B), sort_keys=True) + "\n")
     print(w.vu, w.n_max)
     return 0
 
@@ -150,7 +150,7 @@ _MS = re.compile(r"^(inputs|setup(?: \(drawn\))?|.+?): (\d+) ms$")
 
 
 def cmd_lean_verdict(a) -> int:
-    """One JSON line for one session's ``flock-verify verify``: its verdict, time and peak memory."""
+    """One JSON line for one session's ``verity-verify-proof verify``: its verdict, time and peak memory."""
     out = Path(a.stdout).read_text() if Path(a.stdout).exists() else ""
     err = Path(a.stderr).read_text() if Path(a.stderr).exists() else ""
     verdict = next((json.loads(ln[len("VERDICT "):]) for ln in out.splitlines() if ln.startswith("VERDICT ")), None)
@@ -451,7 +451,7 @@ def cmd_zk_point(a) -> int:
     """``zk-point``: the ZK point's result (``job.sh ZK=1``) from its records; exit 0 when it passed."""
     from . import zk
 
-    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.firewall_on(), os.environ.get("RESEARCH_RUN_ID"))
+    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.zk_server_on(), os.environ.get("RESEARCH_RUN_ID"))
     Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(json.dumps({"status": doc["validation"]["status"], "detail": doc["validation"]["detail"]}
                      | {m["name"]: m["value"] for m in doc["measurements"]}))

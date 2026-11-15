@@ -6,21 +6,17 @@ then the named negative controls, through `verdict.verdict`, the call a call sit
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import shutil
 
+import mc_cases as M
 import pytest
+import verdict as V
+import verity_difftest as D
 from hypothesis import strategies as st
 
-import mc_cases as M
-import verity_difftest as D
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-
-_spec = importlib.util.spec_from_file_location("memory_challenger_lean_verdict", M.PACKAGE / "verdict.py")
-V = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(V)
 
 #: Every scheme the port verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).
 KNOWN = {**mc.SCHEMES, **M.ts.SCHEMES}

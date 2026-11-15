@@ -18,7 +18,7 @@ __all__ = ["CARD", "NO_CARD", "device_name", "device_name_of_row", "fused_moe_co
 
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 
-#: the card file (`verity.hardware.cards.load`) each served target is registered on, by the name its device reports, which
+#: the card file (`verity.device.load_card`) each served target is registered on, by the name its device reports, which
 #: `acquire.served_device` holds the device to (`served_device.card_of`: a name in neither this nor `NO_CARD` is refused)
 CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
 

@@ -17,6 +17,7 @@ import pytest
 import verity_vllm.pipeline.cpu_replay as CPU
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.replay.driver import PoolDoesNotFit
+from verity_vllm.records import schema_ids
 
 ROOT = "ab" * 64
 OPTIONS = CPU.Options(bundle="B", row_dir="R", checkpoint_dir="CK", checkpoints_manifest="checkpoints.json", model="m", revision="r", threads=3)
@@ -172,3 +173,7 @@ def test_a_refused_replay_ends_on_its_reason_and_exits_2(monkeypatch: pytest.Mon
     monkeypatch.setattr(CPU, "replay", replay)
     assert CPU.main(OPTIONS) == 2
     assert capsys.readouterr().out.splitlines()[-1] == f"[replay] REFUSED: {refusal}"
+
+
+def test_the_slim_keep_reads_its_schema_id_from_the_records_package() -> None:
+    assert CPU.SLIM_SCHEMA is schema_ids.REPLAY_SLIM_SCHEMA

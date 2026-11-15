@@ -95,7 +95,8 @@ def _watch(d: Path, monkeypatch, *, which=lambda _: "/x/py-spy"):
     clock, stamps = Clock(), iter(["20261007T030000Z", "20261007T050000Z"])
     monkeypatch.setattr(trun, "clock", clock)
     (d / "stdout.log").write_text("loading\n")
-    run = lambda argv, **kw: subprocess.CompletedProcess(argv, 0, STACK.encode(), b"")
+    def run(argv, **kw):
+        return subprocess.CompletedProcess(argv, 0, STACK.encode(), b"")
     w = trun._StallWatch(d, Emitter(d, proc="tele-run"), "run", 900.0, [], lambda: [(7, "python3")], run=run, which=which,
                          stamp=lambda: next(stamps))
     return w, clock
@@ -200,7 +201,7 @@ def test_custody_keeps_the_dumps_and_compare_does_not_read_them(tmp_path):
     (tmp_path / "logs").mkdir()
     (tmp_path / "logs" / "stall-20261007T030000Z.txt").write_text(STACK)
     (tmp_path / "big.bin").write_bytes(b"x" * 10)
-    kept, trimmed = custody.select(tmp_path, cap=0)
+    kept, trimmed = custody.select(tmp_path, limit=0)
     assert kept == ["logs/stall-20261007T030000Z.txt"] and [t["path"] for t in trimmed] == ["big.bin"]
     assert custody.is_run_file("logs/stall-20261007T030000Z.txt") and not custody.is_run_file("logs/train.txt")
 

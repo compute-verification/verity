@@ -1,11 +1,11 @@
 module
 
-public import Flock.Firewall.Session
+public import Flock.ZkServer.Session
 
 /-!
 # The deployed relay's release is the schedule's
 
-`Flock.Firewall.Session.relay` is the ZK server's session loop: it reads the worker's requests one at a time and decides
+`Flock.ZkServer.Session.relay` is the ZK server's session loop: it reads the worker's requests one at a time and decides
 what leaves for the auditor from the session's state, with `State.request`, `State.place`, `State.answer`,
 `State.sendHello` and `State.wire`. Here its loop body is `stepK`, which makes the same decisions with the same pure
 functions. What the loop reads from its sockets, its rep frames and the operating system at a request is gathered in an
@@ -23,7 +23,7 @@ possibly chosen after reading the answers before it, and so are the answers.
   `reach_step` keeps it at every request that leaves.
 * `request_slot`: before a stop, a request `State.request` lets through is the slot's.
 * `out_stopped`: nothing leaves after a stop, where the hold's barrier refuses a stopped session (the deployed hold's
-  does: `Core.Firewall.Decision.after` stops at the loop's refusal).
+  does: `Core.ZkServer.Decision.after` stops at the loop's refusal).
 * `out_sched`: at every list of requests, what leaves is what leaves at the schedule's slots, at the requests that
   reach one (`pick`), a sublist of what the loop read. A request the session refuses sends nothing and stops it, and a
   `Ping` or a `Proof` sends nothing.
@@ -48,16 +48,17 @@ Scope: the released bytes and their order, not their times. When each frame leav
 
 namespace Claims.ZKServer.Relay
 
-open Flock.Firewall.Session
-open Flock.Firewall hiding State
+open Flock.ZkServer.Session
+open Flock.ZkServer hiding State
 open Flock (V SessionSpec Stmt)
 
 /-- **What the relay reads at one request beyond the request's frame and its own state**: the setup at the sample
 (`Hello.Setup.setupAt`), the nonce and the id it samples from the operating system, the auditor's answer to what left
-(`none` where the auditor closed first), a `Round`'s release by its rep's frame (`Frames.round`), a `Commit`'s roots
-bound by the tables' level 0 (`Level0.commit`), whether the rep's frame took a round's coins (`Frames.coins`), whether
-every rep's frame finished (`Frames.finish`), the loop's own proofs (`ownProofs`), how many of them the auditor took
-before one it didn't, and the hold's barrier at the stop it is given. -/
+(`none` where the auditor closed first, or where the hold refused the session at its answer to `Register`), a
+`Round`'s release by its rep's frame (`Frames.round`), a `Commit`'s roots bound by the tables' level 0
+(`Level0.commit`), whether the rep's frame took a round's coins (`Frames.coins`), whether every rep's frame finished
+(`Frames.finish`), the loop's own proofs (`ownProofs`), how many of them the auditor took before one it didn't, and
+the hold's barrier at the stop it is given. -/
 structure Env where
   setup : V (SessionSpec × Array Stmt)
   nonce : ByteArray
@@ -865,7 +866,7 @@ theorem any_of_idxOf_lt {S : State} {n : Nat} {s : String} (h : (names S).idxOf 
   simp only [names, List.getElem_map, Array.getElem_toList] at hget
   simpa using hget
 
-theorem reach_draw {S : State} {P : Placed} (hR : Reach S P) (d : Option Lean.Json) : Reach { S with draw := d } P :=
+theorem reach_sample {S : State} {P : Placed} (hR : Reach S P) (d : Option Lean.Json) : Reach { S with draw := d } P :=
   { reg := hR.reg, unsent := hR.unsent, sess := hR.sess, grouped := hR.grouped, size := hR.size,
     opens_le := hR.opens_le, opens_pos := hR.opens_pos, link_pos := hR.link_pos, link_two := hR.link_two,
     link_opens := hR.link_opens, le_plan := hR.le_plan, idx := hR.idx }
@@ -1021,7 +1022,7 @@ theorem reach_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env}
       simp only [afterAnswer, Placed.after]
       rcases answer_register st r with h1 | ⟨d, h1⟩
       · exact .inl h1
-      · rw [h1]; exact .inr (reach_draw (reach_register hR) d)
+      · rw [h1]; exact .inr (reach_sample (reach_register hR) d)
   | link =>
     rcases stepK_frame_go (by simp) (by simp) (by simp) (by simp) hr hgo with hst | ⟨r, hst, hpl⟩
     · exact .inl hst

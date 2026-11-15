@@ -1,23 +1,22 @@
-"""PoUW's read of the network certifier's per-execution-phase salt (`verity/protocols/accounting/certifier/verifier/active.py`, "The salt").
+"""PoUW's read of the network certifier's per-execution-phase salt.
 
-PoUW execution phase p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier samples p's 512-bit
-salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,
-registration)` once the proof system registered p (the receipt the registration's) and p's last ingress record is
-published, once, and only until its reveal deadline on its own clock after p's end. PoUW doesn't import the certifier:
-`revealed` reads any object with that `reveal`.
+PoUW execution phase p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier device samples
+p's 512-bit salt and releases it into the block only (`CertifierDevice`'s `SaltSource`, under
+`verity/protocols/accounting/certifier/device/lean/`); the reveal and its custody are outside the device. PoUW reads
+the certifier as an interface and imports none of it: `revealed` takes any object whose `reveal(p, registration)` gives
+p's salt once the proof system registered p, and `committed` any whose `committed(p, registration)` gives what PoUW
+recorded for p before the salt.
 
-* `registered(registration)` is PoUW's reader of the execution phase a registration is for, the certifier's
-  `Proxy(registered=…)`: PoUW's served execution phase ``{"kind": "served", "context", "public"}`` (`core_check.commitment`'s),
-  whose context names PoUW execution phase p as ``<prefix>/pouw-window/<p>/<the pass manifest's SHA-512>`` (`context`).
+* `registered(registration)` is PoUW's reader of the execution phase a registration is for: PoUW's served execution
+  phase ``{"kind": "served", "context", "public"}`` (`core_check.commitment`'s), whose context names PoUW execution phase p as
+  ``<prefix>/pouw-window/<p>/<the pass manifest's SHA-512>`` (`context`).
 * `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
-  isn't p's (unregistered), when the certifier refuses (a receipt that isn't the registration's: unregistered; before
-  t_d: early; past the reveal deadline: late; a second reveal of p, so a second registration naming p gets none; a salt
-  never sampled, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
+  isn't p's (unregistered), when the certifier refuses (on its own rules), and when what it gives isn't 64 bytes
+  (missing).
 * `committed(certifier, p, registration)` is what PoUW recorded with the certifier for p before it sampled p's salt
-  (`Proxy.commit_weights`, which takes only a record the prover registered with the certifier signed), given on
-  `reveal`'s conditions but the once (`Proxy.committed`), or `Unrevealed` (uncommitted): the `pouw_record` of the
-  weights' root, the stream and the prover, or the lead's `lead_record`. The salt binds no weights, so a certified
-  execution phase passes only weights, a stream and a prover recorded before its salt (`core_check.pass_epoch`).
+  (a record the prover registered with the certifier signed), or `Unrevealed` (refused, or uncommitted): the
+  `pouw_record` of the weights' root, the stream and the prover. The salt binds no weights, so a certified execution phase passes only weights,
+  a stream and a prover recorded before its salt (`core_check.pass_epoch_twin`).
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in execution phase p, the one function that states its form,
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
   64-byte id of the prover whose key the certifier verifies records under.
@@ -29,7 +28,7 @@ published, once, and only until its reveal deadline on its own clock after p's e
   PoUW execution phase.
 * `window_open_root(weights_root, requests_root, session)` is a live execution phase's open root: what the auditor's gate opens
   the execution phase's challenger session on and its salt coin opens after, which the verifier recomputes from the execution phase's
-  record and the session the gate reserved (`core_check.salt`).
+  record and the session the gate reserved (`core_check.salt_of_record`).
 """
 from __future__ import annotations
 
@@ -116,39 +115,12 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
 
 
 def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
-    """What PoUW records with the certifier for a PoUW execution phase before its salt is sampled (`Proxy.commit_weights`), and
+    """What PoUW records with the certifier for a PoUW execution phase before its salt is sampled, and
     `committed` reads back: SHA-512(`RECORD_TAG` ‖ weights_root ‖ stream ‖ prover), every part fixed-width (Lean's
     `PouwCheck.pouwRecord`). So the certifier's word orders the weights, the stream and the prover before the salt."""
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
     return hashlib.sha512(RECORD_TAG + weights_root + _bound(stream, prover)).digest()
-
-
-#: `lead_record`'s domain tag
-LEAD_RECORD_TAG = b"verity/pouw-lead-record/v1"
-#: an execution phase's key leaf, the hm96-sha512 leaf over its key ks_w (`lead_record`)
-KEY_LEAF_BYTES = 64
-
-
-def lead_record(weights_root: bytes, stream: bytes, prover: bytes, key_leaf: bytes, calls: int) -> bytes:
-    """What the lead records with the certifier for a PoUW execution phase before its salt is sampled, in `pouw_record`'s place
-    (`Proxy.commit_weights`' slot, which `committed` reads back): SHA-512(`LEAD_RECORD_TAG` ‖ weights_root ‖ stream ‖
-    prover ‖ key_leaf ‖ u64be(calls)), 290 bytes hashed, every part fixed-width, and `test_lead_record_form` pins it.
-
-    `key_leaf` is the execution phase's key leaf: the `hm96.SHA512` tree leaf over the execution phase's key ks_w (64 OS bytes, never
-    published) under 192 OS salt bytes, which a sampled proof block's proof opens ks_w against before it keys a digest
-    (`Pouw.Assumptions.SaltDerivation`); `calls` is the execution phase's calls a forward, which fix its instances' positions.
-    The certifier's word orders the weights, the stream, the prover, the key and the call count before the salt
-    (`pouw_record`'s parts and the lead's own), so no key is chosen after it, and the salt keys every instance's digest
-    (`Pouw.Guarantees.KeyedLeaf`)."""
-    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
-        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
-    if type(key_leaf) is not bytes or len(key_leaf) != KEY_LEAF_BYTES:
-        raise DomainError(f"a window's key leaf is {KEY_LEAF_BYTES} bytes")
-    if not (type(calls) is int and 0 < calls < U64):
-        raise DomainError(f"a window's calls a forward are a positive u64, not {calls!r}")
-    return hashlib.sha512(LEAD_RECORD_TAG + weights_root + _bound(stream, prover) + key_leaf
-                          + calls.to_bytes(8, "big")).digest()
 
 
 def window_open_root(weights_root: bytes, requests_root: bytes, session: str) -> bytes:
@@ -161,7 +133,7 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
     alone), `requests_root` the root of the execution phase's round-0 request table, committed before its salt, and `session` the
     id the auditor's gate assigned when it reserved the execution phase's challenger session, which the prover can't relabel. The gate opens that session on this root (``open --session S --root R``), its
     challenger opens the salt coin only after it, and the verifier recomputes it from the execution phase's record and the
-    session its signed reserve names (`core_check.salt`). Each session has its own root, and a root fixes one execution phase's
+    session its signed reserve names (`core_check.salt_of_record`). Each session has its own root, and a root fixes one execution phase's
     weights and requests, so one session salts one execution phase."""
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
@@ -211,7 +183,7 @@ def anchored_epoch_root(weights_root: bytes, anchors_root: bytes, k: int) -> byt
 
 def prover_id(public_key: bytes) -> bytes:
     """The 64-byte id a certified execution phase's prover is registered under: SHA-512(`PROVER_TAG` ‖ the public key the
-    certifier verifies its records under, `Proxy(prover_key=…)`'s bytes). A record naming the id is taken only signed by
+    certifier verifies its records under). A record naming the id is taken only signed by
     that key."""
     if type(public_key) is not bytes or not public_key:
         raise DomainError("a prover's public key is non-empty bytes")
@@ -269,7 +241,7 @@ class WindowOpens:
 
 def context(prefix: str, window: int, manifest: str) -> str:
     """The served execution phase's context for PoUW execution phase `window`, whose pass's manifest has SHA-512 `manifest` (lowercase
-    hex): `core_check.pass_epoch` reads the manifest's digest off its last segment, `window_of` the execution phase off the one
+    hex): `core_check.pass_epoch_twin` reads the manifest's digest off its last segment, `window_of` the execution phase off the one
     before."""
     return f"{prefix}/{WINDOW_SEGMENT}/{_window(window)}/{manifest}"
 
@@ -297,9 +269,7 @@ def registered(registration: WindowCommitmentRecord) -> int | None:
 def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """PoUW execution phase `window`'s certifier salt, `certifier.reveal(window, registration)`, given the execution phase's registration
     as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
-    off the registration), refused by the certifier (its receipt isn't the registration's; early, before the execution phase's
-    last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never sampled or
-    the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""
+    off the registration), refused by the certifier (on its own rules), or missing (what the certifier gave isn't a 64-byte salt)."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
@@ -314,9 +284,9 @@ def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord |
 def committed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """What PoUW recorded with the certifier for PoUW execution phase `window` before it drew the execution phase's salt, the 64-byte
     `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
-    (`Proxy.commit_weights` records it, signed by the registered prover), given the execution phase's registration. It fails
-    closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on `reveal`'s conditions but the once,
-    or uncommitted: nothing recorded before the sample); or uncommitted, when what the certifier gives isn't 64 bytes."""
+    (recorded signed by the registered prover), given the execution phase's registration. It fails
+    closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on its own rules, or nothing recorded
+    before the sample); or uncommitted, when what the certifier gives isn't 64 bytes."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
@@ -345,4 +315,4 @@ __all__ = ["ANCHORED_EPOCH_TAG", "ANCHORS_ROOT_BYTES", "EPOCH_OPEN_TAG", "PROVER
            "REQUESTS_ROOT_BYTES", "Reopened", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
            "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "WindowOpens", "anchored_epoch_root", "committed",
            "context", "epoch_open_root", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered",
-           "revealed", "unit_reason", "window_of", "window_open_root", "KEY_LEAF_BYTES", "LEAD_RECORD_TAG", "lead_record"]
+           "revealed", "unit_reason", "window_of", "window_open_root"]

@@ -11,10 +11,18 @@ import struct
 from pathlib import Path
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, p2, receipts, timing
+from verity.protocols.accounting.poub.prover import p2_prover
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    p2,
+    receipts,
+    timing,
+)
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as pous_p2
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -47,9 +55,9 @@ def vk(fixture):
 
 
 @pytest.fixture(scope="module")
-def store(fixture, vk) -> p2.Store:
+def store(fixture, vk) -> p2_prover.Store:
     reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
-    return p2.Store(reg, fixture["blocks"])
+    return p2_prover.Store(reg, fixture["blocks"])
 
 
 def params(reg: p2.Registration, **kw) -> audit.Params:
@@ -58,12 +66,12 @@ def params(reg: p2.Registration, **kw) -> audit.Params:
     return audit.Params(**{**base, **kw})
 
 
-def drive(store: p2.Store, p: audit.Params, run=None):
+def drive(store: p2_prover.Store, p: audit.Params, run=None):
     clock = Clock()
     reg = store.registration
     s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins")), not_before_ns=0,
                        clock=clock)
-    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
+    prover = p2_prover.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -107,7 +115,7 @@ def test_the_codec_is_pous_registered_point(fixture) -> None:
 
 def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     reg = store.registration
-    assert reg.salt == setup.draw_salt(SOURCE, reg.commitment) == bytes.fromhex(fixture["salt"])
+    assert reg.salt == setup.sample_salt(SOURCE, reg.commitment) == bytes.fromhex(fixture["salt"])
     assert reg.root == vk.root == bytes.fromhex(fixture["root"]) and reg.blocks == 2 and reg.rows == 16
     c = reg.codec
     assert reg.digest == hashlib.sha512(
@@ -115,12 +123,12 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
         + reg.commitment + reg.salt + reg.root + frame("p2-unit4/v0") + frame("sketch-sha512")
         + (16).to_bytes(4, "big")).digest()
     assert len({reg.digest, dataclasses.replace(reg, rows=64).digest, dataclasses.replace(reg, node=b"x").digest}) == 3
-    other = setup.draw_salt(b"another secret", reg.commitment)
+    other = setup.sample_salt(b"another secret", reg.commitment)
     with pytest.raises(ValueError, match="under the salt"):
         p2.register(b"another secret", NODE, reg.commitment, vk)
     assert other != reg.salt
     with pytest.raises(ValueError, match="not the registered C"):
-        p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
+        p2_prover.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
     with pytest.raises(ValueError, match="at least one unit"):
         p2.Registration(NODE, codec.P2Codec(3, 1), reg.commitment, reg.salt, reg.root)
 
@@ -217,7 +225,7 @@ def test_the_tail_past_the_last_unit_is_in_no_plan(store) -> None:
 
 def test_a_p2_store_takes_no_append_no_tiles_and_no_sloth_session(store) -> None:
     """One session type over either codec: over a P2 store its blocks are units, an append is refused, check 3's unit
-    (which decodes) has no draws to take, no tiles bind, and the registration and codec are P2's together."""
+    (which decodes) has no samples to take, no tiles bind, and the registration and codec are P2's together."""
     reg = store.registration
     s = audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0,
                        clock=Clock())

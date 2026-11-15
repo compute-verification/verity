@@ -22,7 +22,7 @@ from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.protocols.accounting.pouw.prover.schemes import get
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 
@@ -287,7 +287,7 @@ def test_the_h100_h3_vectors_are_the_registered_schemes():
 
 def test_lifecycle_on_a_test_instance():
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), hashing="h0"), 128
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
@@ -323,7 +323,7 @@ def test_v1_rho_reads_every_eighth_position_only():
         if p % C.S5_STRIDE:
             y[p] = f32w(rng.uniform(-1, 1))
     assert C.s5_stats(x)[1] == C.s5_stats(y)[1]
-    exact = sum((P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8))) / 64
+    exact = sum(P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8)) / 64
     assert abs(P.f32_of_bits(C.s5_stats(x)[1]) / exact ** 0.5 - 1) < 1e-6
 
 
@@ -559,9 +559,9 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
         assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
         assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
-    assert D.debit_units(1, 0, s, zeros=0) == 34 and D.debit_units(0, 1, s, zeros=0) == 40
-    assert D.debit_units(1, 1, zeros=0) == 40 + 64 and D.debit_units(0, 0, s, zeros=1) == 8
-    assert D.debit_units(0, 0, zeros=1) == 32
+    assert D.inert_work_units(1, 0, s, zeros=0) == 34 and D.inert_work_units(0, 1, s, zeros=0) == 40
+    assert D.inert_work_units(1, 1, zeros=0) == 40 + 64 and D.inert_work_units(0, 0, s, zeros=1) == 8
+    assert D.inert_work_units(0, 0, zeros=1) == 32
     with pytest.raises(ValueError):
         C.PearlC(forming="v0", prices=s, hashing="h0")
 
@@ -580,7 +580,7 @@ def test_wref_is_leans_wref_of(m, k, n):
 def test_lifecycle_work_has_no_weight_side():
     """Two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
@@ -591,7 +591,7 @@ def test_lifecycle_work_has_no_weight_side():
 
 def test_v1_lifecycle_on_a_test_instance():
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -621,13 +621,12 @@ def test_h3_is_the_default_and_h0_and_sha256_are_named():
     hm96 tile trees don't take.  A name with no hashing suffix still means h0."""
     from verity.protocols.accounting.pouw.verifier import audit
     from verity.protocols.accounting.pouw.prover.circuit import pc8
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c4
     from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 
-    assert C.PearlC(forming="v1").hashing == pearl_c4.PearlC4().hashing == "h3"
+    assert C.PearlC(forming="v1").hashing == "h3"
     assert C.leaf(C.Checked([[0]], [[0]])) == C.leaf(C.Checked([[0]], [[0]]), "h3")
     assert SchemeId("pearl-c", "h100", "v1", "e4m3").name == "pearl-c-h100-v1-h3"
-    assert [get(n).hashing for n in ("pearl-c-h100-v1", "pearl-c-sm120-v1", "pearl-c-nvfp4-v0")] == ["h0"] * 3
+    assert [get(n).hashing for n in ("pearl-c-h100-v1", "pearl-c-sm120-v1")] == ["h0"] * 2
     assert {get(n).commitment_hash for n in ("ncp-v1", "pearl-fp8-v4")} == {"sha256"}
     d = audit.rows_domain(b"\0" * 64, -2, 4)
     assert isinstance(d, audit.Hm96Domain) and d.hash == "sha512"
@@ -706,7 +705,7 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
     from verity.protocols.accounting.pouw.verifier.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, activation_binding, hm96_salt,
                                                   rows_domain, transcript_domain, weight_binding)
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -802,7 +801,7 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)

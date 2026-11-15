@@ -18,7 +18,7 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
               (machines.toml, and the registry where the notes clone already is: the doctor never clones it); a changed host
-              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor hosts
+              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor devices
               (`remote.restricted`) refuse lanes' keys by design: they are not probed, and `ssh:auditor-hosts` names them
   venv        `uv sync --locked --check --offline` of the checkout's lock against the venv this runs in (else the checkout's
               .venv), workspace members aside: a worktree's come from PYTHONPATH
@@ -54,7 +54,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import notes_sync, remote, runs, secret_hint, slack
+from . import notes_sync, remote, runs, secret_hint, settings, slack
 from .pods import registry, runpod
 from .store import local as store_local
 from .store import remote as store_remote
@@ -132,11 +132,11 @@ def needs(role: str) -> list[tuple[str, ...]]:
 
 def check_secrets(role: str) -> Check:
     # the notes go through the GitHub broker: a VM that still injects the notes token needn't have it in its shell
-    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
+    injected = [n for n in settings.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
     want = needs(role)
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
-    missing = ["|".join(alts) for alts in want if not any(os.environ.get(n) for n in alts)]
+    missing = ["|".join(alts) for alts in want if not any(settings.named(n) for n in alts)]
     held, kept = secret_hint.server() or (injected, True)       # nothing asked of a tmux server: nothing to say of one
     lost = [m for m in missing if any(n in injected for n in m.split("|"))]
     unset = [m for m in missing if m not in lost]
@@ -153,7 +153,7 @@ def check_secrets(role: str) -> Check:
         if unset:
             fixes.append(f"{', '.join(unset)}: add {'it' if len(unset) == 1 else 'them'} in {DASHBOARD}; a new agent VM gets them")
         return Check("secrets", FINDING, f"not set here: {', '.join(missing)}", "; ".join(fixes))
-    took = [n for n in secret_hint.RECOVERED if os.environ.get(n)]
+    took = [n for n in secret_hint.RECOVERED if settings.named(n)]
     detail = f"the {len(needs(role))} names the {role} role needs" + (f" and the {len(injected)} this VM injects" if injected else "") + " are set"
     once = f"run `{secret_hint.START_KEPT}` once, from a shell that has the secrets, to start the session this VM keeps"
     if held is None:
@@ -214,7 +214,9 @@ def _git_root(where: Path) -> Path | None:
     try:
         p = subprocess.run(["git", "-C", str(where), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
                            timeout=_left(LOCAL_TIMEOUT_S), check=False)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"research doctor: `git rev-parse` in {where} did not run, so it is no checkout here ({type(e).__name__})",
+              file=sys.stderr)
         return None
     return Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
 
@@ -250,7 +252,11 @@ def check_notes_push() -> Check:
         return Check("notes-push", FINDING, f"the notes clone {root} has no origin: notes committed here reach nobody (a checkout "
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
-    opts, where = notes_sync.remote_target(root)
+    try:
+        opts, where = notes_sync.remote_target(root)
+    except notes_sync.NoToken as e:
+        return Check("notes-push", FINDING, f"the notes clone {root} has nothing to push with: {e}",
+                     "run this again in a minute: the GitHub broker's token needs no secret")
     source, said = notes_sync.token_source()
     fix = {"broker": "the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access",
            "env": f"{notes_sync.TOKEN_ENV} was refused (expired or revoked), and the GitHub broker gave no token to use instead "
@@ -293,7 +299,7 @@ def check_store() -> Check:
 
 def check_slack() -> Check:
     try:
-        api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), transport=lambda url, data, headers: slack.post(url, data, headers, timeout=PROBE_TIMEOUT_S))
+        api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), transport=lambda url, data, headers: slack.post(url, data, headers, timeout=PROBE_TIMEOUT_S))
         api.call("auth.test")
     except slack.SlackError as e:
         return Check("slack", FINDING, str(e), "the using-slack skill: a Cursor agent goes through the broker with no token; @infra holds the bot's")
@@ -312,17 +318,17 @@ SSH_FAILURES = (
 def registry_unread() -> bool:
     """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
     before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
-    return registry.REGISTRY_ENV not in os.environ and not registry.notes_root().exists()
+    return not settings.has(registry.REGISTRY_ENV) and not registry.notes_root().exists()
 
 
 def ssh_machines() -> dict[str, dict]:
     """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
-    ssh host, the auditor hosts (`remote.restricted`) aside."""
+    ssh host, the auditor devices (`remote.restricted`) aside."""
     return _ssh_machines()[0]
 
 
 def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
-    """(the machines to probe, the auditor hosts left out)."""
+    """(the machines to probe, the auditor devices left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
     ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = remote.restricted(ssh)
@@ -404,9 +410,9 @@ def check_disk(root: Path | None) -> Check:
 
 def server_date(url: str = CLOCK_URL) -> float:
     """The time `url`'s Date header gives a HEAD, in seconds since the epoch; its one-second resolution is the caller's."""
-    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})
+    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})  # noqa: S310 (CLOCK_URL, a literal https URL)
     try:
-        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:
+        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:  # noqa: S310 (CLOCK_URL, a literal https URL)
             date = r.headers.get("Date")
     except urllib.error.HTTPError as e:
         date = e.headers.get("Date")

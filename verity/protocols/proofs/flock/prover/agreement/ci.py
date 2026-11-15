@@ -17,9 +17,9 @@ For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstre
   (`record_text.session_text`, Lean's `Json.compress`), in a copy under the set's work directory;
 - runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
   proof does not cover, which the Lean verifier refuses whatever the session, once every check has passed),
-  `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its sampled sessions' law, which no soundness claim samples
-  by, refused at setup), and `--lean-refuses-drawless` for one marked `lean_refuses_drawless` (D12 at its sessions without
-  a sample, refused once every check has passed). A session refused last, and for nothing else, passed every check.
+  `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its sampled sessions' sampling design, which no soundness
+  claim samples by, refused at setup), and `--lean-refuses-drawless` for one marked `lean_refuses_drawless` (D12 at its sessions
+  without a sample, refused once every check has passed). A session refused last, and for nothing else, passed every check.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
@@ -48,7 +48,7 @@ SLOTS = threading.Semaphore(1)
 
 def store_env():
     """The store CLI's environment. Inside a recorded check's steps, which carry no store credentials, it is given the run's
-    custody key that `$CHECK_STORE_CUSTODY` names (`tools/verity/check/check.py`, "The evidence store"), when no store config is set
+    custody key that `$CHECK_STORE_CUSTODY` names (`tools/check/check.py`, "The evidence store"), when no store config is set
     here, as adapters/vllm's `store_io` does: the key goes into that subprocess's environment only."""
     env = dict(os.environ)
     custody = Path(env["CHECK_STORE_CUSTODY"]) if env.get("CHECK_STORE_CUSTODY") else None

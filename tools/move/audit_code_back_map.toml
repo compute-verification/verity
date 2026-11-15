@@ -1,0 +1,140 @@
+# The compute audit's commands back out of `verity/`: what `tools/move/layout.py --map tools/move/audit_code_back_map.toml`
+# moves and rewrites.
+#
+# `verity` imports the standard library, its declared dependencies and itself, and nothing outside `benchmarks/` imports
+# `benchmarks/` (`tests/test_boundaries.py`). The audit's commands that drive the adapter (`verity_vllm`), Flock's prover
+# (`verity_flock`) and the benchmarks' scripts, the cost model's two files that read the adapter, and every test that
+# loads one of them or reaches into `benchmarks/` go back to where they stood before `audit_code_map.toml`, under their
+# names there; what loads none of them stays in SPOT (the verifier's member trees, served integrity and audit record,
+# the challenger's session and party, the local challenger, `class_size.py` and the cost model's other files). The
+# imports that name a moved file as a module are bare again (`import a5 as A5`), as before the move, and a hand commit
+# after this one writes them.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/proofs/spot/prover/audit/check_memo.py" = "benchmarks/one_stage/a5_memo.py"
+"verity/protocols/proofs/spot/prover/audit/compose_circuit.py" = "benchmarks/one_stage/compose_circuit.py"
+"verity/protocols/proofs/spot/prover/audit/prove_bundle.py" = "benchmarks/one_stage/prove_bundle.py"
+"verity/protocols/proofs/spot/prover/audit/prove_bundle.sh" = "benchmarks/one_stage/prove_bundle.sh"
+"verity/protocols/proofs/spot/prover/audit/stop_audit.py" = "benchmarks/one_stage/stop_audit.py"
+"verity/protocols/proofs/spot/prover/audit/template_audit.py" = "benchmarks/one_stage/a0.py"
+"verity/protocols/proofs/spot/prover/audit/two_stage.py" = "benchmarks/one_stage/two_stage.py"
+"verity/protocols/proofs/spot/prover/audit/window_audit.py" = "benchmarks/one_stage/a5.py"
+"verity/protocols/proofs/spot/prover/audit/window_audit.sh" = "benchmarks/one_stage/a5.sh"
+"verity/protocols/proofs/spot/verifier/tests/other_population.py" = "benchmarks/one_stage/r2_population.py"
+"verity/protocols/proofs/spot/prover/audit/prove_path.py" = "benchmarks/prove_path/prove_path.py"
+"verity/protocols/proofs/spot/prover/audit/prove_path.sh" = "benchmarks/prove_path/run.sh"
+"verity/protocols/proofs/spot/prover/audit/records_audit.py" = "benchmarks/prove_path/records_audit.py"
+"verity/protocols/proofs/spot/prover/cost/class_rows.py" = "benchmarks/prove_path/class_rows.py"
+"verity/protocols/proofs/spot/prover/cost/window_cost.py" = "benchmarks/prove_path/window_cost.py"
+"verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py" = "benchmarks/one_stage/tests/test_audit_one_member.py"
+"verity/protocols/proofs/spot/prover/tests/test_audit_two_members.py" = "benchmarks/one_stage/tests/test_audit_two_members.py"
+"verity/protocols/proofs/spot/prover/tests/test_check_memo.py" = "benchmarks/one_stage/tests/test_a5_memo.py"
+"verity/protocols/proofs/spot/prover/tests/test_compose_cache.py" = "benchmarks/one_stage/tests/test_compose_cache.py"
+"verity/protocols/proofs/spot/prover/tests/test_kept_compose_cache.py" = "benchmarks/one_stage/tests/test_kept_compose_cache.py"
+"verity/protocols/proofs/spot/prover/tests/test_prove_bundle.py" = "benchmarks/one_stage/tests/test_prove_bundle.py"
+"verity/protocols/proofs/spot/prover/tests/fixtures/bundle-window-public/" = "benchmarks/one_stage/tests/fixtures/bundle-window-public/"
+"verity/protocols/proofs/spot/prover/tests/test_template_audit_archive_once.py" = "benchmarks/one_stage/tests/test_a0_archive_once.py"
+"verity/protocols/proofs/spot/prover/tests/test_template_audit_challenger_draw.py" = "benchmarks/one_stage/tests/test_a0_challenger_draw.py"
+"verity/protocols/proofs/spot/prover/tests/test_template_audit_lean_refused.py" = "benchmarks/one_stage/tests/test_a0_lean_refused.py"
+"verity/protocols/proofs/spot/prover/tests/test_template_audit_session_challenger.py" = "benchmarks/one_stage/tests/test_a0_session_challenger.py"
+"verity/protocols/proofs/spot/prover/tests/test_template_audit_templated.py" = "benchmarks/one_stage/tests/test_a0_templated.py"
+"verity/protocols/proofs/spot/prover/tests/test_template_audit_verify_members.py" = "benchmarks/one_stage/tests/test_a0_verify_members.py"
+"verity/protocols/proofs/spot/prover/tests/test_window_audit_case_v2.py" = "benchmarks/one_stage/tests/test_a5_case_v2.py"
+"verity/protocols/proofs/spot/prover/tests/test_window_audit_history.py" = "benchmarks/one_stage/tests/test_a5_history.py"
+"verity/protocols/proofs/spot/prover/tests/test_window_audit_outputs.py" = "benchmarks/one_stage/tests/test_a5_outputs.py"
+"verity/protocols/proofs/spot/prover/tests/test_window_audit_sessions.py" = "benchmarks/one_stage/tests/test_a5_sessions.py"
+"verity/protocols/proofs/spot/prover/tests/test_window_audit_wiring.py" = "benchmarks/one_stage/tests/test_a5_wiring.py"
+"verity/protocols/proofs/spot/verifier/tests/test_one_stage_member_trees.py" = "benchmarks/one_stage/tests/test_member_trees.py"
+"verity/protocols/proofs/spot/verifier/tests/test_other_population.py" = "benchmarks/one_stage/tests/test_r2_population.py"
+"verity/protocols/proofs/spot/verifier/tests/test_verdict_record.py" = "benchmarks/one_stage/tests/test_verdict_record.py"
+"verity/protocols/proofs/spot/prover/tests/test_class_rows.py" = "benchmarks/prove_path/tests/test_class_rows.py"
+"verity/protocols/proofs/spot/prover/tests/test_class_size.py" = "benchmarks/prove_path/tests/test_class_size.py"
+"verity/protocols/proofs/spot/prover/tests/test_prove_path.py" = "benchmarks/prove_path/tests/test_prove_path.py"
+"verity/protocols/proofs/spot/prover/tests/test_records_audit.py" = "benchmarks/prove_path/tests/test_records_audit.py"
+"verity/protocols/proofs/spot/prover/tests/test_window_cost.py" = "benchmarks/prove_path/tests/test_window_cost.py"
+"verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_keep.py" = "benchmarks/prove_path/tests/test_run_keep.py"
+"verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_request_values.py" = "benchmarks/prove_path/tests/test_run_request_values.py"
+"verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_rules.py" = "benchmarks/prove_path/tests/test_run_rules.py"
+"verity/protocols/proofs/spot/verifier/tests/test_pearltie.py" = "benchmarks/prove_path/tests/test_pearltie.py"
+"verity/protocols/proofs/spot/verifier/tests/test_remotetie.py" = "benchmarks/prove_path/tests/test_remotetie.py"
+"verity/protocols/proofs/spot/verifier/tests/settings.py" = "benchmarks/prove_path/tests/settings.py"
+"verity/protocols/proofs/spot/verifier/tests/window_tie.py" = "benchmarks/prove_path/tests/window_tie.py"
+"verity/protocols/proofs/spot/prover/cost/demo_a.py" = "benchmarks/sampling_plan/demo_a.py"
+"verity/protocols/proofs/spot/prover/tests/test_cost_demo_a.py" = "benchmarks/sampling_plan/tests/test_demo_a.py"
+"adapters/vllm/tests/pipeline/test_two_stage_driver.py" = "benchmarks/one_stage/tests/test_two_stage_driver.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input; as the earlier maps'.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
+           "tests/tree.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
+           "benchmarks/pouw/pearl_c_sm90/**"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+
+
+# the rename [paths] implies (`layout.py --modules`)
+[modules]
+"adapters.vllm.tests.pipeline.test_two_stage_driver" = "benchmarks.one_stage.tests.test_two_stage_driver"
+"verity.protocols.proofs.spot.prover.audit.check_memo" = "benchmarks.one_stage.a5_memo"
+"verity.protocols.proofs.spot.prover.audit.compose_circuit" = "benchmarks.one_stage.compose_circuit"
+"verity.protocols.proofs.spot.prover.audit.prove_bundle" = "benchmarks.one_stage.prove_bundle"
+"verity.protocols.proofs.spot.prover.audit.prove_path" = "benchmarks.prove_path.prove_path"
+"verity.protocols.proofs.spot.prover.audit.records_audit" = "benchmarks.prove_path.records_audit"
+"verity.protocols.proofs.spot.prover.audit.stop_audit" = "benchmarks.one_stage.stop_audit"
+"verity.protocols.proofs.spot.prover.audit.template_audit" = "benchmarks.one_stage.a0"
+"verity.protocols.proofs.spot.prover.audit.two_stage" = "benchmarks.one_stage.two_stage"
+"verity.protocols.proofs.spot.prover.audit.window_audit" = "benchmarks.one_stage.a5"
+"verity.protocols.proofs.spot.prover.cost.class_rows" = "benchmarks.prove_path.class_rows"
+"verity.protocols.proofs.spot.prover.cost.window_cost" = "benchmarks.prove_path.window_cost"
+"verity.protocols.proofs.spot.prover.tests.test_audit_one_member" = "benchmarks.one_stage.tests.test_audit_one_member"
+"verity.protocols.proofs.spot.prover.tests.test_audit_two_members" = "benchmarks.one_stage.tests.test_audit_two_members"
+"verity.protocols.proofs.spot.prover.tests.test_check_memo" = "benchmarks.one_stage.tests.test_a5_memo"
+"verity.protocols.proofs.spot.prover.tests.test_class_rows" = "benchmarks.prove_path.tests.test_class_rows"
+"verity.protocols.proofs.spot.prover.tests.test_class_size" = "benchmarks.prove_path.tests.test_class_size"
+"verity.protocols.proofs.spot.prover.tests.test_compose_cache" = "benchmarks.one_stage.tests.test_compose_cache"
+"verity.protocols.proofs.spot.prover.tests.test_kept_compose_cache" = "benchmarks.one_stage.tests.test_kept_compose_cache"
+"verity.protocols.proofs.spot.prover.tests.test_prove_bundle" = "benchmarks.one_stage.tests.test_prove_bundle"
+"verity.protocols.proofs.spot.prover.tests.test_prove_path" = "benchmarks.prove_path.tests.test_prove_path"
+"verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_keep" = "benchmarks.prove_path.tests.test_run_keep"
+"verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_request_values" = "benchmarks.prove_path.tests.test_run_request_values"
+"verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_rules" = "benchmarks.prove_path.tests.test_run_rules"
+"verity.protocols.proofs.spot.prover.tests.test_records_audit" = "benchmarks.prove_path.tests.test_records_audit"
+"verity.protocols.proofs.spot.prover.tests.test_template_audit_archive_once" = "benchmarks.one_stage.tests.test_a0_archive_once"
+"verity.protocols.proofs.spot.prover.tests.test_template_audit_challenger_draw" = "benchmarks.one_stage.tests.test_a0_challenger_draw"
+"verity.protocols.proofs.spot.prover.tests.test_template_audit_lean_refused" = "benchmarks.one_stage.tests.test_a0_lean_refused"
+"verity.protocols.proofs.spot.prover.tests.test_template_audit_session_challenger" = "benchmarks.one_stage.tests.test_a0_session_challenger"
+"verity.protocols.proofs.spot.prover.tests.test_template_audit_templated" = "benchmarks.one_stage.tests.test_a0_templated"
+"verity.protocols.proofs.spot.prover.tests.test_template_audit_verify_members" = "benchmarks.one_stage.tests.test_a0_verify_members"
+"verity.protocols.proofs.spot.prover.tests.test_window_audit_case_v2" = "benchmarks.one_stage.tests.test_a5_case_v2"
+"verity.protocols.proofs.spot.prover.tests.test_window_audit_history" = "benchmarks.one_stage.tests.test_a5_history"
+"verity.protocols.proofs.spot.prover.tests.test_window_audit_outputs" = "benchmarks.one_stage.tests.test_a5_outputs"
+"verity.protocols.proofs.spot.prover.tests.test_window_audit_sessions" = "benchmarks.one_stage.tests.test_a5_sessions"
+"verity.protocols.proofs.spot.prover.tests.test_window_audit_wiring" = "benchmarks.one_stage.tests.test_a5_wiring"
+"verity.protocols.proofs.spot.prover.tests.test_window_cost" = "benchmarks.prove_path.tests.test_window_cost"
+"verity.protocols.proofs.spot.verifier.tests.other_population" = "benchmarks.one_stage.r2_population"
+"verity.protocols.proofs.spot.verifier.tests.settings" = "benchmarks.prove_path.tests.settings"
+"verity.protocols.proofs.spot.verifier.tests.test_one_stage_member_trees" = "benchmarks.one_stage.tests.test_member_trees"
+"verity.protocols.proofs.spot.verifier.tests.test_other_population" = "benchmarks.one_stage.tests.test_r2_population"
+"verity.protocols.proofs.spot.verifier.tests.test_pearltie" = "benchmarks.prove_path.tests.test_pearltie"
+"verity.protocols.proofs.spot.verifier.tests.test_remotetie" = "benchmarks.prove_path.tests.test_remotetie"
+"verity.protocols.proofs.spot.verifier.tests.test_verdict_record" = "benchmarks.one_stage.tests.test_verdict_record"
+"verity.protocols.proofs.spot.verifier.tests.window_tie" = "benchmarks.prove_path.tests.window_tie"
+"verity.protocols.proofs.spot.prover.cost.demo_a" = "benchmarks.sampling_plan.demo_a"
+"verity.protocols.proofs.spot.prover.tests.test_cost_demo_a" = "benchmarks.sampling_plan.tests.test_demo_a"

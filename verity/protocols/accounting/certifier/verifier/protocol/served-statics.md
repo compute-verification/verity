@@ -1,28 +1,31 @@
 Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
-## The served rows held to their Programs (`served_statics`)
+## The served rows held to their Programs (`verity_vllm.compiler.served_statics`)
 
 The compile slice reads a window's served rows as a committed hidden row, ``srv``, and the verifier holds its b‖c to the
 served-rows registration natively. What binds those rows to the batch the server ran is a tie. The routed tie
-(`served_tie.ServedRowsTie_v2`) holds them to the Commit's committed positions. Each of its proof blocks hashes the
-window's whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class, which no Flock proof
-block of 2^27 holds. `ServedStaticsTie_v1{R, G, IW, L, T}` holds them to the Programs' statics instead, and reads its
-block's rows through the Lean verifier's registered reads, so its proof block hashes only those rows.
+(`verity_vllm.compiler.served_tie.ServedRowsTie_v2`) holds them to the Commit's committed positions. Each of its proof
+blocks hashes the window's whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class,
+which no Flock proof block of 2^27 holds. `ServedStaticsTie_v1{R, G, IW, L, T}` holds them to the Programs' statics
+instead, and reads its block's rows through the Lean verifier's registered reads, so its proof block hashes only those
+rows.
 
-**The rows registered.** `served_rows.register(..., G=G)` commits each block of G steps of window w (j = 0 … P / G − 1)
-as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha512 tree, under the run root's binding. G
-is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``. At G < P the
-slice is `compile_slice.CompileSliceRowGroups_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: proof
-block w's row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and step u is checked against row u // G. Its ANDs
-are the G = P proof block's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P.
+**The rows registered.** `verity_vllm.compiler.served_rows.register(..., G=G)` commits each block of G steps of window w
+(j = 0 … P / G − 1) as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha512 tree, under the
+run root's binding. G is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's
+``srv``. At G < P the slice is `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1{…, G}`, whose ``srv0`` …
+``srv{P/G − 1}`` are the window's blocks: proof block w's row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and
+step u is checked against row u // G. Its ANDs are the G = P proof block's: at 8eb1's engine class, G = 2 gives 27 rows
+and 1,021,302 ANDs, as at G = 54 = P.
 
 **The proof block** reads two rows:
 - ``pub``, opened: the block's G steps' statics. For each step, R slots of (valid, start, n), in the Programs' batch
   order, which is the order of the step's rows in advice v0. The verifier holds its own copy, from the Programs it
   compiled.
 - ``srb``: the block's served rows, G steps of R slots of (valid, request, kind, start, n). It is a registered port:
-  `served_rows.reads_port` is the verifier's own ``--registered`` port at the registration's root, proof block u reading
-  leaf w·(P / G) + j. Lean refuses a statement whose ``srb`` table row doesn't climb its path to that root at that leaf.
+  `verity_vllm.compiler.served_rows.reads_port` is the verifier's own ``--registered`` port at the registration's root,
+  proof block u reading leaf w·(P / G) + j. Lean refuses a statement whose ``srb`` table row doesn't climb its path to
+  that root at that leaf.
 
 The verdict has bit 0 ``count`` (every slot's valid and n are the statics') and bit 1 ``pos`` (every start is). ``ACCEPT``
 is 0x3. The request ids and kinds are not the Program's to show. `IoTieRequest` holds each prefill slot's ids to its
@@ -40,9 +43,10 @@ step past the window's executed count is idle by public structure, and its Progr
 slice reads every step's served rows, and only the tie shows an idle block's rows zero. A block left untied would make
 its rows the prover's word.
 
-**Cost** (`size`, pinned in `served_statics.circuit-check.json`). A step is R·(1 + LW + TW) − 2 ANDs, and the steps'
-flags cost 2·(G − 1) more. Every committed row a proof block reads is hashed in-circuit, so its two rows, G·R·(3 + IW +
-2·(LW + TW)) bits, set its Flock block (`benchmarks/prove_path/served_statics_zk.py cost`):
+**Cost** (`size`, pinned in `adapters/vllm/verity_vllm/compiler/served_statics.circuit-check.json`). A step is
+R·(1 + LW + TW) − 2 ANDs, and the steps' flags cost 2·(G − 1) more. Every committed row a proof block reads is hashed in-circuit,
+so its two rows, G·R·(3 + IW + 2·(LW + TW)) bits, set its Flock block
+(`benchmarks/prove_path/served_statics_zk.py cost`):
 
 | class | G | proof block ANDs | block (k_log) |
 |---|---|---|---|

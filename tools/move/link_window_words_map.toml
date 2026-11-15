@@ -1,0 +1,50 @@
+# The retired word "link-window": what `tools/move/rename.py --map tools/move/link_window_words_map.toml` renames, after
+# `GLOSSARY.md` (a link-window is an execution phase's transfer blocks on one link) and the retired-words lint.
+#
+# Prose says "execution phase", the word the tree already uses for a link's window, which reads where a link-window is a
+# span ("a 3.2 s link-window", "link-window 0", "per link-window") and where it is the blocks proved in it ("every
+# link-window is proved"). In code, the class of network accounting on one link takes the Lean structure's name
+# (`service.LinkWindows` → `TransferBlocks`, beside `NetworkCheck.TransferBlocks`), and a name that counts or indexes
+# link-windows says phase (`link_windows` → `phases`, `per_link_window` → `per_phase`); the difftest file takes its
+# Lean module's name.
+#
+# Left as they are, since a digest, a signature or a reader takes their bytes: the code's `link-window`, until a format
+# version (the `network-records verdicts` function and the refusal of a certificate of another link or window), the
+# unit tag `unit/n2-link-window`, the reasons of the certifier's public items (`Public`), which a spec's digest takes
+# in, and every record key, quoted or in backticks (`link_windows`, the `network-records` output's, and the summaries'
+# `link_window`, `per_link_window`, `requests_per_link_window` and `link_window_s`), and the difftest's seeds
+# (`link-window/...`), which pick the bytes its counts are held to; and the other sense, a link's burst (the remote
+# line's "link window" `B_l`) and the Lean arguments `link window`, which no word here names.
+
+[words]
+"test_network_certifier_link_window_lean" = "test_network_certifier_transfer_blocks_lean"
+"link-window-proving-nothing" = "phase-proving-nothing"
+"link-windows-verdict" = "phases-verdict"
+"per-link-window" = "per-execution-phase"
+"A link-window" = "An execution phase"
+"a link-window" = "an execution phase"
+"Link-windows" = "Execution phases"
+"Link-window" = "Execution phase"
+"link-windows" = "execution phases"
+"link-window" = "execution phase"
+"LinkWindows" = "TransferBlocks"
+"linkWindow" = "transferBlocks"
+"link_windows" = "phases"
+"link_window" = "phase"
+
+[keep]
+patterns = [
+    "(?<=[`\"'])(?:link-window|link_windows?|per_link_window|requests_per_link_window|link_window_s)(?=`|\"|'(?!s\\b))",
+    "unit/n2-link-window", "link-window/"]
+strings = ["one proof unit per registration: the link-window", "provenance: the link-window's index",
+           "the link-window's certified records under one salted root", "the link-window's verdict, accept or reject",
+           "unit t the link-window's bucket row t", "provenance: the ingress link-window's index",
+           "the group's link-windows of the warden's run",
+           "the round's provenance: its link-window of the warden's run"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, the Glossary's table of older names and
+# the retired-words lint, whose entries and fixtures spell the retired word.
+exclude = ["tests/lint/test_repo_retired_terms.py", "tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "**/moves.json", "GLOSSARY.md", "tests/test_retired_terms.py"]

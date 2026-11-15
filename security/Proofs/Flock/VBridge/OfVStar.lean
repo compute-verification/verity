@@ -24,7 +24,7 @@ import VCVio.Prelude.Core
 /-!
 # The bridge over V*'s circuits as core code
 
-`VStar` (`verity/core/service/vstar`) is the executable Lean that writes V*'s circuit files: each
+`VStar` (`verity/protocols/proofs/recursion/verifier/vstar_cli`) is the executable Lean that writes V*'s circuit files: each
 `RecOpen{LANES, H}` statement and each `InnerRepCheck{S}` part, byte for byte as `verity_flock`'s builders write them.
 This file proves that its builders are the ones this bridge reasons about, and restates the bridge's theorems over
 `VStar`'s definitions, so that they are about the code that writes the circuit files and not about a copy of it.
@@ -63,13 +63,13 @@ theorem iv_eq : VStar.iv = preCv [] 0 := rfl
 theorem blockAt_eq (msg : List Lin) (off : ℕ) : VStar.blockAt msg.toArray off = blockAt msg off := by
   simp only [VStar.blockAt, blockAt, getD_toArray]
 
-theorem shaBlock_eq : VStar.shaBlock = shaBlock := rfl
+theorem shaChunk_eq : VStar.shaChunk = shaChunk := rfl
 
 theorem shaBlocks_eq (msg : List Lin) : ∀ (n k : ℕ) (st : List Lin),
     VStar.shaBlocks msg.toArray n k st = shaBlocks msg n k st
   | 0, _, _ => rfl
   | n + 1, k, st => by
-    simp only [VStar.shaBlocks, shaBlocks, blockAt_eq, shaBlock_eq]
+    simp only [VStar.shaBlocks, shaBlocks, blockAt_eq, shaChunk_eq]
     exact congrArg _ (funext fun st' => shaBlocks_eq msg n (k + 1) st')
 
 theorem shaFrom_eq (cv : List (BitVec 64)) (bits : List Lin) (pre : ℕ) :

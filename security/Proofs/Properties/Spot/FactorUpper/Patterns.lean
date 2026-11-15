@@ -1,11 +1,15 @@
 module
 
 public import Proofs.Properties.Spot.FactorUpper.Sets
+public import Proofs.Flock.SamplingGeneric.TwoRankinThreshold
 
 /-!
 # Rankin's factor bounded above: the patterns' form over requests
 
-`FactorUpperPatternsSound`. Each pattern `c = (r ↦ lightOf |r| U_r)`'s supremum is at most `φ(Σ_r ŷ(c_r))^θ` over the
+`FactorUpperPatternsSound`. The requests that read in the replay block serve at most `S` bits each, and the factor only
+grows with their thresholds (`rankinFactorPatterns_le_at`), so the bound is proved for the factor at thresholds `thr`
+that are `S` at each of them (`rankinFactorPatternsAt`, `patterns_core`).
+Each pattern `c = (r ↦ lightOf (thr r) U_r)`'s supremum is at most `φ(Σ_r ŷ(c_r))^θ` over the
 patterns that meet no cell sampled whole, and `(1 − q)^θ` over those that do (`pat_bound`). The escape is a function
 of the whole replay block, which is how it couples the requests: they read disjoint proof blocks, so
 `y(U) ≥ Σ_r y(U_r)`, and `φ` is decreasing. The first sum is a product over the requests (`Finset.prod_univ_sum`) of
@@ -58,7 +62,7 @@ theorem LogUB.at_ubVal (o : Option ℚ) : LogUB o (ubVal o) := by
   · rfl
   · exact le_rfl
 
-theorem LogUB.le_ubVal {o : Option ℚ} {X : ℝ} (h : LogUB o X) : X ≤ ubVal o := by
+theorem LogUB.le_ubVal {o : Option ℚ} {Xs : ℝ} (h : LogUB o Xs) : Xs ≤ ubVal o := by
   cases o
   · exact le_of_eq h
   · exact h
@@ -140,21 +144,21 @@ theorem capped_split {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G)
   rw [mul_sub, mul_one]
   linarith
 
-/-- A request's classes: `none`, the sets of `X` (each `some (some A)`) and the classes `Y ⊆ {some none}`. -/
-theorem sum_classes (X : Finset (Finset ℕ)) (Y : Finset (Option (Option (Finset ℕ)))) (hY : Y ⊆ {some none})
+/-- A request's classes: `none`, the sets of `Xs` (each `some (some A)`) and the classes `Ys ⊆ {some none}`. -/
+theorem sum_classes (Xs : Finset (Finset ℕ)) (Ys : Finset (Option (Option (Finset ℕ)))) (hY : Ys ⊆ {some none})
     (f : Option (Option (Finset ℕ)) → ℝ) :
-    ∑ a ∈ X.image (fun A => some (some A)) ∪ Y, f a = ∑ A ∈ X, f (some (some A)) + ∑ a ∈ Y, f a := by
+    ∑ a ∈ Xs.image (fun A => some (some A)) ∪ Ys, f a = ∑ A ∈ Xs, f (some (some A)) + ∑ a ∈ Ys, f a := by
   rw [Finset.sum_union, Finset.sum_image fun _ _ _ _ h => by simpa using h]
   rw [Finset.disjoint_left]
   intro a ha haY
   obtain ⟨A, -, rfl⟩ := Finset.mem_image.1 ha
   simpa using hY haY
 
-theorem sum_classes_none (X : Finset (Finset ℕ)) (Y : Finset (Option (Option (Finset ℕ)))) (hY : Y ⊆ {some none})
+theorem sum_classes_none (Xs : Finset (Finset ℕ)) (Ys : Finset (Option (Option (Finset ℕ)))) (hY : Ys ⊆ {some none})
     (f : Option (Option (Finset ℕ)) → ℝ) :
-    ∑ a ∈ insert none (X.image (fun A => some (some A)) ∪ Y), f a =
-      f none + ∑ A ∈ X, f (some (some A)) + ∑ a ∈ Y, f a := by
-  rw [Finset.sum_insert, sum_classes X Y hY, add_assoc]
+    ∑ a ∈ insert none (Xs.image (fun A => some (some A)) ∪ Ys), f a =
+      f none + ∑ A ∈ Xs, f (some (some A)) + ∑ a ∈ Ys, f a := by
+  rw [Finset.sum_insert, sum_classes Xs Ys hY, add_assoc]
   intro h
   rcases Finset.mem_union.1 h with h | h
   · obtain ⟨A, -, h⟩ := Finset.mem_image.1 h; cases h
@@ -669,9 +673,9 @@ noncomputable def actOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {
   Finset.univ.filter fun r => (Dr s Pt d req ρ r).Nonempty
 
 open Classical in
-/-- The classes `some (some A)` of the sets of `X`, with `some none` when `P`. -/
-noncomputable def clsOf (X : Finset (Finset ℕ)) (P : Prop) : Finset (Option (Option (Finset ℕ))) :=
-  X.image (fun A => some (some A)) ∪ if P then {some none} else ∅
+/-- The classes `some (some A)` of the sets of `Xs`, with `some none` when `P`. -/
+noncomputable def clsOf (Xs : Finset (Finset ℕ)) (P : Prop) : Finset (Option (Option (Finset ℕ))) :=
+  Xs.image (fun A => some (some A)) ∪ if P then {some none} else ∅
 
 /-- Request `r`'s classes avoiding the cells sampled whole: heavy when `y_S` exists. -/
 noncomputable def firstOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
@@ -693,8 +697,8 @@ noncomputable def touchOf (s : AuditStatement) (Pt : Partition) (d : Design.Two)
 
 /-- `U`'s pattern. -/
 noncomputable def patOf (s : AuditStatement) (Pt : Partition) {R : Type} [DecidableEq R]
-    (req : Fin s.prog.outs.length → R) (U : Finset ℕ) (r : R) : Option (Option (Finset ℕ)) :=
-  lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r)
+    (req : Fin s.prog.outs.length → R) (thr : R → ℕ) (U : Finset ℕ) (r : R) : Option (Option (Finset ℕ)) :=
+  lightOf s Pt (thr r) (blocksTo s.prog Pt req U r)
 
 /-- A class's `y`: `0`, `y_S` heavy, `y(A)` light. -/
 noncomputable def yhat (Pt : Partition) (cs : List Cell) (yS : Option ℚ) : Option (Option (Finset ℕ)) → ℝ
@@ -702,8 +706,8 @@ noncomputable def yhat (Pt : Partition) (cs : List Cell) (yS : Option ℚ) : Opt
   | some none => ((yS.getD 0 : ℚ) : ℝ)
   | some (some A) => yOf Pt cs A
 
-theorem mem_clsOf_some {X : Finset (Finset ℕ)} {P : Prop} {A : Finset ℕ} :
-    some (some A) ∈ clsOf X P ↔ A ∈ X := by
+theorem mem_clsOf_some {Xs : Finset (Finset ℕ)} {P : Prop} {A : Finset ℕ} :
+    some (some A) ∈ clsOf Xs P ↔ A ∈ Xs := by
   classical
   unfold clsOf
   constructor
@@ -715,7 +719,7 @@ theorem mem_clsOf_some {X : Finset (Finset ℕ)} {P : Prop} {A : Finset ℕ} :
   · intro h
     exact Finset.mem_union_left _ (Finset.mem_image.2 ⟨A, h, rfl⟩)
 
-theorem mem_clsOf_heavy {X : Finset (Finset ℕ)} {P : Prop} : some none ∈ clsOf X P ↔ P := by
+theorem mem_clsOf_heavy {Xs : Finset (Finset ℕ)} {P : Prop} : some none ∈ clsOf Xs P ↔ P := by
   classical
   unfold clsOf
   constructor
@@ -726,7 +730,7 @@ theorem mem_clsOf_heavy {X : Finset (Finset ℕ)} {P : Prop} : some none ∈ cls
   · intro hP
     exact Finset.mem_union_right _ (by rw [if_pos hP]; simp)
 
-theorem none_not_mem_clsOf {X : Finset (Finset ℕ)} {P : Prop} : none ∉ clsOf X P := by
+theorem none_not_mem_clsOf {Xs : Finset (Finset ℕ)} {P : Prop} : none ∉ clsOf Xs P := by
   classical
   unfold clsOf
   intro h
@@ -748,7 +752,7 @@ theorem lightOf_cases (s : AuditStatement) (Pt : Partition) (n : ℕ) (U : Finse
 section Patterns
 
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
-  {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {S : ℕ}
+  {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {thr : R → ℕ} {S : ℕ}
 
 omit [DecidableEq R] in
 theorem mem_actOf {r : R} : r ∈ actOf s Pt d req ρ ↔ (Dr s Pt d req ρ r).Nonempty := by
@@ -767,12 +771,12 @@ theorem patOf_sub {U : Finset ℕ} (hU : U ⊆ blocksIn Pt d.part ρ) (r : R) :
     blocksTo s.prog Pt req U r ⊆ Dr s Pt d req ρ r := blocksTo_subset hU r
 
 /-- Every set's class at `r` is one of `r`'s classes. -/
-theorem pat_mem_all (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req r = S) {H : Prop}
+theorem pat_mem_all (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S) {H : Prop}
     (hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H) {U : Finset ℕ}
-    (hU : U ⊆ blocksIn Pt d.part ρ) (r : R) : patOf s Pt req U r ∈ allOf s Pt d req ρ H S r := by
+    (hU : U ⊆ blocksIn Pt d.part ρ) (r : R) : patOf s Pt req thr U r ∈ allOf s Pt d req ρ H S r := by
   have hA := patOf_sub (req := req) hU r
   unfold patOf allOf
-  rcases lightOf_cases s Pt (servedBits req r) (blocksTo s.prog Pt req U r) with ⟨-, h⟩ | ⟨hne, hb, h⟩ | ⟨hne, hb, h⟩
+  rcases lightOf_cases s Pt (thr r) (blocksTo s.prog Pt req U r) with ⟨-, h⟩ | ⟨hne, hb, h⟩ | ⟨hne, hb, h⟩
   · rw [h]; exact Finset.mem_insert_self _ _
   · have hact := hne.mono hA
     rw [hreq r hact] at hb
@@ -784,12 +788,12 @@ theorem pat_mem_all (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits 
     exact Finset.mem_insert_of_mem (mem_clsOf_some.2 (Finset.mem_filter.2 ⟨Finset.mem_powerset.2 hA, hne, hb⟩))
 
 /-- **A pattern not avoiding the cells sampled whole** meets one, at a request whose class meets one. -/
-theorem pat_touch (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req r = S) {H : Prop}
+theorem pat_touch (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S) {H : Prop}
     (hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H) {yS : Option ℚ}
     (hnone : yS = none → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → bitsOf s Pt A < S)
     {U : Finset ℕ} (hU : U ⊆ blocksIn Pt d.part ρ)
-    (hPF : patOf s Pt req U ∉ Fintype.piFinset (firstOf s Pt d req ρ cs yS S)) :
-    patOf s Pt req U ∈ (Fintype.piFinset (allOf s Pt d req ρ H S)).filter
+    (hPF : patOf s Pt req thr U ∉ Fintype.piFinset (firstOf s Pt d req ρ cs yS S)) :
+    patOf s Pt req thr U ∈ (Fintype.piFinset (allOf s Pt d req ρ H S)).filter
         (fun c => ∃ r, c r ∈ touchOf s Pt d req ρ cs H S r) ∧
       ∃ v ∈ U, (cs.getD (Pt.stratumOf v) default).rate = none := by
   rw [Fintype.mem_piFinset] at hPF
@@ -808,7 +812,7 @@ theorem pat_touch (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits re
   have hall := Fintype.mem_piFinset.2 (pat_mem_all hreq hH hU)
   unfold patOf at hr ⊢
   unfold firstOf at hr
-  rcases lightOf_cases s Pt (servedBits req r) (blocksTo s.prog Pt req U r) with ⟨-, h⟩ | ⟨hne, hb, h⟩ | ⟨hne, hb, h⟩
+  rcases lightOf_cases s Pt (thr r) (blocksTo s.prog Pt req U r) with ⟨-, h⟩ | ⟨hne, hb, h⟩ | ⟨hne, hb, h⟩
   · rw [h] at hr; exact absurd (Finset.mem_insert_self _ _) hr
   · have hact := hne.mono hA
     rw [hreq r hact] at hb
@@ -820,7 +824,7 @@ theorem pat_touch (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits re
       absurd hb (not_le.2 (hnone hyS r _ hsub hne))
     obtain ⟨hDi, v, hv, hvr⟩ := hmeet _ hA hnot
     refine ⟨Finset.mem_filter.2 ⟨hall, r, ?_⟩, v, blocksTo_sub_self U r hv, hvr⟩
-    show lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r) ∈ _
+    show lightOf s Pt (thr r) (blocksTo s.prog Pt req U r) ∈ _
     rw [h]
     exact mem_clsOf_heavy.2 ⟨mem_actOf.2 hact, hH r _ hA hne hb, hDi⟩
   · have hact := hne.mono hA
@@ -830,7 +834,7 @@ theorem pat_touch (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits re
       hr (Finset.mem_insert_of_mem (mem_clsOf_some.2 (Finset.mem_filter.2 ⟨Finset.mem_powerset.2 hsub, hne, hb⟩)))
     obtain ⟨-, v, hv, hvr⟩ := hmeet _ hA hnot
     refine ⟨Finset.mem_filter.2 ⟨hall, r, ?_⟩, v, blocksTo_sub_self U r hv, hvr⟩
-    show lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r) ∈ _
+    show lightOf s Pt (thr r) (blocksTo s.prog Pt req U r) ∈ _
     rw [h]
     exact mem_clsOf_some.2 (Finset.mem_filter.2 ⟨Finset.mem_filter.2 ⟨Finset.mem_powerset.2 hA, hne, hb⟩, hnot⟩)
 
@@ -845,20 +849,20 @@ theorem yhat_nonneg {yS : Option ℚ} (hy : ∀ y, yS = some y → 0 ≤ y) (a :
   · exact yOf_nonneg A
 
 /-- **`y(U) ≥ Σ_r ŷ(c_r)`** for a set avoiding the cells sampled whole whose pattern `c` avoids them too. -/
-theorem pat_y_le (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req r = S)
+theorem pat_y_le (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r')) {yS : Option ℚ}
     (hsome : ∀ y, yS = some y → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → S ≤ bitsOf s Pt A →
       (y : ℝ) ≤ yOf Pt cs A)
     {U : Finset ℕ} (hU : U ⊆ blocksIn Pt d.part ρ) (hUf : ∀ v ∈ U, (cs.getD (Pt.stratumOf v) default).rate.isSome)
-    (hPF : patOf s Pt req U ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S)) :
-    ∑ r, yhat Pt cs yS (patOf s Pt req U r) ≤ yOf Pt cs U := by
-  have hper : ∀ r, yhat Pt cs yS (patOf s Pt req U r) ≤ yOf Pt cs (blocksTo s.prog Pt req U r) := by
+    (hPF : patOf s Pt req thr U ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S)) :
+    ∑ r, yhat Pt cs yS (patOf s Pt req thr U r) ≤ yOf Pt cs U := by
+  have hper : ∀ r, yhat Pt cs yS (patOf s Pt req thr U r) ≤ yOf Pt cs (blocksTo s.prog Pt req U r) := by
     intro r
     have hA := patOf_sub (req := req) hU r
     have hr := Fintype.mem_piFinset.1 hPF r
     unfold patOf at hr ⊢
     unfold firstOf at hr
-    rcases lightOf_cases s Pt (servedBits req r) (blocksTo s.prog Pt req U r) with ⟨-, h⟩ | ⟨hne, hb, h⟩ |
+    rcases lightOf_cases s Pt (thr r) (blocksTo s.prog Pt req U r) with ⟨-, h⟩ | ⟨hne, hb, h⟩ |
       ⟨-, -, h⟩
     · rw [h]; exact yOf_nonneg _
     · have hact := hne.mono hA
@@ -885,7 +889,7 @@ theorem pat_y_le (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req
 /-- **A set's pass probability, by its pattern**: `φ(Σ_r ŷ(c_r))^θ` when its pattern avoids the cells sampled whole,
 else `(1 − q)^θ`, the pattern then meeting one. -/
 theorem pat_bound (hc : Properties.Spot.Covers s Pt d ρ cs)
-    (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req r = S)
+    (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r')) {H : Prop}
     (hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H) {yS : Option ℚ}
     (hnone : yS = none → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → bitsOf s Pt A < S)
@@ -893,12 +897,12 @@ theorem pat_bound (hc : Properties.Spot.Covers s Pt d ρ cs)
       (y : ℝ) ≤ yOf Pt cs A)
     {q θ : ℝ} (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hθ : 0 ≤ θ) {U : Finset ℕ} (hU : U ⊆ blocksIn Pt d.part ρ) :
     d.passes Pt q (counts Pt d.part U) ρ ^ θ ≤
-      (if patOf s Pt req U ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S) then
-          phi q (∑ r, yhat Pt cs yS (patOf s Pt req U r)) ^ θ else 0) +
-        (if patOf s Pt req U ∈ (Fintype.piFinset (allOf s Pt d req ρ H S)).filter
+      (if patOf s Pt req thr U ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S) then
+          phi q (∑ r, yhat Pt cs yS (patOf s Pt req thr U r)) ^ θ else 0) +
+        (if patOf s Pt req thr U ∈ (Fintype.piFinset (allOf s Pt d req ρ H S)).filter
             (fun c => ∃ r, c r ∈ touchOf s Pt d req ρ cs H S r) then (1 - q) ^ θ else 0) := by
   have hpq : 0 ≤ (1 - q) ^ θ := Real.rpow_nonneg (by linarith) θ
-  by_cases hPF : patOf s Pt req U ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S)
+  by_cases hPF : patOf s Pt req thr U ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S)
   · rw [if_pos hPF]
     refine le_add_of_le_of_nonneg ?_ (by split_ifs <;> [exact hpq; exact le_rfl])
     refine Real.rpow_le_rpow (passes_nonneg hq1 _) ?_ hθ
@@ -908,7 +912,7 @@ theorem pat_bound (hc : Properties.Spot.Covers s Pt d ρ cs)
       obtain ⟨v, hv, hvr⟩ := hUf
       rw [passes_whole hc q hU hv (Option.not_isSome_iff_eq_none.1 hvr)]
       unfold phi
-      nlinarith [Real.exp_pos (-(∑ r, yhat Pt cs yS (patOf s Pt req U r)))]
+      nlinarith [Real.exp_pos (-(∑ r, yhat Pt cs yS (patOf s Pt req thr U r)))]
   · obtain ⟨hTS, v, hv, hvr⟩ := pat_touch hreq hH hnone hU hPF
     rw [if_neg hPF, if_pos hTS, zero_add, passes_whole hc q hU hv hvr]
 
@@ -925,8 +929,8 @@ open Nat
 
 /-- A pattern's weight, `2^{Σ_r b(c_r)}`. -/
 noncomputable def Wof (s : AuditStatement) (Pt : Partition) {R : Type} [Fintype R] [DecidableEq R]
-    (req : Fin s.prog.outs.length → R) (c : R → Option (Option (Finset ℕ))) : ℝ :=
-  (2 : ℝ) ^ ∑ r, lightBits s Pt (servedBits req r) (c r)
+    (req : Fin s.prog.outs.length → R) (thr : R → ℕ) (c : R → Option (Option (Finset ℕ))) : ℝ :=
+  (2 : ℝ) ^ ∑ r, lightBits s Pt (thr r) (c r)
 
 /-- A pattern's `y`, `Σ_r ŷ(c_r)`. -/
 noncomputable def Yof (Pt : Partition) (cs : List Cell) (yS : Option ℚ) {R : Type} [Fintype R]
@@ -936,7 +940,7 @@ noncomputable def Yof (Pt : Partition) (cs : List Cell) (yS : Option ℚ) {R : T
 section Sums
 
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
-  {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {S : ℕ}
+  {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {thr : R → ℕ} {S : ℕ}
 
 omit [DecidableEq R] in
 theorem Dr_empty {r : R} (hr : r ∉ actOf s Pt d req ρ) : Dr s Pt d req ρ r = ∅ := by
@@ -944,12 +948,12 @@ theorem Dr_empty {r : R} (hr : r ∉ actOf s Pt d req ρ) : Dr s Pt d req ρ r =
 
 theorem finOf_empty : finOf Pt cs ∅ = ∅ := by simp [finOf]
 
-theorem first_le {yS : Option ℚ} (t : ℝ) {r : R} (hS : servedBits req r = S) {Lt Ht : ℝ}
+theorem first_le {yS : Option ℚ} (t : ℝ) {r : R} (hS : thr r = S) {Lt Ht : ℝ}
     (hlight : ∑ A ∈ lsets s Pt S (finOf Pt cs (Dr s Pt d req ρ r)),
       (2 : ℝ) ^ bitsOf s Pt A * Real.exp (-(t * yOf Pt cs A)) ≤ Lt)
     (hheavy : ∀ y, yS = some y → (2 : ℝ) ^ S * Real.exp (-(t * y)) ≤ Ht) (hHt : 0 ≤ Ht) :
     ∑ a ∈ firstOf s Pt d req ρ cs yS S r,
-        (2 : ℝ) ^ lightBits s Pt (servedBits req r) a * Real.exp (-(t * yhat Pt cs yS a)) ≤ 1 + Lt + Ht := by
+        (2 : ℝ) ^ lightBits s Pt (thr r) a * Real.exp (-(t * yhat Pt cs yS a)) ≤ 1 + Lt + Ht := by
   unfold firstOf clsOf
   rw [sum_classes_none _ _ (heavy_sub _), sum_heavy]
   simp only [lightBits, yhat, pow_zero, mul_zero, neg_zero, Real.exp_zero, mul_one, hS]
@@ -962,15 +966,15 @@ theorem first_le {yS : Option ℚ} (t : ℝ) {r : R} (hS : servedBits req r = S)
 
 theorem first_one {yS : Option ℚ} (t : ℝ) {r : R} (hr : r ∉ actOf s Pt d req ρ) :
     ∑ a ∈ firstOf s Pt d req ρ cs yS S r,
-        (2 : ℝ) ^ lightBits s Pt (servedBits req r) a * Real.exp (-(t * yhat Pt cs yS a)) = 1 := by
+        (2 : ℝ) ^ lightBits s Pt (thr r) a * Real.exp (-(t * yhat Pt cs yS a)) = 1 := by
   unfold firstOf clsOf
   rw [sum_classes_none _ _ (heavy_sub _), sum_heavy, if_neg fun h => hr h.1, Dr_empty hr, finOf_empty, lsets_empty]
   simp [lightBits, yhat]
 
-theorem all_le {H : Prop} {r : R} (hS : servedBits req r = S) {La Ha : ℝ}
+theorem all_le {H : Prop} {r : R} (hS : thr r = S) {La Ha : ℝ}
     (hlight : ∑ A ∈ lsets s Pt S (Dr s Pt d req ρ r), (2 : ℝ) ^ bitsOf s Pt A ≤ La)
     (hheavy : H → (2 : ℝ) ^ S ≤ Ha) (hHa : 0 ≤ Ha) :
-    ∑ a ∈ allOf s Pt d req ρ H S r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) a ≤ 1 + La + Ha := by
+    ∑ a ∈ allOf s Pt d req ρ H S r, (2 : ℝ) ^ lightBits s Pt (thr r) a ≤ 1 + La + Ha := by
   unfold allOf clsOf
   rw [sum_classes_none _ _ (heavy_sub _), sum_heavy]
   simp only [lightBits, pow_zero, hS]
@@ -980,16 +984,16 @@ theorem all_le {H : Prop} {r : R} (hS : servedBits req r = S) {La Ha : ℝ}
   · exact hHa
 
 theorem all_one {H : Prop} {r : R} (hr : r ∉ actOf s Pt d req ρ) :
-    ∑ a ∈ allOf s Pt d req ρ H S r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) a = 1 := by
+    ∑ a ∈ allOf s Pt d req ρ H S r, (2 : ℝ) ^ lightBits s Pt (thr r) a = 1 := by
   unfold allOf clsOf
   rw [sum_classes_none _ _ (heavy_sub _), sum_heavy, if_neg fun h => hr h.1, Dr_empty hr, lsets_empty]
   simp [lightBits]
 
-theorem touch_le {H : Prop} {r : R} (hS : servedBits req r = S) {Lt Ha : ℝ}
+theorem touch_le {H : Prop} {r : R} (hS : thr r = S) {Lt Ha : ℝ}
     (hlight : ∑ A ∈ (lsets s Pt S (Dr s Pt d req ρ r)).filter (fun A => ¬ A ⊆ finOf Pt cs (Dr s Pt d req ρ r)),
       (2 : ℝ) ^ bitsOf s Pt A ≤ Lt)
     (hheavy : H → (2 : ℝ) ^ S ≤ Ha) (hHa : 0 ≤ Ha) :
-    ∑ a ∈ touchOf s Pt d req ρ cs H S r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) a ≤ Lt + Ha := by
+    ∑ a ∈ touchOf s Pt d req ρ cs H S r, (2 : ℝ) ^ lightBits s Pt (thr r) a ≤ Lt + Ha := by
   unfold touchOf clsOf
   rw [sum_classes _ _ (heavy_sub _), sum_heavy]
   simp only [lightBits, hS]
@@ -999,77 +1003,77 @@ theorem touch_le {H : Prop} {r : R} (hS : servedBits req r = S) {Lt Ha : ℝ}
   · exact hHa
 
 theorem touch_zero {H : Prop} {r : R} (hr : r ∉ actOf s Pt d req ρ) :
-    ∑ a ∈ touchOf s Pt d req ρ cs H S r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) a = 0 := by
+    ∑ a ∈ touchOf s Pt d req ρ cs H S r, (2 : ℝ) ^ lightBits s Pt (thr r) a = 0 := by
   unfold touchOf clsOf
   rw [sum_classes _ _ (heavy_sub _), sum_heavy, if_neg fun h => hr h.1, Dr_empty hr, lsets_empty]
   simp
 
 theorem W_eq_prod (c : R → Option (Option (Finset ℕ))) :
-    Wof s Pt req c = ∏ r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) (c r) :=
+    Wof s Pt req thr c = ∏ r, (2 : ℝ) ^ lightBits s Pt (thr r) (c r) :=
   (Finset.prod_pow_eq_pow_sum _ _ _).symm
 
 /-- **A chord's weight factors over the requests.** -/
 theorem first_prod (yS : Option ℚ) (t : ℝ) :
-    ∑ c ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S), Wof s Pt req c * Real.exp (-(t * Yof Pt cs yS c)) =
+    ∑ c ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S), Wof s Pt req thr c * Real.exp (-(t * Yof Pt cs yS c)) =
       ∏ r, ∑ a ∈ firstOf s Pt d req ρ cs yS S r,
-        (2 : ℝ) ^ lightBits s Pt (servedBits req r) a * Real.exp (-(t * yhat Pt cs yS a)) := by
+        (2 : ℝ) ^ lightBits s Pt (thr r) a * Real.exp (-(t * yhat Pt cs yS a)) := by
   rw [Finset.prod_univ_sum]
   refine Finset.sum_congr rfl fun c _ => ?_
   unfold Yof
   rw [W_eq_prod, Finset.mul_sum, ← Finset.sum_neg_distrib, Real.exp_sum, ← Finset.prod_mul_distrib]
 
 theorem W_sum_pi (t : R → Finset (Option (Option (Finset ℕ)))) :
-    ∑ c ∈ Fintype.piFinset t, Wof s Pt req c = ∏ r, ∑ a ∈ t r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) a := by
+    ∑ c ∈ Fintype.piFinset t, Wof s Pt req thr c = ∏ r, ∑ a ∈ t r, (2 : ℝ) ^ lightBits s Pt (thr r) a := by
   rw [Finset.prod_univ_sum]
   exact Finset.sum_congr rfl fun c _ => W_eq_prod c
 
 /-- **The patterns' factor**, by the patterns avoiding the cells sampled whole and those meeting one. -/
 theorem patterns_le (hc : Properties.Spot.Covers s Pt d ρ cs)
-    (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req r = S)
+    (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r')) {H : Prop}
     (hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H) {yS : Option ℚ}
     (hnone : yS = none → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → bitsOf s Pt A < S)
     (hsome : ∀ y, yS = some y → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → S ≤ bitsOf s Pt A →
       (y : ℝ) ≤ yOf Pt cs A)
     {q θ : ℝ} (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hθ : 0 ≤ θ) :
-    rankinFactorPatterns s Pt d req q θ ρ ≤
-      ∑ c ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S), Wof s Pt req c * phi q (Yof Pt cs yS c) ^ θ +
+    rankinFactorPatternsAt s Pt d req thr q θ ρ ≤
+      ∑ c ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S), Wof s Pt req thr c * phi q (Yof Pt cs yS c) ^ θ +
         (1 - q) ^ θ * ∑ c ∈ (Fintype.piFinset (allOf s Pt d req ρ H S)).filter
-          (fun c => ∃ r, c r ∈ touchOf s Pt d req ρ cs H S r), Wof s Pt req c := by
+          (fun c => ∃ r, c r ∈ touchOf s Pt d req ρ cs H S r), Wof s Pt req thr c := by
   set PF := Fintype.piFinset (firstOf s Pt d req ρ cs yS S)
   set TS := (Fintype.piFinset (allOf s Pt d req ρ H S)).filter (fun c => ∃ r, c r ∈ touchOf s Pt d req ρ cs H S r)
   have hpq : 0 ≤ (1 - q) ^ θ := Real.rpow_nonneg (by linarith) θ
-  have hW : ∀ c, 0 ≤ Wof s Pt req c := fun c => by unfold Wof; positivity
-  unfold rankinFactorPatterns
+  have hW : ∀ c, 0 ≤ Wof s Pt req thr c := fun c => by unfold Wof; positivity
+  unfold rankinFactorPatternsAt
   set Img := (blocksIn Pt d.part ρ).powerset.image
-    (fun U r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r))
-  have h1 : ∀ c ∈ Img, (2 : ℝ) ^ (∑ r, lightBits s Pt (servedBits req r) (c r)) *
+    (fun U r => lightOf s Pt (thr r) (blocksTo s.prog Pt req U r))
+  have h1 : ∀ c ∈ Img, (2 : ℝ) ^ (∑ r, lightBits s Pt (thr r) (c r)) *
       (⨆ U : ((blocksIn Pt d.part ρ).powerset.filter
-          fun U => (fun r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r)) = c),
+          fun U => (fun r => lightOf s Pt (thr r) (blocksTo s.prog Pt req U r)) = c),
         d.passes Pt q (counts Pt d.part U.1) ρ ^ θ) ≤
-      Wof s Pt req c * ((if c ∈ PF then phi q (Yof Pt cs yS c) ^ θ else 0) + (if c ∈ TS then (1 - q) ^ θ else 0)) := by
+      Wof s Pt req thr c * ((if c ∈ PF then phi q (Yof Pt cs yS c) ^ θ else 0) + (if c ∈ TS then (1 - q) ^ θ else 0)) := by
     intro c hcI
     obtain ⟨U0, hU0, hc0⟩ := Finset.mem_image.1 hcI
     refine mul_le_mul_of_nonneg_left ?_ (hW c)
     have : Nonempty ((blocksIn Pt d.part ρ).powerset.filter
-        fun U => (fun r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r)) = c) :=
+        fun U => (fun r => lightOf s Pt (thr r) (blocksTo s.prog Pt req U r)) = c) :=
       ⟨⟨U0, Finset.mem_filter.2 ⟨hU0, hc0⟩⟩⟩
     refine ciSup_le fun U => ?_
     obtain ⟨hUB, hUc⟩ := Finset.mem_filter.1 U.2
     have := pat_bound hc hreq hdisj hH hnone hsome hq0 hq1 hθ (Finset.mem_powerset.1 hUB)
-    have hpat : patOf s Pt req U.1 = c := hUc
+    have hpat : patOf s Pt req thr U.1 = c := hUc
     rw [hpat] at this
     exact this
-  have hsplit : ∀ c, Wof s Pt req c *
+  have hsplit : ∀ c, Wof s Pt req thr c *
       ((if c ∈ PF then phi q (Yof Pt cs yS c) ^ θ else 0) + (if c ∈ TS then (1 - q) ^ θ else 0)) =
-      (if c ∈ PF then Wof s Pt req c * phi q (Yof Pt cs yS c) ^ θ else 0) +
-        (1 - q) ^ θ * (if c ∈ TS then Wof s Pt req c else 0) := by
+      (if c ∈ PF then Wof s Pt req thr c * phi q (Yof Pt cs yS c) ^ θ else 0) +
+        (1 - q) ^ θ * (if c ∈ TS then Wof s Pt req thr c else 0) := by
     intro c; split_ifs <;> ring
-  calc _ ≤ ∑ c ∈ Img, Wof s Pt req c *
+  calc _ ≤ ∑ c ∈ Img, Wof s Pt req thr c *
         ((if c ∈ PF then phi q (Yof Pt cs yS c) ^ θ else 0) + (if c ∈ TS then (1 - q) ^ θ else 0)) :=
         Finset.sum_le_sum h1
-    _ = ∑ c ∈ Img ∩ PF, Wof s Pt req c * phi q (Yof Pt cs yS c) ^ θ +
-        (1 - q) ^ θ * ∑ c ∈ Img ∩ TS, Wof s Pt req c := by
+    _ = ∑ c ∈ Img ∩ PF, Wof s Pt req thr c * phi q (Yof Pt cs yS c) ^ θ +
+        (1 - q) ^ θ * ∑ c ∈ Img ∩ TS, Wof s Pt req thr c := by
       rw [Finset.sum_congr rfl fun c _ => hsplit c, Finset.sum_add_distrib, ← Finset.mul_sum,
         Finset.sum_ite_mem, Finset.sum_ite_mem]
     _ ≤ _ := _root_.add_le_add
@@ -1147,7 +1151,7 @@ theorem touch_union {R T : Type} [Fintype R] [DecidableEq R] [DecidableEq T] (Al
 section Core
 
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
-  {reads : List (List (ℕ × ℕ))} {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R}
+  {reads : List (List (ℕ × ℕ))} {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {thr : R → ℕ}
   {S N p : ℕ}
 
 omit [Fintype R] [DecidableEq R] in
@@ -1161,12 +1165,12 @@ theorem fin_keys_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
 /-- **The chords' sum**: `(requestFac)^N − 1`, the patterns avoiding the cells sampled whole at slope `θs`. -/
 theorem chord_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt d req ρ).card ≤ N)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty →
-      servedBits req r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r) (θs : ℚ) :
+      thr r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r) (θs : ℚ) :
     LogUB (((requestFac (Ln2.of p) ((finKeys cs reads).map (grp cs reads S p))
         (heavyY ((finKeys cs reads).map (grp cs reads S p)) S) θs S p).pow N (lnUpper N p) p).l)
       (∑ c ∈ (Fintype.piFinset (firstOf s Pt d req ρ cs
           (heavyY ((finKeys cs reads).map (grp cs reads S p)) S) S)).erase (fun _ => none),
-        Wof s Pt req c *
+        Wof s Pt req thr c *
           Real.exp (-((θs : ℝ) * Yof Pt cs (heavyY ((finKeys cs reads).map (grp cs reads S p)) S) c))) := by
   set fin := (finKeys cs reads).map (grp cs reads S p)
   set yS := heavyY fin S
@@ -1182,11 +1186,11 @@ theorem chord_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt 
     simpa using this
   set PF := Fintype.piFinset (firstOf s Pt d req ρ cs yS S)
   set f : R → ℝ := fun r => ∑ a ∈ firstOf s Pt d req ρ cs yS S r,
-    (2 : ℝ) ^ lightBits s Pt (servedBits req r) a * Real.exp (-((θs : ℝ) * yhat Pt cs yS a))
+    (2 : ℝ) ^ lightBits s Pt (thr r) a * Real.exp (-((θs : ℝ) * yhat Pt cs yS a))
   have hc0 : (fun _ : R => (none : Option (Option (Finset ℕ)))) ∈ PF :=
     Fintype.mem_piFinset.2 fun r => Finset.mem_insert_self _ _
-  have hadd := Finset.add_sum_erase PF (fun c => Wof s Pt req c * Real.exp (-((θs : ℝ) * Yof Pt cs yS c))) hc0
-  have h0 : Wof s Pt req (fun _ : R => (none : Option (Option (Finset ℕ)))) *
+  have hadd := Finset.add_sum_erase PF (fun c => Wof s Pt req thr c * Real.exp (-((θs : ℝ) * Yof Pt cs yS c))) hc0
+  have h0 : Wof s Pt req thr (fun _ : R => (none : Option (Option (Finset ℕ)))) *
       Real.exp (-((θs : ℝ) * Yof Pt cs yS (fun _ : R => (none : Option (Option (Finset ℕ)))))) = 1 := by
     simp [Wof, Yof, lightBits, yhat]
   rw [h0, first_prod] at hadd
@@ -1212,7 +1216,7 @@ theorem chord_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt 
 /-- **The patterns meeting a cell sampled whole**: `touchCount`'s union bound. -/
 theorem whole_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt d req ρ).card ≤ N)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty →
-      servedBits req r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r)
+      thr r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r)
     {q θ : ℚ} (hq1 : (q : ℝ) ≤ 1) (hθ : (0 : ℝ) ≤ θ) :
     LogUB (if ((infKeys cs reads).map (grp cs reads S p)).isEmpty then none
         else oadd (lnPassWhole q θ p) (touchCount (Ln2.of p) ((finKeys cs reads).map (grp cs reads S p))
@@ -1222,7 +1226,7 @@ theorem whole_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt 
             fun g => g.n * g.b).sum < S) S)).filter
           (fun c => ∃ r, c r ∈ touchOf s Pt d req ρ cs
             (¬ ((((finKeys cs reads).map (grp cs reads S p)) ++ ((infKeys cs reads).map (grp cs reads S p))).map
-              fun g => g.n * g.b).sum < S) S r), Wof s Pt req c) := by
+              fun g => g.n * g.b).sum < S) S r), Wof s Pt req thr c) := by
   set fin := (finKeys cs reads).map (grp cs reads S p)
   set inf := (infKeys cs reads).map (grp cs reads S p)
   set H : Prop := ¬ ((fin ++ inf).map fun g => g.n * g.b).sum < S
@@ -1231,7 +1235,7 @@ theorem whole_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt 
   set All := allOf s Pt d req ρ H S
   set Touch := touchOf s Pt d req ρ cs H S
   set TS := (Fintype.piFinset All).filter (fun c => ∃ r, c r ∈ Touch r)
-  have hW : ∀ c, 0 ≤ Wof s Pt req c := fun c => by unfold Wof; positivity
+  have hW : ∀ c, 0 ≤ Wof s Pt req thr c := fun c => by unfold Wof; positivity
   have hpq : (0 : ℝ) ≤ (1 - (q : ℝ)) ^ (θ : ℝ) := Real.rpow_nonneg (by linarith) _
   by_cases hKe : infKeys cs reads = []
   · have hinf : inf.isEmpty = true := by simp [inf, hKe]
@@ -1290,10 +1294,10 @@ theorem whole_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt 
   set T := Pf * (Pi - 1) + Hv
   have hA1 : 1 ≤ A := by nlinarith
   have hT0 : 0 ≤ T := by nlinarith
-  have hsum : ∑ c ∈ TS, Wof s Pt req c =
-      ∑ c ∈ TS, ∏ r, (2 : ℝ) ^ lightBits s Pt (servedBits req r) (c r) :=
+  have hsum : ∑ c ∈ TS, Wof s Pt req thr c =
+      ∑ c ∈ TS, ∏ r, (2 : ℝ) ^ lightBits s Pt (thr r) (c r) :=
     Finset.sum_congr rfl fun c _ => W_eq_prod c
-  have hu := touch_union All Touch (fun r a => (2 : ℝ) ^ lightBits s Pt (servedBits req r) a)
+  have hu := touch_union All Touch (fun r a => (2 : ℝ) ^ lightBits s Pt (thr r) a)
     (fun r a => by positivity) (actOf s Pt d req ρ) hN hA1 hT0
     (fun r hr => by
       have hra := hreq r (mem_actOf.1 hr)
@@ -1322,13 +1326,13 @@ open Nat
 section Main
 
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
-  {reads : List (List (ℕ × ℕ))} {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R}
+  {reads : List (List (ℕ × ℕ))} {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {thr : R → ℕ}
   {S N p : ℕ}
 
 /-- **The patterns' factor at valid parameters `P`** (`P` with `y_S` a breakpoint, or `P` itself). -/
 theorem patterns_core (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt d req ρ).card ≤ N)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty →
-      servedBits req r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r)
+      thr r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r'))
     {P : Params} (hP : P.valid = true) {v : ℚ}
     (hv : bound P (fun σ => ((requestFac (Ln2.of p) ((finKeys cs reads).map (grp cs reads S p))
@@ -1336,13 +1340,13 @@ theorem patterns_core (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s 
       (if ((infKeys cs reads).map (grp cs reads S p)).isEmpty then none
         else oadd (lnPassWhole P.q P.θ p) (touchCount (Ln2.of p) ((finKeys cs reads).map (grp cs reads S p))
           ((infKeys cs reads).map (grp cs reads S p)) N S p)) = some v) :
-    rankinFactorPatterns s Pt d req (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp v := by
+    rankinFactorPatternsAt s Pt d req thr (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp v := by
   obtain ⟨hq0, hq1, hθ, -⟩ := Params.valid_parts hP
   set fin := (finKeys cs reads).map (grp cs reads S p)
   set inf := (infKeys cs reads).map (grp cs reads S p)
   set yS := heavyY fin S
   set H : Prop := ¬ ((fin ++ inf).map fun g => g.n * g.b).sum < S
-  have hreqS : ∀ r, (Dr s Pt d req ρ r).Nonempty → servedBits req r = S := fun r hr => (hreq r hr).1
+  have hreqS : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S := fun r hr => (hreq r hr).1
   have hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H := by
     intro r A hA hne hS
     have hk := reads_keys hc (hreq r (hne.mono hA)).2 (D := Dr s Pt d req ρ r) le_rfl
@@ -1363,30 +1367,36 @@ theorem patterns_core (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s 
   set PF := Fintype.piFinset (firstOf s Pt d req ρ cs yS S)
   have hc0 : (fun _ : R => (none : Option (Option (Finset ℕ)))) ∈ PF :=
     Fintype.mem_piFinset.2 fun r => Finset.mem_insert_self _ _
-  have hW : ∀ c, 0 ≤ Wof s Pt req c := fun c => by unfold Wof; positivity
+  have hW : ∀ c, 0 ≤ Wof s Pt req thr c := fun c => by unfold Wof; positivity
   have hY : ∀ c : R → Option (Option (Finset ℕ)), 0 ≤ Yof Pt cs yS c := fun c =>
     Finset.sum_nonneg fun r _ => yhat_nonneg hy0 _
-  have hb := bound_sound hP hv (PF.erase fun _ => none) (Wof s Pt req) (Yof Pt cs yS)
+  have hb := bound_sound hP hv (PF.erase fun _ => none) (Wof s Pt req thr) (Yof Pt cs yS)
     (fun c => phi P.q (Yof Pt cs yS c) ^ (P.θ : ℝ)) (fun c _ => hW c) (fun c _ => hY c) (fun c _ => le_rfl)
     (fun σ => by
       have := chord_term (p := p) hc hN hreq (P.θ * σ)
       simp only [Rat.cast_mul] at this
       exact this)
     (whole_term hc hN hreq hq1 hθ)
-  have hadd := Finset.add_sum_erase PF (fun c => Wof s Pt req c * phi P.q (Yof Pt cs yS c) ^ (P.θ : ℝ)) hc0
-  have h0 : Wof s Pt req (fun _ : R => none) * phi P.q (Yof Pt cs yS fun _ : R => none) ^ (P.θ : ℝ) = 1 := by
+  have hadd := Finset.add_sum_erase PF (fun c => Wof s Pt req thr c * phi P.q (Yof Pt cs yS c) ^ (P.θ : ℝ)) hc0
+  have h0 : Wof s Pt req thr (fun _ : R => none) * phi P.q (Yof Pt cs yS fun _ : R => none) ^ (P.θ : ℝ) = 1 := by
     simp [Wof, Yof, lightBits, yhat, phi]
   rw [h0] at hadd
   linarith
 
 end Main
 
-/-- **The bound is above the patterns' factor.** -/
+/-- **The bound is above the patterns' factor.** The requests that read in the replay block serve at most `S` bits
+each, so the factor is at most the factor at the threshold `S` (`rankinFactorPatterns_le_at`), which `patterns_core`
+bounds. -/
 theorem factorUpperPatterns_sound : Properties.Spot.FactorUpperPatternsSound := by
   intro cs reads N S P v hv s Pt d R _ _ req ρ hc hN hreq hdisj
   by_cases hP : P.valid = true
   swap
   · simp [lnFactorUpperPatterns, hP] at hv
+  obtain ⟨-, hq1, -, -⟩ := Params.valid_parts hP
+  refine (rankinFactorPatterns_le_at s Pt d req ρ hq1 fun r hr => (hreq r hr).1).trans ?_
+  have hreq' : ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty →
+      (fun _ : R => S) r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r := fun r hr => ⟨rfl, (hreq r hr).2⟩
   unfold lnFactorUpperPatterns at hv
   rw [if_pos hP] at hv
   simp only [split_eq] at hv
@@ -1394,10 +1404,10 @@ theorem factorUpperPatterns_sound : Properties.Spot.FactorUpperPatternsSound := 
   · rename_i y _
     by_cases hP' : ({ P with ys := insertY y P.ys } : Params).valid = true
     · rw [if_pos hP'] at hv
-      exact patterns_core (p := P.p) hc hN hreq hdisj hP' hv
+      exact patterns_core (thr := fun _ => S) (p := P.p) hc hN hreq' hdisj hP' hv
     · rw [if_neg hP'] at hv
-      exact patterns_core (p := P.p) hc hN hreq hdisj hP hv
-  · exact patterns_core (p := P.p) hc hN hreq hdisj hP hv
+      exact patterns_core (thr := fun _ => S) (p := P.p) hc hN hreq' hdisj hP hv
+  · exact patterns_core (thr := fun _ => S) (p := P.p) hc hN hreq' hdisj hP hv
 
 end
 

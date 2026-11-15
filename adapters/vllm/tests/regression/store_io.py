@@ -18,7 +18,7 @@ README §7.1).  Inside a `research run --custody-r2` job on a machine with no st
 store.toml + cred.json, whose actions include GetObject -- so the frozen reference trees are fetched from the remote there too; the key
 goes into that environment only, never onto disk or into a log.
 
-`tools/verity/check/check.py` drops `RESEARCH_*` from its steps, so a recorded check passes the custody dir as `$CHECK_STORE_CUSTODY` instead.
+`tools/check/check.py` drops `RESEARCH_*` from its steps, so a recorded check passes the custody dir as `$CHECK_STORE_CUSTODY` instead.
 
 `reachable()` answers "can the tests use the store here": the CLI answers and a remote is configured.  The tests skip on False, so a
 laptop or dev pod with no remote skips cleanly; a recorded check sets VERITY_STORE_REQUIRED=1, under which a missing remote is
@@ -54,7 +54,7 @@ class StoreUnavailable(RuntimeError):
 
 def _research_src() -> Path | None:
     """`$RESEARCH_SRC` when it holds `research.store`, else where the installed `research` distribution's package lives (a
-    workspace sync installs it; a checkout without it, such as the public export, has none and the store tests skip)."""
+    workspace sync installs it; a checkout without it has none and the store tests skip)."""
     cand = os.environ.get("RESEARCH_SRC")
     if cand and (Path(cand) / "research" / "store").is_dir():
         return Path(cand)

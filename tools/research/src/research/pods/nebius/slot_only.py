@@ -7,7 +7,7 @@ With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-run
 run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
-With `--auditor` (an auditor host's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
+With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
 vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/device/live_challenger/auditor.py).
 
@@ -27,21 +27,26 @@ import re
 import shlex
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
-#: an auditor host's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
+#: an auditor device's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
 AUDITOR = Path("/etc/vy/auditor")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
-#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below the path slot.py has
-#: in the repository, which is how every reader of a run's command knows slot.py. A run that names a pool takes its slot by
-#: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
-#: tree each run ships
+#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below one of CHECK_DIRS'
+#: slot.py paths, which is how every reader of a run's command knows slot.py. It stays where every machine has it, below
+#: tools/verity/check/, whatever the tree's own path: a launch names it, so a move of it would name a file no machine has
+#: until each is installed. A run that names a pool takes its slot by this copy where the machine has one (`node_copy`), so
+#: the waiters of a pool's line are held to one copy's rules, whatever tree each run ships
 NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+#: the check's directory in a shipped tree, either spelling, while trees of both are run: node_ops.py and run_records.py, which
+#: are installed or sent alone, hold copies (`check_file` is the match they spell out)
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 #: slot.py as a run's command names it: a shipped tree's, or the machine's own
-SLOT_PATHS = ("tools/verity/check/slot.py", NODE_SLOT)
+TREE_SLOTS = tuple(d + "slot.py" for d in CHECK_DIRS)
+SLOT_PATHS = (*TREE_SLOTS, NODE_SLOT)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
 #: `proofs` pool), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
@@ -57,19 +62,40 @@ POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/wor
 POOL_WAIT_S = 14400
 
 
-def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S) -> list[str]:
-    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
-    LANE [--wait-max POOL_WAIT_S --run-max S] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own shipped tree
-    (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one (`node_copy`).
-    `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
+def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
+            twin: str | None = None) -> list[str]:
+    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/check/slot.py --by
+    LANE [--wait-max POOL_WAIT_S --run-max S] [--twin PAIR] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own
+    shipped tree (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one
+    (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
     isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
-    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S)."""
+    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S). `twin` is slot.py's --twin: the
+    pair a run `--on auto` placed carries, so a late twin on another machine can take the run from this line (`late_twin`)."""
     if not POOL_NAME.fullmatch(pool):
         raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
                          f"{', '.join(sorted(POOLS))}; a node's own, as node 1's leanrec, are under {LOCKS})")
     limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []
-    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, "--", "nice", "-n", "19",
+    pair = ["--twin", twin] if twin else []
+    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, *pair, "--", "nice", "-n", "19",
             *command]
+
+
+def late_twin(command: list[str], home: str, wait_s: float) -> list[str]:
+    """`in_pool`'s command for a run that carries a pair, as its late twin on another machine runs it: the pair names
+    ``home``, the first's machine (slot.py's `--twin PAIR@HOME`: the twin runs only if it claims the pair there first), and it
+    waits in its own line no longer than ``wait_s``. ValueError for a command with no pair."""
+    end = command.index("--") if "--" in command else 0
+    opts = command[:end]
+    if not through_slot(command) or "--twin" not in opts:
+        raise ValueError("the run carries no pair (slot.py's --twin), so no twin of it could take its place")
+    out = list(command)
+    at = opts.index("--twin") + 1
+    out[at] = f"{out[at].partition('@')[0]}@{home}"
+    if "--wait-max" in opts:
+        out[opts.index("--wait-max") + 1] = f"{max(wait_s, 1):g}"
+    else:
+        out[end:end] = ["--wait-max", f"{max(wait_s, 1):g}"]
+    return out
 
 
 def pool_slots(pool: str) -> str:
@@ -81,9 +107,16 @@ def node_copy(command: list[str]) -> list[str] | None:
     """A command that names a pool and then the shipped tree's slot.py (`in_pool`'s words, however it was built), with the
     machine's own copy (NODE_SLOT) in the tree's place; None for any other command. A recorded check (`check.py --record
     --on`) names its pool in the run's environment and no pool in its command, so it keeps its tree's slot.py."""
-    if command[:1] == ["env"] and through_slot(command) and command[3] == SLOT_PATHS[0]:
+    if command[:1] == ["env"] and through_slot(command) and command[3] in TREE_SLOTS:
         return [*command[:3], NODE_SLOT, *command[4:]]
     return None
+
+
+def check_file(*names: str) -> re.Pattern[str]:
+    """A command's text naming one of the check's files ``names`` (`check.py`, `slot.py`) under either of CHECK_DIRS, as a whole
+    path, which a longer name (`slot.py.bak`, `tools/checks/slot.py`) is not."""
+    dirs, files = "|".join(map(re.escape, CHECK_DIRS)), "|".join(map(re.escape, names))
+    return re.compile(rf"(?<![\w.-])(?:{dirs})(?:{files})(?![\w.-])")
 
 
 def through_slot(command: object) -> bool:
@@ -104,34 +137,40 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
     without `--pool` learns the flag that sends it, rather than wrapping slot.py by hand."""
     have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
     send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
-            if have else "send it as `python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+            if have else "send it as `python3 tools/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
     return f"this machine takes a `research run` only through its check slots ({machine_marker}): {send}"
 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
-    """The commands an auditor host runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    """The commands an auditor device runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    if not marker.exists():
+        return []
     try:
         lines = marker.read_text().splitlines()
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"slot_only: {marker} unread, so no auditor command runs ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     return [shlex.split(ln) for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
 
 
 def auditor_allows(command: object, marker: Path = AUDITOR) -> bool:
-    """Whether a workload command is exactly one of the auditor host's commands: no wrapper, pool or extra argument."""
+    """Whether a workload command is exactly one of the auditor device's commands: no wrapper, pool or extra argument."""
     return isinstance(command, list) and command in auditor_commands(marker)
 
 
 def auditor_refusal(marker: Path = AUDITOR) -> str:
     allowed = " or ".join(f"`{shlex.join(c)}`" for c in auditor_commands(marker)) or "nothing (its list is empty or unreadable)"
-    return (f"this machine is an auditor host ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
+    return (f"this machine is an auditor device ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
             f"take other work to another machine")
 
 
 def _json(p: Path) -> dict:
+    if not p.exists():
+        return {}
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"slot_only: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -192,7 +231,7 @@ def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = F
             sent.append(p)
         except ProcessLookupError:
             pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "pgid": o["pgid"], "workload_group_seen": o["pgid"] in groups, "sigterm": sent, "dry_run": dry_run, "why": why}
 
 
@@ -205,9 +244,9 @@ def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = Fa
                 if not dry_run:
                     os.setpriority(os.PRIO_PROCESS, p, nice)
                 moved.append(p)
-        except (ProcessLookupError, PermissionError):
-            pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+        except (ProcessLookupError, PermissionError) as e:
+            print(f"slot_only: process {p} not reniced ({type(e).__name__})", file=sys.stderr, flush=True)
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
 
 
@@ -228,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.renice is not None:
             rec = renice(o, a.renice, dry_run=a.dry_run)
         elif a.auditor:
-            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor host's {a.marker}")
+            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor device's {a.marker}")
         else:
             rec = stop(o, dry_run=a.dry_run)
         if not rec.get("sigterm" if a.renice is None else "reniced"):
