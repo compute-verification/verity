@@ -3,3 +3,5 @@
 - `live.py`: its process in the timed audit, `verity.protocols.accounting.pous.device.memory_challenger` against the
   responder, and the bad-signature control on the sessions it signed.
 """
+
+__all__: list[str] = []
