@@ -145,9 +145,7 @@ def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
     with ``requests``, each with ``engine_id``, ``user`` or ``http_id``, ``prompt_ids`` and ``output_ids`` or ``streamed_ids``);
     ``finish`` is None where the record has none."""
     out: dict[str, dict[str, Any]] = {}
-    for line in Path(path).read_text().splitlines():
-        if not line.strip():
-            continue
+    for line in M.lines(Path(path), "Run" if Path(path).name == "windows.jsonl" else "Request"):
         doc = json.loads(line)
         for r in doc.get("requests") if isinstance(doc.get("requests"), list) else [doc]:
             rid = str(r.get("request") or r.get("engine_id"))
@@ -490,7 +488,7 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
     trace = Path(trace)
     if io is None:
         io = next((p for p in (run / "requests.jsonl", run / "windows.jsonl") if p.exists()), None)
-    recs = ST.load(trace)
+    recs = ST.parse(M.lines(trace, "Advice"), trace)
     compiler = compiler if compiler is not None else registered_compiler()
     out = Path(out) if out else run / "advice"
     if served(recs):
