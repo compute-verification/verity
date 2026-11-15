@@ -48,7 +48,7 @@ VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_
                      "ready_verdict", "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
-                 "circuits")
+                 "circuits", "goals_dump")
 APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites", "uncites")
 
 
@@ -116,7 +116,7 @@ def test_canonical_spellings_and_coercion():
     assert vocab.is_known("finding") and vocab.is_known("level") and vocab.is_known("anchor")
 
 
-def vocce(*a):  # noqa: N802  (a typo-guard: the one call site above means vocab.coerce)
+def vocce(*a):  # a typo-guard: the one call site above means vocab.coerce
     return vocab.coerce(*a)
 
 

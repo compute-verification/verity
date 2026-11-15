@@ -1,21 +1,19 @@
 # /etc/vy/peers on vy-challenger-1, the auditor host (us-north1, outside the nodes' private network). Its own line names it by
-# its private address; the others are the serving nodes a session's --peer opens `ssh -R PORT` to (verity/protocols/compose/device/live_challenger/
-# auditor.py), over their public addresses with the auditor's tunnel key, which research@ each of them authorizes under the
-# comment `auditor@vy-challenger-1 tunnel` (vy-challenger-setup made it on this host; its private half never leaves it).
-vy-challenger-1 research@10.104.0.21
-vy-nebius-1 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.165
-vy-nebius-2 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.121
-vy-auditor-1 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes challenger@81.85.1.145
-vy-dc-h200 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.171.48
-vy-dc-b200 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.170.80
-vy-nebius-3 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.180
-vy-dc-h200-2 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.188.151
-vy-nebius-cpu-4 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@89.124.37.177
-vy-nebius-cpu-5 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@213.239.173.183
-vy-nebius-cpu-2 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.224
-vy-dc-h200-5 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.188.28
-vy-dc-h200-3 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.163.185
-vy-nebius-cpu-6 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.177.70
-vy-nebius-cpu-11 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.4.136
-vy-nebius-cpu-12 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.1.89
-vy-nebius-cpu-3 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.1.205
+# its private address, the one its interface has; the others are the serving nodes a session's --peer opens `ssh -R PORT` to
+# (verity/protocols/compose/device/live_challenger/auditor.py), over their public addresses with the auditor's tunnel key, which
+# research@ each of them authorizes under the comment `auditor@vy-challenger-1 tunnel` (vy-challenger-setup made it on this
+# host; its private half never leaves it). `research deploy` writes this file from the register of machines: a line names its
+# machine and the register gives the address. A serving node joins by a line here, and one that is released leaves by its line.
+{{vy-challenger-1}} research@{{vy-challenger-1:private_host}}
+{{vy-nebius-2}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-2:host}}
+{{vy-auditor-1}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes challenger@{{vy-auditor-1:host}}
+{{vy-dc-h200}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-dc-h200:host}}
+{{vy-dc-h200-2}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-dc-h200-2:host}}
+{{vy-nebius-cpu-4}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-4:host}}
+{{vy-nebius-cpu-5}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-5:host}}
+{{vy-nebius-cpu-2}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-2:host}}
+{{vy-dc-h200-3}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-dc-h200-3:host}}
+{{vy-nebius-cpu-6}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-6:host}}
+{{vy-nebius-cpu-11}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-11:host}}
+{{vy-nebius-cpu-12}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-12:host}}
+{{vy-nebius-cpu-3}} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@{{vy-nebius-cpu-3:host}}

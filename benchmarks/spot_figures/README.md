@@ -121,8 +121,8 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     comparison at one machine's verification phase that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
-    head's key block as its scores unit and its values units on column blocks), a cost model's lines and not a bound
-    while no unit writes the key rows those units each commit. A new configuration, such as another cut, is a new
+    head's key block as its scores unit and its values units on column blocks, which read the block's key rows from
+    their writers' committed rows). A new configuration, such as another cut, is a new
     entry with its own line.
   - A two-stage line's first stage is the one the verifier runs: a verification phase, one committed trace and the
     sample over it, samples a whole number K of its replay blocks, never fewer than one
@@ -316,9 +316,11 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
   `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
   workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
-  (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) prices the head as that card's
-  whole key blocks and end block, the forms that verify; `--partition head-scores-values` cuts each head's key block
-  into its scores unit and its values units instead, a modeled cut whose rows carry that card's label.
+  (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) cuts the head as it is served, by
+  the `partition` card `head-scores-values`: each head's key block its scores unit and its values units on 64
+  columns, which read the block's key rows from their writers' committed rows (one writer a column block for all the
+  heads); its rows carry that card's label. `--whole` prices the head as the `workload` card's whole key blocks and end
+  block instead, for comparison.
 
 Limits of the model:
 - A replay re-runs its whole replay block from its edge at the `replay` card's factor. Each sampled request pays its

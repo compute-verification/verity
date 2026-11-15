@@ -96,9 +96,11 @@ class Unreadable(Exception):
 
 
 def http(method: str, url: str, headers: dict | None = None, body: bytes | None = None, timeout: float = 30) -> tuple[int, bytes]:
-    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})  # noqa: S310 (http or https, checked above)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (http or https, checked above)
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -422,9 +424,12 @@ ACCOUNT_RE = re.compile(r"ACCOUNT \$[\d,.]+ at \$([\d,.]+)/h")
 
 def account_rate(log: Path) -> float | None:
     """RunPod's own spend rate for the account (every pod and volume), from the steward's last `ACCOUNT` line."""
+    if not log.exists():
+        return None
     try:
         got = tail_match(log, ACCOUNT_RE, limit=1 << 20)
-    except OSError:
+    except OSError as e:
+        print(f"{log}: unreadable, so RunPod's account rate is unknown ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return None if got is None else float(got.replace(",", ""))
 
@@ -498,7 +503,8 @@ def rates(ctx: Ctx) -> dict[str, float]:
             for f in p.glob("*.toml"):
                 try:
                     r = tomllib.loads(f.read_text()).get("rate_usd_per_hour")
-                except (OSError, tomllib.TOMLDecodeError):
+                except (OSError, tomllib.TOMLDecodeError) as e:
+                    print(f"{f}: skipped, so its machine has no rate ({type(e).__name__}: {e})", file=sys.stderr)
                     continue
                 if r is not None:
                     out[f.stem] = float(r)
@@ -758,9 +764,12 @@ def one_pass(ctx: Ctx, *, dry: bool = False, force_digest: bool = False, out=Non
 
 
 def load_state(path: Path) -> dict:
+    if not path.exists():
+        return {}
     try:
         return json.loads(path.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"{path}: unreadable, so the watch starts from no state ({type(e).__name__}: {e})", file=sys.stderr)
         return {}
 
 

@@ -59,7 +59,7 @@ UNBOUNDED = [*GIVEN, "--scan-delta", str(LB.SCAN_DELTA)]
 AMOUNTS = {"free": "bit", "capacity": "bit", "verified": "bit", "error": "probability"}
 #: the term of record's name, and the card's figure's: the term of record's row at the other jitter bound, named under
 #: the card's mark
-METRIC, CARD = "certifier_term/modeled/metric", "certifier_term/modeled/simulated/metric"
+METRIC, CARD = "network-accounting/certifier-term", "certifier_term/modeled/simulated/metric"
 #: the measurements of a result with every scope and monitoring period: those two, and each row's amounts
 EVERY = 2 + len(LB.SCOPES) * len(LB.PERIODS) * len(AMOUNTS)
 #: the uplink's two halves' capacities in bits a tick: the host's side, which is the boundary link, and the outside's
@@ -160,18 +160,18 @@ def test_the_names_are_regular_and_every_one_says_modeled(tmp_path, capsys):
     assert list(got) == [METRIC, CARD,
                          *(f"certifier_term/modeled/{scope}/{period}/{amount}"
                            for scope in LB.SCOPES for period in LB.PERIODS for amount in AMOUNTS)]
-    assert all(name.split("/")[:2] == ["certifier_term", "modeled"] for name in got)
+    assert all(name.split("/")[:2] == ["certifier_term", "modeled"] for name in got if name != METRIC)
     assert all(m["mark"] == "modeled" and m["inputs"][0].startswith("modeled") for m in got.values())
     assert all(m["unit"] == AMOUNTS.get(name.rsplit("/", 1)[1], "GB") for name, m in got.items())
     # the shared fields' last words, the error's among them
     assert R.ERROR == "error"
-    assert {name.rsplit("/", 1)[1] for name in got} == {"metric", "free", "capacity", "verified", "error"}
+    assert {name.rsplit("/", 1)[1] for name in got if name != METRIC} == {"metric", "free", "capacity", "verified", "error"}
     # only the rows the command was asked for, with the term of record
     bench(capsys, "--out", str(tmp_path / "one"), *GIVEN, "--scope", "datacenter", "--period", "month")
     assert list(result(tmp_path / "one")) == [METRIC, CARD,
                                               *(f"certifier_term/modeled/datacenter/month/{amount}" for amount in AMOUNTS)]
-    # the card's figure is named under the card's mark, as the document gives it, and is a metric beside the metric
-    assert (METRIC, CARD) == (f"{R.MODELED}/metric", f"{R.MODELED}/{LB.SIMULATED}/metric")
+    # the term of record is the metric's id; the card's figure is named under the card's mark, as the document gives it
+    assert (METRIC, CARD) == (R.METRIC, f"{R.MODELED}/{LB.SIMULATED}/metric")
 
 
 def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_path, capsys):
@@ -200,7 +200,7 @@ def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_p
             assert R.at_delta(doc) == R.stated("scan_delta", doc["inputs"]["scan_delta"]) in got[f"{name}/free"]["inputs"]
         assert got["certifier_term/modeled/world/year/error"]["value"] == float(AT_MOST)
         # the term of record: the world's year's, in GB
-        metric, year = got["certifier_term/modeled/metric"], got["certifier_term/modeled/world/year/free"]
+        metric, year = got[METRIC], got["certifier_term/modeled/world/year/free"]
         assert (metric["value"], metric["unit"]) == (doc["value"], "GB")
         assert metric["value"] == float(exact["world", "year"].terms[2].certifier / LB.GB)
         assert metric["inputs"][0] == f"modeled: {doc['name']}" and metric["inputs"][1:] == year["inputs"][1:]
@@ -221,7 +221,7 @@ def test_the_cards_figure_is_the_term_of_records_row_at_the_other_jitter_bound_a
     assert card["value"] < got[METRIC]["value"] == doc["value"] == year["term"]["2"]["GB"]
     assert (card["target"], card["verdict"]) == (doc["target"]["value"], "over target")
     assert year["term"]["1"]["of_target"] > 1
-    assert card["inputs"][0] == ("modeled: the row of certifier_term/modeled/metric at D_j = 1, with a simulated "
+    assert card["inputs"][0] == ("modeled: the row of network-accounting/certifier-term at D_j = 1, with a simulated "
                                  "set-time card: no term of record")
     stated = f"set_time_card = simulated (simulated): {LB.SET_TIME_CLAUSE}"
     assert card["inputs"][1] == stated == R.stated("set_time_card", doc["inputs"]["set_time_card"])
@@ -253,7 +253,7 @@ def test_the_metric_and_free_stand_against_the_documents_target(tmp_path, capsys
             free = got[f"certifier_term/modeled/{scope}/{period}/free"]
             assert free["target"] == target_gb * LB.GB
             assert free["verdict"] == ("over target" if multiple > 1 else "within target")
-        metric = got["certifier_term/modeled/metric"]
+        metric = got[METRIC]
         assert (metric["target"], metric["verdict"]) == (
             target_gb, "over target" if said["world", "year"] > 1 else "within target")
         # a target under every row's term, and one over every row's
@@ -337,7 +337,7 @@ def test_a_row_whose_error_is_1_or_more_carries_no_amount(tmp_path, capsys):
             assert (verified["value"], absent(verified)) == (None, why)
         assert none == {"datacenter", "world"}
         # the term of record's row is the world's year's, so the metric has no value either
-        metric, year = got["certifier_term/modeled/metric"], scans(doc)["world", "year"]
+        metric, year = got[METRIC], scans(doc)["world", "year"]
         assert (metric["value"], metric["verdict"], metric["unit"]) == (None, None, "GB")
         assert absent(metric) == [f"absent: no bound at this period: the row's error, {year['eps']}, is 1 or more"]
     assert "request count plan" in got["certifier_term/modeled/world/year/free"]["inputs"][0]
@@ -363,7 +363,7 @@ def test_the_metric_follows_the_world_s_year_whatever_rows_the_command_asks_for(
         text = bench(capsys, "--out", str(tmp_path / str(at)), *argv, *asked)
         assert LB.main([*argv, *asked]) == 0 and capsys.readouterr().out == text
         got, doc = result(tmp_path / str(at)), document(capsys, *argv)
-        metric, year = got["certifier_term/modeled/metric"], scans(doc)["world", "year"]
+        metric, year = got[METRIC], scans(doc)["world", "year"]
         assert list(got) == [METRIC, CARD, *(f"certifier_term/modeled/node/week/{a}" for a in AMOUNTS)]
         assert got["certifier_term/modeled/node/week/free"]["value"] > 0
         assert (year["eps"] < 1) is bounded and metric["value"] == (doc["value"] if bounded else None)
@@ -388,7 +388,7 @@ def test_the_result_of_record_s_command_bounds_every_row(tmp_path, capsys):
     assert doc["scan"] == {"delta": float(DELTA), "given": False, "mark": "assumed", "eps_target": float(AT_MOST),
                            "scope": "world", "period": "year", "phases": year["phases"]}
     assert len(got) == EVERY and all(m["value"] is not None and not absent(m) for m in got.values())
-    assert got["certifier_term/modeled/metric"]["value"] == doc["value"]
+    assert got[METRIC]["value"] == doc["value"]
     errors = {at: got[f"certifier_term/modeled/{at[0]}/{at[1]}/error"]["value"] for at in scans(doc)}
     assert errors["world", "year"] == max(errors.values()) == float(AT_MOST) and min(errors.values()) > 0
     assert all(got[f"certifier_term/modeled/{scope}/{period}/free"]["value"] == r["term"]["2"]["bits"]
@@ -447,7 +447,7 @@ def test_refusals(tmp_path, capsys):
     assert capsys.readouterr().out == "" and not out.exists()
     bench(capsys, "--out", str(out), *GIVEN)
     first = (out / kit.RESULT).read_bytes()
-    with pytest.raises(SystemExit, match="already holds a measurement named certifier_term/modeled/metric"):
+    with pytest.raises(SystemExit, match=f"already holds a measurement named {METRIC}"):
         R.main(["--out", str(out), *GIVEN])
     assert capsys.readouterr().out == "" and (out / kit.RESULT).read_bytes() == first
 

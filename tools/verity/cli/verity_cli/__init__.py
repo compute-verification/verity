@@ -10,6 +10,9 @@
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
+                                    its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
+                                    in the directory you are in and exiting with its status
     verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
                                     the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
@@ -46,6 +49,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[2]
@@ -55,6 +59,22 @@ USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P]
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
+#: `research run --wait`'s line when the run moved to its late twin on another machine, which is then the run
+MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its late twin (\S+) on (\S+) is the run now", re.M)
+#: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the root module of the executable `lake
+#: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
+VERIFIER = "verity/protocols/proofs/flock/verifier"
+VERIFY_PROOF_ROOT = "FlockVerify"
+
+
+def verify_proof_exe(root: Path) -> str:
+    """The name of the `[[lean_exe]]` the verifier's lakefile below ``root`` builds from `VERIFY_PROOF_ROOT`."""
+    exes = tomllib.loads((root / VERIFIER / "lakefile.toml").read_text()).get("lean_exe", [])
+    names = [e["name"] for e in exes if e.get("root") == VERIFY_PROOF_ROOT]
+    if len(names) != 1:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/lakefile.toml has {len(names)} [[lean_exe]] with root = "
+                         f"{VERIFY_PROOF_ROOT!r}, not one: name the verifier's root in verity_cli.VERIFY_PROOF_ROOT")
+    return names[0]
 
 
 def _run(argv: list[str]) -> int:
@@ -235,7 +255,7 @@ def _lean(args: list[str]) -> int:
     if not (m := LAUNCHED.search("".join(said))):
         print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
         return rc or 1
-    run_id, machine = m.groups()
+    run_id, machine = moved[-1] if (moved := MOVED.findall("".join(said))) else m.groups()
     subprocess.run([*research, "fetch", run_id, "--on", machine, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
     d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
     for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):
@@ -243,6 +263,21 @@ def _lean(args: list[str]) -> int:
             to.write((d / name).read_text(errors="replace"))
     print(f"verity lean try: run {run_id} on {machine}: exit {rc} in {time.monotonic() - t0:.0f} s wall", flush=True)
     return rc
+
+
+def _verify(args: list[str]) -> int:
+    """`verity verify proof ARGS`: the Lean verifier's executable with ARGS, in the caller's directory, where the files
+    ARGS name are; its exit status."""
+    if args[:1] != ["proof"]:
+        raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
+    name = verify_proof_exe(ROOT)
+    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / name
+    try:
+        return subprocess.run([str(exe), *args[1:]]).returncode
+    except FileNotFoundError:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{name} is not built: `bash "
+                         f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "
+                         f"dependencies, then `lake build {name}` there builds it") from None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -275,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
 
             return run.run_main([str(config), *args[2:]])
         return _runner("demos", "demo", args[1:])
+    if args[0] == "verify":
+        return _verify(args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")

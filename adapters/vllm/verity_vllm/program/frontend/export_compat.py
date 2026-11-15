@@ -7,7 +7,7 @@ counts them as structural scaffolding.
    ("We found a fake tensor in the exported program constant's list"). For fake tensors the shim returns `detach()`
    — the same value, recorded as `aten.detach` of the parameter placeholder.
 2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
-4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
+4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_leaves.dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
    (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
    (`default_fp8_linear_leaf`).  7. CUDA streams and events as inert stand-ins (`cuda_streams_inert`).  8. A registered op's
    Python body, called directly by a model module, as the op (`registered_op_bodies_as_ops`).  9. DeepSeek-V4's layer-0 mHC
@@ -29,6 +29,7 @@ import torch
 
 from verity_vllm.config import vllm_revision
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.program.frontend.dsa_leaves import dsa_ops_leaf
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
 
@@ -421,98 +422,6 @@ class _ExportWorkspaceManager:
         return self._locked
 
 
-def _dsa_layers(model) -> list:
-    return [m for m in (model.modules() if model is not None else ())
-            if hasattr(m, "_sparse_indexer_and_attn") and hasattr(m, "fused_qkv_a_proj")]
-
-
-@contextmanager
-def dsa_ops_leaf(model=None):
-    """4. DeepSeek sparse attention (`DeepseekV32Attention.forward`, GLM-5.3, DeepSeek-V3.2) as three leaf ops.  Its two Triton kernels
-    run outside the MLA attention op and write the MLA and indexer caches through the forward context's slot mapping, which the meta
-    export has no cache for (`fused_norm_rope` asserts `slot_mapping is not None`); its attention reads those caches back through the
-    same context.  The kernels are patched in the module the layers' `forward` is defined in, the globals it reads them from.  See
-    `dsa_leaves`.  A model without a sparse attention layer is unchanged."""
-    sites = {sys.modules[type(m).forward.__module__] for m in _dsa_layers(model)}
-    if len(sites) > 1:
-        raise NotImplementedError(f"dsa_ops_leaf: sparse attention layers whose forward reads its kernels from {len(sites)} modules")
-    if not sites:
-        yield
-        return
-    with dsa_leaves(sites.pop(), model):
-        yield
-
-
-@contextmanager
-def dsa_leaves(site, model=None):
-    """For the duration, ``site`` (the module `DeepseekV32Attention.forward` reads its kernels from) calls `vllm_iface.dsa_norm_rope`
-    for `fused_norm_rope` and `vllm_iface.dsa_q` for `fused_q`, and every module of ``model`` with a `_sparse_indexer_and_attn` gets
-    one that calls `vllm_iface.dsa_indexer_attn` and then the absorbed value projection its body ends with, `bmm(attn, W_UV)` into
-    `output`.  A call vLLM serves by dense MHA (`vllm_dsa_dense.takes_dense_mha`) runs `forward_mha`'s body: `kv_b_proj` up projects
-    the latent to k_nope and v, then `vllm_iface.dsa_dense_mha` over q's and k's parts (`_concat_k_nope_k_pe`'s copies, which its rule
-    assembles), its rows flattened into `output`.  The cache rows the kernels write are the first op's outputs (`kv_c_out`,
-    `k_pe_out`, the index K and its scale) and the attention op's operands, so each layer's cache is the derive's state
-    (`rules/vllm_dsa.py`).  What the shim does not model is refused at export: prefill context parallelism, decode context
-    parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out` or `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the
-    engine registers after loading; a meta model gets them from `vllm_meta.mla_absorbed_weights_as_the_loader_does`."""
-    from verity_vllm.program.frontend.rules import vllm_dsa_dense, vllm_iface  # noqa: F401  (vllm_iface registers the ops)
-    iface = torch.ops.vllm_iface
-    pending: dict[int, tuple] = {}
-    seen: dict[str, int] = {}
-    h = hooks.Hooks()
-
-    def fused_norm_rope(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, k_cs, index_k, index_k_w, index_k_b, index_k_eps, index_cs,
-                        topk_indices_buffer, slot_mapping=None, indexer_k_cache=None, mla_kv_cache=None, mla_kv_cache_dtype="auto",
-                        mla_k_scale=None, has_indexer=True, index_rope_interleave=False, q_c_out=None, kv_c_out=None, k_pe_out=None,
-                        index_k_out=None):
-        if q_c_out is not None or index_k_out is not None or kv_c_out is None or k_pe_out is None:
-            raise NotImplementedError("dsa_leaves: fused_norm_rope with q_c_out / index_k_out, or without kv_c_out / k_pe_out")
-        if mla_kv_cache_dtype not in ("auto", "bfloat16"):
-            raise NotImplementedError(f"dsa_leaves: MLA KV cache dtype {mla_kv_cache_dtype!r} (only a bf16 cache is modelled)")
-        ix = (index_k, index_k_w, index_k_b, index_cs) if has_indexer else (None, None, None, None)
-        q, ik, iks = iface.dsa_norm_rope(positions, q_c, q_w, float(q_eps), kv_c, kv_w, float(kv_eps), k_pe, k_cs, ix[0], ix[1], ix[2],
-                                         float(index_k_eps), ix[3], bool(index_rope_interleave), kv_c_out, k_pe_out)
-        pending[id(kv_c_out)] = (ik, iks) if has_indexer else (None, None)
-        return q
-
-    def fused_q(positions, q_pe, q_pe_cs, index_q, index_q_cs, ql_nope, q_scale, index_weights, softmax_scale, head_scale,
-                has_indexer=True, index_rope_interleave=False, quantize_mqa=True):
-        if quantize_mqa:
-            raise NotImplementedError("dsa_leaves: fused_q with quantize_mqa (an fp8 MQA query)")
-        ix = (index_q, index_q_cs, index_weights) if has_indexer else (None, None, None)
-        q_pe_out, iq, iw = iface.dsa_q(positions, q_pe, q_pe_cs, ix[0], ix[1], ix[2], float(softmax_scale), float(head_scale),
-                                       bool(index_rope_interleave))
-        return iq, iw, q_pe_out
-
-    def indexer_and_attn(layer):
-        def run(positions, q_c, q_nope, q_pe, index_q_fp8, index_k, index_weights_out, kv_c, k_pe, ql_nope, mqa_q, output):
-            if layer.use_pcp or layer.impl.dcp_world_size > 1 or layer._fp8_query or layer._fp8_kv_needs_view:
-                raise NotImplementedError(f"dsa_leaves: {layer.layer_name} under context parallelism or an fp8 KV cache")
-            ik, iks = pending.pop(id(kv_c))
-            has = ik is not None
-            n, topk = output.shape[0], int(layer.topk_indices_buffer.shape[-1])
-            rows = seen[layer.layer_name] = seen.get(layer.layer_name, 0) + n
-            if vllm_dsa_dense.takes_dense_mha(layer, n, rows, topk):
-                nh, dn, dv = layer.num_heads, layer.qk_nope_head_dim, layer.v_head_dim
-                k_nope, v = layer.kv_b_proj(kv_c)[0].view(-1, nh, dn + dv).split([dn, dv], dim=-1)
-                o = iface.dsa_dense_mha(positions, q_nope, mqa_q, k_nope, v, kv_c, k_pe, ik, iks, layer.layer_name, topk, float(layer.scale))
-                output.copy_(o.flatten(start_dim=-2))
-                return
-            a = iface.dsa_indexer_attn(positions, ql_nope, mqa_q, kv_c, k_pe, index_q_fp8 if has else None, index_weights_out if has else None,
-                                       ik, iks, layer.layer_name, topk, float(layer.scale))
-            nh, lat, v = layer.num_heads, layer.kv_lora_rank, layer.v_head_dim
-            y = torch.bmm(a.view(n, nh, lat).transpose(0, 1), layer.W_UV)
-            output.copy_(y.transpose(0, 1).reshape(n, nh * v))
-        return run
-
-    h.patch(site, "fused_norm_rope", fused_norm_rope)
-    h.patch(site, "fused_q", fused_q)
-    for m in _dsa_layers(model):
-        h.patch(m, "_sparse_indexer_and_attn", indexer_and_attn(m))
-    with h:
-        yield
-
-
 def _model_modules(model) -> list:
     """The modules ``model``'s classes are defined in: the globals their methods read."""
     return [sys.modules[n] for n in sorted({type(m).__module__ for m in model.modules()}) if n in sys.modules]
@@ -795,6 +704,6 @@ def export_compat(profile=None, model=None):
         yield
 
 
-__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
+__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced",
            "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "cuda_streams_inert", "InertStream", "InertEvent",
            "registered_op_bodies_as_ops", "mhc_pre_broadcast_leaf", "deep_gemm_fp8_einsum_leaf", "read_back_applied", "host_facts"]
