@@ -301,6 +301,7 @@ patterns = [
     '''(?<=no )drawn(?= instance passed)''',
     '''(?<=unseeded )draw\b''',
     '''(?<=\bp\.)drawn\b''',
+    '''(?<=HZ_CONFIGS=)drawn\b''',
     '''(?<![\w.])(?:plan_module\.draw|plan\.draw|PL\.draw|Wd\.DRAW|S\.Draw)(?!\w)''',
     '''(?<=ws"\]\[w1\]\.update\(registration=reg\.hex\(\),\ )draw_opening(?=\s*=\s*do\.to_json\(\))''',
     '''(?<=\ \ \ \ \ \ \ \ out\.update\()draw(?=\s*=\s*draw)''',
@@ -563,3 +564,4 @@ strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof bloc
 # module whose name another side spells
 [keep_paths]
 "benchmarks/pouw/h1_prove/drawn*" = ["drawn"]
+"adapters/vllm/tests/protocols/test_pouw_h1_drawn.py" = ["drawn"]

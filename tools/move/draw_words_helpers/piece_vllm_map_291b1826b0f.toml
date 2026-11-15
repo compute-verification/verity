@@ -301,6 +301,7 @@ patterns = [
     '''(?<=no )drawn(?= instance passed)''',
     '''(?<=unseeded )draw\b''',
     '''(?<=\bp\.)drawn\b''',
+    '''(?<=HZ_CONFIGS=)drawn\b''',
     '''(?<![\w.])(?:Wd\.DRAW)(?!\w)''',
     '''(?<=\ \ \ entry\.update\(config=serve\["config"\],\ )redrawn(?=\s*=\s*serve\["redrawn"\])''',
     '''(?<==args\.replay_k,\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ )replay_draw(?=\s*=\s*sampling_design_of\(args\))''',
@@ -421,5 +422,6 @@ strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof bloc
 # module whose name another side spells
 [keep_paths]
 "benchmarks/pouw/h1_prove/drawn*" = ["drawn"]
+"adapters/vllm/tests/protocols/test_pouw_h1_drawn.py" = ["drawn"]
 "adapters/vllm/tests/check/test_stoch_draw_ledger.py" = ["draw"]
 "adapters/vllm/tests/check/test_stoch_draw_ledger_of_record.py" = ["draw"]

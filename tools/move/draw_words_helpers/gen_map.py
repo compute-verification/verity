@@ -255,7 +255,7 @@ patterns += [
     r"\bFlock_\w+", r"(?<=setup \()drawn(?=\))", r"(?<= \\\()drawn(?=\\\))", r"\btest_pouw_h1_drawn\b", r"(?<=[\x22\x27])Draw(?=[\x22\x27])",
     r"\bdraw(?=\.work_table)", r"(?<=os\.urandom\(64\), )drawn\b", r"(?<=every )drawn(?= instance that passed)",
     r"(?<=no )drawn(?= instance passed)", r"(?<=unseeded )draw\b",
-    r"(?<=\bp\.)drawn\b",
+    r"(?<=\bp\.)drawn\b", r"(?<=HZ_CONFIGS=)drawn\b",
 ]
 held_pattern = r"(?<![\w])" + alternation(held) + r"(?![\w])"
 dotted_pattern = r"(?<![\w.])" + alternation(dotted) + r"(?![\w])"
@@ -438,7 +438,9 @@ held = sorted(set(held) | extra_held | looked_up, key=lambda s: (-len(s), s))
 held_pattern = r"(?<![\w])" + alternation(held) + r"(?![\w])"
 
 # a module whose name is a held name stays where it is
-keep_paths = {"benchmarks/pouw/h1_prove/drawn*": ["drawn"]}
+keep_paths = {"benchmarks/pouw/h1_prove/drawn*": ["drawn"],
+              # its path keys the seed ports `tests/test_seed_ports.py` pins
+              "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py": ["drawn"]}
 for p in refs.files:
     stem = p.rsplit("/", 1)[-1].removesuffix(".py")
     if stem in set(held) and not excluded(p):
