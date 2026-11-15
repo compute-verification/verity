@@ -1,0 +1,384 @@
+"""Memory admission on a shared machine: `research run --on M --mem-gb N [--mem-wait S]` (machine side: remote.launch_request).
+
+Every process on a pod shares one memory cgroup, and `free` / /proc/meminfo describe the HOST (a pod can read a MemTotal
+of 946 GB under a cgroup memory.max of 256 GB, beside 300 GB of hand-written reservations).  The reading, in GB (10^9 bytes):
+
+    limit      memory.max (cgroup v2) / memory.limit_in_bytes (v1) of the cgroup with the least left (available below): the
+               process's own, or a v2 ancestor's (a Nebius node puts each run in its own session scope under the user slice's
+               limit, so the run's own empty scope says nothing about its neighbours); none finite -> MemTotal
+    in_use     that cgroup's memory.current / memory.usage_in_bytes minus inactive_file (reclaimable page cache); meminfo: MemTotal
+               - MemAvailable
+    reserved   over the LIVE reservations in the ramlock dir (the fleet convention, /workspace/ramlock/<owner>-<job>.json with
+               {"owner", "gb", "started", "pid"?, "note"}; machines.toml `ramlock` overrides the dir): the part not yet in use --
+               gb minus the RSS of the named pid's process tree, or all of gb when the file names no pid (a running reserved
+               job is already in `in_use`; counting it twice would refuse runs that fit)
+    available  the least, over those cgroups, of limit - in_use, less reserved for the outermost alone (the machine's, which every
+               reservation's holder shares; the run's own scope holds none of them)
+
+A reservation is stale (listed, not counted) when its pid is gone or its run_dir is terminal (status.json done/failed/cancelled, or
+refused.json), or when it names no pid and a run_dir that isn't there: nothing holds that one, and its line gives its size, its
+age and the `rm` that removes it.  An unreadable file is listed and not counted (its size is unknown).
+
+admit() holds an flock on <ramlock>/.admission.lock from the reading through writing research-<run id>.json (same schema, plus
+run_id / run_dir), so two launches cannot both take the last N GB.  Short of N it raises MemoryNotAvailable (refused.json names
+it), or with wait_s polls until then.  It writes the file with no pid, and the launch names the runner's (set_pid) as soon as it
+has started it: between the two the reservation counts whole, by its run_dir alone, which the launch made before it asked for
+memory and which nothing of a launch removes.  So admit() refuses a run_dir that isn't there, and a reservation with no pid is
+stale only once its directory is gone, never while its run is starting.  One that names no pid and no run_dir (the fleet's
+hand-written kind) counts whole until its owner removes it.  The runner removes its file at exit, any status
+($RESEARCH_MEM_RESERVATION, research.cli);
+a runner that dies leaves a file whose pid is gone.  `research mem [--ramlock DIR] [--json]` prints the reading on the machine,
+and the waiters in line.  A reservation limits nothing; on the shared nodes pods/nebius/oom_order.py sets each live run's
+oom_score_adj from its use against it, so the kernel's OOM killer takes a run over its reservation, or without one, first.
+
+Waiters form a line, first come first served: a run that waits writes a ticket, <ramlock>/.waiting/<ns>.<pid>.json ({"run_id",
+"gb", "pid", "start"}), under the admission lock, and removes it when admitted or on any exit.  A run, waiting or not, is admitted
+only when it fits and no older live waiter is in line; the head waiter is admitted as soon as it fits.  Without the line, whoever
+fits at a poll takes the room as it frees, and a big job (550 GB in one process) never fits, refused or waiting while later,
+smaller runs keep being admitted.  The cost: a run that would fit now
+waits (or, without wait_s, is refused, naming the waiter it is behind) until every older waiter is admitted or gives up.  A ticket
+whose process is gone (its pid dead, or reused by a process with another start time) is ignored and removed; a waiter asking for
+more than the whole limit can never fit, so it holds no place in line and waits out wait_s to be refused as before."""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import json
+import os
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterator
+
+from . import settings
+from .remote import MemoryNotAvailable
+from .telemetry.cgroup import _int_or_kind, _kv_file, _read
+from .telemetry.job import write_json_atomic
+
+RAMLOCK_DIR = "/workspace/ramlock"
+WAITING = ".waiting"
+GB = 1e9
+TERMINAL = ("done", "failed", "cancelled")
+
+
+def _cgroup_dirs() -> list[Path]:
+    if settings.get("RESEARCH_CGROUP_DIR"):
+        return [Path(settings.need("RESEARCH_CGROUP_DIR"))]
+    from .telemetry.cgroup import Cgroup
+
+    cg = Cgroup("self")
+    return [d for d in (cg.dir, cg.v1_dir) if d is not None]
+
+
+def _with_ancestors(dirs: list[Path]) -> list[Path]:
+    """Each dir, and each ancestor of a v2 one (memory.max beside it) that has a memory.max of its own."""
+    out = []
+    for d in dirs:
+        out.append(d)
+        if (d / "memory.max").exists():
+            out += [p for p in d.parents if (p / "memory.max").exists()]
+    return out
+
+
+def _proc() -> Path:
+    return Path(settings.get("RESEARCH_PROC_ROOT", "/proc"))
+
+
+def readings() -> list[dict[str, Any]]:
+    """Each cgroup over this process with a finite limit, innermost first, as {"limit", "in_use" (bytes), "source", "cgroup": "v2" |
+    "v1"}; none -> [the meminfo reading, "cgroup": None].  The last is the machine's: the one the ramlock's reservations count against."""
+    out = []
+    for d in _with_ancestors(_cgroup_dirs()):
+        v2 = (d / "memory.max").exists()
+        limit, _ = _int_or_kind(*_read(d / ("memory.max" if v2 else "memory.limit_in_bytes")))
+        usage, _ = _int_or_kind(*_read(d / ("memory.current" if v2 else "memory.usage_in_bytes")))
+        if limit is None or usage is None:
+            continue
+        stat = _kv_file(_read(d / "memory.stat")[0])
+        # File-backed page cache, active or not, is reclaimable (shmem sits on the anon lists): counting hundreds of GB of
+        # active_file (checkpoint weights already read) as used would refuse a run with every GPU idle.
+        cache = sum(stat.get(k, 0) for k in (("inactive_file", "active_file") if v2 else ("total_inactive_file", "total_active_file")))
+        out.append({"limit": limit, "in_use": max(0, usage - cache), "source": str(d), "cgroup": "v2" if v2 else "v1"})
+    if out:
+        return out
+    mi = {k.rstrip(":"): v * 1024 for k, v in _kv_file(_read(_proc() / "meminfo")[0]).items()}
+    total = mi.get("MemTotal", 0)
+    return [{"limit": total, "in_use": max(0, total - mi.get("MemAvailable", total)), "source": str(_proc() / "meminfo"), "cgroup": None}]
+
+
+def _left(r: dict[str, Any], reserved: float) -> float:
+    return r["limit"] - r["in_use"] - reserved
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _rss_tree(pid: int) -> int | None:
+    """Resident bytes of pid and its descendants (/proc/<n>/stat ppid, /proc/<n>/status VmRSS), None when pid is not in /proc."""
+    parent: dict[int, int] = {}
+    rss: dict[int, int] = {}
+    try:
+        entries = [e for e in os.listdir(_proc()) if e.isdigit()]
+    except OSError as e:
+        print(f"mem: {_proc()} unlisted, so no process tree is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        return None
+    for e in entries:
+        stat, _ = _read(_proc() / e / "stat")
+        status, _ = _read(_proc() / e / "status")
+        if not stat:
+            continue
+        try:
+            parent[int(e)] = int(stat.rsplit(")", 1)[1].split()[1])
+        except (IndexError, ValueError):
+            continue
+        rss[int(e)] = _kv_file(status).get("VmRSS:", 0) * 1024
+    if pid not in parent:
+        return None
+    tree, frontier = {pid}, [pid]
+    while frontier:
+        p = frontier.pop()
+        for c, pp in parent.items():
+            if pp == p and c not in tree:
+                tree.add(c)
+                frontier.append(c)
+    return sum(rss.get(p, 0) for p in tree)
+
+
+def _terminal(run_dir: str) -> bool:
+    d = Path(run_dir)
+    if (d / "refused.json").exists():
+        return True
+    try:
+        return json.loads((d / "status.json").read_text()).get("state") in TERMINAL
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def _gone(run_dir: str) -> bool:
+    """Whether the directory a reservation names isn't there.  One that can't be read (another user's, a mount that hides it) is
+    there, and so is a path that isn't absolute (nothing says what it was relative to): only its absence says its run was removed."""
+    if not os.path.isabs(run_dir):
+        return False
+    try:
+        os.stat(run_dir)
+    except (OSError, ValueError) as e:
+        return isinstance(e, (FileNotFoundError, NotADirectoryError))
+    return False
+
+
+def _ago(started: Any) -> str:
+    """How long ago a reservation says it began (its `started`, as admit() writes it): minutes up to two hours, hours up to two
+    days, then days."""
+    try:
+        m = (time.time() - datetime.fromisoformat(str(started)).timestamp()) / 60
+    except (ValueError, OverflowError, OSError):
+        return f"at a time its record doesn't give (started {started!r})"
+    return f"{m:.0f} min ago" if m < 120 else f"{m / 60:.0f} h ago" if m < 2880 else f"{m / 1440:.0f} d ago"
+
+
+def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
+    out = []
+    for f in sorted(Path(ramlock_dir).glob("*.json")):
+        row: dict[str, Any] = {"file": f.name}
+        try:
+            doc = json.loads(f.read_text())
+            gb = float(doc["gb"])
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            out.append({**row, "live": False, "why": f"unreadable ({type(e).__name__}); not counted", "gb": None, "outstanding": 0})
+            continue
+        pid = doc.get("pid") if isinstance(doc.get("pid"), int) else None
+        row.update(owner=doc.get("owner"), gb=gb, pid=pid, run_id=doc.get("run_id"), note=doc.get("note"))
+        if doc.get("run_dir") and _terminal(str(doc["run_dir"])):
+            row.update(live=False, why=f"run {doc.get('run_id')} ended", outstanding=0)
+        elif pid is not None and not _alive(pid):
+            row.update(live=False, why=f"pid {pid} gone", outstanding=0)
+        elif pid is None and doc.get("run_dir") and _gone(str(doc["run_dir"])):
+            row.update(live=False, outstanding=0,
+                       why=f"stale: {gb:g} GB reserved {_ago(doc.get('started'))} for run {doc.get('run_id')}, which names no pid and "
+                           f"whose directory {doc['run_dir']} is gone, so nothing holds it; `rm {f}` removes it")
+        else:
+            used = _rss_tree(pid) if pid is not None else None
+            row.update(live=True, why=f"pid {pid} holds {used / GB:.1f} GB" if used is not None else ("no pid" if pid is None else f"pid {pid}"),
+                       outstanding=max(0.0, gb * GB - (min(used, gb * GB) if used is not None else 0)))
+        out.append(row)
+    return out
+
+
+def reserved_bytes(res: list[dict[str, Any]]) -> float:
+    """The live reservations' outstanding bytes, each run's counted once (its largest): a run that reserves with `research run
+    --mem-gb` and then takes a check slot holds two files for one tree of processes, and counting both (96 + 279 GB for one
+    run) would refuse a 96 GB job with 390 GB free."""
+    by: dict[str, float] = {}
+    for x in res:
+        if x["live"]:
+            k = x.get("run_id") or x["file"]
+            by[k] = max(by.get(k, 0.0), x["outstanding"])
+    return sum(by.values())
+
+
+def _start_time(pid: int) -> int | None:
+    """pid's start time in clock ticks (the real /proc/<pid>/stat field 22, whatever RESEARCH_PROC_ROOT says), None if unreadable."""
+    try:
+        return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def waiters(ramlock_dir: Path, *, prune: bool = False) -> list[dict[str, Any]]:
+    """The live waiters' tickets, oldest first ({"file", "ns", "run_id", "gb", "pid", "since"}).  A ticket whose process is gone, or
+    that is unreadable, is skipped, and with `prune` (under the admission lock) removed."""
+    out = []
+    for f in Path(ramlock_dir, WAITING).glob("*.json"):
+        try:
+            ns, pid = (int(x) for x in f.name.split(".")[:2])
+            doc = json.loads(f.read_text())
+            gb = float(doc["gb"])
+            live = _alive(pid) and doc.get("start") in (None, _start_time(pid))
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"mem: reservation {f.name} unread, so it counts as stale ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+            live = False
+        if not live:
+            if prune:
+                f.unlink(missing_ok=True)
+            continue
+        out.append({"file": f.name, "ns": ns, "run_id": doc.get("run_id"), "gb": gb, "pid": pid, "since": doc.get("since")})
+    return sorted(out, key=lambda w: (w["ns"], w["pid"]))
+
+
+def snapshot(ramlock_dir: Path, *, prune: bool = False) -> dict[str, Any]:
+    """The reading admission goes by: the cgroup with the least left, where the reservations count against the machine's alone.
+    They are the whole machine's, held by processes in other scopes: a run's fresh 900 GiB session scope less 1,219 GB of check
+    slots' reservations would read -253 GB and refuse every --mem-gb run, with 357 GB left in the user slice."""
+    rs = readings()
+    res = reservations(ramlock_dir)
+    reserved = reserved_bytes(res)
+    r = min(rs, key=lambda x: _left(x, reserved if x is rs[-1] else 0))
+    m = rs[-1]
+    return {"limit_gb": round(r["limit"] / GB, 1), "in_use_gb": round(r["in_use"] / GB, 1), "reserved_gb": round(reserved / GB, 1),
+            "available_gb": round(_left(r, reserved if r is m else 0) / GB, 1), "source": r["source"], "cgroup": r["cgroup"],
+            "reserved_against": {"source": m["source"], "limit_gb": round(m["limit"] / GB, 1), "in_use_gb": round(m["in_use"] / GB, 1),
+                                 "available_gb": round(_left(m, reserved) / GB, 1)},
+            "ramlock_dir": str(ramlock_dir), "reservations": res, "waiting": waiters(ramlock_dir, prune=prune)}
+
+
+def _ahead(s: dict[str, Any], ticket: Path | None) -> list[dict[str, Any]]:
+    """The waiters in line before `ticket` (all of them for a run without one), less those asking for more than the whole limit."""
+    return [w for w in s["waiting"] if (ticket is None or w["file"] != ticket.name) and w["gb"] <= s["limit_gb"]
+            and (ticket is None or (w["ns"], w["pid"]) < tuple(int(x) for x in ticket.name.split(".")[:2]))]
+
+
+def _line(ws: list[dict[str, Any]]) -> str:
+    text = ", ".join(f"{w['run_id']} {w['gb']:g} GB (pid {w['pid']}, since {w['since']})" for w in ws[:4])
+    return text + (f" (+{len(ws) - 4} more)" if len(ws) > 4 else "")
+
+
+def describe(s: dict[str, Any], asked: float | None = None) -> str:
+    live = sorted((x for x in s["reservations"] if x["live"]), key=lambda x: -x["outstanding"])
+    head = f"asked {asked:g} GB; " if asked is not None else ""
+    m = s["reserved_against"]
+    if m["source"] == s["source"]:
+        text = (f"{head}available {s['available_gb']:g} GB = limit {s['limit_gb']:g} ({s['cgroup'] or 'meminfo'} {s['source']}) - in use "
+                f"{s['in_use_gb']:g} - reserved {s['reserved_gb']:g} by {len(live)} live reservation(s) in {s['ramlock_dir']}")
+    else:
+        text = (f"{head}available {s['available_gb']:g} GB = limit {s['limit_gb']:g} ({s['cgroup']} {s['source']}, this run's own) - in use "
+                f"{s['in_use_gb']:g}; the machine's {m['source']} leaves {m['available_gb']:g} = {m['limit_gb']:g} - in use {m['in_use_gb']:g} "
+                f"- reserved {s['reserved_gb']:g} by {len(live)} live reservation(s) in {s['ramlock_dir']}")
+    if live:
+        text += ": " + ", ".join(f"{x['file']} {x['outstanding'] / GB:.0f}/{x['gb']:g} GB ({x['owner']}; {x['why']})" for x in live[:4])
+        text += f" (+{len(live) - 4} more)" if len(live) > 4 else ""
+    stale = [x for x in s["reservations"] if not x["live"]]
+    if stale:
+        text += "; not counted: " + ", ".join(f"{x['file']} ({x['why']})" for x in stale[:4])
+    if s.get("waiting"):
+        text += f"; waiting, oldest first: {_line(s['waiting'])}"
+    return text
+
+
+@contextlib.contextmanager
+def _locked(ramlock_dir: Path) -> Iterator[None]:
+    with open(ramlock_dir / ".admission.lock", "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def admit(gb: float, *, ramlock_dir: Path, run_id: str, run_dir: Path, wait_s: float = 0.0, poll_s: float = 5.0, note: str = "") -> dict[str, Any]:
+    """Reserve `gb` or raise MemoryNotAvailable, in line behind older waiters (module doc).  -> the record for job.json run.remote.mem.
+    `run_dir` is there already (ValueError otherwise): until the launch names the runner's pid, the reservation counts by it."""
+    if not Path(run_dir).is_dir():
+        raise ValueError(f"research.mem.admit: the run directory {run_dir} isn't there. A reservation is written with no pid, and one "
+                         f"with no pid whose directory is gone counts for nothing (`reservations`), so two runs could take the same "
+                         f"memory: make the directory before asking for its memory, as a launch does (remote.launch_request's claim)")
+    ramlock_dir = Path(ramlock_dir)
+    ramlock_dir.mkdir(parents=True, exist_ok=True)
+    path = ramlock_dir / f"research-{run_id}.json"
+    ticket: Path | None = None
+    t0 = time.monotonic()
+    try:
+        while True:
+            with _locked(ramlock_dir):
+                s = snapshot(ramlock_dir, prune=True)
+                ahead = _ahead(s, ticket)
+                if s["available_gb"] >= gb and not ahead:
+                    write_json_atomic(path, {"owner": "research", "gb": gb, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pid": None,
+                                             "run_id": run_id, "run_dir": str(run_dir), "note": note[:300]})
+                    if ticket is not None:
+                        ticket.unlink(missing_ok=True)
+                    return {"gb": gb, "reservation": str(path), "waited_s": round(time.monotonic() - t0, 1),
+                            **{k: s[k] for k in ("limit_gb", "in_use_gb", "reserved_gb", "available_gb", "source", "cgroup")}}
+                if ticket is None and wait_s > 0 and gb <= s["limit_gb"]:
+                    ticket = ramlock_dir / WAITING / f"{max([int(time.time() * 1e9)] + [w['ns'] + 1 for w in s['waiting']])}.{os.getpid()}.json"
+                    ticket.parent.mkdir(exist_ok=True)
+                    write_json_atomic(ticket, {"run_id": run_id, "gb": gb, "pid": os.getpid(), "start": _start_time(os.getpid()),
+                                               "since": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run_dir": str(run_dir)})
+            waited = time.monotonic() - t0
+            if waited >= wait_s:
+                held = (f"held behind {len(ahead)} older waiter(s), first come first served (research.mem), oldest first: {_line(ahead)}; "
+                        if ahead and s["available_gb"] >= gb else "")
+                raise MemoryNotAvailable(held + describe(s, gb) + (f"; waited {waited:.0f}s" if wait_s else "; --mem-wait S waits for it"))
+            time.sleep(max(0.05, min(poll_s, wait_s - waited)))
+    finally:
+        if ticket is not None:
+            ticket.unlink(missing_ok=True)
+
+
+def set_pid(path: str | Path, pid: int) -> None:
+    p = Path(path)
+    doc = json.loads(p.read_text())
+    doc["pid"] = pid
+    write_json_atomic(p, doc)
+
+
+def release(path: str | Path | None, run_id: str | None = None) -> None:
+    """Remove a reservation file -- only if it is this run's (a stale path must not delete someone else's)."""
+    if not path:
+        return
+    p = Path(path)
+    if not p.exists():
+        return
+    try:
+        if run_id is None or json.loads(p.read_text()).get("run_id") == run_id:
+            p.unlink()
+    except (OSError, ValueError) as e:
+        print(f"mem: reservation {p.name} not released ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research mem", description="this machine's memory reading for admission (research.mem)")
+    ap.add_argument("--ramlock", default=settings.get("RESEARCH_RAMLOCK_DIR", RAMLOCK_DIR), metavar="DIR")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    s = snapshot(Path(ns.ramlock))
+    print(json.dumps(s, indent=2, default=str) if ns.json else describe(s))
+    return 0

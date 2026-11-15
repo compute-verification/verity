@@ -1,0 +1,465 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "aa2811432b48f843368be788803decc651b08d659e619ee854bd8e592f40705d",
+  "public_values": "aa2811432b48f843368be788803decc651b08d659e619ee854bd8e592f40705dc5d876c0a09da2258fe3fb6632d04b2aee419658cbd8f6acb19da4523752a4fb01",
+  "statement_digest": "c5d876c0a09da2258fe3fb6632d04b2aee419658cbd8f6acb19da4523752a4fb"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"w/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"kappa_W\"},{\"id\":\"w/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"kappa_W\"},{\"id\":\"x/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"x/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"y/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"w/0\",\"w/1\",\"x/0\",\"x/1\"],\"out\":[\"y/0\"]},\"roots\":[\"kappa_W\",\"boundary\",\"ru0\"],\"subcircuit\":\"7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0\",\"target\":{\"encoding\":\"region\",\"id\":\"p=fixture/region=0\"}}],\"references\":[{\"leaf\":\"w/0\",\"offset\":[],\"ref\":\"w/0\"},{\"leaf\":\"w/1\",\"offset\":[],\"ref\":\"w/1\"},{\"leaf\":\"x/0\",\"offset\":[],\"ref\":\"x/0\"},{\"leaf\":\"x/1\",\"offset\":[],\"ref\":\"x/1\"},{\"leaf\":\"y/0\",\"offset\":[],\"ref\":\"y/0\"}],\"roots\":[{\"count\":2,\"domain\":\"741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"a58ae1957d7b16be0fbefc28c4169def1b8b19edd85f1941f56878ec0b695593\"},{\"count\":2,\"domain\":\"6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"kappa_W\",\"owner\":-2,\"root\":\"6eb2d48c2f6afaca15112715d517be3046b293f819c2a194940db916d76a9325\"},{\"count\":1,\"domain\":\"53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"3bd7d795cd5580b7cd9d2fac9180427e0107b1056540600cdecfaa5699a75e75\"}],\"subcircuits\":[{\"definition\":{\"name\":\"q7/dot2-requant-u7\"},\"digest\":\"7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0\",\"gates\":[{\"args\":[[\"in\",2],[\"in\",0]],\"op\":\"mul8\"},{\"args\":[[\"in\",3],[\"in\",1]],\"op\":\"mul8\"},{\"args\":[[\"gate\",0],[\"gate\",1]],\"op\":\"add32\"},{\"args\":[[\"gate\",2]],\"op\":\"requant_u7\"}],\"in\":[8,8,8,8],\"out\":[3]}]}",
+ "description": "The same object with the outgoing word off by one bit: the object is accepted, the relation is not (and the reference checker rejects the witness).",
+ "digest": "aa2811432b48f843368be788803decc651b08d659e619ee854bd8e592f40705d",
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "w/0",
+      "schema": "u8"
+     },
+     {
+      "ref": "w/1",
+      "schema": "u8"
+     },
+     {
+      "ref": "x/0",
+      "schema": "u8"
+     },
+     {
+      "ref": "x/1",
+      "schema": "u8"
+     },
+     {
+      "ref": "y/0",
+      "schema": "u8"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "kind": "d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec6",
+    "outputs": [
+     4
+    ],
+    "ranges": 0,
+    "slots": 5
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        2
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "port",
+        3
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ],
+       [
+        "local",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "local",
+        2
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "kind": "d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec6",
+    "outputs": [
+     3
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     },
+     {
+      "ordinal": 2,
+      "width": 8
+     },
+     {
+      "ordinal": 3,
+      "width": 8
+     }
+    ],
+    "subcircuit": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "kind": "d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec6",
+    "outputs": [
+     4
+    ],
+    "positions": [
+     "w/0",
+     "w/1",
+     "x/0",
+     "x/1",
+     "y/0"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        2
+       ],
+       [
+        "port",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "port",
+        3
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ],
+       [
+        "local",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "local",
+        2
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "kind": "d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec6",
+    "outputs": [
+     3
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     },
+     {
+      "ordinal": 2,
+      "width": 8
+     },
+     {
+      "ordinal": 3,
+      "width": 8
+     }
+    ],
+    "subcircuit": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0"
+   }
+  ]
+ },
+ "name": "accept/q7-relation-rejected",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "w/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "kappa_W"
+   },
+   {
+    "id": "w/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "kappa_W"
+   },
+   {
+    "id": "x/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "x/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "y/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "w/0",
+      "w/1",
+      "x/0",
+      "x/1"
+     ],
+     "out": [
+      "y/0"
+     ]
+    },
+    "roots": [
+     "kappa_W",
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0",
+    "target": {
+     "encoding": "region",
+     "id": "p=fixture/region=0"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "w/0",
+    "offset": [],
+    "ref": "w/0"
+   },
+   {
+    "leaf": "w/1",
+    "offset": [],
+    "ref": "w/1"
+   },
+   {
+    "leaf": "x/0",
+    "offset": [],
+    "ref": "x/0"
+   },
+   {
+    "leaf": "x/1",
+    "offset": [],
+    "ref": "x/1"
+   },
+   {
+    "leaf": "y/0",
+    "offset": [],
+    "ref": "y/0"
+   }
+  ],
+  "roots": [
+   {
+    "count": 2,
+    "domain": "741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "a58ae1957d7b16be0fbefc28c4169def1b8b19edd85f1941f56878ec0b695593"
+   },
+   {
+    "count": 2,
+    "domain": "6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "kappa_W",
+    "owner": -2,
+    "root": "6eb2d48c2f6afaca15112715d517be3046b293f819c2a194940db916d76a9325"
+   },
+   {
+    "count": 1,
+    "domain": "53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "3bd7d795cd5580b7cd9d2fac9180427e0107b1056540600cdecfaa5699a75e75"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "q7/dot2-requant-u7"
+    },
+    "digest": "7f5f69424e4260d8859d14d7fca099e94bb182c8b68409804c7e2858cde8bbb0",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        2
+       ],
+       [
+        "in",
+        0
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "in",
+        3
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ],
+       [
+        "gate",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        2
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "in": [
+     8,
+     8,
+     8,
+     8
+    ],
+    "out": [
+     3
+    ]
+   }
+  ]
+ },
+ "relations": "reject",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000001d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec600000004000000040000000000000001000000020000000300000004000000046d756c380000000200000000020000000000000000046d756c38000000020000000003000000000100000005616464333200000002010000000001000000010000000a72657175616e745f75370000000101000000020000000100000003000000011111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec60000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b6eb2d48c2f6afaca15112715d517be3046b293f819c2a194940db916d76a932500000000000000020000000000000001741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7a58ae1957d7b16be0fbefc28c4169def1b8b19edd85f1941f56878ec0b6955930000000000000002000000000000000253c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e03bd7d795cd5580b7cd9d2fac9180427e0107b1056540600cdecfaa5699a75e7500000000000000010000000500000000000000000000000000000000000000000000000275380000000000000000000000000100000000000000010000000275380000000001000000000000000000000000000000000000000275380000000001000000000000000100000000000000010000000275380000000002000000000000000000000000000000000000000275380000000004000000000000000100000002000000030000000100000004",
+ "statement_digest": "c5d876c0a09da2258fe3fb6632d04b2aee419658cbd8f6acb19da4523752a4fb",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000001d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec600000004000000040000000000000001000000020000000300000004000000046d756c380000000200000000020000000000000000046d756c38000000020000000003000000000100000005616464333200000002010000000001000000010000000a72657175616e745f75370000000101000000020000000100000003000000011111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000d1f558b7e6d24b172df83db314a3be0a5d3a8df345b079c3b05cebd490958ec60000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b6eb2d48c2f6afaca15112715d517be3046b293f819c2a194940db916d76a932500000000000000020000000000000001741db7c549354d4ceae3bd88c492a18cb53929e64b5e69730812c868d1ff7ee7a58ae1957d7b16be0fbefc28c4169def1b8b19edd85f1941f56878ec0b6955930000000000000002000000000000000253c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e03bd7d795cd5580b7cd9d2fac9180427e0107b1056540600cdecfaa5699a75e75000000000000000100000005000000000000000000000000000000000000000000000000027538000000000000000000000000000100000000000000010000000275380000000000010000000000000000000000000000000000000002753800000000000100000000000000010000000000000001000000027538000000000002000000000000000000000000000000000000000275380000000004000000000000000100000002000000030000000100000004",
+ "statement_v3_digest": "a102b1aa44cfc78d6ed619c137696d054935f2a438bb6c4e9a63a5b35d29b38e",
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "stage-1",
+  "witness",
+  "negative-relation"
+ ],
+ "values": [
+  [
+   127,
+   128,
+   5,
+   249,
+   10
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f7632000000000100000005000000017f00000001b5a9cb1c0d0ba9d7b92a058ca0aeb85491d61be25a6ec0a53c10c24586954e15000000018000000001057a6066202dc5bb366894c710b1d25a54054700a7660f75083c28d6176bef31000000010500000001d1d32789f02ce3bc94972a294ce3102be7a14ffe652b0934b5738a99d1e958f300000001f90000000173108c082c8674c80036a73116f4288cb943299a9e4a7f10fa238be36bba4eb8000000010a00000000",
+ "witness_verdict": "reject:RELATION_REJECTED"
+}

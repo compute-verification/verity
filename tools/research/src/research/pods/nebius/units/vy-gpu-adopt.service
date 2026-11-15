@@ -1,0 +1,12 @@
+[Unit]
+Description=hold the gpu-lease lease of a GPU a process uses without one, until it exits (gpu_adopt.py)
+After=local-fs.target
+
+[Service]
+User=research
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/gpu_adopt.py loop
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

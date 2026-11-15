@@ -1,0 +1,8 @@
+[Unit]
+Description=stop any research run that did not come through a check slot (pods/nebius/slot_only.py, /etc/vy/runs-via-slot)
+ConditionPathExists=/etc/vy/runs-via-slot
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2min
+ExecStart=/usr/bin/python3 /usr/local/lib/vy-monitoring/slot_only.py

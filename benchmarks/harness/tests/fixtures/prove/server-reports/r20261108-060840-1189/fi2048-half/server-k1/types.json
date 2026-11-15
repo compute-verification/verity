@@ -1,0 +1,5 @@
+{
+ "fi-linear-k2048": {
+  "definition": "FlashInferFp8Linear_v1{K=2048,N=1}"
+ }
+}

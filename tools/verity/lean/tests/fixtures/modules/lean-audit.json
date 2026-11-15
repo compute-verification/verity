@@ -1,0 +1,6 @@
+{
+ "roots": ["Modular"],
+ "layers": {"Modular.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
+ "guarantees": {"Modular.main_thm": {"owner": "@lean"}},
+ "shape": {"properties": {"Modular.main_thm": {"function": "Modular.triple", "outcome": "none"}}}
+}

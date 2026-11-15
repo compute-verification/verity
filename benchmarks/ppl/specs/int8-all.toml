@@ -1,0 +1,13 @@
+description = "plain int8 everywhere: int8-linears and int8-attention"
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "int8"

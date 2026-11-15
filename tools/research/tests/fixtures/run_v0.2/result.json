@@ -1,0 +1,12 @@
+{
+ "schema": "research/result/v0.1",
+ "run_id": "r20260922-120000-abcd",
+ "workload_fingerprint": {"backend": "ligero", "mode": "fiat-shamir", "zk": true, "kernel_sha": "deadbeef"},
+ "validation": {"status": "passed", "checker": "ligero.verify", "detail": "5/5 sub-batch proofs verified", "evidence": ["out/verify.jsonl"]},
+ "measurements": [
+  {"name": "prove_wall", "value": 1.5, "unit": "s"},
+  {"name": "proof_bytes", "value": 4096, "unit": "B"}
+ ],
+ "measurement_files": ["out/verify.jsonl"],
+ "artifacts": ["out/proof.bin", "out/verify.jsonl"]
+}

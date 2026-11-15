@@ -1,0 +1,8 @@
+{
+ "Claims.Sampling.unitClass": "Claims.Sampling.sizeClass",
+ "Claims.Sampling.unitClassMax": "Claims.Sampling.sizeClassMax",
+ "Spot.OneStageZk.UNIT_CLASS_MAX": "Spot.OneStageZk.SIZE_CLASS_MAX",
+ "Spot.Partition.UNIT_CLASSES": "Spot.Partition.SIZE_CLASSES",
+ "Spot.Partition.UNIT_CLASS_MAX": "Spot.Partition.SIZE_CLASS_MAX",
+ "Spot.Partition.unitClass": "Spot.Partition.sizeClass"
+}

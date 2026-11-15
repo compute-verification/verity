@@ -1,0 +1,21 @@
+{
+  "files": {
+    "w13.circuit.txt": {
+      "art": "art:0af6dacba76ca3a3940c603776d377121f7a8aadc9ddf9f292bfbcc83a50d68a",
+      "sha512": "ff4366b3eff1c199f00b451454b15ce86ddeb04d30c643d5e60d38fa10a8ec28b8045a7b26ca7a29e9e0da2cfcc9dade3185d09ca098736a3b88e0520c4175e7",
+      "V": 256,
+      "H": 96
+    },
+    "w2.circuit.txt": {
+      "art": "art:71e9db9a04596503f9e52eb9fbdda2627e397026a5cedba6b65b1d2009c5a5b7",
+      "sha512": "fef00533441c3f71fc6660bd1da25b5dcd22b5ef67faed04059b44cb2f1c5051c0707291ef54a9797aa7996a003dd9aa925d8652d7273c6e8cc91973181ed479",
+      "V": 256,
+      "H": 4
+    }
+  },
+  "refused": [
+    ["w13.circuit.txt", 256, 4],
+    ["w13.circuit.txt", 128, 96],
+    ["w2.circuit.txt", 256, 96]
+  ]
+}

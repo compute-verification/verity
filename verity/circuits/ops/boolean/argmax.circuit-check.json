@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "ArgmaxChunkBest_v2{C=128}": {
+   "and": 8680,
+   "type": "5e2f3a66617c3821e762a8d8d531ea6b21c7f93506852b8650ad392239c48cf6869a8756cfd103b5ee2c41d0c5ea2cd00e7f49fd6a19b1cbe48e95b68bfa3d71"
+  },
+  "ArgmaxChunkBest_v2{C=8}": {
+   "and": 520,
+   "type": "e6df8fa0b3d6d7a067f0aad06ddf79e2f7a9d7e1b512379b37cda087129fffce1bb24feea43d383191b14bac0241383188b5d954aaa5d9cc6d9b0113561c276d"
+  },
+  "ArgmaxChunkIdx_v2{C=128}": {
+   "and": 7394,
+   "type": "7898689d358ccd1d88c1a8ba0d80cc003edafd886670655f31f33bb41db4e9c696f5fa3069dd7fa4b17f9dd61a3d88f364743179ea7093d1ead68d001c4e536f"
+  },
+  "ArgmaxChunkIdx_v2{C=8}": {
+   "and": 406,
+   "type": "336321b4c3513a9212c5380792e24232ca664d3294156bb46558e30aa633049ecf543afb4f589655ec85c537d8bd76277a5bdb9a2a173e53ffef72e68bfa200b"
+  },
+  "ArgmaxCombine_v2{V=200,C=64}": {
+   "and": 359,
+   "type": "21c48c385784b18b3f06b6693210b308d5864df4fd9952acae2805d501bdaf73ffd01576468d4dfade1fae1e7f6ed665800a03f6af611e8e9de8c0c7849e658a"
+  },
+  "ArgmaxCombine_v2{V=256,C=128}": {
+   "and": 167,
+   "type": "1d4f0e7af7f54c09ac0ae61bccc74534430036484dfc46b3d8ea5d7bb4b29f98eae41b5ce75b806ccfd1f62a5b489d685834d94610d252a52633633800fe2166"
+  },
+  "SelectU16_v2": {
+   "and": 16,
+   "type": "be45c3c6eddf06df158637cfba8a8a0a7bea8b74734fce8a4730ae568ef13fef3b3398ff99d3b55cfd8eb20ac314dda31fc5c3074633ec391b79b12a231229e0"
+  },
+  "U16Add_v2": {
+   "and": 15,
+   "type": "deedf44aedcaa2b47a08d9d260cb04a2fcec67fd49df3efe30b11d25a7235a6439d4ddf201ba58285cb154c7779e77e9ea8fe0d2b901e6771a50372151e9238c"
+  }
+ }
+}

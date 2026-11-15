@@ -1,0 +1,289 @@
+{
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"boundary/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"boundary/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"boundary/2\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"boundary\"},{\"id\":\"kappa_W/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"kappa_W\"},{\"id\":\"kappa_W/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"kappa_W\"},{\"id\":\"ru0/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru0\"},{\"id\":\"ru0/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru0\"},{\"id\":\"ru0/2\",\"layout\":{\"value\":32},\"leaf\":2,\"position\":2,\"root\":\"ru0\"},{\"id\":\"ru0/3\",\"layout\":{\"value\":32},\"leaf\":3,\"position\":3,\"root\":\"ru0\"},{\"id\":\"ru0/4\",\"layout\":{\"value\":32},\"leaf\":4,\"position\":4,\"root\":\"ru0\"},{\"id\":\"ru1/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru1\"},{\"id\":\"ru1/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru1\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[],\"out\":[\"w2\",\"v\",\"z\",\"w\",\"Twice[0]/m\"]},\"roots\":[\"boundary\",\"kappa_W\",\"ru0\"],\"subcircuit\":\"d1516c8d6bb5b9ad9a00b5522d2b695a9c3d81b33e177335b9b77cc0ea5a08c1\",\"target\":{\"encoding\":\"region\",\"id\":\"C[0:6]\"}}],\"references\":[{\"leaf\":\"ru0/2\",\"offset\":[],\"ref\":\"Twice[0]/m\"},{\"leaf\":\"boundary/1\",\"offset\":[],\"ref\":\"v\"},{\"leaf\":\"kappa_W/1\",\"offset\":[],\"ref\":\"w\"},{\"leaf\":\"kappa_W/0\",\"offset\":[],\"ref\":\"w2\"},{\"leaf\":\"boundary/2\",\"offset\":[],\"ref\":\"z\"}],\"roots\":[{\"count\":3,\"domain\":\"26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4\"},{\"count\":2,\"domain\":\"6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"kappa_W\",\"owner\":-2,\"root\":\"e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b\"},{\"count\":5,\"domain\":\"536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757\"},{\"count\":2,\"domain\":\"6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru1\",\"owner\":1,\"root\":\"05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3\"}],\"subcircuits\":[{\"definition\":{\"name\":\"identity/vu/inputs-twice\"},\"digest\":\"d1516c8d6bb5b9ad9a00b5522d2b695a9c3d81b33e177335b9b77cc0ea5a08c1\",\"gates\":[{\"op\":\"Input\",\"value\":\"05\",\"width\":8},{\"op\":\"Input\",\"value\":\"02\",\"width\":8},{\"op\":\"Input\",\"value\":\"03\",\"width\":8},{\"op\":\"Input\",\"value\":\"03\",\"width\":8},{\"op\":\"Input\",\"value\":\"64\",\"width\":8},{\"args\":[[\"gate\",0],[\"gate\",1]],\"op\":\"mul8\"}],\"in\":[],\"out\":[1,2,3,4,5]}]}",
+ "code": "E_INPUT_NOT_PROTECTED",
+ "description": "The Input[0] gate of C[0:6] dropped from out: a sampled Input's value must be protected (pinned).",
+ "detail": "subcircuit d1516c8d6bb5 gate 0: an Input gate's value is on the outgoing boundary",
+ "digest": "54c0ecce4f1e026d7f3cb74ea8c9cd2192c2900c4a839a7d942a9c1fea743176",
+ "identity": {
+  "mutation": {
+   "base": "identity/input-inside-vu-honest",
+   "category": "obligation coverage",
+   "caught_by": "v0 validator",
+   "statement_identical": null
+  }
+ },
+ "name": "identity/mut/coverage-input-unprotected",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "boundary/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/2",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "boundary"
+   },
+   {
+    "id": "kappa_W/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "kappa_W"
+   },
+   {
+    "id": "kappa_W/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "kappa_W"
+   },
+   {
+    "id": "ru0/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/2",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/3",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/4",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "ru0"
+   },
+   {
+    "id": "ru1/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru1"
+   },
+   {
+    "id": "ru1/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru1"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [],
+     "out": [
+      "w2",
+      "v",
+      "z",
+      "w",
+      "Twice[0]/m"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "kappa_W",
+     "ru0"
+    ],
+    "subcircuit": "d1516c8d6bb5b9ad9a00b5522d2b695a9c3d81b33e177335b9b77cc0ea5a08c1",
+    "target": {
+     "encoding": "region",
+     "id": "C[0:6]"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "ru0/2",
+    "offset": [],
+    "ref": "Twice[0]/m"
+   },
+   {
+    "leaf": "boundary/1",
+    "offset": [],
+    "ref": "v"
+   },
+   {
+    "leaf": "kappa_W/1",
+    "offset": [],
+    "ref": "w"
+   },
+   {
+    "leaf": "kappa_W/0",
+    "offset": [],
+    "ref": "w2"
+   },
+   {
+    "leaf": "boundary/2",
+    "offset": [],
+    "ref": "z"
+   }
+  ],
+  "roots": [
+   {
+    "count": 3,
+    "domain": "26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "689c731713120c4044f964dbcc350599d773c216679fa1faee1e6cbb55f0c5b4"
+   },
+   {
+    "count": 2,
+    "domain": "6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "kappa_W",
+    "owner": -2,
+    "root": "e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b"
+   },
+   {
+    "count": 5,
+    "domain": "536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "12daed6bfe445a751cd2ffe9cab41c767fd30c2458a1fc968d4e09f2513f7757"
+   },
+   {
+    "count": 2,
+    "domain": "6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru1",
+    "owner": 1,
+    "root": "05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "identity/vu/inputs-twice"
+    },
+    "digest": "d1516c8d6bb5b9ad9a00b5522d2b695a9c3d81b33e177335b9b77cc0ea5a08c1",
+    "gates": [
+     {
+      "op": "Input",
+      "value": "05",
+      "width": 8
+     },
+     {
+      "op": "Input",
+      "value": "02",
+      "width": 8
+     },
+     {
+      "op": "Input",
+      "value": "03",
+      "width": 8
+     },
+     {
+      "op": "Input",
+      "value": "03",
+      "width": 8
+     },
+     {
+      "op": "Input",
+      "value": "64",
+      "width": 8
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ],
+       [
+        "gate",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "in": [],
+    "out": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   }
+  ]
+ },
+ "subcircuits_well_formed": [
+  false
+ ],
+ "tags": [
+  "identity",
+  "mutation"
+ ],
+ "verdict": "reject"
+}
