@@ -503,36 +503,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnly.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "0638192a04fd4bde84e03375d0bbdd858e3c1c95630bba389eb297b46cd80420",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "InferenceOnly.Assumptions.WeightsIncompressibleSlots": {
-   "owner": "@lean",
-   "digest": "b0f96342adb0eff4b869a392676d0ebcbddc94d93d7d8db25d9c8ad05e5fe970",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "InferenceOnly.Cover.Assumptions.UpdateHardness": {
-   "owner": "@training",
-   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "InferenceOnly.Cover.MulBlocks.Upstream": {
-   "owner": "@training",
-   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "InferenceOnly.Threading.Threaded": {
-   "owner": "@training",
-   "digest": "ad71302f706ba1cfb69e2003ee6e271c6e8674351dbad5703165d02118059905",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "InferenceOnlyCheck.Properties.Divides": {
    "owner": "@network-accounting",
    "digest": "312a4c0e6c039c3cc218713fb9ceaf35ce2be329392a9e49a6a72c9d77432f61",
@@ -880,6 +850,36 @@
   "Properties.Spot.ExpectsV2": {
    "owner": "@proofs",
    "digest": "29c8a4403d892cf05453a760fa35095aae556e185259949573c6ab3eef3fbb3a",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Slowdown.Assumptions.WeightsIncompressible": {
+   "owner": "@lean",
+   "digest": "0638192a04fd4bde84e03375d0bbdd858e3c1c95630bba389eb297b46cd80420",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Slowdown.Assumptions.WeightsIncompressibleSlots": {
+   "owner": "@lean",
+   "digest": "b0f96342adb0eff4b869a392676d0ebcbddc94d93d7d8db25d9c8ad05e5fe970",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Slowdown.Cover.Assumptions.UpdateHardness": {
+   "owner": "@training",
+   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Slowdown.Cover.MulBlocks.Upstream": {
+   "owner": "@training",
+   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Slowdown.Threading.Threaded": {
+   "owner": "@training",
+   "digest": "ad71302f706ba1cfb69e2003ee6e271c6e8674351dbad5703165d02118059905",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },

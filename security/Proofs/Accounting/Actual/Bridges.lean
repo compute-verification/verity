@@ -98,8 +98,8 @@ theorem mem_uncertified {L E : Type*} [Fintype E] {ends : E → L × L} {cert X 
     e ∈ uncertified ends cert X ↔ e ∈ boundary ends X ∧ (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert :=
   mem_filter
 
-theorem uncertifiedCapacity_eq {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
-    uncertifiedCapacity ends β cert X = ∑ e ∈ uncertified ends cert X, β e := rfl
+theorem uncertifiedLinkCapacity_eq {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
+    uncertifiedLinkCapacity ends β cert X = ∑ e ∈ uncertified ends cert X, β e := rfl
 
 /-- Under `Links`, what crosses from `X` to the leaves in neither `X` nor `cert` is the signals the uncertified links
 across `X`'s boundary deliver at their ends outside `X`: runs alike in those signals are alike in it. -/
@@ -359,13 +359,13 @@ theorem B4 : Guarantees.B4 := by
     ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin, Fintype.card_prod, Fintype.card_coe,
     Fintype.card_coe]
   have hsig : ∏ i, (Set.range (sig i)).encard ≤
-      ((2 ^ (uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞) := by
+      ((2 ^ (uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞) := by
     refine (Finset.prod_le_prod fun i _ => hα i.1.1 (Actual.outer ends X i.1.1) i.2.1).trans (le_of_eq ?_)
-    rw [← Nat.cast_prod, Finset.prod_pow_eq_pow_sum, Fintype.sum_prod_type, Actual.uncertifiedCapacity_eq,
+    rw [← Nat.cast_prod, Finset.prod_pow_eq_pow_sum, Fintype.sum_prod_type, Actual.uncertifiedLinkCapacity_eq,
       ← Finset.sum_coe_sort B, Finset.sum_mul]
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_coe, Nat.card_Ico, smul_eq_mul, mul_comm]
   calc _ ≤ (Set.range rec_).encard * ((((2 ^ jitter) ^ (cert.card * K.card) : ℕ) : ℕ∞) *
-        ((2 ^ (uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)) := by
+        ((2 ^ (uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)) := by
         gcongr
     _ = _ := by
       rw [← Nat.cast_mul, ← pow_mul, ← pow_add, show jitter * (cert.card * K.card) = jitter * K.card * cert.card by
@@ -375,7 +375,7 @@ theorem B4 : Guarantees.B4 := by
 theorem B4Covered : Guarantees.B4Covered := by
   intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec hcov
   have h := B4 S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
-  have hc0 : Accounting.uncertifiedCapacity ends β cert X = 0 := hcov
+  have hc0 : Accounting.uncertifiedLinkCapacity ends β cert X = 0 := hcov
   rwa [hc0, Nat.zero_mul, Nat.add_zero] at h
 
 end Accounting.SecurityProofs

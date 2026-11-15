@@ -33,11 +33,11 @@ window_s = { value = 3600, unit = "s", source = "a window, one round of the depl
 base = "remote"
 sampled = true
 proof_share = { value = 0.01, low = 1e-3, high = 0.1, source = "benchmarks/nci/tiers.py DEFAULTS share", status = "declared" }
-overhead = { value = 4.8e12, low = 1.6e8, high = 1e13, source = "benchmarks/nci/tiers.py DEFAULTS overhead: sparse draws today; low: batched throughput", status = "measured" }
+overhead = { value = 4.8e12, low = 1.6e8, high = 1e13, source = "benchmarks/nci/tiers.py DEFAULTS overhead: sparse samples today; low: batched throughput", status = "measured" }
 replay = { value = 1.1e5, low = 1e3, high = 1e6, source = "benchmarks/nci/tiers.py DEFAULTS replay", status = "measured" }
 step_flop = { value = 1.43e4, unit = "FLOP", low = 1e3, high = 1e6, source = "benchmarks/nci/tiers.py DEFAULTS step_flop", status = "declared" }
 luck = { value = 8, low = 1, high = 32, source = "benchmarks/nci/tiers.py DEFAULTS luck: F/(1-p), spec sheet 8", status = "declared" }
-floor_steps = { value = 1, low = 1, high = 1e12, source = "benchmarks/nci/tiers.py DEFAULTS floor_steps: steps in a class drawn at a floor of one", status = "declared" }
+floor_steps = { value = 1, low = 1, high = 1e12, source = "benchmarks/nci/tiers.py DEFAULTS floor_steps: steps in a class sampled at a floor of one", status = "declared" }
 chord = { value = 5.7568542e7, unit = "product/bit", source = "benchmarks/nci/tiers.py chord at DEFAULTS and the injected bits: the steepest secant to S_1 = sqrt(2 b_w b_a Gamma), on the (1, 0) piece", status = "derived" }
 chord_kappa = { value = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS kappa (the products-to-FLOP rate tiers values chi at)", status = "declared" }
 

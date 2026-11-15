@@ -72,8 +72,9 @@ def reference(j):
                         for r in reads]}
 
 
-JUNK = st.one_of(st.none(), st.booleans(), st.floats(allow_nan=False, allow_infinity=False, width=16),
-                 st.text(max_size=3), st.integers(-3, 3), st.lists(st.integers(-2, 3), max_size=2))
+#: canonical JSON only, as `verity_difftest` sends a port nothing else: no float
+JUNK = st.one_of(st.none(), st.booleans(), st.text(max_size=3), st.integers(-3, 3),
+                 st.lists(st.integers(-2, 3), max_size=2))
 
 
 @st.composite

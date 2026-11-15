@@ -40,27 +40,19 @@ open FlockSoundness.Refine (ebind_ok)
 
 /-! ## The parameters -/
 
-/-- A do block's `if c then throw e` before the rest `jp` accepts only where the rest does. -/
-theorem jp_ok {ε γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : Unit → Except ε γ} {p : γ}
-    (h : (if c then (throw e : Except ε Unit) >>= jp else jp ()) = .ok p) : jp () = .ok p := by
-  split at h
-  · cases h
-  · exact h
-
+open FlockSoundness.Refine in
 theorem oneStage_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStage.Params}
     (h : _root_.Spot.OneStage.paramsOfJson j = .ok p) :
     ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
-  unfold _root_.Spot.OneStage.paramsOfJson at h
-  obtain ⟨p', hp', h⟩ := ebind_ok h
-  replace h := jp_ok h
-  simp only [pure, Except.pure, Except.ok.injEq] at h
-  subst h
-  exact paramsParsed_program hp'
+  revert p
+  show Ret (_root_.Spot.OneStage.paramsOfJson j) fun p => ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program
+  rw [_root_.Spot.OneStage.paramsOfJson.eq_def]
+  ret_walk_aux [_root_.Spot.OneStage.paramsParsed] =>
+    exact paramsParsed_program (by assumption)
 
-theorem oneStageZk_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStageZk.Params}
-    (h : _root_.Spot.OneStageZk.paramsOfJson j = .ok p) :
+theorem oneStageZk_paramsParsed_program {j : Json} {p : _root_.Spot.OneStageZk.Params}
+    (h : _root_.Spot.OneStageZk.paramsParsed j = .ok p) :
     ∃ b, _root_.Spot.Program.parse b = .ok p.base.verifier.program := by
-  have h := _root_.Spot.OneStageZk.paramsOfJson_parsed h
   unfold _root_.Spot.OneStageZk.paramsParsed at h
   repeat' (first
     | (obtain ⟨_, _, h⟩ := ebind_ok h)
@@ -72,23 +64,34 @@ theorem oneStageZk_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStageZk.P
        subst h
        exact oneStage_paramsOfJson_program ‹_›)
 
-/-- **v2's parameters in `θ` name a verifier program some descriptor parses to** (`paramsParsed_program`). -/
+theorem oneStageZk_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStageZk.Params}
+    (h : _root_.Spot.OneStageZk.paramsOfJson j = .ok p) :
+    ∃ b, _root_.Spot.Program.parse b = .ok p.base.verifier.program :=
+  oneStageZk_paramsParsed_program (_root_.Spot.OneStageZk.paramsOfJson_parsed h)
+
+/-- **v2's parameters in `θ` name a verifier program some descriptor parses to**: in either form their v1 part is
+parsed parameters' (`paramsEitherOfJson_base`), whose program `paramsParsed_program` parses. -/
 theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
     ∃ desc : Claims.Msg, _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨_, -, x, -, hj⟩ := hp
   obtain ⟨_, -, hj⟩ := ebind_ok hj
-  obtain ⟨_, hr⟩ := Binding.dispatch_params hj
-  obtain ⟨b, hb⟩ := oneStageZk_paramsOfJson_program hr
-  exact ⟨b.data.toList, hb⟩
+  obtain ⟨_, hr⟩ := dispatch_params hj
+  obtain ⟨_, p', _, hp', hb⟩ := _root_.Spot.OneStageZk.paramsEitherOfJson_base hr
+  obtain ⟨b, hb'⟩ := oneStageZk_paramsParsed_program hp'
+  refine ⟨b.data.toList, ?_⟩
+  rw [hb]
+  exact hb'
 
-/-- **v2's parameters in `θ` sample by a sampling design object of kind `subset`** (`paramsOfJson_subset`). -/
-theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
+/-- **v2's parameters in `θ` that name no members sample by a sampling design object of kind `subset`**: they are
+the one statement's (`paramsEitherOfJson_one`), which refuses any other kind (`paramsOfJson_subset`). -/
+theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p)
+    (hm : p.members = none) :
     Properties.Spot.SecurityProofs.kindOf p.base.verifier.samplingDesign = "subset" := by
   obtain ⟨_, -, x, -, hj⟩ := hp
   obtain ⟨_, -, hj⟩ := ebind_ok hj
-  obtain ⟨_, hr⟩ := Binding.dispatch_params hj
+  obtain ⟨_, hr⟩ := dispatch_params hj
   unfold Properties.Spot.SecurityProofs.kindOf
-  rw [_root_.Spot.OneStageZk.paramsOfJson_subset hr]
+  rw [_root_.Spot.OneStageZk.paramsOfJson_subset (_root_.Spot.OneStageZk.paramsEitherOfJson_one hr hm)]
 
 /-! ## The sampling design -/
 
@@ -238,13 +241,13 @@ name, with no public input words of the verifier's own. -/
 theorem checkBlobsAt_scope {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB reg, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       Flock.ProvedScope.check
         (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) true circuitB pubB
         (_root_.Spot.OneStageZk.tablesOf bs) 1 false reg = .ok () := by
-  obtain ⟨r, -, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, -, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run hm h
   rw [eq_single hsz] at hrun
   obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, _, _, _, _, hstep⟩ := run_scope hrun
   have hs := step_scope hstep hall
@@ -257,13 +260,13 @@ statement's tags, the circuit and public files the parameters name on the blobs 
 theorem checkBlobsAt_setup {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB rd record x, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       sessionRecord e bs = some record ∧
       _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
         (Flock.Witness.recordDraw record) = .ok x := by
-  obtain ⟨r, -, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, -, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run hm h
   have hs := eq_single hsz
   rw [hs] at hrun
   obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, -, _, _, _, hstep⟩ := run_event hrun
@@ -490,9 +493,11 @@ open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 files `F` at the parameters `θ`, v2's parameters `p` in `θ` set its session up at the statement's tags on `F`'s
 circuit and public files (`checkBlobsAt_event`, `get_named`), whose lookup tables are the ones the circuit file
 registers where the blobs hold each at its registered file (`pinnedTables_eq`), and a descriptor of the verifier's
-program reads the session's sampling design off `designAt` (`samplingDesignAt_designAt`). -/
+program reads the session's sampling design off `designAt` (`samplingDesignAt_designAt`), where the parameters name no
+members (`OneStatement`). -/
 theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
+    (hone : OneStatement θ)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) :
     ∃ p tags0 pubB record proofs n desc, ParamsAt θ p ∧
@@ -518,15 +523,19 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
     rw [hθ, hFo] at h1
     exact h1
   obtain ⟨p₀, hp₀⟩ := hP
+  have hm : p₀.members = none := hone p₀ hp₀
   have hp₀' : ParamsAt o.sent.params p₀ := by
     rw [show o.sent.params = θ from hθ]
     exact hp₀
+  have hone' : OneStatement o.params := by
+    rw [show o.params = θ from hθ]
+    exact hone
   obtain ⟨a, b, e, p, cm, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp₀' (verdict_case hv)
   have hpp : p₀ = p := paramsAt_case hv.2.1 hcase hacc hp₀'
   subst hpp
   have hacc0 := hacc
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
-  obtain ⟨tags0, circuitB, pubB, record, proofs, n, ht0, hc, hpb, -, -, hn, hAc⟩ := checkBlobsAt_event hck
+  obtain ⟨tags0, circuitB, pubB, record, proofs, n, ht0, hc, hpb, -, -, hn, hAc⟩ := checkBlobsAt_event hm hck
   have hs : o.sent.blobs = F ++ o.blobs := by
     show o.files ++ o.blobs = _
     rw [hFo]
@@ -536,7 +545,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   have hpf : pubB = V.publicFile θ F := by
     rw [hs] at hpb
     exact get_named (hD.publicFile p₀ hp₀) hreg.2 hpb
-  obtain ⟨circuitB', hg, hl⟩ := tables_registered hp₀' hv
+  obtain ⟨circuitB', hg, hl⟩ := tables_registered hp₀' hone' hv
   have e0 : circuitB' = circuitB := Except.ok.inj (hg.symm.trans hc)
   rw [e0] at hl
   have htab := (pinnedTables_eq hl ht hT).symm
@@ -545,17 +554,17 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   obtain ⟨lo, n', read, hlo, hn', hdf⟩ := checkAt_drew hat
   have hnn : n' = n := Option.some.inj (hn'.symm.trans hn)
   rw [hnn] at hdf
-  obtain ⟨tags1, circuitB1, pubB1, reg, ht1, hc1, hp1, hsc⟩ := checkBlobsAt_scope hck
+  obtain ⟨tags1, circuitB1, pubB1, reg, ht1, hc1, hp1, hsc⟩ := checkBlobsAt_scope hm hck
   have e1 : tags1 = tags0 := Option.some.inj (ht1.symm.trans ht0)
   have e2 : circuitB1 = circuitB := Except.ok.inj (hc1.symm.trans hc)
   have e3 : pubB1 = pubB := Except.ok.inj (hp1.symm.trans hpb)
   rw [e1, e2, e3] at hsc
-  obtain ⟨tags2, circuitB2, pubB2, rd, recS, x, ht2, hc2, hp2, hsr2, hsetup⟩ := checkBlobsAt_setup hck
+  obtain ⟨tags2, circuitB2, pubB2, rd, recS, x, ht2, hc2, hp2, hsr2, hsetup⟩ := checkBlobsAt_setup hm hck
   have e4 : tags2 = tags0 := Option.some.inj (ht2.symm.trans ht0)
   have e5 : circuitB2 = circuitB := Except.ok.inj (hc2.symm.trans hc)
   have e6 : pubB2 = pubB := Except.ok.inj (hp2.symm.trans hpb)
   rw [e4, e5, e6] at hsetup
-  obtain ⟨-, -, -, -, -, hcs, -, -, -⟩ := sent_verified hv.2.1 hcase hacc0
+  obtain ⟨-, -, -, -, -, hcs, -, -, -⟩ := sent_verified hv.2.1 hcase hacc0 hm
   have hrecS : sentRecord o.sent = some recS := by
     unfold sentRecord
     rw [hcs]
@@ -563,7 +572,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   obtain ⟨derived, fl, hder, hfl, hdu⟩ := sampledFrom_ok hdf
   have hdrew : Drew k o.sent dr (derived.getD fl) n ξ (sampledBlocks ev.base.draw) :=
     ⟨a, b, e, p₀, cm, ev, hcase, hacc0, ⟨lo, derived, fl, hlo, hnn ▸ hn', hder, hfl, rfl⟩, rfl, read, hdu⟩
-  have hrd := sampleHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
+  have hrd := sampleHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hone' hrecS
   have hlawD := samplingDesignAt_designAt hdesc hlo hdf
   have hlawL : samplingDesignAt p₀.base.verifier n = .ok (derived.getD fl) := by
     simp only [samplingDesignAt, hlo, hder, hfl, ok_bind]
@@ -583,7 +592,7 @@ its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`)
 verifier's query are in order (`popMatches_of_popOk`). -/
 theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
+    (hone : OneStatement θ) (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) :
     ∃ (p : _root_.Spot.OneStageZk.Params) (n : ℕ) (I : FlockSoundness.Discharge.Exec.Inputs) (D : Flock.Desc)
       (pubO : Flock.Public) (desc : Claims.Msg), ParamsAt θ p ∧
@@ -614,7 +623,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
           (FlockSoundness.Discharge.Composed.inputsJ I 0).program none = .ok st ∧
         Flock.Zk.shapeOk st = .ok () := by
   obtain ⟨p, tags0, pubB, record, proofs, n, desc, hp, ht0, hpf, hAc, htab, hdesc, hlaw, reg, hsc,
-    recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hP hreach hv ht hT
+    recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hone hP hreach hv ht hT
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
   obtain ⟨D, pubO, hDp, hU, hpubO, hcD⟩ := desc_of_ports hAc.flat htyp hAc.ports
@@ -648,8 +657,8 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
   refine (div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) ?_) (by positivity)).trans (cap_div_le hkρ)
   unfold tableZHJP
   split_ifs with h
-  · exact zkLogLenCap_23 _ _ _ (Classical.choice h).hz
-  · exact zkLogLenCap_23 _ _ _ y₀.hz
+  · exact zkLogLenCap_23 _ _ _ _ (Classical.choice h).hz
+  · exact zkLogLenCap_23 _ _ _ _ y₀.hz
 
 /-! ## The session at an accepted play -/
 
@@ -663,10 +672,11 @@ def SubsetDesign (θ : ByteArray) : Prop :=
       .subset (Flock.Bridge.samplingDesignK
         (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n))
 
-/-- **v2's registration samples by a subset design**: its parameters' sampling design object is of kind `subset`
-(`kindOf_paramsAt`), under which `designAt` is a subset design (`designAt_subset`). -/
-theorem subsetDesign (θ : ByteArray) : SubsetDesign θ :=
-  fun _ hp _ n _ => Flock.Bridge.designAt_subset n (kindOf_paramsAt hp)
+/-- **v2's registration samples by a subset design** where its parameters name no members (`OneStatement`): their
+sampling design object is of kind `subset` (`kindOf_paramsAt`), under which `designAt` is a subset design
+(`designAt_subset`). -/
+theorem subsetDesign (θ : ByteArray) (hone : OneStatement θ) : SubsetDesign θ :=
+  fun p hp _ n _ => Flock.Bridge.designAt_subset n (kindOf_paramsAt hp (hone p hp))
 
 /-- **The bound's parameters are in range**: `k`, `Rw` and `M` at least one, a rate below one, and `2^23 ≤ ρ·(e·k)`,
 the count curve `hr_planZHJP` reads at `Zk.schedule`'s cap. -/
@@ -692,7 +702,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
     (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) : ∃ A, LiveSpec V b θ F A := by
   obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
     hTags, hDp, hU, hpubO, hscope, hports, hnO, hdesc, hpop, hlaw, recS, units, st, hrd, hsize, hst, hshape⟩ :=
-    session_parts hD hP hreach hv ht hT
+    session_parts hD hone hP hreach hv ht hT
   have hreg : V.Registered θ F := by
     obtain ⟨hθ, hFo, -⟩ := Binding.play_reaches hreach
     have h1 := hv.1
@@ -708,7 +718,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
   let A : Live :=
     { n, I, own := none, ht := htyp, D, hD := hDp, hU, hpi := hpiD, pub, hpub, pubO, hpubO, hscope, hdup, hn, hnO,
       desc, qr := p.base.verifier.query, hpop, lj := p.base.verifier.samplingDesign, tb := p.base.verifier.workTable,
-      hsub := subsetDesign θ p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀,
+      hsub := subsetDesign θ hone p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀,
       y₀ := Classical.choice hy,
       Ω := DeployedCoins, fΩ := inferInstance, nΩ := inferInstance, Lb := deployedLb, src := deployedSrc,
       hA3 := uniformRandomBytes_deployed, hTags, k := b.k, Rw := b.Rw, M := b.M, hk := hb.k, hRw := hb.Rw,
