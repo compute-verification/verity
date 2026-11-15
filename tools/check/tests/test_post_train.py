@@ -90,10 +90,12 @@ class _Store:
         return {"outputs": {"result": rid}} if rid in self.steps else {}
 
 
-def _shard(rid: str, sha: str, shard: str, rc: int, tool: str = "python3", dirty: int = 0, deferred: bool = True) -> tuple:
-    """An attempt of the verified queue's check of ``sha``, as `train.sh --shard` launches it (``shard`` None: no --shard)."""
-    argv = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "ci", "--", "uv", "run", "python",
-            "tools/verity/check/check.py", "--keep-going", *(["--deferred", "pytest,lean-build,circuit-check"] if deferred else []),
+def _shard(rid: str, sha: str, shard: str, rc: int, tool: str = "python3", dirty: int = 0, deferred: bool = True,
+           check: str = "tools/verity/check/") -> tuple:
+    """An attempt of the verified queue's check of ``sha``, as `train.sh --shard` launches it (``shard`` None: no --shard), from
+    the check's directory ``check``."""
+    argv = ["python3", f"{check}slot.py", "--priority", "--by", "ci", "--", "uv", "run", "python",
+            f"{check}check.py", "--keep-going", *(["--deferred", "pytest,lean-build,circuit-check"] if deferred else []),
             "--no-regenerate", *(["--shard", shard] if shard else [])]
     return (rid, tool, "done" if rc == 0 else "failed", rc, f"2026-11-14T{rid[10:12]}:{rid[12:14]}:{rid[14:16]}Z", sha, dirty,
             json.dumps({"argv": argv, "params": {"argv": argv}}))
@@ -137,6 +139,18 @@ def test_a_verified_queue_landing_is_labelled_on_shard_1_of_its_sharded_check(tm
     assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0005", "a shard of an auto plan"
     _store(monkeypatch, [_shard("r20261114-171304-0006", landed, None, 0, deferred=False, tool="check"), *shards])
     assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0006", "drive's whole check comes first"
+
+
+def test_a_shard_is_found_by_the_check_at_either_path(tmp_path, monkeypatch):
+    """A candidate's check runs `tools/check/check.py` since the move, and records from before it name
+    `tools/verity/check/check.py`: either is a shard of the landing's check, and another file named check.py is none."""
+    repo, landed, _ = _landed(tmp_path)
+    for check in ("tools/check/", "tools/verity/check/"):
+        _store(monkeypatch, [_shard("r20261114-171304-0001", landed, "1/2", 0, check=check),
+                             _shard("r20261114-171305-0002", landed, "2/2", 0, check=check)])
+        assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", check
+    _store(monkeypatch, [_shard("r20261114-171304-0001", landed, "1/2", 0, check="tools/other/")])
+    assert PT.check_attempt(landed, cwd=repo) is None, "another check.py"
 
 
 def test_a_shard_that_failed_on_the_gate_makes_no_landing(tmp_path, monkeypatch):

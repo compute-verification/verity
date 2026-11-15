@@ -55,6 +55,15 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
 - **The share of the proving time that rests on rows timed above the host's cores:** the types priced from a row
   timed at more than `--cores` cores, their own or their family's, with the cores those rows were timed at. On a
   host of the stated cores those types' figures are not measured.
+- **How many priced rows ran with their card off their CPUs' NUMA node:** of the steady-state rows that price a type,
+  those whose card was on another NUMA node than their provers' CPUs, those whose card was on their node, and those
+  that don't record it, each with its share of the proving time. Then come the rows priced from the single-session
+  card, whose table records no CPUs. This is in the table's notes and in the inputs of both proving totals. A row
+  records its card's node itself (`card_numa_node`, against its `cores.numa_nodes`). For a row that doesn't, the
+  harness's `verity_bench/data/off_node.json` holds a scan of the runs' own host records: the range of runs it read
+  (`covered`, less the runs it lists `unread`) and the runs among them that were off-node. A run the scan read and
+  doesn't list was on its node, and one it didn't read isn't recorded. The shares are of the whole proving time, so
+  they need not add to 100%. Off-node rows still price their types: the line moves no value and no mark.
 - **The Lean verifier's seconds and the proof's bytes per served token, modeled.** Both are "not measured" until a
   Lean verifier run of record exists (below). With one, the block type it ran on takes its figures, and every other
   block type is scaled from it; each line says `modeled, not measured`, then what was measured (the block type and its
