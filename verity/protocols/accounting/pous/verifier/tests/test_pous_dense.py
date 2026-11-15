@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.accounting.pous.prover.responder import HonestResponder
 from verity.protocols.accounting.pous.verifier import dense, setup
 from verity.protocols.accounting.pous.verifier.audit import (
-    HonestResponder,
     UnsignedRounds,
     challenge_key,
     run_timed,
@@ -104,7 +104,7 @@ def test_end_to_end_with_the_parameters_codec():
     data = {name: random.Random(len(name)).randbytes(size) for name, size in sizes}
     w = layout.pack(data)
     commitment = setup.commit(params, w)
-    salt = setup.draw_salt(b"verifier-secret", commitment)
+    salt = setup.sample_salt(b"verifier-secret", commitment)
     segs = list(split(params, w))
     server = [dense.encode_segment(params, prims, salt, s, g) for s, g in enumerate(segs)]
     vk = setup.verifier_key(params, prims, w, commitment, salt)

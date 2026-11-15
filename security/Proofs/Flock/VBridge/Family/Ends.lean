@@ -54,7 +54,7 @@ open FlockSoundness.Discharge.Hm (bitL)
 section Keyed
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy 0's input column `col` of unit `u` is keyed by bit `k` of a row `own` names, at the registered root `pa` and
 position `pos`**: its Δ key (`Aliased.srcKey`) is bit `k` of row port `q`, the session's reads file names `q`, and
@@ -94,7 +94,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 

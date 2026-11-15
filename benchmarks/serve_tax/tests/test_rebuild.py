@@ -1,9 +1,11 @@
 """The rebuild's bookkeeping on stand-ins for vLLM's engine: the K/V file's layout, the hits the record forces and when
 their pages load, the blocks a re-added request shares, the start's refusal of async scheduling's extra row, and the
 per-request K/V roots and the mirror's save and load (numpy, skipped without it), and where ``--capture`` is
-refused."""
+refused and which template it takes."""
 from __future__ import annotations
 
+import json
+import re
 import sys
 from dataclasses import dataclass
 from types import ModuleType
@@ -525,3 +527,16 @@ def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None
 def test_capture_takes_only_a_served_shape_only_target_s_rows(args: list[str]) -> None:
     with pytest.raises(SystemExit, match="--capture takes the sampler rows of --served's --shape-only target"):
         RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O"])
+
+
+@pytest.mark.parametrize("given", [None, "TokenSelect_v4{V=8}"])
+def test_capture_without_a_template_takes_the_check_the_serve_committed_under(tmp_path, monkeypatch, given) -> None:
+    (tmp_path / "meta.json").write_text(json.dumps({"model_id": "glm53"}))
+
+    def template(meta, t):
+        raise SystemExit(f"capture of {meta['model_id']} under {t}")
+
+    monkeypatch.setattr(RB.RP, "capture_template", template)
+    with pytest.raises(SystemExit, match=re.escape(f"capture of glm53 under {given}")):
+        RB.main(["--served", str(tmp_path), "--scratch", "D", "--shape-only", "r0", "--capture",
+                 *([given] if given else []), "--out", "O"])

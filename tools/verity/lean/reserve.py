@@ -89,7 +89,7 @@ def ask(pins_of: Mapping[str, Iterable[str]], steps: Iterable[str]) -> tuple[int
 
 def reserved(env: Mapping[str, str], machine_gib: float, machine: str) -> tuple[float | None, str]:
     """(the GiB a run reserved, what says so): the least of the `RESERVATIONS` set in ``env``, each converted to GiB, and
-    what this machine lets the run hold (``machine_gib``, which ``machine`` names: its cgroup's cap or its memory), which
+    what this machine lets the run hold (``machine_gib``, which ``machine`` names: its cgroup's limit or its memory), which
     is all a run that declares none of them has; None wherever one of them is no number."""
     got = []
     for name, unit in RESERVATIONS:

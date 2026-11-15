@@ -1,4 +1,4 @@
-"""Produced values (`one_stage.produced`): a value committed after the sample under a domain bound to the registration's
+"""Produced values (`one_stage.produced`): a value committed after the sample under a domain bound to the docket's
 digest, the verifier's own entries and ports for it, the record's check after the sample, the opened roots held to the record,
 and every session's opened rows held to the one opening the record (or the verifier's own known port) fixes."""
 from __future__ import annotations
@@ -45,12 +45,12 @@ def test_a_32_bit_entry_and_its_port():
                     "domain": e["domain"], **G.schema_entry(G.SCHEMA_V2), "reads": [None, 2, None]}
 
 
-def _rec(registration=REG):
-    tree = PR.commit(PD, "partials", ROWS, registration)
+def _rec(docket=REG):
+    tree = PR.commit(PD, "partials", ROWS, docket)
     return PR.record(REG, DRAW, [tree.entry()], {"partials": PR.rows_of(tree)}), tree
 
 
-def test_the_record_is_held_to_the_registration_the_draw_and_the_verifiers_entries():
+def test_the_record_is_held_to_the_registration_the_sample_and_the_verifiers_entries():
     mine = {"partials": PR.entry(PD, "partials", 3, 2, REG)}
     rec, _tree = _rec()
     assert PR.check(rec, REG, DRAW, mine) == ()

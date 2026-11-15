@@ -12,11 +12,12 @@ import policy as P
 import pytest
 import report
 import tied as T
-from rho import lean, min_cut
+from slowdown import lean, min_cut
 from verity_vllm.check.weights_of_record import PARAM
+from verity_vllm.engine.profiles import dense_generic as DG
 from verity_vllm.program.predict import block_counts as BC
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 ROPE, SILU = "RoPEHead_v1{D=16}", "SiluMul_v2{I=8}"
 NORM = 'RMSNormTriton_v5{N=8,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
@@ -52,7 +53,7 @@ def no_out(monkeypatch) -> None:
 
 def reference(inst: dict) -> dict:
     """The count's Python reference, which the count's difftest holds the Lean to, as `built.lean_count`."""
-    spec = importlib.util.spec_from_file_location("nci_reference", B.PACKAGE / "scripts" / "nci_reference.py")
+    spec = importlib.util.spec_from_file_location("inference_only_reference", B.PACKAGE / "scripts" / "inference_only_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return {"verdict": ref.check_count_detail(inst), "cost": {}}
@@ -83,8 +84,6 @@ def test_the_served_file_is_what_the_tree_computes_of_its_class() -> None:
 def test_a_model_pinned_at_several_revisions_has_a_shape_only_under_one_config(monkeypatch) -> None:
     """A model the manifests pin at several revisions of one config.json is taken at its first pin; at two configs its
     shape isn't known."""
-    from verity_vllm.engine.profiles import dense_generic as DG
-
     base = next(e for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == "unsloth/Llama-3.2-1B")
     for config, ok in ((base["config_sha256"], True), ("0" * 64, False)):
         pins = [base, {**base, "revision": "ab" * 20, "config_sha256": config}]
@@ -153,6 +152,12 @@ def test_the_count_refuses_the_session_program_on_k(counted) -> None:
     assert (few["verdict"], few["failed"]) == ("refused", "n")
 
 
+@pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
+def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) -> None:
+    """The goal wants a slowdown of at least 1,000: 1,000 itself is within target, and anything below misses."""
+    assert report.verdict(value) == word
+
+
 def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
@@ -165,6 +170,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     result = json.loads((tmp_path / "result.json").read_text())
     assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
         (report.METRIC, doc["value"], doc["unit"], "modeled")]
+    # the goal's target, which a value of 1 misses
+    assert [(m["target"], m["verdict"]) for m in result["measurements"]] == [(1000, "misses")] and report.TARGET == 1000
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")

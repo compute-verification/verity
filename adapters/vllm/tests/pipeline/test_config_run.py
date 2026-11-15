@@ -78,7 +78,7 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
-    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a row of record keeps its pairs"
+    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a workload of record keeps its pairs"
 
 
 def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path):
@@ -320,7 +320,7 @@ def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_p
     plain = row.commit_cmd([])
     i = plain.index("--required-manifest")
     assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
-    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP row of record keeps its Match, pairs and value check"
+    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP workload of record keeps its Match, pairs and value check"
 
 
 def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
@@ -416,7 +416,7 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
 
 
 @pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
-def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
+def test_a_single_gpu_workload_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
     """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
     decides nothing (its decision document is the row dir's verdict.json): a row chain is never refused as "match FAIL" or
     "commit FAIL" over a passing Match and Commit."""
@@ -658,7 +658,7 @@ def test_family_strata_draw_k_units_with_every_family_at_least_once():
 def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
            for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
-    keyed, per = family_strata(vus, 460, draw="uniform")
+    keyed, per = family_strata(vus, 460, design="uniform")
     assert per == 460 and {v["stratum"] for v in keyed} == {"all|all|all|all|all|all"}
     assert {v["family"] for v in keyed} == {"Gemm_v1", "RoPE_v1", "Embedding_v1"}, "each unit keeps its family for the record"
     picked, strata, tgt = sample(keyed, per, seed=11)
@@ -670,11 +670,11 @@ def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
 def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_is_refused():
     from types import SimpleNamespace
 
-    from verity_vllm.pipeline.c2_replay import draw_of
+    from verity_vllm.pipeline.c2_replay import sampling_design_of
 
-    assert [draw_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
+    assert [sampling_design_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
         "family", "family", "uniform"]
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"} for fam in ("Gemm_v1", "RoPE_v1") for i in range(3)]
-    assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
-    with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
-        family_strata(vus, 4, draw="stratified")
+    assert family_strata(vus, 4, design=sampling_design_of(SimpleNamespace())) == family_strata(vus, 4)
+    with pytest.raises(ValueError, match=r"replay sampling design 'stratified' is not one of \('family', 'uniform'\)"):
+        family_strata(vus, 4, design="stratified")

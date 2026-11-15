@@ -24,8 +24,8 @@ from verity_vllm.pipeline import commit_arb as CA
 
 
 def post(url: str, body: dict) -> Any:
-    req = urllib.request.Request(url, json.dumps(body).encode(), {"content-type": "application/json"})
-    return urllib.request.urlopen(req)
+    req = urllib.request.Request(url, json.dumps(body).encode(), {"content-type": "application/json"})  # noqa: S310 (the served endpoint)
+    return urllib.request.urlopen(req)  # noqa: S310 (the served endpoint)
 
 
 def complete(url: str, model: str, prompt: list[int], sampling: dict, user: str) -> dict[str, Any]:
@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         got = compare(client, server)
         print(f"SERVE-PREFIX {'PASS' if got['passed'] else 'FAIL'}: {json.dumps(got)}", flush=True)
         return 0 if got["passed"] else 1
-    with urllib.request.urlopen(a.url + "/v1/models") as r:
+    with urllib.request.urlopen(a.url + "/v1/models") as r:  # noqa: S310 (the served endpoint)
         model = json.loads(r.read())["data"][0]["id"]
 
     def encode(text: str) -> list[int]:

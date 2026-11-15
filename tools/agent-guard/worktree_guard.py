@@ -65,18 +65,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
+import settings
 from settings import CONVERSATION_ID, EVENT_LOG, PUSH_REMOTES, recorded_runs
 from task_hook import OWN_REGISTRY, REGISTRY, holders
 
-STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
+STATE = Path(settings.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
 #: an owner with no hook run for this long is gone: six times the longest the shell hook lets one command block, so an agent
 #: that is waiting on a command never reads as gone
 GONE_S = 2 * 3600
 RECLAIM = "python3 tools/agent-guard/worktree_guard.py reclaim"
 
-#: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names
-QUEUE_REPOS = ("compute-verification/verity", "compute-verification/infra")
+#: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names; infra is
+#: platform's old name, which GitHub still resolves and older clones' `origin` still spells
+QUEUE_REPOS = ("compute-verification/verity", "compute-verification/platform", "compute-verification/infra")
 #: a GitHub URL of one of them, whole: https or ssh (with any user, credential or port) or scp form, with or without `.git`
 QUEUE_URL = (r"(?i)^(?:(?:https?|ssh|git)://(?:[^@/\s]*@)?github\.com(?::\d+)?/|(?:[\w.-]+@)?github\.com:/?)"
              rf"(?:{'|'.join(re.escape(r) for r in QUEUE_REPOS)})(?:\.git)?/?$")
@@ -86,16 +88,22 @@ def git(directory: str, *args: str, env: dict[str, str] | None = None) -> str | 
     try:
         p = subprocess.run(["git", "-C", directory, *args], capture_output=True, text=True, timeout=5,
                            env={**os.environ, **(env or {}), "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"})
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"worktree_guard: git {args[0] if args else ''} in {directory} did not run, read as no answer "
+              f"({type(e).__name__})", file=sys.stderr)
         return None
     return p.stdout.strip() if p.returncode == 0 else None
 
 
 def registry() -> dict[str, str]:
+    if not (STATE / "branches.json").exists():
+        return {}
     try:
         d = json.loads((STATE / "branches.json").read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"worktree_guard: {STATE / 'branches.json'} unreadable, read as no branch registered ({type(e).__name__}: {e})",
+              file=sys.stderr)
         return {}
 
 
@@ -112,16 +120,18 @@ def register(branch: str, agent: str, *, replace: bool = False) -> None:
 def owner(gitdir: str, agent: str, directory: str) -> str:
     """The worktree's owner, claiming it (and registering its branch) for `agent` when it has none."""
     f = Path(gitdir) / OWNER_FILE
-    try:
-        return f.read_text().strip() or agent
-    except OSError:
-        pass
+    if f.exists():
+        try:
+            return f.read_text().strip() or agent
+        except OSError as e:
+            print(f"worktree_guard: {f} unreadable, so {agent} claims it ({type(e).__name__}: {e})", file=sys.stderr)
     try:
         with open(f, "x") as out:
             out.write(agent + "\n")
     except FileExistsError:
         return f.read_text().strip() or agent
-    except OSError:
+    except OSError as e:
+        print(f"worktree_guard: {f} not written, so the worktree stays unclaimed ({type(e).__name__}: {e})", file=sys.stderr)
         return agent
     register(git(directory, "symbolic-ref", "--short", "-q", "HEAD") or "", agent)
     return agent

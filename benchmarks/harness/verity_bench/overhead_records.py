@@ -53,7 +53,7 @@ MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("benchmarks/census")
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
-GATES = Path("benchmarks/rho/data/hardware.toml")
+GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
@@ -335,8 +335,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
         scheme, card, point = row.split("/")
         r = rows.get((scheme, card, point))
         g = (r or {}).get("gamma") or {}
-        m = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-             "extra": {"covers": table["covers"]}}
+        m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
+                             "extra": {"covers": table["covers"]}}
         if r is None or not r["of_record"] or g.get("gamma") is None:
             why = (r or {}).get("why") or f"no labelled run times {scheme} at {card}'s {point} (`{RUN_OF_RECORD}={RUN_RECORD}`)"
             out.append(m | {"value": None, "why": f"no γ of record: {why}"})
@@ -404,7 +404,7 @@ def render(table: Mapping) -> str:
                    f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
                    "γ is measured on one card at one operating point; every total is scaled from it, not proved. Gates at "
                    f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate."), "",
-              "| Scheme | Card | Point | Share | Period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
+              "| Scheme | Card | Point | Share | Time period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
               "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for r in table["rows"]:
         if p := r.get("periods"):

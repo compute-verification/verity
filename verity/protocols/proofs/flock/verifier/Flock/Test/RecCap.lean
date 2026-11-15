@@ -1,13 +1,3 @@
-/-
-RecCap, V*'s statements that hold each level's committed tops at fixed rows (`rec-cap/n<N>` at level 0,
-`rec-cap/n<N>-l<l>` at a later level, `VStar.capUnit`): `RecVStar.checkCapListed` refuses a V* list without one at a level,
-at another node count, twice, or past the last level; `RecVStar.checkTopsListed` refuses later levels' caps that are not
-the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-top-L<l>` (level `l`'s `out`, its RecCap's
-`top`) without the verifier's shared rows registering it, or at another registration; `RecCoins.checkCap` refuses reads of
-a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words, and a table whose instances are not
-labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
-read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
--/
 module
 
 public import Flock.RecCoins
@@ -20,6 +10,17 @@ meta import Flock.Sizes
 meta import Std.Data.HashMap
 meta import Std.Data.HashSet
 meta import Std.Data.TreeMap.Raw.Lemmas
+
+/-!
+RecCap, V*'s statements that hold each level's committed tops at fixed rows (`rec-cap/n<N>` at level 0,
+`rec-cap/n<N>-l<l>` at a later level, `VStar.capUnit`): `RecVStar.checkCapListed` refuses a V* list without one at a level,
+at another node count, twice, or past the last level; `RecVStar.checkTopsListed` refuses later levels' caps that are not
+the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-top-L<l>` (level `l`'s `out`, its RecCap's
+`top`) without the verifier's shared rows registering it, or at another registration; `RecCoins.checkCap` refuses reads of
+a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words, and a table whose instances are not
+labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
+read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
+-/
 
 @[expose] public section
 
@@ -93,14 +94,12 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
   | .error _ => false
 #guard topsListed inner #[.cap 1 128, .cap 2 128] ==
   some "V*'s list: the later levels' caps hold [128, 128] nodes, and the reps' schedule commits tops of [64, 64, 32] nodes a rep ([128, 128, 64] both reps')"
-#guard match statements inner with
-  | .ok ss => (ss.toList.drop (ss.size - 4)).map (·.name) ==
-      ["rec-cap/n128-l1", "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"]
-  | .error _ => false
 
+-- `statements inner` is a whole V* list, about 20 minutes in the interpreter, so none is built here: that the deployed
+-- dense list passes `statements`' checks and ends in the RecCaps above is `verity-verify-proof rec-statements` at this shape,
+-- compiled (`test_rec_vstar_checks.py::test_the_verifiers_statements_are_the_ones_v_star_stages`).
 -- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
--- the deployed dense list passes it (`statements inner` above runs it), and a list without the parts is refused at
--- round 0. Each `statements` is a whole V* list in the interpreter, about 20 minutes, so no other shape is built here.
+-- a list without the parts is refused at round 0.
 #guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
   | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
   | .ok () => false

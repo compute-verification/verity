@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.TS.Session.Lanes.Layer
+public import Proofs.Pouw.TS.Session.Lanes.Layer
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -44,7 +44,7 @@ gate-signed request table under the window-open root. Round `s`'s request table 
 `s`'s root (round 0's under round-0-only admission): each round's session decodes its own, so a call's view is its round's
 tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
-(`verity/ml/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
+(`verity/protocols/accounting/pouw/prover/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
 `rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`.
 
 * `liveOk`: **the unit on words** (`circuit.live.live_ok`) at round `s`. `m ≤ T`; the entries (prompt length ≠ 0) are a
@@ -83,7 +83,7 @@ public row and the decoded `s` its step's round are `live_credit`'s hypotheses `
 at the known `m@<s>` row of the manifest's `m_s` and its `s` at the known `round@<s>` row of the round's index, so a
 statement decoded at another round proves nothing about this one. That the decoded slot and request rows are the round's
 registered `slots@<s>` and its request table (`requests@0` under round-0-only admission) is the statement's registration
-(flock-verify's complete check and the served path's roots), outside this file.
+(verity-verify-proof's complete check and the served path's roots), outside this file.
 -/
 
 @[expose] public section

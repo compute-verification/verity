@@ -79,7 +79,7 @@ meanwhile stays. Its `remote.json` is deleted last (`_delete`), so a deletion cu
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
 a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
---max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. Launches refused before they ran go first, oldest
+--max-paths paths (MAX_PATHS; 0 lifts the limit), and the next takes the rest. Launches refused before they ran go first, oldest
 expiry first, with --max-paths of their own: each is a few files, so however many wait they never take the place of what frees
 the disk, and the n-th of them is gone by the ceil(n / --max-paths)-th pass that acts. A path qualifies only with a valid record (explicit or
 implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
@@ -94,9 +94,16 @@ preserved path) is there so that gc never deletes the only copy of data somebody
 STORED. gc deletes on `verified` (the remote holds the artifact; with no remote to ask, as on a node, which holds no store key, the
 replica this store's catalog verified when custody pushed it), on `expired` (the remote holds its manifest and has dropped its blobs
 past its kind's time to live, `store.gc.TTL_DAYS`) and on `withdrawn` (every blob the remote lacks is under a `withdrawn` label,
-`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. It
-keeps the path on `uncovered` (the artifact doesn't hold every file now under the path at its size, so files custody trimmed never
-count as stored, whatever the remote says), on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
+`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. A
+symlink or any other entry that is not a regular file holds no bytes, and deleting it deletes nothing it points at, so the check
+passes over it, as custody does (`custody.run_files`). It keeps the path on `uncovered` (the artifact doesn't hold every regular
+file now under the path at its size, so files custody trimmed never count as stored, whatever the remote says; the check answers
+it only when the remote would otherwise have let the path go), except a preserved run's under its implicit record (`.custody`):
+custody marked it preserved with those files only listed, so they are its only copy, as a never-stored run's directory is, and
+gc deletes it under --unpreserved-runs once UNPRESERVED_RUN_EXPIRY (7 days) has passed since custody verified the run (its marker's
+`verified_utc`, which its record's expiry is RUN_EXPIRY after; never the last write, which the store eviction moves when it
+removes the stored files), and lists it with that date and how to keep it until then; its line says how many bytes of it were
+stored nowhere else, and the plan's `trimmed` counts such runs apart. A run with a sidecar keep record is never one. It keeps the path on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
 rule explains), on `unknown` (the remote has no manifest for it: it never stored it) and on `unreachable` (the remote, or with none
 this store, could not be asked), and an `unreachable` fails the pass (exit 1). Every --apply reports how many of each it found.
 
@@ -132,10 +139,11 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
+from . import settings
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
 from .store import evict as EV
@@ -214,7 +222,7 @@ class RecordError(ValueError):
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_utc(s: Any) -> datetime:
@@ -224,11 +232,11 @@ def parse_utc(s: Any) -> datetime:
     t = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
     if t.tzinfo is None or t.utcoffset() != timedelta(0):
         raise ValueError(f"{s!r} is not in UTC (write it as YYYY-MM-DDTHH:MM:SSZ)")
-    return t.astimezone(timezone.utc)
+    return t.astimezone(UTC)
 
 
 def fmt_utc(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime(TS)
+    return t.astimezone(UTC).strftime(TS)
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
@@ -241,16 +249,19 @@ def parse_expires(s: str, now: datetime) -> str | None:
         return fmt_utc(now + timedelta(**{"days" if m[2] == "d" else "hours": int(m[1])}))
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc))
+            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC))
         return fmt_utc(parse_utc(s))
     except ValueError:
         raise RecordError(f"--expires {s!r}: give never, now, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None
 
 
 def _utc_or_none(s: Any) -> datetime | None:
+    if s is None:
+        return None
     try:
         return parse_utc(s)
-    except ValueError:
+    except ValueError as e:
+        print(f"retention: {e}, read as none", file=sys.stderr, flush=True)
         return None
 
 
@@ -350,9 +361,12 @@ def write(path: Path, record: dict) -> Path:
 
 
 def _read_json(p: Path) -> dict | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"retention: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 
@@ -599,7 +613,8 @@ def keep(path: Path | str, *, owner: str, expires: str | None, priority: str, ro
     rel = target(p, root)
     try:
         old = load(p) or {}
-    except RecordError:
+    except RecordError as e:
+        print(f"retention: {p}'s record unread, so it is written afresh ({e})", file=sys.stderr, flush=True)
         old = {}
     given = {"regenerate": regenerate, "preserved": preserved, "why": why, "by": by}
     rec = {"schema": SCHEMA, "path": rel, "node": node or socket.gethostname(), "owner": owner,
@@ -827,11 +842,12 @@ def _raise(e: OSError) -> None:
     raise e
 
 
-def covers(man: Any, path: Path, launcher: bool = False) -> str | None:
-    """None when the artifact's payload holds every file now under `path` at its size (a directory's own sidecar and custody's
-    markers aside); else what it lacks. A symlink is never held, and an unreadable directory raises. With `launcher`, `path` is a
-    launcher's copy of the run whose record the artifact is: its `remote.json` is the launcher's own, and a file at its top is held
-    by its path, whatever its size (module docstring)."""
+def covers(man: Any, path: Path, launcher: bool = False, out: list[tuple[str, int]] | None = None) -> str | None:
+    """None when the artifact's payload holds every regular file now under `path` at its size (a directory's own sidecar and
+    custody's markers aside); else what it lacks, each (path, bytes) appended to `out` too. A symlink or other non-regular entry is
+    passed over: it holds no bytes, and deleting it deletes nothing it points at. An unreadable directory raises. With `launcher`,
+    `path` is a launcher's copy of the run whose record the artifact is: its `remote.json` is the launcher's own, and a file at its
+    top is held by its path, whatever its size (module docstring)."""
     pl = man.payload
     p = Path(path)
     if pl is None:
@@ -848,29 +864,37 @@ def covers(man: Any, path: Path, launcher: bool = False) -> str | None:
     lacking = []
     for base, dirs, files in os.walk(p, onerror=_raise):
         dirs.sort()
-        for name in sorted(files + [d for d in dirs if os.path.islink(os.path.join(base, d))]):
+        for name in sorted(files):
             q = os.path.join(base, name)
             rel = os.path.relpath(q, p).replace(os.sep, "/")
-            if rel in skip:
+            if rel in skip or rel.startswith(CU.MARKER + ".tmp."):
                 continue
             s = os.lstat(q)
-            if not stat.S_ISREG(s.st_mode) or (rel not in have if launcher and "/" not in rel else have.get(rel) != s.st_size):
-                lacking.append(rel)
+            if not stat.S_ISREG(s.st_mode):
+                continue
+            if rel not in have if launcher and "/" not in rel else have.get(rel) != s.st_size:
+                lacking.append((rel, s.st_size))
+    if out is not None:
+        out += lacking
     if lacking:
-        return f"{len(lacking)} file(s) under it are not in the artifact at their size, e.g. {lacking[0]}"
+        return f"{len(lacking)} file(s) under it are not in the artifact at their size, e.g. {lacking[0][0]}"
     return None
 
 
 @dataclass(frozen=True)
 class Stored:
-    """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words."""
+    """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words. An `uncovered` answer also
+    counts the files the artifact lacks and their bytes, which are stored nowhere else."""
     state: str
     why: str
+    lost_files: int = field(default=0, compare=False)
+    lost_bytes: int = field(default=0, compare=False)
 
 
 def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc_now) -> Callable[[str, Path], Stored]:
     """The default remote check, run just before a deletion: what became of the path's stored copy (STORED, module docstring).
-    The artifact must hold the path's files (`covers`); then `preserved.check` in head mode says whether the remote holds it (remote
+    The artifact must hold the path's files (`covers`), else the answer is `uncovered` where the remote's would have let the path
+    go, and the remote's own where it keeps the path; `preserved.check` in head mode says whether the remote holds it (remote
     sizes, and the single-part ETag against the local blob's MD5 where the blob is here, else a read-back; `LocalStore.verify`
     would read back every blob). Where it holds the manifest and lacks blobs, the store gave the copy up when that check's verdict is
     WITHDRAWN (it pulls the artifact's labels from the remote, and a `withdrawn` label covers every blob the remote lacks), or when
@@ -881,6 +905,14 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
     st = None
 
     def chk(art: str, path: Path) -> Stored:
+        lacking: list[str] = []
+        lost: list[tuple[str, int]] = []
+        found = held(art, path, lacking, lost)
+        if lacking and found.state in COLLECTED:
+            return Stored("uncovered", lacking[0], len(lost), sum(n for _, n in lost))
+        return found
+
+    def held(art: str, path: Path, lacking: list[str], lost: list[tuple[str, int]]) -> Stored:
         nonlocal st
         from .store import gc as G
         from .store import preserved as P
@@ -895,8 +927,8 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
                 man = st.get_manifest(art)
             except NotFound as e:
                 return Stored("unknown", str(e)) if r is not None else Stored("unreachable", f"{e}: {nobody}")
-            if why := covers(man, path):
-                return Stored("uncovered", why)
+            if why := covers(man, path, out=lost):
+                lacking.append(why)
             rep = P.check(st, [art], mode="head" if r is not None else "recorded")
             if rep["preserved"]:
                 return Stored("verified", "verified on the remote" if r is not None else
@@ -1035,11 +1067,38 @@ def _why_deletable(row: Row, found: Stored | None) -> str:
     elif row.source == LAUNCHER:
         how = "a launcher's copy of a run" + (f" ({found.why})" if found else
                                               ", if the remote says just before an --apply deletes it that the run is over and stored")
+    elif found and found.state == "uncovered":
+        how = (f"preserved {rec['preserved']} but for {_lost(found)}, which custody trimmed: "
+               f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after custody verified the run")
     elif rec.get("preserved"):
         how = f"preserved {rec['preserved']}" + (f" ({found.why})" if found else ", checked on the remote just before an --apply deletes it")
     else:
         how = "regenerable"
     return f"{rec['priority']}, expired {rec['expires']}, {how}"
+
+
+def uncovered_until(record: dict) -> datetime:
+    """When the files custody did not store of a preserved run go (module docstring): UNPRESERVED_RUN_EXPIRY after custody verified
+    the run, which its implicit record's expiry is RUN_EXPIRY after."""
+    return parse_utc(record["expires"]) - RUN_EXPIRY + UNPRESERVED_RUN_EXPIRY
+
+
+def _lost(found: Stored) -> str:
+    return f"{_size(found.lost_bytes)} stored nowhere else ({found.why})"
+
+
+def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, unpreserved: bool) -> str | None:
+    """Why gc keeps a preserved run whose run record lacks files custody trimmed (`uncovered`), or None once it may go."""
+    until, days = uncovered_until(row.record), UNPRESERVED_RUN_EXPIRY // timedelta(days=1)
+    lack = f"custody trimmed {_lost(found)} from its run record {row.record['preserved']}"
+    keep = (f"; to keep it: `research keep {path} --owner @LANE --expires DATE --priority P`, or a custody that declares the files "
+            f"(--declared-output)")
+    if now < until:
+        return (f"{lack}: it goes {fmt_utc(until)}, {days} d after custody verified the run"
+                + ("" if unpreserved else ", under --unpreserved-runs") + keep)
+    if not unpreserved:
+        return f"{lack}: its {days} d after custody verified the run are over, and only --unpreserved-runs deletes it{keep}"
+    return None
 
 
 def keeping(run_dir: Path) -> str:
@@ -1195,13 +1254,14 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
     DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
     `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
-    `max_paths` caps the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
+    `max_paths` limits the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
     unpreserved runs, which it otherwise lists and leaves; `launcher` (--launcher-copies) gives the launchers' copies of runs
     their records and holds the pass to them: an --apply deletes one only on `copy_check`'s answer (None is
     `launcher_check(now)`), and every other path the pass would have taken is listed as left (ONLY_LAUNCHER). The plan's
-    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the cap left
+    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the limit left
     for the next pass, and `unpreserved` the unpreserved runs, apart from every other path (`unpreserved_runs`), with the
-    `deleted` ones this pass deleted, or in a dry run would."""
+    `deleted` ones this pass deleted, or in a dry run would. `trimmed` counts the preserved runs whose files custody trimmed
+    (`uncovered`) apart again: those deleted, with the `files` and `bytes` of theirs stored nowhere else, and those `kept`."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -1220,6 +1280,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
                             "inodes_pct_before": round(100 * iused / itotal, 2) if itotal else None,
                             "max_paths": max_paths, "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": [],
                             "stored": dict.fromkeys(STORED, 0), "capped": 0, "deletes_unpreserved": unpreserved,
+                            "trimmed": {"deleted": 0, "files": 0, "bytes": 0, "kept": 0},
                             "deletes_launcher_copies": launcher,
                             "unpreserved": {**unpreserved_runs([]), "deleted": unpreserved_runs([])["expired"]}}
     if not plan["acting"]:
@@ -1275,7 +1336,10 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         elif apply and row.record.get("preserved"):
             found = remote_check(row.record["preserved"], p)
             plan["stored"][found.state] += 1
-            if found.state not in COLLECTED:
+            if found.state == "uncovered" and row.source == "custody":
+                why = _uncovered_wait(row, p, found, t, unpreserved)
+                plan["trimmed"]["kept"] += bool(why)
+            elif found.state not in COLLECTED:
                 why = f"preserved {row.record['preserved']} is not verified on the remote: {found.why}"
         elif apply and row.source == LAUNCHER:
             found = copy_check(p)
@@ -1304,6 +1368,9 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         acts.append(Action(row, "delete", "deleted: " + _why_deletable(row, found), round(pct, 2), err, found and found.state))
         if not err:
             plan["freed_bytes"] += row.bytes
+            if found and found.state == "uncovered":
+                tr = plan["trimmed"]
+                tr["deleted"], tr["files"], tr["bytes"] = tr["deleted"] + 1, tr["files"] + found.lost_files, tr["bytes"] + found.lost_bytes
     for a in acts + skips:
         if a.row.source == UNPRESERVED and not (apply and a.action == "delete" and not a.error):
             a.reason += f"; {keeping(root / a.row.path)}"
@@ -1687,7 +1754,7 @@ def main(argv: list[str]) -> int:
                                                                             "every qualifying path)")
         ap.add_argument("--force", action="store_true", help="act under --high-pct too")
         ap.add_argument("--max-paths", type=int, default=MAX_PATHS, metavar="N", help="delete at most N paths in this pass and leave "
-                        "the rest for the next (default %(default)s; 0: no cap)")
+                        "the rest for the next (default %(default)s; 0: no limit)")
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
         ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store that says what became of a preserved path's "
@@ -1705,7 +1772,7 @@ def main(argv: list[str]) -> int:
                         "when a deletion failed or a stored copy could not be asked about")
         ns = ap.parse_args(rest)
         if ns.max_paths < 0:
-            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no cap", file=sys.stderr)
+            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no limit", file=sys.stderr)
             return 2
         if missing := [d for d in [ns.root, *ns.jobs_dir] if not Path(d).is_dir()]:
             print(f"research retention gc: {missing[0]} is not a directory", file=sys.stderr)
@@ -1754,9 +1821,15 @@ def main(argv: list[str]) -> int:
             print(f"unpreserved runs, of the paths above: {_counted(u['expired'])} expired, {took}; {_counted(u['recorded'])} not yet expired"
                   + _unread(u["invalid"]))
         if ns.apply:
-            count = lambda states: ", ".join(f"{plan['stored'][k]} {k}" for k in states)  # noqa: E731
+            tr = plan["trimmed"]
+            count = lambda states: ", ".join(f"{plan['stored'][k] - (tr['deleted'] if k == 'uncovered' else 0)} {k}" for k in states)  # noqa: E731
             print(f"stored copies of the preserved paths it asked about: {count(COLLECTED)} (deleted); {count(STORED[len(COLLECTED):])} (kept)"
                   + ("; a copy that could not be asked about fails the pass" if plan["stored"]["unreachable"] else ""))
+            if tr["deleted"] or tr["kept"]:
+                print(f"runs whose files custody trimmed, apart from the never-stored and the covered: {tr['deleted']} deleted, "
+                      f"{tr['files']} file(s), {_size(tr['bytes'])} of them stored nowhere else; {tr['kept']} kept until "
+                      f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after custody verified each"
+                      + ("" if ns.unpreserved_runs else ", then for --unpreserved-runs"))
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
         return rc
@@ -1767,7 +1840,7 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--approved-by", required=True, metavar="@OWNER", help="the owner who said yes; every record covering a PATH or "
                         "beneath it must name this handle")
         ap.add_argument("--ref", required=True, metavar="REF", help="where the owner said yes (a Slack permalink or thread ts)")
-        ap.add_argument("--by", default=os.environ.get("RESEARCH_AGENT_URL"), metavar="URL",
+        ap.add_argument("--by", default=settings.get("RESEARCH_AGENT_URL"), metavar="URL",
                         help="who deletes (default $RESEARCH_AGENT_URL); --apply needs it")
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
@@ -1807,4 +1880,4 @@ def main(argv: list[str]) -> int:
 __all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "LAUNCHER", "LAUNCHER_COPY_EXPIRY", "MAX_PATHS", "ONLY_LAUNCHER",
            "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "STORED", "UNPRESERVED", "UNPRESERVED_RUN_EXPIRY", "RecordError", "Stored",
            "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "keeping", "launcher_check", "load", "main",
-           "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "unpreserved_runs", "write"]
+           "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "uncovered_until", "unpreserved_runs", "write"]

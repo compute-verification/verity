@@ -1,4 +1,4 @@
-"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after registration and before the session.
+"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after docket and before the session.
 
     {"law": "subset", "population": N, "k": K, "units": [<ascending proof block indices>]}
     {"law": "bernoulli", "population": N, "p": "NUM/DEN", "units": [...]}
@@ -6,10 +6,10 @@
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
 This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the
-auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` reads them too
+auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `verity-verify-proof draw` reads them too
 (`--stream`, `--stream-file`), and without them refuses any sample that reads coins: the verifier has no randomness of
 its own. Nothing here samples, and no sample is derived from a commitment. `check_draw` holds a sample to the
-registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
+docket and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
 the sample.
 
 **The stratified sampling design**: one stratum per template, a uniform k_s-subset sampled
@@ -22,7 +22,7 @@ without replacement inside each, independently.
   "k": k_s}, ...]}`: the sampling design `{"law": "stratified", "k": K}` expanded by `derive`. R1 holds the registered sampling design to the verifier's
   own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
-**The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
+**The work sampling design** (the Lean verifier's `Flock.Draw.SamplingDesign.work`, its bound
 `FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
 and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s samples
@@ -37,7 +37,7 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
   over the credited W, which a per-template work that over-credits any unit breaks.
 
 **The rate sampling designs** (`parse_rate` and `parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
-selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a registration's
+selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a docket's
 N proof blocks `rate:NUM/DEN` or `rate:NUM/DEN:T` is `subset:K` at K = `rate_count`, ceil(q N) rounded up to a multiple of the T
 tables. `stratified-rate:NUM/DEN` is the stratified sampling design at the K its strata need (`strat_k`: the most any stratum of
 n_s proof blocks needs for `stratum_k` to reach ceil(q n_s), at most N), so every stratum samples at least q of its proof blocks
@@ -56,7 +56,6 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.proofs.spot.verifier.profile import work_k
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
@@ -92,7 +91,7 @@ def parse_design(text: str) -> dict[str, Any]:
 def parse_rate(text: Any) -> tuple[int, int, int] | None:
     """The rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` as `(NUM, DEN, T)`: a public rate NUM/DEN with 0 < NUM <= DEN over
     T >= 1 tables (one when it names none), numbers in ASCII digits; None for any other text. A selection rule states it
-    (`service.Law`), and over a registration's N proof blocks it is `subset:K` at K = `rate_count` (`service.selection_law`)."""
+    (`service.SamplingDesign`), and over a docket's N proof blocks it is `subset:K` at K = `rate_count` (`service.selection_sampling_design`)."""
     if not isinstance(text, str):
         return None
     kind, _, arg = text.partition(":")
@@ -216,19 +215,25 @@ def total_work(strata: Sequence[Mapping[str, Any]]) -> int:
     return sum(s["work"] * _size(s["units"]) for s in strata)
 
 
-def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
+    `floor` and at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
+
+
+def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],
            table: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The verifier's sampling design for its program and query: `stratified` (the rule, or an expanded sampling design, whose strata are ignored)
     expands to the strata `partition.strata` derives, each with `stratum_k`; `work` expands to the same strata with the
     work table's works and floors (`work_table`), each with `work_k` (Lean `Flock.Draw.deriveWork`); `subset` and
     `bernoulli` are unchanged. Raises `partition.QueryRefused` when the query doesn't apply, and `ValueError` when k isn't
     in [1, population], a work sampling design has no table, the table names no work for a template, or the population does none."""
-    kind = law.get("law")
+    kind = sampling_design.get("law")
     if kind not in ("stratified", "work"):
-        return dict(law)
+        return dict(sampling_design)
     strata = P.strata(program, query)
     n = sum(hi - lo for _, rs in strata for lo, hi in rs)
-    k = law.get("k")
+    k = sampling_design.get("k")
     if not _int(k) or not 1 <= k <= n:
         raise ValueError(f"a {kind} law needs 1 <= k <= {n}, not {k!r}")
     if kind == "stratified":
@@ -250,7 +255,7 @@ def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
     return {"law": "work", "k": k, "strata": out}
 
 
-def law_of(draw: Mapping[str, Any]) -> dict[str, Any]:
+def sampling_design_of(draw: Mapping[str, Any]) -> dict[str, Any]:
     if draw.get("law") in ("stratified", "work"):
         return {"law": draw["law"], "k": draw.get("k"), "strata": draw.get("strata")}
     return {"law": "subset", "k": draw["k"]} if draw.get("law") == "subset" else {"law": "bernoulli", "p": draw.get("p")}
@@ -272,12 +277,12 @@ def same_design(a: Any, b: Any) -> bool:
         return False
 
 
-def strata_problem(law: Mapping[str, Any], population: int) -> str | None:
+def strata_problem(sampling_design: Mapping[str, Any], population: int) -> str | None:
     """Why a stratified or work sampling design object isn't well formed over `population` proof blocks, or None: each stratum is exactly
     {template, proof blocks, k} (a work stratum {template, proof blocks, work, floor, k}) with a distinct template; the ranges are
     ascending, disjoint and non-empty and tile [0, population); each stratum's k is the rule's (a work sampling design's: a floor of
     at least one, a population that does some work, and each k `work_k` above its floor; Lean `workProblem`)."""
-    strata, k, work = law.get("strata"), law.get("k"), law.get("law") == "work"
+    strata, k, work = sampling_design.get("strata"), sampling_design.get("k"), sampling_design.get("law") == "work"
     if not isinstance(strata, list) or not strata or not _int(k) or not 1 <= k <= population:
         return "strata and 1 <= k <= population"
     keys = _WORK_STRATUM_KEYS if work else _STRATUM_KEYS
@@ -320,42 +325,42 @@ def _ranges_ok(rs: Any) -> bool:
                                                     for r in rs)
 
 
-def fixed_count(law: Mapping[str, Any]) -> int | None:
-    """The proof blocks every sample under `law` has, when that count is fixed: `k` for `subset` and the strata's sum of k_s for
-    `stratified`; None for `bernoulli` (its count is random) and `work` (its closure varies). Lean `Draw.Law.fixedCount`."""
-    if law.get("law") == "subset":
-        return law.get("k")
-    if law.get("law") == "stratified" and isinstance(law.get("strata"), list):
-        return sum(s.get("k", 0) for s in law["strata"] if isinstance(s, Mapping))
+def fixed_count(sampling_design: Mapping[str, Any]) -> int | None:
+    """The proof blocks every sample under `sampling_design` has, when that count is fixed: `k` for `subset` and the strata's sum of k_s for
+    `stratified`; None for `bernoulli` (its count is random) and `work` (its closure varies). Lean `Draw.SamplingDesign.fixedCount`."""
+    if sampling_design.get("law") == "subset":
+        return sampling_design.get("k")
+    if sampling_design.get("law") == "stratified" and isinstance(sampling_design.get("strata"), list):
+        return sum(s.get("k", 0) for s in sampling_design["strata"] if isinstance(s, Mapping))
     return None
 
 
-#: Lean `Draw.TABLES_LAW`, the refusal of a sampling design several tables cannot split
-TABLES_LAW = ("tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli draw's "
+#: Lean `Draw.TABLES_SAMPLING_DESIGN`, the refusal of a sampling design several tables cannot split
+TABLES_SAMPLING_DESIGN = ("tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli draw's "
               "count is random, so the tables could not split it evenly, and a work draw's closure is not split)")
 
 
-def tables_problem(law: Mapping[str, Any], tables: int) -> str | None:
-    """Why one sample under `law` can't be split into `tables` equal tables, as the Lean verifier's `Stmt.setupTables`
+def tables_problem(sampling_design: Mapping[str, Any], tables: int) -> str | None:
+    """Why one sample under `sampling_design` can't be split into `tables` equal tables, as the Lean verifier's `Stmt.setupTables`
     splits a session's sample, or None: one table takes any sampling design; several take a sampling design of fixed count (`fixed_count`) that is
-    positive and a multiple of `tables`. Lean `Draw.tablesWhy`, which `flock-verify draw --tables J` refuses by before
+    positive and a multiple of `tables`. Lean `Draw.tablesWhy`, which `verity-verify-proof draw --tables J` refuses by before
     any coin."""
     if tables <= 1:
         return None
-    n = fixed_count(law)
+    n = fixed_count(sampling_design)
     if not _int(n):
-        return TABLES_LAW
+        return TABLES_SAMPLING_DESIGN
     if n == 0 or n % tables:
         return f"tables: {n} units do not split into {tables} equal tables"
     return None
 
 
 def proved(draw: Mapping[str, Any]) -> list[int]:
-    """The proof blocks a sample proves: the sampled proof blocks and a work sample's closure, ascending (Lean `UnitDraw.proved`)."""
+    """The proof blocks a sample proves: the sampled proof blocks and a work sample's closure, ascending (Lean `UnitSample.proved`)."""
     return sorted([*draw["units"], *draw.get("closure", ())])
 
 
-def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any], tables: int = 1) -> Verdict:
+def check_draw(draw: Any, docket: Mapping[str, Any], sampling_design: Mapping[str, Any], tables: int = 1) -> Verdict:
     """The sample is well formed, over the registered population, under the verifier's sampling design (for `stratified` and `work`,
     the expanded sampling design of `derive`), and a session of `tables` tables can split it (`tables_problem`)."""
     c = _Collect()
@@ -370,12 +375,12 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
         c.fail("keys", sorted(set(draw) ^ keys))
         return c.verdict()
     n, units = draw["population"], draw["units"]
-    if (why := tables_problem(law_of(draw), tables)) is not None:
+    if (why := tables_problem(sampling_design_of(draw), tables)) is not None:
         c.fail("tables", why)
-    if not same_design(law_of(draw), dict(law)):
-        c.fail("law", {"drawn": law_of(draw), "verifier": dict(law)})
-    if n != registration["population"]:
-        c.fail("population", {"drawn": n, "registered": registration["population"]})
+    if not same_design(sampling_design_of(draw), dict(sampling_design)):
+        c.fail("law", {"drawn": sampling_design_of(draw), "verifier": dict(sampling_design)})
+    if n != docket["population"]:
+        c.fail("population", {"drawn": n, "registered": docket["population"]})
     if not isinstance(units, list) or not all(_int(u) for u in units):
         c.fail("units", units)
         return c.verdict()
@@ -421,6 +426,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_design", "parse_rate",
+__all__ = ["TABLES_SAMPLING_DESIGN", "check_draw", "check_proved", "derive", "digits", "fixed_count", "sampling_design_of", "parse_design", "parse_rate",
            "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
            "work_table"]

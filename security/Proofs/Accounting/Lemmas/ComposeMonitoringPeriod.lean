@@ -1,22 +1,22 @@
 module
 
-public import Definitions.Accounting.Guarantees.ComposeMonitoringPeriod
+public import Definitions.Compose.Guarantees.ComposeMonitoringPeriod
 
 /-!
 # PoUW's work over a monitoring period of `n` windows: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.ComposeMonitoringPeriod` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Compose.Guarantees.ComposeMonitoringPeriod` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 
 * `MonitoringPeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
   `Λ` (`RoundGame.BudgetAt`, which `ServiceBudget` gives per window), whatever the earlier windows did, so does the
-  period's game (`monitoringPeriodGame`). Proved (`Proofs.Accounting.ComposeMonitoringPeriod`): a window's game is one round, and
+  period's game (`monitoringPeriodGame`). Proved (`Proofs.Compose.ComposeMonitoringPeriod`): a window's game is one round, and
   `BudgetAt` over rounds is that condition at each round given the past.
 * `MonitoringPeriodTailMax`: `budget_tail` at every prefix at once (Ville's inequality, finite form): when `Λ` bounds the play,
   some prefix of its rounds is accepted with share at least `Λ·t` with probability at most `e^{−t}`. So a prefix
   that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
-  (`Proofs.Accounting.ComposeMonitoringPeriod`): by induction on the game, conditioning on the first round's coins as
+  (`Proofs.Compose.ComposeMonitoringPeriod`): by induction on the game, conditioning on the first round's coins as
   `expect_weight_le` does, with the bound for every threshold `D` in the induction.
 -/
 

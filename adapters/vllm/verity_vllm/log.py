@@ -5,8 +5,8 @@ A record reads ``LEVEL MM-DD HH:MM:SS [file.py:line] message``, vLLM's format, w
 machines compare; each further line of a message (a traceback's too) repeats that head, so every line says where it came
 from.  ``debug_once``, ``info_once`` and ``warning_once`` log a message with its arguments once per process.
 
-Records go to stderr, not to stdout as vLLM's do: a command's stdout carries what it prints for a reader (a JSON record a
-caller redirects to a file), which a diagnostic must not interleave with.  The stream is ``sys.stderr`` as it is at each
+Records go to stderr, not to stdout as vLLM's do: a command's stdout carries what it writes for a reader (a JSON record a
+caller redirects to a file) through ``write``, which a diagnostic must not interleave with.  The stream is ``sys.stderr`` as it is at each
 record, so a redirect or a test's capture sees every one, and each record is flushed.
 
 One handler, on the ``verity_vllm`` logger, which propagates: when a handler above it takes a record (an application that
@@ -14,7 +14,7 @@ configures the root logger, pytest's ``caplog``), that handler writes it and thi
 twice and ``caplog`` sees them all.  Importing this module adds the handler and sets the package's level to INFO, and
 configures nothing else; a program's entry point sets the level and stream with ``configure``.  Inside a vLLM process,
 vLLM's ``VLLM_CONFIGURE_LOGGING`` and ``VLLM_LOGGING_*`` govern only vLLM's own logger, never this one.  It imports nothing
-from the package, so every layer may log.
+from the package, so every layer may log and write.
 """
 from __future__ import annotations
 
@@ -137,6 +137,11 @@ def configure(level: int | str = DEFAULT_LEVEL, stream: TextIO | None = None) ->
     cast(Handler, handler()).stream = stream
 
 
+def write(text: str, end: str = "\n") -> None:
+    """``text`` and ``end`` on stdout, as the stream is at the call, flushed: a command's output for its reader."""
+    print(text, end=end, file=sys.stdout, flush=True)
+
+
 handler()
 
-__all__ = ["VerityLogger", "configure", "init_logger"]
+__all__ = ["VerityLogger", "configure", "init_logger", "write"]

@@ -1197,7 +1197,7 @@ def test_a_watch_state_outside_the_enum_is_refused_and_leaves_the_last_status(tm
 
 
 def test_every_kind_the_watch_records_is_a_watch_state():
-    """A new finding (a new `self.record("...")`) must join WATCH_STATES, or status.json refuses it in production."""
+    """A new finding (a new `self.record("...")`) must join WATCH_STATES, or status.json refuses it in the deployed watcher."""
     kinds = set(re.findall(r'self\.record\("(\w+)"', open(W.__file__).read()))
     assert kinds and kinds <= set(W.WATCH_STATES), sorted(kinds - set(W.WATCH_STATES))
 
@@ -1225,7 +1225,7 @@ def two_agents(tmp_path, order):
 def test_the_same_state_gives_the_same_bytes_with_agents_sorted(tmp_path):
     (tmp_path / "x").mkdir()
     (tmp_path / "y").mkdir()
-    w1, w2 = two_agents(tmp_path / "x", ["bc-b", "bc-a"]), two_agents(tmp_path / "y", ["bc-a", "bc-b"])
+    w1, _ = two_agents(tmp_path / "x", ["bc-b", "bc-a"]), two_agents(tmp_path / "y", ["bc-a", "bc-b"])
     a, b = (tmp_path / "x" / "status.json").read_bytes(), (tmp_path / "y" / "status.json").read_bytes()
     assert a == b, "the listing's order doesn't reach the file"
     assert [e["agent_id"] for e in json.loads(a)["agents"]] == ["bc-a", "bc-b"]
@@ -3292,6 +3292,29 @@ def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_ne
     assert new["branch"] == "cursor/ca-salt-wire-ea24"
 
 
+def test_a_relaunched_worker_runs_opus_at_high_effort_and_its_children_never_run_fable(tmp_path):
+    """Only leads run Fable 5.2: a worker's replacement is launched on Opus 5.5 at high effort, and told to name
+    `claude-opus-5-5-high` (or `claude-sonnet-5-5-high`) for any child and to hold no timer or subscription."""
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
+    launch_api = FakeLaunchApi()
+    api, clock, w, _, roots = nodes_setup(tmp_path, launch_api=launch_api)
+    api.workers[W1_] = worker("IDLE", W.iso(T0 - 600))
+    api.convs[W1_] = [("user_message", "brief"), ("assistant_message", "Rerunning the suites on cpu-3.")]
+    (tmp_path / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
+    ended = run_end_for(tmp_path, roots, clock, w, W1_)
+    while clock.t < ended + W.RESUME_S + W.BURST_QUIET_S + W.WORKER_RELAUNCH_S + 300:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    ((_, body),) = launch_api.posts
+    assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+    assert "claude-fable" not in json.dumps(body), "a worker never runs Fable"
+    text = body["prompt"]["text"]
+    assert ("A child you start names `claude-opus-5-5-high` (or `claude-sonnet-5-5-high` for a fully specified task), "
+            "never Fable, `inherit` or none.") in text
+    assert "You hold no timer or subscription of your own." in text
+
+
 def vllm_workers(d, *agents):
     """workers.d entries for `agents`, launched by NEW (vllm's coordinator), as a coordinator registers its workers."""
     (d / "workers.d").mkdir(parents=True, exist_ok=True)
@@ -4580,7 +4603,8 @@ def test_an_inbox_holder_is_held_unread_only_once_a_doorbell_waited_an_hour(tmp_
     stream_worker(w, clock, "run-v", W.UNREAD_S // 60 + 30)
     assert api.posts == [], "no doorbell and no timer: nothing sits unread"
     rang = clock.t
-    bells = lambda: {"t": W.iso(clock.t), "inboxes": {"vllm": {"agent": NEW, "last": f"{rang:.6f}"}}}
+    def bells():
+        return {"t": W.iso(clock.t), "inboxes": {"vllm": {"agent": NEW, "last": f"{rang:.6f}"}}}
     (tmp_path / "doorbells.json").write_text(json.dumps(bells()))
     for _ in range(W.UNREAD_S // 60 - 1):
         stream_worker(w, clock, "run-v", 1)
@@ -4606,7 +4630,7 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
 
 
-def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap_once_coordinators_are_back(tmp_path):
+def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_limit_once_coordinators_are_back(tmp_path):
     """Most coordinators ended in ERROR over a few hours while every restart failed. The watch spent each one's restarts within
     minutes and left them for a person, nobody was rung, and after a ring revived them they stayed 'left for a person' until
     state.json was cleared by hand. Replayed: one coordinator down every 20 minutes."""
@@ -4618,7 +4642,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
                   {f"ok-{i}": {"status": "FINISHED"} for i in range(len(ids))})
     clock = Clock(T0)
     w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
-    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent
+    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its limit already spent
     refused = []
 
     def down(path, body=None):
@@ -4639,7 +4663,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
     tries = [t for path, t in refused if path == f"/v1/agents/{ids[0]}/runs"]
     outage_tries = [t for t in tries if t >= T0 + 40 * 60]
     assert len(outage_tries) >= 12 and all(b - a >= W.OUTAGE_RETRY_S for a, b in zip(outage_tries, outage_tries[1:])), \
-        "in the outage the first coordinator is still tried every 15 min, its spent cap notwithstanding"
+        "in the outage the first coordinator is still tried every 15 min, its spent limit notwithstanding"
     assert not any(r["kind"] == "relaunch" for r in records(tmp_path) if r["agent"] == ids[0] and r["t"] >= W.iso(T0 + 2400))
     assert all(w.errors.get(a, 0) == 0 for a in ids[2:]), "a restart in an outage is not counted"
     assert not any(r["kind"] in ("erroring", "relaunch") for r in records(tmp_path) if r["agent"] in ids[2:])
@@ -4652,7 +4676,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
     assert w.errors[ids[0]] and w.down, "seeing a restart running is not enough: one reads RUNNING a minute before it errors"
     clock.t += W.STICK_S
     w.sweep(lambda r: None)
-    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every cap cleared, no person needed"
+    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every limit cleared, no person needed"
     api._agents[3]["latestRunId"] = "err-again"
     api._runs["err-again"] = {"status": "ERROR"}
     clock.t += 60
@@ -4661,7 +4685,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
         "one coordinator down alone is restarted and counted as before"
 
 
-def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_cap():
+def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_limit():
     def refused(retry_after=None):
         return W.urllib.error.HTTPError("/v1/agents", 429, "Too Many Requests",
                                         {"Retry-After": retry_after} if retry_after else {}, None)
@@ -5356,3 +5380,23 @@ def test_the_pods_wrapper_hands_the_watch_the_read_token_s_command_and_the_file_
     assert " --gh-env /root/.config/verity/relay.env " in sh
     assert not re.search(r"(^|[\s;(])(\.|source)\s+\S*relay\.env", sh), "never sourced"
     assert "GH_TOKEN" not in sh and "GH_TOKEN" not in open(W.__file__).read()
+
+
+def test_a_file_that_does_not_parse_reads_as_empty_and_says_so_while_a_missing_one_says_nothing(tmp_path, capsys):
+    assert W.read_json(tmp_path / "none.json") == {} and capsys.readouterr().err == ""
+    (tmp_path / "bad.json").write_text("{")
+    assert W.read_json(tmp_path / "bad.json") == {}
+    assert f"{tmp_path / 'bad.json'}: unreadable, read as empty (JSONDecodeError" in capsys.readouterr().err
+
+
+def test_a_time_that_does_not_parse_is_none_and_said_while_no_time_is_none_quietly(capsys):
+    assert W.epoch(None) is None and W.epoch("") is None and capsys.readouterr().err == ""
+    assert W.epoch("yesterday") is None
+    assert "time 'yesterday' does not parse; read as none" in capsys.readouterr().err
+
+
+def test_a_doorbell_without_its_last_is_skipped_by_name(tmp_path, capsys):
+    p = tmp_path / "doorbells.json"
+    p.write_text(json.dumps({"t": "2026-10-18T22:00:00Z", "inboxes": {"top": {"last": "1.5"}, "infra": {}}}))
+    assert W.doorbells(p, W.epoch("2026-10-18T22:00:00Z")) == ({"top": 1.5}, "fresh")
+    assert f"{p}: @infra's doorbell skipped, its `last` unread (KeyError" in capsys.readouterr().err

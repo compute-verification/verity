@@ -14,7 +14,7 @@ set_option Elab.async false
 
 `flock_headline_exec` (`Integrate/Headline.lean`) for the statement main's prover writes
 (`hiddenOutputs = true`, `Stmt.setupHidden`). `flock_headline_exec_hidden` instantiates `flock_headline_hidden` at the
-production program `Placed.keyProg c hU n`, its returned outputs' bits for the program's outputs (`Layout.outsOf`), and
+proving program `Placed.keyProg c hU n`, its returned outputs' bits for the program's outputs (`Layout.outsOf`), and
 the one-table plan of the session's inputs (`planAtH`), with:
 * `pp := ppH`, `hConst := hConstH`, `hZero := hZeroH` (`Sites.lean`);
 * `lay := keyLayoutH` (`layAtH`) and `rs := keyRowsH` (`rsAtH`) at row widths `16 · words` (`KeyH.lean`), each row under
@@ -24,7 +24,7 @@ the one-table plan of the session's inputs (`planAtH`), with:
 * `hHm := keyRowsH_computes` (`rsAtH_computes`).
 
 So the hypotheses left are those of the plain headline: `hscope`, `hdec`, A3, `cr/sha-512`, `ecr/sha-512` and the
-numeric conditions. flock-verify refuses a statement failing `hscope` or the statement's other form hypotheses
+numeric conditions. verity-verify-proof refuses a statement failing `hscope` or the statement's other form hypotheses
 (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec_hidden` takes none of them.
 -/
 
@@ -45,15 +45,15 @@ theorem rowsFit_of_scopeH {tags : Tags} {cf : ByteArray} {tables : List (String 
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
 include hU hpub in
-/-- **The site fact at a sampled table under hidden outputs**: at a sample flock-verify sets up with `Stmt.setupHidden`,
+/-- **The site fact at a sampled table under hidden outputs**: at a sample verity-verify-proof sets up with `Stmt.setupHidden`,
 each sampled proof block's site is `BcSiteH`: the acceptance's sample is `dj S`, which decodes to `D`, its regions are the
 executable's, its public file loads (`HmOut.loadPublic`) to `pub`, with or without shared rows, and the unit's block
 and template instance index its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
-theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableH_bcSiteS {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
   refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_⟩
@@ -70,12 +70,12 @@ theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u 
 set_option linter.unusedSectionVars false in
 include hU hpub hpt in
 /-- `tableH_bcSiteS` at a public file without shared rows. -/
-theorem tableH_bcSite {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableH_bcSite {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub (x.table.o u h) (x.table.vu u h) u.val :=
   tableH_bcSiteS ht hc hscope dj hU hpub x h
 
 include hU hpub hpt in
-/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan: at a sample flock-verify sets up by
+/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan: at a sample verity-verify-proof sets up by
 `tableH_bcSite`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
 theorem sitesAtH_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
@@ -86,7 +86,7 @@ theorem sitesAtH_bcSite :
   intro S R u h M hM
   show BcSiteH ((tableAtH dj x₀ S).acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub ((tableAtH dj x₀ S).o u h)
     ((tableAtH dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupH I mPts S (dj S))
   · have e : tableAtH dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtH
       rw [dite_eq_left_of_eq_true (eq_true hS)]
@@ -131,14 +131,14 @@ checks each output row holds its port's words, `ht`) and whose public file loads
 the JSON `dj S` (`x₀` one sample it sets up with `Stmt.setupHidden`). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
 session be the live-coin part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`,
-flock-verify accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated
+verity-verify-proof accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated
 prover's committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with
-probability at most `miss(K) + ε_ks + δ_link`.
+probability at most `miss(K) + ε_ks + ε_bind`.
 
 Its hypotheses, past the session's inputs, are `flock_headline_exec`'s at the hidden tables:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: the plain headline's, or its rows each a
   `sha512/row/v2` row that fits or a `sha512/row-seg/v1` row, of any mix, the output rows fit;
-* `hdec` (`DecodesOn`, at the sampling design's samples only), open, at the hidden tables `tablesAtH`: at a sample flock-verify
+* `hdec` (`DecodesOn`, at the sampling design's samples only), open, at the hidden tables `tablesAtH`: at a sample verity-verify-proof
   accepts under hidden outputs whose record carries the challenger's sample `dj S`, proving `S`, with link points
   `mPts`, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted (`tableAtH_of_accepts`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
@@ -152,8 +152,8 @@ the same expressions at the hidden tables. Scope otherwise as the plain headline
 path, `keyProg` has no edges between units, the proof coins are the challenger's coin tree's (A6), and sessions of more
 than one table are outside it. -/
 theorem flock_headline_exec_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -164,20 +164,20 @@ theorem flock_headline_exec_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (L
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
     (hdec : DecodesOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dec one fin capOf
-      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+      (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 Lp
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
         (rsAtH_computes ht hc hscope dj x₀ hU hpub hpt))
       (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (planAtH dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
       (batchStratL H512 enc512 Lp (planAtH dj x₀)
         (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 Lp (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
@@ -185,12 +185,12 @@ theorem flock_headline_exec_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (L
               (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict (planAtH dj x₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
-          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
             (rsAtH_computes ht hc hscope dj x₀ hU hpub hpt)) k Rw M ρ t' :=
   flock_headline_hidden dj x₀ (Placed.keyProg c hU n) (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3

@@ -1,7 +1,7 @@
 """The block record: what each subprotocol writes for one server block and the verdict on it, one document
 ``verity/block-record/v2``. It extends the all-protocols runner's per-period report
 (``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
-steps, every leg in one shape, the Lean verdict with the JointPooledLive error sum, and the monitoring period.
+steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive error sum, and the monitoring period.
 
 **The record.**
 
@@ -9,39 +9,38 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   blocks schema).
 * ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
-  ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the leg's certificate
+  ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the subprotocol's certificate
   ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S0, Q_cert, K, the wipe's foreign_bits at its reads ``k``
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it; S0 is PoUS's state bound
-  ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the leg's
+  ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the subprotocol's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
-  proofs' Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
   profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
   the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
   at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
   `NAMES_TERMS` (bandwidth) always carries and another may, is the terms its ``error`` leaves out, as its answer's
   profile names them: PoUB's ``ledger.NAMED_TERMS``, each term ``{claim, term, value: null, in_total: false, status}``.
   They have no number, so ``error``, ``at`` and every sum of this record hold none of them and each reads with them
-  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. A leg whose ``server``
+  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. A subprotocol whose ``server``
   is not the block's is carried but not composed.
-* ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check`` or ``remote check``)'s
-  answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
-  (`Core.Verdict`: accept, reject or undecided), undecided when there is none; nothing here combines the legs' verdicts
-  into another. The rest is what the product's legs say (`compose`): ``legs`` (each composed leg's own verdict), what is
+* ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check``, or ``remote check`` or
+  ``remote-v1 check``)'s answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
+  (`Core.Verdict`: accept, reject or undecided), undecided when there is none; nothing here combines the subprotocols' verdicts
+  into another. The rest is what the product's subprotocols say (`compose`): ``legs`` (each composed subprotocol's own verdict), what is
   ``missing`` on the block's server and what ran ``elsewhere``; ``joint_horizon`` is `JOINT_HORIZON`'s error over this
-  block, the accepted legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it; its
+  block, the accepted subprotocols' errors summed, and at each δ of `DELTAS` that δ times the subprotocols established at it; its
   ``named_terms`` gives, by subprotocol, the terms those errors leave out, which its sums and the monitoring period's
   leave out too (``{}``: they leave none out). The statement names five audits; the wipe is ``outside_statement``.
-  The product (`PRODUCTS`) is onsite's, every leg, unless ``product`` names another: remote's composes sampled proofs
-  and PoUW, and its other legs are ``dropped``, not run and not composed, so they are never ``missing``.
+  The product (`PRODUCTS`) is onsite's, every subprotocol, unless ``product`` names another: remote's composes SPOT
+  and PoUW, and its other subprotocols are ``dropped``, not run and not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `MONITORING_PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
   Each reads with the block's ``joint_horizon.named_terms`` beside it, once a block.
 
-`check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
-the Lean answer and extra legs.
+`check` recomputes every derived field from the subprotocols and the answer. `from_period` builds a record from a runner report,
+the Lean answer and extra subprotocols.
 """
 from __future__ import annotations
 
@@ -58,19 +57,20 @@ from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
-LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
-#: the runner's protocol keys, by leg
+SUBPROTOCOLS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
+#: the runner's protocol keys, by subprotocol
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
-#: the legs each product composes: onsite every leg, remote those that need no hardware of the auditor's at the site
-PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw")}
+#: the subprotocols each product composes: onsite every subprotocol, remote those that need no hardware of the auditor's at the site
+PRODUCTS = {"onsite": SUBPROTOCOLS, "remote": ("integrity", "pouw")}
 #: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
 NAMES_TERMS = ("bandwidth",)
 #: what puts a refused one right: its piece's answer names the terms
 NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
 #: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
 NAMED_TERM = ("claim", "term", "value", "in_total", "status")
-#: the protocol each product's Lean check (`onsite check`, `remote check`) names in its answer, and `Core.Verdict`'s names
-CHECKS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
+#: the protocols each product's Lean checks name in their answers (`onsite check`; `remote check`, and `remote-v1 check`,
+#: remote's composite of record, whose work subprotocol is Pearl+'s), and `Core.Verdict`'s names
+CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v0", "verity/remote/v1")}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
@@ -135,37 +135,37 @@ def error_form(error: Any, named: Mapping[str, Mapping[str, Any]] | None) -> str
     return " + ".join([str(error), *(f"{t['term']} ({t['status']})" for t in (named or {}).values())])
 
 
-def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fraction, str]:
-    """A leg's certificate, its error and where the error is read from, out of its runner row (or the wipe's leg)."""
+def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fraction, str]:
+    """A subprotocol's certificate, its error and where the error is read from, out of its runner row (or the wipe's subprotocol)."""
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
-    if leg == "integrity":
+    if subprotocol == "integrity":
         return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
                 frac(row["delta"]), "delta")
-    if leg == "pouw":
+    if subprotocol == "pouw":
         w = q["work"]
         return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
                 frac(row["delta"]), "delta")
-    if leg == "pous":
+    if subprotocol == "pous":
         return ({"symbol": "S0", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
                 frac(q["eps"]), "quantity.eps")
-    if leg == "bandwidth":
+    if subprotocol == "bandwidth":
         return ({"symbol": "Q_cert", "value": int(q["q_bytes"]), "unit": "bytes"}, frac(q["eps"]), "quantity.eps")
-    if leg == "certifier":
+    if subprotocol == "certifier":
         return ({"symbol": "K", "value": int(q["K"]), "unit": "bits", "windows": int(q["windows"])}, frac(q["eps"]),
                 "quantity.eps")
-    if leg == "wipe":
+    if subprotocol == "wipe":
         k = pub.get("k", (a.get("profile") or {}).get("k"))
         return ({"symbol": "foreign_bits", "value": int(pub["foreign_bits"]), "unit": "bits", "k": k, "r": pub.get("r"),
                  "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])}, frac(pub["eps"]), "answer.public.eps")
-    raise ValueError(f"{leg}: not a leg of {LEGS}")
+    raise ValueError(f"{subprotocol}: not a subprotocol of {SUBPROTOCOLS}")
 
 
-def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[str, Any]:
-    """The leg's certificate at each δ of `DELTAS` (module docstring)."""
+def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) -> dict[str, Any]:
+    """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
     out: dict[str, Any] = {}
     for d in DELTAS:
-        if leg == "integrity":
+        if subprotocol == "integrity":
             b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:
@@ -175,8 +175,8 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
     return out
 
 
-def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
-    """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
+def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
+    """One subprotocol of the record from its runner row (or, for the wipe, its subprotocol document); None for a row the runner marks
     ``missing``. Its answer is the row's verdict, reason, commitment and public outputs, and its profile's ``placement``
     where the answer has one (which host ran each party). Its ``named_terms`` are the answer's profile's, copied; a row
     of `NAMES_TERMS` whose profile names none, or any row whose profile names them in another shape, is a ValueError."""
@@ -201,15 +201,15 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
             "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}})
 
 
-def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
-    """What ``product``'s legs say about the block and the JointPooledLive error over it (module docstring), no verdict:
+def compose(server: str, subprotocols: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
+    """What ``product``'s subprotocols say about the block and the JointPooledLive error over it (module docstring), no verdict:
     the record's is its Lean answer's (`composed`). A product other than onsite's names itself and its ``dropped``
-    legs."""
+    subprotocols."""
     if product not in PRODUCTS:
         raise ValueError(f"product {product!r}: not one of {sorted(PRODUCTS)}")
     composes = PRODUCTS[product]
-    here = {k: v for k, v in legs.items() if k in composes and v is not None and v["server"] == server}
-    elsewhere = sorted(k for k, v in legs.items() if k in composes and v is not None and v["server"] != server)
+    here = {k: v for k, v in subprotocols.items() if k in composes and v is not None and v["server"] == server}
+    elsewhere = sorted(k for k, v in subprotocols.items() if k in composes and v is not None and v["server"] != server)
     missing = sorted(k for k in composes if k not in here)
     verdicts = {k: v["answer"]["verdict"] for k, v in here.items()}
     accepted = sorted(k for k, v in verdicts.items() if v == "accept")
@@ -220,7 +220,7 @@ def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> di
           "at": {str(d): {"error_sum": str(d * sum(1 for k in accepted if here[k]["at"][str(d)]["holds"])),
                           "not_established": sorted(k for k in accepted if not here[k]["at"][str(d)]["holds"])}
                  for d in DELTAS}}
-    named = {} if product == "onsite" else {"product": product, "dropped": sorted(k for k in LEGS if k not in composes)}
+    named = {} if product == "onsite" else {"product": product, "dropped": sorted(k for k in SUBPROTOCOLS if k not in composes)}
     return {"legs": verdicts, "missing": missing, "elsewhere": elsewhere, "joint_horizon": jh, **named}
 
 
@@ -229,24 +229,24 @@ def answer_of(answer: Mapping[str, Any] | None, product: str = "onsite") -> dict
     Raises ValueError for anything else: another protocol's answer, or a verdict that is not `Core.Verdict`'s."""
     if answer is None:
         return None
-    if answer.get("protocol") != CHECKS[product] or answer.get("verdict") not in VERDICTS:
-        raise ValueError(f"not an answer of the {product} check ({CHECKS[product]}) with a verdict of {VERDICTS}: "
-                         f"{dict(answer)}")
+    if answer.get("protocol") not in CHECKS[product] or answer.get("verdict") not in VERDICTS:
+        raise ValueError(f"not an answer of the {product} check ({', '.join(CHECKS[product])}) with a verdict of "
+                         f"{VERDICTS}: {dict(answer)}")
     return {k: answer.get(k) for k in ("protocol", "verdict", "reason", "commitment")}
 
 
-def composed(server: str, legs: Mapping[str, Any], answer: Mapping[str, Any] | None,
+def composed(server: str, subprotocols: Mapping[str, Any], answer: Mapping[str, Any] | None,
              product: str = "onsite") -> dict[str, Any]:
-    """The record's ``composed``: the Lean answer's verdict on the block, the answer, and what ``product``'s legs say
+    """The record's ``composed``: the Lean answer's verdict on the block, the answer, and what ``product``'s subprotocols say
     (`compose`; module docstring)."""
-    summary = compose(server, legs, product)
+    summary = compose(server, subprotocols, product)
     a = answer_of(answer, product)
     return {"verdict": a["verdict"] if a else "undecided", "answer": a, **summary}
 
 
-def dropped_ran(legs: Mapping[str, Any], product: str) -> list[str]:
-    """The legs ``product`` drops that ran nonetheless: a dropped leg is one the block didn't run."""
-    return sorted(k for k in LEGS if k not in PRODUCTS[product] and legs.get(k) is not None)
+def dropped_ran(subprotocols: Mapping[str, Any], product: str) -> list[str]:
+    """The subprotocols ``product`` drops that ran nonetheless: a dropped subprotocol is one the block didn't run."""
+    return sorted(k for k in SUBPROTOCOLS if k not in PRODUCTS[product] and subprotocols.get(k) is not None)
 
 
 def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dict[str, Any]:
@@ -269,8 +269,8 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
                 source: str = "real", product: str = "onsite") -> dict[str, Any]:
     """The record of one runner report (``verity/all-protocols-period/v1`` or ``-window/v1``) whose loop served ``steps``
     ``[lo, hi)`` on its node, for ``product``. ``answer``: the product's Lean check's (`CHECKS`) answer on the block (the
-    ``answer.json`` its check wrote), None when it didn't run. ``extra``: legs the runner doesn't run, by leg name, each
-    ``{row, server, runs, source}`` with ``row`` the leg's document (``{answer, ...}``). A leg the product drops that ran
+    ``answer.json`` its check wrote), None when it didn't run. ``extra``: subprotocols the runner doesn't run, by subprotocol name, each
+    ``{row, server, runs, source}`` with ``row`` the subprotocol's document (``{answer, ...}``). A subprotocol the product drops that ran
     is a ValueError."""
     if report.get("format") not in EXTENDS:
         raise ValueError(f"{report.get('format')}: not one of {EXTENDS}")
@@ -278,25 +278,25 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
     if not 0 <= lo < hi:
         raise ValueError(f"steps [{lo}, {hi}): not a nonempty range")
     server = report["node"]
-    legs: dict[str, Any] = {}
+    subprotocols: dict[str, Any] = {}
     for name, key in RUNNER_KEYS.items():
         row = report["protocols"].get(key)
-        legs[name] = None if row is None else leg(name, row, server=server, runs=row.get("runs") or [report["run"]],
+        subprotocols[name] = None if row is None else subprotocol(name, row, server=server, runs=row.get("runs") or [report["run"]],
                                                   source=source)
-    legs["wipe"] = None
+    subprotocols["wipe"] = None
     for name, x in (extra or {}).items():
-        legs[name] = leg(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
-    if ran := dropped_ran(legs, product):
-        raise ValueError(f"{', '.join(ran)}: legs the {product} product drops, which this block ran")
-    c = composed(server, legs, answer, product)
+        subprotocols[name] = subprotocol(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
+    if ran := dropped_ran(subprotocols, product):
+        raise ValueError(f"{', '.join(ran)}: subprotocols the {product} product drops, which this block ran")
+    c = composed(server, subprotocols, answer, product)
     which = {"period": report["period"]} if "period" in report else {"window": report["window"]}
     return {"format": FORMAT, "extends": report["format"], "run": report["run"], **which, "server": server,
-            "server_time": [{"server": server, "steps": [lo, hi]}], "legs": legs, "composed": c,
+            "server_time": [{"server": server, "steps": [lo, hi]}], "legs": subprotocols, "composed": c,
             "monitoring_period": monitoring_period(deployment, frac(c["joint_horizon"]["error_sum"]))}
 
 
 def check(record: Mapping[str, Any]) -> dict[str, str]:
-    """Every derived field of a record recomputed from its legs and its deployment: ``{key: why}``, empty when it holds."""
+    """Every derived field of a record recomputed from its subprotocols and its deployment: ``{key: why}``, empty when it holds."""
     bad: dict[str, str] = {}
     if record.get("format") != FORMAT:
         return {"format": f"not {FORMAT}"}
@@ -304,13 +304,13 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     if record["server_time"] != [{"server": server, "steps": record["server_time"][0]["steps"]}] or not (
             0 <= record["server_time"][0]["steps"][0] < record["server_time"][0]["steps"][1]):
         bad["server_time"] = "not one nonempty block [lo, hi) of the record's server"
-    if sorted(record["legs"]) != sorted(LEGS):
-        bad["legs"] = f"not the legs {LEGS}"
+    if sorted(record["legs"]) != sorted(SUBPROTOCOLS):
+        bad["legs"] = f"not the subprotocols {SUBPROTOCOLS}"
         return bad
     for name, lg in record["legs"].items():
         if lg is None:
             continue
-        key = f"leg:{name}"
+        key = f"subprotocol:{name}"
         if lg["source"] not in ("real", "fixture"):
             bad[key] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
@@ -325,7 +325,7 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
         bad["composed:product"] = f"not one of {sorted(PRODUCTS)}"
         return bad
     if ran := dropped_ran(record["legs"], product):
-        bad["legs"] = f"{', '.join(ran)}: legs the {product} product drops, which the block ran"
+        bad["legs"] = f"{', '.join(ran)}: subprotocols the {product} product drops, which the block ran"
     try:
         want = composed(server, record["legs"], record["composed"].get("answer"), product)
     except ValueError as e:
@@ -334,7 +334,7 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     got = record["composed"]
     for k in want:
         if got.get(k) != want[k]:
-            bad[f"composed:{k}"] = "not its answer's verdict" if k == "verdict" else "not what its legs and answer give"
+            bad[f"composed:{k}"] = "not its answer's verdict" if k == "verdict" else "not what its subprotocols and answer give"
     if record["monitoring_period"] != monitoring_period(record["monitoring_period"]["deployment"],
                                                         frac(want["joint_horizon"]["error_sum"])):
         bad["monitoring_period"] = "not the deployment's periods at the block's error sum"

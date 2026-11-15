@@ -10,8 +10,8 @@ import json
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.commitments.windows import interface as IF
-from verity.definitions.registry import b1 as B1
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.registry import b1 as B1
 
 from verity_vllm.pipeline import ingress_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW

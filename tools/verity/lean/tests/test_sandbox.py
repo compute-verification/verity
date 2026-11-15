@@ -33,7 +33,7 @@ needs_unshare = pytest.mark.skipif(subprocess.run([*UNSHARE, "--", "true"], capt
 def fake_run(tmp: Path, args: list[str], mounts: list[str], tmpdir: str | None = None) -> tuple[list[str], str]:
     """``sandbox.sh ARGS -- CMD`` with `mount` logged, mountinfo's mount points ``mounts`` and TMPDIR ``tmpdir``: the
     `mount` calls it made, and the TMPDIR CMD got (TEMP and TMP the same). It runs in a user namespace of its own, whose
-    count of user namespaces the script caps."""
+    count of user namespaces the script sets to 0."""
     bin_ = tmp / "bin"
     bin_.mkdir()
     for name, body in FAKE.items():
@@ -111,6 +111,18 @@ def test_where_tmp_stays_the_hosts_tmpdir_is_a_tmpfs_in_the_first_rw_dir(tmp_pat
                                    str(tmp_path / "other" / ".lake")], ["/"], tmpdir)
     assert got == f"{real}/.lake/.sandbox-tmp"
     assert tmpfs(log)[-1] == got and "/tmp" not in tmpfs(log)
+
+
+@needs_unshare
+def test_inside_the_sandbox_the_command_can_hold_no_capability_after_an_exec(tmp_path):
+    """The command runs as the user namespace's root, so a capability left in its inheritable, ambient or bounding set
+    is one it holds again after an `exec`: all three are empty (that it holds none now, the refused mounts below show)."""
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), str(tmp_path / ".lake"), "--", "setpriv", "--dump"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    sets = dict(line.split(": ", 1) for line in r.stdout.splitlines() if "capabilit" in line.lower())
+    assert sets == dict.fromkeys(("Inheritable capabilities", "Ambient capabilities", "Capability bounding set"),
+                                 "[none]"), sets
 
 
 @needs_unshare

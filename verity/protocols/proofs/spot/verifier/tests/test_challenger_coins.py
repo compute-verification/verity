@@ -49,7 +49,7 @@ def _reading(coins):
     return source, read
 
 
-def test_the_draw_reads_the_coins_opened_after_the_commitment_in_order():
+def test_the_sample_reads_the_coins_opened_after_the_commitment_in_order():
     """subset:4 over 678 reads 144 bytes, three coins, opened in one batch after the commitment; the sample is
     `draw_first` on their concatenation, and the verifier replays it from the record."""
     ch, coins = _coins()
@@ -120,7 +120,7 @@ def test_the_verifier_refuses_coins_other_than_those_released_after_the_commitme
     assert reason is not None and why in reason, reason
 
 
-def test_a_family_is_drawn_once_and_a_read_needs_a_commitment():
+def test_a_family_is_sampled_once_and_a_read_needs_a_commitment():
     """A second sample in a family, for the same commitment or another, would take the family's later coins, which the
     prover could pick among once it has read the first: refused. A read before any commitment opens nothing. Coins over
     several families take a commitment each, in order, every one from its family's first coin."""
@@ -179,7 +179,7 @@ def test_coins_skipped_after_the_commitment_are_caught_by_the_log():
     assert T.read_reason(ch.commitment, skipped.to_json(), ROOT, read) is None
 
 
-def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):  # noqa: F811
+def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):
     """Over a challenger served on loopback (`remote.serve`): the sample opens its coins in one round trip, and the
     verifier replays it against the commitment and roots it trusts from the challenger's directory and the auditor's
     ledger (`remote.trusted_session`)."""
@@ -188,19 +188,19 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
     coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
     segment = coins.commit(ROOT)
     source, read = _reading(coins)
-    law = {"law": "subset", "k": 1}
-    draw = T.draw_first(T.OwnRandomness(source), law, 6)
+    sampling_design = {"law": "subset", "k": 1}
+    draw = T.draw_first(T.OwnRandomness(source), sampling_design, 6)
     client.close()
     assert host.ended() is None
     commitment, roots = host.trusted()
     assert roots["positions"] == (ROOT, ROOT) and len(read) == 2 * 9 + 64
     doc = segment.to_json()
     assert T.read_reason(commitment, doc, ROOT, bytes(read), roots["positions"]) is None
-    assert draw == T.draw_first(T.OwnRandomness(T._on(T.challenger_stream(commitment, doc, ROOT))), law, 6)
+    assert draw == T.draw_first(T.OwnRandomness(T._on(T.challenger_stream(commitment, doc, ROOT))), sampling_design, 6)
 
 
-def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
-    """`Stream.select` with the coins as its `coins`, committed to the registration's digest after its receipt: the
+def test_the_proof_system_samples_from_the_challengers_coins_after_the_receipt():
+    """`Stream.select` with the coins as its `coins`, committed to the docket's digest after its receipt: the
     sample both verifiers agree on, from bytes the verifier replays from the record. Without the commitment the
     select reads no coin."""
     from test_service import _ports, _record, _stream
@@ -227,22 +227,22 @@ COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-wi
 COIN_CODES = {"second-root": "family"}
 
 
-def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
+def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
-    the challenger's `coins` and its registration under `window_root`, sampled after the registration's digest, its proof
+    the challenger's `coins` and its docket under `window_root`, sampled after the docket's digest, its proof
     delivered, and its outcome run with the case's evidence (`coins_reason`'s, which is `draw_coins`'s: the auditor's
     ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the session's
     files) on a stream that holds the challenger's key and that copy of main's history, which this gives each case's
     stream (`Stream.key`, `Stream.main`): the honest one; a
     segment that skips a coin opened after the digest, one with a wrong opening, one that
-    adds another registration's coins in front; no evidence, empty evidence; a registration without its window root; a
+    adds another docket's coins in front; no evidence, empty evidence; a docket without its window root; a
     session whose pin isn't on the verifier's copy of main (`pinned_session`), the evidence carrying that copy; a family
     in which the client opened a coin after another root once it had read the sample (the run's `family`); another
     case's segment, a family the stream did not read; honest evidence on a stream that holds another key than the one
     the session is signed under, on one that holds none, and on one whose copy of main's history is not the evidence's;
     honest evidence that names a key of its own, the form the reader took before the key was the stream's; and coins a
     session of another window released after the same digest. Each case's
-    registration has a family of its own (`positions/<case>`, `positions` coins), since a family's coins follow one.
+    docket has a family of its own (`positions/<case>`, `positions` coins), since a family's coins follow one.
     -> ({case: (its stream, its outcome, its audit record)}, {case: its segment})."""
     import test_remote
     from test_service import SESSION, _lean
@@ -314,10 +314,10 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
             assert (lean["step"], lean["codes"]) == ("select", [COIN_CODES.get(name, "coins")]), (name, lean)
 
 
-def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
-        tmp_path, signer, monkeypatch):  # noqa: F811
+def test_the_lean_run_refuses_a_sample_whose_coins_the_challenger_did_not_release_after_the_registration(
+        tmp_path, signer, monkeypatch):
     """On a stream sampling from the challenger (which its digest names), every outcome's run
-    by the verifier (`Run.run`) checks the sample's coins: with their evidence for the registration's window
+    by the verifier (`Run.run`) checks the sample's coins: with their evidence for the docket's window
     (`window_root`) it accepts the honest sample, and it rejects, failing `run` with the select step's `coins`, each of
     `coin_outcomes`' other cases (a prover picking the window among them, or the family), but for the family holding a
     second root, which it rejects with the select step's `family`. A sampler beside the challenger's coins, and
@@ -334,10 +334,10 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     assert_only_honest_coins_accepted(outcomes)
     coins = T.ChallengerCoins(C.LiveRecord(C.LiveChallenger(test_remote.SCHEME, 0, test_remote.FAMILIES, entropy("x")),
                                            "positions/honest", itertools.count().__next__))
-    assert outcomes["honest"][0].digest == _stream().digest != _stream(sampler=lambda law, n: [0, 1]).digest
+    assert outcomes["honest"][0].digest == _stream().digest != _stream(sampler=lambda sampling_design, n: [0, 1]).digest
     with pytest.raises(ValueError, match="no sampler"):
-        _stream(coins=coins, sampler=lambda law, n: [0, 1])
-    sampled = _stream(sampler=lambda law, n: [0, 1])
+        _stream(coins=coins, sampler=lambda sampling_design, n: [0, 1])
+    sampled = _stream(sampler=lambda sampling_design, n: [0, 1])
     draw = sampled.select(sampled.register(_record(), _ports(6)))
     assert sampled.deliver(draw, [SESSION]) is None
     with pytest.raises(S.Refused, match="coins") as refused:
@@ -345,7 +345,7 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     assert "read none" in refused.value.verdict.detail["coins"]
 
 
-def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames(tmp_path, signer, monkeypatch):
+def test_the_lean_run_accepts_a_sample_whose_session_released_its_coins_in_several_frames(tmp_path, signer, monkeypatch):
     """A window's withheld session that opened `test_remote.RELEASED` coins of another family before the sample, so
     many that its release at the close is past `remote.MAX_HEAD` as one frame (which cut the close, so its coins never
     settled) and takes several (`remote.release_frames`): the sample's coins, its own family's from the first, settle
@@ -410,17 +410,17 @@ class Redraws(T.ChallengerCoins):
 
 def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_refused_for_its_family(
         tmp_path, signer, monkeypatch):
-    """A second registration in one family of one window's withheld session is refused by both verifiers. The
-    session's client (`Redraws`) registers six proof blocks, commits the family's coins to that registration's digest
+    """A second docket in one family of one window's withheld session is refused by both verifiers. The
+    session's client (`Redraws`) registers six proof blocks, commits the family's coins to that docket's digest
     and reads its sample: a withheld session answers each open with the coin's raw bytes, so the client holds the
     sample before it sends anything more. It then registers the same six proof blocks again, each time on a stream of
     its own with an empty log and under roots of other bytes (a fresh commitment's), so under another digest, and
     commits the family's next coins to that digest, until a sample leaves out a proof block of the first one. The
-    verifier is handed the last registration alone: its record, its segment and the session's signed files, whose log
+    verifier is handed the last docket alone: its record, its segment and the session's signed files, whose log
     lists every earlier digest's coins before its own. The coins after the last digest are consecutive in the family
     and all read, and the family's log shows the earlier roots: `coins_reason` refuses for that (`FAMILY_ROOT`), and
     the outcome is a reject whose run the Lean (`Run.run`) refused at its select under the code `family`. So is the
-    first registration's, whose coins are the family's first: the family holds later roots. One-stage v2's read of the
+    first docket's, whose coins are the family's first: the family holds later roots. One-stage v2's read of the
     same log at the parameters' family (`draw_coins`, `OneStage.coinsOf`'s) refuses every one of them alike. The
     honest client takes no second commitment in the family (`ChallengerCoins.commit`)."""
     import test_remote
@@ -483,7 +483,7 @@ def _salt_coins(challenger: C.LiveChallenger | None = None) -> tuple[C.LiveChall
     return ch, T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))
 
 
-def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn_once():
+def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_sampled_once():
     """The seed salt is the seed-salt family's first coin, opened after the window's open root and read whole, with no
     derivation, which the verifier replays from the record. The sample refuses coins of another family, a window root in
     another form, and a family with a coin open already: nothing resamples a window's salt."""
@@ -508,7 +508,7 @@ def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn
     assert draw.record.roots == []
 
 
-def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):  # noqa: F811
+def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):
     """Over a challenger served on loopback for the window, withheld: the stream samples the window's seed salt at its
     open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
     (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the

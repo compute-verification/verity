@@ -63,7 +63,7 @@ coins out, and an outside machine that keeps state across programs can return th
 work then imports only the root, so the per-program `OutsourceWithinEgress` is false at such a node: the work's
 exchange-free replacement does the block's words and hashing, worth `H_b`, against `β` times the root's 512 bits.
 Here the answer's exported coins count too. In 𝓜, where a program's outputs are a function of its own inputs, the
-per-program form implies this one (`Pouw.SecurityProofs.outsourcePeriod_of_perProgram`): this is the weaker claim,
+per-program form implies this one (`Pouw.SecurityProofs.outsourceMonitoringPeriod_of_perProgram`): this is the weaker claim,
 and the one that stays true at a node whose outside machines keep state across programs.
 
 **β.** The premise holds only at `β` at least a sampling block's honest priced cost over the
@@ -76,7 +76,7 @@ reaches a machine outside the registered devices only through a bit their progra
 confidential (`CoinsConfidential`). For the MVP that holds by placement: the device that runs a
 server's network certifier also produces that server's live coins, and private messages travel only on private links
 (`WitnessPathPrivate`), so no coin leaves the boundary the certifier counts but through
-the links it counts. Trust in that device and its host provider is `trusted-host`. A coin readable outside the
+the links it counts. Trust in that device and its host provider is `trusted-device`. A coin readable outside the
 boundary falsifies the premise: an outside machine computes the block's words from it and returns the root in 512
 bits. -/
 def OutsourceWithinEgressPeriod (G : Accel) (P : RoundProto) (k : ℕ) (μ : G.Res → ℝ) (β : ℝ) : Prop :=

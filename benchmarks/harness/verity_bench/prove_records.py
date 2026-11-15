@@ -9,10 +9,11 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | --- | --- | --- |
 | `census` | one `block-census/v1` art | its `census.json` (`prove.Census.of`) |
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
-| `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
-| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
+| `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove_flock.Session`) |
+| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove_flock.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
+| `flock-warm` | any number of runs of `benchmarks/served_units/stage_prove.sh` | each group's `WARM_SUMMARY` (`prove_time.py`'s) with its `WARM_CONFIG`: a statement proved on one card, after WARM warm sessions the median of RUNS timed ones, every session accepted (`prove_flock.Warm`, `warm_rows`) |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
-| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove.LeanVerify`, `lean_verify`) |
+| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove_flock.LeanVerify`, `lean_verify`) |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
 says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
@@ -29,8 +30,20 @@ check, or whose fields can't show it ("cannot tell"), prices nothing, and is nam
 check it didn't pass, the check's answer and its reason, in the rules' words, then with what it lacks to be priced
 (`row_why`). The rules' four other checks are no condition here: three read a run's other files (its lease and card,
 the card at its start and end, its window's sessions), and `one_numa_node` reads `cores.numa_nodes`, which a row may
-lack. A labelled row is priced whatever they say (`steady.verdict` gives all ten, from the row and its run's files).
-`report_why` judges a report.
+lack. They are read through a run's own verdict instead (`own_verdict`): a run of the harness's steady-state point
+(`STEADY_POINT_TOOL`) judged its row by all ten as it ended, and its attempt carries that verdict as its result's
+validation. A run of the point whose verdict is `failed` prices none of its rows, each refused with the run and the
+checks it didn't pass, and one whose attempt carries no verdict can't be told and is refused too. Any other run, one
+timed outside the harness's point or before it, has no verdict of its own and is judged by `CHECKS` alone, whatever
+the other four say. `report_why` judges a report.
+
+A row whose card was on another NUMA node than its CPUs still prices its type. Where a row records its card's node
+(`CARD_NUMA`), it is off that node when its CPUs (`cores.numa_nodes`) aren't on that node alone, and on it otherwise.
+Where it records none, its run decides by `OFF_NODE`'s scan of the runs' own host records: off where the scan lists
+the run, on where the scan read the run and doesn't list it, and not recorded where the scan didn't read it
+(`off_node`). The table's notes and the proving totals' inputs count the priced rows of each kind with the share of
+the proving time they hold, and the rows priced from the single-session card, whose table records no CPUs
+(`prove.report`'s `off_node`).
 
 A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
 the stated host CPU cores a card (`--cores`): from the rows whose provers held that many, else from those that held
@@ -77,17 +90,20 @@ it is read from. A table with every block proved records nothing.
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from functools import cache
 from pathlib import Path
 from typing import Any, TypeGuard
 
 from verity_bench import exfiltration as E
-from verity_bench import jobs, kit, overhead_records, settings, steady
+from verity_bench import jobs, kit, overhead_records, settings, steady, steady_node
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
+from verity_bench import prove_flock as PF
 from verity_bench.boolean import boolean_version
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
@@ -108,6 +124,18 @@ REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 #: the checks of the proof server's steady-state rules (`steady.CHECKS`) a row is held to here, each the rules' own
 #: function of the row, in the rules' order: every check of theirs that reads the row alone, but `one_numa_node`
 CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no_throttling, steady.every_prover_warmed)
+#: the tool a run of the harness's steady-state point is recorded under (`verity_bench.tool.STEADY_POINT`'s name): its
+#: attempt carries the point's verdict on all ten checks as its result's validation (`own_verdict`)
+STEADY_POINT_TOOL = "steady_point"
+#: what a refusal of a run by its own verdict opens with: the measurements name each such refusal among their inputs
+OWN_VERDICT = "its own steady-state verdict"
+#: a row's field for the NUMA node of the card its provers ran on, as the harness's timed step reads it inside the
+#: lease (null where the node doesn't say), held to the row's `cores.numa_nodes`
+CARD_NUMA = "card_numa_node"
+#: a scan of the runs' own host records, for rows that don't record `CARD_NUMA`: the record whose runs it read
+#: (`record`), the runs it read (`read`), those of them whose card was on another NUMA node than their CPUs (`off`,
+#: each with both nodes), and in `source` what was read (`OffNodeScan`)
+OFF_NODE = Path(__file__).resolve().parent / "data" / "off_node.json"
 #: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
 #: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
 #: `stage.word`; `verify_s` is there only where the verifier was timed, and `cores`, the CPU cores its provers held for
@@ -121,7 +149,7 @@ LEAN_RECORD = "out/" + L.RECORD
 LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "verifier.runs", "accepted", "label", "host.node",
                "host.cores", "host.cpu_model")
 #: each fleet's assumed serving MFU
-FLEETS = Path("benchmarks/rho/data/reference.toml")
+FLEETS = Path("benchmarks/slowdown/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 #: the proof system whose table a runner records under its metric ids: SPOT, at the workload's sampling plan of record
 RECORDED = "spot"
@@ -150,7 +178,10 @@ TABLE = "out/prove.json"
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
-LEAN = "lean-verify"
+LEAN, WARMED = "lean-verify", "flock-warm"
+#: each card's group of a `stage_prove.sh` run: `prove_time.py`'s summary and `prove_time.sh`'s config, whose last
+#: fields are the warm and timed sessions it ran a statement (`warm=W runs=R`)
+WARM_SUMMARY, WARM_CONFIG = "out/gpu*/out/summary.json", "out/gpu*/out/config.txt"
 
 
 @dataclass(frozen=True)
@@ -309,14 +340,83 @@ def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int |
     return stated if _count(stated) else None
 
 
-def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> P.Steady | str:
+def _node(x: Any) -> TypeGuard[int]:
+    return isinstance(x, int) and not isinstance(x, bool) and x >= 0
+
+
+_RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
+
+
+@dataclass(frozen=True)
+class OffNodeScan:
+    """A scan of runs' own host records (`OFF_NODE`): the record whose runs it read, the runs it read (`read`), and
+    those of them whose card was on another NUMA node than their CPUs (`off`)."""
+
+    record: str
+    read: frozenset[str]
+    off: frozenset[str]
+
+    def of(self, run: str) -> bool | None:
+        """Whether `run`'s card was off its CPUs' node by the scan, None where the scan didn't read `run`."""
+
+        return (run in self.off) if run in self.read else None
+
+
+def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    if dup := sorted({k for k, _ in pairs if sum(k == j for j, _ in pairs) > 1}):
+        raise ValueError(f"lists {', '.join(dup)} more than once")
+    return dict(pairs)
+
+
+@cache
+def off_node_scan(path: Path = OFF_NODE) -> OffNodeScan:
+    """`OFF_NODE`'s scan, refused unless it names a workload's steady-state record, lists each run it read once and
+    by its id, and lists each off-node run once, among those it read, with a card's node and CPUs' nodes that aren't
+    that one node alone."""
+
+    try:
+        doc = json.loads(path.read_text(), object_pairs_hook=_no_duplicate_keys)
+    except ValueError as e:
+        raise ValueError(f"{path}: {e}") from e
+    record, read, off = doc["record"], doc["read"], doc["off"]
+    if record not in {w.record(STEADY) for w in WORKLOADS.values()}:
+        raise ValueError(f"{path}: `record` ({record!r}) is no workload's steady-state record")
+    if bad := sorted(r for r in read if not (isinstance(r, str) and _RUN_ID.fullmatch(r))):
+        raise ValueError(f"{path}: `read` lists what isn't a run id: {', '.join(map(str, bad))}")
+    if len(set(read)) != len(read):
+        raise ValueError(f"{path}: `read` lists {', '.join(sorted({r for r in read if read.count(r) > 1}))} more than once")
+    for run, x in off.items():
+        if run not in read:
+            raise ValueError(f"{path}: off-node run {run} isn't among the runs the scan read")
+        card, cpus = x.get("card_numa_node"), x.get("cpu_numa_nodes")
+        if not (_node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus) and cpus != [card]):
+            raise ValueError(f"{path}: run {run} lists no card's NUMA node and CPUs' NUMA nodes other than it alone")
+    return OffNodeScan(record, frozenset(read), frozenset(off))
+
+
+def off_node(row: Mapping[str, Any], run: str, scan: OffNodeScan | None = None) -> bool | None:
+    """Whether a row's card was on another NUMA node than its CPUs, None where that isn't recorded. A row that records
+    its card's node (`CARD_NUMA`) and its CPUs' (`cores.numa_nodes`) is off when they aren't that one node and on
+    otherwise. A row that doesn't (or records null) is as its run is by the scan (`off_node_scan`): off where it lists
+    the run off-node, on where it read the run and doesn't, and not recorded where it didn't read the run, whatever
+    the run's id."""
+
+    card, cpus = row.get(CARD_NUMA), _field(row, "cores.numa_nodes")
+    if _node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus):
+        return cpus != [card]
+    return (off_node_scan() if scan is None else scan).of(run)
+
+
+def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES,
+               refused: str | None = None) -> PF.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count and its cores: a statement's GPU-seconds are
     the GPUs its provers held over its statements a second, and its cores the CPU cores they held for its card
     (`row_cores`; `unstated` on a row that states none). Its block type is the census type it was staged for
     (`stage.word`), and the Definition staged (`stage.definition`) its `form` where that is another; a row with no
     `stage.word` is its `stage.definition`'s. A row that names no staged Definition can't be put on a block
     type's row, and is its reason instead. `art`: the art that holds the row as its `ART_RATES`, where the run's files
-    don't."""
+    don't. `refused`: why the row's run prices none of its rows (`own_verdict`), which the row is refused with in
+    place of `CHECKS`' answers. Whether its card was off its CPUs' NUMA node is `off_node`'s."""
 
     name = f"`{row.get('type')}` at {row.get('provers')} provers"
     definition = _field(row, "stage.definition")
@@ -324,7 +424,7 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
         why: str | None = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
                "it lacks `stage.definition`")
         return f"its row {name}: {why}"
-    why = row_why(row)
+    why = refused or row_why(row)
     stage = row["stage"]
     staged = definition
     if isinstance(stage.get("word"), str):
@@ -334,18 +434,61 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
     k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
     held = RATES if art is None else ART_RATES
     cores = row_cores(row, unstated) or unstated
+    off = off_node(row, run)
     if why:
-        return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
-                        art=art, cores=cores, form=form)
-    return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
-                    row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
+        return PF.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
+                        art=art, cores=cores, form=form, off_node=off)
+    return PF.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
+                    row.get("verify_s"), provers=provers, art=art, cores=cores, form=form, off_node=off)
 
 
-def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
+def own_verdict(store: Any, run: str, attempt: Mapping[str, Any] | None) -> str | None:
+    """Why a run prices none of its rows by its own verdict, or None where it has none against them. A run of the
+    harness's steady-state point (its attempt's tool `STEADY_POINT_TOOL`) judged its row by all ten of the rules'
+    checks as it ended, and wrote that verdict as its result's validation, which its attempt carries: `passed` leaves
+    its rows to `CHECKS`; `failed` refuses them, naming the run and the checks its verdict file
+    (`steady_node.VERDICT_FILE`, fetched only for such a run) says it didn't pass; and no validation at all can't be
+    told, and refuses them too, as a row whose fields can't show a check prices nothing. Any other run, one timed
+    outside the harness's point or before it, has no verdict of its own: None, and `CHECKS` alone judge its rows."""
+
+    if ((attempt or {}).get("tool") or {}).get("name") != STEADY_POINT_TOOL:
+        return None
+    status = ((attempt or {}).get("status") or {}).get("validation")
+    if status == "passed":
+        return None
+    if status != "failed":
+        return (f"{OWN_VERDICT} can't be told: run {run} is a steady-state point's, and its attempt carries no verdict "
+                f"(its result's validation is {status!r})")
+    return f"{OWN_VERDICT} failed: run {run} {_failed_checks(store, attempt or {})}"
+
+
+def _failed_checks(store: Any, attempt: Mapping[str, Any]) -> str:
+    """The checks a failed steady-state point's verdict file says its row didn't pass, each with its answer, or what its
+    verdict says instead where it names none."""
+
+    out = attempt.get("outputs") or {}
+    files, path = out.get("run_files") or out.get("run_record"), steady_node.VERDICT_FILE
+    if not files or not store.listing(files, [path]):
+        return f"keeps no `{path}` naming the checks it didn't pass"
+    try:
+        doc = json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
+    except json.JSONDecodeError as e:
+        return f"keeps a `{path}` that isn't JSON ({e.msg})"
+    checks = ((doc.get("verdict") or {}).get("checks") or {}) if isinstance(doc, Mapping) else {}
+    named = [f"`{name}` ({c.get('status')})" for name, c in checks.items()
+             if isinstance(c, Mapping) and c.get("status") != steady.PASS]
+    if named:
+        return "didn't pass " + ", ".join(named)
+    why = doc.get("why") if isinstance(doc, Mapping) else None
+    return f"wasn't a passed point: {why}" if why else f"keeps a `{path}` that names no check it didn't pass"
+
+
+def rates(store: Any, run: str) -> tuple[list[PF.Steady], list[str]]:
     """Every row of a run's `RATES` that names a staged Definition, or, in a run that holds none, every staged type of
     its proof server reports; and why the rest (or the run) can't be read. A `RATES` row that states no `cores` is
     read at the run's own (`HOST`'s `HOST_CORES_FIELD`), where the run's files state them; any other row that states
-    none, and every staged type of a report, at `prove.UNSTATED_CORES`."""
+    none, and every staged type of a report, at `prove.UNSTATED_CORES`. A run whose own verdict is against its rows
+    (`own_verdict`) has each refused with it, and the verdict first among its reasons."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
@@ -354,12 +497,17 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
     files = out.get("run_files") or out.get("run_record")
     if not files:
         return [], ["kept no run files"]
+    verdict = own_verdict(store, run, attempt)
     kept = {row["path"] for row in store.listing(files, [RATES, HOST])} & {RATES, HOST}
     if RATES in kept:
         tree = Path(store.fetch(files, paths=sorted(kept)))
         host = json.loads((tree / HOST).read_text()) if HOST in kept else None
         stated = host.get(HOST_CORES_FIELD) if isinstance(host, Mapping) else None
-        return _rows(json.loads((tree / RATES).read_text()), run, unstated=stated if _count(stated) else P.UNSTATED_CORES)
+        found, whys = _rows(json.loads((tree / RATES).read_text()), run,
+                            unstated=stated if _count(stated) else P.UNSTATED_CORES, refused=verdict)
+        return found, [verdict, *whys] if verdict else whys
+    if verdict:
+        return [], [verdict]
     held = {row["path"] for row in store.listing(files, [REPORTS, REPORTS.rsplit("/", 1)[0] + "/" + TYPES])}
     paths = sorted(p for p in held if p.endswith("/server.json") and p.rsplit("/", 1)[0] + "/" + TYPES in held)
     if not paths:
@@ -373,10 +521,11 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
         why, provers = report_why(report), int(where.rsplit("/server-k", 1)[1])
         for name, staged in report["types"].items():
             gpu, verify = ((report.get(k) or {}).get(name) for k in ("gpu_s_by_type", "verify_s"))
-            found.append(P.Steady(
+            found.append(PF.Steady(
                 name, types[name]["definition"], staged["k_log"], staged["c"], staged["full"], run, where,
                 gpu and gpu["mean"], verify and verify["mean"],
-                why or (None if gpu else "no statement of it finished in the steady span"), provers=provers))
+                why or (None if gpu else "no statement of it finished in the steady span"), provers=provers,
+                off_node=off_node({}, run)))
     return found, []
 
 
@@ -397,22 +546,25 @@ def report_why(report: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> tuple[list[P.Steady], list[str]]:
+def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES,
+          refused: str | None = None) -> tuple[list[PF.Steady], list[str]]:
     """A rate file's rows as `run`'s: those that name a staged Definition, and why the rest (or the file) can't be read.
-    A row that states no `cores` is read at `unstated`."""
+    A row that states no `cores` is read at `unstated`; `refused`: why the run prices none of them (`own_verdict`)."""
 
     if not isinstance(doc, list) or not all(isinstance(row, Mapping) for row in doc):
         return [], [f"its `{RATES if art is None else ART_RATES}` isn't a list of rows"]
-    read = [steady_row(row, run, art, unstated) for row in doc]
-    return [x for x in read if isinstance(x, P.Steady)], [x for x in read if isinstance(x, str)]
+    read = [steady_row(row, run, art, unstated, refused) for row in doc]
+    return [x for x in read if isinstance(x, PF.Steady)], [x for x in read if isinstance(x, str)]
 
 
-def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, tuple[list[P.Steady], list[str]]]:
+def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, tuple[list[PF.Steady], list[str]]]:
     """What a target of the steady-state record gives, by the run or art read: its rows that name a staged Definition,
     and why the rest (or the target) can't be read. A run gives its own `RATES`. An art that holds `ART_RATES` gives
     those rows in place of its run's own: they are that run's, completed or corrected after it, so its meta names the
-    one run in `runs`, which the rows are ordered by and which isn't read. Any other art stands for the runs its meta
-    names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged names)."""
+    one run in `runs`, which the rows are ordered by and whose files aren't read; its attempt is, for the run's own
+    verdict (`own_verdict`), which holds of its rows completed as of its own. Any other art stands for the runs its
+    meta names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged
+    names)."""
 
     if not superseded and (by := _superseded(store, target)):
         return {target: ([], [f"superseded by {', '.join(by)}"])}
@@ -427,11 +579,13 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     if len(runs) != 1:
         return {target: ([], [(f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
                                "one run's, so each run's go in an art of their own")])}
-    return {target: _rows(_read(store, target, ART_RATES), runs[0], target)}
+    verdict = own_verdict(store, runs[0], store.get_attempt(runs[0]))
+    found, whys = _rows(_read(store, target, ART_RATES), runs[0], target, refused=verdict)
+    return {target: (found, [verdict, *whys] if verdict else whys)}
 
 
 def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
-          cores: int = P.HOST_CORES) -> tuple[P.Flock, list[dict], list[dict]]:
+          cores: int = P.HOST_CORES) -> tuple[PF.Flock, list[dict], list[dict]]:
     """Flock's prover at `provers` provers on a host of `cores` CPU cores a card from the workload's records: the
     steady-state runs' and arts' rows (`steady_rows`), the single-session card's; the inputs, and the steady-state
     runs, arts and rows left out with why. The steady-state input counts what the rows measure of `census`: its block
@@ -439,10 +593,10 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
 
     art = of_record(store, workload.record(SINGLE), "single-session card")
     value = card(store, art, "proof_overhead", workload)
-    sessions = tuple(P.Session(b["block"], b["k_log"], b["seconds_per_block"], b["fixed_seconds"], b["statement_blocks"])
+    sessions = tuple(PF.Session(b["block"], b["k_log"], b["seconds_per_block"], b["fixed_seconds"], b["statement_blocks"])
                      for b in value["blocks"])
     steady, runs, refused = [], [], []
-    read: dict[str, tuple[list[P.Steady], list[str]]] = {}
+    read: dict[str, tuple[list[PF.Steady], list[str]]] = {}
     for target in records(store).get(workload.record(STEADY), []):
         read |= steady_rows(store, target)
     for target in sorted(read, reverse=True):
@@ -453,7 +607,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
             runs.append(target)
     aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
                       if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
-    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
+    prover = PF.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
                      boolean=boolean_version)
     table = prover.table(census)
     measured = sum(r.cost.source == P.STEADY for r in table.rows)
@@ -465,7 +619,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
         _input(SINGLE, workload, [art], f"{len(sessions)} block types on the {value.get('device')}")], refused
 
 
-def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
+def lean_verify(doc: Any, run: str) -> PF.LeanVerify | str:
     """A `lean-verify` record as the statement it measured, or why it measures nothing: another schema, a field it
     lacks (its `label` among them: an accept the record doesn't qualify is printed by no line), a run the Lean verifier refused (the refusal is the record's result, and prices nothing), or figures that
     aren't a statement's."""
@@ -493,13 +647,13 @@ def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
         return (f"its `block` ({ {k: block[k] for k in ('k_log', 'blocks', 'full')} }), `proof.bytes` "
                 f"({doc['proof']['bytes']}) and runs' `wall_s` ({seconds}) aren't a statement's blocks, bytes and seconds")
     host, form = doc["host"], _field(doc, "statement.id")
-    return P.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
+    return PF.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
                         block["full"], tuple(seconds), doc["proof"]["bytes"], run,
                         f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"],
                         form if isinstance(form, str) else None)
 
 
-def lean_run(store: Any, run: str) -> P.LeanVerify | str:
+def lean_run(store: Any, run: str) -> PF.LeanVerify | str:
     """A run of record's `LEAN_RECORD` as the statement it measured, or why the run measures nothing."""
 
     if superseded := _superseded(store, run):
@@ -518,7 +672,7 @@ def lean_run(store: Any, run: str) -> P.LeanVerify | str:
     return lean_verify(json.loads((Path(store.fetch(files, paths=[LEAN_RECORD])) / LEAN_RECORD).read_text()), run)
 
 
-def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanVerify], list[dict], list[dict]]:
+def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[PF.LeanVerify], list[dict], list[dict]]:
     """The statements of `census`'s block types the Lean verifier accepted, from the workload's `lean-verify` runs of
     record; their input, where a run carries the label; and the runs that measure nothing, with why."""
 
@@ -526,7 +680,7 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
     found, refused = [], []
     for run in sorted(records(store).get(workload.record(LEAN), []), reverse=True):
         got = lean_run(store, run)
-        if isinstance(got, P.LeanVerify) and got.definition not in held:
+        if isinstance(got, PF.LeanVerify) and got.definition not in held:
             got = f"its block type, `{got.definition}`, is no block type of the census under its cut"
         if isinstance(got, str):
             refused.append({"target": run, "record": workload.record(LEAN), "why": got})
@@ -541,6 +695,82 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
                           "Definition's at its size, else at the rate fitted over them" if found else
                           "none that measures a block type: the Lean verifier's seconds and the proof's bytes are not "
                           "measured")], refused
+
+
+def warm_rows(summary: Any, config: str, run: str) -> list[PF.Warm | str]:
+    """A group's statements proved on one card from warm sessions (`WARM_SUMMARY`, `WARM_CONFIG`), each as the
+    statement it measured, or why it measures nothing: one on the CPU, one that names no census type (`word`), a
+    session not accepted, fewer timed sessions than the group's RUNS, or figures that aren't a statement's. A full
+    statement holds `prove.STATEMENT_BITS` over 2^k_log blocks."""
+
+    got = re.search(r"\bwarm=(\d+) runs=(\d+)\s*$", config)
+    statements = summary.get("statements") if isinstance(summary, Mapping) else None
+    if not got or not isinstance(statements, Mapping):
+        return [f"its `{WARM_CONFIG}` states no `warm=W runs=R`, or its `{WARM_SUMMARY}` no `statements`"]
+    warm, runs = int(got[1]), int(got[2])
+    out: list[PF.Warm | str] = []
+    for key, st in sorted(statements.items()):
+        name = key.partition("/")[2]
+        if not isinstance(st, Mapping) or st.get("device") != "gpu":
+            out.append(f"`{name}`: not proved on a card")
+        elif not isinstance(st.get("word"), str):
+            out.append(f"`{name}`: names no census type (`word`)")
+        elif not (isinstance(st.get("accepted"), list) and st["accepted"] and all(a is True for a in st["accepted"])):
+            out.append(f"`{name}`: not every session was accepted ({st.get('accepted')})")
+        elif st.get("timed") != runs or len(st["accepted"]) != warm + runs:
+            out.append(f"`{name}`: {st.get('timed')} timed of {len(st['accepted'])} sessions, not RUNS={runs} after WARM={warm}")
+        elif not (_count(st.get("n")) and _count(st.get("k_log")) and isinstance(st.get("prove_total_s"), (int, float))
+                  and st["prove_total_s"] > 0 and st["n"] <= max(1, P.STATEMENT_BITS >> st["k_log"])):
+            out.append(f"`{name}`: its `n` ({st.get('n')}), `k_log` ({st.get('k_log')}) and `prove_total_s` "
+                       f"({st.get('prove_total_s')}) aren't a statement's blocks and seconds")
+        else:
+            out.append(PF.Warm(P.definition_id(st["word"]), st["k_log"], st["n"], max(1, P.STATEMENT_BITS >> st["k_log"]),
+                              st["prove_total_s"], warm, runs, run, name))
+    return out
+
+
+def warm_run(store: Any, run: str) -> list[PF.Warm | str]:
+    """A run of record's statements proved from warm sessions, every card's group (`warm_rows`), or why the run
+    measures nothing."""
+
+    if superseded := _superseded(store, run):
+        return [f"superseded by {', '.join(superseded)}"]
+    attempt = store.get_attempt(run) if not run.startswith("art:") else None
+    if attempt is None:
+        return ["not a run in the store or on its remote"]
+    out = attempt.get("outputs") or {}
+    files = out.get("run_files") or out.get("run_record")
+    if not files:
+        return ["kept no run files"]
+    held = {row["path"] for row in store.listing(files, [WARM_SUMMARY, WARM_CONFIG])}
+    groups = sorted(p.rsplit("/", 1)[0] for p in held if p.endswith("/summary.json") and
+                    p.rsplit("/", 1)[0] + "/config.txt" in held)
+    if not groups:
+        return [f"holds no `{WARM_SUMMARY}` with its `{WARM_CONFIG}`, which `stage_prove.sh` writes"]
+    tree = Path(store.fetch(files, paths=[f"{g}/{f}" for g in groups for f in ("summary.json", "config.txt")]))
+    return [x for g in groups
+            for x in warm_rows(json.loads((tree / g / "summary.json").read_text()), (tree / g / "config.txt").read_text(), run)]
+
+
+def warm(store: Any, workload: Workload, census: P.Census) -> tuple[list[PF.Warm], list[dict], list[dict]]:
+    """The statements of `census`'s block types proved from warm sessions, from the workload's `flock-warm` runs of
+    record; their input, where a run carries the label; and the statements and runs that measure nothing, with why."""
+
+    held = {P.definition_id(b.name) for b in census.blocks}
+    found, refused = [], []
+    for run in sorted(records(store).get(workload.record(WARMED), []), reverse=True):
+        for got in warm_run(store, run):
+            if isinstance(got, PF.Warm) and got.definition not in held:
+                got = f"`{got.statement}`: its block type, `{got.definition}`, is no block type of the census under its cut"
+            if isinstance(got, str):
+                refused.append({"target": run, "record": workload.record(WARMED), "why": got})
+            else:
+                found.append(got)
+    if not found and not refused:
+        return [], [], []
+    return found, [_input(WARMED, workload, sorted({w.run for w in found}),
+                          f"{len({w.definition for w in found})} block type(s) proved on one card from warm sessions"
+                          if found else "none that measures a block type")], refused
 
 
 def plan(store: Any, workload: Workload, given: str | None) -> tuple[P.SamplingPlan, dict]:
@@ -615,11 +845,12 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     blocks, inputs = census(store, w)
     prover, more, refused = flock(store, w, blocks, provers, cores)
     timed, its, unread = lean(store, w, blocks)
-    prover = replace(prover, lean=tuple(timed))
+    warmed, its_warm, unwarmed = warm(store, w, blocks)
+    prover = replace(prover, lean=tuple(timed), warm=tuple(warmed))
     rate = serving(root, w)
     seconds = rate.gpu_seconds_per_token(blocks)
-    inputs += more + its
-    refused += unread
+    inputs += more + its + its_warm
+    refused += unread + unwarmed
     sampled = None
     priced: P.ProofSystem = prover
     if system == "spot":
@@ -713,9 +944,13 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     """The kit writer's measurements of a table, one a metric id of `metrics`: the total its
     key names (`FIGURES`), in that total's unit, with its mark (`_mark`). A total with a value has its mark in the
     table's words as the first of its inputs, since the kit holds a `why` only for a measurement with no value, then
-    the records the table read; a total with none has those words as its `why`. The prover GPUs a serving GPU are the
+    the records the table read, then each steady-state run its own verdict refused (`own_verdict`), with why; a total
+    with none has those words as its `why`. The prover GPUs a serving GPU are the
     proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
-    their inputs, then proving's words and the serving rate's. The figure at the exfiltration run of record's design
+    their inputs, then proving's words and the serving rate's. Both proving totals then say how many of the priced
+    steady-state rows ran with their card off their CPUs' NUMA node, how many on it and how many don't record it
+    (`off_node_line`):
+    a statement about the rows they rest on, which moves neither value nor mark. The figure at the exfiltration run of record's design
     (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
     `TARGETED` carry `GPUS_PER_SERVING_GPU_TARGET` as their `target`, and, where they have a value, its check against
     it as their `verdict`: `meets` at or under it, `misses` over it."""
@@ -725,6 +960,7 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     if AT_RECORD in metrics.values() and "at_record" not in doc:
         raise ValueError(f"`{AT_RECORD}` is SPOT's: only a table at a sampling plan holds it")
     targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
+    targets += [f"refused {x['target']}: {x['why']}" for x in doc["refused"] if str(x["why"]).startswith(OWN_VERDICT)]
     s, out = doc["serving"], list[dict[str, Any]]()
     for name, figure in metrics.items():
         value, mark, said = _mark(doc, figure)
@@ -741,6 +977,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
         if figure == "gpus_per_serving_gpu":
             mark = max(mark, s["status"], key=STRENGTH.index)
             inputs = [mark, f"proving: {said}", f"serving rate ({s['status']}, a stated input): {s['basis']}"]
+        if (off := doc["totals"].get("off_node")) and figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
+            inputs.append(off_node_line(off))
         out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
     for m, figure in zip(out, metrics.values(), strict=True):
         if figure in TARGETED:
@@ -815,6 +1053,21 @@ def _missing_share(m: Mapping[str, Any]) -> str:
 
     blocks = f"{m['block_share']:.2%} of the blocks"
     return blocks if m["mac_share"] is None else f"{blocks}, {m['mac_share']:.2%} of the blocks' MACs"
+
+
+def off_node_line(off: Mapping[str, Any]) -> str:
+    """How many of the steady-state rows that price a type ran with their card off their CPUs' NUMA node, how many on
+    it and how many don't record it, each with its share of the proving time, then the rows priced from the
+    single-session card, whose table records no CPUs (`prove.report`'s `off_node`)."""
+
+    def share(kind: Mapping[str, Any]) -> str:
+        return f"{kind['time_share'] or 0.0:.4%}"
+
+    return (f"card off its CPUs' NUMA node: {off['off']['rows']} of {off['rows']} priced steady rows, "
+            f"{share(off['off'])} of the proving time; on its node by the runs' own records: {off['on']['rows']} rows, "
+            f"{share(off['on'])}; not recorded: {off['not_recorded']['rows']} rows, {share(off['not_recorded'])}; "
+            f"priced from the single-session card, whose table records no CPUs: {off['single']['rows']} rows, "
+            f"{share(off['single'])}")
 
 
 def _above_line(above: Mapping[str, Any], partial: bool) -> str:
@@ -1007,6 +1260,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += _record_lines(doc)
     if above := t["above_cores"]:
         lines.append(_above_line(above, bool(t["missing"])))
+    if off := t.get("off_node"):
+        lines.append(f"- {off_node_line(off)}")
     if planned:
         lines += _planned_lines(planned)
     if t["range_basis"]:

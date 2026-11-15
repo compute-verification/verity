@@ -109,7 +109,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import remote
+from . import remote, settings
 from .pythonpath import tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
 from .runs import new_run_id
@@ -143,15 +143,15 @@ f=$(timeout 10 find /workspace -xdev {FIND_PRUNE} -o -type f -printf '%T@\n' 2>/
 
 
 def default_root() -> Path:
-    return Path(os.environ.get("RESEARCH_NOTES", Path.home() / ".research" / "notes"))
+    return Path(settings.get("RESEARCH_NOTES", Path.home() / ".research" / "notes"))
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _ts(t: float) -> dt.datetime:
-    return dt.datetime.fromtimestamp(t, dt.timezone.utc)
+    return dt.datetime.fromtimestamp(t, dt.UTC)
 
 
 _TIMES: dict[str, object] = {}
@@ -160,7 +160,7 @@ _TIMES: dict[str, object] = {}
 def file_time(root: Path, p: Path) -> float:
     """A notes file's time: its mtime, or with RESEARCH_LIVENESS=git its newest notes commit (steward.GitTimes), which every
     clone agrees on."""
-    from . import steward  # noqa: PLC0415
+    from . import steward
 
     if not steward.git_liveness():
         return p.stat().st_mtime
@@ -227,7 +227,8 @@ def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
     for m in _CHECK_BACK.finditer(text):
         try:
             at = now.replace(hour=int(m[1]), minute=int(m[2]), second=0, microsecond=0)
-        except ValueError:
+        except ValueError as e:
+            print(f"notes: check-back time {m[1]}:{m[2]} is not a time, skipped ({e})", file=sys.stderr, flush=True)
             continue
         delta = (at - now).total_seconds()
         delays.append((delta + 86400, at + dt.timedelta(days=1)) if delta < -12 * 3600 else (delta, at))
@@ -304,9 +305,12 @@ def bind(root: Path, lane: str, branch: str | None = None, worktree: str | None 
 
 
 def _binding_json(root: Path, lane: str) -> dict:
+    if not (root / "lanes" / lane / BINDING).exists():
+        return {}
     try:
         return json.loads((root / "lanes" / lane / BINDING).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"notes: lane {lane}'s {BINDING} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -368,9 +372,12 @@ def attempt(root: Path, lane: str, succ: dict[str, str] | None = None) -> tuple[
 
 def _seen(root: Path, lane: str) -> float | None:
     p = root / "lanes" / lane / SEEN
+    if not p.exists():
+        return None
     try:
         return float(_io(p.read_text).strip())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"notes: {p} unread, so lane {lane} has no time seen ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -485,13 +492,14 @@ def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
 def _git(repo: Path, *args: str, timeout: float = 20) -> str | None:
     try:
         out = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"notes: git {args[0] if args else ''} in {repo} did not run ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     return out.stdout if out.returncode == 0 else None
 
 
 def repo_default() -> Path | None:
-    env = os.environ.get("RESEARCH_REPO")
+    env = settings.get("RESEARCH_REPO")
     if env:
         return Path(env).expanduser()
     top = _git(Path.cwd(), "rev-parse", "--show-toplevel")
@@ -552,14 +560,14 @@ def parse_pod_probe(out: str) -> dict:
         elif parts[0] == "FILE" and len(parts) >= 3 and parts[1] != "none":
             try:
                 res["file_age_s"] = max(0, int(parts[2]) - int(float(parts[1])))
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"notes: a FILE line's times did not parse, so no file age ({e})", file=sys.stderr, flush=True)
     return res
 
 
 def probe_pods(pods: list[dict], timeout: float = 30) -> dict[str, dict]:
     """pod id -> POD_PROBE over ssh (read-only); an unreachable pod says why instead."""
-    from .pods import connect, runpod  # noqa: PLC0415
+    from .pods import connect, runpod
 
     def one(pod: dict) -> tuple[str, dict]:
         try:
@@ -608,9 +616,9 @@ class Fleet:
 
 
 def running_pods() -> list[dict]:
-    from .pods import connect  # noqa: PLC0415
+    from .pods import connect
 
-    return [p for p in connect._list_pods() if (p.get("desiredStatus") or "").upper() == "RUNNING"]  # noqa: SLF001
+    return [p for p in connect._list_pods() if (p.get("desiredStatus") or "").upper() == "RUNNING"]
 
 
 def load_fleet(root: Path, probe: bool = True, pods: Callable[[], list[dict]] = running_pods,
@@ -631,16 +639,19 @@ def load_fleet(root: Path, probe: bool = True, pods: Callable[[], list[dict]] = 
 
 
 def _started(p: dict) -> dt.datetime | None:
+    if not p.get("lastStartedAt"):
+        return None
     try:
-        return dt.datetime.strptime(str(p.get("lastStartedAt") or "")[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.timezone.utc)
-    except ValueError:
+        return dt.datetime.strptime(str(p.get("lastStartedAt"))[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.UTC)
+    except ValueError as e:
+        print(f"notes: a start time did not parse, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
 def pod_view(p: dict, probe: dict | None, now: dt.datetime) -> dict:
     """A lane's pod as status shows it: name (no campaign suffix), id, $/h, its probe, and `idle` when the probe saw no work
     process, no live verifier, no GPU compute app and 0 % GPU; `idle_min` is since its newest /workspace file, capped at uptime."""
-    from .pods.guard import parse_time  # noqa: PLC0415
+    from .pods.guard import parse_time
 
     v = {"name": strip_pod_suffix(p.get("name") or ""), "id": p.get("id"), "usd_h": float(p.get("costPerHr") or 0.0),
          **(probe or {})}
@@ -680,7 +691,7 @@ def enrich(rows: list[dict], root: Path, repo: Path | None, stale_min: float, no
         r["worktree"] = b.get("worktree") or wts.get(r["branch"])
         r["pod"] = b.get("pod")
         if repo:
-            from . import steward  # noqa: PLC0415
+            from . import steward
 
             gitl = steward.git_liveness()                   # origin's tip; no worktree signal (steward.py, TIMES)
             g = git_signals(repo, r["branch"], None if gitl else r["worktree"], remote=gitl)
@@ -709,7 +720,7 @@ def status(root: Path, stale_min: float = 30, since_hours: float | None = 24, no
            fleet: Fleet | None = None, every_attempt: bool = False) -> list[dict]:
     """One row per lane in the window (and per lane owning a running pod, however old), the latest attempt of each topic only
     unless `every_attempt`."""
-    from fnmatch import fnmatch  # noqa: PLC0415
+    from fnmatch import fnmatch
 
     now = now or _utcnow()
     refresh_times()
@@ -740,8 +751,8 @@ def status(root: Path, stale_min: float = 30, since_hours: float | None = 24, no
 # ---- finish checks (run by `checkpoint LANE final`) ----------------------------------------------------------------------------------------
 
 def _custody(arts: list[str]) -> tuple[bool | None, str]:
-    from .store import preserved  # noqa: PLC0415
-    from .store.local import LocalStore  # noqa: PLC0415
+    from .store import preserved
+    from .store.local import LocalStore
 
     st = LocalStore(None)
     full, unknown = [], []
@@ -842,7 +853,7 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
     kinds), git data (`refused`) and evidence or renders (`evidence`: `notes_sync.is_evidence`, the store holds them).  Only the
     coordinator's watcher calls this, so lanes never contend for the index lock.  The commit is the clone's own author's and
     committer's (`notes_sync.identity_env`).  None: not a repo, or clean."""
-    from .notes_sync import identity_env, is_evidence  # noqa: PLC0415
+    from .notes_sync import identity_env, is_evidence
 
     if not (root / ".git").exists():
         return None
@@ -999,9 +1010,9 @@ def idle_lines(since: dict[str, float], alerted: set[str], rows: list[dict], now
 
 def account() -> dict:
     """The account's balance and spend rate (RunPod GraphQL `myself`)."""
-    from .pods import runpod  # noqa: PLC0415
+    from .pods import runpod
 
-    me = runpod._graphql("{ myself { clientBalance currentSpendPerHr } }")["data"]["myself"]  # noqa: SLF001
+    me = runpod._graphql("{ myself { clientBalance currentSpendPerHr } }")["data"]["myself"]
     return {"balance": float(me["clientBalance"]), "usd_h": float(me.get("currentSpendPerHr") or 0.0)}
 
 
@@ -1031,9 +1042,9 @@ def runway_alert(runway: float | None, under_h: float, last: float | None, now: 
 
 
 def terminate_pod(pod_id: str) -> None:
-    from .pods import runpod  # noqa: PLC0415
+    from .pods import runpod
 
-    runpod._request("DELETE", f"/pods/{pod_id}")  # noqa: SLF001
+    runpod._request("DELETE", f"/pods/{pod_id}")
 
 
 def pod_gone(why: str) -> bool:
@@ -1059,9 +1070,9 @@ def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float,
             started = p.get("started_ts")
             if started is None or started > r["done_ts"]:
                 if f"resumed:{p['id']}" not in noted:
-                    at = f"{dt.datetime.fromtimestamp(started, dt.timezone.utc):%H:%MZ}" if started is not None else "unknown"
+                    at = f"{dt.datetime.fromtimestamp(started, dt.UTC):%H:%MZ}" if started is not None else "unknown"
                     lines.append(f"{now:%H:%MZ} RESUMED-POD {r['lane']} {p['name']} {p['id']} (created {at}, after FINAL "
-                                 f"{dt.datetime.fromtimestamp(r['done_ts'], dt.timezone.utc):%H:%MZ}): not reaped")
+                                 f"{dt.datetime.fromtimestamp(r['done_ts'], dt.UTC):%H:%MZ}): not reaped")
                     noted.add(f"resumed:{p['id']}")
                 continue
             what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (final {(t - r['done_ts']) / 60:.0f}m ago)"
@@ -1114,9 +1125,12 @@ ON_RE = re.compile(r"--on[= ](\S+)")
 
 
 def load_state(root: Path) -> dict:
+    if not (root / STATE_FILE).exists():
+        return {}
     try:
         doc = json.loads((root / STATE_FILE).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"notes: {root / STATE_FILE} unread, so the watch starts from none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return doc if isinstance(doc, dict) else {}
 
@@ -1131,9 +1145,12 @@ def load_env_file(path: Path, environ: dict | None = None) -> list[str]:
     """KEY=VALUE lines (`export`, quotes, # comments allowed) into the environment where the key is unset or empty: the watcher runs
     under launchd, without the R2 credentials.  -> the keys it set."""
     env = os.environ if environ is None else environ
+    if not path.exists():
+        return []
     try:
         text = path.read_text()
-    except OSError:
+    except OSError as e:
+        print(f"notes: {path} unread, so no key is set from it ({type(e).__name__})", file=sys.stderr, flush=True)
         return []
     done = []
     for line in text.splitlines():
@@ -1153,8 +1170,8 @@ def art_custody(arts: list[str], max_readback_mb: float = 64) -> tuple[bool, str
     """Custody (a): every cited art is PRESERVED on the remote -- `preserved.check`, the predicate of `research data preserved`.  A
     verified remote replica the catalog already records counts (`recorded`); else the `head` check runs, but only when the blobs it
     would read back (those not held locally) come to at most max_readback_mb: the laptop's disk is nearly full."""
-    from .store import preserved  # noqa: PLC0415
-    from .store.local import LocalStore  # noqa: PLC0415
+    from .store import preserved
+    from .store.local import LocalStore
 
     st = LocalStore(None)
     for a in arts:
@@ -1182,7 +1199,7 @@ def _store_attempt() -> Callable[[str], bool]:
 
     def has(run_id: str) -> bool:
         nonlocal st
-        from .store.local import LocalStore  # noqa: PLC0415
+        from .store.local import LocalStore
 
         try:
             st = st or LocalStore(None)
@@ -1195,8 +1212,8 @@ def _store_attempt() -> Callable[[str], bool]:
 def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[[str], bool] | None = None) -> tuple[bool, str]:
     """Custody (b): every local run launched on the pod (remote.json `pod_id`) that reached its runner has preserved.json (`research
     fetch --all` verified every file) or is registered in the store (an attempt)."""
-    from . import steward  # noqa: PLC0415
-    from .runs import runs_root  # noqa: PLC0415
+    from . import steward
+    from .runs import runs_root
 
     if steward.git_liveness():
         return False, ("run custody not checked: with --liveness git, runs launched from other machines are not in this host's run "
@@ -1206,7 +1223,8 @@ def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[
     for rj in sorted((runs_dir or runs_root()).glob("*/remote.json")):
         try:
             rec = json.loads(rj.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"notes: {rj} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if not isinstance(rec, dict) or rec.get("pod_id") != pod_id or rec.get("phase") in NEVER_RAN or (rj.parent / "refused.json").exists():
             continue
@@ -1220,8 +1238,8 @@ def run_custody_r2(pod_id: str) -> tuple[bool, str]:
     """Custody (b) from any machine (`watch --custody-r2`): `pods.drain.pod_custody` -- the catalog refreshed from the store's remote,
     every attempt tied to the pod preserved there, and the pod guard's verdict that every run dir on it has custody (.fetched or
     .custody).  Needs neither ~/.research/runs nor the machine that launched the runs."""
-    from .pods.drain import pod_custody  # noqa: PLC0415
-    from .store.local import LocalStore  # noqa: PLC0415
+    from .pods.drain import pod_custody
+    from .store.local import LocalStore
 
     ok, why, _ = pod_custody(LocalStore(None), pod_id, refresh=True, probe=False)
     return ok, why
@@ -1229,7 +1247,7 @@ def run_custody_r2(pod_id: str) -> tuple[bool, str]:
 
 def reap_custody(root: Path, lane: str, pod_id: str, arts: Callable[[list[str]], tuple[bool, str]] = art_custody,
                  runs: Callable[[str], tuple[bool, str]] = run_custody) -> tuple[bool, str]:
-    """Both custody legs for terminating a stale lane's pod: (a) the art: ids the lane's newest report cites, (b) the runs on the pod."""
+    """Both custody checks for terminating a stale lane's pod: (a) the art: ids the lane's newest report cites, (b) the runs on the pod."""
     rep = report_for(root, lane)
     cited = sorted(set(ART_RE.findall(rep.read_text(errors="replace")))) if rep else []
     ok, why = arts(cited) if cited else (True, "no art: cited")
@@ -1340,10 +1358,10 @@ def budget_lines(root: Path, fleet: Fleet, now: dt.datetime, state: dict) -> lis
     lines = []
     for lane, usd in sorted(spend.items()):
         text = _binding_json(root, lane).get("budget")
-        cap = budget_usd(text)
-        if cap is not None and usd > cap and alerted.get(lane) != cap:
-            alerted[lane] = cap
-            lines.append(f"{now:%H:%MZ} OVER-BUDGET {lane} ${usd:.2f} on pods > ${cap:g} (budget: {text[:60]}); "
+        limit = budget_usd(text)
+        if limit is not None and usd > limit and alerted.get(lane) != limit:
+            alerted[lane] = limit
+            lines.append(f"{now:%H:%MZ} OVER-BUDGET {lane} ${usd:.2f} on pods > ${limit:g} (budget: {text[:60]}); "
                          f"now ${rate.get(lane, 0.0):.2f}/h")
     return lines
 
@@ -1436,7 +1454,7 @@ def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     <report>` every pass it lasts, so a clone that stops syncing is never silent, however far behind.  A lane note left
     out for a stamp ahead of the clock or broken front matter is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other
     notes synced.  A `SYNC-WARN <path>: ...` line comes once, with the commit that took the note."""
-    from . import notes_sync  # noqa: PLC0415
+    from . import notes_sync
 
     refused = [f"{now:%H:%MZ} {x}" for x in notes_sync.refused_lines(srep)]
     if srep["rc"] not in (0, notes_sync.FUTURE_RC):
@@ -1457,9 +1475,12 @@ def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[s
 def guardian_kills(path: Path, state: dict, max_bytes: int = 8 << 20) -> list[str]:
     """The guardian log's KILLED lines since the offset saved in the state.  The first look only records where the log ends; a
     rotated or truncated log starts over from its beginning."""
+    if not path.exists():
+        return []
     try:
         st = path.stat()
-    except OSError:
+    except OSError as e:
+        print(f"notes: {path} unread, so no kill is reported ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     g = state.get("guardian") or {}
     if g.get("path") != str(path):
@@ -1519,7 +1540,7 @@ def guardian_lines(root: Path, rows: list[dict], fleet: Fleet | None, now: dt.da
     kills = guardian_kills(log, state) if log else []
     if not kills:
         return []
-    from .remote import load_machines  # noqa: PLC0415
+    from .remote import load_machines
 
     try:
         ms = (machines or load_machines)()
@@ -1584,7 +1605,7 @@ def save_uncommitted(wt: Path, dest: Path, stamp: str, max_file_mb: float = 100)
 def relaunch_dir(lane: str) -> Path:
     """Where `relaunch` saves a lane's uncommitted work: `$RESEARCH_RELAUNCH/<lane>`, else ~/.research/relaunch/<lane>.  On the
     worktree's machine, never in the notes: a copy of code is not evidence, and the notes are Git."""
-    return Path(os.environ.get("RESEARCH_RELAUNCH") or Path.home() / ".research" / "relaunch").expanduser() / lane
+    return Path(settings.get("RESEARCH_RELAUNCH") or Path.home() / ".research" / "relaunch").expanduser() / lane
 
 
 def successor_name(root: Path, lane: str, succ: dict[str, str] | None = None) -> str:
@@ -1620,7 +1641,7 @@ def relaunch(root: Path, lane: str, successor: str | None = None, why: str = "",
     else:
         done.append(f"no worktree found for {branch}: nothing saved")
     sha = ((_git(Path(wt), "rev-parse", "--short=8", "HEAD") or "").strip() if saved else "") or "none"
-    from . import steward  # noqa: PLC0415
+    from . import steward
 
     on_origin = False
     if not saved and repo and steward.git_liveness():       # the dead lane's machine is gone: its pushed branch is the base
@@ -1767,7 +1788,7 @@ def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
     on the notes' main with `notes_sync.sync` instead (the notes token's route): a lane branch of the notes is read by
     nobody.  -> (one line, exit code)."""
     if repo is not None and _same_repo(repo, root):
-        from . import notes_sync  # noqa: PLC0415
+        from . import notes_sync
 
         rep = notes_sync.sync(root, paths=[f"lanes/{lane}"], message=f"notes: {lane}")
         return "\n".join([notes_sync.render_sync(rep), *notes_sync.refused_lines(rep)]), rep["rc"]
@@ -1800,7 +1821,7 @@ def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
 def branches(root: Path, repo: Path, globs: list[str] | None = None, now: dt.datetime | None = None) -> list[dict]:
     """Every local `lane/*` branch and every bound branch, with the lanes using it (and their states) and its sync state against
     origin (as last fetched).  `blocking`: an open lane's branch that origin does not have in full (the push rule's check, H1)."""
-    from fnmatch import fnmatch  # noqa: PLC0415
+    from fnmatch import fnmatch
 
     now = now or _utcnow()
     lanes = {d.name for d in (root / "lanes").glob("*/")} if (root / "lanes").is_dir() else set()
@@ -1865,26 +1886,26 @@ def fetch_lanes(repo: Path | None) -> str | None:
 
 def main(argv: list[str]) -> int:
     """`sync` / `scan` live in notes_sync; with RESEARCH_NOTES_SYNC=1 a successful checkpoint / bind / relaunch syncs what it wrote."""
-    from . import notes_sync  # noqa: PLC0415
+    from . import notes_sync
 
     if line := notes_sync.ensure_clone(default_root()):
         print(line, file=sys.stderr)
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
     if argv and argv[0] == "archive":
-        from .notes_archive import main as archive_main  # noqa: PLC0415
+        from .notes_archive import main as archive_main
 
         return archive_main(argv[1:], default_root())
     if argv and argv[0] in ("claim", "approach", "approaches"):
-        from . import approaches  # noqa: PLC0415
+        from . import approaches
 
         return approaches.main(argv, default_root())
     if argv and argv[0] == "service":
-        from .steward import service_main  # noqa: PLC0415
+        from .steward import service_main
 
         return service_main(argv[1:])
     if argv and argv[0] in ("index", "mcp"):
-        from . import notes_index, notes_mcp  # noqa: PLC0415
+        from . import notes_index, notes_mcp
 
         return (notes_index if argv[0] == "index" else notes_mcp).main(argv[1:], default_root())
     rc = _main(argv)
@@ -1983,7 +2004,7 @@ def _main(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     root = ns.root or default_root()
     if getattr(ns, "liveness", None):
-        from .steward import LIVENESS_ENV  # noqa: PLC0415
+        from .steward import LIVENESS_ENV
 
         os.environ[LIVENESS_ENV] = ns.liveness
     if ns.cmd in ("checkpoint", "inbox"):
@@ -2059,7 +2080,7 @@ def _main(argv: list[str]) -> int:
         return 1 if any(r["stale"] for r in rows) else 0
     lease = None
     if ns.lease:
-        from . import steward  # noqa: PLC0415
+        from . import steward
 
         load_env_file(R2_ENV)                               # the lease lives in the store's bucket
         try:
@@ -2074,7 +2095,7 @@ def _main(argv: list[str]) -> int:
             print(f"research notes watch: REFUSED: the steward lease ({lease.backend.describe()}) is held by {steward.holder(doc)}; "
                   "only the holder reaps, routes, launches and commits the notes (--standby waits for it)", file=sys.stderr)
             return 2
-        import signal  # noqa: PLC0415
+        import signal
 
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # the service manager's stop still releases the lease
     try:
@@ -2107,7 +2128,7 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
         now = _utcnow()
         acting, lease_line = True, None
         if lease is not None:
-            from . import steward  # noqa: PLC0415
+            from . import steward
 
             try:
                 acting, doc = lease.ensure()
@@ -2145,19 +2166,19 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             more += steward_rule("overdue", overdue_lines, root, rows, now, state)
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
             more += steward_rule("run", run_lines, root, now, state)
-            from .approaches import steward_lines as approaches_lines  # noqa: PLC0415
+            from .approaches import steward_lines as approaches_lines
 
             more += steward_rule("approaches", approaches_lines, root, now, state)
             more += steward_rule("state", lambda: save_state(root, state) or [])
         if lease_line:
             more.append(lease_line)
         if ns.sync and acting:
-            from . import notes_sync  # noqa: PLC0415
+            from . import notes_sync
 
             srep = notes_sync.sync(root)
             more += sync_lines(root, srep, now)
         elif ns.sync:                                       # standby: read the others' notes, write nothing
-            from . import notes_sync  # noqa: PLC0415
+            from . import notes_sync
 
             notes_sync.pull(root)
         elif ns.snapshot and acting and (snap := snapshot(root, now=now)) and snap["commit"]:

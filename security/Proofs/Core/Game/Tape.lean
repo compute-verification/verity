@@ -9,7 +9,7 @@ public import Proofs.Core.Game.Prob
 # A play's coins as one uniform coin
 
 At a fixed strategy a play's coins are a tree: each coin's value picks the play after it. `Tape g s` holds, at each
-coin, a value and the coins of the play after every value, a finite type whose uniform law gives the play's output the
+coin, a value and the coins of the play after every value, a finite type whose uniform distribution gives the play's output the
 sampling design `prob` reads (`prob_eq_prCoin`): the coins of the plays a tape doesn't enter are independent of the ones it does.
 So a finder or a forger built from a strategy samples one tape and reads the play on it (`Tape.out`), and an event of the
 play that implies the finder's success is at most as likely as that success (`prob_le_ofReal_pr`). The play on a tape
@@ -77,7 +77,7 @@ theorem prCoin_pair {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [iT 
 end Tape
 
 open Classical in
-/-- **A tape's law is the play's**: the probability that the play of `g` at `s` ends in `p` is the probability that the
+/-- **A tape's distribution is the play's**: the probability that the play of `g` at `s` ends in `p` is the probability that the
 play on a uniform tape does. -/
 theorem prob_eq_prCoin (p : α → Prop) : ∀ (g : Game α) (s : Strategy g),
     prob p g s = prCoin fun t : Tape g s => p (Tape.out g s t)

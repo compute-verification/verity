@@ -6,7 +6,7 @@ lowered through Flock's circuit prover (M0's `UnitStager`, the path `a11.py` sta
   largest sub-Definition of the unit that has every piece, lowered the same way;
 * ``too-big``: an instance needs a block past `circuit.K_MAX` (or a statement past the spec's m <= 35).
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a11_kinds.py --descriptor descriptor.json.gz --out kinds.json [--jobs 8] [--mem-gb 96]
     ... a11_kinds.py --table kinds.json --only MoeSum_v1,TokenSelect_v1 --out kinds-b.json   # those kinds again, census kept
 
@@ -40,7 +40,8 @@ sys.setrecursionlimit(100000)
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.program import input_id, is_input  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.definitions.boolean import load_program  # noqa: E402
+from verity.circuits.ops.boolean.versions import load_program  # noqa: E402
+import verity_vllm.definitions  # noqa: E402, F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 #: flock-circuit's spec shape: a statement's m = k_log + nbl, nbl >= 3, is at most 35 (`a6.M_MAX`)
 M_MAX = 35
@@ -217,7 +218,7 @@ def descend(ch: list[tuple[object, int]]) -> tuple[list[dict], list[dict]]:
 def boolean_route(fn, unit_gates: int) -> dict:
     """`descend` on fn's Boolean version's chain (`program.boolean.boolean_version`, descending into Boolean callees); with the
     version's id (``boolean``) and its unit when one lowers, empty when fn has no Boolean version."""
-    from verity.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
     try:
         bv = boolean_version(fn)
     except LookupError:
@@ -274,7 +275,7 @@ def probe_kind(fam: str, fn, unit_gates: int, boolean_first: bool = False) -> di
 def definition(spec: str):
     """The registered specialization a Definition id names (``Fam_vN{K=V,...}``, each value a Python literal or else a
     registered Definition's id)."""
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     from verity.circuits.call_scope import specialization
     load_registry()
     fam, _, body = spec.partition("{")

@@ -12,14 +12,17 @@ import itertools
 import json
 import math
 
-import pytest
-
 import pous_test_signer as ts
+import pytest
 from pous_fakes import Clock
+
+from verity.commitments.randomness import derive
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.pous.verifier import wipe_period
 from verity.commitments.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
@@ -32,15 +35,15 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
 
 
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None, mark_source=None,
-               server: bytes = SERVER) -> sw.WipeMemoryChallenger:
-    return sw.WipeMemoryChallenger(SECRET, server, SESSION, p or params(),
+               server: bytes = SERVER) -> WC.WipeMemoryChallenger:
+    return WC.WipeMemoryChallenger(SECRET, server, SESSION, p or params(),
                                    signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
                                    clock=clock or Clock(1_000_000), coin_secret=b"coins", mark_source=mark_source)
 
 
-def run(c: sw.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
+def run(c: WC.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
         spend=lambda b: 20_000) -> sw.SignedWipe:
-    prover = sw.Prover(c.params)
+    prover = WS.Prover(c.params)
     for start, data in c.fill(100):
         prover.receive(start, data)
     b = 0
@@ -68,11 +71,11 @@ def test_label_format():
         sw.label(key, 1 << 64)
 
 
-def test_draws_are_uniform_indices_from_the_coin_secret():
-    idx = sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+def test_samples_are_uniform_indices_from_the_coin_secret():
+    idx = sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     key = derive(b"coins", sw.COIN_DOMAIN, {"server": SERVER, "session": SESSION, "n": N})
     assert idx == tuple(key.uniform(N, j) for j in range(K))
-    assert all(0 <= i < N for i in idx) and idx != sw.draw_indices(b"other", SERVER, SESSION, N, K)
+    assert all(0 <= i < N for i in idx) and idx != sw.sample_indices(b"other", SERVER, SESSION, N, K)
 
 
 @pytest.mark.parametrize("batch", [1, 2, 8, K])
@@ -89,7 +92,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     uncovered = f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
     assert v.reasons == (() if batch == 1 else (uncovered,))
     assert v.public() == {"accepted": batch == 1}
-    assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+    assert c.coins() == sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
 
@@ -147,7 +150,7 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-DEFAULT_CLOCK = sw.WipeMemoryChallenger.__init__.__kwdefaults__["clock"]
+DEFAULT_CLOCK = WC.WipeMemoryChallenger.__init__.__kwdefaults__["clock"]
 """`WipeMemoryChallenger`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
 
 
@@ -158,7 +161,7 @@ def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypa
     monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
     assert sw.raw_clock_ns() == 7 and asked == [("ns", sw.time.CLOCK_MONOTONIC_RAW)]
     assert DEFAULT_CLOCK is sw.raw_clock_ns
-    assert WP.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_period.run.__kwdefaults__["clock"] is sw.raw_clock_ns
+    assert WC.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_run.run.__kwdefaults__["clock"] is sw.raw_clock_ns
     monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 1e-9)
     assert challenger(clock=sw.raw_clock_ns).clock is sw.raw_clock_ns
     monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 4e-3)
@@ -182,7 +185,7 @@ class Reads:
         return self.now
 
 
-def stream(c: sw.WipeMemoryChallenger, how: str, sent: list) -> None:
+def stream(c: WC.WipeMemoryChallenger, how: str, sent: list) -> None:
     """The whole fill, by `fill` or by `fill_by`, each thing streamed noted in `sent`."""
     if how == "fill":
         for first, _ in c.fill(100):
@@ -400,6 +403,13 @@ def test_verdict_fails_closed():
     r = signed.batches[0]
     forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1), *signed.batches[1:]))
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
+
+    def raises(*_):
+        raise ValueError("a malformed signature")
+
+    for verify in (raises, lambda *_: False, lambda *_: None):  # a scheme that raises, refuses or says nothing
+        got = sw.verdict(signed, c.commitment, trusted=trusted, schemes={signed.scheme: verify})
+        assert not got.accepted and got.reasons == ("the signature does not verify",)
     more = dataclasses.replace(signed, fill_start_ns=signed.fill_start_ns - 1)
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
 

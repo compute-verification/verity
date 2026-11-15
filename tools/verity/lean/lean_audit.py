@@ -26,7 +26,7 @@ each file under its path relative to its package (a module's is its name), never
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
   otherwise stays a path in the key;
-- `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
+- `tools/verity/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
   `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
   (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
@@ -146,7 +146,7 @@ def _module(path: Path, name: str):
 
 #: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them), `common.py` and the task graph's
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
-COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
 SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
@@ -255,13 +255,16 @@ FLAGS = ["--build", "--closure"]
 NOT_READ = {
     "reserve.json": "the figures a run reserves and plans its jobs by (`reserve.py`'s), never what it checks",
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
+    "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
+    "posture.py": "each deployed guarantee's premises against the trust list, a command of its own on the locks",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",
+    "trust-list.json": "Daniel's trust list, which `posture.py` and the repository suite's `test_trust_list.py` read",
     "trusted_size.py": "the size of a package's trusted text, a command of its own on a records run's facts document",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
@@ -435,7 +438,7 @@ def tool_files(files: list[str]) -> list[str]:
     """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
             and f[len(LEAN_TOOL):] not in NOT_READ]
-    return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
+    return sorted({*tool, "tools/check/common.py", CONTRACT})
 
 
 def read_packages(pkg: str) -> list[str]:
@@ -1704,6 +1707,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
+                            "--program-cache", str((work if fresh else cache.parent) / "lean-programs"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             *(["--facts-cache", str(documents)] if documents else []),

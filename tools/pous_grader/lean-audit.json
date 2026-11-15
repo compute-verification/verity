@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["Grader.Registry", "Grader.Main"],
  "exempt": {
   "submissions": "graded one file at a time by grade.sh"

@@ -8,7 +8,7 @@ nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint
 node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
-seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
+seed or trace record); chain runs chain_record.sh's network certifier path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
 the coin link's peer, and the served node is refused. The gate's host is the challenger host's address, which the
 environment holds and site.json only names the variable of: a session, or a chain on the gate's coins, without it is
@@ -34,7 +34,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import served_session as SS  # noqa: E402
-import scan_zk as sz  # noqa: E402
+from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
 #: the challenger host's address as the environment holds it, here a documentation address, and the gate `SS.GATE` is then
@@ -44,7 +44,7 @@ LIVE_GATE = f"research@{CHALLENGER_HOST}"
 SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
-#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: the network certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
@@ -53,6 +53,8 @@ STUB = r'''#!PYTHON
 import io, json, os, signal, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+if any("${" in w for w in sys.argv[1:-1]):
+    sys.exit(f"stub ssh: an unfilled destination in {sys.argv[1:-1]!r}")
 if cmd.startswith("warden-rehearse "):
     (d / "prompts.json").write_bytes(sys.stdin.buffer.read())
     (d / "request").write_text(cmd)
@@ -63,13 +65,13 @@ elif cmd == "status RUN":
         signal.pause()
     print(json.dumps({"run": "RUN", "end": {"rc": 0}, "note": os.environ.get("STUB_NOTE")}))
 elif cmd == "fetch RUN":
-    files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True, "problems": 0}}).encode(),
+    files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True}}).encode(),
              "out/deployment.json": json.dumps({"windows": 4, "origin_unix": 1.5,
                                                 "params": {"window": 32, "bucket_ms": 100}}).encode(),
              "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes(),
              "witness/certified.jsonl": b"PLANTED\n", "witness/stalls.json": STALLS}
     if (d / "leak").exists():
-        files["out/cells.jsonl"] = (d / "prompts.json").read_bytes()
+        files["out/cells-certificates.jsonl"] = (d / "prompts.json").read_bytes()
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, data in files.items():
@@ -85,7 +87,7 @@ else:
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
     assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
-    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.network_certifier_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     assert len(ps) == 64 and {len(p) for p in ps} == {SS.PROMPT_IDS} and all(0 <= t < SS.VOCAB for p in ps for t in p)
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
@@ -93,7 +95,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     doc = SS.plan(a, data)
     assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
-    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
+    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_CERTIFIER_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
@@ -101,7 +103,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
         "chain", "ART", None, 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
-    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not demos/vllm/serve.sh",
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not adapters/vllm/tools/served_run/serve.sh",
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
@@ -121,7 +123,7 @@ def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_
     plan's session run is the plan's request: its class, prompt ids, tokens and vocabulary."""
     a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "32", "--tokens", "4", "--prompts", "4",
                                 "--requests", "4", "--height", "10"])
-    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.network_certifier_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     doc = SS.plan(a, json.dumps(ps).encode())
     assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes {a.minutes} --requests 4 "
@@ -267,8 +269,8 @@ def test_sigterm_mid_session_releases_nothing(tmp_path):
     assert list(hold.iterdir()) == [] and (tmp_path / "keep" / RUN / "start.json").is_file()
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path, monkeypatch):
-    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network_certifier_records(tmp_path, monkeypatch):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
     holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
     (0600), so the session exits on the gate's verdict."""
@@ -281,9 +283,8 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_
     published, q = tmp_path / "published", tmp_path / "q"
     published.mkdir()
     shutil.copyfile(reply, published / "start.json")
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
-                          str(kept / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
-                         capture_output=True, text=True)
+    got = subprocess.run(SS.guard_argv(published, q, "--gates", kept / "fetch.tar.gz", "--dry", "--report",
+                                       tmp_path / "report.json"), capture_output=True, text=True, cwd=SS.TREE)
     assert got.returncode == 3, got.stdout + got.stderr
     assert [d["path"] for d in json.loads((tmp_path / "report.json").read_text())["found"]] == ["start.json"]
     doc = json.loads((q / "leak-guard.json").read_text())
@@ -312,11 +313,11 @@ def test_at_waits_on_the_clock_and_a_late_launch_sends_nothing():
 def test_public_is_the_bundle_less_witness():
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for name in ("r/end.json", "r/out/cells.jsonl", "r/witness/check.json", "r/witness/x/salts.bin"):
+        for name in ("r/end.json", "r/out/certificates.jsonl", "r/witness/cells.jsonl", "r/witness/x/salts.bin"):
             info = tarfile.TarInfo(name)
             info.size = 1
             tar.addfile(info, io.BytesIO(b"x"))
-    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/cells.jsonl"]
+    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/certificates.jsonl"]
 
 
 def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
@@ -469,11 +470,13 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
         (tmp_path / f).rename(src / f)
 
 
-def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
+def test_chain_runs_chain_records_network_certifier_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
     here = tmp_path / "here"
     here.mkdir()
     (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')
     monkeypatch.setattr(SS, "HERE", here)
+    guard = SS.LEAK_GUARD
+    monkeypatch.setattr(SS, "LEAK_GUARD", "verity_has_no_such_guard")
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     keep = tmp_path / "keep"
     (keep / RUN / "endpoint").mkdir(parents=True)
@@ -482,7 +485,7 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
     assert SS.main(argv) == 2
-    (here / "leak_guard.py").write_text("")
+    monkeypatch.setattr(SS, "LEAK_GUARD", guard)
     assert SS.main(argv) == 0
     seen = dict(line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines())
     assert seen == {"CR_PATH": "warden", "CR_GATES": str(keep / RUN / "fetch.tar.gz"), "CR_MEM_GB": "96",
@@ -499,7 +502,6 @@ def test_chain_reads_the_endpoints_art_as_given_and_needs_no_eos_ids_for_it(tmp_
     for d in (here, keep / RUN):
         d.mkdir(parents=True)
     (here / "chain_record.sh").write_text('env | grep "^CR_E" | sort > "$SEEN"\n')
-    (here / "leak_guard.py").write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
@@ -531,18 +533,19 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     here = tmp_path / "here"
     here.mkdir(exist_ok=True)
     (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\n')
-    (here / "leak_guard.py").write_text("")
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     (tmp_path / "challenger-key.json").write_text("{}")
     (tmp_path / "gate-key").write_text("")
     (tmp_path / "main.txt").write_text("abc\n")
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = json.dumps({"device": "warden", "peer": peer}).encode()
-        info = tarfile.TarInfo(f"{RUN}/request.json")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:  # as the gate's fetch gives the run's own lane its request
+        for name, doc in ((f"{RUN}/request.json", {"device": "warden"}),
+                          (f"{RUN}/witness/request.json", {"device": "warden", "peer": peer})):
+            data = json.dumps(doc).encode()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
     (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
     (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
     return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",
@@ -550,7 +553,7 @@ def _gate_chain(tmp_path, monkeypatch, peer):
             "--main", str(tmp_path / "main.txt")]
 
 
-def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
+def test_a_gate_coin_sample_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
     argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")

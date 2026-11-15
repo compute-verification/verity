@@ -8,7 +8,9 @@ pools nothing until the check that composes the wipe with the network certifier 
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
 was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one
-adaptive prover.
+adaptive prover. A period's row covers those T wipes, so its error is their `eps` summed, T·`eps` (`protocol.summed`);
+where that is 1 or more the row prints `protocol.NO_BOUND` with the sum and neither statement below
+(`protocol.no_bound`). Under 1 it prints both:
 
 - **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each wipe,
   given the earlier ones, is accepted and leaves more than its `foreign_bits` with probability at most p, at least M of
@@ -22,7 +24,7 @@ adaptive prover.
 No number here prices a PRF's advantage, and none assumes it away. The table says so beside each number that is short
 by it, in the same closing words (`UNPRICED`).
 
-`short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
+`short_sessions` is PoUB's too (`poub/verifier/monitoring.py` imports it). The periods and δs are the reporting grid's
 (`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
@@ -45,7 +47,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NoReturn
 
-from verity.protocol import DELTAS, MONITORING_PERIODS, block_count
+from verity.protocol import DELTAS, MONITORING_PERIODS, block_count, no_bound, summed
 
 from . import wipe_period
 
@@ -104,13 +106,9 @@ def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
 
 
 def memory(profile: Mapping[str, Any]) -> dict[str, Any]:
-    """The declared tiers, whether the wipe is of GPU memory alone, and the devices its prover's store names."""
+    """The declared tiers, by label and bytes, and whether the wipe is of GPU memory alone. It names no device."""
     tiers = [{"tier": t, "bytes": int(b)} for t, b in profile["tiers"]]
-    store = (profile.get("placement") or {}).get("prover_store") or {}
-    devices = [{k: s[k] for k in ("tier", "device", "uuid") if k in s}
-               for s in (store.get("parts") or [store]) if s.get("device")]
-    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM],
-            "devices": devices}
+    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM]}
 
 
 def each(public: Mapping[str, Any]) -> dict[str, Any]:
@@ -150,6 +148,10 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
         row: dict[str, Any] = {"seconds": seconds, "wipes": t, "wipes_per_machine": per_machine}
         if t == 0:
             periods[name] = row | {"why": f"a wipe every {cadence_s} s doesn't fit a {name}"}
+            continue
+        row["error"] = float(summed(eps, t))
+        if (why := no_bound(summed(eps, t))) is not None:
+            periods[name] = row | {"no_bound": why}
             continue
         periods[name] = row | {str(d): pooled_step(t, eps, d) for d in DELTAS} | {"per_wipe": per_wipe(t, eps)}
     return head | {"periods": periods,

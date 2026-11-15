@@ -7,7 +7,7 @@
 # name of the relay takes the whole term: `warden` becomes `network_certifier` and `Warden` `NetworkCertifier`, as a name
 # or one part of one (`network_certifier.py`, `NetworkCertifierParams`, `network_certifier_serve.py`). A test file
 # `test_network_certifier_warden*.py` loses the word rather than repeat the term. The two Lean modules named for the word
-# are named for what they define, the cells (`NetworkCertifier.Cells`), and the link-window's constructor is
+# are named for what they define, the cells (`Certifier.Cells`), and the link-window's constructor is
 # `Kind.networkCertifier`.
 #
 # Only a word that renames a path, a module or a Lean declaration is here, since `move_check.py` certifies no other
@@ -24,16 +24,21 @@
 #   case's `kind` and its key, a gate request's `device`, a class, a path label, a run's directory. The Lean's JSON
 #   reader, the difftest vectors, the pinned fixtures and every kept run's records carry it: a new format version, and
 #   those regenerated;
-# - a record's keys and a kept run's file names (`warden_run`, `warden_check`, `warden.json`, the negatives' names):
-#   the leak guard's rows and every kept run that a later step reads;
-# - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them, so they change
-#   with the gate's own deployment;
+# - a report's key and a kept run's file that a program reads back (`"warden_run"`, `warden.json`): the leak guard's
+#   rows and every kept run that a later step reads;
+# - the gate's verb `warden-rehearse`, which the deployed gate serves, so it changes with the gate's own deployment;
+# - `warden-fails`, the link name of a window's fails certificate (`<link>-fails`), which signed certificates hold;
+# - six public items' reasons (`service.py`'s `PUBLIC_WARDEN`, four of `tie_service.py`'s, one of `scan_zk.spec_of`'s),
+#   which a spec's digest takes in and the verifier holds a registered stream's spec to: a new format version, and every
+#   registration made under it;
 # - the trace corpus's labels `warden-heavy` and `warden-smallkv`: the corpus artifact and the fixture cut from it.
 #
 # Kept for `warden_tokens_map.toml`, by the same [keep]: every other hyphenated name (the flags `--warden-run` and
-# `--warden` with the attributes argparse gives them, a tool's label such as `warden-serve`), and the word in a string
-# literal's sentence with its article, its possessive or the noun beside it, so that a message a test spells, or one
-# code makes from a kept value (`f"{label} thread"`), stays whole until that map rewords it.
+# `--warden`, a tool's label such as `warden-serve`), the attribute the flags' declarations name (`warden_run`,
+# `a.warden`), the names that programs only write (a record's keys such as `warden_check`, a kept run's registration
+# files, the negatives' names), and the word in a string literal's sentence with its article, its possessive or the
+# noun beside it, so that a message a test spells, or one code makes from a kept value (`f"{label} thread"`), stays
+# whole until that map rewords it.
 #
 # Not this concept: an "active warden" and a "passive warden" in network steganography's sense, which the architecture
 # and two Lean docstrings cite as that field's term.
@@ -42,21 +47,17 @@
 # directory's maps and toy fixtures, research's store vocabulary and `moves.json`, and fixtures, whose bytes tests pin.
 
 [[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
-files = ["verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean",
-         "Security/Properties/NetworkCertifier/*LinkWindow.lean",
-         "Security/Proofs/Properties/NetworkCertifier/*LinkWindow.lean"]
+files = ["verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean",
+         "security/Properties/Certifier/Check/TransferBlocks.lean",
+         "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean"]
 
 [words_in.words]
 "warden" = "networkCertifier"
 
 [words]
 "Kind.warden" = "Kind.networkCertifier"
-"linkWindowAcceptMeans_honest_warden" = "linkWindowAcceptMeans_honest_certifier"
-"WardenSchedule" = "CertifierSchedule"
-"wardenCode" = "certifierCode"
-"wardenLane" = "certifierLane"
-"NetworkCertifier/Warden" = "NetworkCertifier/Cells"
-"NetworkCertifier.Warden" = "NetworkCertifier.Cells"
+"Certifier/Warden" = "Certifier/Cells"
+"Certifier.Warden" = "Certifier.Cells"
 "Warden.lean" = "Cells.lean"
 "test_network_certifier_warden" = "test_network_certifier"
 "warden" = "network_certifier"
@@ -83,12 +84,12 @@ patterns = [
     'warden\.json\b',                                 # a kept run's file
     'warden(?=-\w)',                                  # a hyphenated name
     '(?<=-)warden',
-    '(?<!\w)warden_run(?!\w)',                        # ... and the attributes argparse gives the flags
+    '(?<!\w)warden_run(?!\w)',                        # ... the attribute the flags' declarations name, and a report's key
     '\ba\.warden\b',
     # the word in a sentence, which after `warden_term_map.toml`'s move stands only in a string literal
     '''(?<![\w-])(?:[Tt]he|[Aa]|no|its|each|this|that|same|whose|active|honest|kept|synthetic|byte-cell|▶|\w+'s) warden(?![\w-])''',
     '''(?<!\w)warden's''',
-    '(?<![\w./-])warden (?:link-windows?|rehearsals?|ordinal|profile|traces?|tests|ports?|rows?|runs?|path|link|view|windows?|cells?|thread|ticker|arrival|admission|release|check|bucket|program|beside|in front)\b',
+    '(?<![\w./-])warden (?:link-windows?|execution phases?|rehearsals?|ordinal|profile|traces?|tests|ports?|rows?|runs?|path|link|view|windows?|cells?|thread|ticker|arrival|admission|release|check|bucket|program|beside|in front)\b',
     '(?<![\w./-])(?:device|another|client /) warden(?![\w-])',
     'warden \((?:its |\{WARDEN)',
     'max ms \| warden ',
@@ -107,6 +108,32 @@ strings = [
     "a warden link's two ends are on the warden's one grid",
     "this key reads only: a warden rehearsal",        # a message made from a kept value, as its test spells it
     '"on the warden path"',
+    "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads ",   # public items' reasons
+    "the warden's domain (`warden_rows.domain`), which binds the session, the ",
+    "the warden's salted root over the window's bucket rows, its signed head's",
+    "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
+    '"warden_check',                                  # keys, markers, values and file names a passing run writes, which
+    '"warden_cost',                                   # records made before the rename are read back by
+    '"warden_certificates"',
+    '"warden_endpoint',
+    '"warden_cores_busy"',
+    '"warden_cpu_s"',
+    '"warden_invol"',
+    '"warden arrival"',
+    '"warden admission"',
+    '"warden release"',
+    "| warden release |",
+    "prover-root-under-the-wardens-certificate (check_registration)",
+    "window-naming-another-warden-root (source)",
+    '"A5-WARDEN ',
+    "CR_PATH:-warden}",
+    '"$CR_PATH" = warden ]',
+    "warden-registration",
+    "/warden-run",
+    "case $e in warden|warden:*)",                    # a5_tp.sh refuses the old stand-in name and names the new one
+    "${e#warden}",
 ]
 
 [rewrite]
