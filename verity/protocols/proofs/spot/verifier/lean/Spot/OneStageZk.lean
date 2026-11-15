@@ -1509,7 +1509,7 @@ private def wiringT (wired : Bool) (writer : String := "W") : Spot.Wires.Wiring 
                   ("W", { units := 2, rows := [], outs := [("y", 1)] })],
     cuts := [],
     wires := if wired then [{ reader := "R", port := "x", writer, out := "y", start := 0, radix := [2], base := 0,
-      step := [1], cut0 := 0, cuts := 1 }] else [] }
+                              step := [1], cut0 := 0, cuts := 1 }] else [] }
 
 /-- The reader `r`'s slice at the wiring `W`, on the registration of `w`'s `y` and `r`'s own `z`, `r` with no tree of
 `x`. -/

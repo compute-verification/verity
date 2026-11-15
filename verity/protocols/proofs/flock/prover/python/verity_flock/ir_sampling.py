@@ -161,12 +161,12 @@ class Lane:
 
     @property
     def text(self) -> str:
-        return IL.netlist(self.layout, self.name, self.cut)
+        return IL.circuit_description(self.layout, self.name, self.cut)
 
     @property
     def unit_text(self) -> str:
         """The circuit description without its cut line: what does not depend on V (:data:`PIN`)."""
-        return IL.netlist(self.layout, self.name)
+        return IL.circuit_description(self.layout, self.name)
 
     @property
     def sha256(self) -> str:
@@ -374,7 +374,7 @@ def write(low: Lane, input_set, lo: int, hi: int, path, k_max: int = IF.K_MAX) -
     logits, scalars, outs = instances(input_set, lo, hi)
     n, V = logits.shape
     if V != low.V:
-        raise ValueError(f"the lane netlist is for V = {low.V}, the set's rows have {V} logits")
+        raise ValueError(f"the lane circuit description is for V = {low.V}, the set's rows have {V} logits")
     cuts = np.zeros((n, words(V)), dtype=np.uint32)
     for i in range(n):
         cuts[i], tok = row_words(logits[i], *(int(scalars[p][i]) for p in PUBLIC_PORTS))
@@ -424,7 +424,7 @@ def write(low: Lane, input_set, lo: int, hi: int, path, k_max: int = IF.K_MAX) -
 
 
 def stage(low: Lane, input_set, lo: int, hi: int, out_dir, k_max: int = IF.K_MAX) -> Path:
-    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the lane netlist as ``<out_dir>/net.txt``: the
+    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the lane circuit description as ``<out_dir>/net.txt``: the
     verifier's own staging, every cut word the verifier's own computation."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

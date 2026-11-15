@@ -55,10 +55,12 @@ theorem B4UnderId : Guarantees.B4UnderId.{u, v, w} := by
     exact h ends β S ℓ link 𝒱 cert X spec record bucket jitter a b (fun _ => Iff.rfl) (fun _ => Iff.rfl) hc
       ((declaredLinksVia_id S ends β link).2 hd) ht hs
 
-/-- On a Site whose every place is its own link end (no place's `host?` names another), `B4` gives `B4Via` there. -/
-theorem b4Via_of_ownLinkEnds (h : Guarantees.B4.{0, 0, w}) (T : Verity.Site) (hT : ∀ p, T.linkPlace p = p) :
-    Guarantees.B4Under.{0, 0, w} T.linkPlace T.placeEnds T.linkβ := by
+/-- On a Site whose every place is its own link end (no place's `host?` names another), `B4` gives `B4Via` there, at
+the registered rates. -/
+theorem b4Via_of_ownLinkEnds (h : Guarantees.B4.{0, 0, w}) (T : Verity.Site) (hT : ∀ p, T.linkPlace p = p)
+    (β : Fin T.links.length → ℕ) (_ : T.RatedOn β Set.univ) :
+    Guarantees.B4Under.{0, 0, w} T.linkPlace T.placeEnds β := by
   rw [show T.linkPlace = id from funext hT]
-  exact (B4UnderId.{0, 0, w}.1 h) T.placeEnds T.linkβ
+  exact (B4UnderId.{0, 0, w}.1 h) T.placeEnds β
 
 end Accounting.SecurityProofs

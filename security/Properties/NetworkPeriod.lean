@@ -561,7 +561,9 @@ def RowsSessionsComplete : Prop :=
     check p c e = .accept pub prof → RowsSessionsCompleteAt p e
 
 /-- `RowsSessionsComplete`'s honest witness, unproved: `check` accepts a period at the deployed LMS parameters that
-lists one key in two sessions. -/
+lists one key in two sessions. A period is one execution phase (`startCarriedRefusal`), so its witness is a period
+after the restart, in the second session's stretch: a period spanning a restart is refused, and this says nothing of
+a restarted device's period that holds the restart. -/
 def RowsSessionsCompleteHonest : Prop :=
   ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile) (s : Schedule) (sd : ByteArray)
     (scan : Scan) (a b : Entry),

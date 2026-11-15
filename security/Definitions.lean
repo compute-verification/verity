@@ -22,6 +22,7 @@ public import Definitions.Core.Game.InterleaveBridge
 public import Definitions.InferenceOnly
 public import Definitions.InferenceOnly.Reads
 public import Definitions.Slowdown.Dark
+public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
 public import Definitions.Slowdown.Capability
 public import Definitions.Slowdown.Cut
@@ -96,10 +97,10 @@ public import Definitions.Certifier.Assumptions
 public import Definitions.Certifier.Guarantees
 public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Flock.Guarantees
-public import Definitions.Compose.Assumptions.Remote
-public import Definitions.Certifier.Assumptions.RemoteOutside
+public import Definitions.Poub.Assumptions.Remote
+public import Definitions.Poub.Assumptions.RemoteOutside
 public import Definitions.Pouw.Assumptions.CreditedWords
-public import Definitions.Compose.Assumptions.RemoteP2
+public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees

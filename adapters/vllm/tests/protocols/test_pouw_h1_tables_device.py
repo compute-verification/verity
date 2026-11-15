@@ -30,7 +30,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+from verity_torch.pouw.h1 import tables_device as TD
 
 KEY = bytes(range(32))
 #: (rows, K, owner, table): an A table's T slots or a z table's records (K = ZY_BYTES - 4)

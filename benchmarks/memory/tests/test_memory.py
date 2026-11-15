@@ -324,8 +324,8 @@ def test_the_references_are_read_from_their_runs_with_date_and_card(store, capsy
     store.add(RUN, {"out/verifier.json": a_record(a_session())})
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[3] == (f"  beside it, PoUS state bound: 0.750 (6.44 GB of 8.59 GB; error 0.01; {POUS}, 2000-01-02, "
-                       f"CARD A)")
+    assert text[3] == (f"  beside it, PoUS state bound: 0.750 (6.44 GB of 8.59 GB, through the device model, not the "
+                       f"answer; error 0.01; {POUS}, 2000-01-02, CARD A)")
     assert text[4] == (f"  beside it, wipe residue: 0.125 (1.07 GB of 8.59 GB; error 2.94e-39; {WIPE}, 2000-01-02, "
                        f"CARD B)")
     assert [(r["name"], r["value"], r["error"], r["run"], r["date"], r["card"]) for r in doc["beside"]] == [

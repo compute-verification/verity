@@ -1,6 +1,6 @@
 """``vllm-v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
 vector openings and rejects the rejection vectors.  That vLLM's own code produces the same bytes is checked in
-``adapters/vllm/tests/commit/test_production_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
+``adapters/vllm/tests/commit/test_serving_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
 openings verify only under their own hash, and a configuration never mixes hashes."""
 
 from __future__ import annotations

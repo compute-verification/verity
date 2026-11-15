@@ -72,7 +72,7 @@ Two kinds of committed run:
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
   Programs for it, ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first output word flipped
   (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
-  ``--serving-rows-tables`` (with its key) gives each window the committer's docket of the per-expert cut's tables
+  ``--serving-rows-tables`` (with its key) gives each window the committer's registration of the per-expert cut's tables
   (`tables_of`), without which a partition of table reads or fused blocks is refused, and ``--checkpoint-dir`` the checkpoint
   it composes the registered weights its rows read from (`checkpoint_of`): a bundle carries none a checkpoint holds, so
   without one a row reading such a weight is refused by the weight's name.
@@ -97,10 +97,10 @@ Two kinds of committed run:
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
   --compiler-name N --compiler-digest D`` registers the
   window's advice under.
-* **weights-registration** (the committer): a served run's weights docket (`weights_docket_of_serve`), each
+* **weights-registration** (the committer): a served run's weights registration (`weights_docket_of_serve`), each
   weight committed under the committer's secret salts once its shards check against the checkpoint's manifest, and the
   rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
-  document ``verity-vllm advice --weights-of-record`` records in each window's docket; its roots are what
+  document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
   ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
   coins and never recomputes one from the checkpoint. ``--deployment-record FILE`` writes it also as the first record of
   the serve's registration log (`window_weights.deployment_record`).
@@ -863,7 +863,7 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
 
 
 def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
-    """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's docket
+    """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's registration
     ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
     return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
 
@@ -1302,17 +1302,17 @@ def committer_key(path: Path) -> bytes:
 
 
 def weights_docket_of_serve(a: argparse.Namespace) -> dict[str, Any]:
-    """A served run's weights docket, the committer's (`window_weights.weights_registration` under the φ its window
+    """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
     circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, sampled under ``--key``
     (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
     (default the tree's ``manifests/checkpoints.json``), and the rotary table at the words the engine serves
     (``--tables``' ``cos_sin_cache.npy``, serve-openai's, default under ``--serve-run``'s ``private/``) once they are
     within the analytic table's bound; with no such file it stays unrooted. Written to ``--out``: what the server's
-    ``verity-vllm advice --weights-of-record`` records in each window's docket, and the roots the verifier pins
+    ``verity-vllm advice --weights-of-record`` records in each window's registration, and the roots the verifier pins
     before the first window's coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never
     recomputes one. Refused (ValueError) for a checkpoint not of record or one the manifest pins as another model than
     ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. With
-    ``--deployment-record FILE``, the docket as the first record of the serve's registration log
+    ``--deployment-record FILE``, the registration as the first record of the serve's registration log
     (`window_weights.deployment_record`) is written there too, for Pearl+'s W to be chained after on a serve tied to it. -> how
     many roots it registers, the weight parameters it leaves free (``unrooted``) and, given, that record's digest
     (``deployment``)."""
@@ -1374,7 +1374,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
-    each held to the root the window's docket (``advice/w<K>/registration.json``) records for its parameter
+    each held to the root the window's registration (``advice/w<K>/registration.json``) records for its parameter
     (`docket_roots`). With ``--window-registration`` (H1's W of the window, `h1_tie` with no key), the class's
     circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible

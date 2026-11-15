@@ -5,12 +5,12 @@ public import Definitions.Compose.Additive
 public import Definitions.Accounting.Actual.Sampler
 public import Definitions.Poub.Bandwidth
 public import Definitions.Poub.BandwidthAudit
-public import Definitions.Pouw.BoundReceipt
-public import Definitions.Pouw.BoundSketch
+public import Definitions.Poub.BoundReceipt
+public import Definitions.Poub.BoundSketch
 public import Definitions.Certifier.Bridge
-public import Definitions.Registration.Capacity
+public import Definitions.Pous.Accounting.Capacity
 public import Definitions.Pouw.CoinFlow
-public import Definitions.Registration.Carrier
+public import Definitions.Poub.Carrier
 public import Definitions.Compose.Compose
 public import Definitions.Compose.ComposeMonitoringPeriod
 public import Definitions.Pouw.Confidence
@@ -30,7 +30,7 @@ public import Definitions.Certifier.JointBridge.CommOfMonitoringPeriodLeakAccept
 public import Definitions.Certifier.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Certifier.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Compose.JointLive
-public import Definitions.Pous.Memory
+public import Definitions.Pous.Accounting.Memory
 public import Definitions.Pouw.PerRun
 public import Definitions.Compose.PeriodBinding
 public import Definitions.Registration.Physical
@@ -50,24 +50,24 @@ public import Definitions.Poub.RateAuditSketch
 public import Definitions.Poub.RateAuditSketchDeployed
 public import Definitions.Poub.RateAuditSketchInteractive
 public import Definitions.Poub.RateAuditSketchLayout
-public import Definitions.Poub.ReadUnit
+public import Definitions.Accounting.ReadUnit
 public import Definitions.Accounting.Records
 public import Definitions.Accounting.RecordsToy
-public import Definitions.Compose.Remote
-public import Definitions.Compose.Remote.Deployed
-public import Definitions.Compose.Remote.DrawInstances
+public import Definitions.Poub.Remote
+public import Definitions.Poub.Remote.Deployed
+public import Definitions.Poub.Remote.DrawInstances
 public import Definitions.Accounting.Requirement
 public import Definitions.Accounting.Requirement.Placed
-public import Definitions.Pous.Responder
+public import Definitions.Pous.Accounting.Responder
 public import Definitions.Accounting.Schedule
 public import Definitions.Accounting.Served
 public import Definitions.Slowdown.ServingBlocks
 public import Definitions.Slowdown.ServingBlocks.Instances
-public import Definitions.Pous.Tag
+public import Definitions.Poub.Tag
 public import Definitions.Pouw.TS
 public import Definitions.Pouw.TS.Fixed
-public import Definitions.Accounting.Window
-public import Definitions.Pous.Wipe
+public import Definitions.Pous.Accounting.Window
+public import Definitions.Pous.Accounting.Wipe
 
 /-!
 # Resource accounting's definitions (trusted)
@@ -83,14 +83,14 @@ The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's,
   PoUB at its deployed parameters.
 * `Accounting.Guarantees.RemoteRunConservationSketchDeployed` (the same module): PoUB's sketch session at the
   deployed receipt parameters, under the per-pass hash budget.
-* `Accounting.Guarantees.StackedRunConservationSketchDeployed` (`Definitions.Compose.Guarantees.Stacking`): PoUB
+* `Accounting.Guarantees.StackedRunConservationSketchDeployed` (`Definitions.Poub.Guarantees.Stacking`): PoUB
   with a store per pass. `Accounting.Guarantees.StackedRequirementSketchDeployed` (the same module) reads
   it against a registered circuit's requirement.
-* `Accounting.Guarantees.Remote.SketchBoundDeployed` (`Definitions.Compose.Guarantees.RemoteSketch`): the sketch
+* `Accounting.Guarantees.Remote.SketchBoundDeployed` (`Definitions.Poub.Guarantees.RemoteSketch`): the sketch
   bound at the deployed receipts.
-* `Accounting.Guarantees.Remote.AuditRO` (`Definitions.Compose.Guarantees.RemotePass`): the bandwidth audit in the
+* `Accounting.Guarantees.Remote.AuditRO` (`Definitions.Poub.Guarantees.RemotePass`): the bandwidth audit in the
   random-oracle model. It is the bandwidth audit's row in `security/README.md`.
-* `Properties.Poub.Line.LineHeld` (`Properties.Compose.Remote.Line`): the memory line of record,
+* `Properties.Poub.Line.LineHeld` (`Properties.Poub.Remote.Line`): the memory line of record,
   link-charged. It is PoUB's row in `security/README.md`.
 
 The area's other guarantees are `Accounting.Guarantees.X`, stated in the module named under

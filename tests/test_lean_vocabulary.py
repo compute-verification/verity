@@ -60,7 +60,7 @@ EXCLUDED_FILES = re.compile(r"(^test_.*\.py|^conftest\.py|Difftest.*\.lean|TestM
 FIX = "see AGENTS.md 'One vocabulary' and this module's docstring"
 
 #: The concepts held to one canonical object each.
-CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", "Coins", "CoinTree", "Draw", "SamplingDesign", "Stmt",
+CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "PrivateCircuit", "Partition", "Coins", "CoinTree", "Draw", "SamplingDesign", "Stmt",
             "Statement", "Witness", "Digest", "Commitment", "Merkle", "Collision", "Device", "InteractiveDevice", "Dag",
             "Transcript", "Hash", "Signature",
             "Site", "Layout", "Hardware", "Machine", "Node", "Card", "Link", "Registration", "Registry", "Period",
@@ -106,7 +106,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": (),  # nothing in scope declares it
+    "PrivateCircuit": ("verity/circuits/private_circuits/universal.py::PrivateCircuit",
+                       "security/Definitions/Claims/Sampling.lean::Claims.Sampling.PrivateCircuit"),
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
@@ -159,7 +160,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/protocols/accounting/certifier/verifier/certificate.py::Certificate":
         ("verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/protocols/proofs/spot/verifier/service.py::SamplingDesign": (f"{COMMITMENTS}Draw.lean::Flock.Draw.SamplingDesign", "sampled-proofs-difftest",
+    "verity/protocols/proofs/spot/verifier/service.py::SamplingDesign": (f"{COMMITMENTS}Draw.lean::Flock.Draw.SamplingDesign", "spot-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/commitments/crypto/lms.py::Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
@@ -437,11 +438,11 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "security/Definitions/Poub/Bandwidth/Interactive.lean::Bandwidth.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Pouw/BoundReceipt.lean::Accounting.BoundReceipt.Coins":
+    "security/Definitions/Poub/BoundReceipt.lean::Accounting.BoundReceipt.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Pouw/BoundReceipt.lean::Accounting.BoundReceipt.Node":
+    "security/Definitions/Poub/BoundReceipt.lean::Accounting.BoundReceipt.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Pouw/BoundSketch.lean::Accounting.BoundSketch.Protocol":
+    "security/Definitions/Poub/BoundSketch.lean::Accounting.BoundSketch.Protocol":
         "homonym, a two-party communication protocol (a tree of one-bit messages): rename (memory-accounting)",
     "security/Definitions/Pouw/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
@@ -471,19 +472,19 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
     "security/Definitions/Poub/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Compose/Remote/Sample.lean::Accounting.Remote.Sample.Coins":
+    "security/Definitions/Poub/Remote/Sample.lean::Accounting.Remote.Sample.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Compose/Remote/Sample.lean::Accounting.Remote.Sample.Session":
+    "security/Definitions/Poub/Remote/Sample.lean::Accounting.Remote.Sample.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Compose/Remote/Held.lean::Accounting.Remote.Held.Trace":
+    "security/Definitions/Poub/Remote/Held.lean::Accounting.Remote.Held.Trace":
         "homonym, a PoUB session's record of the registered blocks in node memory: rename (memory-accounting)",
-    "security/Definitions/Compose/Remote/Node.lean::Accounting.Remote.Node":
+    "security/Definitions/Poub/Remote/Node.lean::Accounting.Remote.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: a node's projection (memory-accounting)",
-    "security/Definitions/Compose/Remote/Sketch.lean::Accounting.Remote.Sketch.Coins":
+    "security/Definitions/Poub/Remote/Sketch.lean::Accounting.Remote.Sketch.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Compose/Remote/Sketch.lean::Accounting.Remote.Sketch.Outcome":
+    "security/Definitions/Poub/Remote/Sketch.lean::Accounting.Remote.Sketch.Outcome":
         "homonym, a session's random outcome (coins): rename (memory-accounting)",
-    "security/Definitions/Compose/Remote/Sketch.lean::Accounting.Remote.Sketch.Session":
+    "security/Definitions/Poub/Remote/Sketch.lean::Accounting.Remote.Sketch.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Layout":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
@@ -497,7 +498,7 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "security/Definitions/Pouw/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "security/Definitions/Pous/Wipe.lean::Accounting.Wipe.Strategy":
+    "security/Definitions/Pous/Accounting/Wipe.lean::Accounting.Wipe.Strategy":
         "homonym, a device's play in the wipe (its fill, egress and spot-read answers): rename (lean)",
     "security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
@@ -647,9 +648,9 @@ KNOWN: dict[str, str] = {
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
-    "security/Properties/Compose/Remote/Line/Record.lean::Properties.Poub.Line.Node":
+    "security/Properties/Poub/Remote/Line/Record.lean::Properties.Poub.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
-    "security/Properties/Compose/Remote/Line/Record.lean::Properties.Poub.Line.Record":
+    "security/Properties/Poub/Remote/Line/Record.lean::Properties.Poub.Line.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes what Poub becomes (lean)",
     # benchmarks/
     "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
@@ -758,7 +759,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
     "adapters/torch/verity_torch/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
-    "verity/protocols/accounting/pouw/prover/serving/credit_gate_device.py::Trace":
+    "adapters/torch/verity_torch/pouw/credit_gate_device.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
     "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py::Ledger":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
@@ -824,8 +825,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/accounting/pous/verifier/layout.py::Placement":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/accounting/pous/verifier/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case, not one per protocol (memory-accounting)",
     "verity/protocols/accounting/pous/verifier/period.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it: PoUS's view of the store entry (memory-accounting)",
     "verity/protocols/accounting/pous/verifier/protocol.py::Certificate":
@@ -898,8 +897,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `poub`'s own type: becomes one type per concept, parameterised by codec (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/accounting/poub/verifier/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/proofs/spot/verifier/one_stage/verdict.py::Verdict":

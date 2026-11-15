@@ -41,7 +41,7 @@ verdict the run recorded.
 `benchmarks/pouw/hidden_zk/served_stage.py` with its Flock staging; `statement.py` commits a served pass's rows in the
 statement's format: `pearl_c_vllm/e2e.py` loads it with its torch parts
 (`benchmarks/pouw/served_zk/statement_torch.py`), and the adapter's
-`verity/protocols/accounting/pouw/prover/serving/pearl_c/graphs.py` takes its `Statement`; `rows_bench.py` is the GPU
+`adapters/torch/verity_torch/pouw/pearl_c/graphs.py` takes its `Statement`; `rows_bench.py` is the GPU
 row commitments `statement.py` loads; `of_record.py` runs each of PoUW's checks on the challenger's path in Lean and in
 its Python reference on one input, its Lean side from `benchmarks/pouw/served_zk/of_record_lean.py`. What verity does
 not import (`verity_difftest`, torch, `fast_tile`, the evidence store) the benchmark-side files pass in or supply.

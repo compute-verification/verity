@@ -30,7 +30,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving import lead as PL
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as F
 from verity.protocols.accounting.pouw.prover.serving.lead import record as R
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import passes as PP
 
 K = 64
 ENTRY = f"pouw:{PL.SCHEME}"

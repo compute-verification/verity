@@ -45,7 +45,7 @@ for a host run. `--peer` overrides it, and a gate run whose record names none is
 the auditor's.
 
 The ledger's head, a gate session's read of the ledger and the *credited* and *pinned* checks below are the Lean
-verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
+verifier's answers (`spot-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
 `challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse. So are the
 ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify_periods`), the commit on main
 (`on_main_answer`), *complete* (`complete_answer`) and a served session's read (`served_session_answer`, past
@@ -348,7 +348,7 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
              link_bytes_per_s: float = RATES["link_bytes_per_s"], bursts: str = "stated") -> dict:
     """The node's rates `verifier.recorded_rates` takes beside the record's squarings: its disks' and links' ceilings,
     and with `bursts` stated `ledger.Node.stated`'s bursts (one rebuild batch on the chips, a second of the disks, one
-    link window: `verifier.ingress_bursts` in each form)."""
+    link burst: `verifier.ingress_bursts` in each form)."""
     if bursts not in BURSTS:
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}

@@ -23,7 +23,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   why). No composite takes it: both name SPOT (`VStar.Recursive.Sampled`) among their subprotocols
   (`Core.Onsite.components`, `Core.Remote.components`), which refuses it by name (`VStar.Recursive.Sampled.V1_REFUSED`).
   It is written because the other cases are read off it (v2's, the inference-only case's), and its answer,
-  `sampled-proofs-one-stage check` on the case, goes to the verdicts alone.
+  `spot-one-stage check` on the case, goes to the verdicts alone.
 * **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' SPOT subprotocol
   (`Core.Remote.components`, `Core.Onsite.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with
   ``form`` ``one-stage`` in its params and its evidence (`with_form`), which the dispatcher splits off before one-stage
@@ -83,7 +83,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   (`a5.case_v2`: v1's case with the verdicts replaced by the one sampled member's proof's files, its params naming that
   member's circuit, public file and registered file, and ``blobs``), refused here when it commits to another record
   than v1's case or names a blob that isn't there, and when a5 wrote none (its ``case-v2-error.txt`` says why: v2
-  verifies one table's `--zk` session on its circuit and public file). Its answer is `sampled-proofs-one-stage-zk
+  verifies one table's `--zk` session on its circuit and public file). Its answer is `spot-one-stage-zk
   check` on the case and its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so it
   is made only when asked.
 
@@ -130,7 +130,7 @@ from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
-V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
+V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
 SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to

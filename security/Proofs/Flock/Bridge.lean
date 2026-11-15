@@ -12,6 +12,7 @@ public import Proofs.Flock.Bridge.Scope
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.UnitRows
+public import Proofs.Flock.Bridge.GateARow
 public import Proofs.Flock.Bridge.Canon
 public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
