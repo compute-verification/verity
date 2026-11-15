@@ -150,6 +150,8 @@ TOKEN, NEXT, AHEAD, KEY = "o0", "o1", "o2", "o3"
 WORD = Array(16, BIT)
 #: the key block's family, the one decode template besides the select that `masked` takes, and its masked version's
 KEY_BLOCK, MASKED_BLOCK = "SparseMlaHeadBlock_v1", "SparseMlaHeadBlockLive_v1"
+#: the families `masked` takes: the decode templates that read the cache, the key block and, in the column cut, its keys
+MASKED = frozenset({KEY_BLOCK, "SparseMlaHeadKeysWire_v1"})
 #: the class window's name, beside `node_window.NAME`
 CLASS_NAME = f"{NAME}/class"
 #: the class Program's select and check rows' families (`ClassSelect`, `ClassStopCheck`)
@@ -193,9 +195,9 @@ def first_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: in
     and whose ids written before are 0, so it has neither a ``live`` nor a ``count`` parameter:
 
         (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, request: Array<4, i32>)
-            -> (o0: Array<2, Value<16>>, o1: WORD, o2: WORD, o3: Array<2, Value<16>>)
+            -> (o0: Array<2, Value<16>>, o1: bit, o2: Array<k, bit>, o3: Array<2, Value<16>>)
 
-    ``o0`` the token, the first served id, always written; ``o1`` the next step's bit (the token is none of the stop ids
+    with k = log2(O) + 1 the count's bits, least significant first, each output one u16 word of its row. ``o0`` the token, the first served id, always written; ``o1`` the next step's bit (the token is none of the stop ids
     and the limit is not reached at one id); ``o2`` = 1, the count's first value; ``o3`` the token ANDed with ``o1``, the
     first decode step's key. A template of its own, one unit a request. `class_select`'s."""
     from .class_select import first_select as built
@@ -208,7 +210,9 @@ def live_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: int
     two ids (module docstring, "The select is where the mask lives"):
 
         (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, request: Array<4, i32>, count: WORD, live: WORD)
-            -> (o0: Array<2, Value<16>>, o1: WORD, o2: WORD, o3: Array<2, Value<16>>)
+            -> (o0: Array<2, Value<16>>, o1: bit, o2: Array<k, bit>, o3: Array<2, Value<16>>)
+
+    reading the count's low k bits and the bit's bit 0, and no other bit of either word.
 
     - ``o1``: ``live`` AND the token is none of STOP (none where ``ignore_eos`` is not 0) AND the length limit is not
       reached at count + 1 ids as `stop_rule.StopRule_v1` reads it, AND ``count`` + 1 is below O.
@@ -236,8 +240,18 @@ def class_check(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_
 
 # ---- the stand-ins (module docstring)
 
-def _word(B: Any, value: int) -> Coll:
-    return Coll(WORD, concat([B.call(const(1, (value >> i) & 1)).refs for i in range(16)]))
+def _bits(B: Any, value: int, n: int) -> Coll:
+    return Coll(Array(n, BIT), concat([B.call(const(1, (value >> i) & 1)).refs for i in range(n)]))
+
+
+def _select_ret(S: Any) -> Tuple:
+    return Tuple(Array(2, U16), BIT, Array(S.O.bit_length(), BIT), Array(2, U16))
+
+
+def _widened(B: Any, f: Coll) -> Coll:
+    """An output of fewer than 16 bits as the `WORD` its row holds: its bits, then zeros."""
+    n = f.type.leaves
+    return f if n == 16 else Coll(WORD, concat([f.refs, _bits(B, 0, 16 - n).refs]))
 
 
 def _select_params(S: Any, first: bool) -> tuple:
@@ -250,11 +264,12 @@ def _stand_in_select(first: bool) -> CompositeDefinition:
     def body(B: Any, S: Any, logits: Coll, *rest: Coll) -> Coll:
         k = S.V // S.N - 1
         token = B.call(bind(G.GreedyCombine, V=S.V, N=S.N), logits, *rest[:k])
-        count, live = (_word(B, 1), _word(B, 1)) if first else rest[k + 1:]
-        return Coll(Tuple(Array(2, U16), WORD, WORD, Array(2, U16)), concat([token.refs, live.refs, count.refs, token.refs]))
+        n = S.O.bit_length()
+        count, live = (_bits(B, 1, n), _bits(B, 1, 1)) if first else (rest[k + 1][:n], rest[k + 2][:1])
+        return Coll(_select_ret(S), concat([token.refs, live.refs, count.refs, token.refs]))
     return CompositeDefinition(
         "GreedyCombineFirstStandIn" if first else "GreedyCombineStandIn", 1, ("V", "N", "O", "STOP", "MAX_MODEL_LEN"),
-        lambda S: (_select_params(S, first), Tuple(Array(2, U16), WORD, WORD, Array(2, U16))), body, register=False,
+        lambda S: (_select_params(S, first), _select_ret(S)), body, register=False,
         doc="a stand-in of the class select's ports: its ids the combine's token, its bit and count its inputs'")
 
 
@@ -277,7 +292,7 @@ def _stand_in_masked(defn: Any) -> CompositeDefinition:
     def sig(S: Any) -> tuple:
         params, ret = bind(defn, **vars(S)).signature()
         return (*params, (LIVE, WORD)), ret
-    return CompositeDefinition(f"{MASKED_BLOCK.rsplit('_v', 1)[0]}StandIn", 1, defn.statics, sig,
+    return CompositeDefinition(f"{defn.name}LiveStandIn", 1, defn.statics, sig,
                                lambda B, S, *args: B.call(bind(defn, **vars(S)), *args[:-1]), register=False,
                                doc="a stand-in of the masked key block's ports: the block's outputs, unmasked")
 
@@ -299,8 +314,8 @@ def _check_def(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_l
 
 
 def _masked_def(fn: Any) -> Any:
-    if descriptor_id(fn).split("{")[0] != KEY_BLOCK:
-        raise Unexpressible(f"{descriptor_id(fn)}: the masked templates are {KEY_BLOCK}'s alone")
+    if descriptor_id(fn).split("{")[0] not in MASKED:
+        raise Unexpressible(f"{descriptor_id(fn)}: the masked templates are {sorted(MASKED)}'s alone")
     return masked(fn) if _module("class_masked") is not None else bind(_stand_in_masked(fn.defn), **fn.bindings)
 
 
@@ -325,8 +340,9 @@ def _select_row(B: Any, S: Any, logits: Coll, request: Coll, *state: Coll) -> Co
     token = B.call(bind(b1.TokenSelect, V=S.V), logits)
     zero = B.call(const(32, 0))
     served = token if S.FIRST else B.call(SelectI32, state[1][0], token, zero)
-    key = B.call(SelectI32, st[1][0], token, zero)
-    return Coll(Tuple(I32, WORD, WORD, I32), concat([served.refs, st[1].refs, st[2].refs, key.refs]))
+    nxt, count = _widened(B, st[1]), _widened(B, st[2])
+    key = B.call(SelectI32, nxt[0], token, zero)
+    return Coll(Tuple(I32, WORD, WORD, I32), concat([served.refs, nxt.refs, count.refs, key.refs]))
 
 
 #: `ClassSelect_v1{V, O, STOP, MAX_MODEL_LEN, FIRST, STAND_IN}` (logits: bf16[V], request: Array<4, i32>[, count: WORD,
@@ -479,7 +495,7 @@ class ClassWindow(NodeWindow):
         self.masked: list[tuple[str, int, int]] = []
 
     def unit(self, family: str, fn: Any, count: int) -> tuple[str, int]:
-        if self._masking is None or descriptor_id(fn).split("{")[0] != KEY_BLOCK:
+        if self._masking is None or descriptor_id(fn).split("{")[0] not in MASKED:
             return super().unit(family, fn, count)
         tid, at = super().unit(family, _masked_def(fn), count)
         self.b.feed(tid, LIVE, at, count, (self._masking,), ((count, 0),))
@@ -650,7 +666,7 @@ def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = No
     return NJ.Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
 
 
-__all__ = ["AHEAD", "CHECK", "CLASS_NAME", "COUNT", "FAMILIES", "KEY", "KEY_BLOCK", "LIMITS", "LIMITS_ROW", "LIVE", "MASKED_BLOCK",
+__all__ = ["AHEAD", "CHECK", "CLASS_NAME", "COUNT", "FAMILIES", "KEY", "KEY_BLOCK", "LIMITS", "LIMITS_ROW", "LIVE", "MASKED", "MASKED_BLOCK",
            "MODULES", "NEXT", "REQUEST", "SELECT", "TOKEN", "WORD", "ClassSelect", "ClassStopCheck", "ClassWindow", "Selects",
            "boundary_reads", "class_check", "class_request", "class_window", "first_select", "live_select", "lower_check",
            "lower_select", "masked", "masked_split", "rank_window", "request_reads", "stand_ins"]
