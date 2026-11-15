@@ -1,0 +1,186 @@
+# Every test under `verity/` to the root, mirrored by path: `verity/A/B/tests/X` becomes `tests/verity/A/B/X`, what
+# `tools/move/layout.py --map tools/move/tests_root_map.toml` moves and rewrites. A sizing move on a scratch branch: it
+# lands nowhere. The two suites whose pyproject sits in their own `tests/` (`verity/tests/`, `verity/protocols/tests/`)
+# move whole, pyproject and inner `tests/` with them. No file is split or deleted. The roots and the excludes are
+# `audit_code_back_map.toml`'s. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+
+[paths]
+"verity/circuits/evaluate/tests/" = "tests/verity/circuits/evaluate/"
+"verity/circuits/ops/tests/" = "tests/verity/circuits/ops/"
+"verity/circuits/private_circuits/tests/" = "tests/verity/circuits/private_circuits/"
+"verity/circuits/requirement/tests/" = "tests/verity/circuits/requirement/"
+"verity/circuits/tests/" = "tests/verity/circuits/"
+"verity/commitments/attest/tests/" = "tests/verity/commitments/attest/"
+"verity/commitments/cuda/commit_slots/tests/" = "tests/verity/commitments/cuda/commit_slots/"
+"verity/commitments/cuda/sha512_rows/tests/" = "tests/verity/commitments/cuda/sha512_rows/"
+"verity/commitments/cuda/tests/" = "tests/verity/commitments/cuda/"
+"verity/commitments/identity/tests/" = "tests/verity/commitments/identity/"
+"verity/commitments/periods/tests/" = "tests/verity/commitments/periods/"
+"verity/commitments/randomness/tests/" = "tests/verity/commitments/randomness/"
+"verity/commitments/tests/" = "tests/verity/commitments/"
+"verity/protocols/accounting/certifier/device/tests/" = "tests/verity/protocols/accounting/certifier/device/"
+"verity/protocols/accounting/certifier/prover/tests/" = "tests/verity/protocols/accounting/certifier/prover/"
+"verity/protocols/accounting/certifier/verifier/network/tests/" = "tests/verity/protocols/accounting/certifier/verifier/network/"
+"verity/protocols/accounting/certifier/verifier/tests/" = "tests/verity/protocols/accounting/certifier/verifier/"
+"verity/protocols/accounting/poub/device/live_verifier/tests/" = "tests/verity/protocols/accounting/poub/device/live_verifier/"
+"verity/protocols/accounting/poub/tests/" = "tests/verity/protocols/accounting/poub/"
+"verity/protocols/accounting/poub/verifier/lean/tests/" = "tests/verity/protocols/accounting/poub/verifier/lean/"
+"verity/protocols/accounting/poub/verifier/tests/" = "tests/verity/protocols/accounting/poub/verifier/"
+"verity/protocols/accounting/pous/device/lean/tests/" = "tests/verity/protocols/accounting/pous/device/lean/"
+"verity/protocols/accounting/pous/tests/" = "tests/verity/protocols/accounting/pous/"
+"verity/protocols/accounting/pous/verifier/check/tests/" = "tests/verity/protocols/accounting/pous/verifier/check/"
+"verity/protocols/accounting/pous/verifier/tests/" = "tests/verity/protocols/accounting/pous/verifier/"
+"verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/" = "tests/verity/protocols/accounting/pouw/prover/kernels/edited_gemm/"
+"verity/protocols/accounting/pouw/prover/tests/" = "tests/verity/protocols/accounting/pouw/prover/"
+"verity/protocols/accounting/pouw/verifier/lean/check/tests/" = "tests/verity/protocols/accounting/pouw/verifier/lean/check/"
+"verity/protocols/accounting/pouw/verifier/lean/commit/tests/" = "tests/verity/protocols/accounting/pouw/verifier/lean/commit/"
+"verity/protocols/accounting/pouw/verifier/lean/window/tests/" = "tests/verity/protocols/accounting/pouw/verifier/lean/window/"
+"verity/protocols/accounting/pouw/verifier/receipts/tests/" = "tests/verity/protocols/accounting/pouw/verifier/receipts/"
+"verity/protocols/accounting/pouw/verifier/tests/" = "tests/verity/protocols/accounting/pouw/verifier/"
+"verity/protocols/accounting/registration/verifier/lean/tests/" = "tests/verity/protocols/accounting/registration/verifier/lean/"
+"verity/protocols/compose/device/live_challenger/tests/" = "tests/verity/protocols/compose/device/live_challenger/"
+"verity/protocols/compose/verifier/lean/tests/" = "tests/verity/protocols/compose/verifier/lean/"
+"verity/protocols/experimental/dither/tests/" = "tests/verity/protocols/experimental/dither/"
+"verity/protocols/experimental/pearl_c4/tests/" = "tests/verity/protocols/experimental/pearl_c4/"
+"verity/protocols/policy/inference_only/verifier/tests/" = "tests/verity/protocols/policy/inference_only/verifier/"
+"verity/protocols/proofs/flock/prover/tests/" = "tests/verity/protocols/proofs/flock/prover/"
+"verity/protocols/proofs/flock/verifier/sigma/tests/" = "tests/verity/protocols/proofs/flock/verifier/sigma/"
+"verity/protocols/proofs/recursion/verifier/vstar_cli/tests/" = "tests/verity/protocols/proofs/recursion/verifier/vstar_cli/"
+"verity/protocols/proofs/recursion/verifier/zk_server/tests/" = "tests/verity/protocols/proofs/recursion/verifier/zk_server/"
+"verity/protocols/proofs/spot/device/tests/" = "tests/verity/protocols/proofs/spot/device/"
+"verity/protocols/proofs/spot/prover/tests/" = "tests/verity/protocols/proofs/spot/prover/"
+"verity/protocols/proofs/spot/verifier/lean/tests/" = "tests/verity/protocols/proofs/spot/verifier/lean/"
+"verity/protocols/proofs/spot/verifier/tests/" = "tests/verity/protocols/proofs/spot/verifier/"
+"verity/protocols/tests/" = "tests/verity/protocols/"
+"verity/runtime/tests/" = "tests/verity/runtime/"
+"verity/tests/" = "tests/verity/"
+
+[retired]
+# the paths this map empties
+paths = [
+    "verity/circuits/evaluate/tests/",
+    "verity/circuits/ops/tests/",
+    "verity/circuits/private_circuits/tests/",
+    "verity/circuits/requirement/tests/",
+    "verity/circuits/tests/",
+    "verity/commitments/attest/tests/",
+    "verity/commitments/cuda/commit_slots/tests/",
+    "verity/commitments/cuda/sha512_rows/tests/",
+    "verity/commitments/cuda/tests/",
+    "verity/commitments/identity/tests/",
+    "verity/commitments/periods/tests/",
+    "verity/commitments/randomness/tests/",
+    "verity/commitments/tests/",
+    "verity/protocols/accounting/certifier/device/tests/",
+    "verity/protocols/accounting/certifier/prover/tests/",
+    "verity/protocols/accounting/certifier/verifier/network/tests/",
+    "verity/protocols/accounting/certifier/verifier/tests/",
+    "verity/protocols/accounting/poub/device/live_verifier/tests/",
+    "verity/protocols/accounting/poub/tests/",
+    "verity/protocols/accounting/poub/verifier/lean/tests/",
+    "verity/protocols/accounting/poub/verifier/tests/",
+    "verity/protocols/accounting/pous/device/lean/tests/",
+    "verity/protocols/accounting/pous/tests/",
+    "verity/protocols/accounting/pous/verifier/check/tests/",
+    "verity/protocols/accounting/pous/verifier/tests/",
+    "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/",
+    "verity/protocols/accounting/pouw/prover/tests/",
+    "verity/protocols/accounting/pouw/verifier/lean/check/tests/",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/tests/",
+    "verity/protocols/accounting/pouw/verifier/lean/window/tests/",
+    "verity/protocols/accounting/pouw/verifier/receipts/tests/",
+    "verity/protocols/accounting/pouw/verifier/tests/",
+    "verity/protocols/accounting/registration/verifier/lean/tests/",
+    "verity/protocols/compose/device/live_challenger/tests/",
+    "verity/protocols/compose/verifier/lean/tests/",
+    "verity/protocols/experimental/dither/tests/",
+    "verity/protocols/experimental/pearl_c4/tests/",
+    "verity/protocols/policy/inference_only/verifier/tests/",
+    "verity/protocols/proofs/flock/prover/tests/",
+    "verity/protocols/proofs/flock/verifier/sigma/tests/",
+    "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/",
+    "verity/protocols/proofs/recursion/verifier/zk_server/tests/",
+    "verity/protocols/proofs/spot/device/tests/",
+    "verity/protocols/proofs/spot/prover/tests/",
+    "verity/protocols/proofs/spot/verifier/lean/tests/",
+    "verity/protocols/proofs/spot/verifier/tests/",
+    "verity/protocols/tests/",
+    "verity/runtime/tests/",
+    "verity/tests/",
+]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input; as the earlier maps'.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
+           "tests/tree.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
+           "benchmarks/pouw/pearl_c_sm90/**"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+
+
+# the rename [paths] implies (`layout.py --modules`)
+[modules]
+"verity.circuits.evaluate.tests" = "tests.verity.circuits.evaluate"
+"verity.circuits.ops.tests" = "tests.verity.circuits.ops"
+"verity.circuits.private_circuits.tests" = "tests.verity.circuits.private_circuits"
+"verity.circuits.requirement.tests" = "tests.verity.circuits.requirement"
+"verity.circuits.tests" = "tests.verity.circuits"
+"verity.commitments.attest.tests" = "tests.verity.commitments.attest"
+"verity.commitments.cuda.commit_slots.tests" = "tests.verity.commitments.cuda.commit_slots"
+"verity.commitments.cuda.sha512_rows.tests" = "tests.verity.commitments.cuda.sha512_rows"
+"verity.commitments.cuda.tests" = "tests.verity.commitments.cuda"
+"verity.commitments.identity.tests" = "tests.verity.commitments.identity"
+"verity.commitments.periods.tests" = "tests.verity.commitments.periods"
+"verity.commitments.randomness.tests" = "tests.verity.commitments.randomness"
+"verity.commitments.tests" = "tests.verity.commitments"
+"verity.protocols.accounting.certifier.device.tests" = "tests.verity.protocols.accounting.certifier.device"
+"verity.protocols.accounting.certifier.prover.tests" = "tests.verity.protocols.accounting.certifier.prover"
+"verity.protocols.accounting.certifier.verifier.network.tests" = "tests.verity.protocols.accounting.certifier.verifier.network"
+"verity.protocols.accounting.certifier.verifier.tests" = "tests.verity.protocols.accounting.certifier.verifier"
+"verity.protocols.accounting.poub.device.live_verifier.tests" = "tests.verity.protocols.accounting.poub.device.live_verifier"
+"verity.protocols.accounting.poub.tests" = "tests.verity.protocols.accounting.poub"
+"verity.protocols.accounting.poub.verifier.lean.tests" = "tests.verity.protocols.accounting.poub.verifier.lean"
+"verity.protocols.accounting.poub.verifier.tests" = "tests.verity.protocols.accounting.poub.verifier"
+"verity.protocols.accounting.pous.device.lean.tests" = "tests.verity.protocols.accounting.pous.device.lean"
+"verity.protocols.accounting.pous.tests" = "tests.verity.protocols.accounting.pous"
+"verity.protocols.accounting.pous.verifier.check.tests" = "tests.verity.protocols.accounting.pous.verifier.check"
+"verity.protocols.accounting.pous.verifier.tests" = "tests.verity.protocols.accounting.pous.verifier"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.tests" = "tests.verity.protocols.accounting.pouw.prover.kernels.edited_gemm"
+"verity.protocols.accounting.pouw.prover.tests" = "tests.verity.protocols.accounting.pouw.prover"
+"verity.protocols.accounting.pouw.verifier.lean.check.tests" = "tests.verity.protocols.accounting.pouw.verifier.lean.check"
+"verity.protocols.accounting.pouw.verifier.lean.commit.tests" = "tests.verity.protocols.accounting.pouw.verifier.lean.commit"
+"verity.protocols.accounting.pouw.verifier.lean.window.tests" = "tests.verity.protocols.accounting.pouw.verifier.lean.window"
+"verity.protocols.accounting.pouw.verifier.receipts.tests" = "tests.verity.protocols.accounting.pouw.verifier.receipts"
+"verity.protocols.accounting.pouw.verifier.tests" = "tests.verity.protocols.accounting.pouw.verifier"
+"verity.protocols.accounting.registration.verifier.lean.tests" = "tests.verity.protocols.accounting.registration.verifier.lean"
+"verity.protocols.compose.device.live_challenger.tests" = "tests.verity.protocols.compose.device.live_challenger"
+"verity.protocols.compose.verifier.lean.tests" = "tests.verity.protocols.compose.verifier.lean"
+"verity.protocols.experimental.dither.tests" = "tests.verity.protocols.experimental.dither"
+"verity.protocols.experimental.pearl_c4.tests" = "tests.verity.protocols.experimental.pearl_c4"
+"verity.protocols.policy.inference_only.verifier.tests" = "tests.verity.protocols.policy.inference_only.verifier"
+"verity.protocols.proofs.flock.prover.tests" = "tests.verity.protocols.proofs.flock.prover"
+"verity.protocols.proofs.flock.verifier.sigma.tests" = "tests.verity.protocols.proofs.flock.verifier.sigma"
+"verity.protocols.proofs.recursion.verifier.vstar_cli.tests" = "tests.verity.protocols.proofs.recursion.verifier.vstar_cli"
+"verity.protocols.proofs.recursion.verifier.zk_server.tests" = "tests.verity.protocols.proofs.recursion.verifier.zk_server"
+"verity.protocols.proofs.spot.device.tests" = "tests.verity.protocols.proofs.spot.device"
+"verity.protocols.proofs.spot.prover.tests" = "tests.verity.protocols.proofs.spot.prover"
+"verity.protocols.proofs.spot.verifier.lean.tests" = "tests.verity.protocols.proofs.spot.verifier.lean"
+"verity.protocols.proofs.spot.verifier.tests" = "tests.verity.protocols.proofs.spot.verifier"
+"verity.protocols.tests" = "tests.verity.protocols"
+"verity.runtime.tests" = "tests.verity.runtime"
+"verity.tests" = "tests.verity"
