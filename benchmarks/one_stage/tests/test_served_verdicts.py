@@ -1558,7 +1558,7 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == checks
     assert json.loads((piece / "development.json").read_text())["execution_phase"] == phase
     line = S.development_line(doc)
-    assert line["execution_phase"] == {"clock": "the auditor host's", "start_utc": phase["start_utc"],
+    assert line["execution_phase"] == {"clock": "the auditor device's", "start_utc": phase["start_utc"],
                                        "end_utc": phase["end_utc"], "seconds": 460, "why": None, "prover": phase["prover"]}
     assert line["checks"] == doc["checks"]
     public = S.public_json(doc)
