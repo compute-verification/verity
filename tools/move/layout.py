@@ -55,7 +55,8 @@ the check's `pins.py` that held the digest of a manifest the move rewrites gets 
 which no pinned output reads. A Lake package's path to another package that named one before the move names one after
 it, or the move stops (exit 1). An old path that names something outside the tree ([rewrite] keep: the frozen evidence
 artifact's layout) is never rewritten, and neither is a dotted name that only looks like a module ([rewrite]
-keep_dotted: a torch op's qualified name).
+keep_dotted: a torch op's qualified name). A file's relative paths stay as written where the map says so ([rewrite]
+keep_relative, by old path: a test's, which name a toy's files).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
@@ -324,6 +325,8 @@ class Layout:
         rw = data.get("rewrite", {})
         self.exclude, self.include = rw.get("exclude", []), rw.get("include", [])
         self.keep = rw.get("keep", [])
+        #: files, by their old path, whose relative paths stay as written ([rewrite] keep_relative): a test's are a toy's
+        self.keep_relative = rw.get("keep_relative", [])
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
@@ -414,10 +417,11 @@ class Layout:
         """Whether `word`, a moved directory's name alone between quotes, is the directory in file `where`."""
         return word in self.words or any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.words_in.items())
 
+    def keeps_relative(self, old: str) -> bool:
+        return _hit(self.keep_relative, old)
+
     def excluded(self, *paths: str) -> bool:
-        def hit(pats, p):
-            return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
-                       for pat in pats)
+        hit = _hit
         if MOVES in paths:              # each move's old paths, kept as they were: rewritten, a rerun would record it again
             return True
         if any(hit(self.include, p) for p in paths if p):
@@ -1160,6 +1164,8 @@ class Run:
 
         def relative(m: re.Match) -> str:
             var, token = (m.group("v"), m.group("p")) if m.group("p") is not None else (m.group("v2"), m.group("p2"))
+            if self.L.keeps_relative(old):
+                return m.group(0)
             new = self._map_relative(token, path, old, from_member=bool(var))
             if new is None or new == token:
                 return m.group(0)
@@ -1187,7 +1193,7 @@ class Run:
             return out + ("/" if token.endswith("/") else "")
 
         text = self._short_re.sub(short, text)
-        if path != old and posixpath.splitext(path)[1] in RELATIVE_TYPES:
+        if path != old and posixpath.splitext(path)[1] in RELATIVE_TYPES and not self.L.keeps_relative(old):
             def plain(m: re.Match) -> str:
                 token = m.group("p")
                 stripped = token.rstrip("/.,")
@@ -2150,6 +2156,11 @@ def _add_inputs(text: str, add: list[str], first: bool = False) -> str:
 
 #: the lists of a suite's `[tool.verity.tests]` whose paths are written from the suite's directory: {table: keys}
 SUITE_RELATIVE = {"tool.verity.tests": ("untraced",), "tool.verity.tests.reads": ("tests",)}
+
+
+def _hit(pats: list[str], p: str) -> bool:
+    """Whether path `p` matches one of the globs `pats` (`**/x` matches `x` too)."""
+    return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:])) for pat in pats)
 
 
 def _strip_suite_relative(text: str, prefix: str) -> str:

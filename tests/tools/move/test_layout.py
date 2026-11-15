@@ -1018,6 +1018,20 @@ def test_a_relative_path_to_a_file_that_moves_beside_it_stays_relative_and_is_ce
     assert cert["certified"], cert["refusals"]
 
 
+def test_a_file_the_map_keeps_relative_moves_with_its_relative_paths_as_written(tmp_path):
+    """A test's relative paths name a toy's files (`"../../packages/x"` in a lakefile it writes): under [rewrite]
+    keep_relative, by its old path, they stay as written when it moves, and a root-relative path in it is still rewritten.
+    Without it the mover reads the toy's path as one to the directory the map splits."""
+    files = {"tools/a/b.sh": "", "tools/a/tests/test_t.py": 'LAKE = "path = \\"../../a\\""\nCODE = "tools/a/b.sh"\n'}
+    layout = ('[roots]\nold = {}\nnew = {}\n\n[paths]\n"tools/a/tests/" = "tests/tools/a/"\n"tools/a/b.sh" = "tools/a/c.sh"\n\n'
+              '[modules]\n"tools.a.tests" = "tests.tools.a"\n')
+    r, p = _run(tmp_path, files, layout + '\n[rewrite]\nkeep_relative = ["**/tests/*.py"]\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "tests/tools/a/test_t.py").read_text() == 'LAKE = "path = \\"../../a\\""\nCODE = "tools/a/c.sh"\n'
+    r, p = _run(tmp_path / "rewritten", files, layout)
+    assert p.returncode == 1 and "tests/tools/a/test_t.py: ../../a (part of tools/a moves)" in p.stderr, p.stderr
+
+
 @pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])
 @pytest.mark.parametrize("dry", [False, True])
 def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_the_fix(tmp_path, held, dry):
