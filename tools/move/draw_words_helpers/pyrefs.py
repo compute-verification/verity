@@ -51,7 +51,8 @@ class Refs:
         return self.by_dotted.get(mod, []) if mod else []
 
     def uses(self, f):
-        """(kind, alias, module files, name, line): `from` imports ("from", bound name, targets, name) and attribute reads
+        """(kind, alias, module files, name, line): `from` imports ("from", bound name, targets, name), modules imported
+        by `from` ("mod", bound name, the module file, its name) and attribute reads
         on an alias of an in-tree module ("attr", alias, targets, attr)."""
         t, out, aliases = self.tree(f), [], {}
         if t is None:
@@ -65,6 +66,7 @@ class Refs:
                     sub = self.resolve(f, (n.module + "." if n.module else "") + a.name, n.level)
                     if sub:
                         aliases[a.asname or a.name] = sub
+                        out.append(("mod", a.asname or a.name, sub, a.name, n.lineno))
                     elif targets:
                         out.append(("from", a.asname or a.name, targets, a.name, n.lineno))
             elif isinstance(n, ast.Import):

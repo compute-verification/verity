@@ -1,0 +1,60 @@
+old	new	files
+DRAW	SAMPLE	1	verity/protocols/accounting/pouw/verifier/lean/window/README.md
+DRAWN	SAMPLED	3	benchmarks/pouw/pearl_c_vllm/served_passes.py benchmarks/pouw/tests/test_pearl_c_vllm_head.py verity/protocols/accounting/pouw/verifier/lean/check/tests/test_difftest.py
+DRAWN1	SAMPLED1	2	verity/protocols/accounting/pouw/prover/serving/h1/__init__.py verity/protocols/accounting/pouw/prover/serving/h1/prover.py
+DRAWS	SAMPLES	8	benchmarks/pouw/pearl_c_sm90/glm53_passes.py benchmarks/pouw/pearl_c_sm90/overhead_arm.py benchmarks/pouw/pearl_c_vllm/h3_screen.py benchmarks/pouw/pearl_c_vllm/served_passes.py
+DrawWref	SampleWref	1	verity/protocols/accounting/pouw/prover/clear/clear_work.py
+RecordedDraw	RecordedSample	5	benchmarks/pouw/pearl_c4/replay.py benchmarks/pouw/pearl_c_vllm/verify_run.py benchmarks/pouw/tests/test_pearl_c_vllm.py verity/protocols/accounting/pouw/prover/clear/clear_work.py
+_core_draw	_core_sample	2	verity/protocols/accounting/pouw/verifier/core_check.py verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+_draw_args	_sample_args	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_credit_cases.py
+_draw_coin	_sample_coin	2	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_credit_cases.py verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_verified_cases.py
+_draw_of	_sample_of	1	verity/protocols/accounting/pouw/prover/serving/h1/handoff.py
+_draw_params	_sample_params	1	verity/protocols/accounting/pouw/verifier/lean/window/tests/test_difftest.py
+_draw_root	_sample_root	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_credit_cases.py
+_draw_state	_sample_state	1	verity/protocols/accounting/pouw/prover/serving/h1/handoff.py
+_live_draw	_live_sample	1	verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+_mutate_draw	_mutate_sample	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py
+_mutate_live_draw	_mutate_live_sample	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py
+draw	sample	36	benchmarks/pouw/h1_lanes/served.sh benchmarks/pouw/h1_prove/job.sh benchmarks/pouw/pearl_c4/replay.py benchmarks/pouw/pearl_c_vllm/bench_arm.py
+draw_args	sample_args	3	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py verity/protocols/accounting/pouw/verifier/lean/check/tests/test_difftest.py verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+draw_coin_case	sample_coin_case	1	verity/protocols/accounting/pouw/verifier/lean/commit/tests/difftest_vectors.py
+draw_instance	sample_instance	3	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py verity/protocols/accounting/pouw/verifier/lean/check/tests/test_difftest.py verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+draw_leaf	sample_leaf	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_credit_cases.py
+draw_op	sample_op	1	verity/protocols/accounting/pouw/verifier/lean/commit/tests/difftest_vectors.py
+draw_reserved	sample_reserved	1	verity/protocols/accounting/pouw/prover/serving/h1/window.py
+draw_wref	sample_wref	3	benchmarks/pouw/pearl_c_vllm/verify_run.py verity/protocols/accounting/pouw/prover/clear/clear_work.py verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_work.py
+drawn	?	1	verity/protocols/accounting/pouw/prover/kernels/served_zk/job.sh
+drawn	sampled	30	benchmarks/pouw/h1_lanes/served.py benchmarks/pouw/h1_prove/drawn.sh benchmarks/pouw/h1_prove/recorded.py benchmarks/pouw/h1_prove/served.py
+drawn_over	sampled_over	1	benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py
+draws	samples	11	benchmarks/pouw/pearl_c_vllm/served_inert_work.py benchmarks/pouw/pearl_c_vllm/served_passes.py benchmarks/pouw/pearl_c_vllm/verify_run.py benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py
+env_draw	env_sample	1	benchmarks/pouw/served_h1/coins.py
+fixed_draw	fixed_sample	1	benchmarks/pouw/tests/test_pearl_c_vllm_head.py
+honest_draw	honest_sample	3	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py verity/protocols/accounting/pouw/verifier/lean/check/tests/test_difftest.py verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+honest_live_draw	honest_live_sample	2	verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+k_draw	k_sample	1	verity/protocols/accounting/pouw/prover/serving/h1/sampled.py
+live_draw	live_sample	3	benchmarks/pouw/pearl_c_vllm/bench_arm.py benchmarks/pouw/pearl_c_vllm/served_passes.py benchmarks/pouw/tests/test_pearl_c_vllm.py
+open_draw	open_sample	2	benchmarks/pouw/served_h1/coins.py benchmarks/pouw/tests/test_served_h1.py
+other_draw	other_sample	1	verity/protocols/accounting/pouw/verifier/lean/commit/tests/difftest_vectors.py
+over_draws	over_samples	1	benchmarks/pouw/pearl_c_vllm/verify_run.py
+pouw_h1_draw	pouw_h1_sample	1	verity/protocols/accounting/pouw/prover/serving/h1/challenger.py
+redrawn	resampled	2	benchmarks/pouw/pearl_c_vllm/verify_run.py benchmarks/pouw/tests/test_pearl_c_vllm.py
+t_draws	t_samples	1	verity/protocols/accounting/pouw/verifier/lean/commit/tests/difftest_vectors.py
+test_a_challenger_draw_that_is_not_the_runs_coin	test_a_challenger_sample_that_is_not_the_runs_coin	1	benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py
+test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused	test_a_sample_record_the_prover_signed_over_its_own_coins_is_refused	1	verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+test_a_live_epoch_and_a_challenger_draw	test_a_live_epoch_and_a_challenger_sample	1	benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py
+test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins	test_a_seeded_serve_flips_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins	1	benchmarks/pouw/tests/test_pearl_c_vllm.py
+test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins	test_a_verdict_of_record_takes_only_a_challenger_sample_on_live_coins	1	benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py
+test_every_draw_mutation_hits_its_refusal	test_every_sample_mutation_hits_its_refusal	1	verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py
+test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command	test_fresh_trials_sample_exactly_by_work_from_a_source_fixed_in_the_command	1	benchmarks/pouw/tests/test_pearl_c_vllm.py
+test_pass_and_draw	test_pass_and_sample	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/test_difftest.py
+test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own	test_served_inert_work_fresh_samples_measure_each_input_under_salts_of_its_own	1	benchmarks/pouw/tests/test_pearl_c_vllm.py
+test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_ticket	test_the_band_rule_holds_in_the_sample_a_tile_of_a_voluntary_rows_band_has_no_ticket	1	verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_work.py
+test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment	test_the_sample_coin_must_open_against_the_epochs_commitment_after_the_commitment	1	verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_work.py
+test_the_draw_policy_refuses_a_partial_draw	test_the_sample_policy_refuses_a_partial_sample	1	verity/protocols/accounting/pouw/verifier/lean/window/tests/test_reg_file.py
+test_the_full_draw_passes	test_the_full_sample_passes	1	verity/protocols/accounting/pouw/verifier/lean/window/tests/test_reg_file.py
+test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_since_its_close_or_asks_no_coin	test_the_live_sample_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_since_its_close_or_asks_no_coin	1	benchmarks/pouw/tests/test_pearl_c_vllm.py
+test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_opens_it_on_the_runs_commitment	test_the_live_sample_reserves_a_withheld_draw_session_outside_any_period_and_opens_it_on_the_runs_commitment	1	benchmarks/pouw/tests/test_pearl_c_vllm.py
+test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again	test_the_run_verdict_takes_its_source_from_its_sample_once_and_never_asks_a_sample_again	1	benchmarks/pouw/tests/test_pearl_c_vllm.py
+test_the_salt_and_draw_cases_reach_every_branch	test_the_salt_and_sample_cases_reach_every_branch	1	verity/protocols/accounting/pouw/verifier/lean/commit/tests/test_pouw_commit_lean_difftest.py
+test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref	test_the_served_sample_weighs_mixed_linears_by_the_cited_statements_wref	1	verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_work.py
+window_drawn	window_sampled	1	verity/protocols/accounting/pouw/verifier/lean/check/tests/test_difftest.py

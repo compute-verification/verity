@@ -256,6 +256,10 @@ patterns += [
     r"\bdraw(?=\.work_table)", r"(?<=os\.urandom\(64\), )drawn\b", r"(?<=every )drawn(?= instance that passed)",
     r"(?<=no )drawn(?= instance passed)", r"(?<=unseeded )draw\b",
     r"(?<=\bp\.)drawn\b", r"(?<=HZ_CONFIGS=)drawn\b",
+    # vllm's `test_pouw_h1_drawn.py` calls it on the module its fixture returns, which no import names
+    r"\bdrawn_calls\b",
+    # recorded text: the served check's `scope`, which `adapters/vllm/tests/records/test_recorded_texts.py` pins
+    r"drawn(?= rows of each request a step)", r"(?<=\bclaim = \x22)[^\x22]*",
 ]
 held_pattern = r"(?<![\w])" + alternation(held) + r"(?![\w])"
 dotted_pattern = r"(?<![\w.])" + alternation(dotted) + r"(?![\w])"
@@ -356,7 +360,7 @@ for r in refs.files:
             if name in BARE and any(excluded(m) for m in targets) and name not in kept_words(r):
                 keep_in[r] = keep_in.get(r, []) + [name]
             continue
-        if name in BARE and any((m, name) in kept for m in targets):
+        if name in BARE and (any((m, name) in kept for m in targets) or (targets and all(excluded(m) for m in targets))):
             if kind == "from":
                 if name not in kept_words(r):
                     keep_in[r] = keep_in.get(r, []) + [name]
@@ -434,7 +438,15 @@ for p in refs.files:
                 and re.fullmatch(r"[A-Za-z_]\w*", n.value):
             quoted.add(n.value)
 looked_up = (defined & quoted) - BARE
-held = sorted(set(held) | extra_held | looked_up, key=lambda s: (-len(s), s))
+# a name a rewritten file imports or reads through a module an excluded file is keeps the spelling it has there
+read_out = set()
+for r in refs.files:
+    if excluded(r):
+        continue
+    for kind, alias, targets, name, _ in refs.uses(r):
+        if kind != "mod" and NAME_FAMILY.search(name) and name not in BARE and targets and all(excluded(m) for m in targets):
+            read_out.add(name)
+held = sorted(set(held) | extra_held | looked_up | read_out, key=lambda s: (-len(s), s))
 held_pattern = r"(?<![\w])" + alternation(held) + r"(?![\w])"
 
 # a module whose name is a held name stays where it is
