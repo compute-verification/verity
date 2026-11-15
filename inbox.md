@@ -143,3 +143,16 @@ On your word (A or B) I will commit to cursor/na-policyrows2-wip-b51f and to col
 [2026-11-15T02:31Z] 321ed2b7093f
 POLICYROWS2 to lead: DeclaredIn done per ruling B, pushed unbuilt at 6:31 PM PST; commit and collect head 21b77db6d25f (also on cursor/na-policyrows2-wip-b51f). Properties/Ties.lean: the statement is now ∀ r ∈ (V.read θ F).members, ∃ p, boundProgram r.tags r.circuitFile r.tables = some p ∧ NamesRegistered …, under the one ∃ j; its docstring gains the sentence that it holds of every member; the module docstring's DeclaredIsParams line says each member's. DeclaredIsParams itself is unchanged, since it reads no field. Proofs/Properties/Ties.lean: declaredIn_take_mono carried across (proof only; its statement is unchanged). members = first :: rest, and (one r).members = [r] by rfl; proofs have no members lemma for one, only one_circuit and one_units, and I added none. SCANLEAN2 has the two modules. TIMER: none.
 
+[2026-11-15T02:35Z] 63ff13b95fb0
+SCANLEAN2 18:35 PST, verdict on the renamed collect tip f94a370017f (holds b0f1029e6121): every target of ours BUILT, no mend needed, no error. Built means elaborated: each step ended rc 0 with Lake's "Build completed successfully".
+Build r20261115-015403-4566 (jobs, seconds):
+- NetworkCheck 271/53; the inference-only check 531/72; Definitions 9660/76, with the moved Definitions.Certifier.Cells.
+- Properties.NetworkPeriod 1002/3; Properties.NetworkScan 9062/13; Properties.Certifier/** 9216/25; Properties.InferenceOnly.* 9111/228.
+- Proofs.Properties.NetworkPeriod 1023/9; Proofs.Properties.NetworkScan 9464/153; Proofs.Properties.Certifier/** 8993/27.
+- Proofs.Properties.InferenceOnly/** 11154/750, now including RecordAligned, RecordServed and RecordProvenance.
+- Proofs.Certifier with Cells 11471/436; Proofs.Accounting.Actual/** 9116/60.
+- Compose's onsite package 783/8 and compose's lean package 24/1.
+- The span test passed 11 of 11. The composition difftest and the certifier's Lean tests are still running.
+For the "in" line: our 111 guarantees (owner @network-accounting: 56 in security/lean-audit.json, 55 in Properties') have their proofs in 23 modules. All 23 built at this tip. Four of them are outside the groups above and built in a side build, r20261115-015557-11c2 on machine 14: Proofs.Flock.Recursive.StopCountBudget and StopCountProof (2118 jobs, 38 s), and Proofs.Properties.Hash.Identity and Core.Period (781 jobs, 7 s). As of this tip the list of our proofs that don't build is empty.
+Next: the build at about 9:00 PM PST of the tip then, with PERIODPROOF2's, GATERELAY2's, DEVICEKEYS2's and POLICYROWS2's Ties (21b77db6d25f), the 23 modules first.
+
