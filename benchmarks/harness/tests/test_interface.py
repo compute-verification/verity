@@ -3,9 +3,9 @@
 `record` also gives),
 `ran_with` takes only the fixed words and states the deployed challenger's unverified coins as the record's word, and `report` prints the line after
 the first, says where it is not an audit and where its record is made up, and gives no number for a run the Lean
-verifier didn't accept. The section's table is held too: each listed directory's README has the three parts, its
-command calls `kit.report` with `ran_with` and `accepted`, and each measurement name its source gives is a row of its
-`metrics.toml` with a goal."""
+verifier didn't accept. Each directory that declares itself a core command (`[tool.verity.interface] core` in its
+`pyproject.toml`) is held too: its README has the three parts, its command calls `kit.report` with `ran_with` and
+`accepted`, and each measurement name its source gives is a row of its `metrics.toml` with a goal."""
 from __future__ import annotations
 
 import ast
@@ -20,12 +20,12 @@ import pytest
 from verity_bench import kit
 
 ROOT = Path(__file__).resolve().parents[3]
-README = ROOT / "benchmarks" / "README.md"
-SECTION = "## The core benchmarks' interface"
+BENCHMARKS = ROOT / "benchmarks"
+HARNESS = BENCHMARKS / "harness" / "pyproject.toml"
 HEADINGS = ("## What you may change", "## What is fixed", "## How a cheating change is refused")
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
 RUN = "r20000101-000000-aaaa"
-#: listed directories rule 6 doesn't hold yet, each with what it writes that is no row: its owner drops its entry in the
+#: declared directories rule 6 doesn't hold yet, each with what it writes that is no row: its owner drops its entry in the
 #: change that makes every number it prints a row of its metrics.toml
 DASHBOARD_NOT_YET = {
     "benchmarks/compute": "its verified, capacity, free and error measurements, and its share under constants of their own",
@@ -33,13 +33,15 @@ DASHBOARD_NOT_YET = {
 }
 
 
-def table(readme: str) -> list[dict[str, str]]:
-    """The section's table of the commands that follow the interface: one row each, by its header's names."""
-    section = readme.split(SECTION, 1)[1].split("\n## ", 1)[0]
-    lines = [x for x in section.splitlines() if x.startswith("|")]
-    head = [c.strip() for c in lines[0].strip("|").split("|")]
-    assert head == ["command", "directory", "owner"] and set(lines[1].replace("|", "").strip()) <= set("-: ")
-    return [dict(zip(head, (c.strip().strip("`") for c in x.strip("|").split("|")))) for x in lines[2:]]
+def declared(benchmarks: Path) -> dict[str, str]:
+    """Each directory under `benchmarks` that declares itself a core command, by its path from the repository, with the
+    command it declares: its `pyproject.toml`'s ``[tool.verity.interface] core``."""
+    found = {}
+    for toml in sorted(benchmarks.glob("*/pyproject.toml")):
+        core = tomllib.loads(toml.read_text()).get("tool", {}).get("verity", {}).get("interface", {}).get("core")
+        if core is not None:
+            found[f"benchmarks/{toml.parent.name}"] = core
+    return found
 
 
 def measurement_names(tree: ast.Module) -> list[str]:
@@ -64,13 +66,18 @@ def unfollowed(directory: Path, dashboard: bool = True) -> list[str]:
     """What a directory lacks of the interface: a heading of its README's three parts, a `kit.report` call in its own
     Python files given both `ran_with` and `accepted`, or (with `dashboard`, rule 6) a row of its `metrics.toml`, with a
     `goal`, for each measurement name those files give (and at least one)."""
-    readme = (directory / "README.md").read_text() if (directory / "README.md").is_file() else ""
-    lacks = [h for h in HEADINGS if not re.search(rf"^{re.escape(h)}\s*$", readme, re.M)]
+    if not (directory / "README.md").is_file():
+        lacks = [f"a README.md with its three parts ({', '.join(HEADINGS)})"]
+    else:
+        readme = (directory / "README.md").read_text()
+        lacks = [h for h in HEADINGS if not re.search(rf"^{re.escape(h)}\s*$", readme, re.M)]
     trees = [ast.parse(py.read_text()) for py in sorted(directory.glob("*.py"))]
     calls = [node for tree in trees for node in ast.walk(tree)
              if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "report"
              and isinstance(node.func.value, ast.Name) and node.func.value.id == "kit"]
-    if not any({"ran_with", "accepted"} <= {k.arg for k in c.keywords} for c in calls):
+    if not trees:
+        lacks.append("a runner: a .py file directly in the directory whose kit.report call gives ran_with and accepted")
+    elif not any({"ran_with", "accepted"} <= {k.arg for k in c.keywords} for c in calls):
         lacks.append("a kit.report(..., ran_with=..., accepted=...) call")
     if not dashboard:
         return lacks
@@ -84,13 +91,16 @@ def unfollowed(directory: Path, dashboard: bool = True) -> list[str]:
     return lacks
 
 
-def test_each_command_the_section_lists_follows_the_interface():
-    rows = table(README.read_text())
-    for row in rows:
-        assert row["command"].startswith("verity bench ") and row["owner"], row
-        assert (ROOT / row["directory"]).is_dir(), f"{row['directory']}: no such directory"
-        dashboard = row["directory"] not in DASHBOARD_NOT_YET
-        assert unfollowed(ROOT / row["directory"], dashboard) == [], f"{row['command']} ({row['directory']}) lacks these"
+def test_each_directory_that_declares_itself_a_core_command_follows_the_interface():
+    inputs = set(tomllib.loads(HARNESS.read_text())["tool"]["verity"]["tests"]["inputs"])
+    for directory, core in declared(BENCHMARKS).items():
+        where = f"{directory}/pyproject.toml declares [tool.verity.interface] core = {core!r}"
+        assert isinstance(core, str) and core.startswith("verity bench "), f"{where}: give the command, 'verity bench NAME'"
+        unread = [p for p in (directory, f"{directory}/README.md") if p not in inputs]
+        assert not unread, (f"{where}, and this test reads {', '.join(unread)}: list it under [tool.verity.tests] inputs "
+                            "in benchmarks/harness/pyproject.toml")
+        lacks = unfollowed(ROOT / directory, directory not in DASHBOARD_NOT_YET)
+        assert lacks == [], f"{where} and lacks {'; '.join(lacks)}: add them, or drop the key until it follows"
 
 
 def test_the_holder_tells_a_command_that_follows_from_one_that_does_not(tmp_path):
@@ -116,8 +126,20 @@ def test_the_holder_tells_a_command_that_follows_from_one_that_does_not(tmp_path
     (bad / "metrics.toml").write_text('[[metric]]\nid = "bad/share"\n')
     assert unfollowed(bad) == [*HEADINGS[1:], "a row of metrics.toml for the measurement <f'free at {r}'>",
                                "a row of metrics.toml for the measurement bad/aside", "a goal on metrics.toml's row bad/share"]
-    readme = f"x\n\n{SECTION}\n\nwords\n\n| command | directory | owner |\n|---|---|---|\n| `verity bench good` | `good` | infra |\n\n## Next\n"
-    assert table(readme) == [{"command": "verity bench good", "directory": "good", "owner": "infra"}]
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    assert unfollowed(bare, dashboard=False) == [
+        f"a README.md with its three parts ({', '.join(HEADINGS)})",
+        "a runner: a .py file directly in the directory whose kit.report call gives ran_with and accepted"]
+
+
+def test_a_core_command_is_declared_in_its_own_pyproject(tmp_path):
+    for name, text in [("good", '[tool.verity.interface]\ncore = "verity bench good"\n'),
+                       ("plain", '[tool.verity.tests]\ninputs = []\n'), ("other", "[project]\nname = 'x'\n")]:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "pyproject.toml").write_text(text)
+    (tmp_path / "loose").mkdir()
+    assert declared(tmp_path) == {"benchmarks/good": "verity bench good"}
 
 
 # ---- record_dir

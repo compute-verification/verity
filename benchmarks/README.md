@@ -145,14 +145,21 @@ and carries `made_up: true`, so its `result.json` passed on alone never reads as
 passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
 
 `kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
-last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit"). These commands follow the
-interface; a command's row is added in the change that makes it follow, and `harness/tests/test_interface.py` then
-holds its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each measurement name
-its source gives as a row of its `metrics.toml` with a `goal` (rule 6, for a directory the test's `DASHBOARD_NOT_YET`
-doesn't name, each entry saying what it writes that is no row):
+last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
 
-| command | directory | owner |
-|---|---|---|
+A command declares that it follows the interface in its own directory's `pyproject.toml`, in the change that makes it
+follow:
+
+```toml
+[tool.verity.interface]
+core = "verity bench NAME"
+```
+
+`harness/tests/test_interface.py` reads that key from every `benchmarks/*/pyproject.toml` and holds each directory that
+declares it to its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each
+measurement name its source gives as a row of its `metrics.toml` with a `goal` (rule 6, for a directory the test's
+`DASHBOARD_NOT_YET` doesn't name, each entry saying what it writes that is no row). The harness's suite lists the
+directory and its README among its inputs, which the test checks too.
 
 ## Metrics
 
