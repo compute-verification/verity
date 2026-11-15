@@ -29,7 +29,6 @@ public import Proofs.Flock.SessionLoop.Leak
 public import Proofs.Flock.SessionLoop.RepSrcSat
 public import Proofs.Flock.SessionLoop.Concrete
 public import Proofs.Flock.SessionLoop.Concrete.Stmt
-public import Proofs.Flock.SessionLoop.Concrete.Drawn
 public import Proofs.Flock.SessionLoop.Concrete.Scope
 public import Proofs.Flock.SessionLoop.Concrete.Total
 public import Proofs.Flock.SessionLoop.Concrete.Trace
@@ -116,6 +115,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Setup
 public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
 public import Proofs.Flock.SpotFlock.InstanceStmt.InsSetup
 public import Proofs.Flock.SpotFlock.InstanceStmt.Scope
+public import Proofs.Flock.SpotFlock.InstanceStmt.ReadyZk
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsOpen
